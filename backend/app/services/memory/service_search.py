@@ -3,6 +3,7 @@
 Delegates to search_operations submodules that use MemoryRepository + pgvector.
 """
 
+from .episode_converters import convert_raw_episodes
 from .memory_models import (
     MemoryCategory,
     MemoryContext,
@@ -41,41 +42,12 @@ async def text_search(
     """Text-based substring search on episode content."""
     repo = get_memory_repository()
     cat_value = category.value if category else None
+    # all_groups path passes group_id=None; do not force scope filter in that case.
+    query_scope = scope.value if scope and group_id is not None else None
     memories = await repo.text_search(
-        query, group_id=group_id, scope=scope.value if scope else None, category=cat_value, limit=limit
+        query, group_id=group_id, scope=query_scope, category=cat_value, limit=limit
     )
-
-    # Convert Memory objects to MemoryEpisode for backward compat
-    from .search_helpers import map_tier_to_category
-
-    episodes = []
-    for mem in memories:
-        from .memory_models import MemorySource
-
-        episodes.append(
-            MemoryEpisode(
-                uuid=str(mem.id),
-                name=mem.name or "",
-                content=mem.content or "",
-                source=MemorySource.CHAT,
-                category=map_tier_to_category(mem.tier),
-                scope=scope or MemoryScope.GLOBAL,
-                scope_id=scope_id,
-                source_description=mem.source_description or "",
-                created_at=mem.created_at,
-                valid_at=mem.valid_at or mem.created_at,
-                entities=[],
-                summary=mem.summary,
-                loaded_count=mem.loaded_count,
-                referenced_count=mem.referenced_count,
-                helpful_count=mem.helpful_count,
-                harmful_count=mem.harmful_count,
-                utility_score=mem.utility_score,
-                pinned=mem.pinned,
-                tags=mem.tags or [],
-            )
-        )
-    return episodes
+    return convert_raw_episodes(memories, scope=scope, scope_id=scope_id)
 
 
 async def get_query_context(

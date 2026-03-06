@@ -16,6 +16,7 @@ from app.exception_handlers import setup_exception_handlers
 from app.middleware.access_control import AccessControlMiddleware
 from app.services.credential_manager import get_credential_manager
 from app.services.events import stop_all_stream_bridges
+from app.services.memory.scope_normalization import normalize_legacy_scope_rows
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.telemetry import init_telemetry
 
@@ -70,6 +71,21 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.info("Loaded %d valid project IDs", len(project_ids))
     except Exception as e:
         logger.warning("Failed to load project IDs at startup: %s", e)
+
+    # Normalize legacy memory scope encodings (idempotent integrity guard).
+    try:
+        normalized = await normalize_legacy_scope_rows()
+        updated_rows = sum(normalized.values())
+        if updated_rows:
+            logger.warning(
+                "Normalized %d legacy memory scope row(s) at startup: %s",
+                updated_rows,
+                normalized,
+            )
+        else:
+            logger.info("Memory scope integrity check passed")
+    except Exception as e:
+        logger.warning("Failed memory scope normalization at startup: %s", e)
 
     # Start health prober for all registered providers
     from app.services.health_prober import init_health_prober, shutdown_health_prober
@@ -126,4 +142,3 @@ async def health_check() -> dict[str, str]:
 
 # Include routers
 app.include_router(router, prefix="/api")
-

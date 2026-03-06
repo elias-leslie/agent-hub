@@ -41,13 +41,15 @@ async def save_and_track(
     result: Any,
     resolved_model: str,
     is_new_session: bool,
+    model_used: str | None = None,
     publish_messages: bool = False,
     duration_ms: int | None = None,
 ) -> None:
     """Save events and track token usage, costs, and session status."""
+    effective_model = model_used or resolved_model
     await save_events(
         db, session_id, request.messages, result.content,
-        result.input_tokens, result.output_tokens, resolved_model,
+        result.input_tokens, result.output_tokens, effective_model,
         getattr(result, "thinking_content", None),
         getattr(result, "thinking_tokens", None),
         agent_id=request.agent_slug, duration_ms=duration_ms,
@@ -60,9 +62,9 @@ async def save_and_track(
                     msg.content if isinstance(msg.content, str) else str(msg.content),
                 )
         await publish_message(session_id, "assistant", result.content, result.output_tokens)
-    cost = estimate_cost(result.input_tokens, result.output_tokens, resolved_model)
+    cost = estimate_cost(result.input_tokens, result.output_tokens, effective_model)
     await log_token_usage(
-        db, session_id, resolved_model,
+        db, session_id, effective_model,
         result.input_tokens, result.output_tokens, cost.total_cost_usd,
     )
     await publish_complete(session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)

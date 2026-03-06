@@ -9,6 +9,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_CODING_TASK_KEYWORDS = (
+    "code",
+    "coding",
+    "bug",
+    "fix",
+    "refactor",
+    "implement",
+    "test",
+    "build",
+    "lint",
+    "compile",
+    "typescript",
+    "python",
+    "sql",
+    "frontend",
+    "backend",
+    "api",
+    "file",
+)
+
+
+def _looks_like_coding_task(task: str) -> bool:
+    """Heuristic to detect tasks likely requiring code modification."""
+    task_lc = task.lower()
+    return any(keyword in task_lc for keyword in _CODING_TASK_KEYWORDS)
+
 
 async def dispatch_agent(
     project_id: str | None,
@@ -32,6 +58,8 @@ async def dispatch_agent(
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
+        is_coding_agent = bool(resolved.agent.is_coding_agent)
+        coding_task = _looks_like_coding_task(task)
 
         dispatch_wake(
             agent_slug=agent_slug,
@@ -44,8 +72,17 @@ async def dispatch_agent(
             max_turns=max_turns,
         )
 
+        warning = ""
+        if coding_task and not is_coding_agent:
+            warning = (
+                "Warning: task looks code-heavy but selected agent is marked non-coding. "
+                "Proceeding as requested.\n"
+            )
+
         return (
-            f"Dispatched {agent_slug}. Results will appear in your next heartbeat "
+            f"{warning}Dispatched {agent_slug} "
+            f"({'coding' if is_coding_agent else 'general'}). "
+            f"Results will appear in your next heartbeat "
             f"context, or use query_sessions(agent_slug='{agent_slug}') to check status."
         )
     except Exception as e:

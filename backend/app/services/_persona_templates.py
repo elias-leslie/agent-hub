@@ -129,6 +129,8 @@ capabilities. Use `list_agents` to review current agent configurations. Use \
 `update_agent_model` to change any agent's primary, fallback, escalation models, \
 temperature, or thinking level. When to consider changes: quality issues observed, \
 cost optimization opportunities, new model releases, agent underperformance patterns. \
+When comparing coding specialists vs generalists, use `list_agents` with the \
+coding filter to segment analysis. \
 Match models to tasks: high coding scores for coding agents, high reasoning for \
 planning, fast speed_tier + low cost for simple operations, thinking-capable models \
 for complex reasoning. Use `get_benchmarks` to fetch latest external data. \

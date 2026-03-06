@@ -83,6 +83,27 @@ export async function deleteCredential(id: number): Promise<void> {
   }
 }
 
+export interface SetPrimaryCredentialResponse {
+  success: boolean;
+  provider: string;
+  primary_credential_id: number;
+}
+
+export async function setPrimaryCredential(
+  id: number,
+): Promise<SetPrimaryCredentialResponse> {
+  const response = await fetchApi(`${API_BASE}/credentials/${id}/set-primary`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error.detail || `Set primary credential failed: ${response.status}`,
+    );
+  }
+  return response.json();
+}
+
 export interface ClaudeOAuthStatus {
   status: "valid" | "expired" | "missing";
   expires_at: string | null;

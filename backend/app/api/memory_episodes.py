@@ -57,17 +57,19 @@ async def list_episodes(
     limit: Annotated[int, Query(ge=1, le=300, description="Max episodes per page")] = 50,
     cursor: Annotated[str | None, Query(description="Timestamp cursor for pagination")] = None,
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
+    all_groups: Annotated[bool, Query(description="Include all groups instead of current scope")] = False,
 ) -> MemoryListResult:
     """List episodes with cursor-based pagination (reverse chronological order)."""
-    return await handle_list_episodes(memory, limit, cursor, category)
+    return await handle_list_episodes(memory, limit, cursor, category, all_groups)
 
 
 @router.get("/stats", response_model=MemoryStats)
 async def get_memory_stats(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
+    all_groups: Annotated[bool, Query(description="Include all groups instead of current scope")] = False,
 ) -> MemoryStats:
-    """Get memory statistics across all groups (total count, category breakdown, last updated)."""
-    return await handle_get_memory_stats(memory)
+    """Get memory statistics (total count, category breakdown, last updated)."""
+    return await handle_get_memory_stats(memory, all_groups)
 
 
 @router.get("/scopes")

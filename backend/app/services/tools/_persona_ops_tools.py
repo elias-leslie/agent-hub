@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.constants import SUBTASK_TYPES
 from app.services.tools.base import Tool
 
 # --- Task orchestration tool ---
@@ -83,12 +84,7 @@ MANAGE_TASKS_TOOL = Tool(
                         },
                         "subtask_type": {
                             "type": "string",
-                            "enum": [
-                                "backend", "frontend", "ui-design", "refactor",
-                                "bug-fix", "test", "performance", "config", "devops",
-                                "database", "image-gen", "game-design",
-                                "design-review", "exploration",
-                            ],
+                            "enum": list(SUBTASK_TYPES),
                             "description": "Agent routing type — determines specialist agent",
                         },
                         "depends_on": {
@@ -167,6 +163,10 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
                 "enum": ["detailed", "compact"],
                 "description": "Output format for list_agents: detailed (full config) or compact (one-liner per agent, active only)",
                 "default": "detailed",
+            },
+            "coding_only": {
+                "type": "boolean",
+                "description": "Optional filter for list_agents. true=coding agents only, false=non-coding only.",
             },
         },
         "required": ["action"],

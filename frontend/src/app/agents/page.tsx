@@ -83,24 +83,6 @@ export default function AgentsPage() {
     [refetch]
   );
 
-  const handleToggleCoding = useCallback(
-    async (agent: Agent) => {
-      try {
-        const res = await fetchApi(`/api/agents/${agent.slug}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ is_coding_agent: !agent.is_coding_agent }),
-        });
-        if (!res.ok) throw new Error("Failed to update agent");
-        refetch();
-      } catch (err) {
-        console.error("Toggle coding failed:", err);
-        alert("Failed to update agent");
-      }
-    },
-    [refetch]
-  );
-
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* HEADER */}
@@ -192,16 +174,13 @@ export default function AgentsPage() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[180px_1fr_100px_70px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800/50"
+                className="grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800/50"
               >
                 <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
                 <div className="h-4 w-48 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-5 w-16 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-8 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
                 <div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
                 <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-8 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
                 <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
               </div>
             ))}
@@ -218,7 +197,6 @@ export default function AgentsPage() {
             getMetrics={getMetrics}
             onClone={handleClone}
             onArchive={handleArchive}
-            onToggleCoding={handleToggleCoding}
           />
         )}
       </main>

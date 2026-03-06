@@ -44,6 +44,7 @@ async def handle_cached_response(
     if db and session:
         await save_and_track(
             db, session, session_id, request, cached, resolved_model, is_new_session,
+            model_used=getattr(cached, "model", resolved_model),
         )
     output_usage = make_output_usage_info(cached, resolved_model)
     return make_completion_response(
@@ -77,6 +78,7 @@ async def process_completion_result(
     if db and session:
         await save_and_track(
             db, session, session_id, request, result, resolved_model, is_new_session,
+            model_used=model_used,
             publish_messages=True, duration_ms=duration_ms,
         )
     output_usage_info = make_output_usage_info(result, resolved_model)

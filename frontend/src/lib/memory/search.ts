@@ -22,9 +22,17 @@ import type {
 const API_BASE = `${getApiBaseUrl()}/api`;
 
 // Fetch memory stats
-export async function fetchMemoryStats(groupId?: string): Promise<MemoryStats> {
+export async function fetchMemoryStats(
+  groupId?: string,
+  allGroups: boolean = true,
+): Promise<MemoryStats> {
+  const params = new URLSearchParams();
+  if (allGroups) params.set("all_groups", "true");
+  const qs = params.toString();
+  const url = `${API_BASE}/memory/stats${qs ? `?${qs}` : ""}`;
+
   return apiFetch(
-    `${API_BASE}/memory/stats`,
+    url,
     { headers: buildHeaders(groupId) },
     "Memory stats fetch failed",
   );

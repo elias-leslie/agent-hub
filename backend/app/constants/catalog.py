@@ -25,7 +25,12 @@ from app.constants.models import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
+    CODEX_GPT_5_1,
+    CODEX_GPT_5_1_MINI,
+    CODEX_GPT_5_2,
+    CODEX_GPT_5_3,
     GEMINI_2_5_FLASH_LITE,
+    GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
     GEMINI_FLASH,
     GEMINI_PRO,
@@ -34,7 +39,6 @@ from app.constants.models import (
     NVIDIA_MINIMAX_M2_5,
     NVIDIA_QWEN_3_5,
     OPENAI_GPT_5_2,
-    OPENAI_GPT_5_3_CODEX,
     OPENAI_GPT_NANO,
     XAI_GROK_4_1_FAST,
     XAI_GROK_CODE_FAST,
@@ -46,6 +50,7 @@ __all__ = [
     "CLAUDE_TO_GEMINI_MAP",
     "CLOUDCODE_TO_CLAUDE_MAP",
     "CLOUDFLARE_TO_CLAUDE_MAP",
+    "CODEX_TO_CLAUDE_MAP",
     "GEMINI_TO_CLAUDE_MAP",
     "MINIMAX_TO_CLAUDE_MAP",
     "MODEL_ALIASES",
@@ -58,6 +63,7 @@ __all__ = [
     "VALID_CLAUDE_MODELS",
     "VALID_CLOUDCODE_MODELS",
     "VALID_CLOUDFLARE_MODELS",
+    "VALID_CODEX_MODELS",
     "VALID_GEMINI_MODELS",
     "VALID_MINIMAX_MODELS",
     "VALID_NVIDIA_MODELS",
@@ -108,6 +114,7 @@ def _models_for_provider(provider: str) -> tuple[str, ...]:
 # Valid model lists for validation (derived from registry)
 VALID_CLAUDE_MODELS = _models_for_provider("claude")
 VALID_GEMINI_MODELS = _models_for_provider("gemini")
+VALID_CODEX_MODELS = _models_for_provider("codex")
 VALID_OPENAI_MODELS = _models_for_provider("openai")
 VALID_XAI_MODELS = _models_for_provider("xai")
 VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
@@ -130,13 +137,20 @@ GEMINI_TO_CLAUDE_MAP: dict[str, str] = {
     GEMINI_FLASH: CLAUDE_SONNET,
     GEMINI_PRO: CLAUDE_OPUS,
     GEMINI_3_1_PRO: CLAUDE_OPUS,
+    GEMINI_3_1_FLASH_LITE: CLAUDE_HAIKU,
     GEMINI_2_5_FLASH_LITE: CLAUDE_HAIKU,
 }
 
 OPENAI_TO_CLAUDE_MAP: dict[str, str] = {
     OPENAI_GPT_NANO: CLAUDE_HAIKU,
     OPENAI_GPT_5_2: CLAUDE_SONNET,
-    OPENAI_GPT_5_3_CODEX: CLAUDE_OPUS,
+}
+
+CODEX_TO_CLAUDE_MAP: dict[str, str] = {
+    CODEX_GPT_5_1_MINI: CLAUDE_HAIKU,
+    CODEX_GPT_5_1: CLAUDE_SONNET,
+    CODEX_GPT_5_2: CLAUDE_OPUS,
+    CODEX_GPT_5_3: CLAUDE_OPUS,
 }
 
 XAI_TO_CLAUDE_MAP: dict[str, str] = {
@@ -171,5 +185,4 @@ CLOUDCODE_TO_CLAUDE_MAP: dict[str, str] = {
     CC_CLAUDE_SONNET: CLAUDE_SONNET,
     CC_CLAUDE_OPUS: CLAUDE_OPUS,
 }
-
 

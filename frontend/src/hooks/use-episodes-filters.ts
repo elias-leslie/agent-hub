@@ -29,6 +29,7 @@ export function useEpisodesFilters({ displayItems }: UseEpisodesFiltersProps) {
           cmp = (a.scope || "").localeCompare(b.scope || "");
           break;
         case "category":
+        case "tier":
           cmp = (a.category || "").localeCompare(b.category || "");
           break;
         case "content":

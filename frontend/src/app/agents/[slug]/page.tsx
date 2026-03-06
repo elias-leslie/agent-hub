@@ -43,7 +43,7 @@ export default function AgentEditorPage() {
   });
 
   const { data: availableModels = [] } = useQuery({
-    queryKey: ["models"],
+    queryKey: ["models", "options"],
     queryFn: fetchModels,
   });
 

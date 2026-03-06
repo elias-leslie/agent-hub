@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Pencil, Trash2, Check, X, Loader2, ExternalLink } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Loader2, ExternalLink, Unplug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Credential } from "@/lib/api";
 import type { ProviderInfo } from "./constants";
@@ -19,6 +19,7 @@ interface ProviderActionButtonsProps {
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
   onOAuthStart?: () => void;
+  onDisconnectOAuth?: () => void;
   isOAuthLoading?: boolean;
 }
 
@@ -36,6 +37,7 @@ export function ProviderActionButtons({
   onConfirmDelete,
   onCancelDelete,
   onOAuthStart,
+  onDisconnectOAuth,
   isOAuthLoading,
 }: ProviderActionButtonsProps) {
   return (
@@ -46,6 +48,15 @@ export function ProviderActionButtons({
           hasOAuthToken={hasOAuthToken}
           onOAuthStart={onOAuthStart}
         />
+      )}
+      {isOAuth && hasOAuthToken && onDisconnectOAuth && (
+        <button
+          onClick={onDisconnectOAuth}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 transition-colors"
+        >
+          <Unplug className="h-3.5 w-3.5" />
+          Disconnect
+        </button>
       )}
 
       {isOAuth && provider.supportsApiKey && !isConfigured && (
@@ -60,6 +71,7 @@ export function ProviderActionButtons({
 
       {(!isOAuth || (provider.supportsApiKey && isConfigured)) && (
         <ApiKeyActions
+          provider={provider}
           credentials={credentials}
           isConfigured={isConfigured}
           isOAuth={isOAuth}
@@ -105,6 +117,7 @@ function OAuthButton({ isOAuthLoading, hasOAuthToken, onOAuthStart }: OAuthButto
 }
 
 interface ApiKeyActionsProps {
+  provider: ProviderInfo;
   credentials: Credential[];
   isConfigured: boolean;
   isOAuth: boolean;
@@ -118,6 +131,7 @@ interface ApiKeyActionsProps {
 }
 
 function ApiKeyActions({
+  provider,
   credentials,
   isConfigured,
   isOAuth,
@@ -156,34 +170,55 @@ function ApiKeyActions({
     }
 
     return (
-      <>
+      <div className="flex items-center gap-1 flex-wrap">
+        {provider.id === "gemini" && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Key
+          </button>
+        )}
         <button
           onClick={onEdit}
           className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-          title="Edit key"
+          title={provider.id === "gemini" ? "Update primary key" : "Edit key"}
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onConfirmDelete}
           className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
-          title="Delete key"
+          title={credentials.length > 1 ? "Delete all keys" : "Delete key"}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
-      </>
+      </div>
     );
   }
 
   if (!isOAuth) {
     return (
-      <button
-        onClick={onAdd}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        {credentials.length > 0 ? "Update" : "Add Key"}
-      </button>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button
+          onClick={onAdd}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {credentials.length > 0 ? "Update" : "Add Key"}
+        </button>
+        {/* Allow adding multiple keys for single-field providers like Gemini */}
+        {credentials.length > 0 && provider.id === "gemini" && (
+          <button
+            onClick={onAdd}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add Another Key
+          </button>
+        )}
+      </div>
     );
   }
 

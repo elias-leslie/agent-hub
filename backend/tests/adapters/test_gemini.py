@@ -5,9 +5,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.adapters._errors_types import ProviderError
-from app.adapters.base import AuthenticationError, CompletionResult, Message, RateLimitError
+from app.adapters.base import (
+    AuthenticationError,
+    CompletionResult,
+    Message,
+    RateLimitError,
+    StreamEvent,
+)
 from app.adapters.gemini import GeminiAdapter
-from app.constants.models import GEMINI_FLASH
+from app.constants.models import GEMINI_FLASH, GEMINI_IMAGE
 
 
 @pytest.fixture
@@ -33,8 +39,9 @@ class TestGeminiAdapter:
         """Test initialization from credential manager."""
         from app.services.credential_manager import CredentialManager
 
+        CredentialManager.reset()
         cm = CredentialManager.get_instance()
-        cm._cache["gemini:api_key"] = "from-cm"
+        cm.set("gemini", "api_key", "from-cm")
         cm._initialized = True
 
         try:
@@ -335,3 +342,100 @@ class TestGeminiOAuthFallback:
                     [Message(role="user", content="Hi")], model=GEMINI_FLASH,
                 )
 
+
+class TestGeminiMultiKeyBehavior:
+    """Tests for multi-key cache refresh and failover behavior."""
+
+    @pytest.mark.asyncio
+    async def test_complete_tries_multiple_api_keys_in_order(self):
+        """Rate-limited first key should fall through to the second key."""
+        expected = CompletionResult(
+            content="Second key succeeded",
+            model=GEMINI_FLASH,
+            provider="gemini",
+            input_tokens=12,
+            output_tokens=7,
+        )
+        client_1 = MagicMock(name="client-1")
+        client_2 = MagicMock(name="client-2")
+
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value=None),
+            patch("app.adapters.gemini.resolve_api_keys", return_value=["k1", "k2"]),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value=None),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="api_key"),
+            patch("app.adapters.gemini.pick_auth_mode", return_value=("adc", MagicMock(), None)),
+            patch("app.adapters.gemini.make_sdk_client", side_effect=[client_1, client_2]),
+            patch("app.adapters.gemini.sdk_complete", new_callable=AsyncMock) as mock_sdk_complete,
+        ):
+            mock_sdk_complete.side_effect = [
+                ProviderError("429 rate limited", provider="gemini", retriable=True),
+                expected,
+            ]
+            adapter = GeminiAdapter()
+            result = await adapter.complete([Message(role="user", content="Hi")], model=GEMINI_FLASH)
+
+            assert result.content == "Second key succeeded"
+            assert mock_sdk_complete.await_count == 2
+
+    def test_refresh_api_key_allows_empty_key_set(self):
+        """When keys are removed from DB, in-memory key list should clear too."""
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value=None),
+            patch("app.adapters.gemini.resolve_api_keys", side_effect=[["k1"], []]),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value=None),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="api_key"),
+            patch("app.adapters.gemini.pick_auth_mode", return_value=("api_key", MagicMock(), None)),
+            patch("app.adapters.gemini.make_sdk_client", side_effect=[MagicMock()]),
+        ):
+            adapter = GeminiAdapter()
+            assert adapter._api_keys == ["k1"]
+
+            adapter._refresh_api_key()
+            assert adapter._api_keys == []
+            assert adapter._sdk_clients == []
+            assert adapter._client is None
+
+    @pytest.mark.asyncio
+    async def test_image_model_without_sdk_client_raises_provider_error(self):
+        """Image models must fail with clear error if no API-key SDK client exists."""
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value=None),
+            patch("app.adapters.gemini.resolve_api_keys", return_value=[]),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value={
+                "access_token": "tok", "project_id": "proj", "refresh_token": "ref",
+            }),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
+            patch("app.adapters.gemini.pick_auth_mode", return_value=("oauth", None, MagicMock())),
+        ):
+            adapter = GeminiAdapter()
+            with pytest.raises(ProviderError, match="API key is not configured"):
+                await adapter.complete([Message(role="user", content="Draw")], model=GEMINI_IMAGE)
+
+    @pytest.mark.asyncio
+    async def test_stream_fails_over_to_next_key_on_retryable_error(self):
+        """Streaming should retry next key when first key errors before content."""
+        client_1 = MagicMock(name="client-1")
+        client_2 = MagicMock(name="client-2")
+
+        async def fake_sdk_stream(client, *_args, **_kwargs):
+            if client is client_1:
+                yield StreamEvent(type="error", error="rate limit exceeded")
+                return
+            yield StreamEvent(type="content", content="hello")
+            yield StreamEvent(type="done", input_tokens=1, output_tokens=1, finish_reason="STOP")
+
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value=None),
+            patch("app.adapters.gemini.resolve_api_keys", return_value=["k1", "k2"]),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value=None),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="api_key"),
+            patch("app.adapters.gemini.pick_auth_mode", return_value=("api_key", MagicMock(), None)),
+            patch("app.adapters.gemini.make_sdk_client", side_effect=[client_1, client_2]),
+            patch("app.adapters.gemini.sdk_stream", new=fake_sdk_stream),
+        ):
+            adapter = GeminiAdapter()
+            events = [event async for event in adapter.stream([Message(role="user", content="hi")], GEMINI_FLASH)]
+
+        assert [e.type for e in events] == ["content", "done"]
+        assert events[0].content == "hello"

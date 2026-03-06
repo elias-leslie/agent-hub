@@ -11,7 +11,6 @@ export function AgentsTable({
   getMetrics,
   onClone,
   onArchive,
-  onToggleCoding,
 }: {
   agents: Agent[];
   sortField: SortField;
@@ -20,7 +19,6 @@ export function AgentsTable({
   getMetrics: (slug: string) => AgentMetrics | null;
   onClone: (agent: Agent) => void;
   onArchive: (agent: Agent) => void;
-  onToggleCoding?: (agent: Agent) => void;
 }) {
   if (agents.length === 0) {
     return (
@@ -38,7 +36,7 @@ export function AgentsTable({
         sortDirection={sortDirection}
         onSort={onSort}
       />
-      <div className="divide-y divide-slate-100 dark:divide-slate-800/50 min-w-[1250px]">
+      <div className="divide-y divide-slate-100 dark:divide-slate-800/50 min-w-[940px]">
         {agents.map((agent) => (
           <AgentRow
             key={agent.id}
@@ -46,7 +44,6 @@ export function AgentsTable({
             metrics={getMetrics(agent.slug)}
             onClone={onClone}
             onArchive={onArchive}
-            onToggleCoding={onToggleCoding}
           />
         ))}
       </div>

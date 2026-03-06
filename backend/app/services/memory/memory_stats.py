@@ -21,11 +21,14 @@ _TIER_TO_CATEGORY = {
 }
 
 
-def _group_id_to_scope(group_id: str) -> MemoryScope:
-    """Map a group_id string to a MemoryScope enum value."""
-    if group_id.startswith("project-"):
+def _parse_scope(scope_str: str | None) -> MemoryScope:
+    """Map scope string to MemoryScope with compatibility for legacy `project:<id>` values."""
+    if scope_str and scope_str.startswith("project:"):
         return MemoryScope.PROJECT
-    return MemoryScope.GLOBAL
+    try:
+        return MemoryScope(scope_str or MemoryScope.GLOBAL.value)
+    except ValueError:
+        return MemoryScope.GLOBAL
 
 
 async def get_scope_stats(driver: Any = None) -> list[MemoryScopeCount]:
@@ -41,11 +44,7 @@ async def get_scope_stats(driver: Any = None) -> list[MemoryScopeCount]:
 
         scope_counts: dict[MemoryScope, int] = {}
         for entry in by_scope:
-            scope_str = entry.get("scope", "global")
-            try:
-                scope = MemoryScope(scope_str)
-            except ValueError:
-                scope = MemoryScope.GLOBAL
+            scope = _parse_scope(entry.get("scope"))
             scope_counts[scope] = scope_counts.get(scope, 0) + entry.get("count", 0)
 
         return [

@@ -217,11 +217,12 @@ async def get_benchmarks() -> str:
         return f"Error fetching benchmarks: {e}"
 
 
-async def list_agents(fmt: str = "detailed") -> str:
+async def list_agents(fmt: str = "detailed", coding_only: bool | None = None) -> str:
     """List all agents with their current model configurations.
 
     Args:
         fmt: "detailed" (full config per agent) or "compact" (one-liner, active only).
+        coding_only: Optional coding-agent filter. True=coding only, False=non-coding only.
     """
     try:
         from app.db import async_session
@@ -230,14 +231,17 @@ async def list_agents(fmt: str = "detailed") -> str:
         agent_service = get_agent_service()
         active_only = fmt == "compact"
         async with async_session() as db:
-            agents = await agent_service.list_agents(db, active_only=active_only)
+            agents = await agent_service.list_agents(
+                db, active_only=active_only, coding_only=coding_only
+            )
 
         if not agents:
             return "(No agents configured)"
 
         if fmt == "compact":
             lines = [
-                f"- {a.slug}: {a.description or '(no description)'}"
+                f"- {a.slug} [{'coding' if a.is_coding_agent else 'general'}]: "
+                f"{a.description or '(no description)'}"
                 for a in agents
             ]
             return "\n".join(lines)
@@ -251,7 +255,8 @@ async def list_agents(fmt: str = "detailed") -> str:
                 f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
                 f"  Escalation: {a.escalation_model_id or 'none'} | "
                 f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"
-                f"  Active: {a.is_active} | Version: {a.version}"
+                f"  Role: {'coding' if a.is_coding_agent else 'general'} | "
+                f"Active: {a.is_active} | Version: {a.version}"
             )
         return "\n\n".join(lines)
     except Exception as e:

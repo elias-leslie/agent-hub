@@ -43,6 +43,8 @@ async def complete(
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
     """
+    # Set early so request telemetry includes agent attribution even for early failures.
+    http_request.state.agent_slug = request.agent_slug
     skip_cache = bool(x_skip_cache and x_skip_cache.lower() == "true")
     return await orchestrate_completion(request, http_request, skip_cache, db)
 

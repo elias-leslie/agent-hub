@@ -163,7 +163,7 @@ class AgentMetrics(BaseModel):
     slug: str
     requests_24h: int = 0
     avg_latency_ms: float = 0.0
-    success_rate: float = 100.0
+    success_rate: float = 0.0
     tokens_24h: int = 0
     cost_24h_usd: float = 0.0
     # Sparkline data (last 24 hours, 1 point per hour)

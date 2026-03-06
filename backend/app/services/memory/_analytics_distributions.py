@@ -13,6 +13,11 @@ from .repository import TIER_REVERSE
 _TIER_NAMES = TIER_REVERSE  # {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}
 
 
+def _is_project_scope(scope_val: str | None) -> bool:
+    """Return True for canonical `project` scope and legacy `project:<id>` scope values."""
+    return bool(scope_val) and (scope_val == "project" or scope_val.startswith("project:"))
+
+
 async def get_tier_distribution(group_id: str | None = None) -> list[TierDistribution]:
     """Get distribution of memories across injection tiers."""
     stmt = (
@@ -54,7 +59,7 @@ async def get_scope_distribution(group_id: str | None = None) -> list[ScopeDistr
 
     scope_counts: dict[str, int] = defaultdict(int)
     for scope_val, cnt in rows:
-        key = "project" if (scope_val and scope_val.startswith("project:")) else "global"
+        key = "project" if _is_project_scope(scope_val) else "global"
         scope_counts[key] += cnt
 
     total = sum(scope_counts.values())

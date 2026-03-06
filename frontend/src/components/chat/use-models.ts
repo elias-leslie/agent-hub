@@ -63,6 +63,8 @@ export interface ModelsApiResponse {
   last_model_review: string | null;
 }
 
+export const MODELS_CATALOG_QUERY_KEY = ["models", "catalog"] as const;
+
 async function fetchModels(): Promise<ModelsApiResponse> {
   const response = await fetchApi("/api/models");
   if (!response.ok) {
@@ -73,7 +75,7 @@ async function fetchModels(): Promise<ModelsApiResponse> {
 
 export function useModels(): ModelOption[] {
   const { data } = useQuery({
-    queryKey: ["models"],
+    queryKey: MODELS_CATALOG_QUERY_KEY,
     queryFn: fetchModels,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -84,7 +86,7 @@ export function useModels(): ModelOption[] {
 
 export function useModelsWithSync() {
   const query = useQuery({
-    queryKey: ["models"],
+    queryKey: MODELS_CATALOG_QUERY_KEY,
     queryFn: fetchModels,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -96,5 +98,7 @@ export function useModelsWithSync() {
     lastModelReview: query.data?.last_model_review ?? null,
     refetch: query.refetch,
     isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
   };
 }

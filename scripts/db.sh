@@ -304,10 +304,17 @@ cmd_exec() {
         error "Query required. Usage: db exec \"UPDATE ...\""
     fi
 
-    # Block destructive DDL — schema changes and privilege escalation
-    # Strip string literals first so keywords inside SET col = '...DROP...' don't false-positive
+    # Block destructive DDL — schema changes and privilege escalation.
+    # Strip SQL string literals first so keywords inside string payloads
+    # (single-quoted or dollar-quoted) don't false-positive.
     local query_stripped query_upper
-    query_stripped=$(echo "$query" | sed "s/'[^']*'//g; s/\\\$[A-Z_]*\\\$[^$]*\\\$[A-Z_]*\\\$//g")
+    query_stripped=$(
+        printf '%s' "$query" | perl -0777 -pe "
+            s/'(?:''|[^'])*'//gs;
+            s/\\\$([A-Za-z_][A-Za-z_0-9]*)\\\$.*?\\\$\\1\\\$//gs;
+            s/\\\$\\\$.*?\\\$\\\$//gs;
+        "
+    )
     query_upper=$(echo "$query_stripped" | tr '[:lower:]' '[:upper:]')
     if echo "$query_upper" | grep -qE '\b(DROP|TRUNCATE|GRANT|REVOKE|CREATE)\b'; then
         error "Destructive DDL blocked by db exec. Use alembic migrations for schema changes."

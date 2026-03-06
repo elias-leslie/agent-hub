@@ -123,12 +123,23 @@ async def inject_memory(
     memory_facts_injected = 0
     loaded_memory_uuids: list[str] = []
 
-    if request.use_memory:
+    def _memory_injection_enabled(agent_memory_config: dict[str, Any] | None) -> bool:
+        """Resolve per-agent memory injection toggle."""
+        if not agent_memory_config:
+            return True
+        if "injection_enabled" in agent_memory_config:
+            return bool(agent_memory_config["injection_enabled"])
+        if "enabled" in agent_memory_config:
+            return bool(agent_memory_config["enabled"])
+        return True
+
+    agent_memory_config = (
+        resolved_agent.agent.memory_config if resolved_agent else None
+    )
+
+    if request.use_memory and _memory_injection_enabled(agent_memory_config):
         scope, scope_id = parse_memory_group_id(request.memory_group_id)
         try:
-            agent_memory_config = (
-                resolved_agent.agent.memory_config if resolved_agent else None
-            )
             messages_dict, progressive_context = await inject_progressive_context(
                 messages=messages_dict,
                 scope=scope,
