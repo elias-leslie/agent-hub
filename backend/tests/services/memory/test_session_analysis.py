@@ -39,6 +39,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ) as mock_track,
             patch(
+                "app.services.memory.session_analysis.get_cited_memories",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
                 "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
@@ -93,6 +98,11 @@ class TestAnalyzeSession:
             patch(
                 "app.services.memory.session_analysis.track_referenced_batch",
                 new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.memory.session_analysis.get_cited_memories",
+                new_callable=AsyncMock,
+                return_value=[],
             ),
             patch(
                 "app.services.memory.session_analysis.store_cite_event",
@@ -188,6 +198,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ),
             patch(
+                "app.services.memory.session_analysis.get_cited_memories",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
                 "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
@@ -214,6 +229,68 @@ class TestAnalyzeSession:
 
             # Should truncate to 8 chars
             mock_resolve.assert_called_once_with(["abc12345"], group_id="global")
+
+    @pytest.mark.asyncio
+    async def test_analyze_session_skips_already_credited_citations(self) -> None:
+        """Re-analyzing a session should not double-credit existing citations."""
+        with (
+            patch(
+                "app.services.memory.session_analysis.resolve_full_uuids",
+                new_callable=AsyncMock,
+                return_value={
+                    "abc12345": "abc12345-full-uuid-1",
+                    "def67890": "def67890-full-uuid-2",
+                },
+            ),
+            patch(
+                "app.services.memory.session_analysis.get_session_group_id",
+                new_callable=AsyncMock,
+                return_value="project-test",
+            ),
+            patch(
+                "app.services.memory.session_analysis.get_cited_memories",
+                new_callable=AsyncMock,
+                return_value=["abc12345-full-uuid-1"],
+            ),
+            patch(
+                "app.services.memory.session_analysis.track_referenced_batch",
+                new_callable=AsyncMock,
+            ) as mock_track,
+            patch(
+                "app.services.memory.session_analysis.store_cite_event",
+                new_callable=AsyncMock,
+            ) as mock_store,
+            patch(
+                "app.services.memory.session_analysis.update_citation_metrics",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_metrics,
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+        ):
+            result = await analyze_session(
+                session_id="test-session",
+                citation_prefixes=["abc12345", "def67890"],
+            )
+
+            assert result.citations_found == 2
+            assert result.citations_credited == 1
+            mock_track.assert_awaited_once_with(["def67890-full-uuid-2"])
+            mock_store.assert_awaited_once_with(
+                "test-session", ["def67890-full-uuid-2"]
+            )
+            mock_metrics.assert_awaited_once_with(
+                session_id="test-session",
+                memories_cited=["abc12345-full-uuid-1", "def67890-full-uuid-2"],
+            )
 
     @pytest.mark.asyncio
     async def test_analyze_session_extracts_artifacts_from_transcript_path(self, tmp_path: Path) -> None:
