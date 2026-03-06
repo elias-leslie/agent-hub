@@ -22,6 +22,7 @@ from .session_analysis_summary import build_git_digest
 from .session_queries import (
     extract_citations_from_events,
     find_sessions_by_task,
+    get_cited_memories,
     get_memories_loaded,
     get_session_group_id,
     store_cite_event,
@@ -111,15 +112,15 @@ async def analyze_session(
     group_id = await get_session_group_id(session_id)
     prefix_to_uuid = await resolve_full_uuids(prefixes, group_id=group_id)
     resolved_uuids = list(prefix_to_uuid.values())
-    await _credit_citations(session_id, resolved_uuids)
+    citations_credited = await _credit_citations(session_id, resolved_uuids)
     logger.info(
         "Session %s: found %d citation prefixes, credited %d, feedback %d, summary %s",
-        session_id, len(prefixes), len(resolved_uuids), feedback_created, summary_stored,
+        session_id, len(prefixes), citations_credited, feedback_created, summary_stored,
     )
     return AnalysisResult(
         session_id=session_id,
         citations_found=len(prefixes),
-        citations_credited=len(resolved_uuids),
+        citations_credited=citations_credited,
         feedback_created=feedback_created,
         summary_stored=summary_stored,
     )
@@ -187,15 +188,23 @@ def _load_transcript_artifacts(transcript_path: str | None) -> _TranscriptArtifa
     )
 
 
-async def _credit_citations(session_id: str, resolved_uuids: list[str]) -> None:
-    """Track and audit credited memory citations."""
+async def _credit_citations(session_id: str, resolved_uuids: list[str]) -> int:
+    """Track and audit newly credited memory citations for a session."""
     if not resolved_uuids:
-        return
-    await track_referenced_batch(resolved_uuids)
-    for uuid in resolved_uuids:
-        track_helpful(uuid)
-    await store_cite_event(session_id, resolved_uuids)
-    await update_citation_metrics(session_id=session_id, memories_cited=resolved_uuids)
+        return 0
+
+    existing_uuids = set(await get_cited_memories(session_id))
+    new_uuids = [uuid for uuid in resolved_uuids if uuid not in existing_uuids]
+
+    if new_uuids:
+        await track_referenced_batch(new_uuids)
+        for uuid in new_uuids:
+            track_helpful(uuid)
+        await store_cite_event(session_id, new_uuids)
+
+    all_cited_uuids = list(dict.fromkeys([*sorted(existing_uuids), *resolved_uuids]))
+    await update_citation_metrics(session_id=session_id, memories_cited=all_cited_uuids)
+    return len(new_uuids)
 
 
 async def _process_feedback_tags(

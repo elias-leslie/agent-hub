@@ -123,6 +123,35 @@ async def store_cite_event(session_id: str, cited_uuids: list[str]) -> None:
         logger.warning("Failed to store cite event for session %s: %s", session_id, e)
 
 
+async def get_cited_memories(session_id: str) -> list[str]:
+    """Return unique memory UUIDs already credited for a session."""
+    session_factory = _get_session_factory()
+
+    try:
+        async with session_factory() as db:
+            query = (
+                select(SessionEvent.tool_input)
+                .where(SessionEvent.session_id == session_id)
+                .where(SessionEvent.event_type == "memory_cite")
+            )
+            result = await db.execute(query)
+            rows = result.scalars().all()
+    except Exception as e:
+        logger.debug("Could not load cited memories for session %s: %s", session_id, e)
+        return []
+
+    cited: set[str] = set()
+    for tool_input in rows:
+        if not isinstance(tool_input, dict):
+            continue
+        uuids = tool_input.get("uuids")
+        if not isinstance(uuids, list):
+            continue
+        cited.update(str(uuid) for uuid in uuids if isinstance(uuid, str))
+
+    return list(cited)
+
+
 async def find_sessions_by_task(
     task_id: str,
     project_id: str | None = None,
