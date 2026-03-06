@@ -54,6 +54,9 @@ export default function AgentAnalyticsPage() {
   const analytics = agent && metrics ? metricsToAnalytics(metrics, agent) : null;
   const visibleTrend = analytics ? sliceTrendWindow(analytics.trend, timeRange) : [];
   const isRefreshing = agentRefetching || metricsRefetching;
+  const hasRecentActivity = analytics
+    ? analytics.totalRequests > 0 || analytics.totalTokens > 0 || analytics.totalCostUsd > 0
+    : false;
 
   function handleRefresh() {
     void Promise.all([refetchAgent(), refetchMetrics()]);
@@ -67,7 +70,25 @@ export default function AgentAnalyticsPage() {
     );
   }
 
-  if (error || !agent || !analytics) {
+  if (error) {
+    const errorMessage = error instanceof Error ? error.message : "Failed to load analytics";
+
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-6">
+        <div className="max-w-md text-center">
+          <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
+          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+            Failed to load analytics
+          </p>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            {errorMessage}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!agent || !analytics) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
@@ -120,7 +141,20 @@ export default function AgentAnalyticsPage() {
           />
         </div>
 
-        <ChartSection trend={visibleTrend} />
+        {hasRecentActivity ? (
+          <ChartSection trend={visibleTrend} />
+        ) : (
+          <ChartCard title="Activity window">
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/40">
+              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                No recent activity
+              </p>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                This agent has not handled any requests in the last 24 hours yet.
+              </p>
+            </div>
+          </ChartCard>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <ChartCard title="24h Throughput">
