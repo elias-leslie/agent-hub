@@ -90,7 +90,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     import re
 
     text = extract_text_content(content) if isinstance(content, list) else content
-    match = re.search(r"@([\w/][\w./-]*)", text, re.IGNORECASE)
+    match = re.search(r"@([\w/][\w./:-]*)", text, re.IGNORECASE)
     if not match:
         return None, text
 
@@ -104,7 +104,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     if not resolved_model:
         return None, text
 
-    cleaned = re.sub(r"@[\w/][\w./-]*\s*", "", text, count=1).strip()
+    cleaned = re.sub(r"@[\w/][\w./:-]*\s*", "", text, count=1).strip()
     return resolved_model, cleaned
 
 
