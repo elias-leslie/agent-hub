@@ -8,8 +8,15 @@ from .models import (
     NormalizedEvent,
     SessionUpsertRequest,
     SessionUpsertResult,
+    TranscriptIngestRequest,
+    TranscriptIngestResult,
 )
-from .service import append_normalized_events, finalize_session, upsert_session
+from .service import (
+    append_normalized_events,
+    finalize_session,
+    ingest_transcript_events,
+    upsert_session,
+)
 
 __all__ = [
     "AppendNormalizedEventsRequest",
@@ -19,7 +26,10 @@ __all__ = [
     "NormalizedEvent",
     "SessionUpsertRequest",
     "SessionUpsertResult",
+    "TranscriptIngestRequest",
+    "TranscriptIngestResult",
     "append_normalized_events",
     "finalize_session",
+    "ingest_transcript_events",
     "upsert_session",
 ]

@@ -5,14 +5,19 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
+from app.models.session import SessionEvent
 from app.services.agent_routing import resolve_agent
 from app.services.event_storage import get_max_sequence, get_max_turn, store_event
 from app.services.memory.session_analysis import analyze_session
 from app.services.session_operations import _validate_project_id, get_or_create_session
 
+from .adapters.base import ProviderSessionRef
+from .adapters.claude_code import ClaudeCodeTranscriptAdapter
+from .adapters.codex import CodexTranscriptAdapter
 from .models import (
     AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
@@ -21,6 +26,8 @@ from .models import (
     NormalizedEvent,
     SessionUpsertRequest,
     SessionUpsertResult,
+    TranscriptIngestRequest,
+    TranscriptIngestResult,
 )
 
 
@@ -127,12 +134,22 @@ async def append_normalized_events(
         return AppendNormalizedEventsResult(
             session_id=session_id,
             events_appended=0,
+            events_skipped=0,
             last_turn=current_turn or 1,
             last_sequence=current_sequence,
         )
 
     current_turn = await get_max_turn(db, session_id) or 1
     sequence_cache: dict[int, int] = {}
+    existing_pairs = await _load_existing_pairs(
+        db,
+        session_id,
+        {
+            event.turn
+            for event in request.events
+            if event.turn is not None and event.sequence is not None
+        },
+    )
 
     async def next_sequence(turn: int) -> int:
         if turn not in sequence_cache:
@@ -143,12 +160,20 @@ async def append_normalized_events(
     last_turn = current_turn
     last_sequence = 0
     event_ids: list[str] = []
+    events_skipped = 0
     for event in request.events:
         normalized = _normalize_event_turn_sequence(event, current_turn)
         turn = normalized.turn
         if turn is None:
             raise ValueError("Normalized event turn resolution failed")
         current_turn = max(current_turn, turn)
+        if normalized.sequence is not None:
+            sequence_cache[turn] = max(sequence_cache.get(turn, 0), normalized.sequence)
+            if (turn, normalized.sequence) in existing_pairs:
+                last_turn = turn
+                last_sequence = normalized.sequence
+                events_skipped += 1
+                continue
         sequence = normalized.sequence if normalized.sequence is not None else await next_sequence(turn)
         sequence_cache[turn] = max(sequence_cache.get(turn, 0), sequence)
         stored_event = await store_event(
@@ -175,7 +200,8 @@ async def append_normalized_events(
     await db.commit()
     return AppendNormalizedEventsResult(
         session_id=session_id,
-        events_appended=len(request.events),
+        events_appended=len(request.events) - events_skipped,
+        events_skipped=events_skipped,
         last_turn=last_turn,
         last_sequence=last_sequence,
         event_ids=event_ids,
@@ -215,3 +241,63 @@ async def finalize_session(
         feedback_created=result.feedback_created,
         summary_stored=result.summary_stored,
     )
+
+
+async def ingest_transcript_events(
+    db: AsyncSession,
+    session_id: str,
+    request: TranscriptIngestRequest,
+) -> TranscriptIngestResult:
+    """Parse a provider transcript and append normalized events idempotently."""
+    adapter = _adapter_for_provider(request.provider)
+    session_ref = ProviderSessionRef(
+        provider_session_id=session_id,
+        source_id=request.transcript_path,
+    )
+    events, next_checkpoint = await adapter.read_new_events(session_ref, request.checkpoint)
+    boundaries = await adapter.detect_boundaries(session_ref, request.checkpoint)
+    append_result = await append_normalized_events(
+        db=db,
+        session_id=session_id,
+        request=AppendNormalizedEventsRequest(events=events),
+    )
+    return TranscriptIngestResult(
+        session_id=session_id,
+        provider=request.provider,
+        transcript_path=request.transcript_path,
+        events_appended=append_result.events_appended,
+        events_skipped=append_result.events_skipped,
+        last_turn=append_result.last_turn,
+        last_sequence=append_result.last_sequence,
+        event_ids=append_result.event_ids,
+        next_checkpoint=next_checkpoint,
+        boundaries=[boundary.boundary_type for boundary in boundaries],
+    )
+
+
+async def _load_existing_pairs(
+    db: AsyncSession,
+    session_id: str,
+    turns: set[int],
+) -> set[tuple[int, int]]:
+    """Load already-persisted turn/sequence pairs for idempotent append."""
+    if not turns:
+        return set()
+
+    result = await db.execute(
+        select(SessionEvent.turn, SessionEvent.sequence).where(
+            SessionEvent.session_id == session_id,
+            SessionEvent.turn.in_(turns),
+        )
+    )
+    return {(turn, sequence) for turn, sequence in result.all()}
+
+
+def _adapter_for_provider(provider: str) -> ClaudeCodeTranscriptAdapter | CodexTranscriptAdapter:
+    """Resolve the transcript adapter for a provider."""
+    normalized = provider.lower()
+    if normalized in {"claude", "anthropic", "claude_code"}:
+        return ClaudeCodeTranscriptAdapter()
+    if normalized == "codex":
+        return CodexTranscriptAdapter()
+    raise ValueError(f"Unsupported transcript ingestion provider: {provider}")

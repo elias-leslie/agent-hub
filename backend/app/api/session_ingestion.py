@@ -17,8 +17,11 @@ from app.services.session_ingestion import (
     FinalizeSessionResult,
     SessionUpsertRequest,
     SessionUpsertResult,
+    TranscriptIngestRequest,
+    TranscriptIngestResult,
     append_normalized_events,
     finalize_session,
+    ingest_transcript_events,
     upsert_session,
 )
 
@@ -82,3 +85,21 @@ async def finalize_session_endpoint(
             status_code=500,
             detail=f"Failed to finalize session: {exc}",
         ) from exc
+
+
+@router.post(
+    "/sessions/{session_id}/transcript-events",
+    response_model=TranscriptIngestResult,
+)
+async def ingest_transcript_events_endpoint(
+    session_id: str,
+    request: TranscriptIngestRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TranscriptIngestResult:
+    """Translate a provider transcript into normalized session events."""
+    try:
+        await get_session_or_404(db, session_id)
+        return await ingest_transcript_events(db, session_id, request)
+    except ValueError as exc:
+        status = 404 if "not found" in str(exc).lower() else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc

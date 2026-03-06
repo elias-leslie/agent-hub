@@ -369,6 +369,43 @@ class TestAnalyzeSession:
         )
 
     @pytest.mark.asyncio
+    async def test_analyze_session_extracts_summary_tags_from_events(self) -> None:
+        """Event-backed analysis can persist inline summary tags without transcript rescans."""
+        with (
+            patch(
+                "app.services.memory.session_analysis.extract_citations_from_events",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.services.memory.session_analysis.extract_summary_tags_from_events",
+                new_callable=AsyncMock,
+                return_value=["[[S:completed:normalized events finalized cleanly]]"],
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_summary,
+        ):
+            result = await analyze_session(session_id="test-session")
+
+        assert result.citations_found == 0
+        assert result.summary_stored is True
+        mock_summary.assert_called_once_with(
+            "test-session",
+            ["[[S:completed:normalized events finalized cleanly]]"],
+            None,
+            None,
+            False,
+        )
+
+    @pytest.mark.asyncio
     async def test_analyze_session_uses_persisted_summary_context(self, tmp_path: Path) -> None:
         """Stored summary_context lets replay analysis recover transcript artifacts."""
         transcript = tmp_path / "codex-session.jsonl"
