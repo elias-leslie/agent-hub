@@ -7,6 +7,9 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from app.db import _get_session_factory
+from app.models import Session
+
 from .citation_parser import (
     extract_feedback_tag_strings,
     extract_summary_tag_strings,
@@ -60,6 +63,17 @@ async def analyze_session(
     transcript_path: str | None = None,
 ) -> AnalysisResult:
     """Analyze a session for memory citations and credit them."""
+    summary_context = await _load_summary_context(session_id)
+    if summary_context is not None:
+        if transcript_path is None:
+            transcript_path = summary_context.transcript_path
+        if git_context is None:
+            git_context = summary_context.git_context
+        if branch is None:
+            branch = summary_context.branch
+        if not is_worktree and summary_context.is_worktree:
+            is_worktree = True
+
     transcript_artifacts = _load_transcript_artifacts(transcript_path)
 
     if citation_prefixes is not None:
@@ -118,6 +132,41 @@ class _TranscriptArtifacts:
     citation_prefixes: list[str]
     feedback_tags: list[str]
     summary_tags: list[str]
+
+
+@dataclass(frozen=True)
+class _SummaryContext:
+    """Persisted summary request context stored on the session row."""
+
+    transcript_path: str | None
+    git_context: str | None
+    branch: str | None
+    is_worktree: bool
+
+
+async def _load_summary_context(session_id: str) -> _SummaryContext | None:
+    """Load persisted summary context used for replaying transcript-aware analysis."""
+    try:
+        async with _get_session_factory()() as db:
+            row = await db.execute(select(Session.provider_metadata).where(Session.id == session_id))
+            provider_metadata = row.scalar_one_or_none()
+    except Exception as e:
+        logger.debug("Summary context lookup skipped for %s: %s", session_id, e)
+        return None
+
+    if not isinstance(provider_metadata, dict):
+        return None
+
+    summary_context = provider_metadata.get("summary_context")
+    if not isinstance(summary_context, dict):
+        return None
+
+    return _SummaryContext(
+        transcript_path=summary_context.get("transcript_path"),
+        git_context=summary_context.get("git_context"),
+        branch=summary_context.get("branch"),
+        is_worktree=bool(summary_context.get("is_worktree")),
+    )
 
 
 def _load_transcript_artifacts(transcript_path: str | None) -> _TranscriptArtifacts | None:

@@ -53,12 +53,14 @@ function StateKpiCards({ analytics }: { analytics: MemoryAnalyticsDashboard["sta
 
 function ActivityKpiCards({ analytics }: { analytics: MemoryAnalyticsDashboard["activity"] }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
       <MetricCard label="Injections" value={analytics.injection_metrics.total_injections.toLocaleString()} icon={Download} color="amber" />
+      <MetricCard label="Recent Cited" value={analytics.usage_totals.cited.toLocaleString()} icon={Quote} color="purple" />
+      <MetricCard label="Helpful Signals" value={analytics.usage_totals.helpful.toLocaleString()} icon={Heart} color="rose" />
       <MetricCard label="Outcome Coverage" value={`${(analytics.injection_metrics.outcomes.coverage_rate * 100).toFixed(1)}%`} icon={Activity} color="emerald" />
       <MetricCard label="Success Rate" value={`${(analytics.injection_metrics.outcomes.success_rate * 100).toFixed(1)}%`} icon={CheckCircle2} color="green" />
-      <MetricCard label="Citation Rate" value={`${(analytics.injection_metrics.overall_citation_rate * 100).toFixed(1)}%`} icon={Quote} color="purple" />
-      <MetricCard label="Tier Changes" value={analytics.tier_changes.total.toLocaleString()} icon={ArrowUpDown} color="rose" />
+      <MetricCard label="Citation Rate" value={`${(analytics.injection_metrics.overall_citation_rate * 100).toFixed(1)}%`} icon={TrendingUp} color="sky" />
+      <MetricCard label="Tier Changes" value={analytics.tier_changes.total.toLocaleString()} icon={ArrowUpDown} color="amber" />
     </div>
   );
 }

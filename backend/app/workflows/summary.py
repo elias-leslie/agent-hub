@@ -39,6 +39,7 @@ class SummaryInput(BaseModel):
     ),
 )
 async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, Any]:
+    from app.services.memory.session_analysis import analyze_session
     from app.services.memory.summary_generator import generate_session_summary
 
     # Fetch memory contents for combined rating (replaces separate rate_session_memories call)
@@ -59,9 +60,23 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
 
     ctx.log(f"Summary generated for {input.session_id}: outcome={result.outcome}")
 
+    analysis_result = await analyze_session(
+        input.session_id,
+        transcript_path=input.transcript_path,
+        git_context=input.git_context,
+        branch=input.branch,
+        is_worktree=input.is_worktree,
+    )
+    ctx.log(
+        f"Session analysis for {input.session_id}: "
+        f"credited={analysis_result.citations_credited} "
+        f"feedback={analysis_result.feedback_created} "
+        f"summary={analysis_result.summary_stored}"
+    )
+
     rating_info = await _apply_memory_ratings(input.session_id, result, ctx)
 
-    return _build_result(input.session_id, result, rating_info)
+    return _build_result(input.session_id, result, rating_info, analysis_result)
 
 
 async def _generate_summary(
@@ -140,6 +155,7 @@ def _build_result(
     session_id: str,
     result: Any,
     rating_info: dict[str, Any],
+    analysis_result: Any,
 ) -> dict[str, Any]:
     """Build the final task result dictionary."""
     return {
@@ -148,6 +164,9 @@ def _build_result(
         "outcome": result.outcome,
         "summary": result.summary[:200],
         "git_digest": result.git_digest[:200] if result.git_digest else "",
+        "citations_credited": analysis_result.citations_credited,
+        "feedback_created": analysis_result.feedback_created,
+        "summary_stored": analysis_result.summary_stored,
         **rating_info,
     }
 
