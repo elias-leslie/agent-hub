@@ -14,7 +14,11 @@ from sqlalchemy import select
 from app.db import _get_session_factory
 from app.models import MemoryInjectionMetric, Session, SessionEvent
 
-from .citation_parser import extract_feedback_tags, extract_uuid_prefixes
+from .citation_parser import (
+    extract_feedback_tags,
+    extract_summary_tag_strings,
+    extract_uuid_prefixes,
+)
 from .memory_utils import build_group_id
 from .service import MemoryScope
 
@@ -71,6 +75,35 @@ async def extract_feedback_from_events(session_id: str) -> list[dict]:
                     seen.add(key)
 
     return all_tags
+
+
+async def extract_summary_tags_from_events(session_id: str) -> list[str]:
+    """Extract inline summary tag strings from session_events assistant messages."""
+    session_factory = _get_session_factory()
+
+    try:
+        async with session_factory() as db:
+            query = (
+                select(SessionEvent.content)
+                .where(SessionEvent.session_id == session_id)
+                .where(SessionEvent.event_type == "assistant_message")
+            )
+            result = await db.execute(query)
+            rows = result.scalars().all()
+    except Exception as e:
+        logger.debug("Could not load summary tags for session %s: %s", session_id, e)
+        return []
+
+    tags: list[str] = []
+    seen: set[str] = set()
+    for content in rows:
+        if not content:
+            continue
+        for tag in extract_summary_tag_strings(content):
+            if tag not in seen:
+                tags.append(tag)
+                seen.add(tag)
+    return tags
 
 
 async def get_session_group_id(session_id: str) -> str:

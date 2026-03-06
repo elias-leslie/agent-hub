@@ -21,6 +21,7 @@ from .session_analysis_feedback import fetch_feedback_tag_dicts, persist_feedbac
 from .session_analysis_summary import build_git_digest
 from .session_queries import (
     extract_citations_from_events,
+    extract_summary_tags_from_events,
     find_sessions_by_task,
     get_cited_memories,
     get_memories_loaded,
@@ -93,7 +94,9 @@ async def analyze_session(
     summary_stored = await _process_summary_tags(
         session_id,
         summary_tags if summary_tags is not None else (
-            transcript_artifacts.summary_tags if transcript_artifacts is not None else None
+            transcript_artifacts.summary_tags
+            if transcript_artifacts is not None
+            else await extract_summary_tags_from_events(session_id)
         ),
         git_context,
         branch,

@@ -131,3 +131,42 @@ class TestSessionIngestionAPI:
         assert data["session_id"] == "session-123"
         assert data["citations_credited"] == 2
         assert data["summary_stored"] is True
+
+    @pytest.mark.asyncio
+    async def test_transcript_events_endpoint(self, client: AsyncClient) -> None:
+        """Transcript ingest endpoint returns checkpointed append results."""
+        with (
+            patch(
+                "app.api.session_ingestion.get_session_or_404",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.api.session_ingestion.ingest_transcript_events",
+                new_callable=AsyncMock,
+                return_value={
+                    "session_id": "session-123",
+                    "provider": "codex",
+                    "transcript_path": "/tmp/session.jsonl",
+                    "events_appended": 4,
+                    "events_skipped": 0,
+                    "last_turn": 1,
+                    "last_sequence": 4,
+                    "event_ids": ["evt-1", "evt-2"],
+                    "next_checkpoint": "4",
+                    "boundaries": ["opened"],
+                },
+            ),
+        ):
+            response = await client.post(
+                "/api/session-ingestion/sessions/session-123/transcript-events",
+                json={
+                    "provider": "codex",
+                    "transcript_path": "/tmp/session.jsonl",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["events_appended"] == 4
+        assert data["next_checkpoint"] == "4"
+        assert data["boundaries"] == ["opened"]

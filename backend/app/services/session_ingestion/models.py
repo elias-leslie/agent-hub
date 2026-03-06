@@ -63,6 +63,7 @@ class AppendNormalizedEventsResult(BaseModel):
 
     session_id: str
     events_appended: int
+    events_skipped: int = 0
     last_turn: int
     last_sequence: int
     event_ids: list[str] = Field(default_factory=list)
@@ -88,3 +89,26 @@ class FinalizeSessionResult(BaseModel):
     citations_credited: int
     feedback_created: int = 0
     summary_stored: bool = False
+
+
+class TranscriptIngestRequest(BaseModel):
+    """Ingest a provider transcript into normalized session events."""
+
+    provider: str
+    transcript_path: str
+    checkpoint: str | None = None
+
+
+class TranscriptIngestResult(BaseModel):
+    """Outcome of ingesting transcript-backed events."""
+
+    session_id: str
+    provider: str
+    transcript_path: str
+    events_appended: int
+    events_skipped: int = 0
+    last_turn: int
+    last_sequence: int
+    event_ids: list[str] = Field(default_factory=list)
+    next_checkpoint: str | None = None
+    boundaries: list[str] = Field(default_factory=list)
