@@ -11,13 +11,9 @@ import {
   Heart,
   ArrowUpDown,
 } from "lucide-react";
+import { type MemoryAnalyticsDashboard } from "@/lib/memory-api";
 import {
-  type MemoryAnalytics,
-  type MetricsDashboard,
-  type TopMemory,
-  type TierChangesSummary,
-} from "@/lib/memory-api";
-import {
+  type AnalyticsLookback,
   MetricCard,
   SectionHeader,
   TimeRangeSelector,
@@ -33,68 +29,46 @@ import {
 import { TierChangesSection } from "./tier-changes-section";
 
 export interface AnalyticsContentProps {
-  analytics: MemoryAnalytics;
-  metrics: MetricsDashboard | undefined;
-  topMemories: TopMemory[];
-  tierChanges: TierChangesSummary | undefined;
-  days: number;
-  onDaysChange: (days: number) => void;
+  analytics: MemoryAnalyticsDashboard;
+  lookback: AnalyticsLookback;
+  onLookbackChange: (lookback: AnalyticsLookback) => void;
   topMemoriesSortBy: string;
   onTopMemoriesSortChange: (field: string) => void;
   onTierClick: (tier: string) => void;
   onMemoryClick: (uuid: string) => void;
 }
 
-function KpiCards({ analytics }: { analytics: MemoryAnalytics }) {
+function StateKpiCards({ analytics }: { analytics: MemoryAnalyticsDashboard["state"] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-      <MetricCard
-        label="Total Episodes"
-        value={analytics.total_episodes.toLocaleString()}
-        icon={Database}
-        color="emerald"
-      />
-      <MetricCard
-        label="Success Rate"
-        value={`${(analytics.success_rate * 100).toFixed(1)}%`}
-        icon={CheckCircle2}
-        color="green"
-      />
-      <MetricCard
-        label="Citation Rate"
-        value={`${(analytics.citation_rate * 100).toFixed(1)}%`}
-        icon={Quote}
-        color="purple"
-      />
-      <MetricCard
-        label="Avg Utility"
-        value={analytics.avg_utility_score.toFixed(2)}
-        icon={TrendingUp}
-        color="sky"
-      />
-      <MetricCard
-        label="Avg Lifecycle"
-        value={analytics.avg_lifecycle_score.toFixed(2)}
-        icon={Heart}
-        color="rose"
-      />
-      <MetricCard
-        label="Total Loaded"
-        value={analytics.total_loaded.toLocaleString()}
-        icon={Download}
-        color="amber"
-      />
+      <MetricCard label="Total Episodes" value={analytics.total_episodes.toLocaleString()} icon={Database} color="emerald" />
+      <MetricCard label="Avg Utility" value={analytics.avg_utility_score.toFixed(2)} icon={TrendingUp} color="sky" />
+      <MetricCard label="Avg Lifecycle" value={analytics.avg_lifecycle_score.toFixed(2)} icon={Heart} color="rose" />
+      <MetricCard label="Total Loaded" value={analytics.usage_totals.loaded.toLocaleString()} icon={Download} color="amber" />
+      <MetricCard label="Total Cited" value={analytics.usage_totals.cited.toLocaleString()} icon={Quote} color="purple" />
+      <MetricCard label="Helpful" value={analytics.usage_totals.helpful.toLocaleString()} icon={CheckCircle2} color="green" />
     </div>
   );
 }
 
-interface DistributionRowProps {
-  analytics: MemoryAnalytics;
-  metrics: MetricsDashboard | undefined;
+function ActivityKpiCards({ analytics }: { analytics: MemoryAnalyticsDashboard["activity"] }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <MetricCard label="Injections" value={analytics.injection_metrics.total_injections.toLocaleString()} icon={Download} color="amber" />
+      <MetricCard label="Outcome Coverage" value={`${(analytics.injection_metrics.outcomes.coverage_rate * 100).toFixed(1)}%`} icon={Activity} color="emerald" />
+      <MetricCard label="Success Rate" value={`${(analytics.injection_metrics.outcomes.success_rate * 100).toFixed(1)}%`} icon={CheckCircle2} color="green" />
+      <MetricCard label="Citation Rate" value={`${(analytics.injection_metrics.overall_citation_rate * 100).toFixed(1)}%`} icon={Quote} color="purple" />
+      <MetricCard label="Tier Changes" value={analytics.tier_changes.total.toLocaleString()} icon={ArrowUpDown} color="rose" />
+    </div>
+  );
+}
+
+interface StateDistributionRowProps {
+  analytics: MemoryAnalyticsDashboard["state"];
   onTierClick: (tier: string) => void;
 }
 
-function DistributionRow({ analytics, metrics, onTierClick }: DistributionRowProps) {
+function StateDistributionRow({ analytics, onTierClick }: StateDistributionRowProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
@@ -106,17 +80,15 @@ function DistributionRow({ analytics, metrics, onTierClick }: DistributionRowPro
         <ScopeChart data={analytics.scope_distribution} />
       </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-        <SectionHeader title="Feedback Loops" icon={Activity} />
-        <FeedbackLoopsHealth analytics={analytics} metrics={metrics} />
+        <SectionHeader title="Current Usage" icon={Activity} />
+        <UsageStats data={analytics.usage_totals} />
       </div>
     </div>
   );
 }
 
 interface DetailRowProps {
-  analytics: MemoryAnalytics;
-  topMemories: TopMemory[];
-  tierChanges: TierChangesSummary | undefined;
+  analytics: MemoryAnalyticsDashboard;
   topMemoriesSortBy: string;
   onTopMemoriesSortChange: (field: string) => void;
   onMemoryClick: (uuid: string) => void;
@@ -124,8 +96,6 @@ interface DetailRowProps {
 
 function DetailRow({
   analytics,
-  topMemories,
-  tierChanges,
   topMemoriesSortBy,
   onTopMemoriesSortChange,
   onMemoryClick,
@@ -133,13 +103,13 @@ function DetailRow({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-        <SectionHeader title="Usage Stats" icon={BarChart3} />
-        <UsageStats data={analytics} />
+        <SectionHeader title="Recent Feedback Loops" icon={BarChart3} />
+        <FeedbackLoopsHealth activity={analytics.activity} />
       </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
         <SectionHeader title="Top Performing Memories" icon={Trophy} />
         <TopMemoriesTable
-          data={topMemories}
+          data={analytics.state.top_memories}
           sortBy={topMemoriesSortBy}
           onSortChange={onTopMemoriesSortChange}
           onRowClick={onMemoryClick}
@@ -147,7 +117,7 @@ function DetailRow({
       </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
         <SectionHeader title="Tier Changes" icon={ArrowUpDown} />
-        <TierChangesSection data={tierChanges} />
+        <TierChangesSection data={analytics.activity.tier_changes} />
       </div>
     </div>
   );
@@ -155,11 +125,8 @@ function DetailRow({
 
 export function AnalyticsContent({
   analytics,
-  metrics,
-  topMemories,
-  tierChanges,
-  days,
-  onDaysChange,
+  lookback,
+  onLookbackChange,
   topMemoriesSortBy,
   onTopMemoriesSortChange,
   onTierClick,
@@ -171,18 +138,23 @@ export function AnalyticsContent({
         <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
           Memory Analytics
         </h2>
-        <TimeRangeSelector value={days} onChange={onDaysChange} />
+        <TimeRangeSelector value={lookback} onChange={onLookbackChange} />
       </div>
-      <KpiCards analytics={analytics} />
-      <DistributionRow analytics={analytics} metrics={metrics} onTierClick={onTierClick} />
+      <div className="space-y-3">
+        <SectionHeader title="Current State" icon={Database} />
+        <StateKpiCards analytics={analytics.state} />
+      </div>
+      <StateDistributionRow analytics={analytics.state} onTierClick={onTierClick} />
+      <div className="space-y-3">
+        <SectionHeader title={`Recent Activity (${analytics.activity.lookback})`} icon={TrendingUp} />
+        <ActivityKpiCards analytics={analytics.activity} />
+      </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
         <SectionHeader title="Injection Metrics Over Time" icon={TrendingUp} />
-        <InjectionMetricsChart data={metrics} />
+        <InjectionMetricsChart data={analytics.activity.injection_metrics} />
       </div>
       <DetailRow
         analytics={analytics}
-        topMemories={topMemories}
-        tierChanges={tierChanges}
         topMemoriesSortBy={topMemoriesSortBy}
         onTopMemoriesSortChange={onTopMemoriesSortChange}
         onMemoryClick={onMemoryClick}

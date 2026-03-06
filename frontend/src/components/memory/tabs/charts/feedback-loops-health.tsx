@@ -1,9 +1,8 @@
-import type { MemoryAnalytics, MetricsDashboard } from "@/lib/memory-api";
+import type { MemoryAnalyticsActivity } from "@/lib/memory-api";
 import { StatusDot } from "../analytics-components";
 
 interface FeedbackLoopsHealthProps {
-  analytics: MemoryAnalytics;
-  metrics: MetricsDashboard | undefined;
+  activity: MemoryAnalyticsActivity;
 }
 
 function getLoopStatus(value: number): "active" | "warning" | "inactive" {
@@ -11,25 +10,25 @@ function getLoopStatus(value: number): "active" | "warning" | "inactive" {
   return "inactive";
 }
 
-export function FeedbackLoopsHealth({ analytics, metrics }: FeedbackLoopsHealthProps) {
+export function FeedbackLoopsHealth({ activity }: FeedbackLoopsHealthProps) {
   const loops = [
     {
       name: "Citation Scanning",
-      description: "CC hook scans for [M:id]/[G:id]/[R:id] citations",
-      stat: `${analytics.total_cited} cited`,
-      status: getLoopStatus(analytics.total_cited),
+      description: "Recent citations credited from session analysis",
+      stat: `${activity.usage_totals.cited} cited`,
+      status: getLoopStatus(activity.usage_totals.cited),
     },
     {
       name: "Task Outcome",
-      description: "Task success/failure credited to injected memories",
-      stat: `${analytics.total_success} succeeded`,
-      status: getLoopStatus(analytics.total_success),
+      description: "Recent tasks with known outcomes in the selected window",
+      stat: `${activity.injection_metrics.outcomes.known_count} known`,
+      status: getLoopStatus(activity.injection_metrics.outcomes.known_count),
     },
     {
-      name: "Utility Scoring",
-      description: "3-tier formula: citations + success + recency",
-      stat: `${analytics.avg_utility_score.toFixed(2)} avg`,
-      status: getLoopStatus(analytics.avg_utility_score),
+      name: "Helpful Signals",
+      description: "Recent helpful credits captured for cited memories",
+      stat: `${activity.usage_totals.helpful} helpful`,
+      status: getLoopStatus(activity.usage_totals.helpful),
     },
   ];
 
@@ -48,11 +47,9 @@ export function FeedbackLoopsHealth({ analytics, metrics }: FeedbackLoopsHealthP
           <span className="text-xs font-mono text-slate-400 shrink-0">{loop.stat}</span>
         </div>
       ))}
-      {metrics && (
-        <div className="pt-1 text-[10px] text-slate-500 text-center">
-          {metrics.total_injections} total injections tracked
-        </div>
-      )}
+      <div className="pt-1 text-[10px] text-slate-500 text-center">
+        {activity.injection_metrics.outcomes.unknown_count} injections still missing outcomes
+      </div>
     </div>
   );
 }

@@ -11,8 +11,18 @@ export function InjectionMetricsChart({ data }: InjectionMetricsChartProps) {
     return <EmptyChart label="No injection metrics for this period" />;
   }
 
+  const formatPeriodLabel = (period: string) => {
+    if (period.includes(" ")) {
+      return period.slice(11, 16);
+    }
+    if (period.includes("-W")) {
+      return period.slice(2);
+    }
+    return period.slice(5);
+  };
+
   const chartData = data.by_period.map((d) => ({
-    period: d.period.slice(5),
+    period: formatPeriodLabel(d.period),
     injections: d.injection_count,
     successRate: Math.round(d.avg_success_rate * 100),
     citationRate: Math.round(d.avg_citation_rate * 100),

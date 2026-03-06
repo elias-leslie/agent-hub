@@ -165,23 +165,6 @@ export interface DailyTrend {
   count: number;
 }
 
-export interface MemoryAnalytics {
-  total_episodes: number;
-  tier_distribution: TierDistribution[];
-  scope_distribution: ScopeDistribution[];
-  total_loaded: number;
-  total_cited: number;
-  total_helpful: number;
-  total_harmful: number;
-  total_success: number;
-  citation_rate: number;
-  success_rate: number;
-  daily_trend: DailyTrend[];
-  avg_utility_score: number;
-  avg_lifecycle_score: number;
-  lifecycle_by_tier: Record<string, number>;
-}
-
 export interface TopMemory {
   uuid: string;
   content: string;
@@ -231,10 +214,52 @@ export interface MetricsDashboard {
   total_injections: number;
   period_start: string;
   period_end: string;
+  period_granularity: string;
   by_variant: VariantMetrics[];
   by_period: TimePeriodMetrics[];
   overall_success_rate: number;
   overall_citation_rate: number;
+  outcomes: OutcomeSummary;
+}
+
+export interface UsageTotals {
+  loaded: number;
+  cited: number;
+  helpful: number;
+  harmful: number;
+  success?: number;
+}
+
+export interface OutcomeSummary {
+  success_count: number;
+  fail_count: number;
+  unknown_count: number;
+  known_count: number;
+  coverage_rate: number;
+  success_rate: number;
+}
+
+export interface MemoryAnalyticsState {
+  total_episodes: number;
+  tier_distribution: TierDistribution[];
+  scope_distribution: ScopeDistribution[];
+  usage_totals: UsageTotals;
+  avg_utility_score: number;
+  avg_lifecycle_score: number;
+  lifecycle_by_tier: Record<string, number>;
+  top_memories: TopMemory[];
+}
+
+export interface MemoryAnalyticsActivity {
+  lookback: string;
+  usage_totals: UsageTotals & { success: number };
+  injection_metrics: MetricsDashboard;
+  tier_changes: TierChangesSummary;
+}
+
+export interface MemoryAnalyticsDashboard {
+  state: MemoryAnalyticsState;
+  activity: MemoryAnalyticsActivity;
 }
 
 export interface SessionSummary {
@@ -279,4 +304,3 @@ export interface SimilarEpisodesResponse {
   similar: SimilarEpisode[];
   total: number;
 }
-

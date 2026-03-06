@@ -30,9 +30,6 @@ export {
   searchMemories,
   fetchTimeline,
   fetchMemoryAnalytics,
-  fetchMemoryMetrics,
-  fetchTopMemories,
-  fetchTierChanges,
   generateSessionSummary,
   fetchContinuityContext,
 } from "./memory/search";

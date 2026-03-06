@@ -1,19 +1,19 @@
 import { Download, Quote, ThumbsUp, ThumbsDown, CheckCircle2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MemoryAnalytics } from "@/lib/memory-api";
+import type { UsageTotals } from "@/lib/memory-api";
 
 interface UsageStatsProps {
-  data: MemoryAnalytics;
+  data: UsageTotals;
 }
 
 export function UsageStats({ data }: UsageStatsProps) {
   const items = [
-    { label: "Loaded", value: data.total_loaded, icon: Download, color: "text-sky-400", bg: "bg-sky-500/10" },
-    { label: "Cited", value: data.total_cited, icon: Quote, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-    { label: "Success", value: data.total_success, icon: CheckCircle2, color: "text-green-400", bg: "bg-green-500/10" },
-    { label: "Helpful", value: data.total_helpful, icon: ThumbsUp, color: "text-teal-400", bg: "bg-teal-500/10" },
-    { label: "Harmful", value: data.total_harmful, icon: ThumbsDown, color: "text-amber-400", bg: "bg-amber-500/10" },
-    { label: "Injections", value: data.total_loaded + data.total_cited, icon: Zap, color: "text-violet-400", bg: "bg-violet-500/10" },
+    { label: "Loaded", value: data.loaded, icon: Download, color: "text-sky-400", bg: "bg-sky-500/10" },
+    { label: "Cited", value: data.cited, icon: Quote, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    { label: "Success", value: data.success ?? 0, icon: CheckCircle2, color: "text-green-400", bg: "bg-green-500/10" },
+    { label: "Helpful", value: data.helpful, icon: ThumbsUp, color: "text-teal-400", bg: "bg-teal-500/10" },
+    { label: "Harmful", value: data.harmful, icon: ThumbsDown, color: "text-amber-400", bg: "bg-amber-500/10" },
+    { label: "Tracked Events", value: data.loaded + data.cited + (data.success ?? 0), icon: Zap, color: "text-violet-400", bg: "bg-violet-500/10" },
   ];
 
   return (

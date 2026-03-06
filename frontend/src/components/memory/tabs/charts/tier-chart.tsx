@@ -1,10 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import type { MemoryAnalytics } from "@/lib/memory-api";
+import type { MemoryAnalyticsState } from "@/lib/memory-api";
 import { TIER_COLORS, TIER_LABELS } from "../analytics-constants";
 import { EmptyChart } from "../analytics-components";
 
 interface TierChartProps {
-  data: MemoryAnalytics["tier_distribution"];
+  data: MemoryAnalyticsState["tier_distribution"];
   onTierClick?: (tier: string) => void;
 }
 

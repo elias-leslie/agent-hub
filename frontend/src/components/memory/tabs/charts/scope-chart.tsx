@@ -1,9 +1,9 @@
 import { cn } from "@/lib/utils";
-import type { MemoryAnalytics } from "@/lib/memory-api";
+import type { MemoryAnalyticsState } from "@/lib/memory-api";
 import { EmptyChart } from "../analytics-components";
 
 interface ScopeChartProps {
-  data: MemoryAnalytics["scope_distribution"];
+  data: MemoryAnalyticsState["scope_distribution"];
 }
 
 export function ScopeChart({ data }: ScopeChartProps) {

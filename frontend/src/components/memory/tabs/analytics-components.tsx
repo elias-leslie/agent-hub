@@ -2,15 +2,19 @@ import { BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COLOR_MAP, type ColorVariant } from "./analytics-constants";
 
-const TIME_RANGES = [
-  { label: "7d", value: 7 },
-  { label: "14d", value: 14 },
-  { label: "30d", value: 30 },
+export const TIME_RANGES = [
+  { label: "1h", value: "1h" },
+  { label: "1d", value: "1d" },
+  { label: "7d", value: "7d" },
+  { label: "14d", value: "14d" },
+  { label: "30d", value: "30d" },
 ] as const;
 
+export type AnalyticsLookback = (typeof TIME_RANGES)[number]["value"];
+
 interface TimeRangeSelectorProps {
-  value: number;
-  onChange: (days: number) => void;
+  value: AnalyticsLookback;
+  onChange: (lookback: AnalyticsLookback) => void;
 }
 
 export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
