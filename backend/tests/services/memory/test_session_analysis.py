@@ -291,6 +291,87 @@ class TestAnalyzeSession:
             False,
         )
 
+    @pytest.mark.asyncio
+    async def test_analyze_session_uses_persisted_summary_context(self, tmp_path: Path) -> None:
+        """Stored summary_context lets replay analysis recover transcript artifacts."""
+        transcript = tmp_path / "codex-session.jsonl"
+        transcript.write_text(
+            '{"type":"response_item","payload":{"type":"message","role":"assistant",'
+            '"content":[{"type":"output_text","text":"Applied: [M:abc12345] '
+            '[[F:praise:ah.memory:replay worked]] [[S:completed:replayed analysis]]"}]}}'
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = {
+            "summary_context": {
+                "transcript_path": str(transcript),
+                "git_context": "abc1234 feat: replay",
+                "branch": "main",
+                "is_worktree": True,
+            }
+        }
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = mock_result
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "app.services.memory.session_analysis._get_session_factory",
+                return_value=mock_factory,
+            ),
+            patch(
+                "app.services.memory.session_analysis.resolve_full_uuids",
+                new_callable=AsyncMock,
+                return_value={"abc12345": "abc12345-full"},
+            ),
+            patch(
+                "app.services.memory.session_analysis.get_session_group_id",
+                new_callable=AsyncMock,
+                return_value="global",
+            ),
+            patch(
+                "app.services.memory.session_analysis.track_referenced_batch",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.memory.session_analysis.store_cite_event",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.memory.session_analysis.update_citation_metrics",
+                new_callable=AsyncMock,
+                return_value=1,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_feedback,
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_summary,
+        ):
+            result = await analyze_session(session_id="test-session")
+
+        assert result.citations_found == 1
+        assert result.feedback_created == 1
+        assert result.summary_stored is True
+        mock_feedback.assert_called_once_with(
+            "test-session",
+            ["[[F:praise:ah.memory:replay worked]]"],
+        )
+        mock_summary.assert_called_once_with(
+            "test-session",
+            ["[[S:completed:replayed analysis]]"],
+            "abc1234 feat: replay",
+            "main",
+            True,
+        )
+
 
 @pytest.mark.unit
 class TestProcessTaskOutcome:

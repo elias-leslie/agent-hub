@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
+from app.db import _get_session_factory
+from app.models import Session
 from app.services.memory.analytics_models import MemoryAnalyticsDashboard
 from app.services.memory.service import MemoryCategory, MemoryScope
 
@@ -21,6 +23,42 @@ router = APIRouter()
 
 # Strong references to background tasks to prevent GC before completion (RUF006)
 _background_tasks: set[Any] = set()
+
+
+async def _store_summary_request_context(
+    session_id: str,
+    branch: str | None,
+    is_worktree: bool,
+    transcript_path: str | None,
+    git_context: str | None,
+) -> None:
+    """Persist summary request context for future transcript-aware reanalysis."""
+    if not any((branch, is_worktree, transcript_path, git_context)):
+        return
+
+    try:
+        async with _get_session_factory()() as db:
+            row = await db.execute(select(Session).where(Session.id == session_id))
+            session = row.scalar_one_or_none()
+            if not session:
+                return
+
+            provider_metadata = dict(session.provider_metadata or {})
+            summary_context = dict(provider_metadata.get("summary_context") or {})
+
+            if branch is not None:
+                summary_context["branch"] = branch
+            summary_context["is_worktree"] = is_worktree
+            if transcript_path is not None:
+                summary_context["transcript_path"] = transcript_path
+            if git_context is not None:
+                summary_context["git_context"] = git_context
+
+            provider_metadata["summary_context"] = summary_context
+            session.provider_metadata = provider_metadata
+            await db.commit()
+    except Exception as e:
+        logger.warning("Failed to persist summary context for %s: %s", session_id, e)
 
 
 @router.get("/timeline")
@@ -143,9 +181,6 @@ async def summarize_session(
 ) -> Any:
     from fastapi.responses import JSONResponse
 
-    from app.db import _get_session_factory
-    from app.models import Session
-
     # Short-circuit: if inline summary already stored, skip LLM summarizer
     async with _get_session_factory()() as db:
         row = await db.execute(
@@ -163,6 +198,13 @@ async def summarize_session(
     transcript_path = request.transcript_path if request else None
     git_context = request.git_context if request else None
     async_dispatch = request.async_dispatch if request else False
+    await _store_summary_request_context(
+        session_id,
+        branch=branch,
+        is_worktree=is_worktree,
+        transcript_path=transcript_path,
+        git_context=git_context,
+    )
 
     if async_dispatch:
         dispatched = await dispatch_to_hatchet(
