@@ -73,6 +73,14 @@ class CredentialListResponse(BaseModel):
     total: int
 
 
+class SetPrimaryCredentialResponse(BaseModel):
+    """Response body for setting primary credential."""
+
+    success: bool
+    provider: str
+    primary_credential_id: int
+
+
 @router.post("/credentials", response_model=CredentialResponse, status_code=201)
 async def create_credential(
     request: CredentialCreate,
@@ -234,6 +242,16 @@ async def update_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CredentialResponse:
     """Update a credential's value."""
+    old_credential = await get_credential_by_id_async(db, credential_id)
+    if not old_credential:
+        raise HTTPException(status_code=404, detail="Credential not found")
+
+    old_value: str | None
+    try:
+        old_value = decrypt_value(old_credential.value_encrypted)
+    except Exception:
+        old_value = None
+
     try:
         credential = await update_credential_async(db, credential_id, request.value)
     except EncryptionError as e:
@@ -242,8 +260,11 @@ async def update_credential(
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
 
-    # Update cache
-    get_credential_manager().set(credential.provider, credential.credential_type, request.value)
+    cm = get_credential_manager()
+    if old_value is not None:
+        cm.replace_value(credential.provider, credential.credential_type, old_value, request.value)
+    else:
+        cm.set(credential.provider, credential.credential_type, request.value)
 
     return CredentialResponse(
         id=credential.id,
@@ -266,7 +287,82 @@ async def delete_credential(
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
 
+    # Decrypt to get the actual value for targeted multi-cache removal
+    try:
+        value = decrypt_value(credential.value_encrypted)
+    except EncryptionError:
+        value = None
+
     deleted = await delete_credential_async(db, credential_id)
     if deleted:
-        # Remove from cache
-        get_credential_manager().remove(credential.provider, credential.credential_type)
+        cm = get_credential_manager()
+        if value:
+            cm.remove_value(credential.provider, credential.credential_type, value)
+        else:
+            cm.remove(credential.provider, credential.credential_type)
+
+
+@router.post("/credentials/{credential_id}/set-primary", response_model=SetPrimaryCredentialResponse)
+async def set_primary_credential(
+    credential_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SetPrimaryCredentialResponse:
+    """Set an API key credential as primary by swapping with current first key.
+
+    Primary key is defined by lowest credential ID in provider/api_key order.
+    """
+    target = await get_credential_by_id_async(db, credential_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Credential not found")
+
+    if target.credential_type != "api_key":
+        raise HTTPException(status_code=400, detail="Only api_key credentials can be made primary")
+
+    creds = await list_credentials_async(db, provider=target.provider)
+    api_keys = [c for c in creds if c.credential_type == "api_key"]
+    if not api_keys:
+        raise HTTPException(status_code=400, detail="No API keys found for provider")
+
+    primary = api_keys[0]
+    if primary.id == target.id:
+        return SetPrimaryCredentialResponse(
+            success=True, provider=target.provider, primary_credential_id=target.id
+        )
+
+    try:
+        primary_value = decrypt_value(primary.value_encrypted)
+        target_value = decrypt_value(target.value_encrypted)
+    except EncryptionError as e:
+        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
+
+    try:
+        await update_credential_async(db, primary.id, target_value)
+        await update_credential_async(db, target.id, primary_value)
+    except EncryptionError as e:
+        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
+
+    refreshed = await list_credentials_async(db, provider=target.provider)
+    ordered_keys: list[str] = []
+    for cred in refreshed:
+        if cred.credential_type != "api_key":
+            continue
+        try:
+            ordered_keys.append(decrypt_value(cred.value_encrypted))
+        except EncryptionError:
+            continue
+
+    cm = get_credential_manager()
+    cm.set_api_keys(target.provider, ordered_keys)
+
+    new_primary_id = primary.id
+    if refreshed:
+        for cred in refreshed:
+            if cred.credential_type == "api_key":
+                new_primary_id = cred.id
+                break
+
+    return SetPrimaryCredentialResponse(
+        success=True,
+        provider=target.provider,
+        primary_credential_id=new_primary_id,
+    )

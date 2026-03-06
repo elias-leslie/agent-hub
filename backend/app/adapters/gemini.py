@@ -1,8 +1,10 @@
 """Gemini adapter using Google GenAI SDK (API key) or CloudCode PA (OAuth).
 
 When the primary auth mode is OAuth and a request hits a rate limit (429),
-the adapter automatically falls back to the SDK client (API key) for that
-request if a Gemini API key is available.
+the adapter automatically falls back to SDK clients (API keys) for that
+request. Multiple API keys are tried in order until one succeeds.
+
+Failover chain: OAuth → API key 1 → API key 2 → ... → raise error.
 """
 
 import logging
@@ -10,6 +12,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from app.adapters._errors_types import ProviderError
+from app.adapters._gemini_cloudcode_ops import _is_retryable_error
 from app.adapters.base import CompletionResult, Message, ProviderAdapter, StreamEvent
 from app.adapters.gemini_adapter_ops import (
     cloudcode_health_check,
@@ -30,7 +33,7 @@ from app.adapters.gemini_adapter_settings import (
 )
 from app.adapters.gemini_adapter_stream import sdk_stream
 from app.adapters.gemini_cloudcode import cloudcode_complete, cloudcode_stream
-from app.adapters.gemini_utils import resolve_api_key
+from app.adapters.gemini_utils import resolve_api_key, resolve_api_keys
 from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
 
 logger = logging.getLogger(__name__)
@@ -50,6 +53,8 @@ class GeminiAdapter(ProviderAdapter):
     - OAuth mode: Uses raw HTTP to ``cloudcode-pa.googleapis.com`` via
       :class:`CloudCodeClient` — the same endpoint the Gemini CLI uses,
       which routes through a consumer subscription (zero per-token cost).
+
+    Supports multiple API keys for failover on rate limits.
     """
 
     def __init__(
@@ -64,21 +69,39 @@ class GeminiAdapter(ProviderAdapter):
         self._auth_mode, self._client, self._cc_client = pick_auth_mode(
             resolved_key, oauth_data, get_gemini_auth_preference(),
         )
-        self._last_api_key = resolved_key
+        self._explicit_api_key = api_key
         self._oauth_project = oauth_data.get("project_id") if oauth_data else None
 
+        # Build list of SDK clients for all available API keys (for failover).
+        all_keys = resolve_api_keys()
+        self._sdk_clients: list[Any] = []
+        self._api_keys: list[str] = []
+        for k in all_keys:
+            self._sdk_clients.append(make_sdk_client(k))
+            self._api_keys.append(k)
+
+        # If we have an explicit key not in the list, add it too
+        if resolved_key and resolved_key not in self._api_keys:
+            self._sdk_clients.insert(0, make_sdk_client(resolved_key))
+            self._api_keys.insert(0, resolved_key)
+
+        # Ensure backward compat: self._client is the first SDK client
+        if not self._client and self._sdk_clients:
+            self._client = self._sdk_clients[0]
+
         # Keep an SDK client ready for API-key fallback when OAuth is rate-limited.
-        # If primary mode is OAuth and we have an API key, create the SDK client
-        # eagerly so it's available for fallback without extra latency.
-        if self._auth_mode == "oauth" and resolved_key and self._client is None:
-            self._client = make_sdk_client(resolved_key)
+        if self._auth_mode == "oauth" and self._sdk_clients:
+            if self._client is None:
+                self._client = self._sdk_clients[0]
+            key_count = len(self._sdk_clients)
             logger.info(
-                "Gemini adapter: OAuth primary with API-key fallback available",
+                "Gemini adapter: OAuth primary with %d API-key fallback(s) available",
+                key_count,
             )
 
         logger.info(
-            "Gemini adapter initialized with %s auth (preference=%s)",
-            self._auth_mode, get_gemini_auth_preference(),
+            "Gemini adapter initialized with %s auth (preference=%s, api_keys=%d)",
+            self._auth_mode, get_gemini_auth_preference(), len(self._sdk_clients),
         )
         self._after_tool_callback = after_tool_callback
 
@@ -87,12 +110,21 @@ class GeminiAdapter(ProviderAdapter):
         return "gemini"
 
     def _refresh_api_key(self) -> None:
-        """Refresh API key from CredentialManager if rotated."""
-        fresh = resolve_api_key(None)
-        if fresh and fresh != self._last_api_key:
-            self._client = make_sdk_client(fresh)
-            self._last_api_key = fresh
-            logger.debug("Gemini: credential refreshed from cache")
+        """Refresh API keys from CredentialManager if rotated."""
+        fresh_keys = resolve_api_keys()
+        if not fresh_keys:
+            fallback = self._explicit_api_key or resolve_api_key(None)
+            if fallback:
+                fresh_keys = [fallback]
+
+        if fresh_keys != self._api_keys:
+            self._sdk_clients = [make_sdk_client(k) for k in fresh_keys]
+            self._api_keys = fresh_keys
+            if self._sdk_clients:
+                self._client = self._sdk_clients[0]
+            else:
+                self._client = None
+            logger.debug("Gemini: %d API key(s) refreshed from cache", len(fresh_keys))
 
     def _refresh_oauth(self) -> None:
         """Push fresher OAuth tokens from CredentialManager into CloudCodeClient."""
@@ -116,12 +148,72 @@ class GeminiAdapter(ProviderAdapter):
                 self._refresh_api_key()
             elif self._auth_mode == "oauth":
                 self._refresh_oauth()
+                self._refresh_api_key()  # Also refresh fallback keys
         except Exception:
             pass
 
     def _has_api_key_fallback(self) -> bool:
-        """True if we're in OAuth mode but have an SDK client for fallback."""
-        return self._auth_mode == "oauth" and self._client is not None
+        """True if we're in OAuth mode and have SDK clients for fallback."""
+        return self._auth_mode == "oauth" and len(self._sdk_clients) > 0
+
+    def _get_stream_client(self) -> Any:
+        """Return the first available SDK client for streaming."""
+        if self._sdk_clients:
+            return self._sdk_clients[0]
+        if self._client is not None:
+            return self._client
+        raise ProviderError(
+            "Gemini API key is not configured",
+            provider=self.provider_name,
+            retriable=False,
+        )
+
+    async def _sdk_complete_with_failover(
+        self,
+        messages: list[Message],
+        model: str,
+        temperature: float,
+        max_tokens: int | None,
+        kwargs: dict[str, Any],
+    ) -> CompletionResult:
+        """Try each SDK client in order; raise last error if all fail."""
+        if not self._sdk_clients:
+            if self._client is None:
+                raise ProviderError(
+                    "Gemini API key is not configured",
+                    provider=self.provider_name,
+                    retriable=False,
+                )
+            return await sdk_complete(
+                self._client, messages, model, temperature,
+                max_tokens, self.provider_name, kwargs,
+            )
+
+        last_error: ProviderError | None = None
+        for i, client in enumerate(self._sdk_clients):
+            try:
+                result = await sdk_complete(
+                    client, messages, model, temperature,
+                    max_tokens, self.provider_name, kwargs,
+                )
+                if i > 0:
+                    logger.info("Gemini: API key #%d succeeded after %d failure(s)", i + 1, i)
+                return result
+            except ProviderError as e:
+                last_error = e
+                if not e.retriable:
+                    raise  # Non-retriable errors propagate immediately
+                logger.warning(
+                    "Gemini API key #%d rate-limited for %s, trying next key",
+                    i + 1, model,
+                )
+        # All keys exhausted — fall back to primary client or raise
+        if last_error:
+            raise last_error
+        return await sdk_complete(
+            self._client, messages, model, temperature,
+            max_tokens, self.provider_name, kwargs,
+        )
 
     async def complete(
         self,
@@ -137,9 +229,8 @@ class GeminiAdapter(ProviderAdapter):
         # Image models don't work on CloudCode — always use SDK (API key).
         if model in _IMAGE_MODELS:
             logger.info("Image model %s: bypassing CloudCode, using SDK", model)
-            return await sdk_complete(
-                self._client, messages, model, temperature,
-                max_tokens, self.provider_name, kwargs,
+            return await self._sdk_complete_with_failover(
+                messages, model, temperature, max_tokens, kwargs,
             )
         if self._auth_mode == "oauth" and self._cc_client is not None:
             try:
@@ -150,18 +241,64 @@ class GeminiAdapter(ProviderAdapter):
             except ProviderError as e:
                 if e.retriable and self._has_api_key_fallback():
                     logger.warning(
-                        "Gemini OAuth rate-limited, falling back to API key for %s",
+                        "Gemini OAuth rate-limited, falling back to API keys for %s",
                         model,
                     )
-                    return await sdk_complete(
-                        self._client, messages, model, temperature,
-                        max_tokens, self.provider_name, kwargs,
+                    return await self._sdk_complete_with_failover(
+                        messages, model, temperature, max_tokens, kwargs,
                     )
                 raise
-        return await sdk_complete(
-            self._client, messages, model, temperature,
-            max_tokens, self.provider_name, kwargs,
+        return await self._sdk_complete_with_failover(
+            messages, model, temperature, max_tokens, kwargs,
         )
+
+    async def _sdk_stream_with_failover(
+        self,
+        messages: list[Message],
+        model: str,
+        temperature: float,
+        max_tokens: int | None,
+        kwargs: dict[str, Any],
+    ) -> AsyncIterator[StreamEvent]:
+        """Try SDK stream across keys; fail over on retryable pre-content errors."""
+        clients = self._sdk_clients if self._sdk_clients else [self._get_stream_client()]
+
+        for i, client in enumerate(clients):
+            emitted_non_error = False
+            async for event in sdk_stream(
+                client,
+                messages,
+                model,
+                temperature,
+                max_tokens,
+                self.provider_name,
+                kwargs,
+            ):
+                if event.type != "error":
+                    emitted_non_error = True
+                    yield event
+                    continue
+
+                can_fail_over = (
+                    not emitted_non_error
+                    and i < len(clients) - 1
+                    and bool(event.error)
+                    and _is_retryable_error(event.error or "")
+                )
+                if can_fail_over:
+                    logger.warning(
+                        "Gemini API key #%d stream failed (%s), trying next key",
+                        i + 1,
+                        event.error,
+                    )
+                    break
+                yield event
+                return
+            else:
+                # Stream completed successfully for this client.
+                return
+
+        yield StreamEvent(type="error", error="Gemini stream retries exhausted across API keys")
 
     async def health_check(self) -> bool:
         """Check if Gemini API is reachable."""
@@ -187,9 +324,12 @@ class GeminiAdapter(ProviderAdapter):
         # Image models don't work on CloudCode — always use SDK (API key).
         if model in _IMAGE_MODELS:
             logger.info("Image model %s: bypassing CloudCode stream, using SDK", model)
-            async for event in sdk_stream(
-                self._client, messages, model, temperature,
-                max_tokens, self.provider_name, kwargs,
+            async for event in self._sdk_stream_with_failover(
+                messages,
+                model,
+                temperature,
+                max_tokens,
+                kwargs,
             ):
                 yield event
             return
@@ -204,15 +344,19 @@ class GeminiAdapter(ProviderAdapter):
             except ProviderError as e:
                 if e.retriable and self._has_api_key_fallback():
                     logger.warning(
-                        "Gemini OAuth rate-limited during stream, falling back to API key for %s",
+                        "Gemini OAuth rate-limited during stream, falling back to API keys for %s",
                         model,
                     )
-                    # Fall through to SDK stream below
+                    # Fall through to SDK stream with failover below
                 else:
                     raise
-        async for event in sdk_stream(
-            self._client, messages, model, temperature,
-            max_tokens, self.provider_name, kwargs,
+        # SDK stream — try first available client
+        async for event in self._sdk_stream_with_failover(
+            messages,
+            model,
+            temperature,
+            max_tokens,
+            kwargs,
         ):
             yield event
 

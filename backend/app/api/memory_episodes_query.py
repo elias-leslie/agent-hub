@@ -18,6 +18,7 @@ async def handle_list_episodes(
     limit: int,
     cursor: str | None,
     category: MemoryCategory | None,
+    all_groups: bool = False,
 ) -> MemoryListResult:
     """List memory episodes with cursor-based pagination."""
     try:
@@ -25,16 +26,19 @@ async def handle_list_episodes(
             limit=limit,
             cursor=cursor,
             category=category,
-            all_groups=True,
+            all_groups=all_groups,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list episodes: {e}") from e
 
 
-async def handle_get_memory_stats(memory: MemoryService) -> MemoryStats:
-    """Get memory statistics across all groups."""
+async def handle_get_memory_stats(
+    memory: MemoryService,
+    all_groups: bool = False,
+) -> MemoryStats:
+    """Get memory statistics."""
     try:
-        return await memory.get_stats(all_groups=True)
+        return await memory.get_stats(all_groups=all_groups)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
 

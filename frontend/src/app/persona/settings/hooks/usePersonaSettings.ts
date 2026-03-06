@@ -66,7 +66,7 @@ export function usePersonaSettings() {
   });
 
   const { data: availableModels = [] } = useQuery({
-    queryKey: ["models"],
+    queryKey: ["models", "options"],
     queryFn: fetchModels,
   });
 

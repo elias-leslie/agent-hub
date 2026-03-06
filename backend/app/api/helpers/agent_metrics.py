@@ -6,7 +6,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.agent_schemas import AgentMetrics
-from app.models import RequestLog
+from app.models import CostLog, RequestLog, Session
 
 
 async def compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetrics:
@@ -42,7 +42,19 @@ async def compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetri
     success_count = row.success_count or 0
     tokens_24h = (row.tokens_in or 0) + (row.tokens_out or 0)
 
-    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100.0
+    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 0.0
+
+    # Cost is tracked in cost_logs keyed by session_id; join sessions to map to agent_slug.
+    cost_query = (
+        select(func.coalesce(func.sum(CostLog.cost_usd), 0.0))
+        .join(Session, Session.id == CostLog.session_id)
+        .where(
+            Session.agent_slug == agent_slug,
+            CostLog.created_at >= cutoff_24h,
+        )
+    )
+    cost_result = await db.execute(cost_query)
+    cost_24h_usd = float(cost_result.scalar() or 0.0)
 
     # Hourly sparkline data (24 buckets)
     latency_trend: list[float] = []
@@ -68,7 +80,7 @@ async def compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetri
         latency_trend.append(float(hourly_row.avg_latency or 0))
         hourly_total = hourly_row.total or 0
         hourly_success = hourly_row.success or 0
-        success_trend.append((hourly_success / hourly_total * 100) if hourly_total > 0 else 100.0)
+        success_trend.append((hourly_success / hourly_total * 100) if hourly_total > 0 else 0.0)
 
     return AgentMetrics(
         slug=agent_slug,
@@ -76,7 +88,7 @@ async def compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetri
         avg_latency_ms=avg_latency,
         success_rate=success_rate,
         tokens_24h=tokens_24h,
-        cost_24h_usd=0.0,  # TODO: Join with cost_logs if needed
+        cost_24h_usd=cost_24h_usd,
         latency_trend=latency_trend,
         success_trend=success_trend,
     )

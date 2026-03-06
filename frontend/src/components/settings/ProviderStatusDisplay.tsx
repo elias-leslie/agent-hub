@@ -1,6 +1,16 @@
 "use client";
 
-import { Shield, Key, Activity, Clock, Zap, AlertTriangle } from "lucide-react";
+import {
+  Shield,
+  Key,
+  Activity,
+  Clock,
+  Zap,
+  AlertTriangle,
+  ArrowUp,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Credential } from "@/lib/api";
 import type { ProviderInfo } from "./constants";
@@ -30,6 +40,9 @@ interface ProviderStatusDisplayProps {
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
   vertexProject?: string;
   onVertexProjectChange?: (project: string) => void;
+  onEditCredential?: (credentialId: number) => void;
+  onDeleteCredential?: (credentialId: number) => void;
+  onSetPrimaryCredential?: (credentialId: number) => void;
 }
 
 export function ProviderStatusDisplay({
@@ -48,6 +61,9 @@ export function ProviderStatusDisplay({
   onPreferenceChange,
   vertexProject,
   onVertexProjectChange,
+  onEditCredential,
+  onDeleteCredential,
+  onSetPrimaryCredential,
 }: ProviderStatusDisplayProps) {
   // Primary credential for single-field providers
   const primaryCredential = credentials.find((c) => c.credential_type === "api_key") ?? credentials[0];
@@ -55,8 +71,8 @@ export function ProviderStatusDisplay({
   // Latest credential updated_at = "last authenticated"
   const authSince = credentials.length > 0
     ? credentials.reduce((latest, c) =>
-        new Date(c.updated_at) > new Date(latest.updated_at) ? c : latest
-      ).updated_at
+      new Date(c.updated_at) > new Date(latest.updated_at) ? c : latest
+    ).updated_at
     : null;
 
   // Not configured at all — show hint
@@ -88,6 +104,7 @@ export function ProviderStatusDisplay({
         preferredAuth={preferredAuth}
         onPreferenceChange={onPreferenceChange}
         provider={provider}
+        credentials={credentials}
       />
 
       {/* Row 2: Health metrics strip (when health data available) */}
@@ -119,11 +136,53 @@ export function ProviderStatusDisplay({
         </div>
       )}
 
-      {/* Single-field credential display */}
-      {isConfigured && !provider.credentialFields && primaryCredential && !isOAuth && (
-        <p className="text-[10px] text-slate-500 truncate">
-          <code className="font-mono">{primaryCredential.value_masked}</code>
-        </p>
+      {/* Single-field credential display (supports multiple API keys) */}
+      {isConfigured && !provider.credentialFields && credentials.length > 0 && (
+        <div className="space-y-0.5">
+          {credentials.map((cred, idx) => (
+            <div key={cred.id} className="flex items-center gap-1.5 text-[10px] text-slate-500 truncate">
+              {credentials.length > 1 && (
+                <span className="font-medium text-slate-400">
+                  {idx === 0 ? "Primary:" : `Key ${idx + 1}:`}
+                </span>
+              )}
+              <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                {cred.value_masked}
+              </code>
+              {(onEditCredential || onDeleteCredential) && (
+                <div className="inline-flex items-center gap-0.5 ml-0.5">
+                  {onEditCredential && (
+                    <button
+                      onClick={() => onEditCredential(cred.id)}
+                      className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                      title="Update this key"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                  {onDeleteCredential && (
+                    <button
+                      onClick={() => onDeleteCredential(cred.id)}
+                      className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
+                      title="Delete this key"
+                    >
+                      <Trash2 className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                  {onSetPrimaryCredential && idx > 0 && (
+                    <button
+                      onClick={() => onSetPrimaryCredential(cred.id)}
+                      className="p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"
+                      title="Make primary"
+                    >
+                      <ArrowUp className="h-2.5 w-2.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Preference toggle for dual-auth providers */}
@@ -159,6 +218,7 @@ function AuthBadges({
   preferredAuth,
   onPreferenceChange,
   provider,
+  credentials,
 }: {
   isOAuth: boolean;
   isClaude: boolean;
@@ -172,6 +232,7 @@ function AuthBadges({
   preferredAuth: "oauth" | "api_key";
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
   provider: ProviderInfo;
+  credentials: Credential[];
 }) {
   const badges: React.ReactNode[] = [];
 
@@ -238,22 +299,20 @@ function AuthBadges({
     }
   }
 
-  // API key badge
+  // API key badge(s)
   if (hasApiKey && isConfigured && primaryCredential) {
+    // Check if we have multiple credentials of type "api_key" (for single-field providers like Gemini)
+    const apiKeyCount = provider.credentialFields ? 1 : credentials.filter(c => c.credential_type === "api_key" || !c.credential_type).length;
+
     badges.push(
       <span
         key="apikey"
         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/20"
       >
         <Key className="h-2.5 w-2.5" />
-        API Key
+        {apiKeyCount > 1 ? `API Key (${apiKeyCount})` : "API Key"}
       </span>,
     );
-    if (!isOAuth) {
-      badges.push(
-        <code key="masked" className="text-[10px] font-mono text-slate-500">{primaryCredential.value_masked}</code>,
-      );
-    }
   }
 
   if (badges.length === 0) return null;

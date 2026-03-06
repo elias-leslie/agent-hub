@@ -24,7 +24,12 @@ from app.constants.models import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
+    CODEX_GPT_5_1,
+    CODEX_GPT_5_1_MINI,
+    CODEX_GPT_5_2,
+    CODEX_GPT_5_3,
     GEMINI_2_5_FLASH_LITE,
+    GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
     GEMINI_FLASH,
     GEMINI_IMAGE,
@@ -41,7 +46,6 @@ from app.constants.models import (
     NVIDIA_QWEN_3_5,
     NVIDIA_SD_3_5_LARGE,
     OPENAI_GPT_5_2,
-    OPENAI_GPT_5_3_CODEX,
     OPENAI_GPT_NANO,
     OR_FREE_GLM,
     OR_FREE_TRINITY,
@@ -83,7 +87,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(has_vision=True, supports_pdf=True, max_output_tokens=8192),
         release_date="2025-10-01", knowledge_cutoff="2025-04-01", family="claude-haiku",
     ),
-    # --- Gemini (3) ---
+    # --- Gemini (4) ---
     ModelEntry(
         id=GEMINI_FLASH, alias="flash", name="Gemini 3 Flash",
         hint="Fast", provider="gemini",
@@ -99,6 +103,14 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(0.10, 0.40), context_window=1_000_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True, supports_pdf=True, max_output_tokens=8192),
         release_date="2025-06-01", knowledge_cutoff="2025-01-01", family="gemini-flash-lite",
+    ),
+    ModelEntry(
+        id=GEMINI_3_1_FLASH_LITE, alias="3.1-flash-lite", name="Gemini 3.1 Flash Lite",
+        hint="High Throughput", provider="gemini",
+        scores=ModelScores(coding=56, reasoning=64, planning=46, tool_use=49, instruction=86, design=58),
+        cost=ModelCost(0.10, 0.40), context_window=1_000_000, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, supports_pdf=True, max_output_tokens=8192),
+        release_date="2026-01-15", knowledge_cutoff="2025-11-01", family="gemini-flash-lite",
     ),
     ModelEntry(
         id=GEMINI_PRO, alias="pro", name="Gemini 3 Pro",
@@ -165,7 +177,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(has_vision=True),
         family="glm",
     ),
-    # --- OpenAI (3) ---
+    # --- OpenAI (2) ---
     ModelEntry(
         id=OPENAI_GPT_5_2, alias="gpt5.2", name="GPT-5.2",
         hint="GPT 5.2", provider="openai",
@@ -176,15 +188,6 @@ MODEL_CATALOG: list[ModelEntry] = [
         release_date="2025-11-01", knowledge_cutoff="2025-06-01", family="gpt",
     ),
     ModelEntry(
-        id=OPENAI_GPT_5_3_CODEX, alias="codex", name="GPT-5.3 Codex",
-        hint="Codex", provider="openai",
-        scores=ModelScores(coding=93, reasoning=92, planning=77, tool_use=78, instruction=88, design=72),
-        cost=ModelCost(2.00, 14.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
-        context_window=400_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32768),
-        release_date="2026-01-15", knowledge_cutoff="2025-09-01", family="gpt-codex",
-    ),
-    ModelEntry(
         id=OPENAI_GPT_NANO, alias="nano", name="GPT-5 Nano",
         hint="Nano", provider="openai",
         scores=ModelScores(coding=40, reasoning=60, planning=35, tool_use=40, instruction=70, design=50),
@@ -192,6 +195,43 @@ MODEL_CATALOG: list[ModelEntry] = [
         context_window=400_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True, max_output_tokens=8192),
         release_date="2025-10-01", family="gpt-nano",
+    ),
+    # --- Codex (4) ---
+    ModelEntry(
+        id=CODEX_GPT_5_3, alias="codex", name="GPT-5.3 Codex",
+        hint="Best Coding", provider="codex",
+        scores=ModelScores(coding=93, reasoning=95, planning=80, tool_use=80, instruction=90, design=72),
+        cost=ModelCost(2.00, 14.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32768),
+        release_date="2026-02-05", knowledge_cutoff="2025-10-01", family="gpt-codex",
+    ),
+    ModelEntry(
+        id=CODEX_GPT_5_2, alias="codex-5.2", name="GPT-5.2 Codex",
+        hint="Coding Stable", provider="codex",
+        scores=ModelScores(coding=90, reasoning=92, planning=78, tool_use=78, instruction=88, design=70),
+        cost=ModelCost(2.00, 12.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="medium",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32768),
+        release_date="2026-01-01", knowledge_cutoff="2025-09-01", family="gpt-codex",
+    ),
+    ModelEntry(
+        id=CODEX_GPT_5_1, alias="codex-5.1", name="GPT-5.1 Codex",
+        hint="Fallback Coding", provider="codex",
+        scores=ModelScores(coding=86, reasoning=89, planning=74, tool_use=74, instruction=84, design=68),
+        cost=ModelCost(1.50, 10.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="medium",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32768),
+        release_date="2025-12-01", knowledge_cutoff="2025-08-01", family="gpt-codex",
+    ),
+    ModelEntry(
+        id=CODEX_GPT_5_1_MINI, alias="codex-mini", name="GPT-5.1 Codex Mini",
+        hint="Cheap Fallback", provider="codex",
+        scores=ModelScores(coding=76, reasoning=80, planning=62, tool_use=66, instruction=78, design=62),
+        cost=ModelCost(0.50, 2.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="fast",
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=16384),
+        release_date="2025-12-01", knowledge_cutoff="2025-08-01", family="gpt-codex",
     ),
     # --- xAI (2) ---
     ModelEntry(

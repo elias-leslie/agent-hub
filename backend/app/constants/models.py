@@ -17,6 +17,7 @@ CLAUDE_HAIKU = "claude-haiku-4-5"
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
+GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 GEMINI_IMAGE_NANO = "gemini-2.5-flash-image"            # Nano Banana - stable, fast
 GEMINI_IMAGE_NANO2 = "gemini-3.1-flash-image-preview"   # Nano Banana 2 - preview, fastest
@@ -31,7 +32,6 @@ OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 
 # OpenAI models (Direct)
 OPENAI_GPT_5_2 = "openai/gpt-5.2"
-OPENAI_GPT_5_3_CODEX = "openai/gpt-5.3-codex"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
 # CloudCode Claude models (Google CloudCode PA, zero-cost via Gemini OAuth)
@@ -40,12 +40,13 @@ CC_CLAUDE_OPUS = "cloudcode/claude-opus-4-6-thinking"
 
 # Codex models (ChatGPT subscription via OAuth)
 CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
-CODEX_GPT_5_2 = "codex/gpt-5.2"
+CODEX_GPT_5_2 = "codex/gpt-5.2-codex"
+CODEX_GPT_5_1 = "codex/gpt-5.1-codex"
 CODEX_GPT_5_1_MINI = "codex/gpt-5.1-codex-mini"
 
 # xAI models (Direct)
 XAI_GROK_CODE_FAST = "xai/grok-code-fast-1"
-XAI_GROK_4_1_FAST = "xai/grok-4.1-fast"
+XAI_GROK_4_1_FAST = "xai/grok-4-1-fast-non-reasoning"
 
 # Zhipu models (Direct)
 ZHIPU_GLM_5 = "zhipu/glm-5"
@@ -109,4 +110,4 @@ REASONING_GEMINI_MODEL = GEMINI_3_1_PRO
 
 # Model for fast/cheap operations (extraction, validation, summarization)
 FAST_CLAUDE_MODEL = CLAUDE_HAIKU
-FAST_GEMINI_MODEL = GEMINI_FLASH
+FAST_GEMINI_MODEL = GEMINI_3_1_FLASH_LITE

@@ -119,6 +119,33 @@ class TestCredentialManagerLoad:
         assert loaded == 0
         assert manager.is_initialized is True
 
+    @pytest.mark.asyncio
+    async def test_load_rebuilds_cache_from_source_of_truth(self, mock_db):
+        """Repeated load() should clear stale in-memory credentials."""
+        fernet = Fernet(TEST_KEY.encode())
+
+        cred1 = MagicMock()
+        cred1.provider = "gemini"
+        cred1.credential_type = "api_key"
+        cred1.value_encrypted = fernet.encrypt(b"old-key")
+
+        cred2 = MagicMock()
+        cred2.provider = "gemini"
+        cred2.credential_type = "api_key"
+        cred2.value_encrypted = fernet.encrypt(b"new-key")
+
+        result1 = MagicMock()
+        result1.scalars.return_value.all.return_value = [cred1]
+        result2 = MagicMock()
+        result2.scalars.return_value.all.return_value = [cred2]
+        mock_db.execute.side_effect = [result1, result2]
+
+        manager = CredentialManager.get_instance()
+        await manager.load(mock_db)
+        await manager.load(mock_db)
+
+        assert manager.get_api_keys("gemini") == ["new-key"]
+
 
 class TestCredentialManagerCache:
     """Tests for cache operations."""
@@ -151,6 +178,46 @@ class TestCredentialManagerCache:
         manager = CredentialManager.get_instance()
         manager.set("claude", "api_key", "claude-key")
         assert manager.get_api_key("claude") == "claude-key"
+
+    def test_get_api_keys_returns_all_for_provider(self):
+        """get_api_keys should return all keys in insertion order."""
+        manager = CredentialManager.get_instance()
+        manager.set("gemini", "api_key", "key-1")
+        manager.set("gemini", "api_key", "key-2")
+        assert manager.get_api_keys("gemini") == ["key-1", "key-2"]
+
+    def test_replace_value_updates_in_place_without_stale_key(self):
+        """replace_value should keep order and remove stale key values."""
+        manager = CredentialManager.get_instance()
+        manager.set("gemini", "api_key", "key-1")
+        manager.set("gemini", "api_key", "key-2")
+
+        manager.replace_value("gemini", "api_key", "key-1", "key-1-rotated")
+
+        assert manager.get_api_keys("gemini") == ["key-1-rotated", "key-2"]
+        assert manager.get_api_key("gemini") == "key-1-rotated"
+
+    def test_remove_value_deletes_single_match(self):
+        """remove_value should remove only one key and keep remaining keys."""
+        manager = CredentialManager.get_instance()
+        manager.set("gemini", "api_key", "key-1")
+        manager.set("gemini", "api_key", "key-2")
+
+        manager.remove_value("gemini", "api_key", "key-1")
+
+        assert manager.get_api_keys("gemini") == ["key-2"]
+        assert manager.get_api_key("gemini") == "key-2"
+
+    def test_set_api_keys_replaces_order_atomically(self):
+        """set_api_keys should overwrite key order and set the new primary."""
+        manager = CredentialManager.get_instance()
+        manager.set("gemini", "api_key", "key-1")
+        manager.set("gemini", "api_key", "key-2")
+
+        manager.set_api_keys("gemini", ["key-2", "key-3"])
+
+        assert manager.get_api_keys("gemini") == ["key-2", "key-3"]
+        assert manager.get_api_key("gemini") == "key-2"
 
     def test_list_providers(self):
         """list_providers should return sorted providers."""

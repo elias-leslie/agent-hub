@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   fetchCredentials,
   fetchClaudeOAuthStatus,
@@ -12,18 +12,20 @@ import {
   createCredential,
   updateCredential,
   deleteCredential,
+  setPrimaryCredential,
   updateUserPreferences,
   fetchUserPreferences,
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
+import { isOAuthProvider, listKnownProviderIds } from "./constants";
+import type { SaveCredentialOptions } from "./ProviderCardTypes";
 import type { ProviderHealthData } from "./ProviderCardTypes";
-
-/** OAuth providers that support browser-based authentication */
-export const BROWSER_OAUTH_PROVIDERS = ["claude", "codex", "gemini"];
 
 export function useProvidersTab() {
   const queryClient = useQueryClient();
+  const knownProviderIds = listKnownProviderIds();
+  const oauthProviderIds = knownProviderIds.filter(isOAuthProvider);
 
   const { data, isLoading } = useQuery({
     queryKey: ["credentials"],
@@ -33,17 +35,11 @@ export function useProvidersTab() {
     queryKey: ["claude-oauth-status"],
     queryFn: () => fetchClaudeOAuthStatus(),
   });
-  const { data: claudeOAuthProviderStatus } = useQuery({
-    queryKey: ["oauth-status", "claude"],
-    queryFn: () => fetchOAuthStatus("claude"),
-  });
-  const { data: codexOAuthStatus } = useQuery({
-    queryKey: ["oauth-status", "codex"],
-    queryFn: () => fetchOAuthStatus("codex"),
-  });
-  const { data: geminiOAuthStatus } = useQuery({
-    queryKey: ["oauth-status", "gemini"],
-    queryFn: () => fetchOAuthStatus("gemini"),
+  const oauthStatusQueries = useQueries({
+    queries: oauthProviderIds.map((providerId) => ({
+      queryKey: ["oauth-status", providerId] as const,
+      queryFn: () => fetchOAuthStatus(providerId),
+    })),
   });
   const { data: userPrefs } = useQuery({
     queryKey: ["user-preferences"],
@@ -56,6 +52,7 @@ export function useProvidersTab() {
   });
 
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const [editingCredentialId, setEditingCredentialId] = useState<number | null>(null);
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,9 +79,10 @@ export function useProvidersTab() {
         setManualPasteState(null);
         queryClient.invalidateQueries({ queryKey: ["credentials"] });
         queryClient.invalidateQueries({ queryKey: ["claude-oauth-status"] });
-        if (BROWSER_OAUTH_PROVIDERS.includes(provider)) {
+        if (isOAuthProvider(provider)) {
           queryClient.invalidateQueries({ queryKey: ["oauth-status", provider] });
         }
+        queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       } else if (event.data?.type === "oauth-error") {
         setOauthLoading(null);
         setError(event.data.error || "OAuth authentication failed");
@@ -137,6 +135,7 @@ export function useProvidersTab() {
         queryClient.invalidateQueries({ queryKey: ["credentials"] });
         queryClient.invalidateQueries({ queryKey: ["claude-oauth-status"] });
         queryClient.invalidateQueries({ queryKey: ["oauth-status", providerId] });
+        queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       } else {
         setError(result.error || "OAuth exchange failed");
       }
@@ -167,6 +166,7 @@ export function useProvidersTab() {
 
   function resetForm() {
     setEditingProvider(null);
+    setEditingCredentialId(null);
     setAddingProvider(null);
     setError(null);
   }
@@ -175,9 +175,10 @@ export function useProvidersTab() {
     mutationFn: (d: CredentialCreate) => createCredential(d),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
-      if (BROWSER_OAUTH_PROVIDERS.includes(vars.provider)) {
+      if (isOAuthProvider(vars.provider)) {
         queryClient.invalidateQueries({ queryKey: ["oauth-status", vars.provider] });
       }
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       resetForm();
     },
     onError: (e: Error) => setError(e.message),
@@ -188,6 +189,7 @@ export function useProvidersTab() {
       updateCredential(id, value),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       resetForm();
     },
     onError: (e: Error) => setError(e.message),
@@ -197,16 +199,41 @@ export function useProvidersTab() {
     mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteCredential(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
-      BROWSER_OAUTH_PROVIDERS.forEach((p) => {
+      knownProviderIds.filter(isOAuthProvider).forEach((p) => {
         queryClient.invalidateQueries({ queryKey: ["oauth-status", p] });
       });
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       setConfirmingDelete(null);
     },
     onError: (e: Error) => setError(e.message),
   });
 
-  function handleSave(providerId: string, value: string) {
+  const setPrimaryMut = useMutation({
+    mutationFn: (id: number) => setPrimaryCredential(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  function handleSave(
+    providerId: string,
+    value: string,
+    options?: SaveCredentialOptions,
+  ) {
     setError(null);
+
+    if (options?.credentialId) {
+      updateMut.mutate({ id: options.credentialId, value });
+      return;
+    }
+
+    if (options?.forceCreate) {
+      createMut.mutate({ provider: providerId, credential_type: "api_key", value });
+      return;
+    }
+
     const existing = credentialsByProvider[providerId]?.find(
       (c) => c.credential_type === "api_key",
     );
@@ -230,6 +257,7 @@ export function useProvidersTab() {
         }
       }
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
       resetForm();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save credentials");
@@ -237,10 +265,10 @@ export function useProvidersTab() {
   }
 
   function getOAuthStatus(providerId: string) {
-    if (providerId === "claude") return claudeOAuthStatus ?? claudeOAuthProviderStatus;
-    if (providerId === "codex") return codexOAuthStatus;
-    if (providerId === "gemini") return geminiOAuthStatus;
-    return undefined;
+    const oauthIndex = oauthProviderIds.indexOf(providerId);
+    const genericStatus = oauthIndex >= 0 ? oauthStatusQueries[oauthIndex]?.data : undefined;
+    if (providerId === "claude") return claudeOAuthStatus ?? genericStatus;
+    return genericStatus;
   }
 
   function getHealthData(providerId: string): ProviderHealthData | undefined {
@@ -256,11 +284,22 @@ export function useProvidersTab() {
     };
   }
 
+  const providerIds = Array.from(
+    new Set([
+      ...knownProviderIds,
+      ...Object.keys(credentialsByProvider),
+      ...(statusData?.providers.map((p) => p.name) ?? []),
+    ]),
+  ).sort((a, b) => a.localeCompare(b));
+
   return {
     isLoading,
+    providerIds,
     credentialsByProvider,
     editingProvider,
     setEditingProvider,
+    editingCredentialId,
+    setEditingCredentialId,
     addingProvider,
     setAddingProvider,
     confirmingDelete,
@@ -282,6 +321,7 @@ export function useProvidersTab() {
     getOAuthStatus,
     getHealthData,
     onDelete: (ids: number[]) => deleteMut.mutate(ids),
+    onSetPrimaryCredential: (credentialId: number) => setPrimaryMut.mutate(credentialId),
     onPreferenceChange: (provider: string, pref: "oauth" | "api_key") =>
       prefMut.mutate({ provider, pref }),
     onVertexProjectChange: (project: string) => vertexProjectMut.mutate(project),

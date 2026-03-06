@@ -45,7 +45,7 @@ def build_request_body(
     model: str,
     *,
     instructions: str | None = None,
-    temperature: float = 1.0,
+    temperature: float = 1.0,  # accepted but ignored — Codex API rejects temperature
     max_tokens: int | None = None,
     stream: bool = True,
     **kwargs: Any,
@@ -59,8 +59,8 @@ def build_request_body(
     }
     if instructions:
         body["instructions"] = instructions
-    if temperature != 1.0:
-        body["temperature"] = temperature
+    # NOTE: temperature is intentionally NOT sent — the Codex Responses API
+    # returns 400 "Unsupported parameter: temperature".
     if max_tokens is not None:
         body["max_output_tokens"] = max_tokens
     if kwargs.get("reasoning_effort"):

@@ -13,6 +13,28 @@ from app.db import async_session
 from app.models.memory_unified import Memory
 
 from ._repo_helpers import TIER_MAP, to_dict
+from .memory_utils import parse_group_id
+
+
+def _resolve_scope_from_group_id(
+    *,
+    scope: str,
+    scope_id: str | None,
+    group_id: str | None,
+) -> tuple[str, str | None]:
+    """Derive canonical scope/scope_id from group_id when caller uses defaults.
+
+    If caller already provided a non-global scope or explicit scope_id, preserve it.
+    """
+    if not group_id:
+        return scope, scope_id
+    if scope != "global" or scope_id is not None:
+        return scope, scope_id
+
+    derived_scope, derived_scope_id = parse_group_id(group_id)
+    if derived_scope.value == "global":
+        return scope, scope_id
+    return derived_scope.value, derived_scope_id
 
 
 class CrudRepository:
@@ -47,6 +69,11 @@ class CrudRepository:
     ) -> Memory:
         """Create a new memory record."""
         now = datetime.now(UTC)
+        resolved_scope, resolved_scope_id = _resolve_scope_from_group_id(
+            scope=scope,
+            scope_id=scope_id,
+            group_id=group_id,
+        )
         memory = Memory(
             id=id or _uuid.uuid4(),
             content=content,
@@ -54,8 +81,8 @@ class CrudRepository:
             summary=summary,
             embedding=embedding,
             memory_type=memory_type,
-            scope=scope,
-            scope_id=scope_id,
+            scope=resolved_scope,
+            scope_id=resolved_scope_id,
             group_id=group_id,
             source=source,
             source_description=source_description,

@@ -61,8 +61,12 @@ def convert_raw_episode_to_memory_episode(
     if group_id:
         resolved_scope, resolved_scope_id = parse_group_id(group_id)
     else:
-        resolved_scope = scope or MemoryScope.GLOBAL
-        resolved_scope_id = scope_id
+        raw_scope = _get_attr_or_key(ep, "scope")
+        try:
+            resolved_scope = MemoryScope(str(raw_scope))
+        except ValueError:
+            resolved_scope = scope or MemoryScope.GLOBAL
+        resolved_scope_id = _get_attr_or_key(ep, "scope_id", None) or scope_id
 
     # Use injection_tier as source of truth; default to REFERENCE
     tier = _get_attr_or_key(ep, "injection_tier")
@@ -72,17 +76,20 @@ def convert_raw_episode_to_memory_episode(
     raw_source = _get_attr_or_key(ep, "source") or _get_attr_or_key(ep, "memory_type")
     mapped_source = _map_source(raw_source)
 
+    created_at = _get_attr_or_key(ep, "created_at")
+    valid_at = _get_attr_or_key(ep, "valid_at") or created_at
+
     return MemoryEpisode(
-        uuid=_get_attr_or_key(ep, "uuid", ""),
-        name=_get_attr_or_key(ep, "name", ""),
-        content=_get_attr_or_key(ep, "content", ""),
+        uuid=str(_get_attr_or_key(ep, "uuid") or _get_attr_or_key(ep, "id") or ""),
+        name=_get_attr_or_key(ep, "name") or "",
+        content=_get_attr_or_key(ep, "content") or "",
         source=mapped_source,
         category=cat,
         scope=resolved_scope,
         scope_id=resolved_scope_id,
         source_description=_get_attr_or_key(ep, "source_description") or "",
-        created_at=_get_attr_or_key(ep, "created_at"),
-        valid_at=_get_attr_or_key(ep, "valid_at"),
+        created_at=created_at,
+        valid_at=valid_at,
         entities=_get_attr_or_key(ep, "entity_edges") or [],
         summary=_get_attr_or_key(ep, "summary"),
         loaded_count=_get_attr_or_key(ep, "loaded_count"),

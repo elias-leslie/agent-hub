@@ -1,16 +1,19 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { PROVIDERS, PROVIDER_COLORS } from "./constants";
+import { getProviderInfo, isOAuthProvider, PROVIDER_COLORS } from "./constants";
 import { ProviderCard } from "./ProviderCard";
-import { useProvidersTab, BROWSER_OAUTH_PROVIDERS } from "./useProvidersTab";
+import { useProvidersTab } from "./useProvidersTab";
 
 export function ProvidersTab() {
   const {
     isLoading,
+    providerIds,
     credentialsByProvider,
     editingProvider,
     setEditingProvider,
+    editingCredentialId,
+    setEditingCredentialId,
     addingProvider,
     setAddingProvider,
     confirmingDelete,
@@ -32,6 +35,7 @@ export function ProvidersTab() {
     getOAuthStatus,
     getHealthData,
     onDelete,
+    onSetPrimaryCredential,
     onPreferenceChange,
     onVertexProjectChange,
   } = useProvidersTab();
@@ -52,12 +56,22 @@ export function ProvidersTab() {
       </h3>
 
       <div className="grid gap-3">
-        {PROVIDERS.map((provider) => {
+        {providerIds.map((providerId) => {
+          const provider = getProviderInfo(providerId);
           const creds = credentialsByProvider[provider.id] ?? [];
-          const colors = PROVIDER_COLORS[provider.id];
+          const colors = PROVIDER_COLORS[provider.id] ?? {
+            dot: "bg-slate-400",
+            bg: "border-slate-500/20",
+          };
           const isEditing = editingProvider === provider.id;
           const isAdding = addingProvider === provider.id;
           const isConfirmDelete = confirmingDelete === provider.id;
+          const primaryApiCredential = creds.find(
+            (c) => c.credential_type === "api_key" || !c.credential_type,
+          );
+          const oauthCredentialIds = creds
+            .filter((c) => c.credential_type === "oauth_token" || c.credential_type === "refresh_token")
+            .map((c) => c.id);
 
           return (
             <ProviderCard
@@ -72,10 +86,24 @@ export function ProvidersTab() {
               isConfirmDelete={isConfirmDelete}
               isSaving={isSaving}
               error={error}
-              onEdit={() => { resetForm(); setEditingProvider(provider.id); }}
-              onAdd={() => { resetForm(); setAddingProvider(provider.id); }}
+              onEdit={() => {
+                resetForm();
+                setEditingCredentialId(primaryApiCredential?.id ?? null);
+                setEditingProvider(provider.id);
+              }}
+              onAdd={() => {
+                resetForm();
+                setEditingCredentialId(null);
+                setAddingProvider(provider.id);
+              }}
               onDeleteAll={(ids) => onDelete(ids)}
-              onSave={(value) => handleSave(provider.id, value)}
+              onSave={(value, options) =>
+                handleSave(provider.id, value, {
+                  ...options,
+                  credentialId: options?.credentialId ?? (isEditing ? editingCredentialId ?? undefined : undefined),
+                  forceCreate: options?.forceCreate ?? isAdding,
+                })
+              }
               onSaveMulti={
                 provider.credentialFields
                   ? (fields) => handleSaveMulti(provider.id, fields)
@@ -86,8 +114,17 @@ export function ProvidersTab() {
               onCancelDelete={() => setConfirmingDelete(null)}
               isDeletingThis={isDeletingAny}
               onOAuthStart={
-                BROWSER_OAUTH_PROVIDERS.includes(provider.id)
+                isOAuthProvider(provider.id)
                   ? () => handleOAuthStart(provider.id)
+                  : undefined
+              }
+              onDisconnectOAuth={
+                oauthCredentialIds.length > 0
+                  ? () => {
+                    if (window.confirm(`Disconnect ${provider.name} OAuth credentials?`)) {
+                      onDelete(oauthCredentialIds);
+                    }
+                  }
                   : undefined
               }
               isOAuthLoading={oauthLoading === provider.id}
@@ -105,6 +142,21 @@ export function ProvidersTab() {
               }
               vertexProject={provider.id === "gemini" ? userPrefs?.gemini_vertex_project ?? "" : undefined}
               onVertexProjectChange={provider.id === "gemini" ? onVertexProjectChange : undefined}
+              onEditCredential={(credentialId) => {
+                resetForm();
+                setEditingCredentialId(credentialId);
+                setEditingProvider(provider.id);
+              }}
+              onDeleteCredential={(credentialId) => {
+                if (window.confirm("Delete this credential?")) {
+                  onDelete([credentialId]);
+                }
+              }}
+              onSetPrimaryCredential={
+                provider.id === "gemini"
+                  ? (credentialId) => onSetPrimaryCredential(credentialId)
+                  : undefined
+              }
             />
           );
         })}

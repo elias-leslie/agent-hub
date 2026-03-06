@@ -59,6 +59,11 @@ export interface ProviderHealthData {
   health: ProviderHealthDetails | null;
 }
 
+export interface SaveCredentialOptions {
+  credentialId?: number;
+  forceCreate?: boolean;
+}
+
 export interface ProviderCardProps {
   provider: ProviderInfo;
   credentials: Credential[];
@@ -73,13 +78,14 @@ export interface ProviderCardProps {
   onEdit: () => void;
   onAdd: () => void;
   onDeleteAll: (ids: number[]) => void;
-  onSave: (value: string) => void;
+  onSave: (value: string, options?: SaveCredentialOptions) => void;
   onSaveMulti?: (fields: Record<string, string>) => void;
   onCancel: () => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
   isDeletingThis: boolean;
   onOAuthStart?: () => void;
+  onDisconnectOAuth?: () => void;
   isOAuthLoading?: boolean;
   isManualPasteActive?: boolean;
   onManualExchange?: (input: string) => Promise<void> | void;
@@ -87,4 +93,7 @@ export interface ProviderCardProps {
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
   vertexProject?: string;
   onVertexProjectChange?: (project: string) => void;
+  onEditCredential?: (credentialId: number) => void;
+  onDeleteCredential?: (credentialId: number) => void;
+  onSetPrimaryCredential?: (credentialId: number) => void;
 }

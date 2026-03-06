@@ -34,14 +34,17 @@ export async function fetchMemoryList(params?: {
   groupId?: string;
   sortBy?: MemorySortBy;
   sortOrder?: MemorySortOrder;
+  allGroups?: boolean;
 }): Promise<MemoryListResult> {
   const searchParams = new URLSearchParams();
+  const allGroups = params?.allGroups ?? true;
   if (params?.limit) searchParams.set("limit", params.limit.toString());
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   if (params?.category) searchParams.set("category", params.category);
   if (params?.scope) searchParams.set("scope", params.scope);
   if (params?.sortBy) searchParams.set("sort_by", params.sortBy);
   if (params?.sortOrder) searchParams.set("sort_order", params.sortOrder);
+  if (allGroups) searchParams.set("all_groups", "true");
 
   const url = searchParams.toString()
     ? `${API_BASE}/memory/list?${searchParams}`

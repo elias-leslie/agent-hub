@@ -14,24 +14,58 @@ export interface ProviderInfo {
   credentialFields?: CredentialField[];
 }
 
-export const PROVIDERS: readonly ProviderInfo[] = [
-  { id: "claude", name: "Claude", hint: "Anthropic — browser OAuth", oauth: true },
-  { id: "codex", name: "Codex", hint: "ChatGPT subscription OAuth", oauth: true },
-  { id: "gemini", name: "Gemini", hint: "Google AI — OAuth or API key", oauth: true, supportsApiKey: true },
-  { id: "openai", name: "OpenAI", hint: "OpenAI platform API key" },
-  { id: "openrouter", name: "OpenRouter", hint: "OpenRouter API key" },
-  { id: "xai", name: "xAI", hint: "xAI (Grok) API key" },
-  { id: "zhipu", name: "Zhipu", hint: "Zhipu AI (GLM) API key" },
-  { id: "minimax", name: "MiniMax", hint: "MiniMax API key" },
-  { id: "nvidia", name: "NVIDIA NIM", hint: "NVIDIA developer API key (nvapi-…)" },
-  {
-    id: "cloudflare", name: "Cloudflare", hint: "Workers AI — Account ID + API Token",
+const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, "id">> = {
+  claude: { name: "Claude", hint: "Anthropic — browser OAuth", oauth: true },
+  codex: { name: "Codex", hint: "ChatGPT subscription OAuth", oauth: true },
+  gemini: {
+    name: "Gemini",
+    hint: "Google AI — OAuth or API key",
+    oauth: true,
+    supportsApiKey: true,
+  },
+  openai: { name: "OpenAI", hint: "OpenAI platform API key" },
+  openrouter: { name: "OpenRouter", hint: "OpenRouter API key" },
+  xai: { name: "xAI", hint: "xAI (Grok) API key" },
+  zhipu: { name: "Zhipu", hint: "Zhipu AI (GLM) API key" },
+  minimax: { name: "MiniMax", hint: "MiniMax API key" },
+  nvidia: { name: "NVIDIA NIM", hint: "NVIDIA developer API key (nvapi-…)" },
+  cloudflare: {
+    name: "Cloudflare",
+    hint: "Workers AI — Account ID + API Token",
     credentialFields: [
       { credentialType: "account_id", label: "Account ID", placeholder: "Enter Cloudflare Account ID" },
       { credentialType: "api_key", label: "API Token", placeholder: "Enter Cloudflare API Token" },
     ],
   },
-] as const;
+};
+
+function titleCaseProviderId(providerId: string): string {
+  return providerId
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function getProviderInfo(providerId: string): ProviderInfo {
+  const metadata = PROVIDER_METADATA[providerId];
+  if (metadata) {
+    return { id: providerId, ...metadata };
+  }
+  return {
+    id: providerId,
+    name: titleCaseProviderId(providerId),
+    hint: "Provider credential configuration",
+  };
+}
+
+export function listKnownProviderIds(): string[] {
+  return Object.keys(PROVIDER_METADATA);
+}
+
+export function isOAuthProvider(providerId: string): boolean {
+  return Boolean(PROVIDER_METADATA[providerId]?.oauth);
+}
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   claude:     { dot: "bg-amber-400",   bg: "border-amber-500/20" },

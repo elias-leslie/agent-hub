@@ -187,7 +187,8 @@ async def _get_agent_roster_summary() -> str:
             return ""
 
         lines = [
-            f"- {a.slug}: {a.description or '(no description)'}"
+            f"- {a.slug} [{'coding' if a.is_coding_agent else 'general'}]: "
+            f"{a.description or '(no description)'}"
             for a in agents
         ]
         body = "\n".join(lines)

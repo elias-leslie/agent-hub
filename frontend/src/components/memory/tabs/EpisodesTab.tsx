@@ -154,6 +154,18 @@ export function EpisodesTab() {
     localStorage.setItem(VIEW_MODE_KEY, mode);
   }, []);
 
+  // Client-side sorts need the full dataset; backend pages are newest-first.
+  // Therefore created_at DESC is stable with pagination, but created_at ASC is not.
+  const shouldPrefetchAllPages = !isSearchMode && (
+    sortField !== "created_at" || sortDirection === "asc"
+  );
+  useEffect(() => {
+    if (!shouldPrefetchAllPages || !hasMore || isFetchingMore || isLoadingEpisodes) {
+      return;
+    }
+    loadMore();
+  }, [shouldPrefetchAllPages, hasMore, isFetchingMore, isLoadingEpisodes, loadMore]);
+
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/80 space-y-3">
@@ -199,7 +211,7 @@ export function EpisodesTab() {
         {viewMode === "table" ? (
           <MemoryTable
             items={sortedItems}
-            isLoading={isLoadingEpisodes}
+            isLoading={isLoadingEpisodes || (shouldPrefetchAllPages && hasMore)}
             isFetchingMore={isFetchingMore}
             isSearchMode={isSearchMode}
             searchQuery={searchQuery}

@@ -44,20 +44,14 @@ export function useAgentFiltering({
         case "model":
           cmp = a.primary_model_id.localeCompare(b.primary_model_id);
           break;
-        case "status":
-          cmp = (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0);
-          break;
         case "requests":
           cmp = (metricsA?.requests_24h ?? 0) - (metricsB?.requests_24h ?? 0);
           break;
         case "latency":
           cmp = (metricsA?.avg_latency_ms ?? 0) - (metricsB?.avg_latency_ms ?? 0);
           break;
-        case "success":
-          cmp = (metricsA?.success_rate ?? 100) - (metricsB?.success_rate ?? 100);
-          break;
-        case "version":
-          cmp = a.version - b.version;
+        case "cost":
+          cmp = (metricsA?.cost_24h_usd ?? 0) - (metricsB?.cost_24h_usd ?? 0);
           break;
       }
       return sortDirection === "asc" ? cmp : -cmp;

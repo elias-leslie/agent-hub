@@ -39,5 +39,5 @@ export interface AgentMetricsResponse {
 }
 
 // Sort types
-export type SortField = "name" | "model" | "status" | "requests" | "latency" | "success" | "version";
+export type SortField = "name" | "model" | "requests" | "latency" | "cost";
 export type SortDirection = "asc" | "desc";

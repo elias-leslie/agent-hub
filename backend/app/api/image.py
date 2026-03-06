@@ -12,8 +12,9 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
@@ -22,8 +23,9 @@ from app.adapters.gemini_image import GeminiImageAdapter
 from app.adapters.image_base import ImageAdapter
 from app.adapters.minimax_image import MinimaxImageAdapter
 from app.adapters.nvidia_image import NvidiaImageAdapter
-from app.constants import GEMINI_IMAGE
+from app.constants import GEMINI_IMAGE, MODEL_CATALOG_BY_ID
 from app.db import get_db
+from app.models import Agent
 from app.models import Session as DBSession
 from app.services.events import publish_complete, publish_session_start
 
@@ -98,6 +100,47 @@ def clear_image_adapter_cache() -> None:
     _adapters.clear()
 
 
+def _is_known_non_image_model(model_id: str) -> bool:
+    """True when model is in catalog and explicitly does not support image generation."""
+    entry = MODEL_CATALOG_BY_ID.get(model_id)
+    if entry is None:
+        return False
+    return not entry.capabilities.can_generate_images
+
+
+async def _resolve_model_chain(
+    db: AsyncSession,
+    request_model: str,
+    agent_slug: str | None,
+) -> list[str]:
+    """Build ordered model chain for image generation (primary + fallbacks)."""
+    chain = [request_model]
+
+    if agent_slug:
+        row = await db.execute(
+            select(Agent).where(Agent.slug == agent_slug, Agent.is_active.is_(True))
+        )
+        agent = row.scalar_one_or_none()
+        if agent:
+            primary = agent.primary_model_id or request_model
+            # If caller left default model, honor agent primary first.
+            if request_model == GEMINI_IMAGE:
+                chain = [primary, *(agent.fallback_models or [])]
+            else:
+                chain = [request_model, *(agent.fallback_models or [])]
+
+    seen: set[str] = set()
+    filtered: list[str] = []
+    for model_id in chain:
+        if model_id in seen:
+            continue
+        seen.add(model_id)
+        if _is_known_non_image_model(model_id):
+            continue
+        filtered.append(model_id)
+    return filtered or [request_model]
+
+
 async def _create_image_session(
     db: AsyncSession,
     project_id: str,
@@ -124,6 +167,7 @@ async def _create_image_session(
 async def generate_image(
     request: ImageGenerationRequest,
     db: DbDep,
+    http_request: Request,
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt.
 
@@ -131,6 +175,8 @@ async def generate_image(
     Creates a session for tracking.
     """
     provider = request.model.split("/")[0] if "/" in request.model else "gemini"
+    http_request.state.used_fallback = False
+    http_request.state.fallback_model = None
 
     # Create session for tracking
     session = await _create_image_session(db, request.project_id, request.model, provider)
@@ -149,18 +195,39 @@ async def generate_image(
             raise HTTPException(status_code=400, detail=f"Invalid base64 reference_image: {e}") from e
 
     try:
-        adapter = _get_image_adapter(request.model)
+        model_chain = await _resolve_model_chain(db, request.model, request.agent_slug)
+        result = None
+        last_error: Exception | None = None
 
-        result = await adapter.generate_image(
-            prompt=request.prompt,
-            model=request.model,
-            size=request.size,
-            style=request.style,
-            reference_image=ref_image_bytes,
-            reference_mime_type=request.reference_mime_type,
-        )
+        for idx, model_id in enumerate(model_chain):
+            try:
+                adapter = _get_image_adapter(model_id)
+                result = await adapter.generate_image(
+                    prompt=request.prompt,
+                    model=model_id,
+                    size=request.size,
+                    style=request.style,
+                    reference_image=ref_image_bytes,
+                    reference_mime_type=request.reference_mime_type,
+                )
+                if idx > 0:
+                    http_request.state.used_fallback = True
+                    http_request.state.fallback_model = model_id
+                    logger.info("Image generation fallback succeeded with model=%s", model_id)
+                break
+            except (RateLimitError, AuthenticationError, ProviderError, ValueError) as e:
+                last_error = e
+                logger.warning("Image generation failed for model=%s: %s", model_id, e)
+                continue
+
+        if result is None:
+            if last_error:
+                raise last_error
+            raise ProviderError("No image model could serve the request", provider="image", retriable=False)
 
         # Update session status to completed
+        session.provider = result.provider
+        session.model = result.model
         session.status = "completed"
         await db.commit()
 

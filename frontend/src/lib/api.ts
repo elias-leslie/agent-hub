@@ -42,12 +42,14 @@ export type {
   OAuthAuthorizeResponse,
   OAuthStatusResponse,
   OAuthExchangeResponse,
+  SetPrimaryCredentialResponse,
 } from "./api/credentials";
 export {
   fetchCredentials,
   createCredential,
   updateCredential,
   deleteCredential,
+  setPrimaryCredential,
   fetchClaudeOAuthStatus,
   startOAuthFlow,
   fetchOAuthStatus,

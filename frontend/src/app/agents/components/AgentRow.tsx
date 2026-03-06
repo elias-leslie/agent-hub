@@ -1,6 +1,5 @@
-import { Code } from "lucide-react";
+import { Code2 } from "lucide-react";
 import { ModelPill } from "@/app/sessions/components/ModelPill";
-import { StatusBadge } from "./StatusBadge";
 import { MetricCell } from "./MetricCell";
 import { AgentActionsMenu } from "./AgentActionsMenu";
 import { cn } from "@/lib/utils";
@@ -11,24 +10,54 @@ export function AgentRow({
   metrics,
   onClone,
   onArchive,
-  onToggleCoding,
 }: {
   agent: Agent;
   metrics: AgentMetrics | null;
   onClone: (agent: Agent) => void;
   onArchive: (agent: Agent) => void;
-  onToggleCoding?: (agent: Agent) => void;
 }) {
+  const requests24h = metrics?.requests_24h ?? 0;
+  const successLabel = requests24h > 0 ? `${(metrics?.success_rate ?? 0).toFixed(1)}% ok` : "no data";
+  const cost24hUsd = metrics?.cost_24h_usd ?? 0;
+
   return (
-    <div className="grid grid-cols-[180px_1fr_100px_70px_70px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+    <div
+      className={cn(
+        "grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 items-center transition-colors",
+        agent.is_active
+          ? "hover:bg-slate-50 dark:hover:bg-slate-800/30"
+          : "hover:bg-slate-50/80 dark:hover:bg-slate-800/20"
+      )}
+    >
       {/* Agent Name & Slug */}
       <div className="min-w-0">
-        <a
-          href={`/agents/${agent.slug}`}
-          className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 truncate block"
-        >
-          {agent.name}
-        </a>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full shrink-0",
+              agent.is_active ? "bg-emerald-500" : "bg-slate-400"
+            )}
+            title={agent.is_active ? "Active" : "Inactive"}
+          />
+          <a
+            href={`/agents/${agent.slug}`}
+            className={cn(
+              "text-sm font-semibold hover:text-blue-600 dark:hover:text-blue-400 truncate block",
+              agent.is_active
+                ? "text-slate-800 dark:text-slate-100"
+                : "text-slate-500 dark:text-slate-400"
+            )}
+          >
+            {agent.name}
+          </a>
+          {agent.is_coding_agent && (
+            <span title="Coding specialist">
+              <Code2
+                className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400 shrink-0"
+              />
+            </span>
+          )}
+        </div>
         <span className="text-[10px] text-slate-400 font-mono">
           {agent.slug}
         </span>
@@ -37,6 +66,7 @@ export function AgentRow({
       {/* Model Stack */}
       <div className="flex flex-wrap gap-1 items-center">
         <ModelPill model={agent.primary_model_id} />
+        <span className="text-[10px] font-mono text-slate-400">v{agent.version}</span>
         {agent.fallback_models.length > 0 && (
           <span className="text-[10px] text-slate-400">
             +{agent.fallback_models.length} fallback
@@ -44,37 +74,15 @@ export function AgentRow({
         )}
       </div>
 
-      {/* Status */}
-      <StatusBadge isActive={agent.is_active} />
-
-      {/* Coding Agent Toggle */}
-      <button
-        onClick={() => onToggleCoding?.(agent)}
-        className={cn(
-          "flex items-center justify-center w-8 h-8 rounded-md transition-colors",
-          agent.is_coding_agent
-            ? "bg-cyan-100 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400"
-            : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 hover:text-slate-500"
-        )}
-        title={agent.is_coding_agent ? "Coding agent (click to disable)" : "Not a coding agent (click to enable)"}
-      >
-        <Code className="h-4 w-4" />
-      </button>
-
-      {/* Timeout */}
-      <div className="text-center">
-        <span className="text-xs font-mono tabular-nums text-slate-400">
-          {agent.timeout_seconds ? `${agent.timeout_seconds}s` : "—"}
-        </span>
+      {/* Requests 24h + success summary */}
+      <div className="min-w-[90px]">
+        <div className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+          {requests24h}
+        </div>
+        <div className="text-[10px] text-slate-400 tabular-nums">
+          {successLabel}
+        </div>
       </div>
-
-      {/* Requests 24h with sparkline */}
-      <MetricCell
-        label="Requests"
-        value={metrics?.requests_24h ?? 0}
-        trend={metrics?.latency_trend}
-        color="blue"
-      />
 
       {/* Latency with sparkline */}
       <MetricCell
@@ -85,19 +93,10 @@ export function AgentRow({
         color="amber"
       />
 
-      {/* Success Rate with sparkline */}
-      <MetricCell
-        label="Success"
-        value={metrics?.success_rate?.toFixed(1) ?? "100.0"}
-        unit="%"
-        trend={metrics?.success_trend}
-        color="emerald"
-      />
-
-      {/* Version */}
+      {/* Cost 24h */}
       <div className="text-right">
-        <span className="text-xs font-mono tabular-nums text-slate-500">
-          v{agent.version}
+        <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+          ${cost24hUsd.toFixed(2)}
         </span>
       </div>
 

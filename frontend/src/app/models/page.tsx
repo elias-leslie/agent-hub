@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { Cpu, RefreshCw, AlertCircle, Database, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Cpu, AlertCircle, Database, Loader2 } from "lucide-react";
 import type { ModelOption } from "@agent-hub/chat-ui";
 import { useModelsWithSync } from "@/components/chat/use-models";
 import { fetchApi } from "@/lib/api-config";
@@ -11,7 +10,15 @@ import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
 
 export default function ModelsPage() {
-  const { models, providers: allProviders, lastSync, lastModelReview, refetch } = useModelsWithSync();
+  const {
+    models,
+    providers: allProviders,
+    lastSync,
+    lastModelReview,
+    refetch,
+    isLoading,
+    isError,
+  } = useModelsWithSync();
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   // null = "show all" until models load; becomes a Set after first initialization
@@ -248,7 +255,37 @@ export default function ModelsPage() {
         </div>
 
         {/* Empty State */}
-        {filteredModels.length === 0 && (
+        {isError && (
+          <div className="flex items-center justify-center py-16 text-center">
+            <div className="max-w-md">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                Failed to load model catalog
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                The models API request failed. Retry to refresh catalog data.
+              </p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoading && !isError && (
+          <div className="flex items-center justify-center py-16 text-center">
+            <div className="max-w-md">
+              <Loader2 className="h-10 w-10 text-slate-400 animate-spin mx-auto mb-3" />
+              <p className="text-sm text-slate-500 dark:text-slate-400">Loading models...</p>
+            </div>
+          </div>
+        )}
+
+        {filteredModels.length === 0 && !isError && !isLoading && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <AlertCircle className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
             <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
@@ -261,7 +298,7 @@ export default function ModelsPage() {
         )}
 
         {/* Models Grid (ungrouped) */}
-        {!groupByProvider && filteredModels.length > 0 && (
+        {!groupByProvider && filteredModels.length > 0 && !isError && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {filteredModels.map((model) => (
               <ModelCard
@@ -276,7 +313,7 @@ export default function ModelsPage() {
         )}
 
         {/* Models Grid (grouped) */}
-        {groupByProvider && groupedModels && (
+        {groupByProvider && groupedModels && !isError && (
           <div className="space-y-8">
             {Object.entries(groupedModels).map(([provider, providerModels]) => (
               <div key={provider}>

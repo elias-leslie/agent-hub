@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { Eye, EyeOff, Check, Loader2 } from "lucide-react";
 import type { CredentialField } from "./constants";
+import type { SaveCredentialOptions } from "./ProviderCardTypes";
 
 interface ProviderFormProps {
   providerName: string;
-  onSave: (value: string) => void;
+  onSave: (value: string, options?: SaveCredentialOptions) => void;
   onCancel: () => void;
   isSaving: boolean;
   error: string | null;
@@ -14,6 +15,7 @@ interface ProviderFormProps {
   credentialFields?: CredentialField[];
   /** Callback for saving multiple credential fields at once. */
   onSaveMulti?: (fields: Record<string, string>) => void;
+  saveOptions?: SaveCredentialOptions;
 }
 
 export function ProviderForm({
@@ -24,6 +26,7 @@ export function ProviderForm({
   error,
   credentialFields,
   onSaveMulti,
+  saveOptions,
 }: ProviderFormProps) {
   const [keyValue, setKeyValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +50,7 @@ export function ProviderForm({
       onSaveMulti(trimmed);
     } else {
       if (!keyValue.trim()) return;
-      onSave(keyValue.trim());
+      onSave(keyValue.trim(), saveOptions);
     }
   }
 

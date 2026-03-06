@@ -36,6 +36,7 @@ export function ProviderCard({
   onCancelDelete,
   isDeletingThis,
   onOAuthStart,
+  onDisconnectOAuth,
   isOAuthLoading,
   isManualPasteActive,
   onManualExchange,
@@ -43,10 +44,17 @@ export function ProviderCard({
   onPreferenceChange,
   vertexProject,
   onVertexProjectChange,
+  onEditCredential,
+  onDeleteCredential,
+  onSetPrimaryCredential,
 }: ProviderCardProps) {
-  // Primary credential (api_key) for backward-compat display
-  const primaryCredential = credentials.find((c) => c.credential_type === "api_key") ?? credentials[0];
-  const isConfigured = credentials.length > 0;
+  const managedCredentials = provider.credentialFields
+    ? credentials.filter((cred) =>
+      provider.credentialFields?.some((f) => f.credentialType === cred.credential_type),
+    )
+    : credentials.filter((cred) => cred.credential_type === "api_key" || !cred.credential_type);
+
+  const isConfigured = managedCredentials.length > 0;
   const isOAuth = !!provider.oauth;
   const isFormOpen = isEditing || isAdding;
   const isClaude = provider.id === PROVIDER_ID_CLAUDE;
@@ -55,7 +63,7 @@ export function ProviderCard({
 
   const providerStatus =
     oauthStatus && !isClaudeStatus(oauthStatus) ? oauthStatus : null;
-  const hasOAuthToken = providerStatus?.oauth_status === "authenticated";
+  const hasOAuthToken = oauthActive === "active";
   const hasApiKey = providerStatus?.api_key_status === "configured" || isConfigured;
   const preferredAuth = providerStatus?.preferred_auth ?? "api_key";
   const hasBothCredentials = hasOAuthToken && hasApiKey;
@@ -116,7 +124,7 @@ export function ProviderCard({
           </div>
           <ProviderStatusDisplay
             provider={provider}
-            credentials={credentials}
+            credentials={managedCredentials}
             oauthStatus={oauthStatus}
             healthData={healthData}
             isConfigured={isConfigured}
@@ -130,6 +138,9 @@ export function ProviderCard({
             onPreferenceChange={onPreferenceChange}
             vertexProject={vertexProject}
             onVertexProjectChange={onVertexProjectChange}
+            onEditCredential={onEditCredential}
+            onDeleteCredential={onDeleteCredential}
+            onSetPrimaryCredential={onSetPrimaryCredential}
           />
         </div>
       </div>
@@ -139,7 +150,7 @@ export function ProviderCard({
         <div className="mt-2 ml-[1.25rem]">
           <ProviderActionButtons
             provider={provider}
-            credentials={credentials}
+            credentials={managedCredentials}
             isConfigured={isConfigured}
             isOAuth={isOAuth}
             isConfirmDelete={isConfirmDelete}
@@ -151,6 +162,7 @@ export function ProviderCard({
             onConfirmDelete={onConfirmDelete}
             onCancelDelete={onCancelDelete}
             onOAuthStart={onOAuthStart}
+            onDisconnectOAuth={onDisconnectOAuth}
             isOAuthLoading={isOAuthLoading}
           />
         </div>
@@ -169,6 +181,7 @@ export function ProviderCard({
         <ProviderForm
           providerName={provider.name}
           onSave={onSave}
+          saveOptions={isAdding ? { forceCreate: true } : undefined}
           onCancel={onCancel}
           isSaving={isSaving}
           error={error}

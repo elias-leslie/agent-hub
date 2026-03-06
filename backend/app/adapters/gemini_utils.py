@@ -66,6 +66,19 @@ def resolve_api_key(api_key: str | None) -> str | None:
     return None
 
 
+def resolve_api_keys() -> list[str]:
+    """Return all Gemini API keys from CredentialManager in creation order."""
+    try:
+        from app.services.credential_manager import get_credential_manager
+
+        cm = get_credential_manager()
+        if cm.is_initialized:
+            return cm.get_api_keys("gemini")
+    except Exception:
+        pass
+    return []
+
+
 # Gemini sometimes generates variant tool names — normalize to canonical names
 # so the shared tool executor can resolve them without provider-specific logic.
 _GEMINI_TOOL_NAME_ALIASES: dict[str, str] = {
@@ -146,4 +159,5 @@ __all__ = [
     "handle_error",
     "process_response",
     "resolve_api_key",
+    "resolve_api_keys",
 ]

@@ -3,7 +3,13 @@
 Includes: coder, planner, reviewer, refactor
 """
 
-from app.constants import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH, GEMINI_PRO
+from app.constants import (
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+    format_subtask_types_markdown,
+)
 
 CORE_AGENTS = [
     {
@@ -43,15 +49,7 @@ CORE_AGENTS = [
             "implementation plans broken into subtasks with steps.\n\n"
             "For each subtask you create, you MUST assign a subtask_type that determines "
             "which specialized agent will execute it. Valid subtask_type values:\n"
-            "- backend: Server-side logic, APIs, services, database changes\n"
-            "- frontend: UI components, pages, client-side logic\n"
-            "- ui-design: Visual polish, animations, design system work\n"
-            "- refactor: Code restructuring without behavior change\n"
-            "- bug-fix: Diagnosing and fixing defects\n"
-            "- test: Writing tests (unit, integration, e2e)\n"
-            "- performance: Optimization, caching, query tuning\n"
-            "- config: Configuration, environment, build setup\n"
-            "- devops: CI/CD, deployment, infrastructure\n\n"
+            f"{format_subtask_types_markdown()}\n\n"
             "Planning guidelines:\n"
             "- Order subtasks by dependency (database before backend before frontend)\n"
             "- Each subtask should be independently verifiable\n"

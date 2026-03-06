@@ -188,6 +188,7 @@ async def list_credentials_async(
     stmt = select(Credential)
     if provider:
         stmt = stmt.where(Credential.provider == provider)
-    stmt = stmt.order_by(Credential.provider, Credential.credential_type)
+    # Keep ordering stable for UI + cache consistency (oldest key remains primary).
+    stmt = stmt.order_by(Credential.provider, Credential.credential_type, Credential.id)
     result = await db.execute(stmt)
     return list(result.scalars().all())
