@@ -3,7 +3,7 @@
 Extracts and condenses session events into a compact format suitable
 for LLM summarization. Supports two sources:
 - SessionEvent objects from PostgreSQL (API sessions)
-- CC JSONL transcript files (Claude Code sessions)
+- JSONL transcript files from Claude Code and Codex
 """
 
 from __future__ import annotations
@@ -60,35 +60,44 @@ def _append_event_line(event: _SessionEventLike, lines: list[str]) -> None:
         lines.append(f"ERROR: {event.content[:200]}")
 
 
-def build_transcript_from_cc_jsonl(transcript_path: str) -> str:
-    """Build a condensed transcript from a Claude Code JSONL transcript file."""
+def read_transcript_text(transcript_path: str) -> str:
+    """Read raw transcript text from a supported JSONL transcript path."""
     path = Path(transcript_path)
     if not path.exists() or path.suffix != ".jsonl":
-        logger.warning("CC transcript not found or not JSONL: %s", transcript_path)
+        logger.warning("Transcript not found or not JSONL: %s", transcript_path)
         return ""
     try:
-        raw_lines = path.read_text().splitlines()
+        return path.read_text()
     except OSError as e:
-        logger.warning("Failed to read CC transcript %s: %s", transcript_path, e)
+        logger.warning("Failed to read transcript %s: %s", transcript_path, e)
         return ""
-    result = build_condensed_transcript_from_jsonl(raw_lines)
+
+
+def build_transcript_from_jsonl(transcript_path: str) -> str:
+    """Build a condensed transcript from a JSONL transcript file."""
+    raw_text = read_transcript_text(transcript_path)
+    if not raw_text:
+        return ""
+    path = Path(transcript_path)
+    result = build_condensed_transcript_from_jsonl(raw_text.splitlines())
     if result:
-        logger.info("Built CC transcript: %d lines from %s", len(result.splitlines()), path.name)
+        logger.info("Built transcript: %d lines from %s", len(result.splitlines()), path.name)
     return result
 
 
+def build_transcript_from_cc_jsonl(transcript_path: str) -> str:
+    """Backward-compatible alias for generic JSONL transcript building."""
+    return build_transcript_from_jsonl(transcript_path)
+
+
 def build_condensed_transcript_from_jsonl(jsonl_lines: list[str]) -> str:
-    """Build a condensed transcript from CC JSONL lines."""
+    """Build a condensed transcript from supported JSONL transcript lines."""
     lines: list[str] = []
     for raw_line in jsonl_lines:
         obj = _parse_jsonl_line(raw_line)
         if obj is None:
             continue
-        entry_type = obj.get("type")
-        if entry_type == "user" and not obj.get("isMeta"):
-            _process_user_entry(obj, lines)
-        elif entry_type == "assistant":
-            _process_assistant_entry(obj, lines)
+        _append_jsonl_entry_lines(obj, lines)
     return _apply_recency_window(lines) if lines else ""
 
 
@@ -108,6 +117,19 @@ def _get_message_content(obj: JsonObject) -> object:
         return ""
     content = message.get("content")
     return content if content is not None else ""
+
+
+def _append_jsonl_entry_lines(obj: JsonObject, lines: list[str]) -> None:
+    """Append transcript lines for one supported JSONL entry."""
+    entry_type = obj.get("type")
+    if entry_type == "user" and not obj.get("isMeta"):
+        _process_user_entry(obj, lines)
+        return
+    if entry_type == "assistant":
+        _process_assistant_entry(obj, lines)
+        return
+    if entry_type == "response_item":
+        _process_codex_response_item(obj.get("payload"), lines)
 
 
 def _process_user_entry(obj: JsonObject, lines: list[str]) -> None:
@@ -166,6 +188,80 @@ def _append_assistant_block(block: object, lines: list[str]) -> None:
         tool_input: JsonObject = raw_input if isinstance(raw_input, dict) else {}
         preview = _tool_input_preview(tool_name, tool_input)
         lines.append(f"TOOL: {tool_name}{preview}")
+
+
+def _process_codex_response_item(payload: object, lines: list[str]) -> None:
+    """Extract transcript lines from a Codex response_item payload."""
+    if not isinstance(payload, dict):
+        return
+    payload_type = payload.get("type")
+    if payload_type == "message":
+        _process_codex_message_payload(payload, lines)
+        return
+    if payload_type == "function_call":
+        _append_codex_function_call(payload, lines)
+        return
+    if payload_type == "function_call_output":
+        _append_codex_function_call_output(payload, lines)
+
+
+def _process_codex_message_payload(payload: JsonObject, lines: list[str]) -> None:
+    """Extract user and assistant message lines from a Codex message payload."""
+    role = payload.get("role")
+    content = payload.get("content")
+    if not isinstance(content, list):
+        return
+    prefix = "USER" if role == "user" else "ASSISTANT" if role == "assistant" else None
+    if prefix is None:
+        return
+    for block in content:
+        _append_codex_message_block(block, lines, prefix)
+
+
+def _append_codex_message_block(block: object, lines: list[str], prefix: str) -> None:
+    """Append a Codex message content block to transcript lines."""
+    if not isinstance(block, dict):
+        return
+    block_type = block.get("type")
+    if block_type not in {"input_text", "output_text", "text"}:
+        return
+    raw_text = block.get("text")
+    text = raw_text if isinstance(raw_text, str) else ""
+    if not text.strip():
+        return
+    cleaned = _strip_command_tags(text) if prefix == "USER" else text.strip()
+    if cleaned:
+        limit = 1000 if prefix == "USER" else 500
+        lines.append(f"{prefix}: {cleaned[:limit]}")
+
+
+def _append_codex_function_call(payload: JsonObject, lines: list[str]) -> None:
+    """Append a Codex tool call entry to transcript lines."""
+    raw_name = payload.get("name")
+    tool_name = raw_name if isinstance(raw_name, str) else "unknown"
+    tool_input = _parse_codex_function_arguments(payload.get("arguments"))
+    preview = _tool_input_preview(tool_name, tool_input)
+    lines.append(f"TOOL: {tool_name}{preview}")
+
+
+def _append_codex_function_call_output(payload: JsonObject, lines: list[str]) -> None:
+    """Append a Codex tool result entry to transcript lines."""
+    raw_output = payload.get("output")
+    if isinstance(raw_output, str) and raw_output.strip():
+        lines.append(f"RESULT: {raw_output[:200]}")
+
+
+def _parse_codex_function_arguments(arguments: object) -> JsonObject:
+    """Parse Codex function call arguments JSON into a dict when possible."""
+    if isinstance(arguments, dict):
+        return {str(key): value for key, value in arguments.items()}
+    if not isinstance(arguments, str) or not arguments.strip():
+        return {}
+    try:
+        parsed = json.loads(arguments)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _apply_recency_window(lines: list[str]) -> str:

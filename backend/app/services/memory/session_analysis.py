@@ -7,7 +7,12 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
-from .citation_parser import resolve_full_uuids
+from .citation_parser import (
+    extract_feedback_tag_strings,
+    extract_summary_tag_strings,
+    extract_uuid_prefixes,
+    resolve_full_uuids,
+)
 from .metrics_collector import update_citation_metrics
 from .session_analysis_feedback import fetch_feedback_tag_dicts, persist_feedback_items
 from .session_analysis_summary import build_git_digest
@@ -52,16 +57,32 @@ async def analyze_session(
     git_context: str | None = None,
     branch: str | None = None,
     is_worktree: bool = False,
+    transcript_path: str | None = None,
 ) -> AnalysisResult:
     """Analyze a session for memory citations and credit them."""
+    transcript_artifacts = _load_transcript_artifacts(transcript_path)
+
     if citation_prefixes is not None:
         prefixes = [p.lower()[:8] for p in citation_prefixes if len(p) >= 8]
+    elif transcript_artifacts is not None:
+        prefixes = transcript_artifacts.citation_prefixes
     else:
         prefixes = await extract_citations_from_events(session_id)
 
-    feedback_created = await _process_feedback_tags(session_id, feedback_tags)
+    feedback_created = await _process_feedback_tags(
+        session_id,
+        feedback_tags if feedback_tags is not None else (
+            transcript_artifacts.feedback_tags if transcript_artifacts is not None else None
+        ),
+    )
     summary_stored = await _process_summary_tags(
-        session_id, summary_tags, git_context, branch, is_worktree,
+        session_id,
+        summary_tags if summary_tags is not None else (
+            transcript_artifacts.summary_tags if transcript_artifacts is not None else None
+        ),
+        git_context,
+        branch,
+        is_worktree,
     )
 
     if not prefixes:
@@ -87,6 +108,33 @@ async def analyze_session(
         citations_credited=len(resolved_uuids),
         feedback_created=feedback_created,
         summary_stored=summary_stored,
+    )
+
+
+@dataclass(frozen=True)
+class _TranscriptArtifacts:
+    """Inline artifacts extracted from a transcript file."""
+
+    citation_prefixes: list[str]
+    feedback_tags: list[str]
+    summary_tags: list[str]
+
+
+def _load_transcript_artifacts(transcript_path: str | None) -> _TranscriptArtifacts | None:
+    """Load inline citations, feedback, and summaries from a transcript file."""
+    if not transcript_path:
+        return None
+
+    from .summary_transcript import read_transcript_text
+
+    transcript_text = read_transcript_text(transcript_path)
+    if not transcript_text:
+        return _TranscriptArtifacts(citation_prefixes=[], feedback_tags=[], summary_tags=[])
+
+    return _TranscriptArtifacts(
+        citation_prefixes=extract_uuid_prefixes(transcript_text),
+        feedback_tags=extract_feedback_tag_strings(transcript_text),
+        summary_tags=extract_summary_tag_strings(transcript_text),
     )
 
 

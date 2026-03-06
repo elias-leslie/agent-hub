@@ -198,10 +198,19 @@ class TestAgentService:
             agent.escalation_model_id = None
             agent.strategies = {}
             agent.temperature = 0.7
+            agent.thinking_level = "high"
+            agent.verbosity_level = "medium"
+            agent.premium_model_id = CLAUDE_OPUS
             agent.max_tokens = None
             agent.is_active = True
             agent.is_coding_agent = False
             agent.tool_permissions = None
+            agent.memory_config = None
+            agent.max_concurrency = 4
+            agent.max_subagent_concurrency = 2
+            agent.daily_token_budget = 1000
+            agent.hourly_request_limit = 25
+            agent.timeout_seconds = 45.0
 
         mock_db.refresh = mock_refresh
 
@@ -212,10 +221,22 @@ class TestAgentService:
                 name="Test Agent",
                 system_prompt="You are a test agent.",
                 primary_model_id=CLAUDE_SONNET,
+                premium_model_id=CLAUDE_OPUS,
+                thinking_level="high",
+                verbosity_level="medium",
+                max_concurrency=4,
+                max_subagent_concurrency=2,
+                daily_token_budget=1000,
+                hourly_request_limit=25,
+                timeout_seconds=45.0,
             )
 
         assert agent.slug == "test-agent"
         assert agent.name == "Test Agent"
+        assert agent.thinking_level == "high"
+        assert agent.verbosity_level == "medium"
+        assert agent.premium_model_id == CLAUDE_OPUS
+        assert agent.timeout_seconds == 45.0
         assert mock_db.add.call_count == 2  # Agent + AgentVersion
 
     @pytest.mark.asyncio
@@ -238,11 +259,19 @@ class TestAgentService:
                 mock_db,
                 1,
                 name="Updated Coder",
+                premium_model_id=CLAUDE_OPUS,
+                thinking_level="minimal",
+                verbosity_level="high",
+                timeout_seconds=90.0,
                 change_reason="Test update",
             )
 
         assert result is not None
         assert mock_agent.name == "Updated Coder"
+        assert mock_agent.premium_model_id == CLAUDE_OPUS
+        assert mock_agent.thinking_level == "minimal"
+        assert mock_agent.verbosity_level == "high"
+        assert mock_agent.timeout_seconds == 90.0
         assert mock_agent.version == 2
 
     @pytest.mark.asyncio

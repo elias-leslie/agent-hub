@@ -7,7 +7,7 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Agent, TabId } from "./types";
 import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
 import { AgentEditorHeader } from "./components/AgentEditorHeader";
-import { Sidebar } from "./components/Sidebar";
+import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
 import { ModelsTab } from "./components/ModelsTab";
 import { PromptTab } from "./components/PromptTab";
@@ -16,6 +16,7 @@ import { PermissionsTab } from "./components/PermissionsTab";
 import { PromptsTab } from "./components/PromptsTab";
 import { MemoryTab } from "./components/MemoryTab";
 import { PreviewModal } from "./components/PreviewModal";
+import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
 
 export default function AgentEditorPage() {
   const params = useParams();
@@ -35,6 +36,7 @@ export default function AgentEditorPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: agent, isLoading, error } = useQuery({
     queryKey: ["agent", slug],
@@ -76,19 +78,7 @@ export default function AgentEditorPage() {
 
   useEffect(() => {
     if (agent) {
-      setFormData({
-        name: agent.name,
-        description: agent.description,
-        system_prompt: agent.system_prompt,
-        primary_model_id: agent.primary_model_id,
-        fallback_models: agent.fallback_models,
-        escalation_model_id: agent.escalation_model_id,
-        temperature: agent.temperature,
-        is_active: agent.is_active,
-        is_coding_agent: agent.is_coding_agent,
-        tool_permissions: agent.tool_permissions,
-        memory_config: agent.memory_config,
-      });
+      setFormData(createAgentFormData(agent));
     }
   }, [agent]);
 
@@ -98,7 +88,7 @@ export default function AgentEditorPage() {
   }, []);
 
   const handleSave = () => {
-    mutation.mutate(formData);
+    mutation.mutate(buildAgentUpdatePayload(formData));
   };
 
   const handlePreview = () => {
@@ -133,6 +123,9 @@ export default function AgentEditorPage() {
     );
   }
 
+  const activeTabLabel =
+    AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.label ?? "Editor";
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <AgentEditorHeader
@@ -141,6 +134,8 @@ export default function AgentEditorPage() {
         isSaving={mutation.isPending}
         onSave={handleSave}
         onPreview={handlePreview}
+        onOpenSidebar={() => setSidebarOpen(true)}
+        activeTabLabel={activeTabLabel}
       />
 
       {mutation.isSuccess && (
@@ -161,9 +156,11 @@ export default function AgentEditorPage() {
           activeTab={activeTab}
           agent={agent}
           onTabChange={setActiveTab}
+          mobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 p-4 lg:p-8">
           <div className="max-w-2xl">
             {activeTab === "general" && (
               <GeneralTab formData={formData} updateField={updateField} />

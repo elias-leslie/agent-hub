@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { RotateCcw, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import type { Persona, PersonaUpdate } from "@/types/persona";
@@ -59,19 +59,33 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
   }, [greetingValue, persona.greeting, onUpdate]);
 
   const [resetting, setResetting] = useState(false);
+  const [resetState, setResetState] = useState<{
+    status: "idle" | "success" | "error";
+    message: string | null;
+  }>({ status: "idle", message: null });
 
   const handleResetOnboarding = useCallback(async () => {
     setResetting(true);
+    setResetState({ status: "idle", message: null });
     try {
       const res = await fetchApi(buildApiUrl("/api/persona/reset-onboarding"), {
         method: "POST",
       });
-      if (res.ok) {
-        const updated = await res.json();
-        onPersonaRefresh?.(updated);
+      if (!res.ok) {
+        throw new Error(`Reset failed with status ${res.status}`);
       }
+      const updated = await res.json();
+      onPersonaRefresh?.(updated);
+      setResetState({
+        status: "success",
+        message: "Onboarding reset. Bootstrap instructions will be injected into the next new conversation.",
+      });
     } catch (err) {
       console.error("Failed to reset onboarding:", err);
+      setResetState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to reset onboarding",
+      });
     } finally {
       setResetting(false);
     }
@@ -179,6 +193,23 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             )}
           </div>
         </div>
+        {resetState.message && (
+          <div
+            className={cn(
+              "flex max-w-md items-start gap-2 rounded-lg border px-3 py-2 text-xs",
+              resetState.status === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300",
+            )}
+          >
+            {resetState.status === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            )}
+            <p>{resetState.message}</p>
+          </div>
+        )}
       </div>
     </div>
   );

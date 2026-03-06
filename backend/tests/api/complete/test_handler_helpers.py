@@ -41,7 +41,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
             session_id="sess-1",
             request=request,
             result=result,
-            resolved_model="xai/grok-4-1-fast-non-reasoning",
+            resolved_model="xai/grok-4-1-fast-reasoning",
             model_used="claude-haiku-4-5",
             is_new_session=True,
         )

@@ -1,0 +1,35 @@
+import type { Agent } from "./types"
+
+export function createAgentFormData(agent: Agent): Partial<Agent> {
+  return {
+    name: agent.name,
+    description: agent.description,
+    system_prompt: agent.system_prompt,
+    primary_model_id: agent.primary_model_id,
+    fallback_models: agent.fallback_models,
+    escalation_model_id: agent.escalation_model_id,
+    premium_model_id: agent.premium_model_id,
+    temperature: agent.temperature,
+    thinking_level: agent.thinking_level,
+    verbosity_level: agent.verbosity_level,
+    is_active: agent.is_active,
+    is_coding_agent: agent.is_coding_agent,
+    tool_permissions: agent.tool_permissions,
+    memory_config: agent.memory_config,
+    max_concurrency: agent.max_concurrency ?? null,
+    max_subagent_concurrency: agent.max_subagent_concurrency ?? null,
+    daily_token_budget: agent.daily_token_budget ?? null,
+    hourly_request_limit: agent.hourly_request_limit ?? null,
+    timeout_seconds: agent.timeout_seconds ?? null,
+  }
+}
+
+export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent> {
+  const payload = { ...formData }
+
+  if (!payload.name) delete payload.name
+  if (!payload.system_prompt) delete payload.system_prompt
+  if (!payload.primary_model_id) delete payload.primary_model_id
+
+  return payload
+}

@@ -232,6 +232,37 @@ class TestBuildCondensedTranscriptFromJsonl:
         result = build_condensed_transcript_from_jsonl(jsonl_lines)
         assert "USER: valid" in result
 
+    def test_extracts_codex_messages_and_tool_calls(self) -> None:
+        """Extracts Codex message, tool call, and tool result entries."""
+        from app.services.memory.summary_transcript import (
+            build_condensed_transcript_from_jsonl,
+        )
+
+        jsonl_lines = [
+            (
+                '{"type": "response_item", "payload": {"type": "message", "role": "user", '
+                '"content": [{"type": "input_text", "text": "Review the hook gap"}]}}'
+            ),
+            (
+                '{"type": "response_item", "payload": {"type": "message", "role": "assistant", '
+                '"content": [{"type": "output_text", "text": "I\'m tracing the parser now"}]}}'
+            ),
+            (
+                '{"type": "response_item", "payload": {"type": "function_call", "name": "exec_command", '
+                '"arguments": "{\\"cmd\\":\\"git status\\",\\"workdir\\":\\"/repo\\"}"}}'
+            ),
+            (
+                '{"type": "response_item", "payload": {"type": "function_call_output", '
+                '"output": "M backend/app/services/memory/session_analysis.py"}}'
+            ),
+        ]
+
+        result = build_condensed_transcript_from_jsonl(jsonl_lines)
+        assert "USER: Review the hook gap" in result
+        assert "ASSISTANT: I'm tracing the parser now" in result
+        assert "TOOL: exec_command" in result
+        assert "RESULT: M backend/app/services/memory/session_analysis.py" in result
+
 
 @pytest.mark.unit
 class TestRecencyWindow:

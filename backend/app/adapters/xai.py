@@ -5,6 +5,12 @@ from __future__ import annotations
 from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
 
+_XAI_MODEL_NORMALIZATION = {
+    "grok-4.1-fast": "grok-4-1-fast-reasoning",
+    "grok-4-1-fast": "grok-4-1-fast-reasoning",
+    "grok-4-1-fast-non-reasoning": "grok-4-1-fast-reasoning",
+}
+
 
 class XAIAdapter(OpenAICompatibleAdapter):
     """Adapter for xAI (Grok) models via direct API."""
@@ -22,3 +28,8 @@ class XAIAdapter(OpenAICompatibleAdapter):
         if not explicit_key:
             raise AuthenticationError("xai")
         return explicit_key
+
+    def _resolve_model(self, model: str) -> str:
+        """Normalize legacy Grok model IDs before sending them to xAI."""
+        resolved = super()._resolve_model(model)
+        return _XAI_MODEL_NORMALIZATION.get(resolved, resolved)

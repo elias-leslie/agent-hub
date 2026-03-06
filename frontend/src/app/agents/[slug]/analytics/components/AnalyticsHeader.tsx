@@ -1,11 +1,14 @@
 import { useRouter } from "next/navigation";
 import { Bot, ArrowLeft, RefreshCw } from "lucide-react";
+import type { AnalyticsWindow } from "../types";
 
 interface AnalyticsHeaderProps {
   agentName: string;
   slug: string;
-  timeRange: string;
-  onTimeRangeChange: (value: string) => void;
+  timeRange: AnalyticsWindow;
+  onTimeRangeChange: (value: AnalyticsWindow) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
 }
 
 export function AnalyticsHeader({
@@ -13,6 +16,8 @@ export function AnalyticsHeader({
   slug,
   timeRange,
   onTimeRangeChange,
+  onRefresh,
+  isRefreshing,
 }: AnalyticsHeaderProps) {
   const router = useRouter();
 
@@ -41,15 +46,19 @@ export function AnalyticsHeader({
           <div className="flex items-center gap-2">
             <select
               value={timeRange}
-              onChange={(e) => onTimeRangeChange(e.target.value)}
+              onChange={(e) => onTimeRangeChange(Number(e.target.value) as AnalyticsWindow)}
               className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             >
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
+              <option value="6">Last 6 hours</option>
+              <option value="12">Last 12 hours</option>
+              <option value="24">Last 24 hours</option>
             </select>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-              <RefreshCw className="h-3.5 w-3.5" />
+            <button
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>

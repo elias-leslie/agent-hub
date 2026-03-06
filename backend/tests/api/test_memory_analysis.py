@@ -81,6 +81,29 @@ class TestAnalyzeEndpoint:
         assert data["citations_found"] == 1
 
     @pytest.mark.asyncio
+    async def test_analyze_session_forwards_transcript_path(self, client: AsyncClient) -> None:
+        """transcript_path is forwarded to the analysis service."""
+        with patch(
+            "app.services.memory.session_analysis.analyze_session",
+            new_callable=AsyncMock,
+            return_value=AnalysisResult(
+                session_id="test-session",
+                citations_found=1,
+                citations_credited=1,
+                feedback_created=1,
+                summary_stored=True,
+            ),
+        ) as mock_analyze:
+            response = await client.post(
+                "/api/memory/sessions/test-session/analyze",
+                json={"transcript_path": "/tmp/codex-session.jsonl"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["summary_stored"] is True
+        assert mock_analyze.await_args.kwargs["transcript_path"] == "/tmp/codex-session.jsonl"
+
+    @pytest.mark.asyncio
     async def test_analyze_session_error_returns_500(self, client: AsyncClient) -> None:
         """Internal error returns 500."""
         with patch(

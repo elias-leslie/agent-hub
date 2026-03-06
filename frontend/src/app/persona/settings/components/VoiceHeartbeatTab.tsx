@@ -1,65 +1,19 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Play, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoicePreferences, type VoiceOption } from "@agent-hub/chat-ui";
 import { getApiBaseUrl, buildApiUrl, fetchApi } from "@/lib/api-config";
+import type { PersonaAutosaveState } from "@/app/persona/hooks/usePersona";
 import type { Persona, PersonaUpdate } from "@/types/persona";
-
-interface DocumentSectionProps {
-  label: string;
-  description: string;
-  value: string;
-  placeholder: string;
-  onSave: (value: string) => void;
-  rows?: number;
-  textareaClassName?: string;
-}
-
-function DocumentSection({ label, description, value, placeholder, onSave, rows = 6, textareaClassName }: DocumentSectionProps) {
-  const [localValue, setLocalValue] = useState(value);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => { setLocalValue(value); }, [value]);
-
-  const handleChange = useCallback(
-    (newValue: string) => {
-      setLocalValue(newValue);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => onSave(newValue), 2000);
-    },
-    [onSave],
-  );
-
-  return (
-    <div>
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
-        {label}
-      </label>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">{description}</p>
-      <textarea
-        value={localValue}
-        onChange={(e) => handleChange(e.target.value)}
-        rows={rows}
-        className={cn(
-          "w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y",
-          textareaClassName,
-        )}
-        placeholder={placeholder}
-      />
-      <div className="flex justify-between mt-1">
-        <span className="text-[10px] text-slate-400">Auto-saves on pause</span>
-        <span className="text-[10px] text-slate-400">{localValue.length} chars</span>
-      </div>
-    </div>
-  );
-}
+import { PersonaDocumentSection } from "./PersonaDocumentSection";
 
 interface VoiceHeartbeatTabProps {
   persona: Persona;
   onUpdate: (fields: PersonaUpdate) => void;
+  autosave: PersonaAutosaveState;
 }
 
-export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps) {
+export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbeatTabProps) {
   const [search, setSearch] = useState("");
 
   const {
@@ -122,6 +76,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
           </span>
           <button
             onClick={() => setTtsEnabled(!ttsEnabled)}
+            aria-label={ttsEnabled ? "Disable text-to-speech" : "Enable text-to-speech"}
             className={cn(
               "relative w-10 h-5 rounded-full transition-colors duration-200",
               ttsEnabled ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-600",
@@ -159,6 +114,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
                 <button
                   key={voice.id}
                   onClick={() => setSelectedVoice(voice.id)}
+                  aria-label={`Select voice ${voice.name}`}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors",
                     voice.id === selectedVoice && "bg-amber-50 dark:bg-amber-900/20",
@@ -166,6 +122,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
                 >
                   <div
                     role="button"
+                    aria-label={`Preview voice ${voice.name}`}
                     tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -223,6 +180,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
             Check-in interval
           </span>
           <select
+            aria-label="Heartbeat interval"
             value={persona.heartbeat_interval_minutes}
             onChange={(e) => handleHeartbeatChange(Number(e.target.value))}
             className="px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
@@ -240,12 +198,13 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
         </p>
 
         {/* Heartbeat Instructions */}
-        <DocumentSection
+        <PersonaDocumentSection
           label="Heartbeat Instructions"
           description="Custom instructions for autonomous heartbeat checks. Defines what to monitor and when to alert."
           value={persona.heartbeat_instructions || ""}
           placeholder="Describe what the persona should check during heartbeats..."
           onSave={(v) => onUpdate({ heartbeat_instructions: v })}
+          autosave={autosave}
           textareaClassName="min-h-[200px] h-[calc(100vh-24rem)]"
         />
       </div>

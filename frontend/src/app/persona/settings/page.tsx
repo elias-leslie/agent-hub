@@ -34,9 +34,12 @@ export default function PersonaSettingsPage() {
   const {
     persona,
     personaLoading,
+    personaError,
     updatePersonaField,
+    personaAutosave,
     agent,
     agentLoading,
+    agentError,
     agentFormData,
     hasAgentChanges,
     updateAgentField,
@@ -55,6 +58,21 @@ export default function PersonaSettingsPage() {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (personaError || agentError) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-2">
+          <p className="text-sm font-medium text-rose-500 dark:text-rose-400">
+            Failed to load persona settings
+          </p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {personaError || agentError}
+          </p>
+        </div>
       </div>
     );
   }
@@ -131,7 +149,11 @@ export default function PersonaSettingsPage() {
                 </div>
               )}
               {activeTab === "personality" && (
-                <PersonalityTab persona={persona} onUpdate={updatePersonaField} />
+                <PersonalityTab
+                  persona={persona}
+                  onUpdate={updatePersonaField}
+                  autosave={personaAutosave}
+                />
               )}
               {activeTab === "prompt" && (
                 <div className="space-y-8">
@@ -148,7 +170,11 @@ export default function PersonaSettingsPage() {
                 </div>
               )}
               {activeTab === "voice" && (
-                <VoiceHeartbeatTab persona={persona} onUpdate={updatePersonaField} />
+                <VoiceHeartbeatTab
+                  persona={persona}
+                  onUpdate={updatePersonaField}
+                  autosave={personaAutosave}
+                />
               )}
               {activeTab === "session" && (
                 <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />

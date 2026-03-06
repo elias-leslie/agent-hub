@@ -1,46 +1,67 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertCircle,
+  Archive,
   Bot,
+  CheckCircle2,
+  Plus,
   RefreshCw,
   Search,
-  AlertCircle,
-  Plus,
+  X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { fetchApi } from "@/lib/api-config";
+
 import { GlobalInstructionsPanel } from "@/components/GlobalInstructionsPanel";
-import { AgentsTable } from "./components/AgentsTable";
 import { fetchAgents, fetchAgentMetrics } from "@/lib/api";
+import { fetchApi } from "@/lib/api-config";
+import { cn } from "@/lib/utils";
+import { AgentsTable } from "./components/AgentsTable";
 import { useAgentFiltering } from "./hooks/useAgentFiltering";
-import type { Agent, AgentMetrics, SortField, SortDirection } from "./lib/types";
+import type {
+  Agent,
+  AgentMetrics,
+  AgentMetricsResponse,
+  SortDirection,
+  SortField,
+} from "./lib/types";
 
 export default function AgentsPage() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [archiveCandidate, setArchiveCandidate] = useState<Agent | null>(null);
+  const [archiveState, setArchiveState] = useState<{
+    status: "idle" | "saving" | "success" | "error";
+    message: string | null;
+  }>({ status: "idle", message: null });
 
-  const handleSort = useCallback((field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(d => d === "desc" ? "asc" : "desc");
-    } else {
-      setSortField(field);
-      setSortDirection("desc");
-    }
-  }, [sortField]);
+  const handleSort = useCallback(
+    (field: SortField) => {
+      if (sortField === field) {
+        setSortDirection((direction) => (direction === "desc" ? "asc" : "desc"));
+      } else {
+        setSortField(field);
+        setSortDirection("desc");
+      }
+    },
+    [sortField],
+  );
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["agents", { activeOnly: !showInactive }],
     queryFn: () => fetchAgents(!showInactive),
   });
 
-  const { data: metricsData } = useQuery({
+  const { data: metricsData } = useQuery<AgentMetricsResponse>({
     queryKey: ["agent-metrics"],
-    queryFn: fetchAgentMetrics,
-    refetchInterval: 60000, // Refresh metrics every minute
+    queryFn: () => fetchAgentMetrics(),
+    refetchInterval: 60000,
   });
 
   const filteredAgents = useAgentFiltering({
@@ -52,73 +73,113 @@ export default function AgentsPage() {
   });
 
   const getMetrics = useCallback(
-    (slug: string): AgentMetrics | null => {
-      return metricsData?.metrics?.[slug] ?? null;
-    },
-    [metricsData]
+    (slug: string): AgentMetrics | null => metricsData?.metrics?.[slug] ?? null,
+    [metricsData],
   );
 
-  const handleClone = useCallback((agent: Agent) => {
-    // Navigate to create page with agent data pre-filled
-    const params = new URLSearchParams({ clone: agent.slug });
-    window.location.href = `/agents/new?${params}`;
+  const handleClone = useCallback(
+    (agent: Agent) => {
+      const params = new URLSearchParams({ clone: agent.slug });
+      router.push(`/agents/new?${params}`);
+    },
+    [router],
+  );
+
+  const handleArchive = useCallback((agent: Agent) => {
+    setArchiveCandidate(agent);
+    setArchiveState({ status: "idle", message: null });
   }, []);
 
-  const handleArchive = useCallback(
-    async (agent: Agent) => {
-      if (!confirm(`Archive agent "${agent.name}"? This will deactivate it.`)) {
-        return;
+  const dismissArchiveMessage = useCallback(() => {
+    setArchiveCandidate(null);
+    setArchiveState({ status: "idle", message: null });
+  }, []);
+
+  const confirmArchive = useCallback(async () => {
+    if (!archiveCandidate) {
+      return;
+    }
+
+    setArchiveState({
+      status: "saving",
+      message: `Archiving ${archiveCandidate.name}...`,
+    });
+
+    try {
+      const res = await fetchApi(`/api/agents/${archiveCandidate.slug}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to archive agent (${res.status})`);
       }
-      try {
-        const res = await fetchApi(`/api/agents/${agent.slug}`, {
-          method: "DELETE",
-        });
-        if (!res.ok) throw new Error("Failed to archive agent");
-        refetch();
-      } catch (err) {
-        console.error("Archive failed:", err);
-        alert("Failed to archive agent");
-      }
-    },
-    [refetch]
-  );
+
+      setArchiveState({
+        status: "success",
+        message: `${archiveCandidate.name} archived. Hidden from the active list.`,
+      });
+      setArchiveCandidate(null);
+      refetch();
+    } catch (err) {
+      console.error("Archive failed:", err);
+      setArchiveState({
+        status: "error",
+        message: err instanceof Error ? err.message : "Failed to archive agent",
+      });
+    }
+  }, [archiveCandidate, refetch]);
+
+  const hasSearch = searchQuery.trim().length > 0;
+  const visibleCount = filteredAgents.length;
+  const totalCount = data?.total ?? 0;
+  const activeCount = data?.agents?.filter((agent) => agent.is_active).length ?? 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="px-4 lg:px-8">
+          <div className="flex min-h-14 flex-col gap-3 py-3 lg:h-14 lg:flex-row lg:items-center lg:justify-between lg:py-0">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
                   Agents
                 </h1>
               </div>
-              <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono tabular-nums">
+                <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                  {visibleCount} visible
+                </span>
                 <span className="text-slate-500 dark:text-slate-400">
-                  {data?.total ?? 0} total
+                  {showInactive ? `${totalCount} total` : `${activeCount} active`}
                 </span>
               </div>
             </div>
 
-            {/* Controls */}
-            <div className="flex items-center gap-2">
-              {/* Search */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search agents..."
+                  placeholder="Search name, slug, or description..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 w-48 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
+                  aria-label="Search agents"
+                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-8 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 dark:border-slate-700 dark:bg-slate-800 sm:w-64"
                 />
+                {hasSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
-              {/* Show inactive toggle */}
-              <label className="flex items-center gap-2 px-2.5 py-1.5 text-xs cursor-pointer">
+              <label className="flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs">
                 <input
                   type="checkbox"
                   checked={showInactive}
@@ -128,66 +189,133 @@ export default function AgentsPage() {
                 <span className="text-slate-600 dark:text-slate-400">Show inactive</span>
               </label>
 
-              {/* Refresh */}
               <button
+                type="button"
                 onClick={() => refetch()}
                 disabled={isRefetching}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
               >
-                <RefreshCw
-                  className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")}
-                />
+                <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
                 Refresh
               </button>
 
-              {/* New Agent */}
-              <a
+              <Link
                 href="/agents/new"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New Agent
-              </a>
+              </Link>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="px-6 lg:px-8 py-5">
-        {/* Global Instructions Panel */}
-        <GlobalInstructionsPanel
-          activeAgentCount={data?.agents?.filter((a) => a.is_active).length ?? 0}
-        />
+      <main className="px-4 py-5 lg:px-8">
+        <GlobalInstructionsPanel activeAgentCount={activeCount} />
 
-        {/* Error State */}
-        {error && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-5">
-            <AlertCircle className="h-4 w-4" />
-            <p className="text-xs font-medium">Failed to load agents</p>
+        {archiveCandidate && (
+          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <Archive className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Archive {archiveCandidate.name}?</p>
+                <p className="text-amber-800/80 dark:text-amber-200/80">
+                  This deactivates the agent and removes it from the default list. You can still find it later by showing inactive agents.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={dismissArchiveMessage}
+                className="rounded-md border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/30"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmArchive}
+                disabled={archiveState.status === "saving"}
+                className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+              >
+                {archiveState.status === "saving" ? "Archiving..." : "Confirm archive"}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Loading */}
+        {archiveState.message && !archiveCandidate && (
+          <div
+            className={cn(
+              "mb-5 mt-5 flex items-start gap-2 rounded-lg border p-4 text-sm",
+              archiveState.status === "success"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300",
+            )}
+          >
+            {archiveState.status === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <div className="flex-1">
+              <p className="font-medium">
+                {archiveState.status === "success" ? "Archive complete" : "Archive failed"}
+              </p>
+              <p>{archiveState.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissArchiveMessage}
+              aria-label="Dismiss archive message"
+              className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Failed to load agents</p>
+                <p className="text-xs text-red-600/90 dark:text-red-300/80">
+                  {error instanceof Error ? error.message : "Check the API response and try again."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {isLoading && (
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-            <div className="h-10 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700" />
+          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="h-10 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50" />
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800/50"
+                className="grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800/50"
               >
-                <div className="h-4 w-32 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-48 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-4 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
               </div>
             ))}
           </div>
         )}
 
-        {/* AGENTS TABLE */}
         {data && (
           <AgentsTable
             agents={filteredAgents}
@@ -197,6 +325,11 @@ export default function AgentsPage() {
             getMetrics={getMetrics}
             onClone={handleClone}
             onArchive={handleArchive}
+            totalAgents={totalCount}
+            searchQuery={searchQuery}
+            showInactive={showInactive}
+            onClearSearch={() => setSearchQuery("")}
+            onShowActiveOnly={() => setShowInactive(true)}
           />
         )}
       </main>

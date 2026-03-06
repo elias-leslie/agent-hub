@@ -48,7 +48,7 @@ CODEX_GPT_5_1_MINI = "codex/gpt-5.1-codex-mini"
 
 # xAI models (Direct)
 XAI_GROK_CODE_FAST = "xai/grok-code-fast-1"
-XAI_GROK_4_1_FAST = "xai/grok-4-1-fast-non-reasoning"
+XAI_GROK_4_1_FAST = "xai/grok-4-1-fast-reasoning"
 
 # Zhipu models (Direct)
 ZHIPU_GLM_5 = "zhipu/glm-5"

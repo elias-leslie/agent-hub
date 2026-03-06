@@ -24,12 +24,26 @@ from ._citation_types import (
 )
 
 __all__ = [
-    "Citation", "CitationType", "FeedbackParseResult", "FeedbackTag",
-    "ParseResult", "SummaryParseResult", "SummaryTag",
-    "extract_feedback_tags", "extract_summary_tags", "extract_uuid_prefixes",
-    "format_citation", "format_guardrail_citation", "format_mandate_citation",
-    "format_reference_citation", "parse_citations", "parse_feedback_tags",
-    "parse_summary_tags", "resolve_full_uuids",
+    "Citation",
+    "CitationType",
+    "FeedbackParseResult",
+    "FeedbackTag",
+    "ParseResult",
+    "SummaryParseResult",
+    "SummaryTag",
+    "extract_feedback_tag_strings",
+    "extract_feedback_tags",
+    "extract_summary_tag_strings",
+    "extract_summary_tags",
+    "extract_uuid_prefixes",
+    "format_citation",
+    "format_guardrail_citation",
+    "format_mandate_citation",
+    "format_reference_citation",
+    "parse_citations",
+    "parse_feedback_tags",
+    "parse_summary_tags",
+    "resolve_full_uuids",
 ]
 
 logger = logging.getLogger(__name__)
@@ -177,6 +191,17 @@ def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
     return parse_feedback_tags(response_text).tags
 
 
+def extract_feedback_tag_strings(response_text: str) -> list[str]:
+    """Extract raw feedback tag strings from response text."""
+    if not response_text:
+        return []
+
+    tags = [match.group(0) for match in FEEDBACK_TAG_PATTERN.finditer(response_text)]
+    if tags:
+        return tags
+    return [match.group(0).strip() for match in FEEDBACK_TAG_PATTERN_LEGACY.finditer(response_text)]
+
+
 def parse_summary_tags(response_text: str) -> SummaryParseResult:
     """Parse [[S:outcome:description]] tags from response text."""
     if not response_text:
@@ -196,3 +221,10 @@ def parse_summary_tags(response_text: str) -> SummaryParseResult:
 def extract_summary_tags(response_text: str) -> list[SummaryTag]:
     """Convenience: extract summary tags as list."""
     return parse_summary_tags(response_text).tags
+
+
+def extract_summary_tag_strings(response_text: str) -> list[str]:
+    """Extract raw summary tag strings from response text."""
+    if not response_text:
+        return []
+    return [match.group(0) for match in SUMMARY_TAG_PATTERN.finditer(response_text)]

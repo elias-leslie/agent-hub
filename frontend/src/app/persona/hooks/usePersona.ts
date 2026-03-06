@@ -1,20 +1,33 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import { useToastActions } from "@/components/error/toast";
 import type { Persona, PersonaUpdate } from "@/types/persona";
+import { useDebouncedAutosave } from "./useDebouncedAutosave";
+
+export interface PersonaAutosaveState {
+  status: "idle" | "scheduled" | "saving" | "saved" | "error";
+  errorMessage: string | null;
+  savedAt: number | null;
+}
 
 interface UsePersonaReturn {
   persona: Persona | null;
   loading: boolean;
   error: string | null;
-  updatePersona: (fields: PersonaUpdate) => Promise<void>;
+  updatePersona: (fields: PersonaUpdate) => void;
+  setPersona: React.Dispatch<React.SetStateAction<Persona | null>>;
+  autosave: PersonaAutosaveState;
 }
 
 export function usePersona(): UsePersonaReturn {
   const [persona, setPersona] = useState<Persona | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autosave, setAutosave] = useState<PersonaAutosaveState>({
+    status: "idle",
+    errorMessage: null,
+    savedAt: null,
+  });
   const toast = useToastActions();
 
   useEffect(() => {
@@ -24,7 +37,10 @@ export function usePersona(): UsePersonaReturn {
         const res = await fetchApi(buildApiUrl("/api/persona"));
         if (!res.ok) throw new Error(`Failed to fetch persona: ${res.status}`);
         const data = await res.json();
-        if (!cancelled) setPersona(data);
+        if (!cancelled) {
+          setPersona(data);
+          setError(null);
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load persona");
@@ -37,28 +53,57 @@ export function usePersona(): UsePersonaReturn {
     return () => { cancelled = true; };
   }, []);
 
-  const updatePersona = useCallback(async (fields: PersonaUpdate) => {
-    // Optimistic update
+  const updatePersona = useDebouncedAutosave<Persona, PersonaUpdate>({
+    save: async (fields) => {
+      setAutosave((prev) => ({
+        ...prev,
+        status: "saving",
+        errorMessage: null,
+      }));
+      const res = await fetchApi(buildApiUrl("/api/persona"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      if (!res.ok) throw new Error(`Failed to update persona: ${res.status}`);
+      return res.json();
+    },
+    onSuccess: (updated) => {
+      setPersona(updated);
+      setError(null);
+      setAutosave({
+        status: "saved",
+        errorMessage: null,
+        savedAt: Date.now(),
+      });
+    },
+    onError: (err) => {
+      console.error("Failed to save persona:", err);
+      setAutosave({
+        status: "error",
+        errorMessage: err instanceof Error ? err.message : "Failed to save persona settings",
+        savedAt: null,
+      });
+      toast.error("Failed to save persona settings");
+    },
+  });
+
+  const handleUpdatePersona = useCallback((fields: PersonaUpdate) => {
     setPersona((prev) => prev ? { ...prev, ...fields } : prev);
+    setAutosave((prev) => ({
+      ...prev,
+      status: "scheduled",
+      errorMessage: null,
+    }));
+    updatePersona(fields);
+  }, [updatePersona]);
 
-    // Debounced save
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await fetchApi(buildApiUrl("/api/persona"), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(fields),
-        });
-        if (!res.ok) throw new Error(`Failed to update persona: ${res.status}`);
-        const updated = await res.json();
-        setPersona(updated);
-      } catch (err) {
-        console.error("Failed to save persona:", err);
-        toast.error("Failed to save persona settings");
-      }
-    }, 500);
-  }, [toast]);
-
-  return { persona, loading, error, updatePersona };
+  return {
+    persona,
+    loading,
+    error,
+    updatePersona: handleUpdatePersona,
+    setPersona,
+    autosave,
+  };
 }

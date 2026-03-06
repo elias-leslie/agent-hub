@@ -3,7 +3,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { fetchApi } from "@/lib/api-config";
-import type { AgentListResponse, AgentMetricsResponse } from "@/app/agents/lib/types";
+import type {
+  AgentListResponse,
+  AgentMetrics,
+  AgentMetricsResponse,
+} from "@/app/agents/lib/types";
 
 export async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   const params = new URLSearchParams();
@@ -16,9 +20,17 @@ export async function fetchAgents(activeOnly = true): Promise<AgentListResponse>
   return res.json();
 }
 
-export async function fetchAgentMetrics(): Promise<AgentMetricsResponse> {
-  const res = await fetchApi("/api/agents/metrics/all");
+export async function fetchAgentMetrics(): Promise<AgentMetricsResponse>;
+export async function fetchAgentMetrics(slug: string): Promise<AgentMetrics>;
+export async function fetchAgentMetrics(
+  slug?: string
+): Promise<AgentMetricsResponse | AgentMetrics> {
+  const res = await fetchApi(slug ? `/api/agents/${slug}/metrics` : "/api/agents/metrics/all");
   if (!res.ok) {
+    if (slug) {
+      throw new Error("Failed to fetch agent metrics");
+    }
+
     // Return empty metrics on error - don't fail the whole page
     return { metrics: {} };
   }

@@ -199,6 +199,7 @@ def _make_mock_session(session_id: str, **overrides: Any) -> MagicMock:
     defaults: dict[str, Any] = {
         "id": session_id,
         "agent_slug": "persona",
+        "project_id": "persona-sandbox",
         "session_type": "chat",
         "summary_oneliner": None,
         "status": "completed",
@@ -249,6 +250,32 @@ class TestBuildSessionQueryHasEventsFilter:
         query = _build_session_query(hours=0)
         compiled = str(query.compile(compile_kwargs={"literal_binds": True}))
         assert "persona" in compiled.lower()
+
+
+class TestActivitySessionClassification:
+    """Unit tests for activity-specific session type classification."""
+
+    def test_persona_sandbox_completion_maps_to_heartbeat(self) -> None:
+        from app.api.persona.activity import _classify_activity_session_type
+
+        session = _make_mock_session(
+            "heartbeat-1",
+            project_id="persona-sandbox",
+            session_type="completion",
+        )
+
+        assert _classify_activity_session_type(session) == "heartbeat"
+
+    def test_non_sandbox_completion_remains_completion(self) -> None:
+        from app.api.persona.activity import _classify_activity_session_type
+
+        session = _make_mock_session(
+            "scheduled-1",
+            project_id="agent-hub",
+            session_type="completion",
+        )
+
+        assert _classify_activity_session_type(session) == "completion"
 
 
 class TestActivityEndpointEmptySessionFilter:
@@ -428,3 +455,49 @@ class TestActivityEndpointEmptySessionFilter:
         sess_2_data = next(s for s in data["sessions"] if s["id"] == "sess-2")
         assert sess_1_data["message_count"] == 1
         assert sess_2_data["message_count"] == 0
+
+    def test_activity_maps_persona_sandbox_completion_to_heartbeat(
+        self, activity_client: APITestClient, activity_db: AsyncMock
+    ) -> None:
+        session = _make_mock_session(
+            "sess-heartbeat",
+            project_id="persona-sandbox",
+            session_type="completion",
+        )
+        event = _make_mock_event("sess-heartbeat", content="Heartbeat event")
+
+        patch_previews, patch_counts = self._patch_activity(
+            sessions=[session],
+            events_by_session={"sess-heartbeat": [event]},
+            msg_counts={"sess-heartbeat": 1},
+            activity_db=activity_db,
+        )
+
+        with patch_previews, patch_counts:
+            response = activity_client.get("/api/persona/activity?time_range=all")
+
+        assert response.status_code == 200
+        assert response.json()["sessions"][0]["session_type"] == "heartbeat"
+
+    def test_activity_leaves_non_sandbox_completion_as_completion(
+        self, activity_client: APITestClient, activity_db: AsyncMock
+    ) -> None:
+        session = _make_mock_session(
+            "sess-scheduled",
+            project_id="agent-hub",
+            session_type="completion",
+        )
+        event = _make_mock_event("sess-scheduled", content="Scheduled job")
+
+        patch_previews, patch_counts = self._patch_activity(
+            sessions=[session],
+            events_by_session={"sess-scheduled": [event]},
+            msg_counts={"sess-scheduled": 1},
+            activity_db=activity_db,
+        )
+
+        with patch_previews, patch_counts:
+            response = activity_client.get("/api/persona/activity?time_range=all")
+
+        assert response.status_code == 200
+        assert response.json()["sessions"][0]["session_type"] == "completion"

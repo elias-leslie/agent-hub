@@ -96,18 +96,28 @@ async def create_agent(
             primary_model_id=request.primary_model_id,
             fallback_models=request.fallback_models,
             escalation_model_id=request.escalation_model_id,
+            premium_model_id=request.premium_model_id,
             strategies=request.strategies,
             temperature=request.temperature,
+            thinking_level=request.thinking_level,
+            verbosity_level=request.verbosity_level,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
             tool_permissions=request.tool_permissions.model_dump()
             if request.tool_permissions
             else None,
             memory_config=request.memory_config,
+            max_concurrency=request.max_concurrency,
+            max_subagent_concurrency=request.max_subagent_concurrency,
+            daily_token_budget=request.daily_token_budget,
+            hourly_request_limit=request.hourly_request_limit,
+            timeout_seconds=request.timeout_seconds,
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
         return AgentResponse.from_dto(agent)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to create agent: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -143,14 +153,22 @@ async def update_agent(
             primary_model_id=request.primary_model_id,
             fallback_models=request.fallback_models,
             escalation_model_id=request.escalation_model_id,
+            premium_model_id=request.premium_model_id,
             strategies=request.strategies,
             temperature=request.temperature,
+            thinking_level=request.thinking_level,
+            verbosity_level=request.verbosity_level,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
             tool_permissions=request.tool_permissions.model_dump()
             if request.tool_permissions
             else None,
             memory_config=request.memory_config,
+            max_concurrency=request.max_concurrency,
+            max_subagent_concurrency=request.max_subagent_concurrency,
+            daily_token_budget=request.daily_token_budget,
+            hourly_request_limit=request.hourly_request_limit,
+            timeout_seconds=request.timeout_seconds,
             changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )
@@ -159,6 +177,8 @@ async def update_agent(
 
         logger.info(f"Updated agent: {slug} to version {updated.version}")
         return AgentResponse.from_dto(updated)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to update agent: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e

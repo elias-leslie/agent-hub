@@ -4,6 +4,8 @@ export interface Agent {
   name: string;
   primary_model_id: string;
   fallback_models: string[];
+  premium_model_id: string | null;
+  updated_at: string;
 }
 
 export interface AgentMetrics {
@@ -17,24 +19,23 @@ export interface AgentMetrics {
   success_trend: number[];
 }
 
+export type AnalyticsWindow = 6 | 12 | 24;
+
+export interface TrendPoint {
+  hour: string;
+  latencyMs: number;
+  successRate: number;
+}
+
 export interface AnalyticsData {
-  total_cost_usd: number;
-  avg_latency_ms: number;
-  error_rate: number;
-  cache_hit_rate: number;
-  total_requests: number;
-  model_distribution: { model: string; count: number; percentage: number }[];
-  latency_histogram: { range: string; count: number }[];
-  recent_failures: {
-    id: string;
-    timestamp: string;
-    error_type: string;
-    message: string;
-    model: string;
-  }[];
-  trend: {
-    cost_change: number;
-    latency_change: number;
-    error_change: number;
-  };
+  totalCostUsd: number;
+  avgLatencyMs: number;
+  errorRate: number;
+  successRate: number;
+  totalRequests: number;
+  totalTokens: number;
+  requestsPerHour: number;
+  trend: TrendPoint[];
+  modelSummary: string[];
+  lastUpdatedAt: string;
 }

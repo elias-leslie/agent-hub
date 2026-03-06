@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,6 +22,11 @@ from app.services.agent_routing import (
     resolve_agent,
 )
 from app.services.agent_service import AgentDTO
+
+
+@dataclass
+class _CapturedCall:
+    kwargs: dict[str, object] | None = None
 
 
 @pytest.fixture
@@ -200,6 +206,63 @@ class TestCompleteWithFallback:
         assert result.result == mock_result
         assert result.model_used == CLAUDE_SONNET
         assert result.used_fallback is False
+
+    @pytest.mark.asyncio
+    async def test_codex_primary_maps_thinking_to_reasoning_and_verbosity(self) -> None:
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=6,
+            slug="codex-coder",
+            name="Codex Coder",
+            description=None,
+            system_prompt="Write code.",
+            primary_model_id="codex/gpt-5.4",
+            fallback_models=[],
+            escalation_model_id=None,
+            premium_model_id=None,
+            strategies={},
+            temperature=0.7,
+            thinking_level="xhigh",
+            verbosity_level="high",
+            is_active=True,
+            is_coding_agent=True,
+            tool_permissions=None,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        captured = _CapturedCall()
+
+        async def mock_complete(**kwargs: object) -> MagicMock:
+            captured.kwargs = kwargs
+            return mock_result
+
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.complete = mock_complete
+            mock_get_adapter.return_value = mock_adapter
+
+            result = await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=agent,
+                max_tokens=100,
+                temperature=0.7,
+                thinking_level=agent.thinking_level,
+            )
+
+        assert result.model_used == "codex/gpt-5.4"
+        assert captured.kwargs is not None
+        assert captured.kwargs["reasoning_effort"] == "xhigh"
+        assert "thinking_level" not in captured.kwargs
+        assert captured.kwargs["verbosity_level"] == "high"
 
     @pytest.mark.asyncio
     async def test_primary_fails_fallback_succeeds(self, mock_agent: AgentDTO) -> None:

@@ -1,0 +1,91 @@
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
+import type { Agent } from "@/app/agents/[slug]/types";
+
+const baseFormData: Partial<Agent> = {
+  temperature: 0.7,
+  thinking_level: "medium",
+  verbosity_level: "high",
+  max_concurrency: 4,
+  max_subagent_concurrency: 2,
+  daily_token_budget: 100000,
+  hourly_request_limit: 30,
+  timeout_seconds: 60,
+};
+
+describe("parameters tab", () => {
+  it("renders and updates agent execution limits", () => {
+    const updateField = vi.fn();
+
+    render(<ParametersTab formData={baseFormData} updateField={updateField} />);
+
+    fireEvent.change(screen.getByLabelText("Max concurrency"), {
+      target: { value: "8" },
+    });
+    fireEvent.change(screen.getByLabelText("Max subagent concurrency"), {
+      target: { value: "" },
+    });
+    fireEvent.change(screen.getByLabelText("Daily token budget"), {
+      target: { value: "250000" },
+    });
+    fireEvent.change(screen.getByLabelText("Hourly request limit"), {
+      target: { value: "45" },
+    });
+
+    expect(updateField).toHaveBeenCalledWith("max_concurrency", 8);
+    expect(updateField).toHaveBeenCalledWith("max_subagent_concurrency", null);
+    expect(updateField).toHaveBeenCalledWith("daily_token_budget", 250000);
+    expect(updateField).toHaveBeenCalledWith("hourly_request_limit", 45);
+  });
+
+  it("ignores out-of-range values that would be rejected by the API", () => {
+    const updateField = vi.fn();
+
+    render(<ParametersTab formData={baseFormData} updateField={updateField} />);
+
+    fireEvent.change(screen.getByLabelText("Max concurrency"), {
+      target: { value: "0" },
+    });
+    fireEvent.change(screen.getByLabelText("Max subagent concurrency"), {
+      target: { value: "101" },
+    });
+    fireEvent.change(screen.getByLabelText("Timeout (seconds)"), {
+      target: { value: "601" },
+    });
+
+    expect(updateField).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Enter a whole number between 1 and 100.")).toHaveLength(2);
+    expect(screen.getByText("Enter a value between 1 and 600 seconds.")).toBeInTheDocument();
+  });
+
+  it("still allows clearing optional numeric overrides", () => {
+    const updateField = vi.fn();
+
+    render(<ParametersTab formData={baseFormData} updateField={updateField} />);
+
+    fireEvent.change(screen.getByLabelText("Timeout (seconds)"), {
+      target: { value: "" },
+    });
+
+    expect(updateField).toHaveBeenCalledWith("timeout_seconds", null);
+  });
+
+  it("keeps invalid drafts visible until the user corrects them", () => {
+    const updateField = vi.fn();
+
+    render(<ParametersTab formData={baseFormData} updateField={updateField} />);
+
+    const maxConcurrency = screen.getByLabelText("Max concurrency");
+    fireEvent.change(maxConcurrency, { target: { value: "0" } });
+
+    expect(maxConcurrency).toHaveValue(0);
+    expect(updateField).not.toHaveBeenCalled();
+
+    fireEvent.change(maxConcurrency, { target: { value: "10" } });
+
+    expect(updateField).toHaveBeenCalledWith("max_concurrency", 10);
+    expect(screen.queryByText("Enter a whole number between 1 and 100.")).not.toBeInTheDocument();
+  });
+});

@@ -6,7 +6,7 @@ import { Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 
 import { ChatPanel } from "@/components/chat";
-import { fetchApi, getApiBaseUrl } from "@/lib/api-config";
+import { fetchApi } from "@/lib/api-config";
 import type { Agent } from "@/types/agent";
 
 function AgentChatContent() {
@@ -21,7 +21,7 @@ function AgentChatContent() {
   useEffect(() => {
     async function fetchAgent() {
       try {
-        const res = await fetchApi(`${getApiBaseUrl()}/api/agents/${slug}`);
+        const res = await fetchApi(`/api/agents/${slug}`);
         if (!res.ok) throw new Error(`Agent not found: ${slug}`);
         const data = await res.json();
         setAgent(data);
