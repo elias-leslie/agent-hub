@@ -54,14 +54,27 @@ class TestParseMentionProviderPrefixed:
 
     def test_minimax_model(self) -> None:
         model, cleaned = parse_mention("@minimax/MiniMax-M2.5 Hello world")
-        # parse_mention lowercases
-        assert model == "minimax/minimax-m2.5"
+        assert model == "minimax/MiniMax-M2.5"
         assert cleaned == "Hello world"
 
     def test_openrouter_model(self) -> None:
         model, cleaned = parse_mention("@openrouter/some-model Test")
         assert model == "openrouter/some-model"
         assert cleaned == "Test"
+
+
+class TestParseMentionExactCatalogIds:
+    """Test exact catalog model IDs passed through @mention injection."""
+
+    def test_exact_claude_model_id(self) -> None:
+        model, cleaned = parse_mention("@claude-sonnet-4-6 Explain this code")
+        assert model == "claude-sonnet-4-6"
+        assert cleaned == "Explain this code"
+
+    def test_exact_gemini_model_id(self) -> None:
+        model, cleaned = parse_mention("@gemini-3-flash-preview Quick question")
+        assert model == "gemini-3-flash-preview"
+        assert cleaned == "Quick question"
 
 
 class TestParseMentionCleaning:

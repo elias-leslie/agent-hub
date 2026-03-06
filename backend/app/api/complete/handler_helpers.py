@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
 from app.models import TruncationEvent
+from app.services.agent_routing import get_provider_for_model
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete, publish_message
 from app.services.response_cache import get_response_cache
@@ -33,6 +34,22 @@ from .session_manager import update_provider_metadata
 logger = logging.getLogger(__name__)
 
 
+def _sync_session_execution_metadata(
+    session: DBSession,
+    effective_model: str,
+) -> None:
+    """Keep the session row aligned with the actual model/provider used."""
+    provider = get_provider_for_model(effective_model)
+    session.model = effective_model
+    session.provider = provider
+    models_used: list[str] = session.models_used or []
+    providers_used: list[str] = session.providers_used or []
+    if effective_model not in models_used:
+        session.models_used = [*models_used, effective_model]
+    if provider not in providers_used:
+        session.providers_used = [*providers_used, provider]
+
+
 async def save_and_track(
     db: AsyncSession,
     session: DBSession,
@@ -47,6 +64,7 @@ async def save_and_track(
 ) -> None:
     """Save events and track token usage, costs, and session status."""
     effective_model = model_used or resolved_model
+    _sync_session_execution_metadata(session, effective_model)
     await save_events(
         db, session_id, request.messages, result.content,
         result.input_tokens, result.output_tokens, effective_model,
