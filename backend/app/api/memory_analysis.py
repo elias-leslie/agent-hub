@@ -8,6 +8,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.services.session_ingestion import FinalizeSessionRequest, finalize_session
+
 router = APIRouter()
 
 
@@ -106,20 +108,18 @@ async def analyze_session(
     - CC sessions: Send citation_prefixes extracted from JSONL transcript
     - API sessions: Omit body, citations extracted from session_events
     """
-    from app.services.memory.session_analysis import (
-        analyze_session as _analyze_session,
-    )
-
     try:
-        result = await _analyze_session(
+        result = await finalize_session(
             session_id=session_id,
-            citation_prefixes=request.citation_prefixes if request else None,
-            feedback_tags=request.feedback_tags if request else None,
-            summary_tags=request.summary_tags if request else None,
-            git_context=request.git_context if request else None,
-            branch=request.branch if request else None,
-            is_worktree=request.is_worktree if request else False,
-            transcript_path=request.transcript_path if request else None,
+            request=FinalizeSessionRequest(
+                citation_prefixes=request.citation_prefixes if request else None,
+                feedback_tags=request.feedback_tags if request else None,
+                summary_tags=request.summary_tags if request else None,
+                git_context=request.git_context if request else None,
+                branch=request.branch if request else None,
+                is_worktree=request.is_worktree if request else False,
+                transcript_path=request.transcript_path if request else None,
+            ) if request else None,
         )
         return AnalyzeResponse(
             session_id=result.session_id,
