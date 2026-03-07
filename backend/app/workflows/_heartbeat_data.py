@@ -8,6 +8,9 @@ from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
+_WORKSTREAM_LOOKBACK_HOURS = 24
+_STALE_ACTIVE_MINUTES = 4 * 60
+
 
 async def get_project_access_summary() -> str:
     """Build a summary of project access tiers for the heartbeat prompt."""
@@ -153,6 +156,167 @@ async def _fetch_recently_completed_sessions_section() -> str:
         logger.debug(
             "Failed to fetch completed sessions for heartbeat prompt", exc_info=True
         )
+        return ""
+
+
+async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
+    """Fetch recent session rows that look like task/worktree lanes."""
+    from datetime import timedelta
+
+    from sqlalchemy import and_, or_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+
+    async with async_session() as db:
+        query = (
+            select(
+                Session.id,
+                Session.agent_slug,
+                Session.project_id,
+                Session.external_id,
+                Session.current_branch,
+                Session.status,
+                Session.created_at,
+                Session.updated_at,
+            )
+            .where(
+                and_(
+                    Session.agent_slug.isnot(None),
+                    Session.created_at >= cutoff,
+                    or_(
+                        Session.external_id.isnot(None),
+                        Session.current_branch.isnot(None),
+                    ),
+                )
+            )
+            .order_by(Session.created_at.desc())
+            .limit(50)
+        )
+        rows = (await db.execute(query)).all()
+
+    now = datetime.now(UTC)
+    return [
+        {
+            "session_id": row.id,
+            "agent_slug": row.agent_slug,
+            "project_id": row.project_id,
+            "external_id": row.external_id,
+            "current_branch": row.current_branch,
+            "status": row.status,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "age_minutes": int((now - row.created_at).total_seconds() / 60),
+        }
+        for row in rows
+    ]
+
+
+def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
+    """Classify a grouped task/worktree lane into an actionable lifecycle state."""
+    active_rows = [row for row in rows if row.get("status") == "active"]
+    completed_rows = [row for row in rows if row.get("status") == "completed"]
+    branches = {str(row["current_branch"]) for row in rows if row.get("current_branch")}
+
+    if len(active_rows) > 1 and len(branches) > 1:
+        return "mixed"
+    if active_rows:
+        freshest_active_age = min(
+            int(row.get("age_minutes", _STALE_ACTIVE_MINUTES + 1)) for row in active_rows
+        )
+        if freshest_active_age >= _STALE_ACTIVE_MINUTES:
+            return "stale_active"
+        return "active"
+    if completed_rows:
+        return "completed_ready_for_closure"
+    return "orphaned"
+
+
+def _build_workstream_next_action(
+    *,
+    state: str,
+    project_id: str,
+    task_id: str | None,
+) -> str:
+    """Return a concrete next action for a classified workstream lane."""
+    if state == "completed_ready_for_closure" and task_id:
+        return (
+            f'manage_tasks(action="done", task_id="{task_id}", '
+            f'project_id="{project_id}")'
+        )
+    if state == "stale_active":
+        return "query_sessions(status='active') then verify or retire the stale lane"
+    if state == "mixed":
+        return "split/promotion cleanup; do not dispatch more implementation onto this lane"
+    return "monitor"
+
+
+async def _get_workstream_inventory() -> str:
+    """Build a heartbeat section that classifies active/recent work lanes."""
+    try:
+        rows = await _query_recent_workstream_sessions()
+        if not rows:
+            return ""
+
+        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in rows:
+            task_id = str(row.get("external_id") or "")
+            branch = str(row.get("current_branch") or row.get("session_id") or "")
+            lane_key = task_id or branch
+            if not lane_key:
+                continue
+            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+
+        if not grouped:
+            return ""
+
+        lines = ["Recent workstreams:"]
+        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
+            task_id = next(
+                (str(row["external_id"]) for row in lane_rows if row.get("external_id")),
+                None,
+            )
+            branches = {
+                str(row["current_branch"])
+                for row in lane_rows
+                if row.get("current_branch")
+            }
+            agents = {
+                str(row["agent_slug"])
+                for row in lane_rows
+                if row.get("agent_slug")
+            }
+            active_count = sum(1 for row in lane_rows if row.get("status") == "active")
+            completed_count = sum(
+                1 for row in lane_rows if row.get("status") == "completed"
+            )
+            state = _classify_workstream_lane(lane_rows)
+            next_action = _build_workstream_next_action(
+                state=state,
+                project_id=project_id,
+                task_id=task_id,
+            )
+            label = task_id or lane_key
+            parts = [
+                f"- {project_id} | {label}",
+                f"state={state}",
+                f"active={active_count}",
+            ]
+            if completed_count:
+                parts.append(f"completed={completed_count}")
+            if branches:
+                parts.append(f"branches={len(branches)}")
+            if agents:
+                parts.append(f"agents={','.join(sorted(agents))}")
+            parts.append(f"next={next_action}")
+            lines.append(" | ".join(parts))
+
+        body = "\n".join(lines)
+        return f"\n<workstream_inventory>\n{body}\n</workstream_inventory>"
+    except Exception:
+        logger.debug("Failed to build workstream inventory for heartbeat", exc_info=True)
         return ""
 
 
@@ -325,5 +489,6 @@ __all__ = [
     "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
+    "_get_workstream_inventory",
     "get_project_access_summary",
 ]
