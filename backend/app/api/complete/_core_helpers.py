@@ -140,11 +140,15 @@ async def _finalize_and_build(
     ctx: _ExecContext, exec_result: dict[str, Any],
 ) -> CompletionInternalResult:
     """Finalize the session record and build the CompletionInternalResult."""
+    final_result = exec_result["final_result"]
+    effective_model = getattr(final_result, "model_used", None) or ctx.model
     await finalize_completion_result(
-        ctx.db, ctx.session, ctx.session_id, ctx.model,
+        ctx.db, ctx.session, ctx.session_id, ctx.model, effective_model,
         exec_result["total_input_tokens"], exec_result["total_output_tokens"],
-        ctx.is_new_session, exec_result["final_result"],
+        ctx.is_new_session, final_result,
         project_id=ctx.project_id,
+        fallback_used=bool(getattr(final_result, "fallback_used", False)),
+        fallback_reason=getattr(final_result, "fallback_reason", None),
     )
     result_dict = build_completion_result(
         final_content=exec_result["final_content"], model=ctx.model, provider=ctx.provider,
@@ -159,7 +163,7 @@ async def _finalize_and_build(
         execution_error=exec_result["execution_error"],
         current_container_id=exec_result["current_container_id"],
         progress_log=exec_result["progress_log"],
-        final_result=exec_result["final_result"],
+        final_result=final_result,
     )
     return CompletionInternalResult(**result_dict)
 

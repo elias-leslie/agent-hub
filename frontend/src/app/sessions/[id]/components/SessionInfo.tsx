@@ -12,6 +12,14 @@ interface SessionInfoProps {
 }
 
 export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
+  const requestedModel = session.requested_model || session.model;
+  const effectiveModel = session.effective_model || session.model;
+  const requestedProvider = session.requested_provider || session.provider;
+  const effectiveProvider = session.effective_provider || session.provider;
+  const fallbackDetail = session.fallback_used && requestedModel !== effectiveModel
+    ? `${requestedProvider}/${requestedModel} -> ${effectiveProvider}/${effectiveModel}`
+    : effectiveModel;
+
   return (
     <div className="p-6 max-w-4xl space-y-6">
       {/* Context Usage */}
@@ -25,8 +33,8 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
         <StatCard
           icon={Cpu}
           label="Provider"
-          value={session.provider}
-          subValue={session.model}
+          value={effectiveProvider}
+          subValue={fallbackDetail}
         />
         <StatCard icon={Activity} label="Type" value={session.session_type} />
         <StatCard
@@ -43,6 +51,22 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           />
         )}
       </div>
+
+      {session.fallback_used && session.fallback_reason && (
+        <div
+          className={cn(
+            "p-4 rounded-lg",
+            "bg-amber-950/20 border border-amber-800/40"
+          )}
+        >
+          <h3 className="text-sm font-medium text-amber-300 mb-1">
+            Fallback Reason
+          </h3>
+          <p className="text-sm text-amber-100/80 font-mono break-words">
+            {session.fallback_reason}
+          </p>
+        </div>
+      )}
 
       {/* Token breakdown */}
       {session.agent_token_breakdown &&

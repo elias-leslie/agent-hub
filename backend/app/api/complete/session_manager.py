@@ -107,3 +107,48 @@ async def update_provider_metadata(
     existing: dict[str, object] = session.provider_metadata or {}
     session.provider_metadata = merge_cache_metrics(existing, cache_metrics)
     await db.commit()
+
+
+def apply_execution_metadata(
+    session: DBSession,
+    *,
+    requested_model: str,
+    effective_model: str,
+    fallback_used: bool,
+    fallback_reason: str | None = None,
+) -> None:
+    """Align session row and provider metadata with the actual execution path."""
+    from app.services.agent_routing import get_provider_for_model
+
+    requested_provider = get_provider_for_model(requested_model)
+    effective_provider = get_provider_for_model(effective_model)
+
+    models_used: list[str] = session.models_used or []
+    providers_used: list[str] = session.providers_used or []
+    if requested_model not in models_used:
+        models_used = [*models_used, requested_model]
+    if effective_model not in models_used:
+        models_used = [*models_used, effective_model]
+    if requested_provider not in providers_used:
+        providers_used = [*providers_used, requested_provider]
+    if effective_provider not in providers_used:
+        providers_used = [*providers_used, effective_provider]
+
+    metadata: dict[str, object] = session.provider_metadata or {}
+    metadata.update(
+        {
+            "requested_model": requested_model,
+            "requested_provider": requested_provider,
+            "effective_model": effective_model,
+            "effective_provider": effective_provider,
+            "fallback_used": fallback_used,
+        }
+    )
+    if fallback_reason:
+        metadata["fallback_reason"] = fallback_reason
+
+    session.model = effective_model
+    session.provider = effective_provider
+    session.models_used = models_used
+    session.providers_used = providers_used
+    session.provider_metadata = metadata

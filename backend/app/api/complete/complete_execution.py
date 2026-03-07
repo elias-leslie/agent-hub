@@ -90,10 +90,13 @@ async def _run_with_agentic_fallback(
             fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
             raw = await _run_internal(req, model_id, fb_provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, True)
             assert isinstance(raw, CompletionInternalResult)
+            raw.requested_model = primary_model
+            raw.requested_provider = provider
             if model_id != primary_model:
                 logger.info("Agentic fallback succeeded: %s → %s", primary_model, model_id)
                 raw.fallback_used = True
                 raw.model_used = model_id
+                raw.fallback_reason = f"{type(last_error).__name__}: {last_error}" if last_error else None
             return raw
         except (TimeoutError, ProviderError) as e:
             last_error = e

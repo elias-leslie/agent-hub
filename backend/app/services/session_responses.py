@@ -11,6 +11,7 @@ from app.models import Session, SessionEvent
 from app.services.context_tracker import calculate_context_usage
 from app.services.session_tokens import calculate_agent_token_breakdown
 from app.services.session_transforms import (
+    _effective_model,
     build_session_response,
     convert_messages_to_response,
 )
@@ -50,7 +51,7 @@ async def build_full_session_response(
     Returns:
         Complete SessionResponse with all metadata
     """
-    ctx_usage = await calculate_context_usage(db, session.id, session.model)
+    ctx_usage = await calculate_context_usage(db, session.id, _effective_model(session))
     context_usage_response = ContextUsageResponse(
         used_tokens=ctx_usage.used_tokens,
         limit_tokens=ctx_usage.limit_tokens,

@@ -15,6 +15,7 @@ from app.api.schemas.sessions import (
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.models.session import SessionEventType
+from app.services.agent_routing import get_provider_for_model
 from app.services.tools.project_env import detect_main_repo
 
 
@@ -26,6 +27,69 @@ def _resolve_model_display_name(model_id: str | None) -> str | None:
     normalized = model_id.split("/")[-1] if "/" in model_id else model_id
     entry = MODEL_CATALOG_BY_ID.get(normalized) or MODEL_CATALOG_BY_ID.get(model_id)
     return entry.name if entry else None
+
+
+def _session_metadata(session: Session) -> dict[str, Any]:
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else None
+    return metadata or {}
+
+
+def _requested_model(session: Session) -> str:
+    metadata = _session_metadata(session)
+    value = metadata.get("requested_model")
+    if isinstance(value, str) and value:
+        return value
+    models_used = session.models_used or []
+    if models_used:
+        return models_used[0]
+    return session.model
+
+
+def _effective_model(session: Session) -> str:
+    metadata = _session_metadata(session)
+    value = metadata.get("effective_model")
+    if isinstance(value, str) and value:
+        return value
+    models_used = session.models_used or []
+    if models_used:
+        return models_used[-1]
+    return session.model
+
+
+def _requested_provider(session: Session, requested_model: str) -> str:
+    metadata = _session_metadata(session)
+    value = metadata.get("requested_provider")
+    if isinstance(value, str) and value:
+        return value
+    providers_used = session.providers_used or []
+    if providers_used:
+        return providers_used[0]
+    return get_provider_for_model(requested_model)
+
+
+def _effective_provider(session: Session, effective_model: str) -> str:
+    metadata = _session_metadata(session)
+    value = metadata.get("effective_provider")
+    if isinstance(value, str) and value:
+        return value
+    providers_used = session.providers_used or []
+    if providers_used:
+        return providers_used[-1]
+    return get_provider_for_model(effective_model)
+
+
+def _fallback_used(session: Session, requested_model: str, effective_model: str) -> bool:
+    metadata = _session_metadata(session)
+    fallback_value = metadata.get("fallback_used")
+    if isinstance(fallback_value, bool):
+        return fallback_value
+    return requested_model != effective_model
+
+
+def _fallback_reason(session: Session) -> str | None:
+    metadata = _session_metadata(session)
+    value = metadata.get("fallback_reason")
+    return value if isinstance(value, str) and value else None
 
 
 def convert_messages_to_response(
@@ -164,8 +228,16 @@ def build_session_list_items(
         SessionListItem(
             id=s.id,
             project_id=s.project_id,
-            provider=s.provider,
-            model=s.model,
+            provider=effective_provider,
+            model=effective_model,
+            requested_provider=requested_provider,
+            requested_model=requested_model,
+            effective_provider=effective_provider,
+            effective_model=effective_model,
+            requested_model_display_name=_resolve_model_display_name(requested_model),
+            effective_model_display_name=_resolve_model_display_name(effective_model),
+            fallback_used=_fallback_used(s, requested_model, effective_model),
+            fallback_reason=_fallback_reason(s),
             status=s.status,
             agent_slug=_optional_str(s.agent_slug),
             session_type=s.session_type or "completion",
@@ -183,6 +255,10 @@ def build_session_list_items(
             updated_at=s.updated_at,
         )
         for s in sessions
+        for requested_model in [_requested_model(s)]
+        for effective_model in [_effective_model(s)]
+        for requested_provider in [_requested_provider(s, requested_model)]
+        for effective_provider in [_effective_provider(s, effective_model)]
         for working_dir in [_working_dir(s)]
     ]
 
@@ -211,8 +287,16 @@ def build_session_response(
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
-        provider=session.provider,
-        model=session.model,
+        provider=_effective_provider(session, _effective_model(session)),
+        model=_effective_model(session),
+        requested_provider=_requested_provider(session, _requested_model(session)),
+        requested_model=_requested_model(session),
+        effective_provider=_effective_provider(session, _effective_model(session)),
+        effective_model=_effective_model(session),
+        requested_model_display_name=_resolve_model_display_name(_requested_model(session)),
+        effective_model_display_name=_resolve_model_display_name(_effective_model(session)),
+        fallback_used=_fallback_used(session, _requested_model(session), _effective_model(session)),
+        fallback_reason=_fallback_reason(session),
         status=session.status,
         agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",

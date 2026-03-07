@@ -32,6 +32,11 @@ export function SessionHeader({
   maxTurn,
   memorySummary,
 }: SessionHeaderProps) {
+  const requestedModel = session.requested_model || session.model;
+  const effectiveModel = session.effective_model || session.model;
+  const effectiveProvider = session.effective_provider || session.provider;
+  const showsFallback = session.fallback_used && requestedModel !== effectiveModel;
+
   return (
     <header
       className={cn(
@@ -62,7 +67,7 @@ export function SessionHeader({
                   "bg-slate-900/80 border border-slate-800/60"
                 )}
               >
-                {getProviderIcon(session.provider)}
+                {getProviderIcon(effectiveProvider)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
@@ -82,7 +87,14 @@ export function SessionHeader({
                     {session.status}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500">{session.model}</p>
+                <div className="text-xs text-slate-500">
+                  <p>{effectiveModel}</p>
+                  {showsFallback && (
+                    <p className="text-amber-500/80">
+                      requested {requestedModel}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

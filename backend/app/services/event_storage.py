@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import SessionEvent, SessionEventType
+from app.models import Session, SessionEvent, SessionEventType
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,11 @@ async def store_event(
         agent_name=agent_name,
     )
     db.add(event)
+    await db.execute(
+        update(Session)
+        .where(Session.id == session_id)
+        .values(updated_at=func.now())
+    )
     return event
 
 

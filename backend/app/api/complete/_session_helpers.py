@@ -45,12 +45,30 @@ async def update_session_metadata(
     db: AsyncSession, session: DBSession, provider: str, model: str, agent_slug: str | None
 ) -> None:
     """Update models/providers used and agent_slug on an existing session."""
+    existing_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    if (session.model != model or session.provider != provider) and "requested_model" not in existing_metadata:
+        existing_metadata = {
+            **existing_metadata,
+            "requested_model": session.model,
+            "requested_provider": session.provider,
+        }
+
+    existing_metadata = {
+        **existing_metadata,
+        "effective_model": model,
+        "effective_provider": provider,
+        "fallback_used": existing_metadata.get("requested_model", session.model) != model,
+    }
+
     models_used: list[str] = session.models_used or []
     providers_used: list[str] = session.providers_used or []
     if model not in models_used:
         session.models_used = [*models_used, model]
     if provider not in providers_used:
         session.providers_used = [*providers_used, provider]
+    session.model = model
+    session.provider = provider
+    session.provider_metadata = existing_metadata
     if agent_slug and not session.agent_slug:
         session.agent_slug = agent_slug
     await db.commit()

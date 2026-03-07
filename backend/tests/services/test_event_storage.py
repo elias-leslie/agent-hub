@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.services.event_storage import (
     EventSequencer,
     _extract_tool_result_content,
+    store_event,
     store_memory_inject_event,
 )
 
@@ -151,8 +152,24 @@ class TestExtractToolResultContent:
 
 class TestMemoryInjectEvent:
     @pytest.mark.asyncio
+    async def test_store_event_touches_parent_session_updated_at(self) -> None:
+        db = MagicMock()
+        db.execute = AsyncMock()
+
+        await store_event(
+            db=db,
+            session_id="sess-1",
+            event_type="assistant_message",
+            role="assistant",
+            content="hello",
+        )
+
+        assert db.execute.await_count == 1
+
+    @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
         db = MagicMock()
+        db.execute = AsyncMock()
 
         event = await store_memory_inject_event(
             db=db,

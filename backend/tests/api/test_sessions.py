@@ -108,6 +108,16 @@ class TestGetSession:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
+        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
+        mock_db_session.providers_used = ["claude", "codex"]
+        mock_db_session.provider_metadata = {
+            "requested_model": CLAUDE_SONNET,
+            "requested_provider": "claude",
+            "effective_model": "codex/gpt-5.4",
+            "effective_provider": "codex",
+            "fallback_used": True,
+            "fallback_reason": "TimeoutError: primary timed out",
+        }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -175,12 +185,18 @@ class TestGetSession:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == "test-session-123"
+        assert data["model"] == "codex/gpt-5.4"
+        assert data["provider"] == "codex"
+        assert data["requested_model"] == CLAUDE_SONNET
+        assert data["effective_model"] == "codex/gpt-5.4"
+        assert data["fallback_used"] is True
+        assert data["fallback_reason"] == "TimeoutError: primary timed out"
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
         # Verify context_usage is included
         assert "context_usage" in data
         assert data["context_usage"]["used_tokens"] == 0
-        assert data["context_usage"]["limit_tokens"] == 1000000
+        assert data["context_usage"]["limit_tokens"] == 1050000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
         assert mock_session.execute.call_count == 4, (
@@ -272,11 +288,21 @@ class TestListSessions:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
+        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
+        mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.parent_session_id = "parent-1"
         mock_db_session.external_id = "task-123"
         mock_db_session.current_branch = "task-123/main"
         mock_db_session.workstream_status = "authoritative"
-        mock_db_session.provider_metadata = {"cwd": str(tmp_path)}
+        mock_db_session.provider_metadata = {
+            "cwd": str(tmp_path),
+            "requested_model": CLAUDE_SONNET,
+            "requested_provider": "claude",
+            "effective_model": "codex/gpt-5.4",
+            "effective_provider": "codex",
+            "fallback_used": True,
+            "fallback_reason": "TimeoutError: primary timed out",
+        }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -314,6 +340,11 @@ class TestListSessions:
         data = response.json()
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["id"] == "session-1"
+        assert data["sessions"][0]["model"] == "codex/gpt-5.4"
+        assert data["sessions"][0]["provider"] == "codex"
+        assert data["sessions"][0]["requested_model"] == CLAUDE_SONNET
+        assert data["sessions"][0]["effective_model"] == "codex/gpt-5.4"
+        assert data["sessions"][0]["fallback_used"] is True
         assert data["sessions"][0]["message_count"] == 5
         assert data["sessions"][0]["total_input_tokens"] == 100
         assert data["sessions"][0]["total_output_tokens"] == 200
@@ -348,6 +379,8 @@ class TestListSessions:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
+        mock_db_session.models_used = [CLAUDE_SONNET]
+        mock_db_session.providers_used = ["claude"]
         mock_db_session.parent_session_id = None
         mock_db_session.external_id = "task-123"
         mock_db_session.current_branch = "task-123/main"

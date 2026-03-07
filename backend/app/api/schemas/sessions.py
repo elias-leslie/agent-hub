@@ -96,6 +96,14 @@ class SessionResponse(BaseModel):
     project_id: str
     provider: str
     model: str
+    requested_provider: str | None = Field(default=None, description="Originally requested provider")
+    requested_model: str | None = Field(default=None, description="Originally requested model")
+    effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")
+    effective_model: str | None = Field(default=None, description="Model that actually executed the session")
+    requested_model_display_name: str | None = Field(default=None, description="Human-readable requested model name")
+    effective_model_display_name: str | None = Field(default=None, description="Human-readable effective model name")
+    fallback_used: bool = Field(default=False, description="Whether execution fell back away from the requested model")
+    fallback_reason: str | None = Field(default=None, description="Why the primary model was abandoned, if known")
     status: str
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
@@ -119,6 +127,14 @@ class SessionListItem(BaseModel):
     project_id: str
     provider: str
     model: str
+    requested_provider: str | None = Field(default=None, description="Originally requested provider")
+    requested_model: str | None = Field(default=None, description="Originally requested model")
+    effective_provider: str | None = Field(default=None, description="Provider that actually executed the session")
+    effective_model: str | None = Field(default=None, description="Model that actually executed the session")
+    requested_model_display_name: str | None = Field(default=None, description="Human-readable requested model name")
+    effective_model_display_name: str | None = Field(default=None, description="Human-readable effective model name")
+    fallback_used: bool = Field(default=False, description="Whether execution fell back away from the requested model")
+    fallback_reason: str | None = Field(default=None, description="Why the primary model was abandoned, if known")
     status: str
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
