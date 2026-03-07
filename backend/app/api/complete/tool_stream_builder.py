@@ -19,6 +19,7 @@ def build_event_stream(
     provider: str,
     model: str,
     tools: list[dict[str, Any]] | None,
+    tool_catalog: list[dict[str, Any]] | None,
     working_dir: str | None,
     permission_config: dict[str, Any] | None,
     max_turns: int,
@@ -32,6 +33,7 @@ def build_event_stream(
         return adapt_openai_stream(
             adapter, messages, model, tools or [],
             working_dir, permission_config, max_turns, project_id, session_id,
+            tool_catalog=tool_catalog,
         )
     if provider == "claude":
         from .claude_event_adapter import adapt_claude_stream
@@ -40,6 +42,7 @@ def build_event_stream(
             messages=messages, model=model, tools=tools or [],
             working_dir=working_dir, permission_config=permission_config,
             project_id=project_id, max_turns=max_turns,
+            tool_catalog=tool_catalog,
         )
         return adapt_claude_stream(raw_stream)
 
@@ -47,6 +50,7 @@ def build_event_stream(
     kwargs: dict[str, Any] = {
         "messages": messages, "model": model, "tools": tools or [],
         "working_dir": working_dir, "permission_config": permission_config,
+        "tool_catalog": tool_catalog,
     }
     if provider in ("gemini", "cloudcode"):
         kwargs["max_turns"] = max_turns

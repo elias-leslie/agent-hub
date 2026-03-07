@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.workflows._heartbeat_data import (
+    _build_workstream_next_action,
+    _classify_workstream_lane,
     _get_git_project_status,
     _get_git_status_summary,
     _get_workstream_inventory,
@@ -394,4 +396,101 @@ agent-hub (1 ready, 1 stale)
         assert (
             'manage_tasks(action="reconcile", task_id="task-de53b498", project_id="agent-hub")'
             in result
+        )
+
+
+class TestWorkstreamLaneContract:
+    """Tests for lane classification precedence and automation boundaries."""
+
+    def test_classify_reconciled_wins_over_completed_ready_for_closure(self) -> None:
+        rows = [
+            {
+                "status": "completed",
+                "workstream_status": "authoritative",
+                "current_branch": "task-1/main",
+            },
+            {
+                "status": "completed",
+                "workstream_status": "superseded",
+                "current_branch": "task-1/old",
+            },
+        ]
+
+        assert _classify_workstream_lane(rows) == "reconciled"
+
+    def test_classify_retired_wins_over_completed_ready_for_closure(self) -> None:
+        rows = [
+            {
+                "status": "completed",
+                "workstream_status": "retired",
+                "current_branch": "task-2/main",
+            }
+        ]
+
+        assert _classify_workstream_lane(rows) == "retired"
+
+    def test_classify_superseded_wins_over_completed_ready_for_closure(self) -> None:
+        rows = [
+            {
+                "status": "completed",
+                "workstream_status": "superseded",
+                "current_branch": "task-3/main",
+            }
+        ]
+
+        assert _classify_workstream_lane(rows) == "superseded"
+
+    def test_classify_active_wins_when_lane_is_fresh(self) -> None:
+        rows = [
+            {
+                "status": "active",
+                "current_branch": "task-4/main",
+                "age_minutes": 15,
+            }
+        ]
+
+        assert _classify_workstream_lane(rows) == "active"
+
+    def test_classify_orphaned_when_lane_has_no_active_or_completed_status(self) -> None:
+        rows = [
+            {
+                "status": "paused",
+                "current_branch": "task-5/main",
+            }
+        ]
+
+        assert _classify_workstream_lane(rows) == "orphaned"
+
+    def test_build_next_action_limits_automation_for_informational_states(self) -> None:
+        assert (
+            _build_workstream_next_action(
+                state="mixed",
+                project_id="summitflow",
+                task_id="task-6",
+            )
+            == "split/promotion cleanup; do not dispatch more implementation onto this lane"
+        )
+        assert (
+            _build_workstream_next_action(
+                state="reconciled",
+                project_id="summitflow",
+                task_id="task-6",
+            )
+            == "authoritative lane recorded; avoid redispatch unless new facts contradict it"
+        )
+        assert (
+            _build_workstream_next_action(
+                state="retired",
+                project_id="summitflow",
+                task_id="task-6",
+            )
+            == "retired_lane_no_action"
+        )
+        assert (
+            _build_workstream_next_action(
+                state="superseded",
+                project_id="summitflow",
+                task_id="task-6",
+            )
+            == "superseded_lane_no_action"
         )

@@ -26,6 +26,9 @@ BASH_TOOL = Tool(
         },
         "required": ["command"],
     },
+    category="workspace",
+    search_keywords=["shell", "command", "test", "git"],
+    usage_examples=["Run the changed-file quality gate with `dt -q -d`."],
 )
 
 READ_FILE_TOOL = Tool(
@@ -51,6 +54,9 @@ READ_FILE_TOOL = Tool(
         },
         "required": ["path"],
     },
+    category="workspace",
+    search_keywords=["inspect file", "open file", "source code"],
+    usage_examples=["Read a backend module before editing it."],
 )
 
 WRITE_FILE_TOOL = Tool(
@@ -70,6 +76,9 @@ WRITE_FILE_TOOL = Tool(
         },
         "required": ["path", "content"],
     },
+    category="workspace",
+    search_keywords=["edit file", "write patch"],
+    usage_examples=["Update a source file after validating the target lines."],
 )
 
 CONSULT_AGENT_TOOL = Tool(
@@ -99,6 +108,9 @@ CONSULT_AGENT_TOOL = Tool(
         },
         "required": ["agent_slug", "question"],
     },
+    category="agents",
+    search_keywords=["second opinion", "review", "strategy"],
+    usage_examples=["Ask the reviewer agent for risk-focused feedback."],
 )
 
 STANDARD_TOOLS: list[Tool] = [

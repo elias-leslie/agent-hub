@@ -73,6 +73,7 @@ __all__ = [
     "WRITE_PERSONALITY_TOOL",
     "WRITE_USER_CONTEXT_TOOL",
     "get_agent_tools",
+    "get_agent_tool_specs",
     "get_ideator_public_tools",
     "get_ideator_tools",
     "get_standard_tools",
@@ -107,3 +108,9 @@ def get_agent_tools(agent_slug: str) -> list[dict[str, object]] | None:
         }
         for t in tools
     ]
+
+
+def get_agent_tool_specs(agent_slug: str) -> list[Tool] | None:
+    """Return raw Tool specs for internal provisioning paths."""
+    tools = _AGENT_TOOL_REGISTRY.get(agent_slug)
+    return tools.copy() if tools else None

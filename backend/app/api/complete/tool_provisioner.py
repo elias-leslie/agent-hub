@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
+from app.services.tools.catalog import build_deferred_toolset, build_tool_catalog
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ToolProvisioningResult:
+    """Provisioned tool surface plus the full execution catalog."""
+
+    loaded_tools: list[dict[str, Any]]
+    catalog_tools: list[dict[str, Any]]
 
 
 def _resolve_tools(
@@ -14,18 +25,15 @@ def _resolve_tools(
 ) -> list[dict[str, Any]]:
     """Resolve agent-specific or standard tools when none are provided."""
     if agent_slug:
-        from app.services.tools.tool_definitions import get_agent_tools
+        from app.services.tools.tool_definitions import get_agent_tool_specs
 
-        agent_tools = get_agent_tools(agent_slug)
-        if agent_tools:
-            return agent_tools
+        agent_tool_specs = get_agent_tool_specs(agent_slug)
+        if agent_tool_specs:
+            return build_tool_catalog(agent_tool_specs)
 
     from app.services.tools.direct_executor import get_standard_tools
 
-    return [
-        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-        for t in get_standard_tools()
-    ]
+    return build_tool_catalog(get_standard_tools())
 
 
 def _filter_tools_by_tier(
@@ -76,7 +84,8 @@ def provision_standard_tools(
     tools: list[dict[str, Any]] | None,
     agent_slug: str | None = None,
     project_id: str | None = None,
-) -> list[dict[str, Any]]:
+    defer_tool_loading: bool = False,
+) -> ToolProvisioningResult:
     """Auto-provision tools if execute_tools is enabled and no tools provided.
 
     Uses agent-specific tools from the registry when agent_slug is provided,
@@ -92,7 +101,7 @@ def provision_standard_tools(
         project_id: Project ID for tier-based tool filtering
 
     Returns:
-        Tool definitions (either existing or auto-provisioned)
+        Provisioned loaded tools plus the full catalog
     """
     if execute_tools and not tools:
         tools = _resolve_tools(tools, agent_slug)
@@ -104,4 +113,25 @@ def provision_standard_tools(
     if result and project_id:
         result = _filter_tools_by_tier(result, project_id)
 
-    return result
+    catalog_tools = build_tool_catalog(result)
+    if defer_tool_loading:
+        loaded_tools, catalog_tools = build_deferred_toolset(catalog_tools)
+    else:
+        loaded_tools = [
+            {
+                "name": t["name"],
+                "description": t["description"],
+                "input_schema": t["input_schema"],
+                **(
+                    {"allowed_callers": t["allowed_callers"]}
+                    if t.get("allowed_callers") != ["direct"]
+                    else {}
+                ),
+            }
+            for t in catalog_tools
+        ]
+
+    return ToolProvisioningResult(
+        loaded_tools=loaded_tools,
+        catalog_tools=catalog_tools,
+    )

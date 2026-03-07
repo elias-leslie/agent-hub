@@ -13,6 +13,10 @@ READ_PERSONALITY_TOOL = Tool(
         "principles, and operating style. Use this to review before making changes."
     ),
     input_schema={"type": "object", "properties": {}},
+    category="persona-memory",
+    search_keywords=["personality", "operating style"],
+    usage_examples=["Read the current personality document before revising it."],
+    defer_loading=True,
 )
 
 WRITE_PERSONALITY_TOOL = Tool(
@@ -37,6 +41,10 @@ WRITE_PERSONALITY_TOOL = Tool(
         },
         "required": ["personality", "reason"],
     },
+    category="persona-memory",
+    search_keywords=["update personality", "rewrite principles"],
+    usage_examples=["Update the personality document after learning a durable operating preference."],
+    defer_loading=True,
 )
 
 # --- User context tools ---
@@ -59,12 +67,20 @@ WRITE_USER_CONTEXT_TOOL = Tool(
         },
         "required": ["user_context"],
     },
+    category="persona-memory",
+    search_keywords=["user preferences", "user profile"],
+    usage_examples=["Record a stable user preference after confirming it."],
+    defer_loading=True,
 )
 
 READ_USER_CONTEXT_TOOL = Tool(
     name="read_user_context",
     description="Read your current knowledge about the user.",
     input_schema={"type": "object", "properties": {}},
+    category="persona-memory",
+    search_keywords=["user context", "preferences"],
+    usage_examples=["Review stored user context before making a broad assumption."],
+    defer_loading=True,
 )
 
 # --- Heartbeat instructions tools ---
@@ -76,6 +92,10 @@ READ_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
         "periodic background check-ins. Review before making changes."
     ),
     input_schema={"type": "object", "properties": {}},
+    category="persona-memory",
+    search_keywords=["heartbeat", "background workflow"],
+    usage_examples=["Read heartbeat instructions before changing recurring behavior."],
+    defer_loading=True,
 )
 
 WRITE_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
@@ -100,6 +120,10 @@ WRITE_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
         },
         "required": ["heartbeat_instructions", "reason"],
     },
+    category="persona-memory",
+    search_keywords=["update heartbeat", "background workflow"],
+    usage_examples=["Refine heartbeat instructions after a recurring failure mode is confirmed."],
+    defer_loading=True,
 )
 
 # --- Memory curation tools ---
@@ -122,6 +146,10 @@ MARK_MEMORY_RELEVANT_TOOL = Tool(
         },
         "required": ["memory_uuid"],
     },
+    category="memory",
+    search_keywords=["promote memory", "retain memory"],
+    usage_examples=["Mark a durable operational pattern as persona-relevant."],
+    defer_loading=True,
 )
 
 MARK_MEMORY_IRRELEVANT_TOOL = Tool(
@@ -140,6 +168,10 @@ MARK_MEMORY_IRRELEVANT_TOOL = Tool(
         },
         "required": ["memory_uuid"],
     },
+    category="memory",
+    search_keywords=["demote memory", "remove memory relevance"],
+    usage_examples=["Remove persona relevance from outdated memory guidance."],
+    defer_loading=True,
 )
 
 # --- Onboarding tool ---
@@ -166,4 +198,8 @@ SUBMIT_ONBOARDING_TOOL = Tool(
         },
         "required": ["summary"],
     },
+    category="persona-ops",
+    search_keywords=["onboarding", "submit profile"],
+    usage_examples=["Submit onboarding only after the user confirms the profile is complete."],
+    defer_loading=True,
 )

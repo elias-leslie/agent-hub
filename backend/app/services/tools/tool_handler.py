@@ -51,6 +51,7 @@ class DirectToolHandler(ToolHandler):
         pre_hook: PreToolUseHook | None = None,
         project_id: str | None = None,
         session_id: str | None = None,
+        tool_catalog: list[dict[str, object]] | None = None,
     ):
         """Initialize with working directory and optional permission hook.
 
@@ -64,12 +65,16 @@ class DirectToolHandler(ToolHandler):
             working_dir,
             project_id=project_id,
             session_id=session_id,
+            tool_catalog=tool_catalog,
         )
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call with permission checking."""
         start = time.monotonic()
         tool_name = _SDK_TOOL_NAME_MAP.get(tool_call.name, tool_call.name)
+
+        if tool_name == "tool_catalog":
+            return await self._execute_catalog_tool(tool_call, start)
 
         normalized_call = ToolCall(
             id=tool_call.id, name=tool_name, input=tool_call.input,
@@ -94,6 +99,58 @@ class DirectToolHandler(ToolHandler):
 
         try:
             output = await self._executor.dispatch(tool_name, tool_call.input)
+        except Exception as e:
+            output = f"Tool execution error: {e}"
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        return ToolResult(
+            tool_use_id=tool_call.id,
+            content=output,
+            is_error=output.startswith("Error:") or output.startswith("Unknown tool:"),
+            duration_ms=duration_ms,
+        )
+
+    async def _execute_catalog_tool(self, tool_call: ToolCall, start: float) -> ToolResult:
+        """Execute a discovered catalog tool without bypassing its permission checks."""
+        target_name = _SDK_TOOL_NAME_MAP.get(
+            str(tool_call.input.get("tool_name", "")),
+            str(tool_call.input.get("tool_name", "")),
+        )
+        target_args = tool_call.input.get("arguments", {})
+        nested_call = ToolCall(
+            id=tool_call.id,
+            name=target_name,
+            input=target_args if isinstance(target_args, dict) else {},
+            caller=tool_call.caller,
+            original_id=tool_call.original_id,
+        )
+
+        if not self._executor.has_catalog_tool(target_name):
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Error: Unknown catalog tool '{target_name}'",
+                is_error=True,
+                duration_ms=duration_ms,
+            )
+
+        try:
+            decision = await self.check_permission(nested_call)
+        except Exception as e:
+            logger.error("Permission check error for catalog tool '%s': %s — denying", target_name, e)
+            decision = ToolDecision.DENY
+
+        if decision == ToolDecision.DENY:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Error: Tool '{target_name}' denied by permission policy",
+                is_error=True,
+                duration_ms=duration_ms,
+            )
+
+        try:
+            output = await self._executor.dispatch(target_name, nested_call.input)
         except Exception as e:
             output = f"Tool execution error: {e}"
 
@@ -159,6 +216,7 @@ def create_direct_handler(
     permission_config: dict[str, str | list[str]] | None = None,
     project_id: str | None = None,
     session_id: str | None = None,
+    tool_catalog: list[dict[str, object]] | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
 
@@ -203,4 +261,5 @@ def create_direct_handler(
         pre_hook=pre_hook,
         project_id=project_id,
         session_id=session_id,
+        tool_catalog=tool_catalog,
     )

@@ -47,6 +47,7 @@ def build_mcp_server(
     tools: list[dict[str, Any]],
     working_dir: str | None,
     project_id: str | None,
+    tool_catalog: list[dict[str, Any]] | None = None,
 ) -> Any | None:
     """Build an in-process SDK MCP server for custom tools.
 
@@ -56,7 +57,8 @@ def build_mcp_server(
     from claude_agent_sdk import create_sdk_mcp_server
     from claude_agent_sdk import tool as sdk_tool
 
-    from app.services.tools.direct_executor_core import DirectToolExecutor
+    from app.services.tools.base import ToolCall
+    from app.services.tools.tool_handler import create_direct_handler
 
     custom_tools = [t for t in tools if t["name"] not in _CLI_BUILTIN_TOOLS]
     if not custom_tools:
@@ -64,15 +66,19 @@ def build_mcp_server(
 
     _patch_sdk_mcp_race_condition()
 
-    executor = DirectToolExecutor(working_dir, project_id=project_id)
+    tool_handler = create_direct_handler(
+        working_dir=working_dir,
+        project_id=project_id,
+        tool_catalog=tool_catalog,
+    )
     mcp_tools = []
     for t in custom_tools:
         tool_name = t["name"]
 
         async def handler(args: dict[str, Any], _name: str = tool_name) -> dict[str, Any]:
             try:
-                result = await executor.dispatch(_name, args)
-                return {"content": [{"type": "text", "text": result}]}
+                result = await tool_handler.execute(ToolCall(id=f"mcp_{_name}", name=_name, input=args))
+                return {"content": [{"type": "text", "text": result.content}]}
             except Exception as e:
                 logger.exception("MCP handler error: tool=%s", _name)
                 return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}

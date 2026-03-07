@@ -38,7 +38,8 @@ class _CompletionCtx:
     skip_cache: bool = False
     progress_callback: Callable[[AgentProgress], Any] | None = None
     max_turns: int = 1; execute_tools: bool = False  # noqa: E702
-    enable_programmatic_tools: bool = False; enable_caching: bool = True  # noqa: E702
+    enable_programmatic_tools: bool = False; defer_tool_loading: bool = False  # noqa: E702
+    enable_caching: bool = True
     cache_ttl: str = "ephemeral"
     thinking_level: str | None = None; container_id: str | None = None  # noqa: E702
     response_format: dict[str, Any] | None = None
@@ -55,6 +56,7 @@ def _build_ctx(
     agent_slug: str | None, skip_cache: bool,
     progress_callback: Callable[[AgentProgress], Any] | None,
     max_turns: int, execute_tools: bool, enable_programmatic_tools: bool,
+    defer_tool_loading: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
 ) -> _CompletionCtx:
@@ -70,6 +72,7 @@ def _build_ctx(
         skip_cache=skip_cache, progress_callback=progress_callback,
         max_turns=max_turns, execute_tools=execute_tools,
         enable_programmatic_tools=enable_programmatic_tools,
+        defer_tool_loading=defer_tool_loading,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format,
@@ -101,6 +104,7 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
         progress_callback=ctx.progress_callback, max_turns=ctx.max_turns,
         project_id=ctx.project_id, execute_tools=ctx.execute_tools,
         enable_programmatic_tools=ctx.enable_programmatic_tools,
+        defer_tool_loading=ctx.defer_tool_loading,
         enable_caching=ctx.enable_caching, cache_ttl=ctx.cache_ttl,
         thinking_level=ctx.thinking_level, container_id=ctx.container_id,
         response_format=ctx.response_format, agent_slug=ctx.agent_slug,
@@ -118,6 +122,7 @@ async def complete_internal(
     cache_ttl: str = "ephemeral", thinking_level: str | None = None,
     tools: list[dict[str, Any]] | None = None,
     enable_programmatic_tools: bool = False,
+    defer_tool_loading: bool = False,
     container_id: str | None = None,
     response_format: dict[str, Any] | None = None,
     skip_cache: bool = False,
@@ -153,6 +158,7 @@ async def complete_internal(
         skip_cache=skip_cache, progress_callback=progress_callback,
         max_turns=max_turns, execute_tools=execute_tools,
         enable_programmatic_tools=enable_programmatic_tools,
+        defer_tool_loading=defer_tool_loading,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format,
