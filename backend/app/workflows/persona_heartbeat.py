@@ -214,6 +214,7 @@ async def _do_completion(interval_minutes: int):
             max_turns=max_turns,
             execute_tools=True,
             enable_programmatic_tools=True,
+            defer_tool_loading=True,
             task_type="heartbeat",
             thinking_level=thinking_level,
             working_dir=KNOWN_ROOTS.get(HEARTBEAT_PROJECT),

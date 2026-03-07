@@ -41,11 +41,12 @@ def _tool_to_catalog_entry(tool: Tool | dict[str, Any]) -> dict[str, Any]:
 
 def build_tool_catalog(tools: Iterable[Tool | dict[str, Any]]) -> list[dict[str, Any]]:
     """Return catalog entries for non-virtual tools."""
-    return [
-        _tool_to_catalog_entry(tool)
-        for tool in tools
-        if _tool_to_catalog_entry(tool)["name"] not in VIRTUAL_TOOL_NAMES
-    ]
+    entries: list[dict[str, Any]] = []
+    for tool in tools:
+        entry = _tool_to_catalog_entry(tool)
+        if entry["name"] not in VIRTUAL_TOOL_NAMES:
+            entries.append(entry)
+    return entries
 
 
 def _api_tool_from_catalog_entry(tool: dict[str, Any]) -> dict[str, Any]:

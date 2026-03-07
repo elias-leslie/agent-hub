@@ -163,6 +163,7 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
         resolved = resolve_cloudcode_model(model)
         tool_handler = create_direct_handler(
             working_dir, kwargs.get("permission_config"), project_id=project_id,
+            tool_catalog=kwargs.get("tool_catalog"),
         )
         session_id = str(uuid.uuid4())
         system_instruction, contents = convert_messages_for_cloudcode(messages)
