@@ -62,6 +62,10 @@ def _normalize_summary(summary: str | None) -> str:
     return " ".join(text.split()) or "completed work"
 
 
+def _is_missing_checkpoint_error(output: str) -> bool:
+    return "No checkpoint found" in output and "Was it claimed?" in output
+
+
 def _extract_task_status(context_output: str) -> str | None:
     """Extract task status from `st context --compact` output."""
     if not isinstance(context_output, str):
@@ -234,7 +238,14 @@ async def _reconcile_task_lane(
         f"done {shlex.quote(task_id)} --message {shlex.quote(message)}",
         project_id,
     )
-    return await bash_fn(cmd)
+    result = await bash_fn(cmd)
+    if _is_missing_checkpoint_error(result):
+        admin_cmd = _st_cmd(
+            f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
+            project_id,
+        )
+        return await bash_fn(admin_cmd)
+    return result
 
 
 async def _retire_task_lane(
