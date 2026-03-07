@@ -45,7 +45,10 @@ _WAKE_TOOLING_HINTS = """Operational notes:
 - For observability: use `st session-events <session_id>` for a direct session id, or `st session-events -T task-123 --page-size 100` for a task-linked session trace.
 - Do not add stale flags like `-P`, `--project`, `--human`, or `--compact` to `st ready` / `st ready-all`.
 - Do not use `--session` with `st session-events`; pass the session id as the positional argument instead.
-- Do not treat `st sessions list` output `session_id` values like Agent Hub session ids; use `st session-events -T task-...` for task-linked traces unless you already have a real Agent Hub session UUID.
+- Never pass `st sessions list` output `session_id` values to `st session-events`; they are ST session ids, not Agent Hub session ids.
+- Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID from Agent Hub context or heartbeat results.
+- If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on; do not probe ST internal worktree paths trying to force more context.
+- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect `/home/kasadis/.local/share/st/worktrees/...` or other external ST internals unless the prompt explicitly requires it.
 - Use `st context <task-id>` only when you have a real task id.
 - Prefer the known-good commands above over probing multiple invalid `st` variants.
 - Avoid exploratory `--help` calls unless a known-good command above still fails.
