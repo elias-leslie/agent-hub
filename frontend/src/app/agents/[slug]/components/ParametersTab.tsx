@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Agent } from "../types";
+import { Agent, ModelInfo } from "../types";
 
 interface ParametersTabProps {
   formData: Partial<Agent>;
+  availableModels: ModelInfo[];
   updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
 }
 
@@ -104,7 +105,17 @@ const VERBOSITY_LEVELS = [
   { value: "high", label: "High", hint: "Comprehensive, production-ready output" },
 ] as const;
 
-export function ParametersTab({ formData, updateField }: ParametersTabProps) {
+function getSelectedModel(
+  availableModels: ModelInfo[],
+  modelId: string | null | undefined,
+): ModelInfo | null {
+  if (!modelId) {
+    return null;
+  }
+  return availableModels.find((model) => model.id === modelId) ?? null;
+}
+
+export function ParametersTab({ formData, availableModels, updateField }: ParametersTabProps) {
   const [draftValues, setDraftValues] = useState<DraftState>({
     max_concurrency: formatDraftValue(formData.max_concurrency),
     max_subagent_concurrency: formatDraftValue(formData.max_subagent_concurrency),
@@ -149,6 +160,13 @@ export function ParametersTab({ formData, updateField }: ParametersTabProps) {
     setFieldErrors((current) => ({ ...current, [field]: message }));
   }
 
+  const selectedModel = getSelectedModel(availableModels, formData.primary_model_id);
+  const supportsThinking = selectedModel?.capabilities.has_thinking ?? true;
+  const supportsVerbosity = selectedModel?.capabilities.supports_verbosity ?? false;
+  const thinkingLevels = THINKING_LEVELS.filter(
+    (level) => level.value !== "xhigh" || selectedModel?.capabilities.supports_xhigh,
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -189,57 +207,69 @@ export function ParametersTab({ formData, updateField }: ParametersTabProps) {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label
-            htmlFor="thinking_level"
-            className="text-xs font-medium text-slate-600 dark:text-slate-400"
-          >
-            Thinking Level
-          </label>
-          <select
-            id="thinking_level"
-            value={formData.thinking_level ?? ""}
-            onChange={(e) =>
-              updateField("thinking_level", e.target.value || null)
-            }
-            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
-          >
-            {THINKING_LEVELS.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label} — {level.hint}
-              </option>
-            ))}
-          </select>
-          <p className="text-[10px] text-slate-400">
-            Controls reasoning depth. Higher levels produce more thorough but slower/costlier responses. Maps to extended thinking (Claude/Gemini) or reasoning effort (OpenAI/Codex).
-          </p>
-        </div>
+        {supportsThinking ? (
+          <div className="space-y-2">
+            <label
+              htmlFor="thinking_level"
+              className="text-xs font-medium text-slate-600 dark:text-slate-400"
+            >
+              Thinking Level
+            </label>
+            <select
+              id="thinking_level"
+              value={formData.thinking_level ?? ""}
+              onChange={(e) =>
+                updateField("thinking_level", e.target.value || null)
+              }
+              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
+            >
+              {thinkingLevels.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label} — {level.hint}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-400">
+              Controls reasoning depth. Higher levels produce more thorough but slower responses. Unsupported levels are hidden per model.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            This model does not support configurable reasoning effort.
+          </div>
+        )}
 
-        <div className="space-y-2">
-          <label
-            htmlFor="verbosity_level"
-            className="text-xs font-medium text-slate-600 dark:text-slate-400"
-          >
-            Verbosity Level
-          </label>
-          <select
-            id="verbosity_level"
-            value={formData.verbosity_level ?? ""}
-            onChange={(e) =>
-              updateField("verbosity_level", e.target.value || null)
-            }
-            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
-          >
-            {VERBOSITY_LEVELS.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label} — {level.hint}
-              </option>
-            ))}
-          </select>
-          <p className="text-[10px] text-slate-400">
-            Controls output length and detail. Only affects Codex/OpenAI models via the Responses API. Low = concise code, High = comprehensive with docs.
-          </p>
-        </div>
+        {supportsVerbosity ? (
+          <div className="space-y-2">
+            <label
+              htmlFor="verbosity_level"
+              className="text-xs font-medium text-slate-600 dark:text-slate-400"
+            >
+              Verbosity Level
+            </label>
+            <select
+              id="verbosity_level"
+              value={formData.verbosity_level ?? ""}
+              onChange={(e) =>
+                updateField("verbosity_level", e.target.value || null)
+              }
+              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
+            >
+              {VERBOSITY_LEVELS.map((level) => (
+                <option key={level.value} value={level.value}>
+                  {level.label} — {level.hint}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-slate-400">
+              Controls output length and detail for models that expose a verbosity knob.
+            </p>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            This model ignores verbosity overrides.
+          </div>
+        )}
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">

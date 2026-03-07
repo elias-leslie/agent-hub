@@ -184,7 +184,11 @@ export default function AgentEditorPage() {
               />
             )}
             {activeTab === "parameters" && (
-              <ParametersTab formData={formData} updateField={updateField} />
+              <ParametersTab
+                formData={formData}
+                availableModels={availableModels}
+                updateField={updateField}
+              />
             )}
             {activeTab === "permissions" && (
               <PermissionsTab formData={formData} updateField={updateField} />

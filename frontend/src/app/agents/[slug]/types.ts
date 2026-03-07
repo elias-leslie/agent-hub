@@ -1,3 +1,5 @@
+import type { CatalogModel } from "@/lib/models";
+
 export interface ToolPermission {
   name: string;
   allowed: boolean;
@@ -49,11 +51,7 @@ export interface AgentPreview {
   guardrail_uuids: string[];
 }
 
-export interface ModelInfo {
-  id: string;
-  name: string;
-  provider: string;
-}
+export type ModelInfo = CatalogModel;
 
 export type TabId =
   | "general"

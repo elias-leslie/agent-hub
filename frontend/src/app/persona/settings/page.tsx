@@ -144,6 +144,7 @@ export default function PersonaSettingsPage() {
                   />
                   <ParametersTab
                     formData={agentFormData}
+                    availableModels={availableModels}
                     updateField={updateAgentField}
                   />
                 </div>

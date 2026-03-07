@@ -129,17 +129,17 @@ describe("DashboardPage", () => {
   it("renders dashboard header", async () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByText("Agent Hub")).toBeInTheDocument();
-    expect(screen.getByText("Monitoring Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("7-day view")).toBeInTheDocument();
   });
 
   it("displays KPI cards", async () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByText("Active Sessions")).toBeInTheDocument();
-    expect(screen.getByText("Total Cost")).toBeInTheDocument();
+    expect(screen.getAllByText("Sessions").length).toBeGreaterThan(0);
+    expect(screen.getByText("Cost")).toBeInTheDocument();
     expect(screen.getByText("Requests")).toBeInTheDocument();
-    expect(screen.getByText("Error Rate")).toBeInTheDocument();
+    expect(screen.getByText("Success")).toBeInTheDocument();
   });
 
   it("shows provider status after loading", async () => {
@@ -163,7 +163,7 @@ describe("DashboardPage", () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText(/1h 0m uptime/)).toBeInTheDocument();
+      expect(screen.getByText("healthy")).toBeInTheDocument();
     });
   });
 
@@ -183,9 +183,7 @@ describe("DashboardPage", () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/Failed to load dashboard data/),
-      ).toBeInTheDocument();
+      expect(screen.getByText("Unable to connect to backend")).toBeInTheDocument();
     });
   });
 });

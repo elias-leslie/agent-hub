@@ -9,6 +9,7 @@ from app.adapters.base import (
     RateLimitError,
 )
 from app.adapters.thinking import get_thinking_config
+from app.constants.catalog import get_model_capabilities
 from app.services.agent_dto import AgentDTO
 
 from .agent_routing_models import CompletionResult
@@ -38,9 +39,10 @@ async def _try_model(
             thinking_config = get_thinking_config(model, thinking_level, provider)
             if thinking_config:
                 extra_kwargs.update(thinking_config)
-            else:
+            elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax"}:
                 extra_kwargs["thinking_level"] = thinking_level
-        if verbosity_level:
+        capabilities = get_model_capabilities(model)
+        if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
             extra_kwargs["verbosity_level"] = verbosity_level
         return await adapter.complete(
             messages=messages,

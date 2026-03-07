@@ -4,7 +4,23 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageInput, MessageList, type ChatMessage } from "@agent-hub/chat-ui";
+
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
 
 describe("MessageInput", () => {
   const mockOnSend = vi.fn();
@@ -21,6 +37,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="idle"
       />,
+      { wrapper: createWrapper() },
     );
 
     expect(screen.getByLabelText("Send message")).toBeInTheDocument();
@@ -34,6 +51,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="streaming"
       />,
+      { wrapper: createWrapper() },
     );
 
     expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
@@ -47,6 +65,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="cancelling"
       />,
+      { wrapper: createWrapper() },
     );
 
     expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
@@ -59,6 +78,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="streaming"
       />,
+      { wrapper: createWrapper() },
     );
 
     fireEvent.click(screen.getByLabelText("Stop generating"));
@@ -72,6 +92,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="cancelling"
       />,
+      { wrapper: createWrapper() },
     );
 
     const stopButton = screen.getByLabelText("Stop generating");
@@ -85,6 +106,7 @@ describe("MessageInput", () => {
         onCancel={mockOnCancel}
         status="streaming"
       />,
+      { wrapper: createWrapper() },
     );
 
     const textarea = screen.getByPlaceholderText("Waiting for response...");

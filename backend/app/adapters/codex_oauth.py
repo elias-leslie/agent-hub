@@ -7,7 +7,9 @@ with OAuth bearer tokens from a ChatGPT Plus/Pro subscription.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -62,6 +64,33 @@ def _convert_messages_to_input(messages: list[Message]) -> tuple[list[dict[str, 
         input_items.append({"role": msg.role, "content": msg.content})
 
     return input_items, instructions
+
+
+def _assistant_text_item(content: str, turn: int) -> dict[str, Any]:
+    """Build an assistant text item for continuing a Responses session."""
+    return {
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "output_text", "text": content, "annotations": []}],
+        "status": "completed",
+        "id": f"msg_{turn}",
+    }
+
+
+def _assistant_tool_call_item(tool_id: str, name: str, arguments: dict[str, Any], turn: int) -> dict[str, Any]:
+    """Build an assistant function_call item for continuing a Responses session."""
+    return {
+        "type": "function_call",
+        "id": f"fc_{turn}_{tool_id}".replace("-", "_"),
+        "call_id": tool_id,
+        "name": name,
+        "arguments": json.dumps(arguments),
+    }
+
+
+def _tool_result_item(tool_id: str, output: str) -> dict[str, Any]:
+    """Build a function_call_output item for a tool result."""
+    return {"type": "function_call_output", "call_id": tool_id, "output": output}
 
 
 # ---------------------------------------------------------------------------
@@ -188,9 +217,29 @@ class CodexOAuthAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Internal non-streaming completion (collects full streamed response)."""
-        creds = await self._ensure_fresh_credentials()
         resolved_model = self._resolve_model(model)
         input_items, instructions = _convert_messages_to_input(messages)
+        return await self._complete_from_input(
+            input_items=input_items,
+            instructions=instructions,
+            resolved_model=resolved_model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **kwargs,
+        )
+
+    async def _complete_from_input(
+        self,
+        *,
+        input_items: list[dict[str, Any]],
+        instructions: str | None,
+        resolved_model: str,
+        max_tokens: int | None,
+        temperature: float,
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Issue a completion with pre-built Responses input items."""
+        creds = await self._ensure_fresh_credentials()
         body = build_request_body(
             input_items,
             resolved_model,
@@ -256,6 +305,69 @@ class CodexOAuthAdapter(ProviderAdapter):
         except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
             logger.error("Codex stream HTTP error: %s", exc)
             yield StreamEvent(type="error", error=str(exc))
+
+    async def complete_with_tools(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        tool_handler: Any,
+        max_turns: int = 20,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamEvent]:
+        """Run a tool-calling loop over the Codex Responses API."""
+        kwargs = kwargs.copy()
+        temperature: float = kwargs.pop("temperature", 1.0)
+        max_tokens: int | None = kwargs.pop("max_tokens", None)
+        prompt_cache_key = kwargs.pop("prompt_cache_key", None) or str(uuid.uuid4())
+        input_items, instructions = _convert_messages_to_input(messages)
+        resolved_model = self._resolve_model(model)
+
+        for turn in range(max_turns):
+            result = await self._complete_from_input(
+                input_items=input_items,
+                instructions=instructions,
+                resolved_model=resolved_model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                tools=tools,
+                prompt_cache_key=prompt_cache_key,
+                **kwargs,
+            )
+
+            if result.thinking_content:
+                yield StreamEvent(type="thinking", content=result.thinking_content)
+
+            if result.content:
+                yield StreamEvent(type="content", content=result.content)
+
+            if not result.tool_calls:
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
+                    finish_reason=result.finish_reason,
+                )
+                return
+
+            if result.content:
+                input_items.append(_assistant_text_item(result.content, turn))
+
+            for tool_call in result.tool_calls:
+                input_items.append(
+                    _assistant_tool_call_item(tool_call.id, tool_call.name, tool_call.input, turn)
+                )
+                yield StreamEvent(
+                    type="tool_use",
+                    tool_id=tool_call.id,
+                    tool_name=tool_call.name,
+                    tool_input=tool_call.input,
+                )
+                tool_result_str = await tool_handler(tool_call.name, tool_call.input)
+                yield StreamEvent(type="tool_result", tool_id=tool_call.id, content=tool_result_str)
+                input_items.append(_tool_result_item(tool_call.id, tool_result_str))
+
+        yield StreamEvent(type="done", finish_reason="max_turns")
 
     async def health_check(self) -> bool:
         """Check if Codex credentials are valid (zero tokens consumed)."""

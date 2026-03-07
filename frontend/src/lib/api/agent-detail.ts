@@ -29,8 +29,7 @@ export async function fetchPreview(slug: string): Promise<AgentPreview> {
 export async function fetchModels(): Promise<ModelInfo[]> {
   const { getModels } = await import("@/lib/models");
   try {
-    const models = await getModels();
-    return models.map((m) => ({ id: m.id, name: m.name, provider: m.provider }));
+    return await getModels();
   } catch {
     return [];
   }
