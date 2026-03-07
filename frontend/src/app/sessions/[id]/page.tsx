@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchSession, fetchSessionEvents } from "@/lib/api";
+import { summarizeSessionMemoryObservability } from "@/lib/session-memory-observability";
 import { EventTimeline } from "@/components/timeline";
 import { SessionHeader } from "./components/SessionHeader";
 import { SessionInfo } from "./components/SessionInfo";
@@ -37,6 +38,9 @@ export default function SessionDetailPage({
 
   const isLoading = sessionLoading || eventsLoading;
   const error = sessionError || eventsError;
+  const memorySummary = eventsData
+    ? summarizeSessionMemoryObservability(eventsData.events)
+    : null;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -49,6 +53,7 @@ export default function SessionDetailPage({
           onTabChange={setActiveTab}
           eventsTotal={eventsData?.total}
           maxTurn={eventsData?.max_turn}
+          memorySummary={memorySummary}
         />
       )}
 
@@ -86,7 +91,9 @@ export default function SessionDetailPage({
             {activeTab === "timeline" && eventsData && (
               <EventTimeline events={eventsData.events} className="h-full" />
             )}
-            {activeTab === "info" && <SessionInfo session={session} />}
+            {activeTab === "info" && (
+              <SessionInfo session={session} memorySummary={memorySummary} />
+            )}
           </>
         )}
       </main>
