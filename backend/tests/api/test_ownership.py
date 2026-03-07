@@ -28,6 +28,7 @@ def _owner(**overrides: object) -> OwnershipOwner:
         "agent_slug": "codex",
         "branch": "task-12345678/main",
         "worktree_path": "/tmp/worktree",
+        "is_worktree": True,
         "session_status": "active",
         "workstream_status": "authoritative",
         "workstream_note": "Current owner",
@@ -86,6 +87,7 @@ class TestProjectOwnership:
         assert "generated_at" in data
         assert len(data["active_owners"]) == 2
         assert data["active_owners"][0]["task_id"] == "task-12345678"
+        assert data["active_owners"][0]["is_worktree"] is True
         assert data["active_owners"][0]["ownership_kind"] == "scoped"
         assert data["active_owners"][0]["scope_paths"] == [
             "backend/app/services/tools/catalog.py"

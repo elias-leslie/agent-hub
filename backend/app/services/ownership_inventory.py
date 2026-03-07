@@ -29,6 +29,7 @@ class OwnershipOwner:
     agent_slug: str | None
     branch: str | None
     worktree_path: str | None
+    is_worktree: bool
     session_status: str
     workstream_status: str | None
     workstream_note: str | None
@@ -112,6 +113,15 @@ def _derive_ownership_kind(
     if scope_paths:
         return "scoped"
     return "unscoped"
+
+
+def _is_worktree(worktree_path: str | None) -> bool:
+    if not worktree_path:
+        return False
+    try:
+        return detect_main_repo(Path(worktree_path).resolve()) is not None
+    except OSError:
+        return False
 
 
 async def _fetch_candidate_sessions(
@@ -220,6 +230,7 @@ async def query_project_ownership(
                 agent_slug=session.agent_slug,
                 branch=session.current_branch,
                 worktree_path=worktree_path,
+                is_worktree=_is_worktree(worktree_path),
                 session_status=session.status,
                 workstream_status=session.workstream_status,
                 workstream_note=session.workstream_note,

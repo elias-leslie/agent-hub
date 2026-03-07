@@ -15,6 +15,7 @@ class OwnershipOwnerResponse(BaseModel):
     agent_slug: str | None = Field(default=None, description="Owning agent slug")
     branch: str | None = Field(default=None, description="Current branch for the lane")
     worktree_path: str | None = Field(default=None, description="Working directory for the lane")
+    is_worktree: bool = Field(default=False, description="Whether the working directory is an isolated worktree")
     session_status: str = Field(..., description="Session lifecycle status")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     workstream_note: str | None = Field(default=None, description="Optional lifecycle note")
