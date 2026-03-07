@@ -166,6 +166,9 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "prefer `dispatch_agent` to a coding-capable specialist" in prompt
         assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
         assert "Treat recent completed sessions as evidence, not just history." in prompt
+        assert "Treat already-active specialist sessions as current work" in prompt
+        assert "prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type" in prompt
+        assert "Only redispatch the same specialist lane when you have concrete evidence the active session is stuck" in prompt
         assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt

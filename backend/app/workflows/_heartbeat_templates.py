@@ -38,6 +38,9 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 
 ## Anti-Repeat Recovery
 - Treat recent completed sessions as evidence, not just history.
+- Treat already-active specialist sessions as current work, not fresh opportunities to redispatch the same lane.
+- If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
+- Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
 - If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.
 - For repeated stale running-task or stale session-state findings, your default next action is `manage_tasks` / task-state repair / verification follow-through, not another reviewer dispatch.
