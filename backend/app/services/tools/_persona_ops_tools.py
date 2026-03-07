@@ -321,6 +321,10 @@ MANAGE_FEEDBACK_TOOL = Tool(
         },
         "required": ["action"],
     },
+    category="observability",
+    search_keywords=["feedback", "friction", "vote", "resolve"],
+    usage_examples=["Search for existing feedback before filing a duplicate item."],
+    defer_loading=True,
 )
 
 QUERY_SESSIONS_TOOL = Tool(
@@ -357,6 +361,9 @@ QUERY_SESSIONS_TOOL = Tool(
             },
         },
     },
+    category="observability",
+    search_keywords=["sessions", "agent status", "dispatched agents"],
+    usage_examples=["List recent completed coder sessions from the last two hours."],
 )
 
 REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
@@ -393,4 +400,8 @@ REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
             },
         },
     },
+    category="observability",
+    search_keywords=["performance review", "model history", "patterns"],
+    usage_examples=["Review friction trends before changing an agent's primary model."],
+    defer_loading=True,
 )
