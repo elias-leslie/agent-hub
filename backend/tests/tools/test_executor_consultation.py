@@ -44,6 +44,9 @@ async def test_query_sessions_includes_external_id_when_present() -> None:
         provider="codex",
         model="codex/gpt-5.4",
         external_id="task-123",
+        current_branch="task-123/main",
+        workstream_status="authoritative",
+        provider_metadata={"cwd": "/tmp/worktrees/task-123"},
         status="completed",
         created_at=datetime.now(UTC) - timedelta(minutes=2),
         summary_oneliner="Closed the loop",
@@ -60,4 +63,9 @@ async def test_query_sessions_includes_external_id_when_present() -> None:
         result = await query_sessions(status="completed")
 
     assert "task=task-123" in result
+    assert "branch=task-123/main" in result
+    assert "lane=authoritative" in result
+    assert "cwd=/tmp/worktrees/task-123" in result
     assert "Closed the loop" in result
+    assert "codex/gpt-5.4" in result
+    assert "codex/codex/gpt-5.4" not in result
