@@ -11,6 +11,11 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent
+from app.services.ownership_lanes import (
+    OwnershipOwner,
+    collapse_ownership_owners,
+    infer_task_id,
+)
 from app.services.tools.project_env import detect_main_repo
 
 _LOOKBACK_HOURS = 24
@@ -18,27 +23,6 @@ _STALE_ACTIVE_MINUTES = 4 * 60
 _GHOST_SESSION_MINUTES = 15
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
-
-
-@dataclass(frozen=True)
-class OwnershipOwner:
-    """Normalized live owner row for cross-repo coordination."""
-
-    task_id: str | None
-    session_id: str
-    agent_slug: str | None
-    branch: str | None
-    worktree_path: str | None
-    is_worktree: bool
-    session_status: str
-    workstream_status: str | None
-    workstream_note: str | None
-    ownership_kind: str
-    scope_paths: list[str]
-    updated_at: datetime | None
-    created_at: datetime
-    age_minutes: int
-    is_stale: bool
 
 
 @dataclass(frozen=True)
@@ -52,16 +36,6 @@ class ActiveSpecialistSession:
     request_source: str | None
     created_at: datetime
     age_minutes: int
-
-
-def _infer_task_id(external_id: str | None, branch: str | None) -> str | None:
-    """Resolve task id from explicit external id or task branch naming."""
-    if external_id and external_id.startswith("task-"):
-        return external_id
-    if not branch:
-        return None
-    prefix = branch.split("/", 1)[0]
-    return prefix if prefix.startswith("task-") else None
 
 
 def _parse_timestamp(value: datetime | None) -> datetime | None:
@@ -273,7 +247,7 @@ async def query_project_ownership(
         ownership_kind = _derive_ownership_kind(session.workstream_status, scope_paths, is_stale)
         owners.append(
             OwnershipOwner(
-                task_id=_infer_task_id(session.external_id, session.current_branch),
+                task_id=infer_task_id(session.external_id, session.current_branch),
                 session_id=session.id,
                 agent_slug=session.agent_slug,
                 branch=session.current_branch,
@@ -291,7 +265,7 @@ async def query_project_ownership(
             )
         )
 
-    return owners
+    return collapse_ownership_owners(owners)
 
 
 async def query_project_active_specialists(
