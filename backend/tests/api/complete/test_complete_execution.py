@@ -9,8 +9,8 @@ import pytest
 
 from app.adapters.base import CompletionResult, ProviderError
 from app.adapters.types import Message
-from app.api.complete.types import CompletionInternalResult
 from app.api.complete.execution import execute_with_fallback
+from app.api.complete.types import CompletionInternalResult
 
 
 @pytest.mark.asyncio
@@ -54,7 +54,7 @@ async def test_execute_with_fallback_attaches_primary_failure_reason_to_result()
     assert result is adapter_result
     assert model_used == "codex/gpt-5.4"
     assert fallback_used is True
-    assert getattr(result, "fallback_reason") == "ProviderError: claude timed out"
+    assert result.fallback_reason == "ProviderError: claude timed out"
 
 
 @pytest.mark.asyncio
