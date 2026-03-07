@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 4 * 60
+_ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 
 # Contract: workstream inventory states are derived in precedence order.
@@ -175,6 +176,118 @@ async def _fetch_recently_completed_sessions_section() -> str:
         logger.debug(
             "Failed to fetch completed sessions for heartbeat prompt", exc_info=True
         )
+        return ""
+
+
+async def _query_active_specialist_sessions() -> list[dict[str, object]]:
+    """Fetch active non-owner specialist sessions for heartbeat duplicate-avoidance.
+
+    These are active sessions without a task/worktree lane, which means they can still
+    overlap in practice even though the ownership inventory correctly excludes them.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import and_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    cutoff = datetime.now(UTC) - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
+
+    async with async_session() as db:
+        query = (
+            select(
+                Session.id,
+                Session.agent_slug,
+                Session.project_id,
+                Session.parent_session_id,
+                Session.request_source,
+                Session.created_at,
+            )
+            .where(
+                and_(
+                    Session.status == "active",
+                    Session.agent_slug.isnot(None),
+                    Session.project_id != "persona-sandbox",
+                    Session.created_at >= cutoff,
+                    Session.external_id.is_(None),
+                    Session.current_branch.is_(None),
+                )
+            )
+            .order_by(Session.created_at.desc())
+            .limit(50)
+        )
+        rows = (await db.execute(query)).all()
+
+    now = datetime.now(UTC)
+    return [
+        {
+            "session_id": row.id,
+            "agent_slug": row.agent_slug,
+            "project_id": row.project_id,
+            "parent_session_id": row.parent_session_id,
+            "request_source": row.request_source,
+            "created_at": row.created_at,
+            "age_minutes": int((now - row.created_at).total_seconds() / 60),
+        }
+        for row in rows
+    ]
+
+
+def _format_active_specialist_group(
+    project_id: str,
+    agent_slug: str,
+    rows: list[dict[str, object]],
+) -> str:
+    """Format an active specialist group into a heartbeat summary line."""
+    session_ids = [str(row["session_id"]) for row in rows if row.get("session_id")]
+    parent_ids = {
+        str(row["parent_session_id"])
+        for row in rows
+        if row.get("parent_session_id")
+    }
+    request_sources = {
+        str(row["request_source"])
+        for row in rows
+        if row.get("request_source")
+    }
+    oldest_age = max(int(row.get("age_minutes", 0)) for row in rows)
+    newest_age = min(int(row.get("age_minutes", 0)) for row in rows)
+    duplicate = len(rows) > 1
+    parts = [
+        f"- {project_id} | {agent_slug}",
+        f"active={len(rows)}",
+        f"age={newest_age}-{oldest_age}m" if duplicate else f"age={oldest_age}m",
+        "next=dedupe_or_wait" if duplicate else "next=wait_or_complement",
+    ]
+    if request_sources:
+        parts.append(f"source={','.join(sorted(request_sources))}")
+    if parent_ids:
+        parts.append(f"parents={len(parent_ids)}")
+    if session_ids:
+        parts.append(f"sessions={','.join(session_ids[:2])}")
+    return " | ".join(parts)
+
+
+async def _get_active_specialist_inventory() -> str:
+    """Build a heartbeat section for active read-only/planning specialist sessions."""
+    try:
+        rows = await _query_active_specialist_sessions()
+        if not rows:
+            return ""
+
+        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in rows:
+            key = (str(row["project_id"]), str(row["agent_slug"]))
+            grouped.setdefault(key, []).append(row)
+
+        lines = ["Active specialist sessions:"]
+        for (project_id, agent_slug), group_rows in sorted(grouped.items()):
+            lines.append(_format_active_specialist_group(project_id, agent_slug, group_rows))
+        body = "\n".join(lines)
+        return f"\n<active_specialist_inventory>\n{body}\n</active_specialist_inventory>"
+    except Exception:
+        logger.debug("Failed to build active specialist inventory for heartbeat", exc_info=True)
         return ""
 
 
@@ -610,6 +723,7 @@ __all__ = [
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
     "_format_session_line",
+    "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
     "_get_feedback_summary_section",
