@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useVoicePreferences, type VoiceOption } from "@agent-hub/chat-ui";
 import { getApiBaseUrl, buildApiUrl, fetchApi } from "@/lib/api-config";
 import type { PersonaAutosaveState } from "@/app/persona/hooks/usePersona";
+import { useHeartbeat } from "@/app/persona/hooks/useHeartbeat";
 import type { Persona, PersonaUpdate } from "@/types/persona";
 import { PersonaDocumentSection } from "./PersonaDocumentSection";
 
@@ -15,6 +16,7 @@ interface VoiceHeartbeatTabProps {
 
 export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbeatTabProps) {
   const [search, setSearch] = useState("");
+  const { status: heartbeatStatus } = useHeartbeat();
 
   const {
     voices,
@@ -55,6 +57,9 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
     },
     [onUpdate],
   );
+  const runtime = heartbeatStatus?.runtime;
+  const heartbeatWarning = runtime?.warnings[0] ?? null;
+  const heartbeatDisabled = persona.heartbeat_interval_minutes === 0;
 
   return (
     <div className="space-y-8">
@@ -196,6 +201,55 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
         <p className="text-[10px] text-slate-400 max-w-md">
           How often {persona.name} runs autonomous system checks
         </p>
+
+        <div className="max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Heartbeat Runtime
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                {runtime?.model_display_name || runtime?.model || "Unavailable"}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {runtime ? `${runtime.provider} · thinking ${runtime.thinking_level || "off"}` : "Runtime status unavailable"}
+              </p>
+            </div>
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                heartbeatDisabled
+                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  : runtime?.heartbeat_supported
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+              )}
+            >
+              {heartbeatDisabled ? "Disabled" : runtime?.heartbeat_supported ? "Ready" : "Attention"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/70 px-3 py-2">
+              Tools: {runtime?.supports_tools ? "supported" : "not supported"}
+            </div>
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/70 px-3 py-2">
+              Session cache: {runtime?.supports_session_cache ? "supported" : "not supported"}
+            </div>
+          </div>
+
+          {heartbeatDisabled && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+              Heartbeat is currently off, so Jenny is not autonomously driving work.
+            </div>
+          )}
+
+          {heartbeatWarning && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+              {heartbeatWarning}
+            </div>
+          )}
+        </div>
 
         {/* Heartbeat Instructions */}
         <PersonaDocumentSection

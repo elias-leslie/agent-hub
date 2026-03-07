@@ -14,8 +14,10 @@ from app.workflows._heartbeat_redis import (
 )
 from app.workflows.persona_heartbeat import (
     HeartbeatInput,
+    HeartbeatRuntimeInfo,
     check_project_permission,
     get_heartbeat_interval,
+    get_heartbeat_runtime_info,
     persona_heartbeat_task,
 )
 
@@ -36,6 +38,7 @@ class HeartbeatStatusResponse(BaseModel):
     last_format_compliant: bool | None = None
     last_summary_stored: bool | None = None
     last_had_error: bool | None = None
+    runtime: HeartbeatRuntimeInfo | None = None
 
 
 class HeartbeatTriggerResponse(BaseModel):
@@ -50,12 +53,14 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     last_run = await get_last_run_info()
     interval_minutes, _ = await get_heartbeat_interval()
     metrics = await get_heartbeat_metrics()
+    runtime = await get_heartbeat_runtime_info()
 
     resp = HeartbeatStatusResponse(
         running=running_info is not None,
         last_run=last_run,
         elapsed_seconds=running_info.get("elapsed_seconds") if running_info else None,
         interval_minutes=interval_minutes,
+        runtime=runtime,
     )
 
     if metrics:
