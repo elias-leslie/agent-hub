@@ -112,6 +112,7 @@ async def complete_internal(
     temperature: float, project_id: str, db: AsyncSession,
     session_id: str | None = None, external_id: str | None = None,
     client_id: str | None = None, request_source: str | None = None,
+    parent_session_id: str | None = None,
     agent_slug: str | None = None, use_memory: bool = False,
     memory_group_id: str | None = None, enable_caching: bool = True,
     cache_ttl: str = "ephemeral", thinking_level: str | None = None,
@@ -138,7 +139,7 @@ async def complete_internal(
         ]
     session, session_id, is_new, messages_dict = await setup_completion_session(
         db, session_id, project_id, provider, model,
-        external_id, client_id, request_source, agent_slug, messages,
+        external_id, client_id, request_source, agent_slug, parent_session_id, messages,
     )
     ctx = _build_ctx(
         db=db, session=session, session_id=session_id, is_new=is_new,

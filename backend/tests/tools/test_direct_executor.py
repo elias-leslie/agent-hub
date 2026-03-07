@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -211,6 +212,29 @@ class TestConsultAgent:
         )
         result = await handler.execute(call)
         assert "project_id" in result.content.lower()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_includes_parent_session_id(self, tmp_path: Path) -> None:
+        """Dispatched child sessions should link back to the current session."""
+        executor = DirectToolExecutor(
+            str(tmp_path),
+            project_id="summitflow",
+            session_id="parent-session-789",
+        )
+        with patch(
+            "app.services.tools._executor_consultation.dispatch_agent",
+            new_callable=AsyncMock,
+            return_value="ok",
+        ) as mock_dispatch:
+            await executor.dispatch_agent("debugger", "Advance stale state recovery")
+
+        mock_dispatch.assert_awaited_once_with(
+            "summitflow",
+            "debugger",
+            "Advance stale state recovery",
+            25,
+            parent_session_id="parent-session-789",
+        )
 
 
 class TestPathAllowedWithExtraRoots:

@@ -88,6 +88,7 @@ def create_tool_handler(
     working_dir: str | None,
     permission_config: dict[str, Any] | None,
     project_id: str | None = None,
+    session_id: str | None = None,
 ) -> Any:
     """Create an async tool_handler callback for OpenAI-compat adapters.
 
@@ -97,7 +98,12 @@ def create_tool_handler(
     from app.services.tools.base import ToolCall
     from app.services.tools.tool_handler import create_direct_handler
 
-    handler = create_direct_handler(working_dir, permission_config, project_id)
+    handler = create_direct_handler(
+        working_dir,
+        permission_config,
+        project_id,
+        session_id=session_id,
+    )
 
     async def tool_handler(tool_name: str, tool_input: dict[str, Any]) -> str:
         tool_call = ToolCall(id=f"openai_{tool_name}_{id(tool_input)}", name=tool_name, input=tool_input)
@@ -116,6 +122,7 @@ async def adapt_openai_stream(
     permission_config: dict[str, Any] | None,
     max_turns: int = 20,
     project_id: str | None = None,
+    session_id: str | None = None,
 ) -> AsyncIterator[tuple[ToolEvent, str]]:
     """Run an OpenAI-compat adapter's complete_with_tools and yield ToolEvents.
 
@@ -132,7 +139,12 @@ async def adapt_openai_stream(
     Yields:
         (ToolEvent, session_id) tuples (session_id is empty for OpenAI-compat)
     """
-    handler = create_tool_handler(working_dir, permission_config, project_id)
+    handler = create_tool_handler(
+        working_dir,
+        permission_config,
+        project_id,
+        session_id=session_id,
+    )
 
     async for stream_event in adapter.complete_with_tools(
         messages=messages,

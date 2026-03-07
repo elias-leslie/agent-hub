@@ -67,7 +67,7 @@ async def _run_tool_loop(
     """
     event_stream = build_event_stream(
         adapter, state.messages_for_adapter, provider, model, tools,
-        working_dir, permission_config, max_turns, project_id,
+        working_dir, permission_config, max_turns, project_id, session_id,
     )
 
     # Mapping of tool_use_id → tool_name, shared across all events in the loop

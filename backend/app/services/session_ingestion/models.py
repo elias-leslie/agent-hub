@@ -20,6 +20,10 @@ class SessionUpsertRequest(BaseModel):
     client_id: str | None = Field(default=None, description="Authenticated client ID")
     request_source: str | None = Field(default=None, description="Request source header")
     current_branch: str | None = Field(default=None, description="Git branch at session start")
+    parent_session_id: str | None = Field(
+        default=None,
+        description="Optional parent session for dispatched or branched work",
+    )
     cwd: str | None = Field(default=None, description="Provider working directory")
     provider_metadata: dict[str, Any] = Field(
         default_factory=dict,

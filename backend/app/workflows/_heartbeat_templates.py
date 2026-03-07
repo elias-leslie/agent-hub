@@ -40,6 +40,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - Treat recent completed sessions as evidence, not just history.
 - If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.
+- For repeated stale running-task or stale session-state findings, your default next action is `manage_tasks` / task-state repair / verification follow-through, not another reviewer dispatch.
 - Prefer follow-through, bug creation, verification, or task-state repair over repeating the same diagnostic pass.
 
 Follow your <heartbeat_instructions> from your system context.

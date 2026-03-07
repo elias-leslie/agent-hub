@@ -230,6 +230,7 @@ async def _fetch_filtered_sessions(
     session_type: str | None,
     page: int,
     page_size: int,
+    parent_session_id: str | None,
 ) -> tuple[list[Session], int]:
     """Apply filters, paginate, and return sessions with total count.
 
@@ -254,6 +255,7 @@ async def _fetch_filtered_sessions(
         status,
         agent_slug,
         session_type,
+        parent_session_id,
     )
 
     total_result = await db.execute(count_query)
@@ -276,6 +278,7 @@ async def list_sessions_with_stats(
     session_type: str | None = None,
     page: int = 1,
     page_size: int = 20,
+    parent_session_id: str | None = None,
 ) -> tuple[list[Session], int, dict[str, int], dict[str, dict[str, int]]]:
     """List sessions with pagination, filtering, and statistics.
 
@@ -294,7 +297,7 @@ async def list_sessions_with_stats(
     from app.services.session_queries import fetch_session_statistics
 
     sessions, total = await _fetch_filtered_sessions(
-        db, project_id, status, agent_slug, session_type, page, page_size
+        db, project_id, status, agent_slug, session_type, page, page_size, parent_session_id
     )
 
     session_ids = [s.id for s in sessions]
@@ -334,5 +337,4 @@ async def fork_session_at_turn(
     await db.commit()
 
     return new_session_id, fork_at, len(events_to_copy)
-
 

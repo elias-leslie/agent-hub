@@ -41,6 +41,7 @@ async def dispatch_agent(
     agent_slug: str,
     task: str,
     max_turns: int = 25,
+    parent_session_id: str | None = None,
 ) -> str:
     """Dispatch an agent via Hatchet wake workflow (fire-and-forget).
 
@@ -71,6 +72,7 @@ async def dispatch_agent(
             event_type="dispatch",
             thinking_level=resolved.agent.thinking_level,
             max_turns=max_turns,
+            parent_session_id=parent_session_id,
         )
 
         warning = ""
@@ -231,6 +233,7 @@ async def query_sessions(
     status: str | None = None,
     hours_back: int = 24,
     limit: int = 10,
+    parent_session_id: str | None = None,
 ) -> str:
     """Query agent sessions for observability — check progress, find stuck agents."""
     try:
@@ -248,6 +251,8 @@ async def query_sessions(
             conditions.append(DBSession.agent_slug == agent_slug)
         if status:
             conditions.append(DBSession.status == status)
+        if parent_session_id:
+            conditions.append(DBSession.parent_session_id == parent_session_id)
 
         async with async_session() as db:
             query = (
@@ -265,6 +270,8 @@ async def query_sessions(
                 filters.append(f"agent={agent_slug}")
             if status:
                 filters.append(f"status={status}")
+            if parent_session_id:
+                filters.append(f"parent={parent_session_id}")
             filter_str = f" ({', '.join(filters)})" if filters else ""
             return f"(No sessions found in last {hours_back}h{filter_str})"
 
@@ -277,8 +284,8 @@ async def query_sessions(
             if s.summary_oneliner:
                 summary = f" — {s.summary_oneliner}"
             lines.append(
-                f"- {s.agent_slug or '?'} | {s.project_id} | "
-                f"status={s.status} | {time_label}{summary}"
+                f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
+                f"{s.provider}/{s.model} | status={s.status} | {time_label}{summary}"
             )
         return "\n".join(lines)
     except Exception as e:

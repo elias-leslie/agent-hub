@@ -168,3 +168,4 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Treat recent completed sessions as evidence, not just history." in prompt
         assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
+        assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt

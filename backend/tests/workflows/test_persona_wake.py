@@ -103,3 +103,56 @@ async def test_agent_wake_stores_summary_for_completed_session():
     assert len(messages) == 1
     assert "st ready-all" in messages[0]["content"]
     assert "Task:\nInspect the dirty worktree" in messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_forwards_parent_session_id():
+    mock_db = AsyncMock()
+    complete_result = SimpleNamespace(
+        status="success",
+        turns=2,
+        tool_calls_count=1,
+        error=None,
+        session_id="sess-wake-2",
+        content="Recovered stale task state.",
+    )
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=complete_result,
+        ) as mock_complete,
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="debugger",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Advance recovery.",
+                project_id="summitflow",
+                event_type="dispatch",
+                parent_session_id="parent-session-456",
+            )
+        )
+
+    assert mock_complete.await_args.kwargs["parent_session_id"] == "parent-session-456"
