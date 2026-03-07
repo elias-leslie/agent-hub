@@ -44,7 +44,7 @@ class MemoryRepository(
     """
 
     @staticmethod
-    def _to_dict(mem: object) -> dict:  # type: ignore[override]
+    def _to_dict(mem: object) -> dict:
         """Convert Memory ORM object to dict (backward compat)."""
         from app.models.memory_unified import Memory as _Memory
         assert isinstance(mem, _Memory)

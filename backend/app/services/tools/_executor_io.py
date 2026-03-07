@@ -10,23 +10,17 @@ import logging
 import shlex
 import tempfile
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from app.models import Session
 
-async def _reconcile_task_lane(
-    bash_fn: Callable[..., Awaitable[str]],
-    task_id: str,
-    project_id: str | None,
-) -> str:
-    """Reconcile a task lane using Agent Hub session evidence.
 
-    Auto-closes only the obvious safe case:
-    - no active sessions linked to the task
-    - at least one completed session linked to the task
-
-    Ambiguous or active lanes are reported but not mutated.
-    """
+async def _load_task_lane_sessions(task_id: str) -> list[Session]:
+    """Load recent Agent Hub sessions linked to a task lane."""
     from sqlalchemy import select
 
     from app.db import async_session
@@ -42,7 +36,57 @@ async def _reconcile_task_lane(
             .order_by(Session.created_at.desc())
             .limit(20)
         )
-        sessions = (await db.execute(query)).scalars().all()
+        return list((await db.execute(query)).scalars().all())
+
+
+def _choose_authoritative_session(completed_sessions: list[Session]) -> Session:
+    """Pick the completed session that should become authoritative."""
+    return max(
+        completed_sessions,
+        key=lambda s: (
+            getattr(s, "created_at", datetime.min.replace(tzinfo=UTC)),
+            bool(getattr(s, "summary_oneliner", None)),
+        ),
+    )
+
+
+def _normalize_summary(summary: str | None) -> str:
+    text = (summary or "completed work").strip()
+    return " ".join(text.split()) or "completed work"
+
+
+async def _persist_workstream_resolution(
+    sessions: list[Session],
+    authoritative_session: Session,
+) -> None:
+    """Persist authoritative/superseded markers for a reconciled task lane."""
+    from app.db import async_session
+
+    now = datetime.now(UTC)
+    winner_branch = getattr(authoritative_session, "current_branch", None) or "unknown"
+
+    async with async_session() as db:
+        for session in sessions:
+            if session is authoritative_session:
+                session.workstream_status = "authoritative"
+                session.workstream_note = "Selected as authoritative during reconcile"
+            else:
+                session.workstream_status = "superseded"
+                session.workstream_note = (
+                    f"Superseded by session on branch {winner_branch} during reconcile"
+                )
+            session.workstream_updated_at = now
+            db.add(session)
+        await db.commit()
+
+
+async def _reconcile_task_lane(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str:
+    """Reconcile a task lane using Agent Hub session evidence."""
+    sessions = await _load_task_lane_sessions(task_id)
 
     if not sessions:
         return (
@@ -65,21 +109,42 @@ async def _reconcile_task_lane(
             f"(statuses={statuses or 'unknown'})."
         )
 
-    summary = next(
-        (
-            str(s.summary_oneliner).strip()
-            for s in completed_sessions
-            if s.summary_oneliner and str(s.summary_oneliner).strip()
-        ),
-        "completed work",
-    )
-    summary = " ".join(summary.split())
+    authoritative_session = _choose_authoritative_session(completed_sessions)
+    await _persist_workstream_resolution(sessions, authoritative_session)
+
+    summary = _normalize_summary(getattr(authoritative_session, "summary_oneliner", None))
     message = f"Reconciled from Agent Hub session evidence: {summary}"
     cmd = _st_cmd(
         f"done {shlex.quote(task_id)} --message {shlex.quote(message)}",
         project_id,
     )
     return await bash_fn(cmd)
+
+
+async def _retire_task_lane(task_id: str) -> str:
+    """Persist a retired marker for a task lane when no live sessions remain."""
+    from app.db import async_session
+
+    sessions = await _load_task_lane_sessions(task_id)
+    if not sessions:
+        return f"Retire skipped for {task_id}: no linked Agent Hub sessions found."
+
+    active_sessions = [s for s in sessions if s.status == "active"]
+    if active_sessions:
+        return (
+            f"Retire blocked for {task_id}: cannot retire while {len(active_sessions)} "
+            "active session(s) remain."
+        )
+
+    now = datetime.now(UTC)
+    async with async_session() as db:
+        for session in sessions:
+            session.workstream_status = "retired"
+            session.workstream_note = 'Retired via manage_tasks(action="retire_lane")'
+            session.workstream_updated_at = now
+            db.add(session)
+        await db.commit()
+    return f"Retired {len(sessions)} session-backed lane(s) for {task_id}"
 
 
 async def send_push(
@@ -272,6 +337,11 @@ async def manage_tasks(
             return "Error: task_id required for reconcile"
         return await _reconcile_task_lane(bash_fn, task_id, project_id)
 
+    if action == "retire_lane":
+        if not task_id:
+            return "Error: task_id required for retire_lane"
+        return await _retire_task_lane(task_id)
+
     if action == "done":
         if not task_id:
             return "Error: task_id required for done"
@@ -289,5 +359,5 @@ async def manage_tasks(
 
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/reconcile/done/abandon/cancel."
+        "Use overview/get_context/create/dispatch/reconcile/retire_lane/done/abandon/cancel."
     )

@@ -92,7 +92,7 @@ def _build_oauth_options(
     # Build allowed_tools including MCP tool names
     from app.adapters._claude_constants import build_allowed_tools
 
-    allowed_tools = build_allowed_tools(tools) if tools else None  # type: ignore[arg-type]
+    allowed_tools = build_allowed_tools(tools) if tools else None
     return build_sdk_options(
         cli_path=cli_path, model=model, model_map=model_map,
         working_dir=working_dir, system_prompt=system_prompt,

@@ -104,18 +104,18 @@ def build_boundary_hook(working_dir: str) -> dict[str, list[Any]]:
     ) -> HookJSONOutput:
         tool_name = input_data.get("tool_name", "")
         if tool_name not in ("Write", "Edit", "MultiEdit"):
-            return {}  # type: ignore[return-value]
+            return {}
 
         tool_input = input_data.get("tool_input", {})
         path = tool_input.get("file_path") or tool_input.get("path") or ""
         if not path:
-            return {}  # type: ignore[return-value]
+            return {}
 
         resolved = Path(path).resolve()
         if resolved.is_relative_to(boundary):
-            return {}  # type: ignore[return-value]
+            return {}
         if any(resolved.is_relative_to(a) for a in _WRITE_ALLOWLIST):
-            return {}  # type: ignore[return-value]
+            return {}
 
         logger.info(
             "Boundary hook DENY: %s on %s (boundary=%s)", tool_name, path, boundary,

@@ -19,14 +19,14 @@ _SORT_EXPR_MAP = {
 }
 
 
-def _build_sort_expr(sort_by: str):  # type: ignore[return]
+def _build_sort_expr(sort_by: str):
     """Return the SQLAlchemy sort expression for the given field name."""
     if sort_by in _SORT_EXPR_MAP:
         return _SORT_EXPR_MAP[sort_by]()
     return Memory.referenced_count * 1.0 / (Memory.loaded_count + 1)
 
 
-def _build_order(sort_by: str, sort_expr):  # type: ignore[return]
+def _build_order(sort_by: str, sort_expr):
     """Return ordered expression (nulls last for lifecycle_score)."""
     if sort_by == "lifecycle_score":
         return sort_expr.desc().nulls_last()

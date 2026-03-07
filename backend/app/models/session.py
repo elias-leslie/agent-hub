@@ -66,6 +66,20 @@ class Session(Base):
         nullable=True,
         default=None,
     )
+    workstream_status: Mapped[str | None] = mapped_column(
+        Enum(
+            "authoritative",
+            "superseded",
+            "retired",
+            name="workstream_status_enum",
+        ),
+        nullable=True,
+        default=None,
+    )
+    workstream_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    workstream_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Outcome tracking for branched sessions
     manual_outcome: Mapped[str | None] = mapped_column(
         Enum("selected", "discarded", name="manual_outcome_enum"),

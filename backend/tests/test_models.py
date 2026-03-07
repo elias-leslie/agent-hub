@@ -87,3 +87,45 @@ class TestMemoryInjectionMetric:
         """Test that Session model has back_populates for injection_metrics."""
         relationships = Session.__mapper__.relationships
         assert "injection_metrics" in relationships
+
+
+class TestSessionWorkstreamLifecycle:
+    """Tests for explicit task/workstream lifecycle fields on Session."""
+
+    def test_session_has_workstream_lifecycle_fields(self) -> None:
+        session = Session(
+            id="test-session",
+            project_id="test-project",
+            provider="claude",
+            model="claude-sonnet-4-5",
+            status="active",
+        )
+
+        assert hasattr(session, "workstream_status")
+        assert hasattr(session, "workstream_note")
+        assert hasattr(session, "workstream_updated_at")
+
+    def test_session_workstream_defaults(self) -> None:
+        session = Session(
+            id="test-session",
+            project_id="test-project",
+            provider="claude",
+            model="claude-sonnet-4-5",
+            status="active",
+        )
+
+        assert session.workstream_status is None
+        assert session.workstream_note is None
+        assert session.workstream_updated_at is None
+
+    def test_session_accepts_workstream_status_values(self) -> None:
+        for status in ["authoritative", "superseded", "retired"]:
+            session = Session(
+                id=f"session-{status}",
+                project_id="test-project",
+                provider="claude",
+                model="claude-sonnet-4-5",
+                status="completed",
+                workstream_status=status,
+            )
+            assert session.workstream_status == status
