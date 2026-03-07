@@ -267,6 +267,9 @@ class TestListSessions:
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
         mock_db_session.parent_session_id = "parent-1"
+        mock_db_session.external_id = "task-123"
+        mock_db_session.current_branch = "task-123/main"
+        mock_db_session.workstream_status = "authoritative"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -308,6 +311,9 @@ class TestListSessions:
         assert data["sessions"][0]["total_input_tokens"] == 100
         assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["sessions"][0]["parent_session_id"] == "parent-1"
+        assert data["sessions"][0]["external_id"] == "task-123"
+        assert data["sessions"][0]["current_branch"] == "task-123/main"
+        assert data["sessions"][0]["workstream_status"] == "authoritative"
         assert data["total"] == 1
 
     def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
