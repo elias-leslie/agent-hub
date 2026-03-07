@@ -12,6 +12,7 @@
 #   db sizes                     # Show table and index sizes
 #   db indexes [table]           # Show indexes (all or per-table)
 #   db query "SELECT ..."        # Run read-only query (writes blocked)
+#   db query -t "SELECT ..."     # Run read-only query with plain output
 #   db exec "UPDATE ..."         # Run write query (DROP/TRUNCATE blocked)
 #   db ddl "CREATE INDEX ..."    # Run safe DDL (CREATE INDEX, ALTER TABLE ADD)
 #   db migrate status            # Show current migration state
@@ -77,6 +78,7 @@ Commands:
   count <table>             Get row count for a table
   sample <table> [limit]    Get sample rows (default 10)
   query "SELECT ..."        Execute read-only SQL query
+  query -t "SELECT ..."     Execute read-only SQL query with plain output
   exec "UPDATE ..."         Execute write SQL (DROP/TRUNCATE blocked)
 
 Migration Commands:
@@ -101,6 +103,7 @@ Examples:
 
 Notes:
   - db query enforces read-only (INSERT/UPDATE/DELETE/DROP blocked)
+  - db query -t/--plain emits unformatted rows for shell composition
   - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE/CREATE)
   - db ddl allows safe DDL: CREATE INDEX, CREATE INDEX IF NOT EXISTS, ALTER TABLE ADD
   - Auto-detects project from git root directory name
@@ -281,10 +284,28 @@ cmd_sample() {
 }
 
 cmd_query() {
+    local plain_output="false"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -t|--plain)
+                plain_output="true"
+                shift
+                ;;
+            --help|-h)
+                echo "Usage: db query [-t|--plain] \"SELECT ...\""
+                return 0
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
     local query="$1"
 
     if [[ -z "$query" ]]; then
-        error "Query required. Usage: db query \"SELECT ...\""
+        error "Query required. Usage: db query [-t|--plain] \"SELECT ...\""
     fi
 
     # Enforce read-only: block destructive SQL statements
@@ -294,7 +315,11 @@ cmd_query() {
         error "Write operations blocked. db query is read-only. Use psql directly for writes."
     fi
 
-    run_psql_formatted "$query"
+    if [[ "$plain_output" == "true" ]]; then
+        run_psql "$query"
+    else
+        run_psql_formatted "$query"
+    fi
 }
 
 cmd_exec() {
