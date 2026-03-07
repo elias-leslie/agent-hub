@@ -67,8 +67,7 @@ def _apply_identity_fields(
         payload["purpose"] = purpose
     if external_id:
         payload["external_id"] = external_id
-    if use_memory:
-        payload["use_memory"] = True
+    payload["use_memory"] = use_memory
     if memory_group_id:
         payload["memory_group_id"] = memory_group_id
     if routing_config:
