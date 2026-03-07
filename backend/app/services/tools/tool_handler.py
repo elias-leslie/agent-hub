@@ -50,6 +50,7 @@ class DirectToolHandler(ToolHandler):
         working_dir: str | None = None,
         pre_hook: PreToolUseHook | None = None,
         project_id: str | None = None,
+        session_id: str | None = None,
     ):
         """Initialize with working directory and optional permission hook.
 
@@ -59,7 +60,11 @@ class DirectToolHandler(ToolHandler):
             project_id: Project ID for agent consultation (enables consult_agent)
         """
         super().__init__(pre_hook=pre_hook)
-        self._executor = DirectToolExecutor(working_dir, project_id=project_id)
+        self._executor = DirectToolExecutor(
+            working_dir,
+            project_id=project_id,
+            session_id=session_id,
+        )
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call with permission checking."""
@@ -153,6 +158,7 @@ def create_direct_handler(
     working_dir: str | None = None,
     permission_config: dict[str, str | list[str]] | None = None,
     project_id: str | None = None,
+    session_id: str | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
 
@@ -192,4 +198,9 @@ def create_direct_handler(
     elif len(hooks) > 1:
         pre_hook = _compose_hooks(hooks)
 
-    return DirectToolHandler(working_dir, pre_hook=pre_hook, project_id=project_id)
+    return DirectToolHandler(
+        working_dir,
+        pre_hook=pre_hook,
+        project_id=project_id,
+        session_id=session_id,
+    )

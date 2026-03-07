@@ -121,7 +121,12 @@ class DirectToolExecutor:
         "query_sessions",
     })
 
-    def __init__(self, working_dir: str | None = None, project_id: str | None = None):
+    def __init__(
+        self,
+        working_dir: str | None = None,
+        project_id: str | None = None,
+        session_id: str | None = None,
+    ):
         """Initialize executor with optional working directory and project context.
 
         When working_dir is not provided (e.g. headless/worker contexts like
@@ -135,6 +140,7 @@ class DirectToolExecutor:
             self.working_dir.mkdir(parents=True, exist_ok=True)
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
+        self._session_id = session_id
         self._allowed_root: Path | None = self._resolve_project_root(project_id)
         self._registry: dict[str, Any] = build_tool_registry(project_id, self.bash)
 
@@ -213,4 +219,10 @@ class DirectToolExecutor:
         from app.services.tools._executor_consultation import dispatch_agent as _dispatch
         # Use provided project_id (from tool args) or fall back to executor's project
         effective_project_id = project_id or self._project_id
-        return await _dispatch(effective_project_id, agent_slug, task, max_turns)
+        return await _dispatch(
+            effective_project_id,
+            agent_slug,
+            task,
+            max_turns,
+            parent_session_id=self._session_id,
+        )

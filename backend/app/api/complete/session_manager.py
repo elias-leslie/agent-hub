@@ -29,6 +29,7 @@ async def _create_session(
     request_source: str | None,
     agent_slug: str | None,
     current_branch: str | None,
+    parent_session_id: str | None,
 ) -> _SessionResult:
     session, _ = await upsert_session(
         db=db,
@@ -43,6 +44,7 @@ async def _create_session(
             request_source=request_source,
             agent_slug=agent_slug,
             current_branch=current_branch,
+            parent_session_id=parent_session_id,
         ),
     )
     return session, [], True
@@ -60,6 +62,7 @@ async def get_or_create_session(
     request_source: str | None = None,
     agent_slug: str | None = None,
     current_branch: str | None = None,
+    parent_session_id: str | None = None,
 ) -> _SessionResult:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     from app.constants import VALID_PROJECT_IDS
@@ -79,12 +82,14 @@ async def get_or_create_session(
                 return await _create_session(
                     db, None, project_id, provider, model, session_type,
                     external_id, client_id, request_source, "persona", current_branch,
+                    parent_session_id,
                 )
             return existing
 
     return await _create_session(
         db, session_id, project_id, provider, model, session_type,
         external_id, client_id, request_source, agent_slug, current_branch,
+        parent_session_id,
     )
 
 

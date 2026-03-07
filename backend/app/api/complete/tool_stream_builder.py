@@ -23,6 +23,7 @@ def build_event_stream(
     permission_config: dict[str, Any] | None,
     max_turns: int,
     project_id: str | None,
+    session_id: str,
 ) -> Any:
     """Select and return the appropriate async event stream for the provider."""
     if provider in _OPENAI_COMPAT_PROVIDERS:
@@ -30,7 +31,7 @@ def build_event_stream(
 
         return adapt_openai_stream(
             adapter, messages, model, tools or [],
-            working_dir, permission_config, max_turns, project_id,
+            working_dir, permission_config, max_turns, project_id, session_id,
         )
     if provider == "claude":
         from .claude_event_adapter import adapt_claude_stream

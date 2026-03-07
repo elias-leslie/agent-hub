@@ -48,7 +48,9 @@ async def iter_stream_sse_with_tools(
     from app.services.tools.tool_handler import create_direct_handler
 
     handler = create_direct_handler(
-        working_dir=stream_kwargs.get("working_dir"), project_id=project_id,
+        working_dir=stream_kwargs.get("working_dir"),
+        project_id=project_id,
+        session_id=ctx.session_id,
     )
     current_messages = list(messages)
 

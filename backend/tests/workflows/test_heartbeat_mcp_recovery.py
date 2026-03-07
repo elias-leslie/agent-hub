@@ -86,9 +86,51 @@ class TestDispatchAgentFireAndForget:
             event_type="dispatch",
             thinking_level="medium",
             max_turns=25,
+            parent_session_id=None,
         )
         assert "Dispatched git-agent" in result
         assert "heartbeat" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_forwards_parent_session_id(self):
+        """dispatch_agent links wake sessions back to the current parent session."""
+        mock_db = AsyncMock()
+        mock_resolved = MagicMock()
+        mock_resolved.model = "codex/gpt-5.4"
+        mock_resolved.provider = "codex"
+        mock_resolved.agent.temperature = 0.2
+        mock_resolved.agent.thinking_level = "high"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            await dispatch_agent(
+                "summitflow",
+                "debugger",
+                "Advance the stale task recovery flow.",
+                parent_session_id="parent-session-123",
+            )
+
+        mock_wake.assert_called_once_with(
+            agent_slug="debugger",
+            model="codex/gpt-5.4",
+            provider="codex",
+            temperature=0.2,
+            prompt="Advance the stale task recovery flow.",
+            project_id="summitflow",
+            event_type="dispatch",
+            thinking_level="high",
+            max_turns=25,
+            parent_session_id="parent-session-123",
+        )
 
     @pytest.mark.asyncio
     async def test_dispatch_agent_does_not_call_complete_internal(self):
@@ -235,4 +277,3 @@ class TestRetryFailedMcpTools:
             task="Fix the biome thread bug",
             max_turns=25,
         )
-

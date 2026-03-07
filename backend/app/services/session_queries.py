@@ -14,6 +14,7 @@ def apply_session_filters(
     status: str | None = None,
     agent_slug: str | None = None,
     session_type: str | None = None,
+    parent_session_id: str | None = None,
 ) -> tuple[Select[tuple[Session]], Select[tuple[int]]]:
     """Apply filters to session queries.
 
@@ -40,6 +41,9 @@ def apply_session_filters(
     if session_type:
         query = query.where(Session.session_type == session_type)
         count_query = count_query.where(Session.session_type == session_type)
+    if parent_session_id:
+        query = query.where(Session.parent_session_id == parent_session_id)
+        count_query = count_query.where(Session.parent_session_id == parent_session_id)
 
     return query, count_query
 

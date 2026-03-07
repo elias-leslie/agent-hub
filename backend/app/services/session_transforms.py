@@ -151,6 +151,7 @@ def build_session_list_items(
             status=s.status,
             agent_slug=s.agent_slug,
             session_type=s.session_type or "completion",
+            parent_session_id=s.parent_session_id,
             summary_oneliner=s.summary_oneliner,
             message_count=msg_counts.get(s.id, 0),
             total_input_tokens=token_stats.get(s.id, {}).get("input", 0),

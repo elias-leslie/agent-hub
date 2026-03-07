@@ -331,6 +331,10 @@ QUERY_SESSIONS_TOOL = Tool(
                 "description": "Max sessions to return (default: 10)",
                 "default": 10,
             },
+            "parent_session_id": {
+                "type": "string",
+                "description": "Filter to sessions dispatched from a specific parent session",
+            },
         },
     },
 )
