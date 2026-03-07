@@ -19,7 +19,7 @@ _FINANCE_MEMORY_CONFIG: dict[str, object] = {
     "include_guardrails": False,
     "reference_index": False,
     "continuity_enabled": False,
-    "include_tags": [],
+    "include_tags": ["finance-relevant"],
     "exclude_tags": [],
 }
 
