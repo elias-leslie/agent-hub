@@ -247,6 +247,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/main",
+                "working_dir": "/tmp/worktrees/task-777-main",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -258,6 +259,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/follow-up",
+                "working_dir": "/tmp/worktrees/task-777-follow-up",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -275,6 +277,34 @@ class TestGetWorkstreamInventory:
         assert "task-777" in result
         assert "state=mixed" in result
         assert "branches=2" in result
+        assert "worktree=/tmp/worktrees/task-777-follow-up" in result or "worktree=/tmp/worktrees/task-777-main" in result
+
+    @pytest.mark.asyncio
+    async def test_reports_worktree_path_when_lane_has_working_dir(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-7",
+                "agent_slug": "refactor",
+                "project_id": "terminal",
+                "external_id": "task-999",
+                "current_branch": "task-999/main",
+                "working_dir": "/home/kasadis/.local/share/st/worktrees/terminal/task-999",
+                "status": "active",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 2,
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-999" in result
+        assert "worktree=/home/kasadis/.local/share/st/worktrees/terminal/task-999" in result
 
     @pytest.mark.asyncio
     async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:

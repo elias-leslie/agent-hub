@@ -178,6 +178,7 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
                 Session.project_id,
                 Session.external_id,
                 Session.current_branch,
+                Session.provider_metadata,
                 Session.status,
                 Session.workstream_status,
                 Session.workstream_note,
@@ -208,6 +209,11 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
             "project_id": row.project_id,
             "external_id": row.external_id,
             "current_branch": row.current_branch,
+            "working_dir": (
+                row.provider_metadata.get("cwd")
+                if isinstance(row.provider_metadata, dict)
+                else None
+            ),
             "status": row.status,
             "workstream_status": row.workstream_status,
             "workstream_note": row.workstream_note,
@@ -308,6 +314,11 @@ def _format_workstream_lane(
         for row in lane_rows
         if row.get("workstream_status")
     }
+    working_dirs = {
+        str(row["working_dir"])
+        for row in lane_rows
+        if row.get("working_dir")
+    }
     state = _classify_workstream_lane(lane_rows)
     next_action = _build_workstream_next_action(
         state=state,
@@ -326,6 +337,8 @@ def _format_workstream_lane(
         parts.append(f"lifecycle={','.join(sorted(workstream_statuses))}")
     if branches:
         parts.append(f"branches={len(branches)}")
+    if working_dirs:
+        parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
     if agents:
         parts.append(f"agents={','.join(sorted(agents))}")
     parts.append(f"next={next_action}")
