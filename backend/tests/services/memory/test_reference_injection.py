@@ -9,6 +9,7 @@ import pytest
 
 from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_injector import format_context_with_reference_index
+from app.services.memory.context_injector_blocks_helpers import episode_to_result
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -26,6 +27,18 @@ def _reference_result(uuid: str, content: str, score: float = 0.72) -> MemorySea
 
 
 class TestReferenceInjection:
+    def test_episode_to_result_normalizes_null_tags(self) -> None:
+        result = episode_to_result(
+            {
+                "uuid": "f2ae2668-da26-46e1-b499-ffac6141e377",
+                "content": "**Session Surfaces**: Use ownership for normalized lane truth.",
+                "tags": None,
+            }
+        )
+
+        assert result is not None
+        assert result.tags == []
+
     @pytest.mark.asyncio
     async def test_build_progressive_context_injects_query_relevant_references(self) -> None:
         settings = MemorySettingsDTO(

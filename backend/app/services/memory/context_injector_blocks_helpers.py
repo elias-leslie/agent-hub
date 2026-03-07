@@ -19,6 +19,13 @@ def _safe_created_at(raw: Any) -> datetime:
     return datetime.now(UTC)
 
 
+def _safe_tags(raw: Any) -> list[str]:
+    """Normalize nullable or malformed tags into a list of strings."""
+    if isinstance(raw, list):
+        return [str(tag) for tag in raw if tag is not None]
+    return []
+
+
 def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SYSTEM) -> MemorySearchResult | None:
     """Convert a raw episode dict to a MemorySearchResult, or None if content is missing."""
     content = ep.get("content") or ""
@@ -35,7 +42,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
-        tags=ep.get("tags", []),
+        tags=_safe_tags(ep.get("tags")),
     )
 
 
@@ -67,7 +74,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             created_at=created_at,
             facts=[content],
             pinned=ep.get("pinned", False),
-            tags=ep.get("tags", []),
+            tags=_safe_tags(ep.get("tags")),
         )
     except Exception as e:
         logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
@@ -93,5 +100,5 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
-        tags=ep.get("tags", []),
+        tags=_safe_tags(ep.get("tags")),
     )
