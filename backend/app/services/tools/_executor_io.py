@@ -14,6 +14,74 @@ from collections.abc import Awaitable, Callable
 logger = logging.getLogger(__name__)
 
 
+async def _reconcile_task_lane(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str:
+    """Reconcile a task lane using Agent Hub session evidence.
+
+    Auto-closes only the obvious safe case:
+    - no active sessions linked to the task
+    - at least one completed session linked to the task
+
+    Ambiguous or active lanes are reported but not mutated.
+    """
+    from sqlalchemy import select
+
+    from app.db import async_session
+    from app.models import Session
+
+    async with async_session() as db:
+        query = (
+            select(Session)
+            .where(
+                Session.external_id == task_id,
+                Session.agent_slug.isnot(None),
+            )
+            .order_by(Session.created_at.desc())
+            .limit(20)
+        )
+        sessions = (await db.execute(query)).scalars().all()
+
+    if not sessions:
+        return (
+            f"Reconcile skipped for {task_id}: no linked Agent Hub sessions found. "
+            "Use manage_tasks(action=\"get_context\") or query_sessions() first."
+        )
+
+    active_sessions = [s for s in sessions if s.status == "active"]
+    if active_sessions:
+        return (
+            f"Reconcile blocked for {task_id}: still has {len(active_sessions)} active "
+            "session(s). Verify whether the lane is truly stale before closing it."
+        )
+
+    completed_sessions = [s for s in sessions if s.status == "completed"]
+    if not completed_sessions:
+        statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
+        return (
+            f"Reconcile skipped for {task_id}: no completed sessions to justify closure "
+            f"(statuses={statuses or 'unknown'})."
+        )
+
+    summary = next(
+        (
+            str(s.summary_oneliner).strip()
+            for s in completed_sessions
+            if s.summary_oneliner and str(s.summary_oneliner).strip()
+        ),
+        "completed work",
+    )
+    summary = " ".join(summary.split())
+    message = f"Reconciled from Agent Hub session evidence: {summary}"
+    cmd = _st_cmd(
+        f"done {shlex.quote(task_id)} --message {shlex.quote(message)}",
+        project_id,
+    )
+    return await bash_fn(cmd)
+
+
 async def send_push(
     title: str,
     body: str,
@@ -199,6 +267,11 @@ async def manage_tasks(
             return "Error: task_id required for dispatch"
         return await _handle_dispatch(bash_fn, task_id, project_id)
 
+    if action == "reconcile":
+        if not task_id:
+            return "Error: task_id required for reconcile"
+        return await _reconcile_task_lane(bash_fn, task_id, project_id)
+
     if action == "done":
         if not task_id:
             return "Error: task_id required for done"
@@ -216,5 +289,5 @@ async def manage_tasks(
 
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/done/abandon/cancel."
+        "Use overview/get_context/create/dispatch/reconcile/done/abandon/cancel."
     )
