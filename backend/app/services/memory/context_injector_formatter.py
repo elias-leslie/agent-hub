@@ -8,7 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .citation_parser import format_guardrail_citation, format_mandate_citation
+from .citation_parser import (
+    format_guardrail_citation,
+    format_mandate_citation,
+    format_reference_citation,
+)
 from .context_injector_debug import (
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
@@ -74,7 +78,7 @@ def format_context_with_reference_index(
     parts: list[str] = []
 
     # 1. Header
-    if reference_episodes or context.mandates or context.guardrails:
+    if reference_episodes or context.mandates or context.guardrails or context.reference:
         parts.append(
             MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
         )
@@ -94,7 +98,15 @@ def format_context_with_reference_index(
         for g in context.guardrails:
             parts.append(_format_memory_item(g, "G", include_citations))
 
-    # 4. References
+    # 4. Directly injected references
+    if context.reference:
+        if parts:
+            parts.append("")
+        parts.append("## References")
+        for r in context.reference:
+            parts.append(_format_memory_item(r, "R", include_citations))
+
+    # 5. Reference index fallback
     if reference_episodes:
         parts.extend(_format_references(reference_episodes, include_citations))
 
@@ -106,11 +118,11 @@ def _format_memory_item(
 ) -> str:
     """Helper to format a single mandate or guardrail item."""
     if include_citations and item.uuid:
-        citation = (
-            format_mandate_citation(item.uuid)
-            if type_prefix == "M"
-            else format_guardrail_citation(item.uuid)
-        )
+        citation = {
+            "M": format_mandate_citation,
+            "G": format_guardrail_citation,
+            "R": format_reference_citation,
+        }[type_prefix](item.uuid)
         return f"- {citation} {item.content}"
     return f"- {item.content}"
 

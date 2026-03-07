@@ -43,12 +43,14 @@ def apply_count_limits(
 def compute_token_counts(
     mandates: list[MemorySearchResult],
     guardrails: list[MemorySearchResult],
-) -> tuple[int, int]:
-    """Compute total tokens for mandates and guardrails.
+    references: list[MemorySearchResult],
+) -> tuple[int, int, int]:
+    """Compute total tokens for mandates, guardrails, and references.
 
     Returns:
-        Tuple of (mandates_tokens, guardrails_tokens)
+        Tuple of (mandates_tokens, guardrails_tokens, reference_tokens)
     """
     mandates_tokens = sum(count_tokens(m.content) for m in mandates)
     guardrails_tokens = sum(count_tokens(g.content) for g in guardrails)
-    return mandates_tokens, guardrails_tokens
+    reference_tokens = sum(count_tokens(r.content) for r in references)
+    return mandates_tokens, guardrails_tokens, reference_tokens

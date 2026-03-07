@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 def apply_budget_enforcement(
     mandates: list[MemorySearchResult],
     guardrails: list[MemorySearchResult],
+    references: list[MemorySearchResult],
     budget: BudgetUsage,
-) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
-    """Apply budget caps to mandates and guardrails using 60/40 split.
+) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
+    """Apply budget caps to mandates, guardrails, and references using 55/30/15 split.
 
     Args:
         mandates: List of mandate episodes
@@ -23,11 +24,12 @@ def apply_budget_enforcement(
         budget: BudgetUsage object with total_budget set
 
     Returns:
-        Tuple of (filtered_mandates, filtered_guardrails)
+        Tuple of (filtered_mandates, filtered_guardrails, filtered_references)
     """
     total_budget = budget.total_budget
-    mandates_cap = int(total_budget * 0.6)
-    guardrails_cap = int(total_budget * 0.4)
+    mandates_cap = int(total_budget * 0.55)
+    guardrails_cap = int(total_budget * 0.30)
+    references_cap = max(0, total_budget - mandates_cap - guardrails_cap)
 
     mandates_tokens = 0
     filtered_mandates = []
@@ -53,15 +55,29 @@ def apply_budget_enforcement(
             )
             break
 
+    reference_tokens = 0
+    filtered_references = []
+    for r in references:
+        tokens = count_tokens(r.content)
+        if reference_tokens + tokens <= references_cap:
+            filtered_references.append(r)
+            reference_tokens += tokens
+        else:
+            logger.debug("References tier cap hit: %d/%d tokens", reference_tokens, references_cap)
+            break
+
     logger.info(
-        "Budget allocation: M=%d/%d G=%d/%d",
+        "Budget allocation: M=%d/%d G=%d/%d R=%d/%d",
         mandates_tokens,
         mandates_cap,
         guardrails_tokens,
         guardrails_cap,
+        reference_tokens,
+        references_cap,
     )
 
     budget.mandates_tokens = mandates_tokens
     budget.guardrails_tokens = guardrails_tokens
+    budget.reference_tokens = reference_tokens
 
-    return filtered_mandates, filtered_guardrails
+    return filtered_mandates, filtered_guardrails, filtered_references

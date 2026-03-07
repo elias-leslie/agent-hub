@@ -12,6 +12,7 @@ from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
 from .context_builder_processors import apply_count_limits, compute_token_counts
 from .context_builder_settings import apply_memory_config_overrides
+from .context_injector_queries import get_query_relevant_references_as_search_results
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
 
@@ -66,14 +67,23 @@ def _apply_limits_and_budget(context: ProgressiveContext, settings: Any) -> Budg
     budget.reference_total = len(context.reference)
 
     context.mandates, context.guardrails = apply_count_limits(context.mandates, context.guardrails, settings)
-    budget.mandates_tokens, budget.guardrails_tokens = compute_token_counts(context.mandates, context.guardrails)
+    budget.mandates_tokens, budget.guardrails_tokens, budget.reference_tokens = compute_token_counts(
+        context.mandates,
+        context.guardrails,
+        context.reference,
+    )
 
     if settings.budget_enabled:
-        context.mandates, context.guardrails = apply_budget_enforcement(context.mandates, context.guardrails, budget)
+        context.mandates, context.guardrails, context.reference = apply_budget_enforcement(
+            context.mandates,
+            context.guardrails,
+            context.reference,
+            budget,
+        )
     else:
         logger.debug(
             "Budget enforcement disabled - injecting all %d memories (%d tokens)",
-            len(context.mandates) + len(context.guardrails),
+            len(context.mandates) + len(context.guardrails) + len(context.reference),
             budget.total_tokens,
         )
     return budget
@@ -132,6 +142,18 @@ async def build_progressive_context(
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
         scopes_to_query, include_mandates, include_guardrails, task_type, phase
     )
+    selected_reference_payloads = await get_query_relevant_references_as_search_results(
+        query,
+        scopes_to_query,
+    )
+    if selected_reference_payloads:
+        existing = {item.uuid for item in context.reference}
+        for payload in selected_reference_payloads:
+            result = MemorySearchResult.model_validate(payload)
+            if result.uuid in existing:
+                continue
+            context.reference.append(result)
+            existing.add(result.uuid)
 
     settings = await get_memory_settings()
     apply_memory_config_overrides(settings, memory_config)
