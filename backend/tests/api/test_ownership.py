@@ -10,7 +10,7 @@ import pytest
 
 from app.db import get_db
 from app.main import app
-from app.services.ownership_inventory import OwnershipOwner
+from app.services.ownership_inventory import ActiveSpecialistSession, OwnershipOwner
 from tests.conftest import APITestClient
 
 
@@ -78,6 +78,22 @@ class TestProjectOwnership:
                     ]
                 ),
             ),
+            patch(
+                "app.api.ownership.query_project_active_specialists",
+                new=AsyncMock(
+                    return_value=[
+                        ActiveSpecialistSession(
+                            session_id="spec-1",
+                            agent_slug="reviewer",
+                            project_id="agent-hub",
+                            parent_session_id="parent-1",
+                            request_source="dispatch",
+                            created_at=datetime(2026, 3, 7, 18, 5, tzinfo=UTC),
+                            age_minutes=3,
+                        )
+                    ]
+                ),
+            ),
         ):
             response = client.get("/api/ownership/projects/agent-hub/live")
 
@@ -94,6 +110,9 @@ class TestProjectOwnership:
         ]
         assert data["active_owners"][1]["ownership_kind"] == "unscoped"
         assert data["active_owners"][1]["scope_paths"] == []
+        assert len(data["active_specialists"]) == 1
+        assert data["active_specialists"][0]["agent_slug"] == "reviewer"
+        assert data["active_specialists"][0]["request_source"] == "dispatch"
 
     def test_live_project_ownership_propagates_empty_inventory(
         self, client: APITestClient
@@ -103,8 +122,13 @@ class TestProjectOwnership:
                 "app.api.ownership.query_project_ownership",
                 new=AsyncMock(return_value=[]),
             ),
+            patch(
+                "app.api.ownership.query_project_active_specialists",
+                new=AsyncMock(return_value=[]),
+            ),
         ):
             response = client.get("/api/ownership/projects/summitflow/live")
 
         assert response.status_code == 200
         assert response.json()["active_owners"] == []
+        assert response.json()["active_specialists"] == []

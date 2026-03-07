@@ -8,9 +8,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.ownership import OwnershipOwnerResponse, ProjectOwnershipResponse
+from app.api.schemas.ownership import (
+    ActiveSpecialistSessionResponse,
+    OwnershipOwnerResponse,
+    ProjectOwnershipResponse,
+)
 from app.db import get_db
-from app.services.ownership_inventory import query_project_ownership
+from app.services.ownership_inventory import (
+    query_project_active_specialists,
+    query_project_ownership,
+)
 
 router = APIRouter(prefix="/ownership", tags=["ownership"])
 
@@ -22,12 +29,19 @@ async def get_live_project_ownership(
 ) -> ProjectOwnershipResponse:
     """Return normalized live ownership rows for a project."""
     owners = await query_project_ownership(db, project_id)
+    specialists = await query_project_active_specialists(db, project_id)
     return ProjectOwnershipResponse(
         project_id=project_id,
         generated_at=datetime.now(UTC),
         active_owners=[
             OwnershipOwnerResponse.model_validate(owner, from_attributes=True)
             for owner in owners
+        ],
+        active_specialists=[
+            ActiveSpecialistSessionResponse.model_validate(
+                specialist, from_attributes=True
+            )
+            for specialist in specialists
         ],
     )
 
