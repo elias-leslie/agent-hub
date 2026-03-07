@@ -24,7 +24,7 @@ _TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "fa
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
     """Load recent Agent Hub sessions linked to a task lane."""
-    from sqlalchemy import select
+    from sqlalchemy import or_, select
 
     from app.db import async_session
     from app.models import Session
@@ -33,7 +33,11 @@ async def _load_task_lane_sessions(task_id: str) -> list[Session]:
         query = (
             select(Session)
             .where(
-                Session.external_id == task_id,
+                or_(
+                    Session.external_id == task_id,
+                    Session.current_branch == task_id,
+                    Session.current_branch.like(f"{task_id}/%"),
+                ),
                 Session.agent_slug.isnot(None),
             )
             .order_by(Session.created_at.desc())
