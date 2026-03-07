@@ -30,6 +30,20 @@ _CODING_TASK_KEYWORDS = (
 )
 
 
+def _session_working_dir(session: object) -> str | None:
+    metadata = getattr(session, "provider_metadata", None)
+    if not isinstance(metadata, dict):
+        return None
+    cwd = metadata.get("cwd")
+    return cwd if isinstance(cwd, str) and cwd else None
+
+
+def _provider_model_label(provider: str, model: str) -> str:
+    """Format provider/model without duplicating already-prefixed model ids."""
+    prefix = f"{provider}/"
+    return model if model.startswith(prefix) else f"{provider}/{model}"
+
+
 def _looks_like_coding_task(task: str) -> bool:
     """Heuristic to detect tasks likely requiring code modification."""
     task_lc = task.lower()
@@ -286,10 +300,20 @@ async def query_sessions(
             summary = ""
             if s.summary_oneliner:
                 summary = f" — {s.summary_oneliner}"
-            external_id = f" | task={s.external_id}" if s.external_id else ""
+            lane_parts: list[str] = []
+            if s.external_id:
+                lane_parts.append(f"task={s.external_id}")
+            if getattr(s, "current_branch", None):
+                lane_parts.append(f"branch={s.current_branch}")
+            if getattr(s, "workstream_status", None):
+                lane_parts.append(f"lane={s.workstream_status}")
+            if cwd := _session_working_dir(s):
+                lane_parts.append(f"cwd={cwd}")
+            lane_suffix = f" | {' | '.join(lane_parts)}" if lane_parts else ""
             lines.append(
                 f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
-                f"{s.provider}/{s.model}{external_id} | status={s.status} | {time_label}{summary}"
+                f"{_provider_model_label(s.provider, s.model)}{lane_suffix} | "
+                f"status={s.status} | {time_label}{summary}"
             )
         return "\n".join(lines)
     except Exception as e:
