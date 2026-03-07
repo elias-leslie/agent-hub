@@ -4,6 +4,7 @@ import pytest
 
 from app.services.tools._worktree_boundary_hook import (
     _is_write_allowed,
+    _resolve_target_path,
     create_worktree_boundary_hook,
 )
 from app.services.tools.base import ToolCall, ToolDecision
@@ -42,6 +43,14 @@ class TestIsWriteAllowed:
         target = Path.home() / ".claude" / "settings.json"
         assert _is_write_allowed(target, boundary) is True
 
+    def test_resolve_target_path_uses_boundary_for_relative_paths(self, tmp_path):
+        boundary = tmp_path / "worktree"
+        boundary.mkdir()
+
+        resolved = _resolve_target_path("backend/app/main.py", boundary)
+
+        assert resolved == (boundary / "backend/app/main.py").resolve()
+
 
 class TestWorktreeBoundaryHook:
     """Integration tests for the full hook."""
@@ -53,6 +62,15 @@ class TestWorktreeBoundaryHook:
         hook = create_worktree_boundary_hook(str(worktree))
 
         tc = ToolCall(id="1", name="write_file", input={"path": str(worktree / "file.py")})
+        assert await hook(tc) == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_relative_write_inside_worktree_allowed(self, tmp_path):
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        hook = create_worktree_boundary_hook(str(worktree))
+
+        tc = ToolCall(id="1a", name="write_file", input={"path": "backend/cli/file.py"})
         assert await hook(tc) == ToolDecision.ALLOW
 
     @pytest.mark.asyncio

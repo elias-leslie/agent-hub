@@ -10,10 +10,10 @@ Agent definitions are organized in focused sub-modules:
 - _support_utility:      validator, designer, reasoner, voice-responder, complexity-assessor
 """
 
-from seed_agents_data._support_analysis import ANALYSIS_AGENTS
-from seed_agents_data._support_coordination import COORDINATION_AGENTS
-from seed_agents_data._support_memory import MEMORY_AGENTS
-from seed_agents_data._support_utility import UTILITY_AGENTS
+from ._support_analysis import ANALYSIS_AGENTS
+from ._support_coordination import COORDINATION_AGENTS
+from ._support_memory import MEMORY_AGENTS
+from ._support_utility import UTILITY_AGENTS
 
 # Preserve the original ordering of agents.
 # Original order: supervisor, analyst, validator, explorer, specifier, designer, reasoner,
