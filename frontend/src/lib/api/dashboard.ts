@@ -107,6 +107,20 @@ export interface HeartbeatStatusResponse {
   last_run: string | null;
   elapsed_seconds: number | null;
   interval_minutes: number;
+  runtime: HeartbeatRuntimeInfo | null;
+}
+
+export interface HeartbeatRuntimeInfo {
+  model: string;
+  provider: string;
+  model_display_name: string | null;
+  thinking_level: string | null;
+  supports_tools: boolean;
+  supports_thinking: boolean;
+  supports_verbosity: boolean;
+  supports_session_cache: boolean;
+  heartbeat_supported: boolean;
+  warnings: string[];
 }
 
 export interface HeartbeatTriggerResponse {

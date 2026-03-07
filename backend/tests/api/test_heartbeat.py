@@ -25,6 +25,11 @@ class TestHeartbeatStatus:
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             response = api_client.get("/api/heartbeat/status")
 
@@ -52,6 +57,11 @@ class TestHeartbeatStatus:
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             response = api_client.get("/api/heartbeat/status")
 
@@ -77,6 +87,11 @@ class TestHeartbeatStatus:
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
         ):
             response = api_client.get("/api/heartbeat/status")
 
@@ -84,6 +99,49 @@ class TestHeartbeatStatus:
         data = response.json()
         assert data["running"] is False
         assert data["last_run"] is None
+
+    def test_heartbeat_status_includes_runtime_metadata(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat.get_heartbeat_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_last_run_info",
+                new_callable=AsyncMock,
+                return_value="2026-03-03T10:00:00+00:00",
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value={
+                    "model": "codex/gpt-5.4",
+                    "provider": "codex",
+                    "model_display_name": "GPT-5.4 (Codex)",
+                    "thinking_level": "medium",
+                    "supports_tools": True,
+                    "supports_thinking": True,
+                    "supports_verbosity": True,
+                    "supports_session_cache": True,
+                    "heartbeat_supported": True,
+                    "warnings": [],
+                },
+            ),
+        ):
+            response = api_client.get("/api/heartbeat/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["runtime"]["model"] == "codex/gpt-5.4"
+        assert data["runtime"]["provider"] == "codex"
+        assert data["runtime"]["heartbeat_supported"] is True
+        assert data["runtime"]["supports_tools"] is True
 
 
 class TestHeartbeatTrigger:

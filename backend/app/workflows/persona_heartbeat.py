@@ -50,6 +50,21 @@ class HeartbeatResult(BaseModel):
     mcp_retried: int = 0
 
 
+class HeartbeatRuntimeInfo(BaseModel):
+    """Resolved persona heartbeat runtime and compatibility state."""
+
+    model: str
+    provider: str
+    model_display_name: str | None = None
+    thinking_level: str | None = None
+    supports_tools: bool
+    supports_thinking: bool
+    supports_verbosity: bool
+    supports_session_cache: bool
+    heartbeat_supported: bool
+    warnings: list[str] = []
+
+
 async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
     """Return (model, provider, temperature, thinking_level, system_content, memory_config) for persona agent."""
     from app.services.agent_routing import get_provider_for_model
@@ -65,6 +80,42 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, d
         agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT, task_type="heartbeat"
     )
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content, agent.memory_config
+
+
+def _build_runtime_warning(model: str) -> str:
+    return f"Heartbeat requires tool execution, but {model} does not support tools."
+
+
+async def get_heartbeat_runtime_info() -> HeartbeatRuntimeInfo:
+    """Return the resolved model/provider and whether heartbeat can run on it."""
+    from app.adapters.registry import supports_thinking, supports_tools
+    from app.constants.catalog import get_model_capabilities, get_model_entry
+    from app.db import async_session
+
+    async with async_session() as db:
+        model, provider, _, thinking_level, _, _ = await _resolve_persona(db)
+
+    capabilities = get_model_capabilities(model)
+    entry = get_model_entry(model)
+    tool_support = supports_tools(provider, model)
+    thinking_support = supports_thinking(provider, model)
+
+    warnings: list[str] = []
+    if not tool_support:
+        warnings.append(_build_runtime_warning(model))
+
+    return HeartbeatRuntimeInfo(
+        model=model,
+        provider=provider,
+        model_display_name=entry.name if entry else None,
+        thinking_level=thinking_level,
+        supports_tools=tool_support,
+        supports_thinking=thinking_support,
+        supports_verbosity=bool(capabilities and capabilities.supports_verbosity),
+        supports_session_cache=bool(capabilities and capabilities.supports_session_cache),
+        heartbeat_supported=tool_support,
+        warnings=warnings,
+    )
 
 
 async def get_heartbeat_interval() -> tuple[int, bool]:
@@ -172,18 +223,7 @@ async def _do_completion(interval_minutes: int):
     return result
 
 
-@hatchet.task(
-    name="persona-heartbeat",
-    input_validator=HeartbeatInput,
-    on_crons=["*/5 * * * *"],
-    execution_timeout="7200s",
-    concurrency=ConcurrencyExpression(
-        expression="'persona_heartbeat'",
-        max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
-    ),
-)
-async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
+async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
     """Periodic persona check-in via complete_internal."""
     manual = input.manual
 
@@ -204,6 +244,16 @@ async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[st
         ctx.log("Heartbeat skipped (project_permission_off)")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
+    runtime = await get_heartbeat_runtime_info()
+    if not runtime.heartbeat_supported:
+        warning = runtime.warnings[0] if runtime.warnings else _build_runtime_warning(runtime.model)
+        ctx.log(f"Heartbeat skipped (runtime_incompatible: {warning})")
+        return HeartbeatResult(
+            status="skipped",
+            interval_minutes=interval_minutes,
+            error=warning,
+        ).model_dump()
+
     await set_heartbeat_running()
     try:
         out = await _execute_heartbeat(interval_minutes)
@@ -211,3 +261,18 @@ async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[st
         return out.model_dump()
     finally:
         await clear_heartbeat_running()
+
+
+@hatchet.task(
+    name="persona-heartbeat",
+    input_validator=HeartbeatInput,
+    on_crons=["*/5 * * * *"],
+    execution_timeout="7200s",
+    concurrency=ConcurrencyExpression(
+        expression="'persona_heartbeat'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
+    ),
+)
+async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
+    return await _run_persona_heartbeat(input, ctx)

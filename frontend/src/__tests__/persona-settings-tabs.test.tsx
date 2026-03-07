@@ -10,6 +10,7 @@ import type { PersonaAutosaveState } from "@/app/persona/hooks/usePersona";
 const mockPreviewVoice = vi.fn();
 const mockSetSelectedVoice = vi.fn();
 const mockSetTtsEnabled = vi.fn();
+const mockHeartbeatStatus = vi.fn();
 
 vi.mock("@/lib/api-config", () => ({
   buildApiUrl: (path: string) => path,
@@ -40,6 +41,14 @@ vi.mock("@agent-hub/chat-ui", () => ({
     setSelectedVoice: mockSetSelectedVoice,
     setTtsEnabled: mockSetTtsEnabled,
     previewVoice: mockPreviewVoice,
+  }),
+}));
+
+vi.mock("@/app/persona/hooks/useHeartbeat", () => ({
+  useHeartbeat: () => ({
+    status: mockHeartbeatStatus(),
+    trigger: vi.fn(),
+    isTriggering: false,
   }),
 }));
 
@@ -86,6 +95,24 @@ describe("persona settings tabs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    mockHeartbeatStatus.mockReturnValue({
+      running: false,
+      last_run: null,
+      elapsed_seconds: null,
+      interval_minutes: 60,
+      runtime: {
+        model: "claude-opus-4-6",
+        provider: "claude",
+        model_display_name: "Claude Opus 4.6",
+        thinking_level: "medium",
+        supports_tools: true,
+        supports_thinking: true,
+        supports_verbosity: false,
+        supports_session_cache: false,
+        heartbeat_supported: true,
+        warnings: [],
+      },
+    });
   });
 
   afterEach(() => {
@@ -139,6 +166,8 @@ describe("persona settings tabs", () => {
     expect(onUpdate).toHaveBeenCalledWith({
       heartbeat_instructions: "Check queues and active sessions",
     });
+    expect(screen.getByText("Claude Opus 4.6")).toBeInTheDocument();
+    expect(screen.getByText("Tools: supported")).toBeInTheDocument();
   });
 
   it("filters voices and previews the selected sample", () => {
@@ -211,5 +240,40 @@ describe("persona settings tabs", () => {
     });
 
     expect(screen.getByText("Reset failed with status 500")).toBeInTheDocument();
+  });
+
+  it("shows heartbeat warnings when runtime is incompatible or disabled", () => {
+    mockHeartbeatStatus.mockReturnValue({
+      running: false,
+      last_run: null,
+      elapsed_seconds: null,
+      interval_minutes: 0,
+      runtime: {
+        model: "codex/gpt-5.1-codex-mini",
+        provider: "codex",
+        model_display_name: null,
+        thinking_level: "medium",
+        supports_tools: false,
+        supports_thinking: false,
+        supports_verbosity: false,
+        supports_session_cache: false,
+        heartbeat_supported: false,
+        warnings: [
+          "Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools.",
+        ],
+      },
+    });
+
+    render(
+      <VoiceHeartbeatTab
+        persona={{ ...basePersona, heartbeat_interval_minutes: 0 }}
+        onUpdate={vi.fn()}
+        autosave={idleAutosave}
+      />,
+    );
+
+    expect(screen.getByText("Heartbeat is currently off, so Jenny is not autonomously driving work.")).toBeInTheDocument();
+    expect(screen.getByText("Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools.")).toBeInTheDocument();
+    expect(screen.getByText("Tools: not supported")).toBeInTheDocument();
   });
 });
