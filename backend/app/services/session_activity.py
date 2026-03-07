@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from sqlalchemy import func, select
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import Session, SessionEvent
 
 
-def last_activity_expr():
+def last_activity_expr() -> ColumnElement:
     """Return a SQL expression for the most recent observed session activity.
 
     Session rows are not updated on every SessionEvent insert, so cleanup logic
