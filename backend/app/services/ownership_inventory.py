@@ -16,6 +16,7 @@ from app.services.tools.project_env import detect_main_repo
 _LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 4 * 60
 _GHOST_SESSION_MINUTES = 15
+_ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
 
 
@@ -38,6 +39,19 @@ class OwnershipOwner:
     created_at: datetime
     age_minutes: int
     is_stale: bool
+
+
+@dataclass(frozen=True)
+class ActiveSpecialistSession:
+    """Normalized active non-owner specialist session for live coordination."""
+
+    session_id: str
+    agent_slug: str | None
+    project_id: str
+    parent_session_id: str | None
+    request_source: str | None
+    created_at: datetime
+    age_minutes: int
 
 
 def _infer_task_id(external_id: str | None, branch: str | None) -> str | None:
@@ -187,6 +201,46 @@ async def _fetch_scope_events(
     return grouped
 
 
+async def _fetch_active_specialists(
+    db: AsyncSession,
+    project_id: str,
+) -> list[ActiveSpecialistSession]:
+    """Return active sessions without owner-lane identity for a project."""
+    cutoff = datetime.now(UTC) - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
+    rows = (
+        await db.execute(
+            select(Session)
+            .where(
+                and_(
+                    Session.project_id == project_id,
+                    Session.status == "active",
+                    Session.agent_slug.isnot(None),
+                    Session.created_at >= cutoff,
+                    Session.external_id.is_(None),
+                    Session.current_branch.is_(None),
+                )
+            )
+            .order_by(Session.created_at.desc())
+            .limit(50)
+        )
+    ).scalars().all()
+
+    specialists: list[ActiveSpecialistSession] = []
+    for session in rows:
+        specialists.append(
+            ActiveSpecialistSession(
+                session_id=session.id,
+                agent_slug=session.agent_slug,
+                project_id=session.project_id,
+                parent_session_id=session.parent_session_id,
+                request_source=session.request_source,
+                created_at=_parse_timestamp(session.created_at) or datetime.now(UTC),
+                age_minutes=_age_minutes(session.created_at, session.updated_at),
+            )
+        )
+    return specialists
+
+
 def _extract_scope_paths(events: list[SessionEvent], worktree_path: str | None) -> list[str]:
     """Extract distinct normalized file paths from tool events."""
     paths: list[str] = []
@@ -238,3 +292,11 @@ async def query_project_ownership(
         )
 
     return owners
+
+
+async def query_project_active_specialists(
+    db: AsyncSession,
+    project_id: str,
+) -> list[ActiveSpecialistSession]:
+    """Return normalized active specialist sessions for a project."""
+    return await _fetch_active_specialists(db, project_id)

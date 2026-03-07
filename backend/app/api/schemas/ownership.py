@@ -30,6 +30,18 @@ class OwnershipOwnerResponse(BaseModel):
     is_stale: bool = Field(default=False, description="Whether the lane exceeds stale threshold")
 
 
+class ActiveSpecialistSessionResponse(BaseModel):
+    """A single active non-owner specialist session in a project."""
+
+    session_id: str = Field(..., description="Agent Hub session id")
+    agent_slug: str | None = Field(default=None, description="Active specialist agent slug")
+    project_id: str = Field(..., description="Project id")
+    parent_session_id: str | None = Field(default=None, description="Parent dispatch/session id")
+    request_source: str | None = Field(default=None, description="Request source for the session")
+    created_at: datetime = Field(..., description="Session creation timestamp")
+    age_minutes: int = Field(..., description="Age in minutes from creation/update")
+
+
 class ProjectOwnershipResponse(BaseModel):
     """Project-scoped ownership inventory used by SummitFlow preflight."""
 
@@ -38,4 +50,8 @@ class ProjectOwnershipResponse(BaseModel):
     active_owners: list[OwnershipOwnerResponse] = Field(
         default_factory=list,
         description="Active or recently relevant owners for the project",
+    )
+    active_specialists: list[ActiveSpecialistSessionResponse] = Field(
+        default_factory=list,
+        description="Active non-owner specialist sessions relevant to duplicate-avoidance",
     )
