@@ -165,3 +165,6 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Your heartbeat working directory is persona-sandbox" in prompt
         assert "prefer `dispatch_agent` to a coding-capable specialist" in prompt
         assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
+        assert "Treat recent completed sessions as evidence, not just history." in prompt
+        assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
+        assert "create or advance the recovery task instead of re-opening another review loop" in prompt

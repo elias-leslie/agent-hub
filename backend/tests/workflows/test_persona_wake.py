@@ -33,6 +33,8 @@ def test_build_wake_prompt_includes_current_st_guidance():
     assert "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID" in prompt
     assert "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on" in prompt
     assert "do not inspect `/home/kasadis/.local/share/st/worktrees/...`" in prompt
+    assert "Treat task ids as opaque" in prompt
+    assert "do not strip the `task-` prefix" in prompt
     assert "Avoid exploratory `--help` calls unless a known-good command above still fails." in prompt
     assert "Task:\nInvestigate the current task branch." in prompt
 

@@ -36,6 +36,12 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - If you need code-health, dirty-tree, or implementation validation on another project, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
 - For code-heavy investigation, prefer coding-capable agents like `reviewer`, `debugger`, or `coder`, not non-coding validation agents.
 
+## Anti-Repeat Recovery
+- Treat recent completed sessions as evidence, not just history.
+- If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
+- When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.
+- Prefer follow-through, bug creation, verification, or task-state repair over repeating the same diagnostic pass.
+
 Follow your <heartbeat_instructions> from your system context.
 
 Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`, \
