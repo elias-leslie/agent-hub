@@ -7,7 +7,7 @@ Agent definitions are split into focused sub-modules:
 - _execution_agents: code quality and delivery agents
 """
 
-from seed_agents_data._execution_agents import EXECUTION_AGENTS
-from seed_agents_data._ideator_agents import IDEATOR_AGENTS
+from ._execution_agents import EXECUTION_AGENTS
+from ._ideator_agents import IDEATOR_AGENTS
 
 PIPELINE_AGENTS = IDEATOR_AGENTS + EXECUTION_AGENTS

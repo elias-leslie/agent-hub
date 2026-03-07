@@ -34,6 +34,14 @@ def _is_write_allowed(resolved: Path, boundary: Path) -> bool:
     return any(resolved.is_relative_to(allowed) for allowed in _WRITE_ALLOWLIST)
 
 
+def _resolve_target_path(path: str, boundary: Path) -> Path:
+    """Resolve a write target relative to the worktree boundary when needed."""
+    target = Path(path)
+    if target.is_absolute():
+        return target.resolve()
+    return (boundary / target).resolve()
+
+
 def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
     """Return a pre-hook that blocks writes outside the worktree boundary.
 
@@ -54,7 +62,7 @@ def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
                 path = tool_call.input.get("path") or tool_call.input.get("file_path") or ""
                 if not path:
                     return ToolDecision.ALLOW
-                resolved = Path(path).resolve()
+                resolved = _resolve_target_path(str(path), boundary)
                 if not _is_write_allowed(resolved, boundary):
                     logger.info(
                         "Worktree boundary DENY: write_file on %s (boundary=%s)",
