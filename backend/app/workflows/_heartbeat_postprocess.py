@@ -9,6 +9,13 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from app.workflows._session_postprocess import (
+    ensure_session_summary as _shared_ensure_session_summary,
+)
+from app.workflows._session_postprocess import (
+    extract_synthetic_summary as _shared_extract_synthetic_summary,
+)
+
 if TYPE_CHECKING:
     from app.api.complete.types import CompletionInternalResult
 
@@ -63,34 +70,12 @@ async def postprocess_heartbeat(
 
 async def _ensure_session_summary(session_id: str, content: str) -> bool:
     """Ensure the session has a summary — from inline tags or synthetic fallback."""
-    try:
-        from app.api.complete.citation_tracker import track_inline_summaries
-        from app.db import async_session
-
-        async with async_session() as db:
-            stored = await track_inline_summaries(content, db, session_id, agent_id="persona")
-
-        if stored:
-            return True
-
-        # No [[S:...]] tag — generate synthetic summary
-        summary = _extract_synthetic_summary(content)
-        if not summary:
-            # Fallback: always store *something* so summary_oneliner is never NULL
-            summary = "Heartbeat completed (no output)"
-        from app.services.memory.summary_generator import _store_summary_on_session
-
-        await _store_summary_on_session(
-            session_id=session_id,
-            summary_oneliner=summary,
-            outcome="completed",
-            files_touched=[],
-            git_digest="",
-        )
-        return True
-    except Exception:
-        logger.exception("Failed to ensure session summary for %s", session_id)
-        return False
+    return await _shared_ensure_session_summary(
+        session_id,
+        content,
+        agent_id="persona",
+        empty_fallback="Heartbeat completed (no output)",
+    )
 
 
 def _extract_synthetic_summary(content: str) -> str:
@@ -99,25 +84,7 @@ def _extract_synthetic_summary(content: str) -> str:
     Parses HEARTBEAT_OK/HEARTBEAT_ACTION prefix and extracts the sentence after it.
     Falls back to first 120 chars of content.
     """
-    if not content or not content.strip():
-        return ""
-
-    text = content.strip()
-
-    # Try to extract from HEARTBEAT_OK/HEARTBEAT_ACTION prefix
-    for prefix in ("HEARTBEAT_OK", "HEARTBEAT_ACTION"):
-        if text.startswith(prefix):
-            after = text[len(prefix):].lstrip(" \u2014\u2013-").strip()
-            if after:
-                # Take first sentence or up to 120 chars
-                period_idx = after.find(". ")
-                if 0 < period_idx <= 120:
-                    return after[: period_idx + 1]
-                return after[:120].rstrip() + ("..." if len(after) > 120 else "")
-            return prefix.lower().replace("_", " ")
-
-    # Fallback: first 120 chars
-    return text[:120].rstrip() + ("..." if len(text) > 120 else "")
+    return _shared_extract_synthetic_summary(content)
 
 
 

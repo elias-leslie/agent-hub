@@ -143,6 +143,11 @@ class TestEnsureSessionSummary:
                 return_value=False,
             ),
             patch(
+                "app.services.memory.summary_generator.generate_session_summary",
+                new_callable=AsyncMock,
+                return_value=MagicMock(skipped=True, summary=""),
+            ),
+            patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
             ) as mock_store,
@@ -174,6 +179,11 @@ class TestEnsureSessionSummary:
                 return_value=False,
             ),
             patch(
+                "app.services.memory.summary_generator.generate_session_summary",
+                new_callable=AsyncMock,
+                return_value=MagicMock(skipped=True, summary=""),
+            ),
+            patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
             ) as mock_store,
@@ -185,6 +195,40 @@ class TestEnsureSessionSummary:
         call_kwargs = mock_store.call_args[1]
         assert call_kwargs["session_id"] == "sess-1"
         assert call_kwargs["summary_oneliner"] == "Heartbeat completed (no output)"
+
+    @pytest.mark.asyncio
+    async def test_empty_content_uses_generated_session_summary_when_available(self):
+        """Empty content should use transcript-based summary before generic fallback."""
+        mock_db = AsyncMock()
+
+        from contextlib import asynccontextmanager
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with (
+            patch("app.db.async_session", _session),
+            patch(
+                "app.api.complete.citation_tracker.track_inline_summaries",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch(
+                "app.services.memory.summary_generator.generate_session_summary",
+                new_callable=AsyncMock,
+                return_value=MagicMock(skipped=False, summary="Investigated dirty worktree and found coherent in-progress frontend fixes."),
+            ) as mock_generate,
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            result = await _ensure_session_summary("sess-1", "")
+
+        assert result is True
+        mock_generate.assert_awaited_once_with("sess-1")
+        mock_store.assert_not_awaited()
 
 
 class TestPostprocessHeartbeat:
@@ -237,5 +281,3 @@ class TestPostprocessHeartbeat:
             hb_result = await postprocess_heartbeat(result, 60)
 
         assert hb_result.error == "Provider timeout"
-
-

@@ -30,6 +30,12 @@ If <feedback_summary> is present, use `manage_feedback` to triage:
 ## Available Tools ({tool_count} total)
 Beyond bash/read_file/write_file, you have: {persona_tool_list}
 
+## Execution Boundaries
+- Your heartbeat working directory is persona-sandbox, not every project root.
+- Do not use `bash` or `read_file` to inspect another project's filesystem unless that project is already your active working root and the action is clearly allowed.
+- If you need code-health, dirty-tree, or implementation validation on another project, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
+- For code-heavy investigation, prefer coding-capable agents like `reviewer`, `debugger`, or `coder`, not non-coding validation agents.
+
 Follow your <heartbeat_instructions> from your system context.
 
 Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`, \
