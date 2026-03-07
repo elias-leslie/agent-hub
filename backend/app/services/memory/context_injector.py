@@ -153,6 +153,9 @@ async def _build_context_and_format(
         if memory_config else settings.reference_index_enabled
     )
     ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else None
+    if ref_episodes and context.reference:
+        selected_uuids = {item.uuid for item in context.reference}
+        ref_episodes = [episode for episode in ref_episodes if episode[0] not in selected_uuids]
     formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
     return context, formatted
 

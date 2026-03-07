@@ -18,6 +18,7 @@ def _build_semantic_params(
     limit: int,
     scope: str | None,
     group_id: str | None,
+    tier: int | str | None,
     memory_type: str | None,
     min_score: float,
     exclude_ids: list[_uuid.UUID] | None,
@@ -32,6 +33,9 @@ def _build_semantic_params(
     if group_id:
         conditions.append("group_id = :group_id")
         params["group_id"] = group_id
+    if tier is not None:
+        conditions.append("tier = :tier")
+        params["tier"] = tier
     if memory_type:
         conditions.append("memory_type = :memory_type")
         params["memory_type"] = memory_type
@@ -54,6 +58,7 @@ class SearchRepository:
         *,
         scope: str | None = None,
         group_id: str | None = None,
+        tier: int | str | None = None,
         memory_type: str | None = None,
         status: str = "active",
         limit: int = 10,
@@ -72,6 +77,7 @@ class SearchRepository:
             limit=limit,
             scope=scope,
             group_id=group_id,
+            tier=tier,
             memory_type=memory_type,
             min_score=min_score,
             exclude_ids=exclude_ids,
