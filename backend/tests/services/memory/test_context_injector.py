@@ -490,6 +490,9 @@ class TestInjectionMetrics:
             mandates_count=5,
             guardrails_count=3,
             reference_count=2,
+            reference_selected_count=2,
+            reference_index_count=4,
+            reference_cited_count=1,
             total_tokens=150,
             query="test query",
             variant="ENHANCED",
@@ -497,12 +500,17 @@ class TestInjectionMetrics:
             external_id="task-456",
             project_id="summitflow",
             memories_loaded=["uuid-1", "uuid-2"],
+            reference_selected_uuids=["uuid-1"],
+            reference_index_uuids=["uuid-3", "uuid-4"],
         )
 
         assert metrics.injection_latency_ms == 45
         assert metrics.mandates_count == 5
         assert metrics.guardrails_count == 3
         assert metrics.reference_count == 2
+        assert metrics.reference_selected_count == 2
+        assert metrics.reference_index_count == 4
+        assert metrics.reference_cited_count == 1
         assert metrics.total_tokens == 150
         assert metrics.query == "test query"
         assert metrics.variant == "ENHANCED"
@@ -510,6 +518,8 @@ class TestInjectionMetrics:
         assert metrics.external_id == "task-456"
         assert metrics.project_id == "summitflow"
         assert metrics.memories_loaded == ["uuid-1", "uuid-2"]
+        assert metrics.reference_selected_uuids == ["uuid-1"]
+        assert metrics.reference_index_uuids == ["uuid-3", "uuid-4"]
 
     def test_injection_metrics_defaults(self):
         """Test InjectionMetrics default values."""
@@ -529,6 +539,11 @@ class TestInjectionMetrics:
         assert metrics.external_id is None
         assert metrics.project_id is None
         assert metrics.memories_loaded is None
+        assert metrics.reference_selected_count == 0
+        assert metrics.reference_index_count == 0
+        assert metrics.reference_cited_count == 0
+        assert metrics.reference_selected_uuids is None
+        assert metrics.reference_index_uuids is None
 
     def test_record_injection_metrics_no_loop(self):
         """Test record_injection_metrics handles no event loop gracefully."""

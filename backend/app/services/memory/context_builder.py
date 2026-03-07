@@ -42,6 +42,10 @@ class ProgressiveContext:
         """Get guardrail UUIDs (for citation tracking)."""
         return [g.uuid for g in self.guardrails if g.uuid]
 
+    def get_reference_uuids(self) -> list[str]:
+        """Get directly selected reference UUIDs."""
+        return [r.uuid for r in self.reference if r.uuid]
+
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
     """Apply include/exclude tag filters to context blocks in-place.

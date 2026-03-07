@@ -165,6 +165,12 @@ async def inject_memory(
                     agent_slug = resolved_agent.agent.slug if resolved_agent else None
                     await store_memory_inject_event(
                         db, session_id, loaded_memory_uuids, memory_facts_injected,
+                        reference_selected_uuids=list(
+                            progressive_context.debug_info.get("reference_selected_uuids", [])
+                        ),
+                        reference_index_uuids=list(
+                            progressive_context.debug_info.get("reference_index_uuids", [])
+                        ),
                         agent_id=agent_slug,
                     )
         except Exception as e:

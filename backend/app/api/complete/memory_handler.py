@@ -75,6 +75,12 @@ async def inject_memory_context(
             await track_loaded_batch(loaded_memory_uuids)
             await store_memory_inject_event(
                 db, session_id, loaded_memory_uuids, memory_facts_injected,
+                reference_selected_uuids=list(
+                    progressive_context.debug_info.get("reference_selected_uuids", [])
+                ),
+                reference_index_uuids=list(
+                    progressive_context.debug_info.get("reference_index_uuids", [])
+                ),
                 agent_id=agent_id,
             )
     except Exception as e:

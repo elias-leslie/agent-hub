@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from app.services.event_storage import EventSequencer, _extract_tool_result_content
+from unittest.mock import MagicMock
+
+import pytest
+
+from app.services.event_storage import (
+    EventSequencer,
+    _extract_tool_result_content,
+    store_memory_inject_event,
+)
 
 
 class TestEventSequencer:
@@ -139,6 +147,28 @@ class TestExtractToolResultContent:
         """When multiple known keys exist, 'result' wins over 'content'."""
         data = {"content": "second", "result": "first", "message": "third"}
         assert _extract_tool_result_content(data) == "first"
+
+
+class TestMemoryInjectEvent:
+    @pytest.mark.asyncio
+    async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
+        db = MagicMock()
+
+        event = await store_memory_inject_event(
+            db=db,
+            session_id="sess-1",
+            memory_uuids=["m1", "m2", "r1"],
+            memory_count=3,
+            reference_selected_uuids=["r1"],
+            reference_index_uuids=["r2", "r3"],
+            agent_id="persona",
+        )
+
+        assert "refs selected=1 index=2" in event.content
+        assert event.tool_input["reference_selected_count"] == 1
+        assert event.tool_input["reference_index_count"] == 2
+        assert event.tool_input["reference_selected_uuids"] == ["r1"]
+        assert event.tool_input["reference_index_uuids"] == ["r2", "r3"]
 
     def test_extract_content_beats_output(self) -> None:
         """'content' has higher priority than 'output'."""

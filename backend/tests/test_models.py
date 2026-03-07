@@ -15,6 +15,9 @@ class TestMemoryInjectionMetric:
             mandates_count=5,
             guardrails_count=3,
             reference_count=2,
+            reference_selected_count=2,
+            reference_index_count=7,
+            reference_cited_count=1,
             total_tokens=150,
         )
 
@@ -24,6 +27,9 @@ class TestMemoryInjectionMetric:
         assert metric.mandates_count == 5
         assert metric.guardrails_count == 3
         assert metric.reference_count == 2
+        assert metric.reference_selected_count == 2
+        assert metric.reference_index_count == 7
+        assert metric.reference_cited_count == 1
         assert metric.total_tokens == 150
 
     def test_model_defaults(self) -> None:
@@ -39,6 +45,9 @@ class TestMemoryInjectionMetric:
         assert table.c.mandates_count.default.arg == 0
         assert table.c.guardrails_count.default.arg == 0
         assert table.c.reference_count.default.arg == 0
+        assert table.c.reference_selected_count.default.arg == 0
+        assert table.c.reference_index_count.default.arg == 0
+        assert table.c.reference_cited_count.default.arg == 0
         assert table.c.total_tokens.default.arg == 0
 
         # Check variant default
@@ -47,6 +56,8 @@ class TestMemoryInjectionMetric:
         # Check JSON columns have defaults defined (callable defaults for mutable)
         assert table.c.memories_cited.default is not None
         assert table.c.memories_loaded.default is not None
+        assert table.c.reference_selected_uuids.default is not None
+        assert table.c.reference_index_uuids.default is not None
 
     def test_model_with_all_fields(self) -> None:
         """Test model with all optional fields populated."""
@@ -58,12 +69,17 @@ class TestMemoryInjectionMetric:
             mandates_count=10,
             guardrails_count=5,
             reference_count=8,
+            reference_selected_count=8,
+            reference_index_count=11,
+            reference_cited_count=3,
             total_tokens=350,
             query="pytest fixtures mock",
             variant="ENHANCED",
             task_succeeded=True,
             memories_cited=["uuid-1", "uuid-2"],
             memories_loaded=["uuid-1", "uuid-2", "uuid-3", "uuid-4"],
+            reference_selected_uuids=["uuid-1", "uuid-2", "uuid-3"],
+            reference_index_uuids=["uuid-4", "uuid-5"],
         )
 
         assert metric.session_id == "sess-abc123"
@@ -72,6 +88,8 @@ class TestMemoryInjectionMetric:
         assert metric.task_succeeded is True
         assert metric.memories_cited == ["uuid-1", "uuid-2"]
         assert metric.memories_loaded == ["uuid-1", "uuid-2", "uuid-3", "uuid-4"]
+        assert metric.reference_selected_uuids == ["uuid-1", "uuid-2", "uuid-3"]
+        assert metric.reference_index_uuids == ["uuid-4", "uuid-5"]
 
     def test_tablename(self) -> None:
         """Test the model uses correct table name."""

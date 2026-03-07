@@ -41,6 +41,9 @@ class MemoryInjectionMetric(Base):
     mandates_count: Mapped[int] = mapped_column(Integer, default=0)
     guardrails_count: Mapped[int] = mapped_column(Integer, default=0)
     reference_count: Mapped[int] = mapped_column(Integer, default=0)
+    reference_selected_count: Mapped[int] = mapped_column(Integer, default=0)
+    reference_index_count: Mapped[int] = mapped_column(Integer, default=0)
+    reference_cited_count: Mapped[int] = mapped_column(Integer, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
     # Query context
     query: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -52,6 +55,14 @@ class MemoryInjectionMetric(Base):
     memories_cited: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
     # All memories loaded - JSON array of loaded memory UUIDs
     memories_loaded: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
+    # References directly selected into prompt context
+    reference_selected_uuids: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True, default=list
+    )
+    # References shown in passive Reference Index
+    reference_index_uuids: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True, default=list
+    )
 
     # Relationships
     session = relationship("Session", back_populates="injection_metrics", lazy="raise")

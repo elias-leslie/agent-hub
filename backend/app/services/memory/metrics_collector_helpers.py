@@ -60,6 +60,16 @@ async def _apply_citation_updates(
     update_values: dict[str, Any] = {}
     if memories_cited is not None:
         update_values["memories_cited"] = memories_cited
+        result = await session.execute(
+            select(MemoryInjectionMetric.reference_selected_uuids).where(
+                MemoryInjectionMetric.id == record_id
+            )
+        )
+        selected_reference_uuids = result.scalar_one_or_none() or []
+        cited_lookup = set(memories_cited)
+        update_values["reference_cited_count"] = sum(
+            1 for uuid in selected_reference_uuids if uuid in cited_lookup
+        )
     if task_succeeded is not None:
         update_values["task_succeeded"] = task_succeeded
 
