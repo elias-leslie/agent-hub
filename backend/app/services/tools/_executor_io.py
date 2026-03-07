@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 import tempfile
 from collections.abc import Awaitable, Callable
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.models import Session
+
+_TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "failed"}
 
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
@@ -53,6 +56,61 @@ def _choose_authoritative_session(completed_sessions: list[Session]) -> Session:
 def _normalize_summary(summary: str | None) -> str:
     text = (summary or "completed work").strip()
     return " ".join(text.split()) or "completed work"
+
+
+def _extract_task_status(context_output: str) -> str | None:
+    """Extract task status from `st context --compact` output."""
+    if not isinstance(context_output, str):
+        return None
+    first_line = context_output.splitlines()[0] if context_output else ""
+    match = re.match(r"^TASK:[^|]+\|([^|]+)\|", first_line)
+    if not match:
+        return None
+    return match.group(1).strip().lower() or None
+
+
+async def _get_task_status(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str | None:
+    """Load current SummitFlow task status through the CLI."""
+    try:
+        output = await bash_fn(_st_cmd(f"context {shlex.quote(task_id)} --compact", project_id))
+    except Exception:
+        logger.exception("Failed to load task context for stale-lane check", extra={"task_id": task_id})
+        return None
+    return _extract_task_status(output)
+
+
+def _task_is_terminal(task_status: str | None) -> bool:
+    return bool(task_status and task_status in _TERMINAL_TASK_STATUSES)
+
+
+async def _mark_stale_active_sessions(
+    sessions: list[Session],
+    *,
+    workstream_status: str,
+    note_prefix: str,
+) -> int:
+    """Convert stale active sessions into completed sessions with lifecycle markers."""
+    from app.db import async_session
+
+    stale_active = [s for s in sessions if s.status == "active"]
+    if not stale_active:
+        return 0
+
+    now = datetime.now(UTC)
+    async with async_session() as db:
+        for session in stale_active:
+            branch = getattr(session, "current_branch", None) or "unknown branch"
+            session.status = "completed"
+            session.workstream_status = workstream_status
+            session.workstream_note = f"{note_prefix} ({branch})"
+            session.workstream_updated_at = now
+            db.add(session)
+        await db.commit()
+    return len(stale_active)
 
 
 async def _persist_workstream_resolution(
@@ -96,12 +154,26 @@ async def _reconcile_task_lane(
 
     active_sessions = [s for s in sessions if s.status == "active"]
     if active_sessions:
-        return (
-            f"Reconcile blocked for {task_id}: still has {len(active_sessions)} active "
-            "session(s). Verify whether the lane is truly stale before closing it."
-        )
-
-    completed_sessions = [s for s in sessions if s.status == "completed"]
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        if _task_is_terminal(task_status):
+            retired = await _mark_stale_active_sessions(
+                sessions,
+                workstream_status="superseded",
+                note_prefix=f"Marked stale active during reconcile because task is {task_status}",
+            )
+            if retired:
+                sessions = await _load_task_lane_sessions(task_id)
+                active_sessions = [s for s in sessions if s.status == "active"]
+        if active_sessions:
+            task_detail = f" (task={task_status})" if task_status else ""
+            return (
+                f"Reconcile blocked for {task_id}: still has {len(active_sessions)} active "
+                f"session(s){task_detail}. Verify whether the lane is truly stale before closing it."
+            )
+    completed_sessions = [
+        s for s in sessions
+        if s.status == "completed" and getattr(s, "workstream_status", None) != "superseded"
+    ]
     if not completed_sessions:
         statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
         return (
@@ -121,7 +193,11 @@ async def _reconcile_task_lane(
     return await bash_fn(cmd)
 
 
-async def _retire_task_lane(task_id: str) -> str:
+async def _retire_task_lane(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str:
     """Persist a retired marker for a task lane when no live sessions remain."""
     from app.db import async_session
 
@@ -131,16 +207,29 @@ async def _retire_task_lane(task_id: str) -> str:
 
     active_sessions = [s for s in sessions if s.status == "active"]
     if active_sessions:
-        return (
-            f"Retire blocked for {task_id}: cannot retire while {len(active_sessions)} "
-            "active session(s) remain."
-        )
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        if _task_is_terminal(task_status):
+            retired = await _mark_stale_active_sessions(
+                sessions,
+                workstream_status="retired",
+                note_prefix=f"Retired stale active lane because task is {task_status}",
+            )
+            if retired:
+                sessions = await _load_task_lane_sessions(task_id)
+                active_sessions = [s for s in sessions if s.status == "active"]
+        if active_sessions:
+            task_detail = f" (task={task_status})" if task_status else ""
+            return (
+                f"Retire blocked for {task_id}: cannot retire while {len(active_sessions)} "
+                f"active session(s) remain{task_detail}."
+            )
 
     now = datetime.now(UTC)
     async with async_session() as db:
         for session in sessions:
             session.workstream_status = "retired"
-            session.workstream_note = 'Retired via manage_tasks(action="retire_lane")'
+            if not getattr(session, "workstream_note", None):
+                session.workstream_note = 'Retired via manage_tasks(action="retire_lane")'
             session.workstream_updated_at = now
             db.add(session)
         await db.commit()
@@ -340,7 +429,7 @@ async def manage_tasks(
     if action == "retire_lane":
         if not task_id:
             return "Error: task_id required for retire_lane"
-        return await _retire_task_lane(task_id)
+        return await _retire_task_lane(bash_fn, task_id, project_id)
 
     if action == "done":
         if not task_id:

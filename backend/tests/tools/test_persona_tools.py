@@ -838,7 +838,58 @@ class TestManageTasks:
             )
 
         assert "still has 1 active session" in result
-        mock_bash.assert_not_awaited()
+        mock_bash.assert_awaited_once_with("st -P summitflow context task-42 --compact")
+
+    @pytest.mark.asyncio
+    async def test_reconcile_allows_stale_active_when_task_is_blocked(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "TASK:task-42|blocked|P2|bug|SIMPLE",
+                "Completed task task-42",
+            ]
+        )
+        mock_db = AsyncMock()
+        stale_active = MagicMock(
+            status="active",
+            current_branch="task-42/main",
+            created_at=datetime.now(UTC),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        completed = MagicMock(
+            status="completed",
+            current_branch="task-42/fix",
+            summary_oneliner="Applied the real fix",
+            created_at=datetime.now(UTC) - timedelta(minutes=1),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [stale_active, completed]
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Completed task task-42" in result
+        assert stale_active.status == "completed"
+        assert stale_active.workstream_status == "superseded"
+        assert "Superseded by session on branch task-42/fix" in stale_active.workstream_note
+        mock_bash.assert_any_await("st -P summitflow context task-42 --compact")
 
     @pytest.mark.asyncio
     async def test_reconcile_marks_authoritative_and_superseded_sessions(self):
@@ -946,7 +997,44 @@ class TestManageTasks:
             )
 
         assert "cannot retire while 1 active session" in result
-        mock_bash.assert_not_awaited()
+        mock_bash.assert_awaited_once_with("st -P summitflow context task-77 --compact")
+
+    @pytest.mark.asyncio
+    async def test_retire_lane_allows_stale_active_when_task_is_terminal(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="TASK:task-77|completed|P2|task|SIMPLE")
+        mock_db = AsyncMock()
+        active = MagicMock(
+            status="active",
+            current_branch="task-77/main",
+            created_at=datetime.now(UTC),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [active]
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="retire_lane",
+                task_id="task-77",
+                project_id="summitflow",
+            )
+
+        assert "Retired 1 session-backed lane(s) for task-77" in result
+        assert active.status == "completed"
+        assert active.workstream_status == "retired"
+        assert "stale active" in active.workstream_note
+        mock_bash.assert_awaited_once_with("st -P summitflow context task-77 --compact")
 
     @pytest.mark.asyncio
     async def test_unknown_action(self):

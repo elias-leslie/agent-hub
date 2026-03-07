@@ -3,7 +3,12 @@
 Agents specialized for Portfolio AI's long-only investing workflows.
 """
 
-from app.constants import CLAUDE_SONNET, GEMINI_PRO
+from app.constants import (
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    GEMINI_3_1_PRO,
+    XAI_GROK_4_1_FAST,
+)
 
 PORTFOLIO_AGENTS: list[dict[str, object]] = [
     {
@@ -26,8 +31,8 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- Keep explanations plain enough for a novice investor.\n"
             "- If the caller requests JSON, return strict JSON only."
         ),
-        "primary_model_id": GEMINI_PRO,
-        "fallback_models": [CLAUDE_SONNET],
+        "primary_model_id": GEMINI_3_1_PRO,
+        "fallback_models": [CLAUDE_SONNET, XAI_GROK_4_1_FAST],
         "temperature": 0.3,
         "thinking_level": "medium",
         "is_coding_agent": False,
@@ -48,10 +53,11 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- Never fabricate price levels or certainty.\n"
             "- Prefer simple, defensible reasoning to technical jargon.\n"
             "- Assume the investor is long-only and values risk control more than activity.\n"
+            "- Default to trim, review, or avoid when concentration and event risk stack up.\n"
             "- If the caller requests JSON, return strict JSON only."
         ),
         "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_PRO],
+        "fallback_models": [GEMINI_3_1_PRO, XAI_GROK_4_1_FAST],
         "temperature": 0.2,
         "thinking_level": "medium",
         "is_coding_agent": False,
@@ -75,7 +81,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- If the caller requests JSON, return strict JSON only."
         ),
         "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_PRO],
+        "fallback_models": [XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
         "temperature": 0.25,
         "is_coding_agent": False,
     },
@@ -98,8 +104,8 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- Never recommend shorting by default.\n"
             "- If the caller requests JSON, return strict JSON only."
         ),
-        "primary_model_id": GEMINI_PRO,
-        "fallback_models": [CLAUDE_SONNET],
+        "primary_model_id": CLAUDE_OPUS,
+        "fallback_models": [CLAUDE_SONNET, GEMINI_3_1_PRO],
         "temperature": 0.25,
         "thinking_level": "medium",
         "is_coding_agent": False,
