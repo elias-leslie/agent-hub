@@ -42,9 +42,13 @@ class WakeResult(BaseModel):
 
 _WAKE_TOOLING_HINTS = """Operational notes:
 - Use current `st` syntax when inspecting tasks/sessions: `st ready-all`, `st ready --limit N`, `st sessions list --status <status> --limit N`.
+- For observability: use `st session-events <session_id>` for a direct session id, or `st session-events -T task-123 --page-size 100` for a task-linked session trace.
 - Do not add stale flags like `-P`, `--project`, `--human`, or `--compact` to `st ready` / `st ready-all`.
+- Do not use `--session` with `st session-events`; pass the session id as the positional argument instead.
+- Do not treat `st sessions list` output `session_id` values like Agent Hub session ids; use `st session-events -T task-...` for task-linked traces unless you already have a real Agent Hub session UUID.
 - Use `st context <task-id>` only when you have a real task id.
 - Prefer the known-good commands above over probing multiple invalid `st` variants.
+- Avoid exploratory `--help` calls unless a known-good command above still fails.
 - Prefer investigation over feature work unless the prompt explicitly asks for implementation.
 """
 

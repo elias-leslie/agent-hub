@@ -25,7 +25,12 @@ def test_build_wake_prompt_includes_current_st_guidance():
     assert "st ready-all" in prompt
     assert "st ready --limit N" in prompt
     assert "st sessions list --status <status> --limit N" in prompt
+    assert "st session-events <session_id>" in prompt
+    assert "st session-events -T task-123 --page-size 100" in prompt
     assert "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`" in prompt
+    assert "Do not use `--session` with `st session-events`" in prompt
+    assert "Do not treat `st sessions list` output `session_id` values like Agent Hub session ids" in prompt
+    assert "Avoid exploratory `--help` calls unless a known-good command above still fails." in prompt
     assert "Task:\nInvestigate the current task branch." in prompt
 
 
