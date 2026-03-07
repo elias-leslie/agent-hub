@@ -7,6 +7,11 @@ import re
 import subprocess
 from datetime import UTC, datetime
 
+from app.services.ownership_lanes import (
+    collapse_active_workstream_rows,
+    infer_task_id,
+)
+
 logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
@@ -360,14 +365,9 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
 
 def _infer_task_id(row: dict[str, object]) -> str | None:
     """Infer a task id from explicit linkage or task branch naming."""
-    external_id = row.get("external_id")
-    if isinstance(external_id, str) and external_id.startswith("task-"):
-        return external_id
-    branch = row.get("current_branch")
-    if not isinstance(branch, str) or not branch:
-        return None
-    branch_prefix = branch.split("/", 1)[0]
-    return branch_prefix if branch_prefix.startswith("task-") else None
+    external_id = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+    branch = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+    return infer_task_id(external_id, branch)
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
@@ -525,7 +525,7 @@ def _format_stale_running_task(project_id: str, task_id: str) -> str:
 async def _get_workstream_inventory() -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
-        rows = await _query_recent_workstream_sessions()
+        rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
         task_overview = _fetch_task_overview()
         stale_tasks = _extract_stale_running_tasks(task_overview)
         if not rows and not stale_tasks:
