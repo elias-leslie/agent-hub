@@ -209,7 +209,7 @@ class TestGetWorkstreamInventory:
         assert "<workstream_inventory>" in result
         assert "task-123" in result
         assert "state=completed_ready_for_closure" in result
-        assert 'manage_tasks(action="done"' in result
+        assert 'manage_tasks(action="reconcile"' in result
 
     @pytest.mark.asyncio
     async def test_reports_stale_active_lane(self) -> None:
@@ -275,3 +275,41 @@ class TestGetWorkstreamInventory:
         assert "task-777" in result
         assert "state=mixed" in result
         assert "branches=2" in result
+
+    @pytest.mark.asyncio
+    async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-5",
+                "agent_slug": "coder",
+                "project_id": "summitflow",
+                "external_id": "task-888",
+                "current_branch": "task-888/main",
+                "status": "completed",
+                "workstream_status": "authoritative",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+            {
+                "session_id": "sess-6",
+                "agent_slug": "reviewer",
+                "project_id": "summitflow",
+                "external_id": "task-888",
+                "current_branch": "task-888/old",
+                "status": "completed",
+                "workstream_status": "superseded",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-888" in result
+        assert "state=reconciled" in result
+        assert "lifecycle=authoritative,superseded" in result

@@ -129,9 +129,9 @@ def pick_auth_mode(
         )
 
     if preference == "oauth" and oauth_usable:
-        return "oauth", None, make_cloudcode_client(oauth_data)  # type: ignore[arg-type]
+        return "oauth", None, make_cloudcode_client(oauth_data)
     if resolved_key:
         return "api_key", make_sdk_client(resolved_key), None
     if oauth_usable:
-        return "oauth", None, make_cloudcode_client(oauth_data)  # type: ignore[arg-type]
+        return "oauth", None, make_cloudcode_client(oauth_data)
     return "adc", make_sdk_client(), None

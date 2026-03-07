@@ -179,6 +179,9 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
                 Session.external_id,
                 Session.current_branch,
                 Session.status,
+                Session.workstream_status,
+                Session.workstream_note,
+                Session.workstream_updated_at,
                 Session.created_at,
                 Session.updated_at,
             )
@@ -206,6 +209,9 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
             "external_id": row.external_id,
             "current_branch": row.current_branch,
             "status": row.status,
+            "workstream_status": row.workstream_status,
+            "workstream_note": row.workstream_note,
+            "workstream_updated_at": row.workstream_updated_at,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
             "age_minutes": int((now - row.created_at).total_seconds() / 60),
@@ -216,10 +222,17 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
     """Classify a grouped task/worktree lane into an actionable lifecycle state."""
+    statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
     active_rows = [row for row in rows if row.get("status") == "active"]
     completed_rows = [row for row in rows if row.get("status") == "completed"]
     branches = {str(row["current_branch"]) for row in rows if row.get("current_branch")}
 
+    if statuses == {"retired"}:
+        return "retired"
+    if "authoritative" in statuses and "superseded" in statuses:
+        return "reconciled"
+    if statuses == {"superseded"}:
+        return "superseded"
     if len(active_rows) > 1 and len(branches) > 1:
         return "mixed"
     if active_rows:
@@ -243,15 +256,26 @@ def _build_workstream_next_action(
     """Return a concrete next action for a classified workstream lane."""
     if state == "completed_ready_for_closure" and task_id:
         return (
-            f'manage_tasks(action="done", task_id="{task_id}", '
+            f'manage_tasks(action="reconcile", task_id="{task_id}", '
             f'project_id="{project_id}")'
         )
     if state == "completed_ready_for_closure" and not task_id:
         return "completed_no_task_id"
     if state == "stale_active":
+        if task_id:
+            return (
+                f'query_sessions(status="active") then manage_tasks(action="retire_lane", '
+                f'task_id="{task_id}", project_id="{project_id}") if truly stale'
+            )
         return "query_sessions(status='active') then verify or retire the stale lane"
     if state == "mixed":
         return "split/promotion cleanup; do not dispatch more implementation onto this lane"
+    if state == "reconciled":
+        return "authoritative lane recorded; avoid redispatch unless new facts contradict it"
+    if state == "retired":
+        return "retired_lane_no_action"
+    if state == "superseded":
+        return "superseded_lane_no_action"
     return "monitor"
 
 
@@ -279,6 +303,11 @@ def _format_workstream_lane(
     completed_count = sum(
         1 for row in lane_rows if row.get("status") == "completed"
     )
+    workstream_statuses = {
+        str(row["workstream_status"])
+        for row in lane_rows
+        if row.get("workstream_status")
+    }
     state = _classify_workstream_lane(lane_rows)
     next_action = _build_workstream_next_action(
         state=state,
@@ -293,6 +322,8 @@ def _format_workstream_lane(
     ]
     if completed_count:
         parts.append(f"completed={completed_count}")
+    if workstream_statuses:
+        parts.append(f"lifecycle={','.join(sorted(workstream_statuses))}")
     if branches:
         parts.append(f"branches={len(branches)}")
     if agents:

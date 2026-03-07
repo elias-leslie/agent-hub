@@ -153,7 +153,7 @@ class GeminiImageAdapter(ImageAdapter):
                 types.Part.from_text(text=prompt),
             ]
         else:
-            contents = prompt  # type: ignore[assignment]
+            contents = prompt
 
         response = await self._sdk_client.aio.models.generate_content(
             model=model,

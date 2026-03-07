@@ -54,10 +54,10 @@ def _get_known_roots() -> dict[str, str]:
 # need a proxy that delegates to the cached function.
 
 
-class _RootsProxy(dict):  # type: ignore[type-arg]
+class _RootsProxy(dict):
     """Dict-like proxy that delegates to get_known_roots()."""
 
-    def get(self, key: str, default: str | None = None) -> str | None:  # type: ignore[override]
+    def get(self, key: str, default: str | None = None) -> str | None:
         return _get_known_roots().get(key, default)
 
     def __getitem__(self, key: str) -> str:
@@ -66,16 +66,16 @@ class _RootsProxy(dict):  # type: ignore[type-arg]
     def __contains__(self, key: object) -> bool:
         return key in _get_known_roots()
 
-    def __iter__(self):  # type: ignore[override]
+    def __iter__(self):
         return iter(_get_known_roots())
 
-    def items(self):  # type: ignore[override]
+    def items(self):
         return _get_known_roots().items()
 
-    def values(self):  # type: ignore[override]
+    def values(self):
         return _get_known_roots().values()
 
-    def keys(self):  # type: ignore[override]
+    def keys(self):
         return _get_known_roots().keys()
 
     def __repr__(self) -> str:

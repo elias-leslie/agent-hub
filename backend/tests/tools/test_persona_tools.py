@@ -841,6 +841,114 @@ class TestManageTasks:
         mock_bash.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_reconcile_marks_authoritative_and_superseded_sessions(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Completed task task-42")
+        mock_db = AsyncMock()
+        older = MagicMock(
+            status="completed",
+            current_branch="task-42/old",
+            summary_oneliner="Old branch result",
+            created_at=datetime.now(UTC) - timedelta(hours=1),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        newer = MagicMock(
+            status="completed",
+            current_branch="task-42/main",
+            summary_oneliner="Newest branch result",
+            created_at=datetime.now(UTC),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [newer, older]
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert newer.workstream_status == "authoritative"
+        assert older.workstream_status == "superseded"
+        assert "Superseded by session on branch task-42/main" in older.workstream_note
+        mock_db.commit.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_retire_lane_marks_completed_sessions_retired(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        mock_db = AsyncMock()
+        completed = MagicMock(
+            status="completed",
+            current_branch="task-77/main",
+            created_at=datetime.now(UTC),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed]
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="retire_lane",
+                task_id="task-77",
+                project_id="summitflow",
+            )
+
+        assert "Retired 1 session-backed lane(s) for task-77" in result
+        assert completed.workstream_status == "retired"
+        assert "Retired via manage_tasks(action=\"retire_lane\")" in completed.workstream_note
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_retire_lane_refuses_when_active_sessions_exist(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        mock_db = AsyncMock()
+        active = MagicMock(status="active", created_at=datetime.now(UTC))
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [active]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="retire_lane",
+                task_id="task-77",
+                project_id="summitflow",
+            )
+
+        assert "cannot retire while 1 active session" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_unknown_action(self):
         from app.services.tools._executor_io import manage_tasks
 

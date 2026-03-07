@@ -130,7 +130,7 @@ class Memory(Base):
     # Indexes are created via raw SQL in the Alembic migration (d3e4f5g6h7i8)
     # because SQLAlchemy doesn't natively handle pgvector index types and
     # partial indexes with JSONB/vector columns.
-    __table_args__: tuple = ()  # type: ignore[assignment]
+    __table_args__: tuple = ()
 
     @property
     def uuid_short(self) -> str:
@@ -155,4 +155,3 @@ class Memory(Base):
         if self.loaded_count == 0:
             return 0.0
         return self.referenced_count / (self.loaded_count + 1)
-

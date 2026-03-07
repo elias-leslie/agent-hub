@@ -120,7 +120,7 @@ class _ProjectIDsProxy:
     def __contains__(self, item: object) -> bool:
         return item in get_valid_project_ids()
 
-    def __iter__(self):  # type: ignore[override]
+    def __iter__(self):
         return iter(get_valid_project_ids())
 
     def __len__(self) -> int:
