@@ -170,3 +170,4 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
+        assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt

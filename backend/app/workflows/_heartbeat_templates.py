@@ -43,6 +43,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - For repeated stale running-task or stale session-state findings, your default next action is `manage_tasks` / task-state repair / verification follow-through, not another reviewer dispatch.
 - Prefer follow-through, bug creation, verification, or task-state repair over repeating the same diagnostic pass.
 - If recent reviewer/debugger output already narrowed the problem to a concrete code fix, closure step, or task-scope mismatch, prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass.
+- When converting recent session evidence into a follow-through dispatch, distinguish stale evidence from current facts. If current `git` state, task context, or session status conflicts with an older summary, trust the current state and frame the dispatch around that truth instead of repeating the stale description.
 
 Follow your <heartbeat_instructions> from your system context.
 
