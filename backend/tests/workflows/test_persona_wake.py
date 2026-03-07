@@ -29,7 +29,10 @@ def test_build_wake_prompt_includes_current_st_guidance():
     assert "st session-events -T task-123 --page-size 100" in prompt
     assert "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`" in prompt
     assert "Do not use `--session` with `st session-events`" in prompt
-    assert "Do not treat `st sessions list` output `session_id` values like Agent Hub session ids" in prompt
+    assert "Never pass `st sessions list` output `session_id` values to `st session-events`" in prompt
+    assert "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID" in prompt
+    assert "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on" in prompt
+    assert "do not inspect `/home/kasadis/.local/share/st/worktrees/...`" in prompt
     assert "Avoid exploratory `--help` calls unless a known-good command above still fails." in prompt
     assert "Task:\nInvestigate the current task branch." in prompt
 
