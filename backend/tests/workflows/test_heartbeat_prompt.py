@@ -177,6 +177,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
+        assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
 
@@ -369,3 +370,28 @@ class TestGetWorkstreamInventory:
         assert "task-888" in result
         assert "state=reconciled" in result
         assert "lifecycle=authoritative,superseded" in result
+
+    @pytest.mark.asyncio
+    async def test_promotes_stale_running_ready_all_entries_into_workstream_inventory(self) -> None:
+        fake_overview = """READY-ALL[1 ready, 0 blocked, 0 active, 1 stale across 1 projects]
+
+agent-hub (1 ready, 1 stale)
+  ? task-de53b498 P1 task     [M] Add persona heartbeat provider regression tests for ... [stale-running]
+"""
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
+            "app.workflows._heartbeat_data._fetch_task_overview",
+            return_value=fake_overview,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-de53b498" in result
+        assert "state=stale_running_task" in result
+        assert (
+            'manage_tasks(action="reconcile", task_id="task-de53b498", project_id="agent-hub")'
+            in result
+        )
