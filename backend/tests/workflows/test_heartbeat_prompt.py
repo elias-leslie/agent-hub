@@ -169,6 +169,10 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Treat already-active specialist sessions as current work" in prompt
         assert "prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type" in prompt
         assert "Only redispatch the same specialist lane when you have concrete evidence the active session is stuck" in prompt
+        assert "Treat follow-up branches and worktrees as single workstreams, not shared scratchpads" in prompt
+        assert "Reuse an existing follow-up branch only when the new work is the same task lane" in prompt
+        assert "create a new task/worktree instead of piling onto the old branch" in prompt
+        assert "your next action is split/promotion/cleanup, not another implementation dispatch onto that same branch" in prompt
         assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
