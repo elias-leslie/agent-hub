@@ -136,6 +136,7 @@ async def _execute_agent_turn(job: Any) -> str:
             max_turns=max_turns,
             execute_tools=True,
             enable_programmatic_tools=True,
+            defer_tool_loading=True,
             task_type="scheduled_job",
             thinking_level=agent.thinking_level,
         )

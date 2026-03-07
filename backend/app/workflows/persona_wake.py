@@ -127,6 +127,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             max_turns=max_turns,
             execute_tools=True,
             enable_programmatic_tools=True,
+            defer_tool_loading=True,
             task_type="wake",
             phase=input.event_type,
             thinking_level=input.thinking_level,

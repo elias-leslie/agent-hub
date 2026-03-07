@@ -40,4 +40,8 @@ SEND_PUSH_TOOL = Tool(
         },
         "required": ["title", "body"],
     },
+    category="persona-ops",
+    search_keywords=["notify human", "push notification", "alert"],
+    usage_examples=["Send a high-signal push when a background fix fails and needs attention."],
+    defer_loading=True,
 )

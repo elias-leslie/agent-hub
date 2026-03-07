@@ -221,7 +221,12 @@ async def execute_tool_loop(
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str]]:
     """Run agentic loop with tool execution."""
-    tool_handler = create_direct_handler(working_dir, permission_config, project_id=project_id)
+    tool_handler = create_direct_handler(
+        working_dir,
+        permission_config,
+        project_id=project_id,
+        tool_catalog=kwargs.get("tool_catalog"),
+    )
     session_id = str(uuid.uuid4())
     gemini_tools = build_gemini_tools(tools)
     system_instruction, contents = convert_messages(messages)
