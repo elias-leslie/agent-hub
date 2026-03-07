@@ -6,9 +6,11 @@ import {
   LayoutList,
   Hash,
   Layers,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/api";
+import type { SessionMemoryObservability } from "@/lib/session-memory-observability";
 import { formatDate, getProviderIcon } from "./utils";
 
 interface SessionHeaderProps {
@@ -18,6 +20,7 @@ interface SessionHeaderProps {
   onTabChange: (tab: "timeline" | "info") => void;
   eventsTotal?: number;
   maxTurn?: number;
+  memorySummary?: SessionMemoryObservability | null;
 }
 
 export function SessionHeader({
@@ -27,6 +30,7 @@ export function SessionHeader({
   onTabChange,
   eventsTotal,
   maxTurn,
+  memorySummary,
 }: SessionHeaderProps) {
   return (
     <header
@@ -129,6 +133,15 @@ export function SessionHeader({
                   <Layers className="h-3.5 w-3.5" />
                   <span className="font-mono">{maxTurn} turns</span>
                 </div>
+                {memorySummary && (
+                  <div className="flex items-center gap-1">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span className="font-mono">
+                      refs {memorySummary.selectedCount}/{memorySummary.indexCount} cited{" "}
+                      {memorySummary.selectedCitedCount}/{memorySummary.selectedCount}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 

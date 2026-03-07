@@ -1,15 +1,17 @@
 import { Cpu, Activity, Clock, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Session } from "@/lib/api";
+import type { SessionMemoryObservability } from "@/lib/session-memory-observability";
 import { formatDate, formatTokens } from "./utils";
 import { ContextUsageBar } from "./ContextUsageBar";
 import { StatCard } from "./StatCard";
 
 interface SessionInfoProps {
   session: Session;
+  memorySummary?: SessionMemoryObservability | null;
 }
 
-export function SessionInfo({ session }: SessionInfoProps) {
+export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
   return (
     <div className="p-6 max-w-4xl space-y-6">
       {/* Context Usage */}
@@ -18,7 +20,7 @@ export function SessionInfo({ session }: SessionInfoProps) {
       )}
 
       {/* Session Info Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard icon={Layers} label="Project" value={session.project_id} />
         <StatCard
           icon={Cpu}
@@ -32,6 +34,14 @@ export function SessionInfo({ session }: SessionInfoProps) {
           label="Updated"
           value={formatDate(session.updated_at)}
         />
+        {memorySummary && (
+          <StatCard
+            icon={Layers}
+            label="References"
+            value={`${memorySummary.selectedCount} selected / ${memorySummary.indexCount} index`}
+            subValue={`selected cited ${memorySummary.selectedCitedCount}/${memorySummary.selectedCount} (${memorySummary.selectedCitationRate}%)`}
+          />
+        )}
       </div>
 
       {/* Token breakdown */}
