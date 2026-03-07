@@ -6,6 +6,7 @@ Agents specialized for Portfolio AI's long-only investing workflows.
 from app.constants import (
     CLAUDE_OPUS,
     CLAUDE_SONNET,
+    CODEX_GPT_5_4,
     GEMINI_3_1_PRO,
     XAI_GROK_4_1_FAST,
 )
@@ -31,8 +32,8 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- Keep explanations plain enough for a novice investor.\n"
             "- If the caller requests JSON, return strict JSON only."
         ),
-        "primary_model_id": GEMINI_3_1_PRO,
-        "fallback_models": [CLAUDE_SONNET, XAI_GROK_4_1_FAST],
+        "primary_model_id": CLAUDE_SONNET,
+        "fallback_models": [CODEX_GPT_5_4, XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
         "temperature": 0.3,
         "thinking_level": "medium",
         "is_coding_agent": False,
@@ -57,7 +58,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- If the caller requests JSON, return strict JSON only."
         ),
         "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_3_1_PRO, XAI_GROK_4_1_FAST],
+        "fallback_models": [CODEX_GPT_5_4, XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
         "temperature": 0.2,
         "thinking_level": "medium",
         "is_coding_agent": False,
@@ -81,7 +82,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- If the caller requests JSON, return strict JSON only."
         ),
         "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
+        "fallback_models": [CODEX_GPT_5_4, XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
         "temperature": 0.25,
         "is_coding_agent": False,
     },
@@ -105,7 +106,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
             "- If the caller requests JSON, return strict JSON only."
         ),
         "primary_model_id": CLAUDE_OPUS,
-        "fallback_models": [CLAUDE_SONNET, GEMINI_3_1_PRO],
+        "fallback_models": [CLAUDE_SONNET, CODEX_GPT_5_4, GEMINI_3_1_PRO],
         "temperature": 0.25,
         "thinking_level": "medium",
         "is_coding_agent": False,
