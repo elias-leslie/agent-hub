@@ -19,37 +19,47 @@ def _mock_async_session(mock_db):
     return _session
 
 
+def assert_prompt_contains_all(prompt: str, substrings: list[str]) -> None:
+    for substring in substrings:
+        assert substring in prompt, f"Expected prompt to contain: {substring!r}"
+
+
 def test_build_wake_prompt_includes_current_st_guidance():
     prompt = _build_wake_prompt("Investigate the current task branch.")
 
-    assert "st ready-all" in prompt
-    assert "st ready --limit N" in prompt
-    assert "st sessions list --status <status> --limit N" in prompt
-    assert "st session-events <session_id>" in prompt
-    assert "st session-events -T task-123 --page-size 100" in prompt
-    assert "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`" in prompt
-    assert "Do not use `--session` with `st session-events`" in prompt
-    assert "Never pass `st sessions list` output `session_id` values to `st session-events`" in prompt
-    assert "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID" in prompt
-    assert "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on" in prompt
-    assert "do not inspect `/home/kasadis/.local/share/st/worktrees/...`" in prompt
-    assert "If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only" in prompt
-    assert "Treat task ids as opaque" in prompt
-    assert "do not strip the `task-` prefix" in prompt
-    assert "Example: `st done <task-id>` has no `--note` flag" in prompt
-    assert "start with the concrete task context, current diff/status, and the files or commands named in the task/prompt" in prompt
-    assert "inspect those first and only widen the search if that targeted path is insufficient" in prompt
-    assert "Prefer `dt -q -d` as the first validation pass from the repo root" in prompt
-    assert "use paths relative to that directory" in prompt
-    assert "For `read_file`, use repo-relative paths or fully expanded absolute paths" in prompt
-    assert "Do not use shell shortcuts like `~` inside `read_file` paths" in prompt
-    assert "If a direct path inspection is denied by tool policy, treat that denial as a real boundary" in prompt
-    assert "If `git branch` or snapshot metadata shows a task branch already attached to another worktree" in prompt
-    assert "Do not `git checkout` that branch in the current worktree just to inspect it" in prompt
-    assert "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead" in prompt
-    assert 'When completing a task with a note, use `st done <task-id> --message "..."`' in prompt
-    assert "Avoid exploratory `--help` calls unless a known-good command above still fails." in prompt
-    assert "Task:\nInvestigate the current task branch." in prompt
+    assert_prompt_contains_all(
+        prompt,
+        [
+            "st ready-all",
+            "st ready --limit N",
+            "st sessions list --status <status> --limit N",
+            "st session-events <session_id>",
+            "st session-events -T task-123 --page-size 100",
+            "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`",
+            "Do not use `--session` with `st session-events`",
+            "Never pass `st sessions list` output `session_id` values to `st session-events`",
+            "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
+            "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
+            "do not inspect `/home/kasadis/.local/share/st/worktrees/...`",
+            "If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only",
+            "Treat task ids as opaque",
+            "do not strip the `task-` prefix",
+            "Example: `st done <task-id>` has no `--note` flag",
+            "start with the concrete task context, current diff/status, and the files or commands named in the task/prompt",
+            "inspect those first and only widen the search if that targeted path is insufficient",
+            "Prefer `dt -q -d` as the first validation pass from the repo root",
+            "use paths relative to that directory",
+            "For `read_file`, use repo-relative paths or fully expanded absolute paths",
+            "Do not use shell shortcuts like `~` inside `read_file` paths",
+            "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
+            "If `git branch` or snapshot metadata shows a task branch already attached to another worktree",
+            "Do not `git checkout` that branch in the current worktree just to inspect it",
+            "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
+            'When completing a task with a note, use `st done <task-id> --message "..."`',
+            "Avoid exploratory `--help` calls unless a known-good command above still fails.",
+            "Task:\nInvestigate the current task branch.",
+        ],
+    )
 
 
 @pytest.mark.asyncio

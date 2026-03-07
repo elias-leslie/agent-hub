@@ -68,7 +68,7 @@ async def route_tool_execution(
         Dict with tool execution result attributes
     """
     if not supports_tools(provider, model):
-        raise ValueError(f"Tool execution not supported for provider: {provider}")
+        raise ValueError(f"Tool execution not supported for provider: {provider}, model: {model}")
 
     adapter = get_adapter(provider)
 

@@ -107,7 +107,6 @@ class TestGetSession:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
-        mock_db_session.parent_session_id = "parent-1"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
