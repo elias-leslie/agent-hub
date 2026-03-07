@@ -34,9 +34,9 @@ async def ensure_session_summary(
                 return True
             summary = empty_fallback
 
-        from app.services.memory.summary_generator import _store_summary_on_session
+        from app.services.memory.summary_generator import store_summary_on_session
 
-        await _store_summary_on_session(
+        await store_summary_on_session(
             session_id=session_id,
             summary_oneliner=summary,
             outcome="completed",

@@ -161,7 +161,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
   }
 
   const selectedModel = getSelectedModel(availableModels, formData.primary_model_id);
-  const supportsThinking = selectedModel?.capabilities.has_thinking ?? true;
+  const supportsThinking = selectedModel?.capabilities.has_thinking ?? false;
   const supportsVerbosity = selectedModel?.capabilities.supports_verbosity ?? false;
   const thinkingLevels = THINKING_LEVELS.filter(
     (level) => level.value !== "xhigh" || selectedModel?.capabilities.supports_xhigh,

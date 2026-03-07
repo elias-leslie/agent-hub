@@ -58,7 +58,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
     [onUpdate],
   );
   const runtime = heartbeatStatus?.runtime;
-  const heartbeatWarning = runtime?.warnings[0] ?? null;
+  const heartbeatWarning = runtime?.warnings?.[0] ?? null;
   const heartbeatDisabled = persona.heartbeat_interval_minutes === 0;
 
   return (
@@ -240,7 +240,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
 
           {heartbeatDisabled && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
-              Heartbeat is currently off, so Jenny is not autonomously driving work.
+              Heartbeat is currently off, so {persona.name} is not autonomously driving work.
             </div>
           )}
 
