@@ -35,6 +35,10 @@ class ModelCapabilitiesInfo(BaseModel):
     has_thinking: bool = False
     supports_pdf: bool = False
     supports_audio: bool = False
+    supports_tool_execution: bool = False
+    supports_verbosity: bool = False
+    supports_xhigh: bool = False
+    supports_session_cache: bool = False
     max_output_tokens: int = 8192
 
 

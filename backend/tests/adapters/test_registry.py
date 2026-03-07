@@ -147,14 +147,20 @@ class TestCapabilities:
         assert caps.supports_cache_retention is True
         assert caps.supports_streaming is True
 
-    def test_codex_supports_nothing(self):
-        """Codex should not support tools, thinking, images, or cache."""
+    def test_codex_provider_is_conservative_without_model_context(self):
+        """Provider-level Codex defaults stay conservative without a model hint."""
         caps = registry.get_capabilities("codex")
         assert caps.supports_tool_execution is False
         assert caps.supports_thinking is False
         assert caps.supports_images is False
         assert caps.supports_cache_retention is False
         assert caps.supports_streaming is True  # streaming is default True
+
+    def test_codex_model_capabilities_come_from_catalog(self):
+        """Model-aware capability checks should use the model catalog."""
+        assert registry.supports_thinking("codex", "codex/gpt-5.4") is True
+        assert registry.supports_tools("codex", "codex/gpt-5.4") is True
+        assert registry.supports_tools("codex", "codex/gpt-5.1-codex-mini") is False
 
     def test_gemini_supports_tools_and_thinking(self):
         """Gemini should support tools, thinking, images but not cache retention."""
@@ -174,6 +180,7 @@ class TestCapabilities:
         assert registry.supports_tools("claude") is True
         assert registry.supports_tools("gemini") is True
         assert registry.supports_tools("codex") is False
+        assert registry.supports_tools("codex", "codex/gpt-5.4") is True
 
     def test_supports_thinking_query(self):
         """supports_thinking() should return correct results."""
@@ -181,6 +188,7 @@ class TestCapabilities:
         assert registry.supports_thinking("gemini") is True
         assert registry.supports_thinking("cloudcode") is True
         assert registry.supports_thinking("openai") is False
+        assert registry.supports_thinking("codex", "codex/gpt-5.1-codex-mini") is False
 
     def test_supports_cache_retention_query(self):
         """Only Claude should support cache retention."""

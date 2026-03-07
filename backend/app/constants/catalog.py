@@ -78,6 +78,8 @@ __all__ = [
     "ModelCost",
     "ModelEntry",
     "ModelScores",
+    "get_model_capabilities",
+    "get_model_entry",
     "resolve_model",
 ]
 
@@ -101,6 +103,17 @@ MODEL_ALIASES: dict[str, str] = {e.alias: e.id for e in MODEL_CATALOG}
 def resolve_model(alias: str) -> str:
     """Resolve model alias to canonical ID. Pass-through if not an alias."""
     return MODEL_ALIASES.get(alias.lower(), alias)
+
+
+def get_model_entry(model: str) -> ModelEntry | None:
+    """Return the catalog entry for a model id or alias."""
+    return MODEL_CATALOG_BY_ID.get(resolve_model(model))
+
+
+def get_model_capabilities(model: str) -> ModelCapabilities | None:
+    """Return model capabilities from the catalog, if known."""
+    entry = get_model_entry(model)
+    return entry.capabilities if entry else None
 
 
 def _models_for_provider(provider: str) -> tuple[str, ...]:
@@ -189,4 +202,3 @@ CLOUDCODE_TO_CLAUDE_MAP: dict[str, str] = {
     CC_CLAUDE_SONNET: CLAUDE_SONNET,
     CC_CLAUDE_OPUS: CLAUDE_OPUS,
 }
-

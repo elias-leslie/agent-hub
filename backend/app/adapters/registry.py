@@ -297,13 +297,31 @@ def get_capabilities(provider: str) -> ProviderCapabilities:
     return _capabilities.get(provider, ProviderCapabilities())
 
 
-def supports_tools(provider: str) -> bool:
-    """Return True if the provider supports tool execution."""
+def _model_capability(model: str | None, attr: str) -> bool | None:
+    """Return a model-scoped capability from the catalog, if available."""
+    if not model:
+        return None
+    from app.constants.catalog import get_model_capabilities
+
+    capabilities = get_model_capabilities(model)
+    if capabilities is None:
+        return None
+    return bool(getattr(capabilities, attr, False))
+
+
+def supports_tools(provider: str, model: str | None = None) -> bool:
+    """Return True if the provider/model supports tool execution."""
+    model_value = _model_capability(model, "supports_tool_execution")
+    if model_value is not None:
+        return model_value
     return get_capabilities(provider).supports_tool_execution
 
 
-def supports_thinking(provider: str) -> bool:
-    """Return True if the provider supports thinking/reasoning mode."""
+def supports_thinking(provider: str, model: str | None = None) -> bool:
+    """Return True if the provider/model supports thinking/reasoning mode."""
+    model_value = _model_capability(model, "has_thinking")
+    if model_value is not None:
+        return model_value
     return get_capabilities(provider).supports_thinking
 
 

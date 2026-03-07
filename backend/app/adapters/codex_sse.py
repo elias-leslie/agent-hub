@@ -19,6 +19,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
     StreamEvent,
+    ToolCallResult,
 )
 from app.adapters.codex_auth import CodexCredentials
 
@@ -63,11 +64,33 @@ def build_request_body(
     # returns 400 "Unsupported parameter: temperature".
     if max_tokens is not None:
         body["max_output_tokens"] = max_tokens
+    if kwargs.get("tools"):
+        body["tools"] = _convert_tools(kwargs["tools"])
+        body["tool_choice"] = "auto"
+        body["parallel_tool_calls"] = True
     if kwargs.get("reasoning_effort"):
         body["reasoning"] = {"effort": kwargs["reasoning_effort"], "summary": "auto"}
     if kwargs.get("verbosity_level"):
         body["text"] = {"verbosity": kwargs["verbosity_level"]}
+    if kwargs.get("prompt_cache_key"):
+        body["prompt_cache_key"] = kwargs["prompt_cache_key"]
     return body
+
+
+def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert internal tool definitions to Codex Responses function tools."""
+    converted: list[dict[str, Any]] = []
+    for tool in tools:
+        if tool.get("type") == "function":
+            converted.append(tool)
+            continue
+        converted.append({
+            "type": "function",
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("input_schema", {"type": "object", "properties": {}}),
+        })
+    return converted
 
 
 def handle_error_response(status_code: int, body_text: str) -> None:
@@ -145,6 +168,10 @@ async def collect_completion(
 ) -> CompletionResult:
     """Collect a full completion result from an SSE stream response."""
     content_parts: list[str] = []
+    thinking_parts: list[str] = []
+    tool_calls: list[ToolCallResult] = []
+    reasoning_by_id: dict[str, list[str]] = {}
+    tool_call_args: dict[str, str] = {}
     input_tokens = 0
     output_tokens = 0
     finish_reason: str | None = None
@@ -169,6 +196,48 @@ async def collect_completion(
         if delta:
             content_parts.append(delta)
 
+        if event_type == "response.output_item.added":
+            item = event.get("item", {})
+            item_type = item.get("type")
+            if item_type == "reasoning":
+                reasoning_by_id[str(item.get("id", ""))] = []
+            elif item_type == "function_call":
+                tool_call_args[str(item.get("call_id", ""))] = item.get("arguments", "") or ""
+
+        if event_type == "response.reasoning_summary_text.delta":
+            active_ids = list(reasoning_by_id)
+            if active_ids:
+                reasoning_by_id[active_ids[-1]].append(event.get("delta", ""))
+
+        if event_type == "response.function_call_arguments.delta":
+            active_ids = list(tool_call_args)
+            if active_ids:
+                call_id = active_ids[-1]
+                tool_call_args[call_id] += event.get("delta", "")
+
+        if event_type == "response.output_item.done":
+            item = event.get("item", {})
+            item_type = item.get("type")
+            if item_type == "reasoning":
+                summary = "".join(reasoning_by_id.get(str(item.get("id", "")), []))
+                if summary:
+                    thinking_parts.append(summary)
+            elif item_type == "function_call":
+                call_id = str(item.get("call_id", ""))
+                raw_args = tool_call_args.get(call_id) or item.get("arguments", "") or "{}"
+                try:
+                    parsed_args = json.loads(raw_args) if raw_args else {}
+                except json.JSONDecodeError:
+                    parsed_args = {}
+                tool_calls.append(
+                    ToolCallResult(
+                        id=call_id,
+                        original_id=str(item.get("id", "")) or None,
+                        name=str(item.get("name", "")),
+                        input=parsed_args,
+                    )
+                )
+
         if event_type in ("response.completed", "response.done"):
             parsed = _parse_completion_event(event, resolved_model)
             input_tokens = parsed["input_tokens"]
@@ -183,6 +252,8 @@ async def collect_completion(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         finish_reason=finish_reason,
+        tool_calls=tool_calls or None,
+        thinking_content="\n".join(part for part in thinking_parts if part) or None,
     )
 
 

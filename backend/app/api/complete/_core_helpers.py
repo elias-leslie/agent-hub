@@ -195,7 +195,7 @@ async def execute_and_build_result(
     )
 
     should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
-    if should_execute_tools and supports_tools(provider):
+    if should_execute_tools and supports_tools(provider, model):
         return await _route_to_tool_executor(ctx)
 
     exec_result = await _run_multi_turn(ctx)

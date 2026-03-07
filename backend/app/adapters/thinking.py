@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.adapters.types import ThinkingLevel
+from app.constants.catalog import get_model_capabilities
 
 # OpenAI reasoning_effort mapping
 _OPENAI_REASONING_MAP: dict[str, str] = {
@@ -52,6 +53,12 @@ def get_thinking_config(
         return None
 
     provider_lower = provider.lower()
+    capabilities = get_model_capabilities(model)
+    if capabilities is not None and not capabilities.has_thinking:
+        return None
+
+    if level_str == "xhigh" and capabilities is not None and not capabilities.supports_xhigh:
+        level_str = "high"
 
     if provider_lower == "claude":
         return {"thinking_level": level_str}
