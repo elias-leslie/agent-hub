@@ -37,3 +37,6 @@ class CompletionInternalResult:
     # Fallback tracking
     model_used: str | None = None
     fallback_used: bool = False
+    requested_model: str | None = None
+    requested_provider: str | None = None
+    fallback_reason: str | None = None

@@ -33,6 +33,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
         model="minimax/MiniMax-M2.5",
         models_used=[],
         providers_used=[],
+        provider_metadata={},
     )
 
     with (
@@ -59,3 +60,6 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert session.provider == "claude"
     assert "claude-haiku-4-5" in session.models_used
     assert "claude" in session.providers_used
+    assert session.provider_metadata["requested_model"] == "xai/grok-4-1-fast-reasoning"
+    assert session.provider_metadata["effective_model"] == "claude-haiku-4-5"
+    assert session.provider_metadata["fallback_used"] is True

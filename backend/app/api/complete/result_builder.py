@@ -56,8 +56,8 @@ def build_completion_result(
 
     return {
         "content": final_content,
-        "model": model,
-        "provider": provider,
+        "model": getattr(final_result, "model_used", None) or model,
+        "provider": getattr(final_result, "provider", None) or provider,
         "input_tokens": total_input_tokens,
         "output_tokens": total_output_tokens,
         "finish_reason": final_finish_reason,
@@ -76,4 +76,9 @@ def build_completion_result(
         "error": execution_error,
         "container_id": current_container_id,
         "progress_log": progress_log,
+        "model_used": getattr(final_result, "model_used", None) or model,
+        "fallback_used": bool(getattr(final_result, "fallback_used", False)),
+        "requested_model": getattr(final_result, "requested_model", None) or model,
+        "requested_provider": getattr(final_result, "requested_provider", None) or provider,
+        "fallback_reason": getattr(final_result, "fallback_reason", None),
     }
