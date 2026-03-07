@@ -21,4 +21,4 @@ async def test_query_active_sessions_filters_to_real_agents() -> None:
 
     statement = mock_db.execute.await_args.args[0]
     sql = str(statement)
-    assert "sessions.agent_slug IS NOT NULL" in sql
+    assert "sessions.agent_slug IS NOT NULL" in sql, f"Expected agent_slug filter in SQL: {sql}"

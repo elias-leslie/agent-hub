@@ -35,6 +35,7 @@ async def test_session_reaper_uses_event_recency_for_global_stale_detection() ->
 
     await reap_stale_sessions(mock_db, datetime.now(UTC))
 
+    assert len(mock_db.execute.await_args_list) >= 2, "Expected at least 2 execute calls"
     statement = mock_db.execute.await_args_list[1].args[0]
     sql = str(statement)
     assert "session_events" in sql
