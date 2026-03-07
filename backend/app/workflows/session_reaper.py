@@ -37,12 +37,15 @@ async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
 
     from app.db import async_session
     from app.models import Session
+    from app.services.session_activity import last_activity_expr
 
     now = datetime.now(UTC)
     reaped_completion = 0
     reaped_stale = 0
 
     async with async_session() as db:
+        last_activity = last_activity_expr()
+
         # 1. Completion-type sessions active for > 4 hours
         cutoff_4h = now - timedelta(hours=4)
         result = await db.execute(
@@ -50,7 +53,7 @@ async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
             .where(
                 Session.status == "active",
                 Session.session_type == "completion",
-                Session.updated_at < cutoff_4h,
+                last_activity < cutoff_4h,
             )
             .values(status="completed")
             .execution_options(synchronize_session="fetch")
@@ -63,7 +66,7 @@ async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
             update(Session)
             .where(
                 Session.status == "active",
-                Session.updated_at < cutoff_24h,
+                last_activity < cutoff_24h,
             )
             .values(status="completed")
             .execution_options(synchronize_session="fetch")
