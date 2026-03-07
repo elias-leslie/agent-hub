@@ -55,6 +55,8 @@ async def _setup_streaming_session(
             client_id=client_id,
             request_source=request_source,
             agent_slug=request.agent_slug,
+            current_branch=request.current_branch,
+            working_dir=request.working_dir,
         )
         session_id = stream_session.id
         if is_new_session:
