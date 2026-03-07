@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Session
+from app.services.session_activity import last_activity_expr
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
 
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
+        last_activity = last_activity_expr()
 
         # Single UPDATE query per session type - avoids SELECT + UPDATE N+1 pattern
         result = await db.execute(
@@ -54,7 +56,7 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
             .where(
                 Session.session_type == session_type,
                 Session.status == "active",
-                Session.updated_at < cutoff,
+                last_activity < cutoff,
             )
             .values(status="completed")
         )
@@ -92,13 +94,14 @@ async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
 
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
+        last_activity = last_activity_expr()
 
         # Use COUNT instead of loading all sessions
         result = await db.execute(
             select(func.count(Session.id)).where(
                 Session.session_type == session_type,
                 Session.status == "active",
-                Session.updated_at < cutoff,
+                last_activity < cutoff,
             )
         )
         stats[session_type] = result.scalar() or 0
