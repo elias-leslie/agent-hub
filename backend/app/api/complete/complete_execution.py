@@ -23,7 +23,7 @@ from app.services.agent_routing_models import ResolvedAgent
 
 logger = logging.getLogger(__name__)
 
-_NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None]
+_NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None, str | None]
 _ToolsAPI = list[dict[str, object]] | None
 _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
@@ -50,7 +50,7 @@ def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _Non
         thinking_content=r.thinking_content, thinking_tokens=r.thinking_tokens,
         tool_calls=r.tool_calls, container=r.container,
     )
-    return (cr, model, False, r.memory_uuids, r.session_id)
+    return (cr, model, False, r.memory_uuids, r.session_id, r.fallback_reason)
 
 
 async def _run_internal(
@@ -84,7 +84,7 @@ async def _run_with_agentic_fallback(
     """Try primary model then fallback_models for agentic DB execution."""
     from app.adapters.registry import get_provider_for_model
 
-    last_error: ProviderError | asyncio.TimeoutError | None = None
+    primary_error: ProviderError | asyncio.TimeoutError | None = None
     for model_id in [primary_model, *agent.agent.fallback_models]:
         try:
             fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
@@ -96,15 +96,16 @@ async def _run_with_agentic_fallback(
                 logger.info("Agentic fallback succeeded: %s → %s", primary_model, model_id)
                 raw.fallback_used = True
                 raw.model_used = model_id
-                raw.fallback_reason = f"{type(last_error).__name__}: {last_error}" if last_error else None
+                raw.fallback_reason = f"{type(primary_error).__name__}: {primary_error}" if primary_error else None
             return raw
         except (TimeoutError, ProviderError) as e:
-            last_error = e
+            if model_id == primary_model:
+                primary_error = e
             logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
 
-    if last_error is None:
+    if primary_error is None:
         raise RuntimeError("No models attempted in fallback chain")
-    raise last_error
+    raise primary_error
 
 
 async def _dispatch_db(
@@ -157,8 +158,15 @@ async def execute_completion(
             resolved_model=resolved_model,
             tier_preference=request.tier_preference,
         )
-        return (result, model_used, fallback_used, [], session_id)
+        return (
+            result,
+            model_used,
+            fallback_used,
+            [],
+            session_id,
+            getattr(result, "fallback_reason", None),
+        )
     if db is not None:
         return await _dispatch_db(request, resolved_model, provider, resolved_agent, messages_dict, db, is_agentic, session_id, client_id, request_source, thinking, tools, fmt, skip_cache)
     result, model_used = await execute_without_db(_to_messages(messages_dict), resolved_model, provider, request, thinking, tools, fmt)
-    return (result, model_used, False, [], session_id)
+    return (result, model_used, False, [], session_id, None)

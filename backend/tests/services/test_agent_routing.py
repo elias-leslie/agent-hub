@@ -294,6 +294,7 @@ class TestCompleteWithFallback:
         assert result.result == mock_result
         assert result.model_used == CLAUDE_HAIKU
         assert result.used_fallback is True
+        assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"
 
     @pytest.mark.asyncio
     async def test_all_models_fail(self, mock_agent: AgentDTO) -> None:

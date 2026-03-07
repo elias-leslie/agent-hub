@@ -68,6 +68,7 @@ async def process_completion_result(
     agent_used: str | None,
     model_used: str | None,
     fallback_used: bool,
+    fallback_reason: str | None = None,
     is_new_session: bool = False,
     external_id: str | None = None,
     duration_ms: int | None = None,
@@ -79,6 +80,7 @@ async def process_completion_result(
         await save_and_track(
             db, session, session_id, request, result, resolved_model, is_new_session,
             model_used=model_used,
+            fallback_reason=fallback_reason,
             publish_messages=True, duration_ms=duration_ms,
         )
     output_usage_info = make_output_usage_info(result, resolved_model)
@@ -107,5 +109,6 @@ async def process_completion_result(
         agent_used=agent_used,
         model_used=model_used,
         fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
         cited_uuids=cited_uuids,
     )

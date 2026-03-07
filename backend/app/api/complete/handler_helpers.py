@@ -41,6 +41,7 @@ async def save_and_track(
     resolved_model: str,
     is_new_session: bool,
     model_used: str | None = None,
+    fallback_reason: str | None = None,
     publish_messages: bool = False,
     duration_ms: int | None = None,
 ) -> None:
@@ -51,6 +52,7 @@ async def save_and_track(
         requested_model=resolved_model,
         effective_model=effective_model,
         fallback_used=effective_model != resolved_model,
+        fallback_reason=fallback_reason,
     )
     await save_events(
         db, session_id, request.messages, result.content,
