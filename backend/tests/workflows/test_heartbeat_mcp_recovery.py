@@ -59,6 +59,7 @@ class TestDispatchAgentFireAndForget:
         mock_resolved.model = "claude-sonnet-4-5"
         mock_resolved.provider = "claude"
         mock_resolved.agent.temperature = 0.7
+        mock_resolved.agent.thinking_level = "medium"
 
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
@@ -83,6 +84,7 @@ class TestDispatchAgentFireAndForget:
             prompt="Fix the bug",
             project_id="summitflow",
             event_type="dispatch",
+            thinking_level="medium",
             max_turns=25,
         )
         assert "Dispatched git-agent" in result
@@ -96,6 +98,7 @@ class TestDispatchAgentFireAndForget:
         mock_resolved.model = "claude-sonnet-4-5"
         mock_resolved.provider = "claude"
         mock_resolved.agent.temperature = 0.7
+        mock_resolved.agent.thinking_level = "medium"
 
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
@@ -232,5 +235,4 @@ class TestRetryFailedMcpTools:
             task="Fix the biome thread bug",
             max_turns=25,
         )
-
 

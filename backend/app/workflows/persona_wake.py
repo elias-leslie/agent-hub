@@ -14,6 +14,7 @@ from hatchet_sdk import Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
+from app.workflows._session_postprocess import ensure_session_summary
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,22 @@ class WakeResult(BaseModel):
     tool_calls: int = 0
     event_type: str = "generic"
     error: str | None = None
+    summary_stored: bool = False
+
+
+_WAKE_TOOLING_HINTS = """Operational notes:
+- Use current `st` syntax when inspecting tasks/sessions: `st ready-all`, `st ready --limit N`, `st sessions list --status <status> --limit N`.
+- Do not add stale flags like `-P`, `--project`, `--human`, or `--compact` to `st ready` / `st ready-all`.
+- Use `st context <task-id>` only when you have a real task id.
+- Prefer the known-good commands above over probing multiple invalid `st` variants.
+- Prefer investigation over feature work unless the prompt explicitly asks for implementation.
+"""
+
+
+def _build_wake_prompt(prompt: str) -> str:
+    """Prefix wake prompts with concise operational hints to reduce CLI thrash."""
+    prompt = prompt.strip()
+    return f"{_WAKE_TOOLING_HINTS}\nTask:\n{prompt}" if prompt else _WAKE_TOOLING_HINTS.strip()
 
 
 @hatchet.task(
@@ -75,7 +92,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             max_turns = get_persona_limit(persona, "max_turns") or 200
 
         result = await complete_internal(
-            messages=[{"role": "user", "content": input.prompt}],
+            messages=[{"role": "user", "content": _build_wake_prompt(input.prompt)}],
             model=input.model,
             provider=input.provider,
             temperature=input.temperature,
@@ -94,16 +111,23 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             thinking_level=input.thinking_level,
         )
 
+    summary_stored = await ensure_session_summary(
+        result.session_id,
+        result.content or "",
+        agent_id=input.agent_slug,
+    )
+
     out = WakeResult(
         status=result.status or "success",
         turns=result.turns,
         tool_calls=result.tool_calls_count,
         event_type=input.event_type,
         error=result.error,
+        summary_stored=summary_stored,
     )
     ctx.log(
         f"Agent wake ({input.agent_slug}/{input.event_type}): "
-        f"{out.turns} turns, {out.tool_calls} tool calls"
+        f"{out.turns} turns, {out.tool_calls} tool calls, summary_stored={summary_stored}"
     )
     return out.model_dump()
 

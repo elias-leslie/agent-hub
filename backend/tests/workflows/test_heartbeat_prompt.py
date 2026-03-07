@@ -162,3 +162,6 @@ class TestBuildHeartbeatPromptIncludesGitState:
         prompt = await build_heartbeat_prompt(model_review_due=False, model_review_label="skip")
         assert "<git_state>" in prompt
         assert "[summitflow] test data" in prompt
+        assert "Your heartbeat working directory is persona-sandbox" in prompt
+        assert "prefer `dispatch_agent` to a coding-capable specialist" in prompt
+        assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt

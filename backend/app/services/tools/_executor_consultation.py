@@ -69,6 +69,7 @@ async def dispatch_agent(
             prompt=task,
             project_id=project_id,
             event_type="dispatch",
+            thinking_level=resolved.agent.thinking_level,
             max_turns=max_turns,
         )
 
