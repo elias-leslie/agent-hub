@@ -12,6 +12,7 @@ import re
 from datetime import UTC, datetime
 
 from app.workflows._heartbeat_data import (
+    _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
     _get_feedback_summary_section,
@@ -110,6 +111,10 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     if active_work:
         prompt += active_work
 
+    active_specialists = await _get_active_specialist_inventory()
+    if active_specialists:
+        prompt += active_specialists
+
     agent_roster = await _get_agent_roster_summary()
     if agent_roster:
         prompt += agent_roster
@@ -133,6 +138,7 @@ __all__ = [
     "HEARTBEAT_PROMPT_TEMPLATE",
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
+    "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
     "_get_feedback_summary_section",

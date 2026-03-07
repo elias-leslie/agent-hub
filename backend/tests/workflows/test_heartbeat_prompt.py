@@ -9,6 +9,7 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _get_active_specialist_inventory,
     _get_git_project_status,
     _get_git_status_summary,
     _get_workstream_inventory,
@@ -150,6 +151,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
     """Integration: build_heartbeat_prompt includes git_state section."""
 
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt._get_git_status_summary",
@@ -165,6 +167,9 @@ class TestBuildHeartbeatPromptIncludesGitState:
         prompt = await build_heartbeat_prompt(model_review_due=False, model_review_label="skip")
         assert "<git_state>" in prompt
         assert "[summitflow] test data" in prompt
+        assert "If <active_specialist_inventory> is present" in prompt
+        assert "Do not dispatch the same specialist on the same project" in prompt
+        assert "If a project/agent pair already shows `active>1`" in prompt
         assert "Your heartbeat working directory is persona-sandbox" in prompt
         assert "prefer `dispatch_agent` to a coding-capable specialist" in prompt
         assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
@@ -182,6 +187,63 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
+
+
+class TestActiveSpecialistInventory:
+    """Tests for active specialist inventory in heartbeat prompt context."""
+
+    @pytest.mark.asyncio
+    async def test_groups_active_non_owner_specialists_by_project_and_agent(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-1",
+                "agent_slug": "reviewer",
+                "project_id": "summitflow",
+                "parent_session_id": "parent-1",
+                "request_source": "dispatch",
+                "age_minutes": 4,
+            },
+            {
+                "session_id": "sess-2",
+                "agent_slug": "reviewer",
+                "project_id": "summitflow",
+                "parent_session_id": "parent-2",
+                "request_source": "dispatch",
+                "age_minutes": 1,
+            },
+            {
+                "session_id": "sess-3",
+                "agent_slug": "investment-committee",
+                "project_id": "portfolio-ai",
+                "parent_session_id": None,
+                "request_source": "dispatch",
+                "age_minutes": 2,
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_active_specialist_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_active_specialist_inventory()
+
+        assert "<active_specialist_inventory>" in result
+        assert "summitflow | reviewer | active=2" in result
+        assert "next=dedupe_or_wait" in result
+        assert "portfolio-ai | investment-committee | active=1" in result
+        assert "next=wait_or_complement" in result
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_when_no_active_specialists_exist(self) -> None:
+        with patch(
+            "app.workflows._heartbeat_data._query_active_specialist_sessions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            result = await _get_active_specialist_inventory()
+
+        assert result == ""
 
 
 class TestGetWorkstreamInventory:

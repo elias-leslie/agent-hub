@@ -36,6 +36,13 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=reconciled` means an authoritative lane is already recorded; do not reopen old branches without new evidence
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
 
+## Specialist Hygiene
+If <active_specialist_inventory> is present, treat it as an in-flight advisory queue:
+- Each line is an active non-owner specialist already working that project.
+- Do not dispatch the same specialist on the same project while it is listed there unless you have concrete evidence the active session is stuck, failed, or is solving the wrong problem.
+- If a project/agent pair already shows `active>1`, treat that as duplicate fan-out to unwind or wait on, not permission to dispatch a third copy.
+- When a coding lane is already active and a specialist is already reviewing that same project, prefer consuming the pending evidence or dispatching a complementary role instead of another reviewer/debugger pass.
+
 ## Available Tools ({tool_count} total)
 Beyond bash/read_file/write_file, you have: {persona_tool_list}
 
