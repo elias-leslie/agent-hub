@@ -1,6 +1,7 @@
 """Session data transformations."""
 
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from app.api.schemas.sessions import (
@@ -14,6 +15,7 @@ from app.api.schemas.sessions import (
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.models.session import SessionEventType
+from app.services.tools.project_env import detect_main_repo
 
 
 def _resolve_model_display_name(model_id: str | None) -> str | None:
@@ -145,6 +147,19 @@ def build_session_list_items(
     def _optional_str(value: object) -> str | None:
         return value if isinstance(value, str) else None
 
+    def _working_dir(session: Session) -> str | None:
+        metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else None
+        cwd = metadata.get("cwd") if metadata else None
+        return cwd if isinstance(cwd, str) and cwd else None
+
+    def _is_worktree(working_dir: str | None) -> bool:
+        if not working_dir:
+            return False
+        try:
+            return detect_main_repo(Path(working_dir).resolve()) is not None
+        except OSError:
+            return False
+
     return [
         SessionListItem(
             id=s.id,
@@ -157,6 +172,8 @@ def build_session_list_items(
             parent_session_id=_optional_str(s.parent_session_id),
             external_id=_optional_str(s.external_id),
             current_branch=_optional_str(s.current_branch),
+            working_dir=working_dir,
+            is_worktree=_is_worktree(working_dir),
             workstream_status=_optional_str(s.workstream_status),
             summary_oneliner=_optional_str(s.summary_oneliner),
             message_count=msg_counts.get(s.id, 0),
@@ -166,6 +183,7 @@ def build_session_list_items(
             updated_at=s.updated_at,
         )
         for s in sessions
+        for working_dir in [_working_dir(s)]
     ]
 
 

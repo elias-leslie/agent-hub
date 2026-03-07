@@ -125,6 +125,8 @@ class SessionListItem(BaseModel):
     parent_session_id: str | None = Field(default=None, description="Parent session ID")
     external_id: str | None = Field(default=None, description="Linked external work item ID")
     current_branch: str | None = Field(default=None, description="Git branch associated with the session")
+    working_dir: str | None = Field(default=None, description="Working directory captured for the session")
+    is_worktree: bool = Field(default=False, description="Whether the working directory is a git worktree")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
     message_count: int

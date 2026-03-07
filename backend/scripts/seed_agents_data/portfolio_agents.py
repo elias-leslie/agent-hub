@@ -11,6 +11,18 @@ from app.constants import (
     XAI_GROK_4_1_FAST,
 )
 
+_FINANCE_MEMORY_CONFIG: dict[str, object] = {
+    "injection_enabled": True,
+    "budget_enforcement": True,
+    "token_budget": 1200,
+    "include_mandates": False,
+    "include_guardrails": False,
+    "reference_index": False,
+    "continuity_enabled": False,
+    "include_tags": [],
+    "exclude_tags": [],
+}
+
 PORTFOLIO_AGENTS: list[dict[str, object]] = [
     {
         "slug": "equity-analyst",
@@ -37,6 +49,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
         "temperature": 0.3,
         "thinking_level": "medium",
         "is_coding_agent": False,
+        "memory_config": _FINANCE_MEMORY_CONFIG,
     },
     {
         "slug": "risk-manager",
@@ -62,6 +75,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
         "temperature": 0.2,
         "thinking_level": "medium",
         "is_coding_agent": False,
+        "memory_config": _FINANCE_MEMORY_CONFIG,
     },
     {
         "slug": "trade-manager",
@@ -85,6 +99,7 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
         "fallback_models": [CODEX_GPT_5_4, XAI_GROK_4_1_FAST, GEMINI_3_1_PRO],
         "temperature": 0.25,
         "is_coding_agent": False,
+        "memory_config": _FINANCE_MEMORY_CONFIG,
     },
     {
         "slug": "investment-committee",
@@ -110,5 +125,6 @@ PORTFOLIO_AGENTS: list[dict[str, object]] = [
         "temperature": 0.25,
         "thinking_level": "medium",
         "is_coding_agent": False,
+        "memory_config": _FINANCE_MEMORY_CONFIG,
     },
 ]
