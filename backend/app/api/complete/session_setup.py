@@ -37,6 +37,8 @@ async def _init_session(
     client_id: str | None,
     request_source: str | None,
     agent_slug: str | None,
+    current_branch: str | None,
+    working_dir: str | None,
     parent_session_id: str | None,
 ) -> tuple[DBSession, list[Any], bool]:
     """Get or create a session and publish a start event when new."""
@@ -51,6 +53,8 @@ async def _init_session(
         client_id=client_id,
         request_source=request_source,
         agent_slug=agent_slug,
+        current_branch=current_branch,
+        working_dir=working_dir,
         parent_session_id=parent_session_id,
     )
     if is_new:
@@ -68,6 +72,8 @@ async def setup_completion_session(
     client_id: str | None,
     request_source: str | None,
     agent_slug: str | None,
+    current_branch: str | None,
+    working_dir: str | None,
     parent_session_id: str | None,
     messages: list[dict[str, Any]],
 ) -> tuple[DBSession, str, bool, list[dict[str, Any]]]:
@@ -82,6 +88,8 @@ async def setup_completion_session(
         client_id,
         request_source,
         agent_slug,
+        current_branch,
+        working_dir,
         parent_session_id,
     )
     return session, session.id, is_new, _merge_messages(ctx, messages)

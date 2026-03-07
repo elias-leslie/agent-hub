@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.complete.request_setup import inject_memory
+from app.api.complete.request_setup import inject_memory, setup_session
 
 
 class _FakeContext:
@@ -29,6 +29,9 @@ def _request() -> SimpleNamespace:
         project_id="agent-hub",
         external_id=None,
         current_branch=None,
+        working_dir=None,
+        session_id=None,
+        agent_slug="coder",
     )
 
 
@@ -119,3 +122,37 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     mock_track.assert_awaited_once_with(["11111111-1111-1111-1111-111111111111"])
     mock_store.assert_awaited_once()
 
+
+@pytest.mark.asyncio
+async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
+    request = _request()
+    request.project_id = "summitflow"
+    request.current_branch = "task-123/main"
+    request.working_dir = "/tmp/worktrees/task-123"
+
+    session = SimpleNamespace(id="sess-1")
+    with patch(
+        "app.api.complete.request_setup.get_or_create_session",
+        new_callable=AsyncMock,
+        return_value=(session, [], True),
+    ) as mock_get_or_create, patch(
+        "app.api.complete.request_setup.publish_session_start",
+        new_callable=AsyncMock,
+    ) as mock_publish:
+        session_id, returned_session, context_messages, is_new_session = await setup_session(
+            request=request,
+            provider="claude",
+            resolved_model="claude-sonnet-4-6",
+            db=AsyncMock(),
+            client_id="client-1",
+            request_source="test",
+        )
+
+    assert session_id == "sess-1"
+    assert returned_session is session
+    assert context_messages == []
+    assert is_new_session is True
+    mock_get_or_create.assert_awaited_once()
+    assert mock_get_or_create.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-123"
+    assert mock_get_or_create.await_args.kwargs["current_branch"] == "task-123/main"
+    mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-4-6", "summitflow")

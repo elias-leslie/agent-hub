@@ -139,7 +139,8 @@ async def complete_internal(
         ]
     session, session_id, is_new, messages_dict = await setup_completion_session(
         db, session_id, project_id, provider, model,
-        external_id, client_id, request_source, agent_slug, parent_session_id, messages,
+        external_id, client_id, request_source, agent_slug, current_branch, working_dir,
+        parent_session_id, messages,
     )
     ctx = _build_ctx(
         db=db, session=session, session_id=session_id, is_new=is_new,
