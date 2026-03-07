@@ -246,11 +246,59 @@ def _build_workstream_next_action(
             f'manage_tasks(action="done", task_id="{task_id}", '
             f'project_id="{project_id}")'
         )
+    if state == "completed_ready_for_closure" and not task_id:
+        return "completed_no_task_id"
     if state == "stale_active":
         return "query_sessions(status='active') then verify or retire the stale lane"
     if state == "mixed":
         return "split/promotion cleanup; do not dispatch more implementation onto this lane"
     return "monitor"
+
+
+def _format_workstream_lane(
+    project_id: str,
+    lane_key: str,
+    lane_rows: list[dict[str, object]],
+) -> str:
+    """Format a single workstream lane into a summary line."""
+    task_id = next(
+        (str(row["external_id"]) for row in lane_rows if row.get("external_id")),
+        None,
+    )
+    branches = {
+        str(row["current_branch"])
+        for row in lane_rows
+        if row.get("current_branch")
+    }
+    agents = {
+        str(row["agent_slug"])
+        for row in lane_rows
+        if row.get("agent_slug")
+    }
+    active_count = sum(1 for row in lane_rows if row.get("status") == "active")
+    completed_count = sum(
+        1 for row in lane_rows if row.get("status") == "completed"
+    )
+    state = _classify_workstream_lane(lane_rows)
+    next_action = _build_workstream_next_action(
+        state=state,
+        project_id=project_id,
+        task_id=task_id,
+    )
+    label = task_id or lane_key
+    parts = [
+        f"- {project_id} | {label}",
+        f"state={state}",
+        f"active={active_count}",
+    ]
+    if completed_count:
+        parts.append(f"completed={completed_count}")
+    if branches:
+        parts.append(f"branches={len(branches)}")
+    if agents:
+        parts.append(f"agents={','.join(sorted(agents))}")
+    parts.append(f"next={next_action}")
+    return " | ".join(parts)
 
 
 async def _get_workstream_inventory() -> str:
@@ -274,44 +322,7 @@ async def _get_workstream_inventory() -> str:
 
         lines = ["Recent workstreams:"]
         for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-            task_id = next(
-                (str(row["external_id"]) for row in lane_rows if row.get("external_id")),
-                None,
-            )
-            branches = {
-                str(row["current_branch"])
-                for row in lane_rows
-                if row.get("current_branch")
-            }
-            agents = {
-                str(row["agent_slug"])
-                for row in lane_rows
-                if row.get("agent_slug")
-            }
-            active_count = sum(1 for row in lane_rows if row.get("status") == "active")
-            completed_count = sum(
-                1 for row in lane_rows if row.get("status") == "completed"
-            )
-            state = _classify_workstream_lane(lane_rows)
-            next_action = _build_workstream_next_action(
-                state=state,
-                project_id=project_id,
-                task_id=task_id,
-            )
-            label = task_id or lane_key
-            parts = [
-                f"- {project_id} | {label}",
-                f"state={state}",
-                f"active={active_count}",
-            ]
-            if completed_count:
-                parts.append(f"completed={completed_count}")
-            if branches:
-                parts.append(f"branches={len(branches)}")
-            if agents:
-                parts.append(f"agents={','.join(sorted(agents))}")
-            parts.append(f"next={next_action}")
-            lines.append(" | ".join(parts))
+            lines.append(_format_workstream_lane(project_id, lane_key, lane_rows))
 
         body = "\n".join(lines)
         return f"\n<workstream_inventory>\n{body}\n</workstream_inventory>"
