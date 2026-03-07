@@ -811,6 +811,73 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
+    async def test_reconcile_cancels_orphan_running_task_without_lane_evidence(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "TASK:task-42|running|P1|task|SIMPLE",
+                "No checkpoint found for task-42",
+                "TASK:task-42|cancelled|P1|task|SIMPLE",
+            ]
+        )
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Recovered task-42" in result
+        mock_bash.assert_any_await("st -P summitflow context task-42 --compact")
+        mock_bash.assert_any_await("st -P summitflow checkpoints --details task-42")
+        mock_bash.assert_any_await(
+            "st -P summitflow cancel task-42 -r 'Recovered stale running task with no linked Agent Hub sessions or checkpoint.'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_skips_orphan_running_task_when_checkpoint_still_exists(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "TASK:task-42|running|P1|task|SIMPLE",
+                "CHECKPOINT:task-42|main|/tmp/worktree/task-42",
+            ]
+        )
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Reconcile skipped for task-42: no linked Agent Hub sessions found." in result
+        mock_bash.assert_any_await("st -P summitflow context task-42 --compact")
+        mock_bash.assert_any_await("st -P summitflow checkpoints --details task-42")
+        assert mock_bash.await_count == 2
+
+    @pytest.mark.asyncio
     async def test_reconcile_refuses_when_lane_is_still_active(self):
         from app.services.tools._executor_io import manage_tasks
 

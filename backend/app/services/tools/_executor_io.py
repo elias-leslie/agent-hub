@@ -91,6 +91,42 @@ def _task_is_terminal(task_status: str | None) -> bool:
     return bool(task_status and task_status in _TERMINAL_TASK_STATUSES)
 
 
+async def _task_has_checkpoint(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> bool | None:
+    """Return whether SummitFlow reports an active checkpoint for the task."""
+    try:
+        output = await bash_fn(_st_cmd(f"checkpoints --details {shlex.quote(task_id)}", project_id))
+    except Exception:
+        logger.exception("Failed to inspect checkpoints for stale-lane recovery", extra={"task_id": task_id})
+        return None
+    return "No checkpoint found" not in output
+
+
+async def _recover_orphan_running_task(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+    task_status: str | None,
+) -> str | None:
+    """Recover a task stuck in running with no session-backed lane evidence."""
+    if task_status != "running":
+        return None
+    has_checkpoint = await _task_has_checkpoint(bash_fn, task_id, project_id)
+    if has_checkpoint is not False:
+        return None
+
+    reason = "Recovered stale running task with no linked Agent Hub sessions or checkpoint."
+    cmd = _st_cmd(f"cancel {shlex.quote(task_id)} -r {shlex.quote(reason)}", project_id)
+    result = await bash_fn(cmd)
+    return (
+        f"{result}\n"
+        f"Recovered {task_id}: task was running but had no linked Agent Hub sessions and no active checkpoint."
+    )
+
+
 async def _mark_stale_active_sessions(
     sessions: list[Session],
     *,
@@ -151,6 +187,10 @@ async def _reconcile_task_lane(
     sessions = await _load_task_lane_sessions(task_id)
 
     if not sessions:
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        recovered = await _recover_orphan_running_task(bash_fn, task_id, project_id, task_status)
+        if recovered:
+            return recovered
         return (
             f"Reconcile skipped for {task_id}: no linked Agent Hub sessions found. "
             "Use manage_tasks(action=\"get_context\") or query_sessions() first."
