@@ -1,6 +1,6 @@
 """Support agents for specialized tasks.
 
-Includes: supervisor, analyst, validator, explorer, designer, reasoner, qa, summarizer,
+Includes: supervisor, analyst, validator, explorer, specifier, designer, reasoner, qa, summarizer,
 memory-rater, learning-extractor, voice-responder, complexity-assessor, critic
 
 Agent definitions are organized in focused sub-modules:
@@ -16,15 +16,16 @@ from seed_agents_data._support_memory import MEMORY_AGENTS
 from seed_agents_data._support_utility import UTILITY_AGENTS
 
 # Preserve the original ordering of agents.
-# Original order: supervisor, analyst, validator, explorer, designer, reasoner,
+# Original order: supervisor, analyst, validator, explorer, specifier, designer, reasoner,
 #                 qa, summarizer, memory-rater, learning-extractor,
 #                 voice-responder, complexity-assessor, critic
 _supervisor = COORDINATION_AGENTS[0]
 _qa = COORDINATION_AGENTS[1]
-_analyst, _explorer, _critic = (
+_analyst, _explorer, _specifier, _critic = (
     ANALYSIS_AGENTS[0],
     ANALYSIS_AGENTS[1],
     ANALYSIS_AGENTS[2],
+    ANALYSIS_AGENTS[3],
 )
 _validator, _designer, _reasoner, _voice_responder, _complexity_assessor, _site_checker = (
     UTILITY_AGENTS[0],
@@ -45,6 +46,7 @@ SUPPORT_AGENTS: list[dict[str, object]] = [
     _analyst,
     _validator,
     _explorer,
+    _specifier,
     _designer,
     _reasoner,
     _qa,

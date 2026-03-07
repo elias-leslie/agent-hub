@@ -1,9 +1,15 @@
 """Analysis and exploration support agents.
 
-Includes: analyst, explorer, critic
+Includes: analyst, explorer, specifier, critic
 """
 
-from app.constants import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH, GEMINI_PRO
+from app.constants import (
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CODEX_GPT_5_4,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
 
 _ANALYST: dict[str, object] = {
     "slug": "analyst",
@@ -41,6 +47,46 @@ _EXPLORER: dict[str, object] = {
     "fallback_models": [CLAUDE_SONNET],
     "temperature": 0.2,
     "is_coding_agent": False,
+}
+
+_SPECIFIER: dict[str, object] = {
+    "slug": "specifier",
+    "name": "Task Spec Critic",
+    "description": (
+        "Independent second-opinion reviewer for task definitions, plans,"
+        " and execution contracts before implementation starts"
+    ),
+    "system_prompt": (
+        "You are a task specification critic. Your job is to review a proposed task package "
+        "before implementation begins and identify what is missing, risky, ambiguous, or "
+        "unnecessarily complex.\n\n"
+        "You will receive a compact package containing task metadata, objective, anti-goals, "
+        "acceptance criteria, constraints, decisions, context, and planned subtasks/steps.\n\n"
+        "Review priorities:\n"
+        "1. Missing requirements or acceptance criteria that would make the task incomplete\n"
+        "2. Weak assumptions or hidden dependencies\n"
+        "3. Edge cases likely to be missed during implementation\n"
+        "4. Test gaps or missing verification strategy\n"
+        "5. Rollout, migration, monitoring, or operational gaps\n"
+        "6. Simpler alternatives that preserve the goal with less risk\n\n"
+        "Rules:\n"
+        "- This is a critique, not a re-plan. Do not rewrite the whole task unless necessary.\n"
+        "- Be concrete and selective. Focus on real execution risk, not style.\n"
+        "- If the task package is sound, say so clearly.\n"
+        "- Return strict JSON only in the shape requested by the caller.\n"
+        "- Treat yourself as an independent reviewer, not a collaborator trying to be agreeable."
+    ),
+    "primary_model_id": CODEX_GPT_5_4,
+    "fallback_models": [CLAUDE_OPUS, GEMINI_PRO],
+    "premium_model_id": CLAUDE_OPUS,
+    "temperature": 0.2,
+    "thinking_level": "medium",
+    "is_coding_agent": False,
+    "memory_config": {
+        "include_mandates": True,
+        "include_guardrails": True,
+        "reference_index_enabled": True,
+    },
 }
 
 _CRITIC: dict[str, object] = {
@@ -122,4 +168,4 @@ _CRITIC: dict[str, object] = {
     },
 }
 
-ANALYSIS_AGENTS: list[dict[str, object]] = [_ANALYST, _EXPLORER, _CRITIC]
+ANALYSIS_AGENTS: list[dict[str, object]] = [_ANALYST, _EXPLORER, _SPECIFIER, _CRITIC]
