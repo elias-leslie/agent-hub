@@ -286,9 +286,10 @@ async def query_sessions(
             summary = ""
             if s.summary_oneliner:
                 summary = f" — {s.summary_oneliner}"
+            external_id = f" | task={s.external_id}" if s.external_id else ""
             lines.append(
                 f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
-                f"{s.provider}/{s.model} | status={s.status} | {time_label}{summary}"
+                f"{s.provider}/{s.model}{external_id} | status={s.status} | {time_label}{summary}"
             )
         return "\n".join(lines)
     except Exception as e:
