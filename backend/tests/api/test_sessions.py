@@ -3,6 +3,7 @@
 from collections import deque
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -254,7 +255,12 @@ class TestListSessions:
         assert data["page"] == 1
         assert data["page_size"] == 20
 
-    def test_list_sessions_with_results(self, client: APITestClient, mock_session: AsyncMock) -> None:
+    def test_list_sessions_with_results(
+        self,
+        client: APITestClient,
+        mock_session: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
         """Test listing sessions with results."""
         # Create mock session
         mock_db_session = MagicMock()
@@ -270,6 +276,7 @@ class TestListSessions:
         mock_db_session.external_id = "task-123"
         mock_db_session.current_branch = "task-123/main"
         mock_db_session.workstream_status = "authoritative"
+        mock_db_session.provider_metadata = {"cwd": str(tmp_path)}
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -313,8 +320,69 @@ class TestListSessions:
         assert data["sessions"][0]["parent_session_id"] == "parent-1"
         assert data["sessions"][0]["external_id"] == "task-123"
         assert data["sessions"][0]["current_branch"] == "task-123/main"
+        assert data["sessions"][0]["working_dir"] == str(tmp_path)
+        assert data["sessions"][0]["is_worktree"] is False
         assert data["sessions"][0]["workstream_status"] == "authoritative"
         assert data["total"] == 1
+
+    def test_list_sessions_marks_worktree_from_cwd(
+        self,
+        client: APITestClient,
+        mock_session: AsyncMock,
+        tmp_path: Path,
+    ) -> None:
+        """Test session list derives worktree identity from cwd metadata."""
+        main_repo = tmp_path / "repo"
+        worktree = tmp_path / "worktrees" / "task-123"
+        gitdir = main_repo / ".git" / "worktrees" / "task-123"
+        gitdir.mkdir(parents=True)
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {gitdir}\n")
+
+        mock_db_session = MagicMock()
+        mock_db_session.id = "session-1"
+        mock_db_session.project_id = "test-project"
+        mock_db_session.provider = "claude"
+        mock_db_session.model = CLAUDE_SONNET
+        mock_db_session.status = "active"
+        mock_db_session.agent_slug = None
+        mock_db_session.session_type = "completion"
+        mock_db_session.summary_oneliner = None
+        mock_db_session.parent_session_id = None
+        mock_db_session.external_id = "task-123"
+        mock_db_session.current_branch = "task-123/main"
+        mock_db_session.workstream_status = "authoritative"
+        mock_db_session.provider_metadata = {"cwd": str(worktree)}
+        mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
+        mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 1
+
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value.all.return_value = [mock_db_session]
+
+        mock_msg_count_result = MagicMock()
+        mock_msg_count_result.all.return_value = [("session-1", 1)]
+
+        mock_token_stats_result = MagicMock()
+        mock_token_stats_result.all.return_value = []
+
+        mock_session.execute = AsyncMock(
+            side_effect=[
+                mock_count_result,
+                mock_list_result,
+                mock_msg_count_result,
+                mock_token_stats_result,
+            ]
+        )
+
+        response = client.get("/api/sessions")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["sessions"][0]["working_dir"] == str(worktree)
+        assert data["sessions"][0]["is_worktree"] is True
 
     def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by project_id."""
