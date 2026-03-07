@@ -27,6 +27,12 @@ If <feedback_summary> is present, use `manage_feedback` to triage:
 - For high-vote friction/improvement items needing code changes: create a task via manage_tasks
 - Search for context on unfamiliar items (action="search")
 
+## Workstream Hygiene
+If <workstream_inventory> is present, treat it as your retirement queue:
+- `state=completed_ready_for_closure` means close the task lane instead of redispatching into it
+- `state=stale_active` means verify whether the session is truly live before trusting it
+- `state=mixed` means split, promote, or clean up the lane before adding more implementation work
+
 ## Available Tools ({tool_count} total)
 Beyond bash/read_file/write_file, you have: {persona_tool_list}
 

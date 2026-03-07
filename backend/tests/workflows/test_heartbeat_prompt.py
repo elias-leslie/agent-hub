@@ -9,6 +9,7 @@ import pytest
 from app.workflows._heartbeat_data import (
     _get_git_project_status,
     _get_git_status_summary,
+    _get_workstream_inventory,
 )
 
 
@@ -178,3 +179,99 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
+
+
+class TestGetWorkstreamInventory:
+    """Tests for first-class workstream inventory classification."""
+
+    @pytest.mark.asyncio
+    async def test_reports_completed_lane_ready_for_closure(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-1",
+                "agent_slug": "coder",
+                "project_id": "summitflow",
+                "external_id": "task-123",
+                "current_branch": "task-123/main",
+                "status": "completed",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "<workstream_inventory>" in result
+        assert "task-123" in result
+        assert "state=completed_ready_for_closure" in result
+        assert 'manage_tasks(action="done"' in result
+
+    @pytest.mark.asyncio
+    async def test_reports_stale_active_lane(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-2",
+                "agent_slug": "reviewer",
+                "project_id": "agent-hub",
+                "external_id": "task-999",
+                "current_branch": "task-999/main",
+                "status": "active",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 480,
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-999" in result
+        assert "state=stale_active" in result
+        assert 'query_sessions(' in result
+
+    @pytest.mark.asyncio
+    async def test_reports_mixed_lane_when_multiple_branches_active(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-3",
+                "agent_slug": "coder",
+                "project_id": "summitflow",
+                "external_id": "task-777",
+                "current_branch": "task-777/main",
+                "status": "active",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 10,
+            },
+            {
+                "session_id": "sess-4",
+                "agent_slug": "fixer",
+                "project_id": "summitflow",
+                "external_id": "task-777",
+                "current_branch": "task-777/follow-up",
+                "status": "active",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 5,
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-777" in result
+        assert "state=mixed" in result
+        assert "branches=2" in result

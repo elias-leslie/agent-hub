@@ -755,6 +755,30 @@ class TestManageTasks:
         assert "Dispatched" in result
 
     @pytest.mark.asyncio
+    async def test_done(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Completed task 42")
+        result = await manage_tasks(
+            mock_bash, action="done", task_id="42", project_id="summitflow"
+        )
+
+        assert "Completed task 42" in result
+        mock_bash.assert_awaited_once_with("st -P summitflow done 42")
+
+    @pytest.mark.asyncio
+    async def test_abandon(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Abandoned task 42")
+        result = await manage_tasks(
+            mock_bash, action="abandon", task_id="42", project_id="summitflow"
+        )
+
+        assert "Abandoned task 42" in result
+        mock_bash.assert_awaited_once_with("st -P summitflow abandon 42")
+
+    @pytest.mark.asyncio
     async def test_unknown_action(self):
         from app.services.tools._executor_io import manage_tasks
 

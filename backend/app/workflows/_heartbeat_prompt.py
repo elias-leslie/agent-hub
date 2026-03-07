@@ -17,6 +17,7 @@ from app.workflows._heartbeat_data import (
     _get_feedback_summary_section,
     _get_git_status_summary,
     _get_persona_tool_summary,
+    _get_workstream_inventory,
     get_project_access_summary,
 )
 from app.workflows._heartbeat_templates import (
@@ -113,6 +114,10 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     if agent_roster:
         prompt += agent_roster
 
+    workstream_inventory = await _get_workstream_inventory()
+    if workstream_inventory:
+        prompt += workstream_inventory
+
     git_state = _get_git_status_summary()
     if git_state:
         prompt += git_state
@@ -134,6 +139,7 @@ __all__ = [
     "_get_git_status_summary",
     "_get_persona_timezone",
     "_get_persona_tool_summary",
+    "_get_workstream_inventory",
     "build_heartbeat_prompt",
     "get_project_access_summary",
 ]
