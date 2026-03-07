@@ -106,7 +106,8 @@ async def upsert_session(
     session.client_id = request.client_id
     session.request_source = request.request_source
     session.current_branch = request.current_branch
-    session.parent_session_id = request.parent_session_id
+    if request.parent_session_id is not None:
+        session.parent_session_id = request.parent_session_id
     session.provider_metadata = _merge_metadata(
         session.provider_metadata,
         request.provider_metadata,

@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -40,6 +40,8 @@ from app.adapters.codex_sse import (
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 
 logger = logging.getLogger(__name__)
+
+ToolHandler = Callable[[str, dict[str, Any]], Awaitable[str]]
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +313,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         messages: list[Message],
         model: str,
         tools: list[dict[str, Any]],
-        tool_handler: Any,
+        tool_handler: ToolHandler,
         max_turns: int = 20,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
@@ -322,6 +324,8 @@ class CodexOAuthAdapter(ProviderAdapter):
         prompt_cache_key = kwargs.pop("prompt_cache_key", None) or str(uuid.uuid4())
         input_items, instructions = _convert_messages_to_input(messages)
         resolved_model = self._resolve_model(model)
+        total_input_tokens = 0
+        total_output_tokens = 0
 
         for turn in range(max_turns):
             result = await self._complete_from_input(
@@ -335,6 +339,9 @@ class CodexOAuthAdapter(ProviderAdapter):
                 **kwargs,
             )
 
+            total_input_tokens += result.input_tokens or 0
+            total_output_tokens += result.output_tokens or 0
+
             if result.thinking_content:
                 yield StreamEvent(type="thinking", content=result.thinking_content)
 
@@ -344,8 +351,8 @@ class CodexOAuthAdapter(ProviderAdapter):
             if not result.tool_calls:
                 yield StreamEvent(
                     type="done",
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
                     finish_reason=result.finish_reason,
                 )
                 return
@@ -363,7 +370,12 @@ class CodexOAuthAdapter(ProviderAdapter):
                     tool_name=tool_call.name,
                     tool_input=tool_call.input,
                 )
-                tool_result_str = await tool_handler(tool_call.name, tool_call.input)
+                try:
+                    tool_result_str = await tool_handler(tool_call.name, tool_call.input)
+                except Exception as exc:
+                    logger.error("Tool handler raised an exception for %r: %s", tool_call.name, exc)
+                    yield StreamEvent(type="error", error=str(exc))
+                    return
                 yield StreamEvent(type="tool_result", tool_id=tool_call.id, content=tool_result_str)
                 input_items.append(_tool_result_item(tool_call.id, tool_result_str))
 

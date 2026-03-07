@@ -205,15 +205,22 @@ async def collect_completion(
                 tool_call_args[str(item.get("call_id", ""))] = item.get("arguments", "") or ""
 
         if event_type == "response.reasoning_summary_text.delta":
-            active_ids = list(reasoning_by_id)
-            if active_ids:
-                reasoning_by_id[active_ids[-1]].append(event.get("delta", ""))
+            item_id = event.get("item_id")
+            if item_id is not None and item_id in reasoning_by_id:
+                reasoning_by_id[item_id].append(event.get("delta", ""))
+            else:
+                active_ids = list(reasoning_by_id)
+                if active_ids:
+                    reasoning_by_id[active_ids[-1]].append(event.get("delta", ""))
 
         if event_type == "response.function_call_arguments.delta":
-            active_ids = list(tool_call_args)
-            if active_ids:
-                call_id = active_ids[-1]
+            call_id = event.get("call_id")
+            if call_id is not None and call_id in tool_call_args:
                 tool_call_args[call_id] += event.get("delta", "")
+            else:
+                active_ids = list(tool_call_args)
+                if active_ids:
+                    tool_call_args[active_ids[-1]] += event.get("delta", "")
 
         if event_type == "response.output_item.done":
             item = event.get("item", {})

@@ -162,6 +162,27 @@ async def _analyse_and_store(
     )
 
 
+async def store_summary_on_session(
+    session_id: str,
+    summary_oneliner: str,
+    outcome: str,
+    files_touched: list[str],
+    branch: str | None = None,
+    is_worktree: bool = False,
+    git_digest: str = "",
+) -> None:
+    """Public API to persist a structured summary on a Session row and append a summary segment."""
+    await _store_summary_on_session(
+        session_id=session_id,
+        summary_oneliner=summary_oneliner,
+        outcome=outcome,
+        files_touched=files_touched,
+        branch=branch,
+        is_worktree=is_worktree,
+        git_digest=git_digest,
+    )
+
+
 async def generate_session_summary(
     session_id: str,
     project_id: str | None = None,
