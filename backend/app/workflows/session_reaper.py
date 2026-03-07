@@ -23,6 +23,46 @@ class ReaperResult(BaseModel):
     reaped_stale: int = 0
 
 
+async def reap_stale_sessions(db, now) -> tuple[int, int]:
+    """Close sessions whose last observed activity is beyond the reaper thresholds."""
+    from datetime import timedelta
+
+    from sqlalchemy import update
+
+    from app.models import Session
+    from app.services.session_activity import last_activity_expr
+
+    last_activity = last_activity_expr()
+
+    cutoff_4h = now - timedelta(hours=4)
+    result = await db.execute(
+        update(Session)
+        .where(
+            Session.status == "active",
+            Session.session_type == "completion",
+            last_activity < cutoff_4h,
+        )
+        .values(status="completed")
+        .execution_options(synchronize_session="fetch")
+    )
+    reaped_completion = result.rowcount  # type: ignore[assignment]
+
+    cutoff_24h = now - timedelta(hours=24)
+    result = await db.execute(
+        update(Session)
+        .where(
+            Session.status == "active",
+            last_activity < cutoff_24h,
+        )
+        .values(status="completed")
+        .execution_options(synchronize_session="fetch")
+    )
+    reaped_stale = result.rowcount  # type: ignore[assignment]
+
+    await db.commit()
+    return reaped_completion, reaped_stale
+
+
 @hatchet.task(
     name="session-reaper",
     input_validator=BaseModel,
@@ -31,49 +71,14 @@ class ReaperResult(BaseModel):
 )
 async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
     """Close sessions stuck in 'active' state."""
-    from datetime import UTC, datetime, timedelta
-
-    from sqlalchemy import update
+    from datetime import UTC, datetime
 
     from app.db import async_session
-    from app.models import Session
-    from app.services.session_activity import last_activity_expr
 
     now = datetime.now(UTC)
-    reaped_completion = 0
-    reaped_stale = 0
 
     async with async_session() as db:
-        last_activity = last_activity_expr()
-
-        # 1. Completion-type sessions active for > 4 hours
-        cutoff_4h = now - timedelta(hours=4)
-        result = await db.execute(
-            update(Session)
-            .where(
-                Session.status == "active",
-                Session.session_type == "completion",
-                last_activity < cutoff_4h,
-            )
-            .values(status="completed")
-            .execution_options(synchronize_session="fetch")
-        )
-        reaped_completion = result.rowcount  # type: ignore[assignment]
-
-        # 2. Any session active for > 24 hours (safety net)
-        cutoff_24h = now - timedelta(hours=24)
-        result = await db.execute(
-            update(Session)
-            .where(
-                Session.status == "active",
-                last_activity < cutoff_24h,
-            )
-            .values(status="completed")
-            .execution_options(synchronize_session="fetch")
-        )
-        reaped_stale = result.rowcount  # type: ignore[assignment]
-
-        await db.commit()
+        reaped_completion, reaped_stale = await reap_stale_sessions(db, now)
 
     total = reaped_completion + reaped_stale
     if total > 0:
