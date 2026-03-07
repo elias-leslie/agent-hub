@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 from datetime import UTC, datetime
 
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 4 * 60
+_STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 
 
 async def get_project_access_summary() -> str:
@@ -354,11 +356,46 @@ def _format_workstream_lane(
     return " | ".join(parts)
 
 
+def _extract_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
+    """Parse stale-running task entries from `st ready-all` output."""
+    project_id: str | None = None
+    stale_tasks: list[dict[str, str]] = []
+
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if not line.startswith(" ") and "(" in line and line.endswith(")"):
+            project_id = line.split(" ", 1)[0]
+            continue
+        match = _STALE_READY_ALL_LINE.match(line)
+        if match and project_id:
+            stale_tasks.append({
+                "project_id": project_id,
+                "task_id": match.group(1),
+            })
+
+    return stale_tasks
+
+
+def _format_stale_running_task(project_id: str, task_id: str) -> str:
+    """Format an orphan running task from queue truth into the workstream inventory."""
+    next_action = (
+        f'manage_tasks(action="reconcile", task_id="{task_id}", project_id="{project_id}")'
+    )
+    return (
+        f"- {project_id} | {task_id} | state=stale_running_task | "
+        f"active=0 | next={next_action}"
+    )
+
+
 async def _get_workstream_inventory() -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         rows = await _query_recent_workstream_sessions()
-        if not rows:
+        task_overview = _fetch_task_overview()
+        stale_tasks = _extract_stale_running_tasks(task_overview)
+        if not rows and not stale_tasks:
             return ""
 
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -370,12 +407,17 @@ async def _get_workstream_inventory() -> str:
                 continue
             grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
 
-        if not grouped:
+        if not grouped and not stale_tasks:
             return ""
 
         lines = ["Recent workstreams:"]
         for (project_id, lane_key), lane_rows in sorted(grouped.items()):
             lines.append(_format_workstream_lane(project_id, lane_key, lane_rows))
+        stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
+        for project_id, task_id in sorted(stale_keys):
+            if (project_id, task_id) in grouped:
+                continue
+            lines.append(_format_stale_running_task(project_id, task_id))
 
         body = "\n".join(lines)
         return f"\n<workstream_inventory>\n{body}\n</workstream_inventory>"
