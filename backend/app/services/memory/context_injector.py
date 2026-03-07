@@ -138,8 +138,8 @@ async def _build_context_and_format(
     task_type: str | None,
     phase: str | None,
     memory_config: dict[str, Any] | None,
-) -> tuple[ProgressiveContext, str | None]:
-    """Build progressive context and format it, returning (context, formatted_text)."""
+) -> tuple[ProgressiveContext, str | None, list[tuple[str, str | None, str, bool]]]:
+    """Build progressive context and format it, returning context, text, and passive index rows."""
     mc_mandates = memory_config.get("include_mandates", True) if memory_config else True
     mc_guardrails = memory_config.get("include_guardrails", True) if memory_config else True
     context = await build_progressive_context(
@@ -152,12 +152,29 @@ async def _build_context_and_format(
         memory_config.get("reference_index_enabled", memory_config.get("reference_index", settings.reference_index_enabled))
         if memory_config else settings.reference_index_enabled
     )
-    ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else None
+    ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else []
     if ref_episodes and context.reference:
         selected_uuids = {item.uuid for item in context.reference}
         ref_episodes = [episode for episode in ref_episodes if episode[0] not in selected_uuids]
     formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
-    return context, formatted
+    return context, formatted, ref_episodes
+
+
+def _annotate_reference_observability(
+    context: ProgressiveContext,
+    reference_episodes: list[tuple[str, str | None, str, bool]],
+) -> None:
+    """Attach selected-vs-indexed reference observability to context.debug_info."""
+    selected_uuids = context.get_reference_uuids()
+    index_uuids = [uuid for uuid, *_ in reference_episodes if uuid]
+    context.debug_info.update(
+        {
+            "reference_selected_count": len(selected_uuids),
+            "reference_index_count": len(index_uuids),
+            "reference_selected_uuids": selected_uuids,
+            "reference_index_uuids": index_uuids,
+        }
+    )
 
 
 def _record_injection_metrics(
@@ -173,9 +190,13 @@ def _record_injection_metrics(
     record_injection_metrics(InjectionMetrics(
         injection_latency_ms=latency_ms, mandates_count=len(context.mandates),
         guardrails_count=len(context.guardrails), reference_count=len(context.reference),
+        reference_selected_count=int(context.debug_info.get("reference_selected_count", len(context.reference))),
+        reference_index_count=int(context.debug_info.get("reference_index_count", 0)),
         total_tokens=context.total_tokens, query=query, variant=variant,
         session_id=session_id, external_id=external_id, project_id=project_id,
         memories_loaded=context.get_loaded_uuids(),
+        reference_selected_uuids=list(context.debug_info.get("reference_selected_uuids", [])),
+        reference_index_uuids=list(context.debug_info.get("reference_index_uuids", [])),
     ))
 
 
@@ -221,12 +242,13 @@ async def inject_progressive_context(
     if not messages or not (query or (query := _extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
-    context, formatted = await _build_context_and_format(
+    context, formatted, ref_episodes = await _build_context_and_format(
         query=query, scope=scope, scope_id=scope_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
     )
     if not formatted:
         return messages, context
+    _annotate_reference_observability(context, ref_episodes)
 
     memory_block = await _apply_continuity_to_context(
         context, formatted, scope, scope_id, session_id, memory_config, current_branch, include_continuity,
@@ -237,8 +259,10 @@ async def inject_progressive_context(
     context.debug_info.update({"variant": variant, "injection_latency_ms": latency_ms})
     continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
     logger.info(
-        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d continuity_tokens=%d scope=%s",
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d refs_selected=%d refs_index=%d continuity_tokens=%d scope=%s",
         variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
+        context.debug_info.get("reference_selected_count", len(context.reference)),
+        context.debug_info.get("reference_index_count", 0),
         continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
     )
     if collect_metrics:

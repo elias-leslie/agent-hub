@@ -45,7 +45,9 @@ class MemoryMetrics(BaseModel):
     avg_tokens: float = Field(..., description="Average tokens injected")
     total_mandates: int = Field(..., description="Total mandates injected")
     total_guardrails: int = Field(..., description="Total guardrails injected")
-    total_references: int = Field(..., description="Total references injected")
+    total_references: int = Field(..., description="Total selected references injected")
+    total_reference_index_entries: int = Field(..., description="Total passive reference index entries injected")
+    total_reference_citations: int = Field(..., description="Total selected references later cited")
 
 
 class TruncationMetrics(BaseModel):
@@ -203,6 +205,8 @@ async def get_dashboard_stats(
         func.sum(MemoryInjectionMetric.mandates_count).label("total_mandates"),
         func.sum(MemoryInjectionMetric.guardrails_count).label("total_guardrails"),
         func.sum(MemoryInjectionMetric.reference_count).label("total_refs"),
+        func.sum(MemoryInjectionMetric.reference_index_count).label("total_ref_index"),
+        func.sum(MemoryInjectionMetric.reference_cited_count).label("total_ref_cited"),
     ).where(MemoryInjectionMetric.created_at >= cutoff)
 
     memory_result = await db.execute(memory_query)
@@ -215,6 +219,8 @@ async def get_dashboard_stats(
         total_mandates=int(mem_row.total_mandates or 0),
         total_guardrails=int(mem_row.total_guardrails or 0),
         total_references=int(mem_row.total_refs or 0),
+        total_reference_index_entries=int(mem_row.total_ref_index or 0),
+        total_reference_citations=int(mem_row.total_ref_cited or 0),
     )
 
     # -------------------------------------------------------------------------

@@ -93,7 +93,19 @@ async def format_context_with_continuity(
     """Format context with reference index and prepend continuity."""
     from app.services.memory.context_injector import format_context_with_reference_index
 
-    reference_episodes = await build_reference_episodes(scope, scope_id)
+    reference_episodes = await build_reference_episodes(scope, scope_id) or []
+    selected_reference_uuids = context.get_reference_uuids()
+    indexed_reference_uuids = [
+        uuid for uuid, *_ in reference_episodes if uuid and uuid not in set(selected_reference_uuids)
+    ]
+    context.debug_info.update(
+        {
+            "reference_selected_count": len(selected_reference_uuids),
+            "reference_index_count": len(indexed_reference_uuids),
+            "reference_selected_uuids": selected_reference_uuids,
+            "reference_index_uuids": indexed_reference_uuids,
+        }
+    )
     formatted = format_context_with_reference_index(
         context,
         reference_episodes=reference_episodes,
@@ -134,6 +146,10 @@ async def track_and_record_metrics(
             mandates_count=len(context.mandates),
             guardrails_count=len(context.guardrails),
             reference_count=len(context.reference),
+            reference_selected_count=int(
+                context.debug_info.get("reference_selected_count", len(context.reference))
+            ),
+            reference_index_count=int(context.debug_info.get("reference_index_count", 0)),
             total_tokens=context.total_tokens,
             query=query,
             variant=variant,
@@ -141,6 +157,10 @@ async def track_and_record_metrics(
             external_id=external_id,
             project_id=project_id or scope_id,
             memories_loaded=loaded_uuids,
+            reference_selected_uuids=list(
+                context.debug_info.get("reference_selected_uuids", [])
+            ),
+            reference_index_uuids=list(context.debug_info.get("reference_index_uuids", [])),
         ))
         logger.info(
             "Progressive-context metrics: session=%s external=%s loaded=%d latency=%dms",

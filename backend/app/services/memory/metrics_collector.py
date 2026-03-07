@@ -30,12 +30,17 @@ class InjectionMetrics:
     guardrails_count: int
     reference_count: int
     total_tokens: int
+    reference_selected_count: int = 0
+    reference_index_count: int = 0
+    reference_cited_count: int = 0
     query: str | None = None
     variant: str = "BASELINE"
     session_id: str | None = None
     external_id: str | None = None
     project_id: str | None = None
     memories_loaded: list[str] | None = None
+    reference_selected_uuids: list[str] | None = None
+    reference_index_uuids: list[str] | None = None
 
 
 async def store_injection_metrics(metrics: InjectionMetrics) -> None:
@@ -59,10 +64,15 @@ async def store_injection_metrics(metrics: InjectionMetrics) -> None:
             mandates_count=metrics.mandates_count,
             guardrails_count=metrics.guardrails_count,
             reference_count=metrics.reference_count,
+            reference_selected_count=metrics.reference_selected_count,
+            reference_index_count=metrics.reference_index_count,
+            reference_cited_count=metrics.reference_cited_count,
             total_tokens=metrics.total_tokens,
             query=metrics.query[:500] if metrics.query else None,
             variant=metrics.variant,
             memories_loaded=metrics.memories_loaded or [],
+            reference_selected_uuids=metrics.reference_selected_uuids or [],
+            reference_index_uuids=metrics.reference_index_uuids or [],
         )
         await _execute_insert_with_retry(session_factory, values)
         logger.debug(
