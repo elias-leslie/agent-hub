@@ -50,6 +50,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
             result=result,
             resolved_model="xai/grok-4-1-fast-reasoning",
             model_used="claude-haiku-4-5",
+            fallback_reason="TimeoutError: primary timed out",
             is_new_session=True,
         )
 
@@ -63,3 +64,4 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert session.provider_metadata["requested_model"] == "xai/grok-4-1-fast-reasoning"
     assert session.provider_metadata["effective_model"] == "claude-haiku-4-5"
     assert session.provider_metadata["fallback_used"] is True
+    assert session.provider_metadata["fallback_reason"] == "TimeoutError: primary timed out"

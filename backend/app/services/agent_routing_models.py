@@ -30,3 +30,4 @@ class CompletionResult:
     result: Any  # Adapter result
     model_used: str  # Model that produced the result
     used_fallback: bool  # Whether fallback was used
+    fallback_reason: str | None = None  # Why the primary model was abandoned

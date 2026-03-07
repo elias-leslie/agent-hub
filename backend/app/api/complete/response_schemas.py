@@ -61,6 +61,10 @@ class CompletionResponse(BaseModel):
         default=False,
         description="Whether a fallback model was used due to primary model failure",
     )
+    fallback_reason: str | None = Field(
+        default=None,
+        description="Why the primary model was abandoned, if known",
+    )
     turns: int = Field(
         default=1,
         description="Number of agentic turns executed (1 for single completion)",

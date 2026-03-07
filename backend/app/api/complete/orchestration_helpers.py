@@ -74,12 +74,12 @@ async def process_result(
 ) -> CompletionResponse | JSONResponse:
     """Unpack result, validate JSON schema, and finalize response."""
     if isinstance(result, tuple):
-        cr, model_used, fallback_used, loaded_uuids, sid = result
+        cr, model_used, fallback_used, loaded_uuids, sid, fallback_reason = result
         if not loaded_uuids:
             loaded_uuids = loaded_uuids_in
     else:
         cr, model_used, fallback_used = result, resolved_model, False
-        loaded_uuids, sid = loaded_uuids_in, session_id
+        loaded_uuids, sid, fallback_reason = loaded_uuids_in, session_id, None
     rf = request.response_format
     if rf and rf.type == "json_object" and rf.schema_:
         is_valid, err = validate_json_response(cr.content, rf.schema_)
@@ -88,7 +88,7 @@ async def process_result(
     return await process_completion_result(
         cr, request, resolved_model, sid, db, session, skip_cache, messages_dict,
         ctx_info, memory_facts, loaded_uuids, agent_used,
-        model_used, fallback_used, is_new_session=is_new_session,
+        model_used, fallback_used, fallback_reason, is_new_session=is_new_session,
         external_id=request.external_id, duration_ms=duration_ms,
         effective_thinking_level=effective_thinking_level,
     )
@@ -117,7 +117,7 @@ async def execute_and_respond(
         # Record fallback info on http_request.state for middleware logging
         if http_request is not None:
             if isinstance(result, tuple):
-                _cr, model_used, fallback_used, _uuids, _sid = result
+                _cr, model_used, fallback_used, _uuids, _sid, _fallback_reason = result
                 if fallback_used:
                     http_request.state.used_fallback = True
                     http_request.state.fallback_model = model_used

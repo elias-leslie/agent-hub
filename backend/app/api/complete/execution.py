@@ -132,6 +132,8 @@ async def execute_with_fallback(
         thinking_level=thinking_level,
         primary_model_override=primary_override,
     )
+    if fallback_result.fallback_reason:
+        fallback_result.result.fallback_reason = fallback_result.fallback_reason
     return (
         fallback_result.result,
         fallback_result.model_used,
