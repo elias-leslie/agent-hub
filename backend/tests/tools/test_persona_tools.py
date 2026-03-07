@@ -811,6 +811,48 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
+    async def test_reconcile_falls_back_to_admin_close_when_checkpoint_is_missing(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "ERROR No checkpoint found for task-42. Was it claimed?\n",
+                "Completed task task-42",
+            ]
+        )
+        mock_db = AsyncMock()
+        completed_session = MagicMock(
+            status="completed",
+            summary_oneliner="Fixed the regression",
+            created_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Completed task task-42" in result
+        assert mock_bash.await_args_list[0].args[0] == (
+            "st -P summitflow done task-42 --message "
+            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+        assert mock_bash.await_args_list[1].args[0] == (
+            "st -P summitflow done task-42 --admin --message "
+            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+
+    @pytest.mark.asyncio
     async def test_reconcile_cancels_orphan_running_task_without_lane_evidence(self):
         from app.services.tools._executor_io import manage_tasks
 
