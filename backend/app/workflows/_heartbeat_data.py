@@ -226,6 +226,18 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
     ]
 
 
+def _infer_task_id(row: dict[str, object]) -> str | None:
+    """Infer a task id from explicit linkage or task branch naming."""
+    external_id = row.get("external_id")
+    if isinstance(external_id, str) and external_id.startswith("task-"):
+        return external_id
+    branch = row.get("current_branch")
+    if not isinstance(branch, str) or not branch:
+        return None
+    branch_prefix = branch.split("/", 1)[0]
+    return branch_prefix if branch_prefix.startswith("task-") else None
+
+
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
     """Classify a grouped task/worktree lane into an actionable lifecycle state."""
     statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
@@ -291,10 +303,7 @@ def _format_workstream_lane(
     lane_rows: list[dict[str, object]],
 ) -> str:
     """Format a single workstream lane into a summary line."""
-    task_id = next(
-        (str(row["external_id"]) for row in lane_rows if row.get("external_id")),
-        None,
-    )
+    task_id = next((_infer_task_id(row) for row in lane_rows if _infer_task_id(row)), None)
     branches = {
         str(row["current_branch"])
         for row in lane_rows
@@ -354,7 +363,7 @@ async def _get_workstream_inventory() -> str:
 
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
         for row in rows:
-            task_id = str(row.get("external_id") or "")
+            task_id = _infer_task_id(row) or ""
             branch = str(row.get("current_branch") or row.get("session_id") or "")
             lane_key = task_id or branch
             if not lane_key:

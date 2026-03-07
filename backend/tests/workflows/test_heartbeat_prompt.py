@@ -212,6 +212,32 @@ class TestGetWorkstreamInventory:
         assert 'manage_tasks(action="reconcile"' in result
 
     @pytest.mark.asyncio
+    async def test_branch_only_completed_lane_still_recovers_task_id(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-branch-only",
+                "agent_slug": "refactor",
+                "project_id": "terminal",
+                "external_id": None,
+                "current_branch": "task-a3903361/main",
+                "status": "completed",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-a3903361" in result
+        assert "state=completed_ready_for_closure" in result
+        assert 'manage_tasks(action="reconcile", task_id="task-a3903361", project_id="terminal")' in result
+
+    @pytest.mark.asyncio
     async def test_reports_stale_active_lane(self) -> None:
         fake_rows = [
             {
