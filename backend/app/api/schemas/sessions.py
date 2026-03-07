@@ -123,6 +123,9 @@ class SessionListItem(BaseModel):
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
     parent_session_id: str | None = Field(default=None, description="Parent session ID")
+    external_id: str | None = Field(default=None, description="Linked external work item ID")
+    current_branch: str | None = Field(default=None, description="Git branch associated with the session")
+    workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
     message_count: int
     total_input_tokens: int = Field(default=0, description="Total input tokens")
