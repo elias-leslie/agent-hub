@@ -22,6 +22,7 @@ MANAGE_TASKS_TOOL = Tool(
                     "get_context",
                     "create",
                     "dispatch",
+                    "reconcile",
                     "done",
                     "abandon",
                     "cancel",
@@ -30,7 +31,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "task_id": {
                 "type": "string",
-                "description": "Task ID (for get_context, dispatch, done, abandon, cancel)",
+                "description": "Task ID (for get_context, dispatch, reconcile, done, abandon, cancel)",
             },
             "title": {
                 "type": "string",

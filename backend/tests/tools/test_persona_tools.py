@@ -779,6 +779,68 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P summitflow abandon 42")
 
     @pytest.mark.asyncio
+    async def test_reconcile_closes_completed_lane(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Completed task task-42")
+        mock_db = AsyncMock()
+        completed_session = MagicMock(
+            status="completed",
+            summary_oneliner="Fixed the regression",
+            created_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Completed task task-42" in result
+        mock_bash.assert_awaited_once_with(
+            "st -P summitflow done task-42 --message 'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconcile_refuses_when_lane_is_still_active(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        mock_db = AsyncMock()
+        active_session = MagicMock(
+            status="active",
+            agent_slug="coder",
+            created_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [active_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "still has 1 active session" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_unknown_action(self):
         from app.services.tools._executor_io import manage_tasks
 
