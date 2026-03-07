@@ -17,7 +17,6 @@ _LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 4 * 60
 _GHOST_SESSION_MINUTES = 15
 _WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
-_RETIRED_STATUSES = {"retired", "superseded"}
 
 
 @dataclass(frozen=True)
@@ -147,10 +146,7 @@ async def _fetch_candidate_sessions(
                 Session.project_id == project_id,
                 Session.created_at >= cutoff,
                 Session.agent_slug.isnot(None),
-                or_(
-                    Session.status == "active",
-                    Session.workstream_status.isnot(None),
-                ),
+                Session.status == "active",
                 or_(
                     Session.external_id.isnot(None),
                     Session.current_branch.isnot(None),
@@ -221,8 +217,6 @@ async def query_project_ownership(
         age = _age_minutes(session.created_at, session.updated_at)
         is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
         ownership_kind = _derive_ownership_kind(session.workstream_status, scope_paths, is_stale)
-        if session.workstream_status in _RETIRED_STATUSES:
-            is_stale = False
         owners.append(
             OwnershipOwner(
                 task_id=_infer_task_id(session.external_id, session.current_branch),
