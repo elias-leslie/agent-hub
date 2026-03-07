@@ -6,6 +6,7 @@ from sqlalchemy import select, text
 
 from app.db import async_session
 from app.models.memory_unified import Memory
+from app.services.memory_utility_score import utility_score_sql_expr
 
 from .analytics_models import TopMemory
 
@@ -23,7 +24,7 @@ def _build_sort_expr(sort_by: str):
     """Return the SQLAlchemy sort expression for the given field name."""
     if sort_by in _SORT_EXPR_MAP:
         return _SORT_EXPR_MAP[sort_by]()
-    return Memory.referenced_count * 1.0 / (Memory.loaded_count + 1)
+    return utility_score_sql_expr(Memory.loaded_count, Memory.referenced_count)
 
 
 def _build_order(sort_by: str, sort_expr):

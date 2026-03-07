@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from app.db import async_session
 from app.models.memory import UsageStatLog
 from app.models.memory_unified import Memory
+from app.services.memory_utility_score import utility_score_sql_expr
 
 from .analytics_models import DailyTrend
 from .repository import TIER_REVERSE
@@ -68,8 +69,8 @@ async def get_daily_trend(
 
 
 async def get_avg_utility_score(group_id: str | None = None) -> float:
-    """Get average utility score (referenced_count / (loaded_count + 1)) for active memories."""
-    utility_expr = Memory.referenced_count * 1.0 / (Memory.loaded_count + 1)
+    """Get average normalized utility score for active memories."""
+    utility_expr = utility_score_sql_expr(Memory.loaded_count, Memory.referenced_count)
     stmt = select(func.avg(utility_expr).label("avg_score")).where(
         Memory.status == "active",
         Memory.loaded_count > 0,

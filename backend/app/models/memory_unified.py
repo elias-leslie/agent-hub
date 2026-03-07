@@ -24,6 +24,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.services.memory_utility_score import calculate_memory_utility_score
+
 from .base import Base
 
 
@@ -152,6 +154,4 @@ class Memory(Base):
     @property
     def utility_score(self) -> float:
         """Calculate utility score from usage stats."""
-        if self.loaded_count == 0:
-            return 0.0
-        return self.referenced_count / (self.loaded_count + 1)
+        return calculate_memory_utility_score(self.loaded_count, self.referenced_count)

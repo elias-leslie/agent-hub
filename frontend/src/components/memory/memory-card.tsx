@@ -164,7 +164,7 @@ export function MemoryCard({
               {episode.utility_score !== undefined && (
                 <span
                   className={cn("px-1.5 py-0.5 rounded text-xs font-medium", getUtilityScoreColor(episode.utility_score))}
-                  title="Utility score (success/referenced ratio)"
+                  title="Utility score (cited vs loaded ratio)"
                 >
                   {(episode.utility_score * 100).toFixed(0)}%
                 </span>
