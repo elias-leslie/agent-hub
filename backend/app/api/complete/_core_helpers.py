@@ -46,9 +46,11 @@ class _ExecContext:
     max_turns: int
     project_id: str
     tools: list[dict[str, Any]] | None = None
+    tool_catalog: list[dict[str, Any]] | None = None
     working_dir: str | None = None
     permission_config: dict[str, Any] | None = None
     enable_programmatic_tools: bool = False
+    defer_tool_loading: bool = False
     enable_caching: bool = True
     cache_ttl: str = "ephemeral"
     thinking_level: str | None = None
@@ -105,7 +107,8 @@ async def _route_to_tool_executor(ctx: _ExecContext) -> CompletionInternalResult
     tool_result_dict = await route_tool_execution(
         provider=ctx.provider, messages_dict=ctx.messages_dict,
         user_messages_for_db=ctx.user_messages_for_db, model=ctx.model,
-        temperature=ctx.temperature, tools=ctx.tools, working_dir=ctx.working_dir,
+        temperature=ctx.temperature, tools=ctx.tools, tool_catalog=ctx.tool_catalog,
+        working_dir=ctx.working_dir,
         permission_config=ctx.permission_config, db=ctx.db, session=ctx.session,
         session_id=ctx.session_id, is_new_session=ctx.is_new_session,
         loaded_memory_uuids=ctx.loaded_memory_uuids, memory_group_id=ctx.memory_group_id,
@@ -171,6 +174,7 @@ async def execute_and_build_result(
     loaded_memory_uuids: list[str], memory_group_id: str | None, skip_cache: bool,
     progress_callback: Callable[[AgentProgress], Any] | None, max_turns: int,
     execute_tools: bool, enable_programmatic_tools: bool,
+    defer_tool_loading: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
     agent_slug: str | None,
@@ -178,23 +182,31 @@ async def execute_and_build_result(
     """Route to tool execution or multi-turn, then finalize and return result."""
     from .tool_router import supports_tools
 
-    tools = provision_standard_tools(execute_tools, tools, agent_slug=agent_slug, project_id=project_id)
+    provisioned = provision_standard_tools(
+        execute_tools,
+        tools,
+        agent_slug=agent_slug,
+        project_id=project_id,
+        defer_tool_loading=defer_tool_loading,
+    )
     ctx = _ExecContext(
         provider=provider, messages_dict=messages_dict,
         user_messages_for_db=user_messages_for_db, model=model,
-        temperature=temperature, tools=tools, working_dir=working_dir,
+        temperature=temperature, tools=provisioned.loaded_tools,
+        tool_catalog=provisioned.catalog_tools, working_dir=working_dir,
         permission_config=permission_config, db=db, session=session,
         session_id=session_id, is_new_session=is_new_session,
         loaded_memory_uuids=loaded_memory_uuids, memory_group_id=memory_group_id,
         skip_cache=skip_cache, progress_callback=progress_callback,
         max_turns=max_turns, project_id=project_id,
         enable_programmatic_tools=enable_programmatic_tools,
+        defer_tool_loading=defer_tool_loading,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format, agent_slug=agent_slug,
     )
 
-    should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
+    should_execute_tools = (execute_tools or enable_programmatic_tools) and bool(provisioned.loaded_tools)
     if should_execute_tools and supports_tools(provider, model):
         return await _route_to_tool_executor(ctx)
 

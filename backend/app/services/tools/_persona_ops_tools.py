@@ -109,6 +109,9 @@ MANAGE_TASKS_TOOL = Tool(
         },
         "required": ["action"],
     },
+    category="tasks",
+    search_keywords=["tasks", "summitflow", "dispatch", "task context"],
+    usage_examples=["Get full context for a task before dispatching follow-up work."],
 )
 
 # --- Model configuration tool ---
@@ -181,6 +184,9 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
         },
         "required": ["action"],
     },
+    category="model-ops",
+    search_keywords=["models", "benchmarks", "agent config"],
+    usage_examples=["Review candidate models before updating a coding agent."],
 )
 
 # --- Agent performance logging tools ---
@@ -253,6 +259,10 @@ LOG_AGENT_PERFORMANCE_TOOL = Tool(
         },
         "required": ["agent_slug", "model_id", "feedback_type", "content"],
     },
+    category="observability",
+    search_keywords=["performance log", "feedback", "observation"],
+    usage_examples=["Log repeated model friction after a failed session."],
+    defer_loading=True,
 )
 
 MANAGE_FEEDBACK_TOOL = Tool(

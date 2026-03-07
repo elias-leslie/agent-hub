@@ -52,6 +52,10 @@ SCHEDULE_JOB_TOOL = Tool(
         },
         "required": ["name", "schedule_type", "schedule_value", "payload_message"],
     },
+    category="persona-ops",
+    search_keywords=["reminder", "cron", "schedule", "follow-up"],
+    usage_examples=["Schedule a one-shot reminder for Monday at 09:00."],
+    defer_loading=True,
 )
 
 LIST_SCHEDULED_JOBS_TOOL = Tool(
@@ -67,6 +71,10 @@ LIST_SCHEDULED_JOBS_TOOL = Tool(
             },
         },
     },
+    category="persona-ops",
+    search_keywords=["jobs", "scheduled tasks", "timers"],
+    usage_examples=["List active scheduled jobs before creating a duplicate."],
+    defer_loading=True,
 )
 
 CANCEL_SCHEDULED_JOB_TOOL = Tool(
@@ -87,6 +95,10 @@ CANCEL_SCHEDULED_JOB_TOOL = Tool(
         },
         "required": ["job_id"],
     },
+    category="persona-ops",
+    search_keywords=["disable job", "remove reminder"],
+    usage_examples=["Cancel a scheduled reminder after the issue is resolved."],
+    defer_loading=True,
 )
 
 # --- Subagent dispatch tools ---
@@ -123,6 +135,9 @@ DISPATCH_AGENT_TOOL = Tool(
         },
         "required": ["agent_slug", "task", "project_id"],
     },
+    category="agents",
+    search_keywords=["delegate", "autonomous agent", "dispatch work"],
+    usage_examples=["Dispatch the fixer agent to repair a failing test lane."],
 )
 
 # --- Subagent steering tools ---
@@ -147,6 +162,10 @@ STEER_CONSULTATION_TOOL = Tool(
         },
         "required": ["session_id", "message"],
     },
+    category="agents",
+    search_keywords=["follow-up", "continue consultation"],
+    usage_examples=["Ask a consulted agent to clarify an earlier recommendation."],
+    defer_loading=True,
 )
 
 LIST_CONSULTATIONS_TOOL = Tool(
@@ -166,6 +185,10 @@ LIST_CONSULTATIONS_TOOL = Tool(
             },
         },
     },
+    category="agents",
+    search_keywords=["consultations", "agent sessions"],
+    usage_examples=["Review recent consultations before opening a new one."],
+    defer_loading=True,
 )
 
 CANCEL_CONSULTATION_TOOL = Tool(
@@ -181,4 +204,8 @@ CANCEL_CONSULTATION_TOOL = Tool(
         },
         "required": ["session_id"],
     },
+    category="agents",
+    search_keywords=["close consultation", "stop session"],
+    usage_examples=["Cancel a stale consultation once the main task is resolved."],
+    defer_loading=True,
 )

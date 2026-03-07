@@ -13,6 +13,23 @@ _WORKSTREAM_LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 4 * 60
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 
+# Contract: workstream inventory states are derived in precedence order.
+# Highest precedence first:
+# 1. retired - all observed lifecycle markers are retired
+# 2. reconciled - authoritative + superseded evidence exists for the same lane
+# 3. superseded - all observed lifecycle markers are superseded
+# 4. mixed - multiple active branches for the same task/lane
+# 5. stale_active - active lane exists but exceeds the stale age threshold
+# 6. active - live non-stale lane exists
+# 7. completed_ready_for_closure - no active lane remains and completed evidence exists
+# 8. orphaned - lane facts exist but do not yet justify automation
+#
+# Automation boundary:
+# - completed_ready_for_closure: safe to reconcile/close
+# - stale_running_task (from ready-all): safe to reconcile stale task state
+# - stale_active: advisory only until explicitly verified/reconciled
+# - mixed / orphaned / reconciled / retired / superseded: informational, no new automatic close path here
+
 
 async def get_project_access_summary() -> str:
     """Build a summary of project access tiers for the heartbeat prompt."""
@@ -241,7 +258,10 @@ def _infer_task_id(row: dict[str, object]) -> str | None:
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
-    """Classify a grouped task/worktree lane into an actionable lifecycle state."""
+    """Classify a grouped task/worktree lane into an actionable lifecycle state.
+
+    See module-level contract comment for the precedence order and automation boundary.
+    """
     statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
     active_rows = [row for row in rows if row.get("status") == "active"]
     completed_rows = [row for row in rows if row.get("status") == "completed"]

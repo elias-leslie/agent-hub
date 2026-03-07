@@ -48,6 +48,7 @@ async def _run_tool_loop(
     provider: str,
     model: str,
     tools: list[dict[str, Any]] | None,
+    tool_catalog: list[dict[str, Any]] | None,
     working_dir: str | None,
     permission_config: dict[str, Any] | None,
     session_id: str,
@@ -66,8 +67,17 @@ async def _run_tool_loop(
     Returns an error result on failure, else None (results in state).
     """
     event_stream = build_event_stream(
-        adapter, state.messages_for_adapter, provider, model, tools,
-        working_dir, permission_config, max_turns, project_id, session_id,
+        adapter=adapter,
+        messages=state.messages_for_adapter,
+        provider=provider,
+        model=model,
+        tools=tools,
+        tool_catalog=tool_catalog,
+        working_dir=working_dir,
+        permission_config=permission_config,
+        max_turns=max_turns,
+        project_id=project_id,
+        session_id=session_id,
     )
 
     # Mapping of tool_use_id → tool_name, shared across all events in the loop

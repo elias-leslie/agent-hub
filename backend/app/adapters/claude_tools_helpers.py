@@ -64,9 +64,10 @@ def _build_mcp_server(
     tools: list[dict[str, Any]],
     working_dir: str | None,
     project_id: str | None,
+    tool_catalog: list[dict[str, Any]] | None,
 ) -> Any | None:
     """Build an in-process SDK MCP server for custom tools."""
-    return _build_mcp_server_impl(tools, working_dir, project_id)
+    return _build_mcp_server_impl(tools, working_dir, project_id, tool_catalog=tool_catalog)
 
 
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
@@ -121,6 +122,7 @@ async def complete_with_tools(
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Generate with native tool calling using SDK-native permission mechanisms."""
     project_id = kwargs.get("project_id")
+    tool_catalog = kwargs.get("tool_catalog")
     # Boundary enforcement for Claude SDK is handled via settings-based
     # enforcement (settings + PreToolUse hook) — see _claude_settings.py.
     # The can_use_tool callback here is only for non-boundary permission
@@ -135,7 +137,7 @@ async def complete_with_tools(
         if has_permission_hooks and not yolo_mode
         else None
     )
-    mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
+    mcp_server = _build_mcp_server(tools, working_dir, project_id, tool_catalog) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
     # Build allowed_tools list including MCP tool names so Claude CLI

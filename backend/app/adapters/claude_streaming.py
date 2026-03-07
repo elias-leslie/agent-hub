@@ -88,7 +88,16 @@ def _build_oauth_options(
     cli_path: str, model: str, model_map: dict[str, str], system_prompt: str | None,
 ) -> tuple[object, bool]:
     """Build SDK options and streaming-prompt flag for OAuth streaming."""
-    mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
+    mcp_server = (
+        _build_mcp_server(
+            tools=tools,
+            working_dir=working_dir,
+            project_id=project_id,
+            tool_catalog=None,
+        )
+        if tools
+        else None
+    )
     # Build allowed_tools including MCP tool names
     from app.adapters._claude_constants import build_allowed_tools
 

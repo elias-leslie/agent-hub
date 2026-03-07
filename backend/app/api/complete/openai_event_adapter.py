@@ -89,6 +89,7 @@ def create_tool_handler(
     permission_config: dict[str, Any] | None,
     project_id: str | None = None,
     session_id: str | None = None,
+    tool_catalog: list[dict[str, Any]] | None = None,
 ) -> Any:
     """Create an async tool_handler callback for OpenAI-compat adapters.
 
@@ -103,6 +104,7 @@ def create_tool_handler(
         permission_config,
         project_id,
         session_id=session_id,
+        tool_catalog=tool_catalog,
     )
 
     async def tool_handler(tool_name: str, tool_input: dict[str, Any]) -> str:
@@ -123,6 +125,7 @@ async def adapt_openai_stream(
     max_turns: int = 20,
     project_id: str | None = None,
     session_id: str | None = None,
+    tool_catalog: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[tuple[ToolEvent, str]]:
     """Run an OpenAI-compat adapter's complete_with_tools and yield ToolEvents.
 
@@ -144,6 +147,7 @@ async def adapt_openai_stream(
         permission_config,
         project_id,
         session_id=session_id,
+        tool_catalog=tool_catalog,
     )
 
     async for stream_event in adapter.complete_with_tools(

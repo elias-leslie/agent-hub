@@ -32,6 +32,7 @@ from app.services.tools._executor_file_io import (
     write_file as _write_file,
 )
 from app.services.tools._executor_registry import build_tool_registry
+from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
 
@@ -109,6 +110,7 @@ class DirectToolExecutor:
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
         "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
+        "tool_search",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
@@ -126,6 +128,7 @@ class DirectToolExecutor:
         working_dir: str | None = None,
         project_id: str | None = None,
         session_id: str | None = None,
+        tool_catalog: list[dict[str, Any]] | None = None,
     ):
         """Initialize executor with optional working directory and project context.
 
@@ -141,6 +144,9 @@ class DirectToolExecutor:
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
         self._session_id = session_id
+        self._tool_catalog = {
+            str(tool["name"]): dict(tool) for tool in (tool_catalog or [])
+        }
         self._allowed_root: Path | None = self._resolve_project_root(project_id)
         self._registry: dict[str, Any] = build_tool_registry(project_id, self.bash)
 
@@ -172,6 +178,8 @@ class DirectToolExecutor:
             return await self.consult_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "question", "context")})
         if name == "dispatch_agent":
             return await self.dispatch_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "task", "project_id", "max_turns")})
+        if name == "tool_search":
+            return await self.tool_search(**{k: v for k, v in args.items() if k in ("query", "limit")})
 
         # All other tools dispatched via registry
         fn = self._registry.get(name)
@@ -226,3 +234,13 @@ class DirectToolExecutor:
             max_turns,
             parent_session_id=self._session_id,
         )
+
+    async def tool_search(self, query: str, limit: int = 8) -> str:
+        """Search the available tool catalog and return matching tools as JSON."""
+        if not self._tool_catalog:
+            return 'Error: No tool catalog available for this run.'
+        return search_tool_catalog(self._tool_catalog.values(), query, limit)
+
+    def has_catalog_tool(self, name: str) -> bool:
+        """Return True when a named tool exists in the current catalog."""
+        return bool(name) and name in self._tool_catalog

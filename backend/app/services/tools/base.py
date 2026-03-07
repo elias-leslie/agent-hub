@@ -26,6 +26,10 @@ class Tool:
     name: str
     description: str
     input_schema: dict[str, Any]
+    category: str | None = None
+    search_keywords: list[str] = field(default_factory=list)
+    usage_examples: list[str] = field(default_factory=list)
+    defer_loading: bool = False
     # Programmatic tool calling: who can call this tool
     # ["direct"] = Claude calls directly (default)
     # ["code_execution_20250825"] = Only callable from code execution
