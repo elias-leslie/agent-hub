@@ -245,7 +245,10 @@ async def query_sessions(
         from app.models import Session as DBSession
 
         cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
-        conditions = [DBSession.created_at >= cutoff]
+        conditions = [
+            DBSession.created_at >= cutoff,
+            DBSession.agent_slug.is_not(None),
+        ]
 
         if agent_slug:
             conditions.append(DBSession.agent_slug == agent_slug)

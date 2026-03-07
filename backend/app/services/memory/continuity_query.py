@@ -151,6 +151,7 @@ async def query_active_sessions(
     conditions: list[Any] = [
         Session.status == "active",
         Session.created_at > cutoff,
+        Session.agent_slug.is_not(None),
     ]
 
     if project_id:
