@@ -8,9 +8,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_OPUS, CODEX_GPT_5_4
+from app.constants.models import CLAUDE_OPUS, CODEX_GPT_5_1_MINI, CODEX_GPT_5_4
 from app.workflows.persona_heartbeat import (
+    HEARTBEAT_MEMORY_GROUP,
+    HEARTBEAT_PROJECT,
     HeartbeatInput,
+    _build_runtime_warning,
     _do_completion,
     _run_persona_heartbeat,
     get_heartbeat_runtime_info,
@@ -67,7 +70,7 @@ class TestHeartbeatRuntimeInfo:
     async def test_runtime_info_warns_when_model_cannot_run_heartbeat_tools(self):
         mock_db = AsyncMock()
         resolved = (
-            "codex/gpt-5.1-codex-mini",
+            CODEX_GPT_5_1_MINI,
             "codex",
             0.7,
             "medium",
@@ -87,9 +90,39 @@ class TestHeartbeatRuntimeInfo:
 
         assert runtime.supports_tools is False
         assert runtime.heartbeat_supported is False
-        assert runtime.warnings == [
-            "Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools."
-        ]
+        assert runtime.warnings == [_build_runtime_warning(CODEX_GPT_5_1_MINI)]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model_id", "provider", "expected_supported"),
+        [
+            (CLAUDE_OPUS, "claude", True),
+            (CODEX_GPT_5_4, "codex", True),
+            (CODEX_GPT_5_1_MINI, "codex", False),
+        ],
+    )
+    async def test_runtime_info_provider_comparison_uses_model_aware_capability_checks(
+        self, model_id, provider, expected_supported
+    ):
+        mock_db = AsyncMock()
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.workflows.persona_heartbeat._resolve_persona",
+                new_callable=AsyncMock,
+                return_value=(model_id, provider, 0.7, "medium", "You are Jenny", None),
+            ),
+        ):
+            runtime = await get_heartbeat_runtime_info()
+
+        assert runtime.provider == provider
+        assert runtime.supports_tools is expected_supported
+        assert runtime.heartbeat_supported is expected_supported
+        if expected_supported:
+            assert runtime.warnings == []
+        else:
+            assert runtime.warnings == [_build_runtime_warning(model_id)]
 
 
 class TestPersonaHeartbeatTask:
@@ -114,8 +147,9 @@ class TestPersonaHeartbeatTask:
                 "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
+                    model=CODEX_GPT_5_1_MINI,
                     heartbeat_supported=False,
-                    warnings=["Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools."],
+                    warnings=[_build_runtime_warning(CODEX_GPT_5_1_MINI)],
                 ),
             ),
             patch(
@@ -130,7 +164,47 @@ class TestPersonaHeartbeatTask:
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
-        assert result["error"] == "Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools."
+        assert result["error"] == _build_runtime_warning(CODEX_GPT_5_1_MINI)
+        mock_set_running.assert_not_awaited()
+        mock_execute.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_manual_heartbeat_uses_model_name_from_runtime_when_warning_missing(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    model="claude/unknown-no-tools",
+                    heartbeat_supported=False,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch(
+                "app.workflows.persona_heartbeat._execute_heartbeat",
+                new_callable=AsyncMock,
+            ) as mock_execute,
+        ):
+            result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
+
+        assert result["status"] == "skipped"
+        assert result["error"] == _build_runtime_warning("claude/unknown-no-tools")
         mock_set_running.assert_not_awaited()
         mock_execute.assert_not_awaited()
 
@@ -242,3 +316,78 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["execute_tools"] is True
         assert kwargs["enable_programmatic_tools"] is True
         assert kwargs["thinking_level"] == "medium"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model_id", "provider"),
+        [
+            (CLAUDE_OPUS, "claude"),
+            (CODEX_GPT_5_4, "codex"),
+        ],
+    )
+    async def test_do_completion_preserves_shared_contract_for_claude_and_codex(
+        self, model_id, provider
+    ):
+        mock_db = AsyncMock()
+        complete_result = SimpleNamespace(content="HEARTBEAT_OK", session_id="sess-1")
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_model_review_status",
+                new_callable=AsyncMock,
+                return_value=(True, "due now"),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.build_heartbeat_prompt",
+                new_callable=AsyncMock,
+                return_value="Compare providers",
+            ),
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.workflows.persona_heartbeat._resolve_persona",
+                new_callable=AsyncMock,
+                return_value=(model_id, provider, 0.25, "high", "You are Jenny", {"mode": "auto"}),
+            ),
+            patch(
+                "app.services.persona_service.get_persona",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(limits={"max_turns": 17}),
+            ),
+            patch(
+                "app.services._persona_crud.get_persona_limit",
+                return_value=17,
+            ),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=complete_result,
+            ) as mock_complete,
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat",
+                new_callable=AsyncMock,
+            ) as mock_record,
+        ):
+            result = await _do_completion(45)
+
+        assert result is complete_result
+        mock_record.assert_awaited_once_with(did_model_review=True)
+        kwargs = mock_complete.await_args.kwargs
+        assert kwargs["messages"] == [
+            {"role": "system", "content": "You are Jenny"},
+            {"role": "user", "content": "Compare providers"},
+        ]
+        assert kwargs["model"] == model_id
+        assert kwargs["provider"] == provider
+        assert kwargs["temperature"] == 0.25
+        assert kwargs["project_id"] == HEARTBEAT_PROJECT
+        assert kwargs["agent_slug"] == "persona"
+        assert kwargs["use_memory"] is True
+        assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
+        assert kwargs["memory_config"] == {"mode": "auto"}
+        assert kwargs["enable_caching"] is False
+        assert kwargs["skip_cache"] is True
+        assert kwargs["max_turns"] == 17
+        assert kwargs["execute_tools"] is True
+        assert kwargs["enable_programmatic_tools"] is True
+        assert kwargs["task_type"] == "heartbeat"
+        assert kwargs["thinking_level"] == "high"
