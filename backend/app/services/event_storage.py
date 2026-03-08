@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent, SessionEventType
+from app.services.session_live_activity import update_live_activity_for_event
 
 logger = logging.getLogger(__name__)
 
@@ -112,11 +114,18 @@ async def store_event(
         agent_name=agent_name,
     )
     db.add(event)
-    await db.execute(
-        update(Session)
-        .where(Session.id == session_id)
-        .values(updated_at=func.now())
-    )
+    session = await db.get(Session, session_id)
+    if session is not None:
+        update_live_activity_for_event(
+            session,
+            event_type=str(event_type),
+            tool_name=tool_name,
+            tool_input=tool_input,
+            tool_output=tool_output,
+            content=content,
+            model_used=model_used,
+        )
+        session.updated_at = datetime.now(UTC)
     return event
 
 

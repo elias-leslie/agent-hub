@@ -36,6 +36,10 @@ export function SessionHeader({
   const effectiveModel = session.effective_model || session.model;
   const effectiveProvider = session.effective_provider || session.provider;
   const showsFallback = session.fallback_used && requestedModel !== effectiveModel;
+  const liveActivity = session.live_activity;
+  const liveLabel = liveActivity
+    ? `${liveActivity.health} · ${liveActivity.phase}`
+    : null;
 
   return (
     <header
@@ -93,6 +97,9 @@ export function SessionHeader({
                     <p className="text-amber-500/80">
                       requested {requestedModel}
                     </p>
+                  )}
+                  {liveLabel && (
+                    <p className="text-sky-400/80">{liveLabel}</p>
                   )}
                 </div>
               </div>

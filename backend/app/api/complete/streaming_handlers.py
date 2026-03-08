@@ -15,6 +15,7 @@ from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
+from app.services.session_live_activity import mark_session_execution_start
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +60,7 @@ async def _setup_streaming_session(
             working_dir=request.working_dir,
         )
         session_id = stream_session.id
+        mark_session_execution_start(stream_session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
 

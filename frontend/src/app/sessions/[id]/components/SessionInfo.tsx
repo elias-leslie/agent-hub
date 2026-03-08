@@ -19,6 +19,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
   const fallbackDetail = session.fallback_used && requestedModel !== effectiveModel
     ? `${requestedProvider}/${requestedModel} -> ${effectiveProvider}/${effectiveModel}`
     : effectiveModel;
+  const live = session.live_activity;
 
   return (
     <div className="p-6 max-w-4xl space-y-6">
@@ -51,6 +52,50 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           />
         )}
       </div>
+
+      {live && (
+        <div
+          className={cn(
+            "p-4 rounded-lg",
+            live.health === "stalled"
+              ? "bg-red-950/20 border border-red-800/40"
+              : live.health === "quiet"
+                ? "bg-amber-950/20 border border-amber-800/40"
+                : "bg-slate-900/60 border border-slate-800/60"
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+            <span className="text-slate-300">
+              {live.health} · {live.phase}
+            </span>
+            {live.current_tool_name && (
+              <span className="text-sky-400">
+                tool {live.current_tool_name}
+              </span>
+            )}
+            {live.quiet_for_seconds !== null && live.quiet_for_seconds !== undefined && (
+              <span className="text-slate-500">
+                quiet {live.quiet_for_seconds}s
+              </span>
+            )}
+            <span className="text-slate-500">
+              tools {live.tool_calls_count}
+            </span>
+          </div>
+          {live.summary && (
+            <p className="mt-2 text-sm text-slate-300">{live.summary}</p>
+          )}
+          {(live.stall_reason || live.last_command || live.last_validation_command || live.last_read_path || live.last_write_path) && (
+            <div className="mt-3 space-y-1 text-xs font-mono text-slate-400 break-all">
+              {live.stall_reason && <p>{live.stall_reason}</p>}
+              {live.last_validation_command && <p>validation: {live.last_validation_command}</p>}
+              {!live.last_validation_command && live.last_command && <p>command: {live.last_command}</p>}
+              {live.last_read_path && <p>read: {live.last_read_path}</p>}
+              {live.last_write_path && <p>write: {live.last_write_path}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {session.fallback_used && session.fallback_reason && (
         <div

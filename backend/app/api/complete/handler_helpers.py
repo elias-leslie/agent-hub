@@ -13,6 +13,7 @@ from app.models import TruncationEvent
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete, publish_message
 from app.services.response_cache import get_response_cache
+from app.services.session_live_activity import mark_session_terminal_state
 from app.services.token_counter import build_output_usage, estimate_cost
 
 from .event_helpers import save_events
@@ -93,6 +94,13 @@ async def save_and_track(
         })
     if is_new_session:
         session.status = "completed"
+    mark_session_terminal_state(
+        session,
+        phase="completed",
+        status="completed",
+        summary="Execution completed",
+        termination_reason=None,
+    )
     await db.commit()
 
 

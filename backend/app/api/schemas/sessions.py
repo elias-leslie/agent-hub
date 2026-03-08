@@ -89,6 +89,35 @@ class ContextUsageResponse(BaseModel):
     warning: str | None = Field(default=None, description="Warning if approaching limit")
 
 
+class LiveActivityResponse(BaseModel):
+    """Structured live execution state for a session."""
+
+    phase: str
+    status: str
+    summary: str | None = None
+    health: str
+    stalled: bool = False
+    stall_reason: str | None = None
+    quiet_for_seconds: int | None = None
+    last_event_type: str | None = None
+    last_event_at: str | None = None
+    last_model_activity_at: str | None = None
+    current_tool_name: str | None = None
+    last_tool_name: str | None = None
+    last_tool_started_at: str | None = None
+    last_tool_finished_at: str | None = None
+    last_tool_error: bool | None = None
+    last_read_path: str | None = None
+    last_write_path: str | None = None
+    last_command: str | None = None
+    last_validation_command: str | None = None
+    last_command_exit_code: int | None = None
+    outstanding_tool_calls: int = 0
+    tool_calls_count: int = 0
+    termination_reason: str | None = None
+    files_touched: list[str] = Field(default_factory=list)
+
+
 class SessionResponse(BaseModel):
     """Response body for session operations."""
 
@@ -109,6 +138,9 @@ class SessionResponse(BaseModel):
     session_type: str = Field(default="completion", description="Session type")
     created_at: datetime
     updated_at: datetime
+    live_activity: LiveActivityResponse | None = Field(
+        default=None, description="Current live execution state"
+    )
     messages: list[MessageResponse] = Field(default_factory=list)
     context_usage: ContextUsageResponse | None = Field(
         default=None, description="Context window usage"
@@ -145,6 +177,9 @@ class SessionListItem(BaseModel):
     is_worktree: bool = Field(default=False, description="Whether the working directory is a git worktree")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
+    live_activity: LiveActivityResponse | None = Field(
+        default=None, description="Current live execution state"
+    )
     message_count: int
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")

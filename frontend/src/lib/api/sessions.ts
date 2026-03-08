@@ -37,6 +37,33 @@ export interface ContextUsage {
   warning: string | null;
 }
 
+export interface LiveActivity {
+  phase: string;
+  status: string;
+  summary?: string | null;
+  health: string;
+  stalled: boolean;
+  stall_reason?: string | null;
+  quiet_for_seconds?: number | null;
+  last_event_type?: string | null;
+  last_event_at?: string | null;
+  last_model_activity_at?: string | null;
+  current_tool_name?: string | null;
+  last_tool_name?: string | null;
+  last_tool_started_at?: string | null;
+  last_tool_finished_at?: string | null;
+  last_tool_error?: boolean | null;
+  last_read_path?: string | null;
+  last_write_path?: string | null;
+  last_command?: string | null;
+  last_validation_command?: string | null;
+  last_command_exit_code?: number | null;
+  outstanding_tool_calls: number;
+  tool_calls_count: number;
+  termination_reason?: string | null;
+  files_touched: string[];
+}
+
 export interface Session {
   id: string;
   project_id: string;
@@ -55,6 +82,7 @@ export interface Session {
   session_type: string;
   created_at: string;
   updated_at: string;
+  live_activity?: LiveActivity | null;
   messages?: SessionMessage[];
   context_usage?: ContextUsage | null;
   agent_token_breakdown?: AgentTokenBreakdown[];
@@ -78,6 +106,7 @@ export interface SessionListItem {
   status: string;
   agent_slug: string | null;
   session_type: string;
+  live_activity?: LiveActivity | null;
   message_count: number;
   total_input_tokens: number;
   total_output_tokens: number;
