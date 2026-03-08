@@ -20,6 +20,7 @@ _WORKSTREAM_LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = STALE_WORKSTREAM_IDLE_MINUTES
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
+_TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 
 # Contract: workstream inventory states are derived in precedence order.
 # Highest precedence first:
@@ -543,6 +544,11 @@ def _extract_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
     return stale_tasks
 
 
+def _extract_task_ids(task_overview: str) -> set[str]:
+    """Extract all task ids present in the current queue snapshot."""
+    return {match.group(0) for match in _TASK_ID_PATTERN.finditer(task_overview)}
+
+
 def _format_stale_running_task(project_id: str, task_id: str) -> str:
     """Format an orphan running task from queue truth into the workstream inventory."""
     next_action = (
@@ -559,6 +565,7 @@ async def _get_workstream_inventory() -> str:
     try:
         rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
         task_overview = _fetch_task_overview()
+        visible_task_ids = _extract_task_ids(task_overview)
         stale_tasks = _extract_stale_running_tasks(task_overview)
         if not rows and not stale_tasks:
             return ""
@@ -579,6 +586,14 @@ async def _get_workstream_inventory() -> str:
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
         for (project_id, lane_key), lane_rows in sorted(grouped.items()):
             task_id = next((_infer_task_id(row) for row in lane_rows if _infer_task_id(row)), None)
+            lane_state = _classify_workstream_lane(lane_rows)
+            if (
+                lane_state == "completed_ready_for_closure"
+                and task_id
+                and task_overview
+                and task_id not in visible_task_ids
+            ):
+                continue
             if task_id and (project_id, task_id) in stale_keys:
                 lines.append(_format_stale_running_task(project_id, task_id))
                 stale_keys.discard((project_id, task_id))
@@ -588,6 +603,9 @@ async def _get_workstream_inventory() -> str:
             if (project_id, task_id) in grouped:
                 continue
             lines.append(_format_stale_running_task(project_id, task_id))
+
+        if len(lines) == 1:
+            return ""
 
         body = "\n".join(lines)
         return f"\n<workstream_inventory>\n{body}\n</workstream_inventory>"
