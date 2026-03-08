@@ -326,6 +326,7 @@ class TestGetWorkstreamInventory:
                 "created_at": "ignored",
                 "updated_at": "ignored",
                 "age_minutes": 480,
+                "idle_minutes": 480,
             },
         ]
 
@@ -339,6 +340,34 @@ class TestGetWorkstreamInventory:
         assert "task-999" in result
         assert "state=stale_active" in result
         assert 'query_sessions(' in result
+
+    @pytest.mark.asyncio
+    async def test_reports_stale_active_lane_from_idle_time_not_session_age(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-2",
+                "agent_slug": "refactor",
+                "project_id": "agent-hub",
+                "external_id": "task-123",
+                "current_branch": "task-123/main",
+                "status": "active",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 6,
+                "idle_minutes": 12,
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-123" in result
+        assert "state=stale_active" in result
+        assert "idle=12m" in result
 
     @pytest.mark.asyncio
     async def test_reports_mixed_lane_when_multiple_branches_active(self) -> None:
@@ -554,6 +583,7 @@ class TestWorkstreamLaneContract:
                 "status": "active",
                 "current_branch": "task-4/main",
                 "age_minutes": 15,
+                "idle_minutes": 5,
             }
         ]
 
