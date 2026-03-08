@@ -54,17 +54,14 @@ async def test_stream_sdk_messages_synthesizes_result_when_stream_ends_without_o
 
 
 @pytest.mark.asyncio
-async def test_stream_sdk_messages_synthesizes_result_after_idle_post_tool_result(
+async def test_stream_sdk_messages_allows_slow_post_tool_progress_without_synthesizing_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.adapters import claude_tools_helpers as helpers
-
-    class HangingIterator:
+    class SlowIterator:
         def __init__(self) -> None:
             self._step = 0
-            self._closed = False
 
-        def __aiter__(self) -> HangingIterator:
+        def __aiter__(self) -> SlowIterator:
             return self
 
         async def __anext__(self):
@@ -77,23 +74,17 @@ async def test_stream_sdk_messages_synthesizes_result_after_idle_post_tool_resul
                     is_error=False,
                 )
                 return types.SimpleNamespace(content=[block], subtype=None)
-            while not self._closed:
-                try:
-                    await asyncio.Event().wait()
-                except asyncio.CancelledError:
-                    # Simulate the SDK ignoring the first cancellation attempt.
-                    continue
+            if self._step == 1:
+                self._step += 1
+                await asyncio.sleep(0.01)
+                return ResultMessage()
             raise StopAsyncIteration
 
-        async def aclose(self) -> None:
-            self._closed = True
-
     def fake_query(*, prompt, options):
-        return HangingIterator()
+        return SlowIterator()
 
     fake_sdk = types.SimpleNamespace(query=fake_query)
     monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
-    monkeypatch.setattr(helpers, "_SDK_TERMINAL_GRACE_SECONDS", 0.01)
 
     seen = []
     async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
