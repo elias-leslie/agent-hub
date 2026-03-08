@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.api.complete.tool_models import AgentProgress
 from app.api.complete.tool_progress import ProgressTracker
 from app.api.complete.turn_processor import report_progress
-from app.api.complete.tool_models import AgentProgress
 
 
 @pytest.mark.asyncio
