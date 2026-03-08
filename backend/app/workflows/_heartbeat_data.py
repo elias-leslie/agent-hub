@@ -544,9 +544,14 @@ async def _get_workstream_inventory() -> str:
             return ""
 
         lines = ["Recent workstreams:"]
-        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-            lines.append(_format_workstream_lane(project_id, lane_key, lane_rows))
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
+        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
+            task_id = next((_infer_task_id(row) for row in lane_rows if _infer_task_id(row)), None)
+            if task_id and (project_id, task_id) in stale_keys:
+                lines.append(_format_stale_running_task(project_id, task_id))
+                stale_keys.discard((project_id, task_id))
+                continue
+            lines.append(_format_workstream_lane(project_id, lane_key, lane_rows))
         for project_id, task_id in sorted(stale_keys):
             if (project_id, task_id) in grouped:
                 continue

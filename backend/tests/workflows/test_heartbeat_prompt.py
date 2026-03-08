@@ -471,6 +471,41 @@ agent-hub (1 ready, 1 stale)
             in result
         )
 
+    @pytest.mark.asyncio
+    async def test_stale_running_queue_truth_overrides_historical_session_rows(self) -> None:
+        fake_overview = """READY-ALL[1 ready, 0 blocked, 0 active, 1 stale across 1 projects]
+
+agent-hub (1 ready, 1 stale)
+  ? task-de53b498 P1 task     [M] Add persona heartbeat provider regression tests for ... [stale-running]
+"""
+        fake_rows = [
+            {
+                "session_id": "sess-1",
+                "agent_slug": "refactor",
+                "project_id": "agent-hub",
+                "external_id": "task-de53b498",
+                "current_branch": "task-de53b498/main",
+                "status": "completed",
+                "workstream_status": "superseded",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ), patch(
+            "app.workflows._heartbeat_data._fetch_task_overview",
+            return_value=fake_overview,
+        ):
+            result = await _get_workstream_inventory()
+
+        assert "task-de53b498" in result
+        assert "state=stale_running_task" in result
+        assert "state=superseded" not in result
+
 
 class TestWorkstreamLaneContract:
     """Tests for lane classification precedence and automation boundaries."""
