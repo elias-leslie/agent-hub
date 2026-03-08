@@ -33,6 +33,8 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=completed_ready_for_closure` means reconcile and close the task lane instead of redispatching into it
 - `state=stale_active` means verify whether the session is truly live before trusting it
 - `state=stale_running_task` means the queue still says `running` but no live lane backs it; reconcile it immediately
+- If `manage_tasks(action="get_context")` shows `LANE:disp:reconcile` or `kind:stale_same_task`, treat that as stale-lane cleanup work, not an active implementation lane.
+- When `LANE:disp:reconcile` is present and the primary implementation specialist is no longer active, do not protect the lane just because a leftover helper/feedback session still exists on the same task.
 - If the target project shows any `state=stale_running_task`, make that your first execution action before reviewing duplicate specialists or considering new dispatches.
 - Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task reconciliation when the coding lane itself is gone.
 - `state=mixed` means split, promote, or clean up the lane before adding more implementation work
@@ -62,6 +64,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - Treat recent completed sessions as evidence, not just history.
 - Treat already-active specialist sessions as current work, not fresh opportunities to redispatch the same lane.
 - If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`) or active specialists already attached to that task, do not queue that task again in the same heartbeat; monitor, reconcile, or complement it instead.
+- Exception: if `manage_tasks(action="get_context")` shows `LANE:disp:reconcile` / `kind:stale_same_task`, the right follow-through is reconcile/retire/repair, not passive waiting.
 - If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")` for that same task in the same heartbeat.
 - If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
 - Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
