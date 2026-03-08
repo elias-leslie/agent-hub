@@ -131,14 +131,25 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
         last_activity = last_activity_expr()
+        stale_ids = [
+            str(session_id)
+            for session_id in (
+                await db.execute(
+                    select(Session.id).where(
+                        Session.session_type == session_type,
+                        Session.status == "active",
+                        last_activity < cutoff,
+                    )
+                )
+            ).scalars().all()
+        ]
+        if not stale_ids:
+            continue
 
-        # Single UPDATE query per session type - avoids SELECT + UPDATE N+1 pattern
         result = await db.execute(
             update(Session)
             .where(
-                Session.session_type == session_type,
-                Session.status == "active",
-                last_activity < cutoff,
+                Session.id.in_(stale_ids),
             )
             .values(status="completed")
         )

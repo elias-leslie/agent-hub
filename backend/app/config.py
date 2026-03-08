@@ -82,7 +82,7 @@ class Settings(BaseSettings):
 
     # Session timeout configuration (in minutes)
     # Sessions idle longer than these thresholds are auto-completed
-    session_timeout_completion: int = 30  # 30 minutes for one-off completions
+    session_timeout_completion: int = 10  # 10 minutes for inactive one-off completions
     session_timeout_chat: int = 1440  # 24 hours for interactive chat
     session_timeout_roundtable: int = 1440  # 24 hours for multi-agent
     session_timeout_image_generation: int = 120  # 2 hours for image gen
