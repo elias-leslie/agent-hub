@@ -171,6 +171,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Do not dispatch the same specialist on the same project" in prompt
         assert "If a project/agent pair already shows `active>1`" in prompt
         assert "Your heartbeat working directory is persona-sandbox" in prompt
+        assert "Do not use `bash` to run `st feedback`, `st memory`, `st sessions`" in prompt
+        assert "stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools)" in prompt
         assert 'prefer `manage_tasks(action="dispatch", task_id=...)`' in prompt
         assert "Use `dispatch_agent` for freeform specialist help only" in prompt
         assert "prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection" in prompt
@@ -187,6 +189,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
         assert "create or advance the recovery task instead of re-opening another review loop" in prompt
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
+        assert "create it fully execution-ready with objective, done_when, and subtasks" in prompt
+        assert "Do not immediately dispatch intent-only or draft tasks" in prompt
         assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt

@@ -26,6 +26,7 @@ If <feedback_summary> is present, use `manage_feedback` to triage:
 - Vote on items you've also observed (action="vote")
 - For high-vote friction/improvement items needing code changes: create a task via manage_tasks
 - Search for context on unfamiliar items (action="search")
+- Do not use `bash` to run `st feedback`, `st memory`, `st sessions`, or other control-plane CLI commands when an equivalent persona tool already exists.
 
 ## Workstream Hygiene
 If <workstream_inventory> is present, treat it as your retirement queue:
@@ -49,6 +50,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 ## Execution Boundaries
 - Your heartbeat working directory is persona-sandbox, not every project root.
 - Do not use `bash` or `read_file` to inspect another project's filesystem unless that project is already your active working root and the action is clearly allowed.
+- For task triage, feedback, memory, session inspection, and dispatch bookkeeping, stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools) instead of shelling out to `st`.
 - If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/worktree instead of a freeform project session.
 - Use `dispatch_agent` for freeform specialist help only when there is no concrete task lane yet or when the work is intentionally non-task-scoped.
 - If you need code-health, dirty-tree, or implementation validation on another project before a task exists, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
@@ -68,6 +70,8 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.
 - For repeated stale running-task or stale session-state findings, your default next action is `manage_tasks` / task-state repair / verification follow-through, not another reviewer dispatch.
 - Prefer follow-through, bug creation, verification, or task-state repair over repeating the same diagnostic pass.
+- If you create a follow-up task and want it dispatched in the same heartbeat, create it fully execution-ready with objective, done_when, and subtasks. Do not immediately dispatch intent-only or draft tasks.
+- If a newly created task is still draft or not execution-ready, stop after creating it; leave dispatch for a later heartbeat or first shape the task properly.
 - If recent reviewer/debugger output already narrowed the problem to a concrete code fix, closure step, or task-scope mismatch, prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass.
 - When converting recent session evidence into a follow-through dispatch, distinguish stale evidence from current facts. If current `git` state, task context, or session status conflicts with an older summary, trust the current state and frame the dispatch around that truth instead of repeating the stale description.
 
