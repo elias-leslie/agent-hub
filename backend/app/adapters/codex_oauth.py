@@ -40,6 +40,7 @@ from app.adapters.codex_sse import (
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 
 logger = logging.getLogger(__name__)
+_TOOL_TURN_TIMEOUT_SECONDS = DEFAULT_TIMEOUT
 
 ToolHandler = Callable[[str, dict[str, Any]], Awaitable[str]]
 
@@ -328,16 +329,34 @@ class CodexOAuthAdapter(ProviderAdapter):
         total_output_tokens = 0
 
         for turn in range(max_turns):
-            result = await self._complete_from_input(
-                input_items=input_items,
-                instructions=instructions,
-                resolved_model=resolved_model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                tools=tools,
-                prompt_cache_key=prompt_cache_key,
-                **kwargs,
-            )
+            try:
+                result = await asyncio.wait_for(
+                    self._complete_from_input(
+                        input_items=input_items,
+                        instructions=instructions,
+                        resolved_model=resolved_model,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        tools=tools,
+                        prompt_cache_key=prompt_cache_key,
+                        **kwargs,
+                    ),
+                    timeout=_TOOL_TURN_TIMEOUT_SECONDS,
+                )
+            except TimeoutError:
+                logger.error(
+                    "Codex tool loop turn %s timed out after %.1fs",
+                    turn + 1,
+                    _TOOL_TURN_TIMEOUT_SECONDS,
+                )
+                yield StreamEvent(
+                    type="error",
+                    error=(
+                        "Codex tool loop timed out waiting for the next model response "
+                        f"after {_TOOL_TURN_TIMEOUT_SECONDS:.0f}s"
+                    ),
+                )
+                return
 
             total_input_tokens += result.input_tokens or 0
             total_output_tokens += result.output_tokens or 0

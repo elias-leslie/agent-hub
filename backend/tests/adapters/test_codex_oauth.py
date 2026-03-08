@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -206,3 +207,41 @@ async def test_complete_with_tools_multiple_tool_calls_per_turn() -> None:
     tool_handler.assert_any_await("tool_a", {"x": 1})
     tool_handler.assert_any_await("tool_b", {"y": 2})
     tool_handler.assert_any_await("tool_c", {"z": 3})
+
+
+@pytest.mark.asyncio
+async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.adapters import codex_oauth as mod
+
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+
+    async def hang_forever(**kwargs):
+        await asyncio.Event().wait()
+        raise AssertionError("unreachable")
+
+    monkeypatch.setattr(adapter, "_complete_from_input", hang_forever)
+    monkeypatch.setattr(mod, "_TOOL_TURN_TIMEOUT_SECONDS", 0.01)
+
+    tool_handler = AsyncMock()
+
+    events = []
+    async for event in adapter.complete_with_tools(
+        messages=[Message(role="user", content="hang")],
+        model="codex/gpt-5.4",
+        tools=[{"name": "noop", "description": "noop", "input_schema": {"type": "object"}}],
+        tool_handler=tool_handler,
+        max_turns=2,
+    ):
+        events.append(event)
+
+    assert len(events) == 1
+    assert events[0].type == "error"
+    assert "timed out" in (events[0].error or "")
+    tool_handler.assert_not_awaited()
