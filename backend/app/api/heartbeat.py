@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
+from app.db import async_session
+from app.models.session import Session
 from app.workflows._heartbeat_redis import (
+    HeartbeatRunningInfo,
+    clear_heartbeat_running,
     get_heartbeat_metrics,
     get_heartbeat_running_info,
     get_last_run_info,
@@ -25,6 +31,9 @@ from app.workflows.persona_heartbeat import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/heartbeat", tags=["heartbeat"])
+
+_HEARTBEAT_SESSION_GRACE_SECONDS = 60
+_HEARTBEAT_SESSION_IDLE_SECONDS = 180
 
 
 class HeartbeatStatusResponse(BaseModel):
@@ -51,10 +60,53 @@ class HeartbeatTriggerRequest(BaseModel):
     target_project_id: str | None = None
 
 
+async def _has_live_heartbeat_session(started_at_iso: str) -> bool:
+    """Sanity-check the Redis running lock against recent persona session activity."""
+    started_at = datetime.fromisoformat(started_at_iso)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=UTC)
+    now = datetime.now(UTC)
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(Session.updated_at)
+            .where(
+                Session.agent_slug == "persona",
+                Session.created_at >= started_at - timedelta(seconds=30),
+            )
+            .order_by(Session.updated_at.desc())
+            .limit(1)
+        )
+        last_updated = result.scalar_one_or_none()
+
+    if last_updated is None:
+        return (now - started_at).total_seconds() <= _HEARTBEAT_SESSION_GRACE_SECONDS
+
+    if last_updated.tzinfo is None:
+        last_updated = last_updated.replace(tzinfo=UTC)
+    return (now - last_updated).total_seconds() <= _HEARTBEAT_SESSION_IDLE_SECONDS
+
+
+async def _get_effective_running_info() -> HeartbeatRunningInfo | None:
+    """Return live running info, clearing stale heartbeat locks when necessary."""
+    running_info = await get_heartbeat_running_info()
+    if not running_info:
+        return None
+    if await _has_live_heartbeat_session(str(running_info["started_at"])):
+        return running_info
+
+    logger.warning(
+        "Clearing stale heartbeat running lock (started_at=%s)",
+        running_info["started_at"],
+    )
+    await clear_heartbeat_running()
+    return None
+
+
 @router.get("/status", response_model=HeartbeatStatusResponse)
 async def heartbeat_status() -> HeartbeatStatusResponse:
     """Return current heartbeat running state, last run info, and metrics."""
-    running_info = await get_heartbeat_running_info()
+    running_info = await _get_effective_running_info()
     last_run = await get_last_run_info()
     interval_minutes, _ = await get_heartbeat_interval()
     metrics = await get_heartbeat_metrics()
@@ -89,7 +141,7 @@ async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> H
         raise HTTPException(status_code=400, detail=f"Unknown target project: {target_project_id}")
 
     # Check if already running
-    running_info = await get_heartbeat_running_info()
+    running_info = await _get_effective_running_info()
     if running_info:
         raise HTTPException(
             status_code=409,

@@ -177,6 +177,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
         assert "Treat recent completed sessions as evidence, not just history." in prompt
         assert "Treat already-active specialist sessions as current work" in prompt
+        assert 'If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`)' in prompt
         assert "prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type" in prompt
         assert "Only redispatch the same specialist lane when you have concrete evidence the active session is stuck" in prompt
         assert "Treat follow-up branches and worktrees as single workstreams, not shared scratchpads" in prompt
