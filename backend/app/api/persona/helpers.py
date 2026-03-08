@@ -6,18 +6,24 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
+from app.services.persona_instruction_service import get_persona_heartbeat_instructions
 
 from .constants import SHRINKAGE_MIN_LEN, SHRINKAGE_RATIO
 from .schemas import PersonaResponse
 
 
-def persona_to_response(persona: Persona, agent_slug: str = "persona") -> PersonaResponse:
+async def persona_to_response(
+    db: AsyncSession,
+    persona: Persona,
+    agent_slug: str = "persona",
+) -> PersonaResponse:
     """Convert a Persona ORM object to response schema."""
+    heartbeat_instructions = await get_persona_heartbeat_instructions(db)
     return PersonaResponse(
         id=persona.id,
         name=persona.name,
         personality=persona.personality,
-        heartbeat_instructions=persona.heartbeat_instructions,
+        heartbeat_instructions=heartbeat_instructions,
         user_context=persona.user_context,
         voice_id=persona.voice_id,
         voice_enabled=persona.voice_enabled,

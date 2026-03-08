@@ -58,10 +58,6 @@ def _build_persona_sections(
         sections.append(f"<greeting>\n{persona.greeting}\n</greeting>")
     if persona.personality:
         sections.append(f"<personality>\n{persona.personality}\n</personality>")
-    if persona.heartbeat_instructions and task_type == "heartbeat":
-        sections.append(
-            f"<heartbeat_instructions>\n{persona.heartbeat_instructions}\n</heartbeat_instructions>"
-        )
     if persona.user_context:
         sections.append(f"<user_context>\n{persona.user_context}\n</user_context>")
     return sections
@@ -92,7 +88,20 @@ async def get_persona_context_for_agent(
         sections.append(onboarding_section)
         await _handle_onboarding_phase_transition(db, persona, phase)
 
+    if task_type == "heartbeat":
+        from app.services.persona_instruction_service import (
+            get_persona_heartbeat_instructions,
+        )
+
+        heartbeat_instructions = await get_persona_heartbeat_instructions(db)
+    else:
+        heartbeat_instructions = None
+
     sections.extend(_build_persona_sections(persona, task_type=task_type))
+    if heartbeat_instructions:
+        sections.append(
+            f"<heartbeat_instructions>\n{heartbeat_instructions}\n</heartbeat_instructions>"
+        )
 
     if phase == "complete":
         sections.append(f"<evolution_guidelines>\n{EVOLUTION_TRIGGERS}\n</evolution_guidelines>")

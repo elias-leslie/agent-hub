@@ -10,6 +10,7 @@ from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
     _get_active_specialist_inventory,
+    _get_cleanup_status_summary,
     _get_git_project_status,
     _get_git_status_summary,
     _get_workstream_inventory,
@@ -154,8 +155,25 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
+        "app.workflows._heartbeat_prompt._get_cleanup_status_summary",
+        return_value="\n<cleanup_status>\nCLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 orphan=1 prunable=0\n</cleanup_status>",
+    )
+    @patch(
         "app.workflows._heartbeat_prompt._get_git_status_summary",
         return_value="\n<git_state>\n[summitflow] test data\n</git_state>",
+    )
+    @patch(
+        "app.workflows._heartbeat_prompt.require_prompt_content",
+        new_callable=AsyncMock,
+        return_value=(
+            "Run your regular heartbeat check. Current time: {timestamp} ({local_time})\n\n"
+            "{project_access_summary}\n\n"
+            "## Model Review ({model_review_status})\n"
+            "{model_review_instructions}\n\n"
+            "## Available Tools ({tool_count} total)\n"
+            "Beyond bash/read_file/write_file, you have: {persona_tool_list}\n\n"
+            "Follow your <heartbeat_instructions> from your system context."
+        ),
     )
     @patch("app.workflows._heartbeat_prompt._get_active_work_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_persona_tool_summary", return_value=(5, "tool1, tool2"))
@@ -165,42 +183,16 @@ class TestBuildHeartbeatPromptIncludesGitState:
         from app.workflows._heartbeat_prompt import build_heartbeat_prompt
 
         prompt = await build_heartbeat_prompt(model_review_due=False, model_review_label="skip")
+        assert "<cleanup_status>" in prompt
+        assert "CLEANUP[all]:repos=2 needs_cleanup=1" in prompt
         assert "<git_state>" in prompt
         assert "[summitflow] test data" in prompt
-        assert "If <active_specialist_inventory> is present" in prompt
-        assert "Do not dispatch the same specialist on the same project" in prompt
-        assert "If a project/agent pair already shows `active>1`" in prompt
-        assert "Your heartbeat working directory is persona-sandbox" in prompt
-        assert "Do not use `bash` to run `st feedback`, `st memory`, `st sessions`" in prompt
-        assert "stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools)" in prompt
-        assert 'prefer `manage_tasks(action="dispatch", task_id=...)`' in prompt
-        assert "Use `dispatch_agent` for freeform specialist help only" in prompt
-        assert "prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection" in prompt
-        assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
-        assert "Treat recent completed sessions as evidence, not just history." in prompt
-        assert "Treat already-active specialist sessions as current work" in prompt
-        assert 'If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`)' in prompt
-        assert 'If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")`' in prompt
-        assert "prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type" in prompt
-        assert "Only redispatch the same specialist lane when you have concrete evidence the active session is stuck" in prompt
-        assert "Treat follow-up branches and worktrees as single workstreams, not shared scratchpads" in prompt
-        assert "Reuse an existing follow-up branch only when the new work is the same task lane" in prompt
-        assert "create a new task/worktree instead of piling onto the old branch" in prompt
-        assert "your next action is split/promotion/cleanup, not another implementation dispatch onto that same branch" in prompt
-        assert "do not redispatch the same investigation unless new contradictory evidence appeared" in prompt
-        assert "create or advance the recovery task instead of re-opening another review loop" in prompt
-        assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
-        assert "create it fully execution-ready with objective, done_when, and subtasks" in prompt
-        assert "Do not immediately dispatch intent-only or draft tasks" in prompt
-        assert "Never dispatch a newly created task in the same heartbeat unless you first verify via `manage_tasks(action=\"get_context\")`" in prompt
-        assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
-        assert 'If `manage_tasks(action="get_context")` shows `LANE:disp:reconcile` or `kind:stale_same_task`, treat that as stale-lane cleanup work, not an active implementation lane.' in prompt
-        assert "When `LANE:disp:reconcile` is present and the primary implementation specialist is no longer active, do not protect the lane just because a leftover helper/feedback session still exists on the same task." in prompt
-        assert "make that your first execution action before reviewing duplicate specialists or considering new dispatches" in prompt
-        assert "Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task reconciliation" in prompt
-        assert "Exception: if `manage_tasks(action=\"get_context\")` shows `LANE:disp:reconcile` / `kind:stale_same_task`, the right follow-through is reconcile/retire/repair, not passive waiting." in prompt
-        assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
-        assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
+        assert "Run your regular heartbeat check." in prompt
+        assert "## Model Review (not due — skip)" in prompt
+        assert "Not due — skip model review this heartbeat." in prompt
+        assert "## Available Tools (5 total)" in prompt
+        assert "tool1, tool2" in prompt
+        assert "Follow your <heartbeat_instructions> from your system context." in prompt
 
 
 class TestActiveSpecialistInventory:
@@ -258,6 +250,24 @@ class TestActiveSpecialistInventory:
             result = await _get_active_specialist_inventory()
 
         assert result == ""
+
+
+class TestCleanupStatusSummary:
+    """Tests for heartbeat cleanup-status section."""
+
+    @patch(
+        "app.workflows._heartbeat_data._fetch_cleanup_status",
+        return_value="CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
+    )
+    def test_returns_xml_block(self, _mock_fetch: MagicMock) -> None:
+        result = _get_cleanup_status_summary()
+        assert result.startswith("\n<cleanup_status>")
+        assert "needs_cleanup=1" in result
+        assert result.endswith("</cleanup_status>")
+
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", return_value="")
+    def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: MagicMock) -> None:
+        assert _get_cleanup_status_summary() == ""
 
 
 class TestGetWorkstreamInventory:

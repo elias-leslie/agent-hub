@@ -1,9 +1,28 @@
-"""Heartbeat prompt string constants and model-review text."""
+"""unify_prompt_sources
+
+Revision ID: a4b5c6d7e8f9
+Revises: 6996cae6424b
+Create Date: 2026-03-08 12:00:00.000000
+
+"""
 
 from __future__ import annotations
 
-HEARTBEAT_PROMPT_TEMPLATE = """\
-Run your regular heartbeat check. Current time: {timestamp} ({local_time})
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = "a4b5c6d7e8f9"
+down_revision = "6996cae6424b"
+branch_labels = None
+depends_on = None
+
+
+PLATFORM_CONTEXT_PROMPT = "platform-context"
+HEARTBEAT_PROMPT = "persona-heartbeat-orchestrator"
+
+HEARTBEAT_TEMPLATE = """Run your regular heartbeat check. Current time: {timestamp} ({local_time})
 
 {project_access_summary}
 
@@ -17,8 +36,7 @@ If you discover a pattern, gotcha, or user preference worth preserving:
 - Git captures your work log automatically via commit messages. Do NOT duplicate it.
 
 ## Memory Curation
-Review injected memories in your context. Use `mark_memory_relevant` for memories \
-useful to your ongoing operations. Use `mark_memory_irrelevant` for noise/outdated ones.
+Review injected memories in your context. Use `mark_memory_relevant` for memories useful to your ongoing operations. Use `mark_memory_irrelevant` for noise/outdated ones.
 
 ## Feedback Triage
 If <feedback_summary> is present, use `manage_feedback` to triage:
@@ -40,6 +58,13 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=mixed` means split, promote, or clean up the lane before adding more implementation work
 - `state=reconciled` means an authoritative lane is already recorded; do not reopen old branches without new evidence
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
+
+## Git Hygiene
+If <cleanup_status> is present, treat it as the canonical branch/worktree hygiene summary:
+- `orphan` and `prunable` counts are cleanup debt; prefer reducing them before spawning low-confidence new maintenance work in that same project.
+- `dirty` worktrees mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
+- Active worktrees alone are not cleanup debt, but mixed active worktrees plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
+- When cleanup debt is nonzero and no higher-priority production issue is active, favor reconciliation, closure, or a cleanup task over another speculative scan.
 
 ## Specialist Hygiene
 If <active_specialist_inventory> is present, treat it as an in-flight advisory queue:
@@ -84,22 +109,109 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 
 Follow your <heartbeat_instructions> from your system context.
 
-Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`, \
-followed by a 1-2 sentence summary. Also include a `[[S:completed:summary here]]` \
-or `[[S:partial:summary here]]` tag so the session gets a searchable summary.
+Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`, followed by a 1-2 sentence summary. Also include a `[[S:completed:summary here]]` or `[[S:partial:summary here]]` tag so the session gets a searchable summary.
 
-If approaching your turn limit, prioritize saving durable insights before doing more work.\
+If approaching your turn limit, prioritize saving durable insights before doing more work.
 """
 
-MODEL_REVIEW_DO = (
-    "Due — run `review_agent_performance` + `manage_model_config(action=get_benchmarks)` + "
-    "`manage_model_config(action=list_agents)`. Check `synced_at` — if benchmark data >60 days old, "
-    "`send_push` to flag stale benchmarks. Evaluate model assignments. Log via `log_agent_performance`."
-)
-MODEL_REVIEW_SKIP = "Not due — skip model review this heartbeat."
 
-__all__ = [
-    "HEARTBEAT_PROMPT_TEMPLATE",
-    "MODEL_REVIEW_DO",
-    "MODEL_REVIEW_SKIP",
-]
+def upgrade() -> None:
+    bind = op.get_bind()
+
+    op.add_column(
+        "prompts",
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+    )
+
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO prompts (slug, name, content, description, is_global, enabled, exclude_agents)
+            SELECT
+                :slug,
+                'Platform Context',
+                content,
+                'Platform-wide context injected into all agents as <platform_context>.',
+                true,
+                enabled,
+                '[]'::json
+            FROM global_instructions
+            WHERE scope = 'global'
+            ON CONFLICT (slug) DO UPDATE SET
+                name = EXCLUDED.name,
+                content = EXCLUDED.content,
+                description = EXCLUDED.description,
+                is_global = EXCLUDED.is_global,
+                enabled = EXCLUDED.enabled,
+                updated_at = NOW()
+            """
+        ),
+        {"slug": PLATFORM_CONTEXT_PROMPT},
+    )
+
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO prompts (slug, name, content, description, is_global, enabled, exclude_agents)
+            VALUES (
+                :slug,
+                'Persona Heartbeat Orchestrator',
+                :content,
+                'Workflow prompt that drives persona heartbeat orchestration.',
+                false,
+                true,
+                '[]'::json
+            )
+            ON CONFLICT (slug) DO UPDATE SET
+                name = EXCLUDED.name,
+                content = EXCLUDED.content,
+                description = EXCLUDED.description,
+                updated_at = NOW()
+            """
+        ),
+        {"slug": HEARTBEAT_PROMPT, "content": HEARTBEAT_TEMPLATE},
+    )
+
+    op.drop_index("ix_global_instructions_scope", table_name="global_instructions")
+    op.drop_table("global_instructions")
+
+
+def downgrade() -> None:
+    bind = op.get_bind()
+
+    op.create_table(
+        "global_instructions",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("scope", sa.String(length=50), nullable=False),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=True),
+        sa.PrimaryKeyConstraint("id", name="global_instructions_pkey"),
+    )
+    op.create_index("ix_global_instructions_scope", "global_instructions", ["scope"], unique=True)
+
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO global_instructions (scope, content, enabled)
+            SELECT
+                'global',
+                content,
+                enabled
+            FROM prompts
+            WHERE slug = :slug
+            """
+        ),
+        {"slug": PLATFORM_CONTEXT_PROMPT},
+    )
+
+    bind.execute(
+        sa.text("DELETE FROM prompts WHERE slug = :slug"),
+        {"slug": PLATFORM_CONTEXT_PROMPT},
+    )
+    bind.execute(
+        sa.text("DELETE FROM prompts WHERE slug = :slug"),
+        {"slug": HEARTBEAT_PROMPT},
+    )
+
+    op.drop_column("prompts", "enabled")

@@ -1,9 +1,4 @@
-"""Heartbeat prompt builder — thin orchestrator.
-
-Constants and data helpers live in sibling modules:
-  _heartbeat_templates  — string constants
-  _heartbeat_data       — async/sync data-fetching helpers
-"""
+"""Heartbeat prompt builder — thin orchestrator backed by DB prompt content."""
 
 from __future__ import annotations
 
@@ -11,25 +6,29 @@ import logging
 import re
 from datetime import UTC, datetime
 
+from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
+from app.services.prompt_service import require_prompt_content
 from app.workflows._heartbeat_data import (
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
+    _get_cleanup_status_summary,
     _get_feedback_summary_section,
     _get_git_status_summary,
     _get_persona_tool_summary,
     _get_workstream_inventory,
     get_project_access_summary,
 )
-from app.workflows._heartbeat_templates import (
-    HEARTBEAT_PROMPT_TEMPLATE,
-    MODEL_REVIEW_DO,
-    MODEL_REVIEW_SKIP,
-)
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEZONE = "America/New_York"
+MODEL_REVIEW_DO = (
+    "Due — run `review_agent_performance` + `manage_model_config(action=get_benchmarks)` + "
+    "`manage_model_config(action=list_agents)`. Check `synced_at` — if benchmark data >60 days old, "
+    "`send_push` to flag stale benchmarks. Evaluate model assignments. Log via `log_agent_performance`."
+)
+MODEL_REVIEW_SKIP = "Not due — skip model review this heartbeat."
 
 
 async def _get_persona_timezone() -> str:
@@ -100,8 +99,9 @@ async def build_heartbeat_prompt(
     review_instructions = MODEL_REVIEW_DO if model_review_due else MODEL_REVIEW_SKIP
 
     tool_count, persona_tool_list = _get_persona_tool_summary()
+    template = await require_prompt_content(PERSONA_HEARTBEAT_PROMPT_SLUG)
 
-    prompt = HEARTBEAT_PROMPT_TEMPLATE.format(
+    prompt = template.format(
         timestamp=now_utc.strftime("%Y-%m-%d %H:%M UTC"),
         local_time=local_time,
         project_access_summary=project_access,
@@ -121,6 +121,10 @@ async def build_heartbeat_prompt(
     active_work = await _get_active_work_summary()
     if active_work:
         prompt += active_work
+
+    cleanup_status = _get_cleanup_status_summary()
+    if cleanup_status:
+        prompt += cleanup_status
 
     active_specialists = await _get_active_specialist_inventory()
     if active_specialists:
@@ -146,12 +150,12 @@ async def build_heartbeat_prompt(
 
 
 __all__ = [
-    "HEARTBEAT_PROMPT_TEMPLATE",
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
     "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
+    "_get_cleanup_status_summary",
     "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_timezone",

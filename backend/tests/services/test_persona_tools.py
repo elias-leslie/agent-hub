@@ -197,7 +197,15 @@ class TestWriteHeartbeatInstructions:
         persona = _make_persona(heartbeat_instructions="H" * 300)
         patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
-        with patch_session, patch_persona:
+        with (
+            patch_session,
+            patch_persona,
+            patch(
+                "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
+                new_callable=AsyncMock,
+                return_value="H" * 300,
+            ),
+        ):
             from app.services.tools._executor_persona import write_heartbeat_instructions
 
             result = await write_heartbeat_instructions(
@@ -205,7 +213,6 @@ class TestWriteHeartbeatInstructions:
             )
 
         assert "Heartbeat instructions updated" in result
-        assert persona.heartbeat_instructions_previous == "H" * 300
 
     @pytest.mark.asyncio
     async def test_empty_rejected(self):
@@ -222,11 +229,17 @@ class TestWriteHeartbeatInstructions:
         persona = _make_persona(heartbeat_instructions="Z" * 600)
         patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
-        with patch_session, patch_persona:
+        with (
+            patch_session,
+            patch_persona,
+            patch(
+                "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
+                new_callable=AsyncMock,
+                return_value="Z" * 600,
+            ),
+        ):
             from app.services.tools._executor_persona import write_heartbeat_instructions
 
             result = await write_heartbeat_instructions("short", "trim")
 
         assert "REJECTED" in result
-
-

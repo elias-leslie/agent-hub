@@ -32,6 +32,7 @@ export default function PromptNewPage() {
   const [content, setContent] = useState("");
   const [description, setDescription] = useState("");
   const [isGlobal, setIsGlobal] = useState(false);
+  const [enabled, setEnabled] = useState(true);
   const [autoSlug, setAutoSlug] = useState(true);
 
   const handleNameChange = (value: string) => {
@@ -54,6 +55,7 @@ export default function PromptNewPage() {
         content,
         description: description || undefined,
         is_global: isGlobal,
+        enabled,
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["prompts"] });
@@ -175,9 +177,9 @@ export default function PromptNewPage() {
           {/* Is Global toggle */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Scope
+              Scope & Status
             </label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => setIsGlobal(true)}
                 className={cn(
@@ -200,6 +202,17 @@ export default function PromptNewPage() {
                 )}
               >
                 Non-Global
+              </button>
+              <button
+                onClick={() => setEnabled(!enabled)}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                  enabled
+                    ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-600"
+                    : "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400",
+                )}
+              >
+                {enabled ? "Enabled" : "Disabled"}
               </button>
             </div>
           </div>

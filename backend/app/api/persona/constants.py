@@ -15,7 +15,6 @@ HOURS_MAP: dict[str, int] = {
 PROTECTED_TEXT_FIELDS: tuple[str, ...] = (
     "user_context",
     "personality",
-    "heartbeat_instructions",
 )
 
 # Minimum existing length before shrinkage protection kicks in

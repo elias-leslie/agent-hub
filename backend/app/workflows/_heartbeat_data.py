@@ -93,6 +93,21 @@ def _fetch_task_overview() -> str:
         return ""
 
 
+def _fetch_cleanup_status() -> str:
+    """Cross-project git hygiene summary via st cleanup status (TOON output)."""
+    try:
+        proc = subprocess.run(
+            ["st", "cleanup", "status", "--all"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return proc.stdout.strip() if proc.stdout.strip() else ""
+    except Exception:
+        logger.debug("Failed to fetch cleanup status for heartbeat prompt", exc_info=True)
+        return ""
+
+
 def _format_session_line(session: dict[str, object]) -> str:
     """Format a single session dict into a summary line."""
     agent = session.get("agent_slug", "session")
@@ -597,6 +612,14 @@ async def _get_active_work_summary() -> str:
     return f"\n<active_work>\n{body}\n</active_work>"
 
 
+def _get_cleanup_status_summary() -> str:
+    """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
+    cleanup_status = _fetch_cleanup_status()
+    if not cleanup_status:
+        return ""
+    return f"\n<cleanup_status>\n{cleanup_status}\n</cleanup_status>"
+
+
 async def _get_agent_roster_summary() -> str:
     """Build an <agent_roster> XML block listing active agents with descriptions."""
     try:
@@ -741,12 +764,14 @@ async def _get_feedback_summary_section() -> str:
 
 __all__ = [
     "_fetch_active_sessions_section",
+    "_fetch_cleanup_status",
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
     "_format_session_line",
     "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
+    "_get_cleanup_status_summary",
     "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_tool_summary",

@@ -5,6 +5,7 @@ Handles personality, user context, memory tagging, and onboarding.
 
 from __future__ import annotations
 
+import inspect
 import logging
 
 logger = logging.getLogger(__name__)
@@ -116,12 +117,14 @@ async def read_heartbeat_instructions() -> str:
     """Read the persona's current heartbeat instructions."""
     try:
         from app.db import async_session
-        from app.services.persona_service import get_or_create_persona
+        from app.services.persona_instruction_service import (
+            get_persona_heartbeat_instructions,
+        )
 
         async with async_session() as db:
-            persona = await get_or_create_persona(db)
-            if persona.heartbeat_instructions:
-                return persona.heartbeat_instructions
+            heartbeat_instructions = await get_persona_heartbeat_instructions(db)
+            if heartbeat_instructions:
+                return heartbeat_instructions
             return "(No heartbeat instructions set. Use write_heartbeat_instructions to create them.)"
     except Exception as e:
         logger.exception("read_heartbeat_instructions failed")
@@ -135,11 +138,19 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
 
     try:
         from app.db import async_session
+        from app.services.persona_instruction_service import (
+            get_persona_heartbeat_instructions,
+            set_persona_heartbeat_instructions,
+        )
         from app.services.persona_service import get_or_create_persona
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
-            old_text = persona.heartbeat_instructions or ""
+            old_text = await get_persona_heartbeat_instructions(db)
+            while inspect.isawaitable(old_text):
+                old_text = await old_text
+            if not isinstance(old_text, str):
+                old_text = ""
             old_len = len(old_text)
             new_len = len(heartbeat_instructions.strip())
 
@@ -151,8 +162,7 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
                     "If you genuinely need to shorten it, explain why in the reason."
                 )
 
-            persona.heartbeat_instructions_previous = old_text
-            persona.heartbeat_instructions = heartbeat_instructions.strip()
+            await set_persona_heartbeat_instructions(db, heartbeat_instructions)
             persona.version += 1
             await db.commit()
 

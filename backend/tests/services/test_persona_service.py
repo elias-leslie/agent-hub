@@ -266,7 +266,12 @@ class TestGetPersonaContextForAgent:
         mock_result_persona.scalar_one_or_none.return_value = persona
         db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
+        with patch(
+            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
+            new_callable=AsyncMock,
+            return_value="Check task queue.",
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
         assert "<heartbeat_instructions>" in result
         assert "Check task queue." in result

@@ -1,9 +1,9 @@
 """Agent preview helper functions."""
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.agent_dto import AgentDTO
+from app.services.agent_routing_utils import inject_agent_mandates
 from app.services.memory.context_injector import (
     build_progressive_context,
     format_progressive_context,
@@ -14,28 +14,13 @@ from app.services.memory.service import MemoryScope
 async def build_agent_preview(
     db: AsyncSession, agent: AgentDTO
 ) -> tuple[str, int, int, list[str], list[str]]:
-    """Build agent preview with combined prompt and memory context.
-
-    Args:
-        db: Database session
-        agent: Agent DTO
-
-    Returns:
-        Tuple of (combined_prompt, mandate_count, guardrail_count, mandate_uuids, guardrail_uuids)
-    """
+    """Build agent preview with the same prompt composition used at runtime."""
     sections = []
 
-    # Get global instructions
-    result = await db.execute(
-        text("SELECT content, enabled FROM global_instructions WHERE scope = 'global'")
-    )
-    row = result.fetchone()
-    if row and row.enabled and row.content:
-        sections.append(f"<platform_context>\n{row.content}\n</platform_context>")
+    mandate = await inject_agent_mandates(agent, db, prompt_mode="full")
+    if mandate.system_content:
+        sections.append(mandate.system_content)
 
-    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
-
-    # Build memory context
     context = await build_progressive_context(
         query="",
         scope=MemoryScope.GLOBAL,
