@@ -81,23 +81,21 @@ async def _get_persona_timezone() -> str:
     return _DEFAULT_TIMEZONE
 
 
-async def build_heartbeat_prompt(
+async def _build_core_prompt(
     model_review_due: bool,
     model_review_label: str,
-    target_project_id: str | None = None,
+    target_project_id: str | None,
 ) -> str:
-    """Build the heartbeat prompt with dynamic model review and project access."""
+    """Render the template-based core prompt and append the execution target if set."""
     from zoneinfo import ZoneInfo
 
     project_access = await get_project_access_summary()
     now_utc = datetime.now(UTC)
     tz_name = await _get_persona_timezone()
-    local_tz = ZoneInfo(tz_name)
-    local_time = now_utc.astimezone(local_tz).strftime("%H:%M %Z")
+    local_time = now_utc.astimezone(ZoneInfo(tz_name)).strftime("%H:%M %Z")
 
     review_status = "DUE" if model_review_due else f"not due — {model_review_label}"
     review_instructions = MODEL_REVIEW_DO if model_review_due else MODEL_REVIEW_SKIP
-
     tool_count, persona_tool_list = _get_persona_tool_summary()
     template = await require_prompt_content(PERSONA_HEARTBEAT_PROMPT_SLUG)
 
@@ -117,36 +115,33 @@ async def build_heartbeat_prompt(
             "Only take execution actions for this target project in this run. "
             "Use persona-sandbox only for persona-internal state."
         )
-
-    active_work = await _get_active_work_summary()
-    if active_work:
-        prompt += active_work
-
-    cleanup_status = _get_cleanup_status_summary()
-    if cleanup_status:
-        prompt += cleanup_status
-
-    active_specialists = await _get_active_specialist_inventory()
-    if active_specialists:
-        prompt += active_specialists
-
-    agent_roster = await _get_agent_roster_summary()
-    if agent_roster:
-        prompt += agent_roster
-
-    workstream_inventory = await _get_workstream_inventory()
-    if workstream_inventory:
-        prompt += workstream_inventory
-
-    git_state = _get_git_status_summary()
-    if git_state:
-        prompt += git_state
-
-    feedback_summary = await _get_feedback_summary_section()
-    if feedback_summary:
-        prompt += feedback_summary
-
     return prompt
+
+
+async def _append_dynamic_sections(prompt: str) -> str:
+    """Append optional dynamic data sections to the heartbeat prompt."""
+    for section in (
+        await _get_active_work_summary(),
+        _get_cleanup_status_summary(),
+        await _get_active_specialist_inventory(),
+        await _get_agent_roster_summary(),
+        await _get_workstream_inventory(),
+        _get_git_status_summary(),
+        await _get_feedback_summary_section(),
+    ):
+        if section:
+            prompt += section
+    return prompt
+
+
+async def build_heartbeat_prompt(
+    model_review_due: bool,
+    model_review_label: str,
+    target_project_id: str | None = None,
+) -> str:
+    """Build the heartbeat prompt with dynamic model review and project access."""
+    prompt = await _build_core_prompt(model_review_due, model_review_label, target_project_id)
+    return await _append_dynamic_sections(prompt)
 
 
 __all__ = [
