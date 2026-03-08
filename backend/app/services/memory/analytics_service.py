@@ -106,6 +106,91 @@ async def get_recent_usage_totals(lookback_delta: timedelta) -> dict[str, int]:
     return totals
 
 
+def _accumulate_injection_records(
+    raw_records: list[Any],
+    period: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Aggregate raw injection records into variant/period buckets."""
+    variant_data: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "success": 0, "fail": 0, "unknown": 0, "latency_sum": 0, "tokens_sum": 0, "loaded_sum": 0, "cited_sum": 0}
+    )
+    period_data: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
+    )
+    normalized_records: list[dict[str, Any]] = []
+
+    for record in raw_records:
+        loaded = record.memories_loaded or []
+        cited = record.memories_cited or []
+        task_succeeded = record.task_succeeded
+        normalized_records.append({"task_succeeded": task_succeeded})
+        loaded_count = len(loaded) if isinstance(loaded, list) else 0
+        cited_count = len(cited) if isinstance(cited, list) else 0
+
+        vb = variant_data[record.variant or "BASELINE"]
+        vb["count"] += 1
+        if task_succeeded is True:
+            vb["success"] += 1
+        elif task_succeeded is False:
+            vb["fail"] += 1
+        else:
+            vb["unknown"] += 1
+        vb["latency_sum"] += record.injection_latency_ms or 0
+        vb["tokens_sum"] += record.total_tokens or 0
+        vb["loaded_sum"] += loaded_count
+        vb["cited_sum"] += cited_count
+
+        pb = period_data[_format_period_key(record.created_at, period)]
+        pb["count"] += 1
+        if task_succeeded is True:
+            pb["success"] += 1
+            pb["known"] += 1
+        elif task_succeeded is False:
+            pb["known"] += 1
+        pb["loaded"] += loaded_count
+        pb["cited"] += cited_count
+
+    return variant_data, period_data, normalized_records
+
+
+def _build_variant_metrics(variant_data: dict[str, dict[str, Any]]) -> list[VariantMetrics]:
+    """Build sorted VariantMetrics list from accumulated buckets."""
+    result = []
+    for variant, data in sorted(variant_data.items()):
+        count = data["count"]
+        known = data["success"] + data["fail"]
+        result.append(
+            VariantMetrics(
+                variant=variant,
+                injection_count=count,
+                success_count=data["success"],
+                fail_count=data["fail"],
+                unknown_count=data["unknown"],
+                success_rate=round(data["success"] / known if known > 0 else 0.0, 3),
+                citation_rate=round(data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0, 3),
+                avg_latency_ms=round(data["latency_sum"] / count if count > 0 else 0.0, 1),
+                avg_tokens=round(data["tokens_sum"] / count if count > 0 else 0.0, 1),
+            )
+        )
+    return result
+
+
+def _build_period_metrics(period_data: dict[str, dict[str, Any]]) -> list[TimePeriodMetrics]:
+    """Build sorted TimePeriodMetrics list from accumulated buckets."""
+    result = []
+    for period_key in sorted(period_data):
+        data = period_data[period_key]
+        result.append(
+            TimePeriodMetrics(
+                period=period_key,
+                injection_count=data["count"],
+                avg_success_rate=round(data["success"] / data["known"] if data["known"] > 0 else 0.0, 3),
+                avg_citation_rate=round(data["cited"] / data["loaded"] if data["loaded"] > 0 else 0.0, 3),
+            )
+        )
+    return result
+
+
 async def get_injection_metrics_summary(
     lookback_delta: timedelta,
     *,
@@ -131,102 +216,20 @@ async def get_injection_metrics_summary(
         query = query.where(MemoryInjectionMetric.project_id == project_id_filter)
 
     async with async_session() as session:
-        result = await session.execute(query)
-        raw_records = result.scalars().all()
+        raw_records = (await session.execute(query)).scalars().all()
 
-    variant_data: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {
-            "count": 0,
-            "success": 0,
-            "fail": 0,
-            "unknown": 0,
-            "latency_sum": 0,
-            "tokens_sum": 0,
-            "loaded_sum": 0,
-            "cited_sum": 0,
-        }
-    )
-    period_data: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
-    )
-    normalized_records: list[dict[str, Any]] = []
-
-    for record in raw_records:
-        loaded = record.memories_loaded or []
-        cited = record.memories_cited or []
-        task_succeeded = record.task_succeeded
-        normalized_records.append({"task_succeeded": task_succeeded})
-
-        variant = record.variant or "BASELINE"
-        variant_bucket = variant_data[variant]
-        variant_bucket["count"] += 1
-        if task_succeeded is True:
-            variant_bucket["success"] += 1
-        elif task_succeeded is False:
-            variant_bucket["fail"] += 1
-        else:
-            variant_bucket["unknown"] += 1
-        variant_bucket["latency_sum"] += record.injection_latency_ms or 0
-        variant_bucket["tokens_sum"] += record.total_tokens or 0
-        variant_bucket["loaded_sum"] += len(loaded) if isinstance(loaded, list) else 0
-        variant_bucket["cited_sum"] += len(cited) if isinstance(cited, list) else 0
-
-        period_key = _format_period_key(record.created_at, period)
-        period_bucket = period_data[period_key]
-        period_bucket["count"] += 1
-        if task_succeeded is True:
-            period_bucket["success"] += 1
-            period_bucket["known"] += 1
-        elif task_succeeded is False:
-            period_bucket["known"] += 1
-        period_bucket["loaded"] += len(loaded) if isinstance(loaded, list) else 0
-        period_bucket["cited"] += len(cited) if isinstance(cited, list) else 0
-
-    by_variant = []
-    for variant, data in sorted(variant_data.items()):
-        count = data["count"]
-        known = data["success"] + data["fail"]
-        success_rate = data["success"] / known if known > 0 else 0.0
-        citation_rate = data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0
-        by_variant.append(
-            VariantMetrics(
-                variant=variant,
-                injection_count=count,
-                success_count=data["success"],
-                fail_count=data["fail"],
-                unknown_count=data["unknown"],
-                success_rate=round(success_rate, 3),
-                citation_rate=round(citation_rate, 3),
-                avg_latency_ms=round(data["latency_sum"] / count, 1) if count > 0 else 0.0,
-                avg_tokens=round(data["tokens_sum"] / count, 1) if count > 0 else 0.0,
-            )
-        )
-
-    by_period = []
-    for period_key in sorted(period_data):
-        data = period_data[period_key]
-        success_rate = data["success"] / data["known"] if data["known"] > 0 else 0.0
-        citation_rate = data["cited"] / data["loaded"] if data["loaded"] > 0 else 0.0
-        by_period.append(
-            TimePeriodMetrics(
-                period=period_key,
-                injection_count=data["count"],
-                avg_success_rate=round(success_rate, 3),
-                avg_citation_rate=round(citation_rate, 3),
-            )
-        )
-
+    variant_data, period_data, normalized_records = _accumulate_injection_records(raw_records, period)
     outcomes = _build_outcome_summary(normalized_records)
-    total_loaded = sum(data["loaded_sum"] for data in variant_data.values())
-    total_cited = sum(data["cited_sum"] for data in variant_data.values())
+    total_loaded = sum(d["loaded_sum"] for d in variant_data.values())
+    total_cited = sum(d["cited_sum"] for d in variant_data.values())
 
     return InjectionMetricsSummary(
         total_injections=len(raw_records),
         period_start=start_date.isoformat(),
         period_end=end_date.isoformat(),
         period_granularity=period,
-        by_variant=by_variant,
-        by_period=by_period,
+        by_variant=_build_variant_metrics(variant_data),
+        by_period=_build_period_metrics(period_data),
         overall_success_rate=round(outcomes.success_rate, 3),
         overall_citation_rate=round(total_cited / total_loaded, 3) if total_loaded > 0 else 0.0,
         outcomes=outcomes,
