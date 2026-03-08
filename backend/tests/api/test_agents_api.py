@@ -29,7 +29,6 @@ def make_mock_dto(
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": ["gemini-3-flash"],
         "escalation_model_id": None,
-        "premium_model_id": None,
         "strategies": {},
         "temperature": 0.7,
         "thinking_level": "low",
@@ -159,7 +158,6 @@ class TestAgentCreateEndpoint:
             name="New Agent",
             thinking_level="xhigh",
             verbosity_level="high",
-            premium_model_id="codex/gpt-5.4",
             timeout_seconds=120.0,
         )
 
@@ -176,7 +174,6 @@ class TestAgentCreateEndpoint:
                     "name": "New Agent",
                     "system_prompt": "You are new.",
                     "primary_model_id": CLAUDE_SONNET,
-                    "premium_model_id": "codex/gpt-5.4",
                     "thinking_level": "xhigh",
                     "verbosity_level": "high",
                     "timeout_seconds": 120,
@@ -185,7 +182,6 @@ class TestAgentCreateEndpoint:
 
             assert response.status_code == 201
             create_kwargs = mock_svc.create.await_args.kwargs
-            assert create_kwargs["premium_model_id"] == "codex/gpt-5.4"
             assert create_kwargs["thinking_level"] == "xhigh"
             assert create_kwargs["verbosity_level"] == "high"
             assert create_kwargs["timeout_seconds"] == 120
@@ -245,7 +241,6 @@ class TestAgentUpdateEndpoint:
         updated_dto = make_mock_dto(
             thinking_level="high",
             verbosity_level="medium",
-            premium_model_id="codex/gpt-5.4",
             timeout_seconds=60.0,
             version=2,
         )
@@ -259,7 +254,6 @@ class TestAgentUpdateEndpoint:
             response = api_client.put(
                 "/api/agents/coder",
                 json={
-                    "premium_model_id": "codex/gpt-5.4",
                     "thinking_level": "high",
                     "verbosity_level": "medium",
                     "timeout_seconds": 60,
@@ -268,7 +262,6 @@ class TestAgentUpdateEndpoint:
 
             assert response.status_code == 200
             update_kwargs = mock_svc.update.await_args.kwargs
-            assert update_kwargs["premium_model_id"] == "codex/gpt-5.4"
             assert update_kwargs["thinking_level"] == "high"
             assert update_kwargs["verbosity_level"] == "medium"
             assert update_kwargs["timeout_seconds"] == 60

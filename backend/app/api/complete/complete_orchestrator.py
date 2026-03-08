@@ -54,7 +54,15 @@ async def _validate_and_resolve(
         await resolve_agent_and_model(request, db, rh)
     )
     http_request.state.agent_slug = request.agent_slug
+    pre_override_model = resolved_model
     resolved_model, provider = apply_mention_override(request, resolved_model)
+    if request.agent_slug and resolved_model != pre_override_model:
+        logger.debug(
+            "DEBUG[%s] Agent routing override: %s -> %s (requested via mention)",
+            rh,
+            request.agent_slug,
+            resolved_model,
+        )
     http_request.state.resolved_model = resolved_model
     return rh, client_id, request_source, resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used
 

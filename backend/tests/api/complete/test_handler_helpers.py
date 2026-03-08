@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.api.complete._session_helpers import update_session_metadata
 from app.api.complete.handler_helpers import save_and_track
 from app.api.complete.schemas import CompletionRequest, MessageInput
 
@@ -65,3 +66,64 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert session.provider_metadata["effective_model"] == "claude-haiku-4-5"
     assert session.provider_metadata["fallback_used"] is True
     assert session.provider_metadata["fallback_reason"] == "TimeoutError: primary timed out"
+
+
+@pytest.mark.asyncio
+async def test_update_session_metadata_flushes_without_commit() -> None:
+    db = AsyncMock()
+    session = SimpleNamespace(
+        provider="codex",
+        model="codex/gpt-5.4",
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+        provider_metadata={},
+        agent_slug=None,
+    )
+
+    await update_session_metadata(
+        db=db,
+        session=session,
+        provider="claude",
+        model="claude-sonnet-4-6",
+        agent_slug="persona",
+    )
+
+    db.flush.assert_awaited_once()
+    db.commit.assert_not_awaited()
+    assert session.provider == "claude"
+    assert session.model == "claude-sonnet-4-6"
+    assert session.agent_slug == "persona"
+    assert session.provider_metadata["requested_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["requested_provider"] == "claude"
+    assert session.provider_metadata["effective_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["effective_provider"] == "claude"
+    assert session.provider_metadata["fallback_used"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_session_metadata_honors_explicit_requested_model() -> None:
+    db = AsyncMock()
+    session = SimpleNamespace(
+        provider="codex",
+        model="codex/gpt-5.4",
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+        provider_metadata={},
+        agent_slug="persona",
+    )
+
+    await update_session_metadata(
+        db=db,
+        session=session,
+        provider="claude",
+        model="claude-sonnet-4-6",
+        agent_slug="persona",
+        requested_model="claude-sonnet-4-6",
+        requested_provider="claude",
+    )
+
+    assert session.provider_metadata["requested_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["requested_provider"] == "claude"
+    assert session.provider_metadata["effective_model"] == "claude-sonnet-4-6"
+    assert session.provider_metadata["effective_provider"] == "claude"
+    assert session.provider_metadata["fallback_used"] is False

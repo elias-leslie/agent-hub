@@ -19,11 +19,7 @@ export function metricsToAnalytics(
     totalTokens: metrics.tokens_24h,
     requestsPerHour: Number((metrics.requests_24h / 24).toFixed(1)),
     trend,
-    modelSummary: [
-      agent.primary_model_id,
-      ...agent.fallback_models,
-      ...(agent.premium_model_id ? [agent.premium_model_id] : []),
-    ],
+    modelSummary: [agent.primary_model_id, ...agent.fallback_models],
     lastUpdatedAt: agent.updated_at,
   };
 }

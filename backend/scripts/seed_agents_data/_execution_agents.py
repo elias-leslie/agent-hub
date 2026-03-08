@@ -80,7 +80,6 @@ EXECUTION_AGENTS = [
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "premium_model_id": CLAUDE_SONNET,
         "temperature": 0.3,
         "is_coding_agent": True,
         "memory_config": {
@@ -110,7 +109,6 @@ EXECUTION_AGENTS = [
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "premium_model_id": CLAUDE_SONNET,
         "temperature": 0.3,
         "is_coding_agent": True,
         "memory_config": {

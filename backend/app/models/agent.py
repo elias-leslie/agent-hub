@@ -44,9 +44,6 @@ class Agent(Base):
     escalation_model_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )  # Model for complex cases
-    premium_model_id: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )  # Model for tier=advanced requests (e.g., critical project work)
     strategies: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict
     )  # Provider-specific configs

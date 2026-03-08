@@ -8,7 +8,6 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
     primary_model_id: agent.primary_model_id,
     fallback_models: agent.fallback_models,
     escalation_model_id: agent.escalation_model_id,
-    premium_model_id: agent.premium_model_id,
     temperature: agent.temperature,
     thinking_level: agent.thinking_level,
     verbosity_level: agent.verbosity_level,

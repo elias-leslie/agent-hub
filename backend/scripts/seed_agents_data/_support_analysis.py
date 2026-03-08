@@ -78,7 +78,6 @@ _SPECIFIER: dict[str, object] = {
     ),
     "primary_model_id": CODEX_GPT_5_4,
     "fallback_models": [CLAUDE_OPUS, GEMINI_PRO],
-    "premium_model_id": CLAUDE_OPUS,
     "temperature": 0.2,
     "thinking_level": "medium",
     "is_coding_agent": False,

@@ -135,6 +135,8 @@ async def complete_internal(
     task_type: str | None = None, phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
+    requested_model: str | None = None,
+    requested_provider: str | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
     if user_messages_for_db is None:
@@ -146,6 +148,8 @@ async def complete_internal(
         db, session_id, project_id, provider, model,
         external_id, client_id, request_source, agent_slug, current_branch, working_dir,
         parent_session_id, messages,
+        requested_provider=requested_provider or provider,
+        requested_model=requested_model or model,
     )
     ctx = _build_ctx(
         db=db, session=session, session_id=session_id, is_new=is_new,

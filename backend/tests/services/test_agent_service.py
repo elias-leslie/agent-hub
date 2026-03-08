@@ -109,7 +109,6 @@ class TestAgentService:
             primary_model_id=CLAUDE_SONNET,
             fallback_models=[],
             escalation_model_id=None,
-            premium_model_id=None,
             strategies={},
             temperature=0.7,
             thinking_level=None,
@@ -200,7 +199,6 @@ class TestAgentService:
             agent.temperature = 0.7
             agent.thinking_level = "high"
             agent.verbosity_level = "medium"
-            agent.premium_model_id = CLAUDE_OPUS
             agent.max_tokens = None
             agent.is_active = True
             agent.is_coding_agent = False
@@ -221,7 +219,6 @@ class TestAgentService:
                 name="Test Agent",
                 system_prompt="You are a test agent.",
                 primary_model_id=CLAUDE_SONNET,
-                premium_model_id=CLAUDE_OPUS,
                 thinking_level="high",
                 verbosity_level="medium",
                 max_concurrency=4,
@@ -235,7 +232,6 @@ class TestAgentService:
         assert agent.name == "Test Agent"
         assert agent.thinking_level == "high"
         assert agent.verbosity_level == "medium"
-        assert agent.premium_model_id == CLAUDE_OPUS
         assert agent.timeout_seconds == 45.0
         assert mock_db.add.call_count == 2  # Agent + AgentVersion
 
@@ -259,7 +255,6 @@ class TestAgentService:
                 mock_db,
                 1,
                 name="Updated Coder",
-                premium_model_id=CLAUDE_OPUS,
                 thinking_level="minimal",
                 verbosity_level="high",
                 timeout_seconds=90.0,
@@ -268,7 +263,6 @@ class TestAgentService:
 
         assert result is not None
         assert mock_agent.name == "Updated Coder"
-        assert mock_agent.premium_model_id == CLAUDE_OPUS
         assert mock_agent.thinking_level == "minimal"
         assert mock_agent.verbosity_level == "high"
         assert mock_agent.timeout_seconds == 90.0
@@ -392,7 +386,6 @@ class TestAgentDTO:
             primary_model_id=CLAUDE_SONNET,
             fallback_models=["gemini-3-flash"],
             escalation_model_id=CLAUDE_OPUS,
-            premium_model_id=None,
             strategies={"retry": True},
             temperature=0.5,
             thinking_level=None,
@@ -438,7 +431,6 @@ class TestAgentDTO:
             primary_model_id=CLAUDE_SONNET,
             fallback_models=[],
             escalation_model_id=None,
-            premium_model_id=None,
             strategies={},
             temperature=0.7,
             thinking_level=None,

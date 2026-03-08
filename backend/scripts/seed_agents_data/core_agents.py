@@ -31,7 +31,6 @@ CORE_AGENTS = [
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "premium_model_id": CLAUDE_SONNET,
         "temperature": 0.3,
         "is_coding_agent": True,
         "memory_config": {
@@ -72,7 +71,6 @@ CORE_AGENTS = [
     {
         "slug": "reviewer",
         "name": "Code Reviewer",
-        "premium_model_id": GEMINI_PRO,
         "description": "Reviews code for quality, security, and best practices with QA loop verdicts",
         "system_prompt": (
             "You are a code review agent in a QA loop. You review code changes "
@@ -132,7 +130,6 @@ CORE_AGENTS = [
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "premium_model_id": CLAUDE_SONNET,
         "temperature": 0.3,
         "is_coding_agent": True,
         "memory_config": {

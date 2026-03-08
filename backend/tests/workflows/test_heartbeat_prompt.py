@@ -171,7 +171,9 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Do not dispatch the same specialist on the same project" in prompt
         assert "If a project/agent pair already shows `active>1`" in prompt
         assert "Your heartbeat working directory is persona-sandbox" in prompt
-        assert "prefer `dispatch_agent` to a coding-capable specialist" in prompt
+        assert 'prefer `manage_tasks(action="dispatch", task_id=...)`' in prompt
+        assert "Use `dispatch_agent` for freeform specialist help only" in prompt
+        assert "prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection" in prompt
         assert "prefer coding-capable agents like `reviewer`, `debugger`, or `coder`" in prompt
         assert "Treat recent completed sessions as evidence, not just history." in prompt
         assert "Treat already-active specialist sessions as current work" in prompt

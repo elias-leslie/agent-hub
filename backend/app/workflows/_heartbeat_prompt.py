@@ -82,7 +82,11 @@ async def _get_persona_timezone() -> str:
     return _DEFAULT_TIMEZONE
 
 
-async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
+async def build_heartbeat_prompt(
+    model_review_due: bool,
+    model_review_label: str,
+    target_project_id: str | None = None,
+) -> str:
     """Build the heartbeat prompt with dynamic model review and project access."""
     from zoneinfo import ZoneInfo
 
@@ -106,6 +110,13 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
         tool_count=tool_count,
         persona_tool_list=persona_tool_list,
     )
+
+    if target_project_id:
+        prompt += (
+            f"\n\nExecution target for this run: {target_project_id}\n"
+            "Only take execution actions for this target project in this run. "
+            "Use persona-sandbox only for persona-internal state."
+        )
 
     active_work = await _get_active_work_summary()
     if active_work:

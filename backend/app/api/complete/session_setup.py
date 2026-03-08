@@ -40,6 +40,8 @@ async def _init_session(
     current_branch: str | None,
     working_dir: str | None,
     parent_session_id: str | None,
+    requested_provider: str | None = None,
+    requested_model: str | None = None,
 ) -> tuple[DBSession, list[Any], bool]:
     """Get or create a session and publish a start event when new."""
     session, ctx, is_new = await get_or_create_session(
@@ -56,6 +58,8 @@ async def _init_session(
         current_branch=current_branch,
         working_dir=working_dir,
         parent_session_id=parent_session_id,
+        requested_provider=requested_provider,
+        requested_model=requested_model,
     )
     if is_new:
         await publish_session_start(session.id, model, project_id)
@@ -76,6 +80,8 @@ async def setup_completion_session(
     working_dir: str | None,
     parent_session_id: str | None,
     messages: list[dict[str, Any]],
+    requested_provider: str | None = None,
+    requested_model: str | None = None,
 ) -> tuple[DBSession, str, bool, list[dict[str, Any]]]:
     """Setup session and prepare messages for completion."""
     session, ctx, is_new = await _init_session(
@@ -91,5 +97,7 @@ async def setup_completion_session(
         current_branch,
         working_dir,
         parent_session_id,
+        requested_provider,
+        requested_model,
     )
     return session, session.id, is_new, _merge_messages(ctx, messages)

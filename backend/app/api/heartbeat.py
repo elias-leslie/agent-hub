@@ -13,6 +13,7 @@ from app.workflows._heartbeat_redis import (
     get_last_run_info,
 )
 from app.workflows.persona_heartbeat import (
+    HEARTBEAT_PROJECT,
     HeartbeatInput,
     HeartbeatRuntimeInfo,
     check_project_permission,
@@ -46,6 +47,10 @@ class HeartbeatTriggerResponse(BaseModel):
     message: str
 
 
+class HeartbeatTriggerRequest(BaseModel):
+    target_project_id: str | None = None
+
+
 @router.get("/status", response_model=HeartbeatStatusResponse)
 async def heartbeat_status() -> HeartbeatStatusResponse:
     """Return current heartbeat running state, last run info, and metrics."""
@@ -75,8 +80,14 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
 
 
 @router.post("/trigger", response_model=HeartbeatTriggerResponse)
-async def heartbeat_trigger() -> HeartbeatTriggerResponse:
+async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> HeartbeatTriggerResponse:
     """Manually trigger a heartbeat. Returns 409 if already running."""
+    from app.constants import VALID_PROJECT_IDS
+
+    target_project_id = request.target_project_id if request else None
+    if target_project_id and target_project_id not in VALID_PROJECT_IDS:
+        raise HTTPException(status_code=400, detail=f"Unknown target project: {target_project_id}")
+
     # Check if already running
     running_info = await get_heartbeat_running_info()
     if running_info:
@@ -91,11 +102,19 @@ async def heartbeat_trigger() -> HeartbeatTriggerResponse:
         raise HTTPException(status_code=400, detail="Persona onboarding not complete")
 
     # Check project permissions
-    if not await check_project_permission():
-        raise HTTPException(status_code=403, detail="Heartbeat project permission is off")
+    permission_project = target_project_id or HEARTBEAT_PROJECT
+    if not await check_project_permission(permission_project):
+        raise HTTPException(status_code=403, detail=f"Heartbeat project permission is off for {permission_project}")
 
     # Dispatch via Hatchet (fire-and-forget)
-    persona_heartbeat_task.run_no_wait(HeartbeatInput(manual=True))
-    logger.info("Manual heartbeat triggered via API")
+    persona_heartbeat_task.run_no_wait(
+        HeartbeatInput(manual=True, target_project_id=target_project_id)
+    )
+    logger.info("Manual heartbeat triggered via API for target=%s", target_project_id or "persona-sandbox")
 
+    if target_project_id:
+        return HeartbeatTriggerResponse(
+            status="dispatched",
+            message=f"Heartbeat triggered for {target_project_id}",
+        )
     return HeartbeatTriggerResponse(status="dispatched", message="Heartbeat triggered")

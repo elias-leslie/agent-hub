@@ -58,7 +58,17 @@ async def should_reset_persona_session(db: AsyncSession, session: object) -> boo
     if not persona or persona.session_reset_mode == "off":
         return False
 
-    session_updated = getattr(session, "updated_at", None)
+    session_updated = None
+    session_dict = getattr(session, "__dict__", None)
+    if isinstance(session_dict, dict):
+        session_updated = session_dict.get("updated_at")
+    if session_updated is None:
+        session_id = getattr(session, "id", None)
+        if session_id:
+            from app.models.session import Session
+
+            result = await db.execute(select(Session.updated_at).where(Session.id == session_id))
+            session_updated = result.scalar_one_or_none()
     if not session_updated:
         return False
 

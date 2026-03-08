@@ -175,6 +175,42 @@ class TestHeartbeatTrigger:
         assert data["status"] == "dispatched"
         mock_task.run_no_wait.assert_called_once()
 
+    def test_heartbeat_trigger_with_target_project_dispatches_scoped_run(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat.get_heartbeat_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_permission,
+            patch(
+                "app.api.heartbeat.persona_heartbeat_task",
+            ) as mock_task,
+            patch(
+                "app.constants.VALID_PROJECT_IDS",
+                frozenset({"agent-hub", "persona-sandbox"}),
+            ),
+        ):
+            response = api_client.post("/api/heartbeat/trigger", json={"target_project_id": "agent-hub"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Heartbeat triggered for agent-hub"
+        mock_permission.assert_awaited_once_with("agent-hub")
+        mock_task.run_no_wait.assert_called_once()
+        heartbeat_input = mock_task.run_no_wait.call_args.args[0]
+        assert heartbeat_input.manual is True
+        assert heartbeat_input.target_project_id == "agent-hub"
+
     def test_heartbeat_trigger_when_running_returns_409(self, api_client):
         with patch(
             "app.api.heartbeat.get_heartbeat_running_info",
@@ -226,3 +262,13 @@ class TestHeartbeatTrigger:
 
         assert response.status_code == 403
         assert "permission" in response.json()["message"]
+
+    def test_heartbeat_trigger_rejects_unknown_target_project(self, api_client):
+        with patch(
+            "app.constants.VALID_PROJECT_IDS",
+            frozenset({"agent-hub", "persona-sandbox"}),
+        ):
+            response = api_client.post("/api/heartbeat/trigger", json={"target_project_id": "unknown-project"})
+
+        assert response.status_code == 400
+        assert "Unknown target project" in response.json()["message"]

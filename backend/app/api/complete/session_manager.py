@@ -31,14 +31,16 @@ async def _create_session(
     current_branch: str | None,
     working_dir: str | None,
     parent_session_id: str | None,
+    requested_provider: str | None = None,
+    requested_model: str | None = None,
 ) -> _SessionResult:
     session, _ = await upsert_session(
         db=db,
         request=SessionUpsertRequest(
             session_id=session_id,
             project_id=project_id,
-            provider=provider,
-            model=model,
+            provider=requested_provider or provider,
+            model=requested_model or model,
             session_type=session_type,
             external_id=external_id,
             client_id=client_id,
@@ -66,6 +68,8 @@ async def get_or_create_session(
     current_branch: str | None = None,
     working_dir: str | None = None,
     parent_session_id: str | None = None,
+    requested_provider: str | None = None,
+    requested_model: str | None = None,
 ) -> _SessionResult:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     from app.constants import VALID_PROJECT_IDS
@@ -79,7 +83,15 @@ async def get_or_create_session(
         )
 
     if session_id:
-        existing = await load_session(db, session_id, provider, model, agent_slug)
+        existing = await load_session(
+            db,
+            session_id,
+            provider,
+            model,
+            agent_slug,
+            requested_model=requested_model,
+            requested_provider=requested_provider,
+        )
         if existing is not None:
             if agent_slug == "persona" and await maybe_reset_persona_session(db, existing):
                 return await _create_session(
@@ -87,6 +99,8 @@ async def get_or_create_session(
                     external_id, client_id, request_source, "persona", current_branch,
                     working_dir,
                     parent_session_id,
+                    requested_provider=requested_provider,
+                    requested_model=requested_model,
                 )
             return existing
 
@@ -95,6 +109,8 @@ async def get_or_create_session(
         external_id, client_id, request_source, agent_slug, current_branch,
         working_dir,
         parent_session_id,
+        requested_provider=requested_provider,
+        requested_model=requested_model,
     )
 
 
