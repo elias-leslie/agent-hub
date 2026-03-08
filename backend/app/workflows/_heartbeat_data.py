@@ -173,6 +173,7 @@ async def _fetch_recently_completed_sessions_section() -> str:
                         Session.status == "completed",
                         Session.created_at >= cutoff,
                         Session.summary_oneliner.isnot(None),
+                        Session.agent_slug != "persona",
                     )
                 )
                 .order_by(Session.created_at.desc())

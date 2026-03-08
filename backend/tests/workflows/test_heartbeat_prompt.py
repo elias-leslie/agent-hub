@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,12 +11,27 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _fetch_recently_completed_sessions_section,
     _get_active_specialist_inventory,
     _get_cleanup_status_summary,
     _get_git_project_status,
     _get_git_status_summary,
     _get_workstream_inventory,
 )
+
+
+def _mock_async_session_with_rows(rows: list[object]):
+    """Create an async_session context manager whose execute().all() yields rows."""
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.all.return_value = rows
+    mock_db.execute.return_value = mock_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    return _session, mock_db
 
 
 class TestGetGitProjectStatus:
@@ -250,6 +267,34 @@ class TestActiveSpecialistInventory:
             result = await _get_active_specialist_inventory()
 
         assert result == ""
+
+
+class TestRecentlyCompletedSessionsSection:
+    """Tests for recently completed session summaries in heartbeat context."""
+
+    @pytest.mark.asyncio
+    async def test_excludes_persona_sessions_from_completed_summary(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, mock_db = _mock_async_session_with_rows(
+            [
+                MagicMock(
+                    agent_slug="refactor",
+                    project_id="agent-hub",
+                    summary_oneliner="Refactored the tool handler",
+                    created_at=now,
+                ),
+            ]
+        )
+
+        with patch("app.db.async_session", session_factory):
+            result = await _fetch_recently_completed_sessions_section()
+
+        executed_query = str(mock_db.execute.await_args.args[0])
+        assert "Recently completed sessions: 1" in result
+        assert "refactor on agent-hub" in result
+        assert "Refactored the tool handler" in result
+        assert "persona" not in result
+        assert "sessions.agent_slug != :agent_slug_1" in executed_query
 
 
 class TestCleanupStatusSummary:
