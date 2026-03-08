@@ -9,31 +9,17 @@ import {
   Loader2,
   ExternalLink,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { fetchApi } from "@/lib/api-config";
+import {
+  PLATFORM_CONTEXT_PROMPT_SLUG,
+  fetchOptionalPrompt,
+} from "@/lib/api/prompts";
 
-interface GlobalInstructions {
-  id: string;
-  content: string;
-  enabled: boolean;
-  updated_at: string;
-}
-
-async function fetchGlobalInstructions(): Promise<GlobalInstructions | null> {
-  const res = await fetchApi("/api/global-instructions");
-  if (!res.ok) {
-    if (res.status === 404) return null;
-    throw new Error("Failed to fetch global instructions");
-  }
-  return res.json();
-}
-
-export function InheritedContextPreview() {
+export function InheritedPlatformContextPreview() {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const { data, isLoading } = useQuery({
-    queryKey: ["global-instructions"],
-    queryFn: fetchGlobalInstructions,
+    queryKey: ["prompt", PLATFORM_CONTEXT_PROMPT_SLUG],
+    queryFn: () => fetchOptionalPrompt(PLATFORM_CONTEXT_PROMPT_SLUG),
   });
 
   if (isLoading) {
@@ -60,14 +46,14 @@ export function InheritedContextPreview() {
           )}
           <Globe2 className="h-3.5 w-3.5 text-amber-500" />
           <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-            Inherited Global Context
+            Inherited Platform Context
           </span>
           <span className="text-[10px] text-amber-600/60 dark:text-amber-400/60">
             (read-only)
           </span>
         </div>
         <a
-          href="/agents"
+          href={`/prompts/${PLATFORM_CONTEXT_PROMPT_SLUG}`}
           onClick={(e) => e.stopPropagation()}
           className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:underline"
         >
@@ -86,7 +72,7 @@ export function InheritedContextPreview() {
             <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30">
               &lt;platform_context&gt;
             </code>{" "}
-            before this agent&apos;s system prompt.
+            via the canonical DB-backed prompt.
           </p>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy, CheckCircle2, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { InheritedContextPreview } from "@/components/InheritedContextPreview";
+import { InheritedPlatformContextPreview } from "@/components/InheritedPlatformContextPreview";
 import { Agent, AgentPreview } from "../types";
 import { PromptEditor } from "./PromptEditor";
 
@@ -26,7 +26,7 @@ export function PromptTab({ formData, preview, previewFetching, showInlinePrevie
         </h2>
       </div>
 
-      <InheritedContextPreview />
+      <InheritedPlatformContextPreview />
 
       <PromptEditor
         value={formData.system_prompt ?? ""}

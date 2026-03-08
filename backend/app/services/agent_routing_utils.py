@@ -3,7 +3,6 @@
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import ProviderAdapter
@@ -15,22 +14,6 @@ from app.services.agent_service import get_agent_service
 from .agent_routing_models import MandateInjection, ResolvedAgent
 
 logger = logging.getLogger(__name__)
-
-
-async def get_global_instructions(db: AsyncSession) -> str | None:
-    """Fetch global instructions from database."""
-    try:
-        result = await db.execute(
-            text("SELECT content, enabled FROM global_instructions WHERE scope = 'global'")
-        )
-        row = result.fetchone()
-        if row and row.enabled and row.content:
-            logger.info(f"Global instructions fetched: enabled={row.enabled}, length={len(row.content)}")
-            return str(row.content)
-        logger.info(f"Global instructions not available: row={row is not None}")
-    except Exception as e:
-        logger.warning(f"Failed to fetch global instructions: {e}")
-    return None
 
 
 def get_adapter(provider: str) -> ProviderAdapter:
@@ -71,10 +54,6 @@ async def inject_agent_mandates(
         )
         if prompt_context:
             sections.append(prompt_context)
-        else:
-            global_instructions = await get_global_instructions(db)
-            if global_instructions:
-                sections.append(f"<platform_context>\n{global_instructions}\n</platform_context>")
 
     if agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")

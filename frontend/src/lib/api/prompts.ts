@@ -1,5 +1,7 @@
 import { fetchApi } from "@/lib/api-config";
 
+export const PLATFORM_CONTEXT_PROMPT_SLUG = "platform-context";
+
 export interface Prompt {
   id: number;
   slug: string;
@@ -7,6 +9,7 @@ export interface Prompt {
   content: string;
   description: string | null;
   is_global: boolean;
+  enabled: boolean;
   exclude_agents: string[];
   created_at: string;
   updated_at: string;
@@ -41,12 +44,20 @@ export async function fetchPrompt(slug: string): Promise<Prompt> {
   return res.json();
 }
 
+export async function fetchOptionalPrompt(slug: string): Promise<Prompt | null> {
+  const res = await fetchApi(`/api/prompts/${slug}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Failed to fetch prompt");
+  return res.json();
+}
+
 export async function createPrompt(data: {
   slug: string;
   name: string;
   content: string;
   description?: string;
   is_global?: boolean;
+  enabled?: boolean;
 }): Promise<Prompt> {
   const res = await fetchApi("/api/prompts", {
     method: "POST",

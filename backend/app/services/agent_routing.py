@@ -20,7 +20,6 @@ from .agent_routing_completion import (
 from .agent_routing_models import CompletionResult, MandateInjection, ResolvedAgent
 from .agent_routing_utils import (
     get_adapter,
-    get_global_instructions,
     get_provider_for_model,
     inject_agent_mandates,
     resolve_agent,
@@ -33,7 +32,6 @@ __all__ = [
     "ResolvedAgent",
     "complete_with_fallback",
     "get_adapter",
-    "get_global_instructions",
     "get_provider_for_model",
     "inject_agent_mandates",
     "inject_system_prompt_into_messages",

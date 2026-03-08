@@ -4,70 +4,58 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Globe2, Save, Loader2, CheckCircle2, AlertCircle, Sparkles, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchApi } from "@/lib/api-config";
+import {
+  PLATFORM_CONTEXT_PROMPT_SLUG,
+  createPrompt,
+  fetchOptionalPrompt,
+  updatePrompt,
+} from "@/lib/api/prompts";
 
-interface GlobalInstructions {
-  id: string;
-  content: string;
-  enabled: boolean;
-  updated_at: string;
-  applied_to_count: number;
-}
-
-async function fetchGlobalInstructions(): Promise<GlobalInstructions> {
-  const res = await fetchApi("/api/global-instructions");
-  if (!res.ok) {
-    if (res.status === 404) {
-      return { id: "", content: "", enabled: true, updated_at: new Date().toISOString(), applied_to_count: 0 };
-    }
-    throw new Error("Failed to fetch global instructions");
-  }
-  return res.json();
-}
-
-async function updateGlobalInstructions(data: Partial<GlobalInstructions>): Promise<GlobalInstructions> {
-  const res = await fetchApi("/api/global-instructions", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to update global instructions");
-  return res.json();
+async function fetchPlatformContext() {
+  return fetchOptionalPrompt(PLATFORM_CONTEXT_PROMPT_SLUG);
 }
 
 function truncatePreview(content: string, maxLength = 120): string {
-  if (!content) return "No global instructions configured";
+  if (!content) return "No platform context configured";
   const firstLine = content.split("\n")[0];
   return firstLine.length <= maxLength ? firstLine : firstLine.slice(0, maxLength).trim() + "…";
 }
 
-function useGlobalInstructions() {
+function usePlatformContext() {
   const queryClient = useQueryClient();
   const [editedContent, setEditedContent] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["global-instructions"],
-    queryFn: fetchGlobalInstructions,
+    queryKey: ["prompt", PLATFORM_CONTEXT_PROMPT_SLUG],
+    queryFn: fetchPlatformContext,
   });
 
   const mutation = useMutation({
-    mutationFn: updateGlobalInstructions,
+    mutationFn: async (payload: { content?: string; enabled?: boolean }) => {
+      if (!data) {
+        return createPrompt({
+          slug: PLATFORM_CONTEXT_PROMPT_SLUG,
+          name: "Platform Context",
+          content: payload.content ?? "",
+          description: "Platform-wide context injected into all agents as <platform_context>.",
+          is_global: true,
+          enabled: payload.enabled ?? true,
+        });
+      }
+      return updatePrompt(PLATFORM_CONTEXT_PROMPT_SLUG, payload);
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["global-instructions"] });
+      queryClient.invalidateQueries({ queryKey: ["prompt", PLATFORM_CONTEXT_PROMPT_SLUG] });
+      queryClient.invalidateQueries({ queryKey: ["prompts"] });
       setEditedContent(null);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2000);
     },
   });
 
-  const toggleMutation = useMutation({
-    mutationFn: (enabled: boolean) => updateGlobalInstructions({ enabled }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["global-instructions"] }),
-  });
-
   useEffect(() => {
-    if (data && editedContent === null) setEditedContent(data.content);
+    if (editedContent === null) setEditedContent(data?.content ?? "");
   }, [data, editedContent]);
 
   const handleSave = useCallback(() => {
@@ -75,13 +63,20 @@ function useGlobalInstructions() {
   }, [editedContent, mutation]);
 
   const handleToggleEnabled = useCallback(() => {
-    if (data) toggleMutation.mutate(!data.enabled);
-  }, [data, toggleMutation]);
+    mutation.mutate({ enabled: !(data?.enabled ?? true) });
+  }, [data, mutation]);
 
   return {
-    data, isLoading, error, editedContent, setEditedContent,
-    hasChanges: editedContent !== null && editedContent !== data?.content,
-    showSuccess, mutation, toggleMutation, handleSave, handleToggleEnabled
+    data,
+    isLoading,
+    error,
+    editedContent,
+    setEditedContent,
+    hasChanges: editedContent !== null && editedContent !== (data?.content ?? ""),
+    showSuccess,
+    mutation,
+    handleSave,
+    handleToggleEnabled,
   };
 }
 
@@ -96,7 +91,7 @@ function CollapsedHeader({ isExpanded, isEnabled, content, activeAgentCount, onT
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={cn("text-xs font-semibold uppercase tracking-wider", isEnabled ? "text-amber-700 dark:text-amber-300" : "text-slate-500")}>Global Instructions</span>
+            <span className={cn("text-xs font-semibold uppercase tracking-wider", isEnabled ? "text-amber-700 dark:text-amber-300" : "text-slate-500")}>Platform Context</span>
             {!isEnabled && <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">Disabled</span>}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{truncatePreview(content)}</p>
@@ -115,19 +110,19 @@ function CollapsedHeader({ isExpanded, isEnabled, content, activeAgentCount, onT
   );
 }
 
-function Toolbar({ isEnabled, hasChanges, showSuccess, isPendingSave, isPendingToggle, onToggle, onSave }: {
-  isEnabled: boolean; hasChanges: boolean; showSuccess: boolean; isPendingSave: boolean; isPendingToggle: boolean; onToggle: () => void; onSave: () => void;
+function Toolbar({ isEnabled, hasChanges, showSuccess, isPending, onToggle, onSave }: {
+  isEnabled: boolean; hasChanges: boolean; showSuccess: boolean; isPending: boolean; onToggle: () => void; onSave: () => void;
 }) {
   return (
     <div className="flex items-center justify-between py-3">
-      <p className="text-[10px] uppercase tracking-wider text-slate-400">Platform-wide context injected into all agents</p>
+      <p className="text-[10px] uppercase tracking-wider text-slate-400">DB-backed global prompt injected into all agents</p>
       <div className="flex items-center gap-2">
-        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPendingToggle} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50" : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700")}>
-          {isPendingToggle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPending} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50" : "bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700")}>
+          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           {isEnabled ? "Enabled" : "Disabled"}
         </button>
-        <button onClick={(e) => { e.stopPropagation(); onSave(); }} disabled={!hasChanges || isPendingSave} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", hasChanges ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed")}>
-          {isPendingSave ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showSuccess ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
+        <button onClick={(e) => { e.stopPropagation(); onSave(); }} disabled={!hasChanges || isPending} className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all", hasChanges ? "bg-amber-500 text-white hover:bg-amber-600 shadow-sm" : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed")}>
+          {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : showSuccess ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
           {showSuccess ? "Saved" : "Save"}
         </button>
       </div>
@@ -138,13 +133,7 @@ function Toolbar({ isEnabled, hasChanges, showSuccess, isPendingSave, isPendingT
 function Editor({ content, isEnabled, onChange }: { content: string; isEnabled: boolean; onChange: (value: string) => void; }) {
   return (
     <div className="relative">
-      <textarea value={content} onChange={(e) => onChange(e.target.value)} placeholder="Enter global instructions that apply to all agents...
-
-Examples:
-- Always respond in a professional tone
-- Include source citations when available
-- Follow company style guidelines
-- Prioritize security best practices" rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors min-h-[150px] max-h-[calc(100vh-20rem)]", isEnabled ? "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
+      <textarea value={content} onChange={(e) => onChange(e.target.value)} placeholder="Enter platform-wide context shared by all agents..." rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors min-h-[150px] max-h-[calc(100vh-20rem)]", isEnabled ? "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
       <div className="absolute bottom-2 right-2">
         <span className="text-[10px] font-mono text-slate-400 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded">{content.length.toLocaleString()} chars</span>
       </div>
@@ -152,9 +141,9 @@ Examples:
   );
 }
 
-export function GlobalInstructionsPanel({ activeAgentCount }: { activeAgentCount: number }) {
+export function PlatformContextPanel({ activeAgentCount }: { activeAgentCount: number }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { data, isLoading, error, editedContent, setEditedContent, hasChanges, showSuccess, mutation, toggleMutation, handleSave, handleToggleEnabled } = useGlobalInstructions();
+  const { data, isLoading, error, editedContent, setEditedContent, hasChanges, showSuccess, mutation, handleSave, handleToggleEnabled } = usePlatformContext();
 
   if (isLoading) return <div className="mb-5"><div className="h-12 rounded-lg bg-slate-100 dark:bg-slate-800/50 animate-pulse" /></div>;
 
@@ -162,7 +151,7 @@ export function GlobalInstructionsPanel({ activeAgentCount }: { activeAgentCount
     return (
       <div className="mb-5 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400">
         <AlertCircle className="h-4 w-4 flex-shrink-0" />
-        <span className="text-xs">Failed to load global instructions</span>
+        <span className="text-xs">Failed to load platform context</span>
       </div>
     );
   }
@@ -176,11 +165,11 @@ export function GlobalInstructionsPanel({ activeAgentCount }: { activeAgentCount
         <CollapsedHeader isExpanded={isExpanded} isEnabled={isEnabled} content={content} activeAgentCount={activeAgentCount} onToggle={() => setIsExpanded(!isExpanded)} />
         {isExpanded && (
           <div className="px-4 pb-4 border-t border-slate-200/50 dark:border-slate-700/50">
-            <Toolbar isEnabled={isEnabled} hasChanges={hasChanges} showSuccess={showSuccess} isPendingSave={mutation.isPending} isPendingToggle={toggleMutation.isPending} onToggle={handleToggleEnabled} onSave={handleSave} />
+            <Toolbar isEnabled={isEnabled} hasChanges={hasChanges} showSuccess={showSuccess} isPending={mutation.isPending} onToggle={handleToggleEnabled} onSave={handleSave} />
             <Editor content={content} isEnabled={isEnabled} onChange={setEditedContent} />
             <div className="mt-3 flex items-start gap-2 text-[10px] text-slate-400">
               <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 mt-1.5 flex-shrink-0" />
-              <p>These instructions are prepended to every agent&apos;s system prompt as <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">&lt;platform_context&gt;</code> block. View the combined prompt on any agent&apos;s Prompt tab.</p>
+              <p>This is the canonical DB-backed prompt injected into every agent as <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">&lt;platform_context&gt;</code>. Review it in the Prompts UI or any agent&apos;s combined preview.</p>
             </div>
           </div>
         )}

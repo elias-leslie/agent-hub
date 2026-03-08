@@ -16,7 +16,6 @@ from app.api.db import router as db_router
 from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
 from app.api.feedback import router as feedback_router
-from app.api.global_instructions import router as global_instructions_router
 from app.api.health import router as health_router
 from app.api.heartbeat import router as heartbeat_router
 from app.api.image import router as image_router
@@ -54,9 +53,6 @@ router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
 router.include_router(memory_router)  # Has its own prefix /memory and tags
 router.include_router(agents_router)  # Has its own prefix /agents and tags
-router.include_router(
-    global_instructions_router
-)  # Has its own prefix /global-instructions and tags
 router.include_router(models_router, tags=["models"])
 router.include_router(persona_router)  # Has its own prefix /persona and tags
 router.include_router(preferences_router, tags=["preferences"])

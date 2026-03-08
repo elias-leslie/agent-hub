@@ -18,11 +18,14 @@ async def get_all_prompts(
     db: AsyncSession,
     *,
     is_global: bool | None = None,
+    enabled_only: bool = False,
 ) -> list[Prompt]:
     """List prompts with optional global filter."""
     stmt = select(Prompt).order_by(Prompt.slug)
     if is_global is not None:
         stmt = stmt.where(Prompt.is_global == is_global)
+    if enabled_only:
+        stmt = stmt.where(Prompt.enabled == True)  # noqa: E712
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -41,6 +44,7 @@ async def create_prompt(
     content: str,
     description: str | None = None,
     is_global: bool = False,
+    enabled: bool = True,
     exclude_agents: list[str] | None = None,
 ) -> Prompt:
     """Create a new prompt."""
@@ -50,6 +54,7 @@ async def create_prompt(
         content=content,
         description=description,
         is_global=is_global,
+        enabled=enabled,
         exclude_agents=exclude_agents or [],
     )
     db.add(prompt)
@@ -69,7 +74,7 @@ async def update_prompt(
     if not prompt:
         return None
 
-    allowed_fields = {"name", "content", "description", "is_global", "slug", "exclude_agents"}
+    allowed_fields = {"name", "content", "description", "is_global", "enabled", "slug", "exclude_agents"}
     for key, value in kwargs.items():
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
@@ -220,6 +225,8 @@ async def build_prompt_context(
 
     global_prompts = await get_all_prompts(db, is_global=True)
     for p in global_prompts:
+        if not p.enabled:
+            continue
         if agent_slug and p.exclude_agents and agent_slug in p.exclude_agents:
             logger.debug("Skipping global prompt '%s' (excluded for agent '%s')", p.slug, agent_slug)
             continue
@@ -227,6 +234,8 @@ async def build_prompt_context(
 
     agent_assignments = await get_agent_prompts(db, agent_id, include_roles=include_roles)
     for ap in agent_assignments:
+        if not ap.prompt.enabled:
+            continue
         sections.append(ap.prompt.content)
 
     return "\n\n".join(sections)
@@ -255,3 +264,16 @@ async def get_prompt_content(slug: str, default: str) -> str:
     except Exception as e:
         logger.debug("Prompt lookup for '%s' failed (using default): %s", slug, e)
     return default
+
+
+async def require_prompt_content(slug: str) -> str:
+    """Fetch prompt content by slug or raise when the DB prompt is missing/empty."""
+    from app.db import async_session
+
+    async with async_session() as db:
+        prompt = await get_prompt_by_slug(db, slug)
+        if not prompt or not prompt.content.strip():
+            raise RuntimeError(f"Required prompt '{slug}' is missing or empty")
+        if not prompt.enabled:
+            raise RuntimeError(f"Required prompt '{slug}' is disabled")
+        return prompt.content

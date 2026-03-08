@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import { GlobalInstructionsPanel } from "@/components/GlobalInstructionsPanel";
+import { PlatformContextPanel } from "@/components/PlatformContextPanel";
 import { fetchAgents, fetchAgentMetrics } from "@/lib/api";
 import { fetchApi } from "@/lib/api-config";
 import { cn } from "@/lib/utils";
@@ -212,7 +212,7 @@ export default function AgentsPage() {
       </header>
 
       <main className="px-4 py-5 lg:px-8">
-        <GlobalInstructionsPanel activeAgentCount={activeCount} />
+        <PlatformContextPanel activeAgentCount={activeCount} />
 
         {archiveCandidate && (
           <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">

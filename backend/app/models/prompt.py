@@ -37,6 +37,7 @@ class Prompt(Base):
     content: Mapped[str] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_global: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

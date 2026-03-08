@@ -168,6 +168,9 @@ export default function PromptsPage() {
                   Scope
                 </th>
                 <th className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-left px-4 py-3">
+                  Status
+                </th>
+                <th className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-left px-4 py-3">
                   Updated
                 </th>
                 <th className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right px-4 py-3">
@@ -200,6 +203,16 @@ export default function PromptsPage() {
                         Global
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn(
+                      "px-2 py-0.5 text-[10px] font-medium rounded-full inline-flex items-center gap-1",
+                      prompt.enabled
+                        ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                        : "bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+                    )}>
+                      {prompt.enabled ? "Enabled" : "Disabled"}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
                     {formatDate(prompt.updated_at)}
