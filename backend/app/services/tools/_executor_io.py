@@ -70,6 +70,10 @@ def _is_dirty_worktree_error(output: str) -> bool:
     return "Claimed worktree has uncommitted changes." in output
 
 
+def _is_not_ready_to_complete_error(output: str) -> bool:
+    return "Task not ready to complete:" in output
+
+
 def _extract_task_status(context_output: str) -> str | None:
     """Extract task status from `st context --compact` output."""
     if not isinstance(context_output, str):
@@ -243,7 +247,11 @@ async def _reconcile_task_lane(
         project_id,
     )
     result = await bash_fn(cmd)
-    if _is_missing_checkpoint_error(result) or _is_dirty_worktree_error(result):
+    if (
+        _is_missing_checkpoint_error(result)
+        or _is_dirty_worktree_error(result)
+        or _is_not_ready_to_complete_error(result)
+    ):
         admin_cmd = _st_cmd(
             f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
             project_id,
