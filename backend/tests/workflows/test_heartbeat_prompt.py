@@ -194,8 +194,11 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Do not immediately dispatch intent-only or draft tasks" in prompt
         assert "Never dispatch a newly created task in the same heartbeat unless you first verify via `manage_tasks(action=\"get_context\")`" in prompt
         assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
+        assert 'If `manage_tasks(action="get_context")` shows `LANE:disp:reconcile` or `kind:stale_same_task`, treat that as stale-lane cleanup work, not an active implementation lane.' in prompt
+        assert "When `LANE:disp:reconcile` is present and the primary implementation specialist is no longer active, do not protect the lane just because a leftover helper/feedback session still exists on the same task." in prompt
         assert "make that your first execution action before reviewing duplicate specialists or considering new dispatches" in prompt
         assert "Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task reconciliation" in prompt
+        assert "Exception: if `manage_tasks(action=\"get_context\")` shows `LANE:disp:reconcile` / `kind:stale_same_task`, the right follow-through is reconcile/retire/repair, not passive waiting." in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
 
