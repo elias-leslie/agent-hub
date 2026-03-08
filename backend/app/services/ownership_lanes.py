@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+STALE_WORKSTREAM_IDLE_MINUTES = 10
+
 
 @dataclass(frozen=True)
 class OwnershipOwner:
@@ -75,6 +77,25 @@ def _timestamp_value(value: datetime | None) -> float:
         return float("-inf")
     value = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
     return value.timestamp()
+
+
+def idle_minutes_from_timestamps(
+    *,
+    created_at: datetime,
+    updated_at: datetime | None = None,
+    workstream_updated_at: datetime | None = None,
+    now: datetime | None = None,
+) -> int:
+    """Return idle minutes from the freshest known lane activity timestamp."""
+    latest = workstream_updated_at or updated_at or created_at
+    baseline = now or datetime.now(UTC)
+    latest = latest.replace(tzinfo=UTC) if latest.tzinfo is None else latest.astimezone(UTC)
+    baseline = (
+        baseline.replace(tzinfo=UTC)
+        if baseline.tzinfo is None
+        else baseline.astimezone(UTC)
+    )
+    return int((baseline - latest).total_seconds() / 60)
 
 
 def _owner_rank(owner: OwnershipOwner) -> tuple[int, int, int, float]:
@@ -188,10 +209,12 @@ def collapse_active_workstream_rows(
 
 
 __all__ = [
+    "STALE_WORKSTREAM_IDLE_MINUTES",
     "LaneFingerprint",
     "OwnershipOwner",
     "collapse_active_workstream_rows",
     "collapse_ownership_owners",
+    "idle_minutes_from_timestamps",
     "infer_task_id",
     "lane_fingerprint",
 ]
