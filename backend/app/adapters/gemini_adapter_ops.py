@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters._errors_types import ProviderError
 from app.adapters.base import CompletionResult, Message
 from app.adapters.gemini_cloudcode import cloudcode_tool_loop
 from app.adapters.gemini_tools import execute_tool_loop
@@ -45,6 +46,44 @@ async def sdk_complete(
         )
 
     return await _do()
+
+
+async def sdk_complete_with_failover(
+    sdk_clients: list[Any],
+    client: Any,
+    messages: list[Message],
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+    provider_name: str,
+    kwargs: dict[str, Any],
+) -> CompletionResult:
+    """Try each SDK client in order; raise last error if all fail."""
+    if not sdk_clients:
+        if client is None:
+            raise ProviderError(
+                "Gemini API key is not configured",
+                provider=provider_name,
+                retriable=False,
+            )
+        return await sdk_complete(client, messages, model, temperature, max_tokens, provider_name, kwargs)
+
+    last_error: ProviderError | None = None
+    for i, c in enumerate(sdk_clients):
+        try:
+            result = await sdk_complete(c, messages, model, temperature, max_tokens, provider_name, kwargs)
+            if i > 0:
+                logger.info("Gemini: API key #%d succeeded after %d failure(s)", i + 1, i)
+            return result
+        except ProviderError as e:
+            last_error = e
+            if not e.retriable:
+                raise
+            logger.warning("Gemini API key #%d rate-limited for %s, trying next key", i + 1, model)
+
+    if last_error:
+        raise last_error
+    return await sdk_complete(client, messages, model, temperature, max_tokens, provider_name, kwargs)
 
 
 async def tool_loop(
