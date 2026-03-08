@@ -22,7 +22,6 @@ export interface Agent {
   primary_model_id: string;
   fallback_models: string[];
   escalation_model_id: string | null;
-  premium_model_id: string | null;
   strategies: Record<string, unknown>;
   temperature: number;
   thinking_level: string | null;

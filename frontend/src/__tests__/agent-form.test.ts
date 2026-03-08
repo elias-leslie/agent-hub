@@ -15,7 +15,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     primary_model_id: "claude-sonnet-4-5",
     fallback_models: ["gemini-2.5-flash"],
     escalation_model_id: null,
-    premium_model_id: "codex/gpt-5.4",
     strategies: {},
     temperature: 0.7,
     thinking_level: "medium",

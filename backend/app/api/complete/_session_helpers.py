@@ -42,22 +42,36 @@ def sync_sequencer(session: DBSession) -> None:
 
 
 async def update_session_metadata(
-    db: AsyncSession, session: DBSession, provider: str, model: str, agent_slug: str | None
+    db: AsyncSession,
+    session: DBSession,
+    provider: str,
+    model: str,
+    agent_slug: str | None,
+    requested_model: str | None = None,
+    requested_provider: str | None = None,
 ) -> None:
     """Update models/providers used and agent_slug on an existing session."""
     existing_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
-    if (session.model != model or session.provider != provider) and "requested_model" not in existing_metadata:
+    requested_model = requested_model or model
+    requested_provider = requested_provider or provider
+
+    if (
+        "requested_model" not in existing_metadata
+        and (session.model != requested_model or session.provider != requested_provider)
+    ):
         existing_metadata = {
             **existing_metadata,
-            "requested_model": session.model,
-            "requested_provider": session.provider,
+            "requested_model": requested_model,
+            "requested_provider": requested_provider,
         }
 
     existing_metadata = {
         **existing_metadata,
+        "requested_model": requested_model,
+        "requested_provider": requested_provider,
         "effective_model": model,
         "effective_provider": provider,
-        "fallback_used": existing_metadata.get("requested_model", session.model) != model,
+        "fallback_used": requested_model != model,
     }
 
     models_used: list[str] = session.models_used or []
@@ -71,7 +85,7 @@ async def update_session_metadata(
     session.provider_metadata = existing_metadata
     if agent_slug and not session.agent_slug:
         session.agent_slug = agent_slug
-    await db.commit()
+    await db.flush()
 
 
 async def maybe_reset_persona_session(
@@ -91,7 +105,13 @@ async def maybe_reset_persona_session(
 
 
 async def load_session(
-    db: AsyncSession, session_id: str, provider: str, model: str, agent_slug: str | None
+    db: AsyncSession,
+    session_id: str,
+    provider: str,
+    model: str,
+    agent_slug: str | None,
+    requested_model: str | None = None,
+    requested_provider: str | None = None,
 ) -> tuple[DBSession, list[Message], bool] | None:
     """Load an existing session by ID; return None if not found."""
     result = await db.execute(
@@ -100,7 +120,15 @@ async def load_session(
     session = result.scalar_one_or_none()
     if session is None:
         return None
-    await update_session_metadata(db, session, provider, model, agent_slug)
+    await update_session_metadata(
+        db,
+        session,
+        provider,
+        model,
+        agent_slug,
+        requested_model=requested_model,
+        requested_provider=requested_provider,
+    )
     sync_sequencer(session)
     return session, build_context_messages(session), False
 

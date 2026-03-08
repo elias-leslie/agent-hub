@@ -11,7 +11,6 @@ const agent: Agent = {
   name: "Persona",
   primary_model_id: "claude-sonnet-4-5",
   fallback_models: ["gemini-2.5-flash"],
-  premium_model_id: "codex/gpt-5.4",
   updated_at: "2026-03-06T14:00:00Z",
 };
 
@@ -36,7 +35,6 @@ describe("agent analytics utils", () => {
     expect(analytics.modelSummary).toEqual([
       "claude-sonnet-4-5",
       "gemini-2.5-flash",
-      "codex/gpt-5.4",
     ]);
     expect(analytics.trend).toHaveLength(24);
   });

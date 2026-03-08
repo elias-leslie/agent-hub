@@ -189,11 +189,6 @@ class CompletionRequest(BaseModel):
         description="Trace ID for event correlation (e.g., SummitFlow task_id). "
         "Events are published to Redis for real-time observability.",
     )
-    tier_preference: str | None = Field(
-        default=None,
-        pattern="^(standard|advanced)$",
-        description="Model tier preference. 'advanced' uses agent's premium_model_id if configured.",
-    )
     current_branch: str | None = Field(
         default=None,
         description="Current git branch for continuity branch scoping (e.g., 'main', 'feature/auth')",

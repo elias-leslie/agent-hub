@@ -37,6 +37,7 @@ _DEFAULT_INTERVAL_MINUTES = 60
 
 class HeartbeatInput(BaseModel):
     manual: bool = False
+    target_project_id: str | None = None
 
 
 class HeartbeatResult(BaseModel):
@@ -65,7 +66,10 @@ class HeartbeatRuntimeInfo(BaseModel):
     warnings: list[str] = []
 
 
-async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
+async def _resolve_persona(
+    db: Any,
+    project_id: str = HEARTBEAT_PROJECT,
+) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
     """Return (model, provider, temperature, thinking_level, system_content, memory_config) for persona agent."""
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates
@@ -77,7 +81,7 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, d
         raise RuntimeError("Persona agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
     mandate = await inject_agent_mandates(
-        agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT, task_type="heartbeat"
+        agent, db, prompt_mode="full", project_id=project_id, task_type="heartbeat"
     )
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content, agent.memory_config
 
@@ -153,13 +157,13 @@ def _get_skip_reason(interval_minutes: int, onboarding_complete: bool) -> str:
     return "not onboarded" if not onboarding_complete else "interval not elapsed"
 
 
-async def check_project_permission() -> bool:
-    """Return False if the heartbeat project permission_tier is 'off'."""
+async def check_project_permission(project_id: str = HEARTBEAT_PROJECT) -> bool:
+    """Return False if the target project permission_tier is 'off'."""
     from app.db import async_session
     from app.services.project_permission_service import get_project_permission
 
     async with async_session() as perm_db:
-        perm = await get_project_permission(perm_db, HEARTBEAT_PROJECT)
+        perm = await get_project_permission(perm_db, project_id)
         return not (perm and perm.permission_tier == "off")
 
 
@@ -172,10 +176,10 @@ def _build_messages(system_content: str, prompt: str) -> list[dict[str, Any]]:
     return messages
 
 
-async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
+async def _execute_heartbeat(interval_minutes: int, target_project_id: str | None = None) -> HeartbeatResult:
     """Run completion and record result; returns a HeartbeatResult."""
     try:
-        result = await _do_completion(interval_minutes)
+        result = await _do_completion(interval_minutes, target_project_id=target_project_id)
     except Exception as e:
         logger.warning("Heartbeat completion failed: %s", e)
         return HeartbeatResult(
@@ -184,7 +188,7 @@ async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
     return await postprocess_heartbeat(result, interval_minutes)
 
 
-async def _do_completion(interval_minutes: int):
+async def _do_completion(interval_minutes: int, target_project_id: str | None = None):
     """Run the actual completion call — separated for error handling."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
@@ -192,10 +196,18 @@ async def _do_completion(interval_minutes: int):
     from app.services.persona_service import get_persona
 
     model_review_due, model_review_label = await get_model_review_status()
-    heartbeat_prompt = await build_heartbeat_prompt(model_review_due, model_review_label)
+    execution_project = target_project_id or HEARTBEAT_PROJECT
+    heartbeat_prompt = await build_heartbeat_prompt(
+        model_review_due,
+        model_review_label,
+        target_project_id=target_project_id,
+    )
 
     async with async_session() as db:
-        model, provider, temperature, thinking_level, system_content, agent_memory_config = await _resolve_persona(db)
+        model, provider, temperature, thinking_level, system_content, agent_memory_config = await _resolve_persona(
+            db,
+            project_id=execution_project,
+        )
         persona = await get_persona(db)
         max_turns = get_persona_limit(persona, "max_turns") or 200
         result = await complete_internal(
@@ -203,7 +215,7 @@ async def _do_completion(interval_minutes: int):
             model=model,
             provider=provider,
             temperature=temperature,
-            project_id=HEARTBEAT_PROJECT,
+            project_id=execution_project,
             db=db,
             agent_slug="persona",
             use_memory=True,
@@ -217,7 +229,9 @@ async def _do_completion(interval_minutes: int):
             defer_tool_loading=True,
             task_type="heartbeat",
             thinking_level=thinking_level,
-            working_dir=KNOWN_ROOTS.get(HEARTBEAT_PROJECT),
+            working_dir=KNOWN_ROOTS.get(execution_project),
+            requested_model=model,
+            requested_provider=provider,
         )
 
     await record_heartbeat(did_model_review=model_review_due)
@@ -227,6 +241,7 @@ async def _do_completion(interval_minutes: int):
 async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
     """Periodic persona check-in via complete_internal."""
     manual = input.manual
+    target_project_id = input.target_project_id
 
     # Manual triggers skip the interval check but still require onboarding + permissions
     if not manual:
@@ -241,7 +256,7 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
             ctx.log("Manual heartbeat skipped (not onboarded)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
-    if not await check_project_permission():
+    if not await check_project_permission(target_project_id or HEARTBEAT_PROJECT):
         ctx.log("Heartbeat skipped (project_permission_off)")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
@@ -257,7 +272,7 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
 
     await set_heartbeat_running()
     try:
-        out = await _execute_heartbeat(interval_minutes)
+        out = await _execute_heartbeat(interval_minutes, target_project_id=target_project_id)
         ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
         return out.model_dump()
     finally:

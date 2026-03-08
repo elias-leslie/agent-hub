@@ -26,7 +26,7 @@ Previous session completed:
 | summitflow | `bc19f44c` | WS1: Fix false completions — require work product |
 | summitflow | `eaba4b15` | WS5: Human language cleanup |
 | agent-hub | `104dd9e` | WS5+8: Human language + remove COMPONENT_FRICTION |
-| agent-hub | `79b9f05` | WS3: Premium model tier |
+| agent-hub | `79b9f05` | WS3: Model routing changes |
 | agent-hub | `f28c0be` | WS4: Failed work + backlog in heartbeat data |
 | summitflow | `990311dc` | WS9: Persona CLI commands |
 | summitflow | `6061dd9b` | WS10: Lifecycle events to Agent Hub |
@@ -55,10 +55,10 @@ grep -rn "COMPONENT_FRICTION" ~/agent-hub/backend/app/
 
 **Phase B verification:**
 ```bash
-# WS3: Premium model tier
-db -P agent-hub query "SELECT slug, premium_model_id FROM agents WHERE premium_model_id IS NOT NULL"
-# Should show 5 agents
-grep -n "tier_preference" ~/agent-hub/backend/app/api/complete/request_schemas.py
+# WS3: Model routing changes
+grep -n "fallback_models" ~/agent-hub/backend/app/models/agent.py
+# Confirm tier_preference is gone
+! grep -n "tier_preference" ~/agent-hub/backend/app/api/complete/request_schemas.py
 ```
 
 **Phase C verification:**

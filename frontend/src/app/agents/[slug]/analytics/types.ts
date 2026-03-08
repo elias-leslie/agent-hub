@@ -4,7 +4,6 @@ export interface Agent {
   name: string;
   primary_model_id: string;
   fallback_models: string[];
-  premium_model_id: string | null;
   updated_at: string;
 }
 

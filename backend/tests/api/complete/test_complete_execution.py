@@ -21,7 +21,6 @@ async def test_execute_with_fallback_attaches_primary_failure_reason_to_result()
             slug="refactor",
             primary_model_id="claude-sonnet-4-6",
             fallback_models=["codex/gpt-5.4"],
-            premium_model_id=None,
             temperature=0.0,
             verbosity_level=None,
         ),
@@ -55,6 +54,50 @@ async def test_execute_with_fallback_attaches_primary_failure_reason_to_result()
     assert model_used == "codex/gpt-5.4"
     assert fallback_used is True
     assert result.fallback_reason == "ProviderError: claude timed out"
+
+
+@pytest.mark.asyncio
+async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback() -> None:
+    resolved_agent = SimpleNamespace(
+        model="codex/gpt-5.4",
+        agent=SimpleNamespace(
+            slug="persona",
+            primary_model_id="codex/gpt-5.4",
+            fallback_models=["claude-sonnet-4-6"],
+            temperature=0.0,
+            verbosity_level=None,
+        ),
+    )
+    adapter_result = CompletionResult(
+        content="ok",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    direct_override_result = SimpleNamespace(
+        result=adapter_result,
+        model_used="claude-sonnet-4-6",
+        used_fallback=True,
+        fallback_reason=None,
+    )
+
+    with patch(
+        "app.api.complete.execution.complete_with_fallback",
+        new=AsyncMock(return_value=direct_override_result),
+    ):
+        result, model_used, fallback_used = await execute_with_fallback(
+            messages_for_adapter=[Message(role="user", content="hi")],
+            resolved_agent=resolved_agent,
+            tools_api=None,
+            thinking_level=None,
+            resolved_model="claude-sonnet-4-6",
+        )
+
+    assert result is adapter_result
+    assert model_used == "claude-sonnet-4-6"
+    assert fallback_used is False
+    assert not hasattr(result, "fallback_reason")
 
 
 @pytest.mark.asyncio

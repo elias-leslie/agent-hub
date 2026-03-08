@@ -30,7 +30,7 @@ Read the full implementation plan at **`/home/kasadis/.claude/plans/vivid-crunch
 
 Pay special attention to:
 - **WS1 (false completions)**: Does `_has_work_product()` actually get called in the execution flow? Trace the call path.
-- **WS3 (model tier)**: Does `tier_preference="advanced"` actually result in `premium_model_id` being used? Test with a real completion request or trace the code path.
+- **WS3 (model routing)**: Verify specialist agents use their primary model by default and only switch models through explicit override, escalation, or true fallback.
 - **WS4 (heartbeat data)**: Trigger a heartbeat and verify `<failed_work>` and `<backlog_summary>` sections actually appear in the prompt (not just that the functions exist).
 - **WS5 (human language)**: Run the full grep verification: `grep -rn "escalate_to_human\|needs-human-review\|COMPONENT_FRICTION\|_notify_human" ~/summitflow/backend/app/ ~/agent-hub/backend/app/` — must be zero results.
 - **WS6+7 (instructions)**: Read the actual DB instructions and compare against the plan's requirements. Are all the specific additions there? (driving progress mandate, backlog hygiene, dispatch tracking rule, escalation clarity, "Progress Drive" not "Creative Scan")
@@ -81,8 +81,8 @@ Review what was done and verify nothing is broken:
 - Run `dt --check` on summitflow to verify no regressions
 
 **Phase B (Model tier):**
-- WS3: `db -P agent-hub query "SELECT slug, premium_model_id FROM agents WHERE premium_model_id IS NOT NULL"` — should show 5 agents
-- Verify `tier_preference` field exists in CompletionRequest: `grep -n "tier_preference" ~/agent-hub/backend/app/api/complete/request_schemas.py`
+- WS3: `! grep -n "premium_model_id\\|tier_preference" ~/agent-hub/backend/app/api/complete/request_schemas.py ~/agent-hub/backend/app/models/agent.py`
+- Verify model routing still supports fallback chains: `grep -n "fallback_models" ~/agent-hub/backend/app/models/agent.py`
 
 **Phase C (Heartbeat context + instructions):**
 - WS4: Verify `<failed_work>` and `<backlog_summary>` sections appear in heartbeat prompt. Check `~/agent-hub/backend/app/workflows/_heartbeat_data.py` for `_fetch_failed_work_section` and `_fetch_backlog_summary_section`
@@ -152,7 +152,7 @@ After any fix, restart affected service and re-trigger heartbeat.
 | `~/summitflow/backend/app/tasks/autonomous/exec_modules/steps.py` | Work product check (`_has_work_product()`) |
 | `~/summitflow/backend/cli/commands/persona.py` | ST CLI persona commands (heartbeat, activity, status) |
 | `~/summitflow/backend/cli/commands/persona_api.py` | API client for persona CLI |
-| `~/agent-hub/backend/scripts/seed_agents_data/core_agents.py` | Agent seed data (premium_model_id, prompts) |
+| `~/agent-hub/backend/scripts/seed_agents_data/core_agents.py` | Agent seed data and prompts |
 | `~/agent-hub/backend/scripts/seed_agents_data/_execution_agents.py` | Execution agent seed data |
 
 ## Commits from This Work
@@ -163,7 +163,7 @@ After any fix, restart affected service and re-trigger heartbeat.
 | summitflow | `bc19f44c` | WS1: Fix false completions — require work product |
 | summitflow | `eaba4b15` | WS5: Human language cleanup |
 | agent-hub | `104dd9e` | WS5+8: Human language + remove COMPONENT_FRICTION |
-| agent-hub | `79b9f05` | WS3: Premium model tier |
+| agent-hub | `79b9f05` | WS3: Model routing changes |
 | agent-hub | `f28c0be` | WS4: Failed work + backlog in heartbeat data |
 | summitflow | `990311dc` | WS9: Persona CLI commands |
 | summitflow | `6061dd9b` | WS10: Lifecycle events to Agent Hub |

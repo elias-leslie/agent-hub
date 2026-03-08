@@ -139,16 +139,6 @@ async def execute_completion(
     Returns a CompletionInternalResult for agentic mode, or a
     (result, model_used, fallback_used, loaded_uuids, session_id) tuple otherwise.
     """
-    # Apply tier-aware model override for advanced tier
-    if (
-        request.tier_preference == "advanced"
-        and resolved_agent
-        and resolved_agent.agent.premium_model_id
-    ):
-        resolved_model = resolved_agent.agent.premium_model_id
-        from app.adapters.registry import get_provider_for_model
-        provider = get_provider_for_model(resolved_model)
-
     thinking = get_thinking_level(request, all_messages, resolved_agent)
     tools = prepare_tools(request)
     fmt = prepare_response_format(request)
@@ -156,7 +146,6 @@ async def execute_completion(
         result, model_used, fallback_used = await execute_with_fallback(
             _to_messages(messages_dict), resolved_agent, tools, thinking,
             resolved_model=resolved_model,
-            tier_preference=request.tier_preference,
         )
         return (
             result,

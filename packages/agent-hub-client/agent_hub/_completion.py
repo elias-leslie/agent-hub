@@ -93,7 +93,6 @@ def _apply_execution_fields(
     system_prompt: str | None,
     resume_session_id: str | None,
     include_roles: list[str] | None,
-    tier_preference: str | None,
     current_branch: str | None,
 ) -> None:
     """Apply execution/runtime optional fields to payload in-place."""
@@ -117,8 +116,6 @@ def _apply_execution_fields(
         payload["resume_session_id"] = resume_session_id
     if include_roles is not None:
         payload["include_roles"] = include_roles
-    if tier_preference:
-        payload["tier_preference"] = tier_preference
     if current_branch:
         payload["current_branch"] = current_branch
 
@@ -140,7 +137,7 @@ def build_completion_payload(  # noqa: PLR0913
     thinking_level: str | None = None, system_prompt: str | None = None,
     resume_session_id: str | None = None,
     include_roles: list[str] | None = None,
-    tier_preference: str | None = None, current_branch: str | None = None,
+    current_branch: str | None = None,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -161,7 +158,7 @@ def build_completion_payload(  # noqa: PLR0913
     _apply_execution_fields(
         payload, container_id, max_turns, working_dir, execute_tools,
         trace_id, timeout_seconds, thinking_level, system_prompt,
-        resume_session_id, include_roles, tier_preference, current_branch,
+        resume_session_id, include_roles, current_branch,
     )
     return payload
 

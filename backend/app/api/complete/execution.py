@@ -101,7 +101,6 @@ async def execute_with_fallback(
     tools_api: list[dict[str, Any]] | None,
     thinking_level: str | None = None,
     resolved_model: str | None = None,
-    tier_preference: str | None = None,
 ) -> tuple[CompletionResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -112,17 +111,14 @@ async def execute_with_fallback(
         thinking_level: Thinking level (from request or agent DB)
         resolved_model: Model override (e.g. from @mention). If different from
             agent's primary model, used as the primary for the fallback chain.
-        tier_preference: Model tier preference. 'advanced' uses premium_model_id.
 
     Returns:
         Tuple of (result, model_used, fallback_used)
     """
-    # Tier-aware model selection: use premium model for advanced tier
     primary_override = None
-    if tier_preference == "advanced" and resolved_agent.agent.premium_model_id:
-        primary_override = resolved_agent.agent.premium_model_id
-    elif resolved_model and resolved_model != resolved_agent.model:
+    if resolved_model and resolved_model != resolved_agent.model:
         primary_override = resolved_model
+    requested_model = primary_override or resolved_agent.model
 
     fallback_result = await complete_with_fallback(
         messages=messages_for_adapter,
@@ -132,12 +128,13 @@ async def execute_with_fallback(
         thinking_level=thinking_level,
         primary_model_override=primary_override,
     )
-    if fallback_result.fallback_reason:
+    fallback_used = fallback_result.used_fallback and fallback_result.model_used != requested_model
+    if fallback_used and fallback_result.fallback_reason:
         fallback_result.result.fallback_reason = fallback_result.fallback_reason
     return (
         fallback_result.result,
         fallback_result.model_used,
-        fallback_result.used_fallback,
+        fallback_used,
     )
 
 

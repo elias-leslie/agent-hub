@@ -33,7 +33,6 @@ const agent: Agent = {
   primary_model_id: "gpt-5.4",
   fallback_models: [],
   escalation_model_id: null,
-  premium_model_id: null,
   strategies: {},
   temperature: 0.2,
   thinking_level: "medium",

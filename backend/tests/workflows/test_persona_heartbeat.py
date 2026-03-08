@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.constants.models import CLAUDE_OPUS, CODEX_GPT_5_1_MINI, CODEX_GPT_5_4
+from app.services.tools.direct_executor_core import KNOWN_ROOTS
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_MEMORY_GROUP,
     HEARTBEAT_PROJECT,
@@ -252,7 +253,57 @@ class TestPersonaHeartbeatTask:
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "success"
-        mock_execute.assert_awaited_once_with(60)
+        mock_execute.assert_awaited_once_with(60, target_project_id=None)
+
+    @pytest.mark.asyncio
+    async def test_manual_heartbeat_passes_target_project_to_execution(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_permission,
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    heartbeat_supported=True,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat._execute_heartbeat",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    model_dump=lambda: {"status": "success", "turns": 1, "tool_calls": 0},
+                    turns=1,
+                    tool_calls=0,
+                ),
+            ) as mock_execute,
+        ):
+            result = await _run_persona_heartbeat(
+                HeartbeatInput(manual=True, target_project_id="agent-hub"),
+                ctx,
+            )
+
+        assert result["status"] == "success"
+        mock_permission.assert_awaited_once_with("agent-hub")
+        mock_execute.assert_awaited_once_with(60, target_project_id="agent-hub")
 
 
 class TestHeartbeatCompletionRouting:
@@ -391,3 +442,54 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["enable_programmatic_tools"] is True
         assert kwargs["task_type"] == "heartbeat"
         assert kwargs["thinking_level"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_do_completion_uses_target_project_for_execution_scope(self):
+        mock_db = AsyncMock()
+        complete_result = SimpleNamespace(content="HEARTBEAT_OK", session_id="sess-1")
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_model_review_status",
+                new_callable=AsyncMock,
+                return_value=(False, "not due"),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.build_heartbeat_prompt",
+                new_callable=AsyncMock,
+                return_value="Focus on agent-hub",
+            ) as mock_prompt,
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.workflows.persona_heartbeat._resolve_persona",
+                new_callable=AsyncMock,
+                return_value=("claude-sonnet-4-6", "claude", 0.2, "medium", "You are Jenny", {"mode": "auto"}),
+            ) as mock_resolve_persona,
+            patch(
+                "app.services.persona_service.get_persona",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(limits=None),
+            ),
+            patch(
+                "app.services._persona_crud.get_persona_limit",
+                return_value=200,
+            ),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=complete_result,
+            ) as mock_complete,
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await _do_completion(60, target_project_id="agent-hub")
+
+        assert result is complete_result
+        mock_prompt.assert_awaited_once_with(False, "not due", target_project_id="agent-hub")
+        mock_resolve_persona.assert_awaited_once_with(mock_db, project_id="agent-hub")
+        kwargs = mock_complete.await_args.kwargs
+        assert kwargs["project_id"] == "agent-hub"
+        assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
+        assert kwargs["working_dir"] == KNOWN_ROOTS["agent-hub"]

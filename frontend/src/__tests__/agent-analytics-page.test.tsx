@@ -54,7 +54,6 @@ const agent: Agent = {
   primary_model_id: "claude-sonnet-4-5",
   fallback_models: [],
   escalation_model_id: null,
-  premium_model_id: null,
   strategies: {},
   temperature: 0.2,
   thinking_level: "medium",

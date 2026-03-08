@@ -479,15 +479,14 @@ run_alembic() {
     local db_url
     db_url=$(get_db_url "$PROJECT_NAME")
 
-    # Prefer project venv alembic (has project deps like pgvector)
-    # Fall back to system alembic if venv doesn't exist
-    local alembic_bin="alembic"
+    # Prefer project venv alembic so migrations run with project-local deps.
+    local alembic_cmd=("alembic")
     if [[ -x "$alembic_dir/.venv/bin/alembic" ]]; then
-        alembic_bin="$alembic_dir/.venv/bin/alembic"
+        alembic_cmd=("$alembic_dir/.venv/bin/alembic")
     fi
 
     # cd is required so alembic can find the app modules
-    (cd "$alembic_dir" && DATABASE_URL="$db_url" "$alembic_bin" "$@") 2>&1
+    (cd "$alembic_dir" && DATABASE_URL="$db_url" "${alembic_cmd[@]}" "$@") 2>&1
 }
 
 cmd_migrate() {

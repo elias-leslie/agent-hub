@@ -81,6 +81,16 @@ class TestGetPersona:
         assert result is None
 
 
+class _ExplodingSession:
+    def __init__(self, session_id: str):
+        self.id = session_id
+        self.__dict__["id"] = session_id
+
+    @property
+    def updated_at(self):  # pragma: no cover - the test ensures this is never used
+        raise AssertionError("updated_at property should not be accessed directly")
+
+
 class TestGetPersonaForAgent:
     """Tests for get_persona_for_agent() — match by agent_id."""
 
@@ -104,6 +114,25 @@ class TestGetPersonaForAgent:
         result = await get_persona_for_agent(db, agent_id=999)
 
         assert result is None
+
+
+class TestShouldResetPersonaSession:
+    @pytest.mark.asyncio
+    async def test_uses_explicit_query_when_updated_at_not_loaded(self):
+        persona = _make_persona(
+            session_reset_mode="idle",
+            session_reset_idle_minutes=5,
+        )
+        db = create_mock_db_session()
+        persona_result = MagicMock()
+        persona_result.scalar_one_or_none.return_value = persona
+        session_result = MagicMock()
+        session_result.scalar_one_or_none.return_value = datetime.now(UTC) - timedelta(minutes=10)
+        db.execute.side_effect = [persona_result, session_result]
+
+        should_reset = await should_reset_persona_session(db, _ExplodingSession("sess-1"))
+
+        assert should_reset is True
 
 
 class TestGetPersonaPersonalityForAgent:

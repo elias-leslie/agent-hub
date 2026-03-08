@@ -72,6 +72,8 @@ async def setup_session(
             agent_slug=request.agent_slug,
             current_branch=request.current_branch,
             working_dir=request.working_dir,
+            requested_provider=provider,
+            requested_model=resolved_model,
         )
         session_id = session.id
         if is_new_session:

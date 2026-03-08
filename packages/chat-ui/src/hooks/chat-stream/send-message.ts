@@ -108,20 +108,6 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   try {
     setStatus("streaming");
 
-    // Fetch user's tier preference
-    let tierPreference: string | undefined;
-    if (preferencesEndpoint) {
-      try {
-        const prefResponse = await fetch(preferencesEndpoint);
-        if (prefResponse.ok) {
-          const prefData = await prefResponse.json();
-          tierPreference = prefData.model_tier_preference;
-        }
-      } catch (error) {
-        console.warn("Failed to load tier preference, using default:", error);
-      }
-    }
-
     await Promise.all(
       effectiveAgents.map((targetAgent, index) => {
         const requestBody: CompletionRequest = {
@@ -138,7 +124,6 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           stream: true,
           use_memory: true,
           memory_group_id: `${memoryGroupPrefix}${targetAgent}`,
-          tier_preference: tierPreference,
         };
 
         const state = streamStatesRef.current.get(assistantIds[index])!;

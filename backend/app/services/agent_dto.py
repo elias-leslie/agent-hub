@@ -19,7 +19,6 @@ class AgentDTO:
     primary_model_id: str
     fallback_models: list[str]
     escalation_model_id: str | None
-    premium_model_id: str | None
     strategies: dict[str, Any]
     temperature: float
     thinking_level: str | None
@@ -49,7 +48,6 @@ class AgentDTO:
             primary_model_id=agent.primary_model_id,
             fallback_models=agent.fallback_models or [],
             escalation_model_id=agent.escalation_model_id,
-            premium_model_id=agent.premium_model_id,
             strategies=agent.strategies or {},
             temperature=agent.temperature,
             thinking_level=agent.thinking_level,
@@ -79,7 +77,6 @@ class AgentDTO:
             "primary_model_id": self.primary_model_id,
             "fallback_models": self.fallback_models,
             "escalation_model_id": self.escalation_model_id,
-            "premium_model_id": self.premium_model_id,
             "strategies": self.strategies,
             "temperature": self.temperature,
             "thinking_level": self.thinking_level,
@@ -110,7 +107,6 @@ class AgentDTO:
             primary_model_id=data["primary_model_id"],
             fallback_models=data.get("fallback_models", []),
             escalation_model_id=data.get("escalation_model_id"),
-            premium_model_id=data.get("premium_model_id"),
             strategies=data.get("strategies", {}),
             temperature=data.get("temperature", 0.7),
             thinking_level=data.get("thinking_level"),
