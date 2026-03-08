@@ -6,15 +6,18 @@ Each session type has its own timeout threshold.
 
 import logging
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Session
+from app.models import Session, SessionEvent
 from app.services.session_activity import last_activity_expr
 
 logger = logging.getLogger(__name__)
+
+_HEARTBEAT_PREFIX = "Run your regular heartbeat check."
 
 
 # Mapping of session types to their timeout settings (in minutes)
@@ -28,6 +31,85 @@ def get_session_timeouts() -> dict[str, int]:
         "agent": settings.session_timeout_agent,
         "claude_code": settings.session_timeout_claude_code,
     }
+
+
+async def _query_active_persona_heartbeat_sessions(
+    db: AsyncSession,
+) -> list[SimpleNamespace]:
+    rows = (
+        await db.execute(
+            select(Session.id, Session.created_at)
+            .where(
+                Session.status == "active",
+                Session.agent_slug == "persona",
+                Session.session_type == "completion",
+                select(SessionEvent.id)
+                .where(
+                    SessionEvent.session_id == Session.id,
+                    SessionEvent.event_type == "user_message",
+                    SessionEvent.content.like(f"{_HEARTBEAT_PREFIX}%"),
+                )
+                .correlate(Session)
+                .exists(),
+            )
+            .order_by(Session.created_at.desc())
+        )
+    ).all()
+    return [SimpleNamespace(id=row.id, created_at=row.created_at) for row in rows]
+
+
+async def _latest_completed_persona_heartbeat_at(db: AsyncSession) -> datetime | None:
+    result = await db.execute(
+        select(func.max(Session.created_at)).where(
+            Session.status == "completed",
+            Session.agent_slug == "persona",
+            Session.session_type == "completion",
+            select(SessionEvent.id)
+            .where(
+                SessionEvent.session_id == Session.id,
+                SessionEvent.event_type == "user_message",
+                SessionEvent.content.like(f"{_HEARTBEAT_PREFIX}%"),
+            )
+            .correlate(Session)
+            .exists(),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def cleanup_superseded_persona_heartbeat_sessions(db: AsyncSession) -> int:
+    """Mark interrupted heartbeat sessions completed when a newer heartbeat supersedes them."""
+    latest_completed_at = await _latest_completed_persona_heartbeat_at(db)
+    active_sessions = await _query_active_persona_heartbeat_sessions(db)
+    if not active_sessions:
+        return 0
+
+    superseded_ids: list[str] = []
+    if latest_completed_at is not None:
+        superseded_ids.extend(
+            str(row.id) for row in active_sessions if row.created_at < latest_completed_at
+        )
+
+    remaining_active = [row for row in active_sessions if str(row.id) not in set(superseded_ids)]
+    if len(remaining_active) > 1:
+        superseded_ids.extend(str(row.id) for row in remaining_active[1:])
+
+    if not superseded_ids:
+        return 0
+
+    result = await db.execute(
+        update(Session)
+        .where(Session.id.in_(sorted(set(superseded_ids))))
+        .values(status="completed")
+    )
+    cursor_result: CursorResult[tuple[()]] = result  # type: ignore[assignment]
+    rows_updated = cursor_result.rowcount or 0
+    if rows_updated > 0:
+        logger.info(
+            "Auto-completed %d superseded persona heartbeat session(s)",
+            rows_updated,
+        )
+    return rows_updated
 
 
 async def cleanup_stale_sessions(db: AsyncSession) -> int:
@@ -44,7 +126,7 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
     """
     timeouts = get_session_timeouts()
     now = datetime.now(UTC)
-    total_cleaned = 0
+    total_cleaned = await cleanup_superseded_persona_heartbeat_sessions(db)
 
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
