@@ -1,7 +1,9 @@
 """Tool handling and helpers for Claude adapter — permission checking, MCP, and SDK tool execution."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +26,7 @@ from app.adapters.claude_utils import (
 )
 
 logger = logging.getLogger(__name__)
+_SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS = 300.0
 
 # Re-export constants callers may reference
 _CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
@@ -110,6 +113,25 @@ async def _stream_sdk_messages(
     """Yield (message, session_id) pairs from claude_agent_sdk query."""
     from claude_agent_sdk import query
 
+    async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
+        if hasattr(message_iter, "aclose"):
+            with suppress(Exception):
+                await message_iter.aclose()
+        if next_task is not None:
+            next_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(next_task, timeout=1.0)
+
+    async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
+        if idle_timeout is None:
+            return await anext(message_iter)
+        next_task = asyncio.create_task(anext(message_iter))
+        done, _pending = await asyncio.wait({next_task}, timeout=idle_timeout)
+        if next_task in done:
+            return await next_task
+        await _abort_message_iter(message_iter, next_task)
+        raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s")
+
     def _message_has_tool_use(message: Any) -> bool:
         for block in getattr(message, "content", []) or []:
             if extract_block_content(block)["type"] == "tool_use":
@@ -134,7 +156,12 @@ async def _stream_sdk_messages(
             message_iter = query(prompt=prompt, options=options).__aiter__()
             while True:
                 try:
-                    message = await anext(message_iter)
+                    idle_timeout = (
+                        _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
+                        if saw_payload and pending_tool_calls == 0 and not done_emitted
+                        else None
+                    )
+                    message = await _next_message(message_iter, idle_timeout)
                 except StopAsyncIteration:
                     if saw_payload and not done_emitted:
                         logger.warning(
@@ -142,6 +169,13 @@ async def _stream_sdk_messages(
                         )
                         yield (_make_fallback_result(), session_id)
                     return
+                except TimeoutError as exc:
+                    logger.error(str(exc))
+                    raise ProviderError(
+                        str(exc),
+                        provider=provider_name,
+                        retriable=True,
+                    ) from exc
 
                 if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
                     session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
