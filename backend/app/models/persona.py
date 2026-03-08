@@ -34,8 +34,6 @@ class Persona(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, default="Jenny")
     personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     personality_previous: Mapped[str | None] = mapped_column(Text, nullable=True)
-    heartbeat_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
-    heartbeat_instructions_previous: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_context: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_context_previous: Mapped[str | None] = mapped_column(Text, nullable=True)
     voice_id: Mapped[str] = mapped_column(String(200), default="en-US-AriaNeural")

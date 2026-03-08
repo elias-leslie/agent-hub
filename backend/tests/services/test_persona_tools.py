@@ -18,7 +18,6 @@ def _make_persona(**overrides) -> MagicMock:
         "user_context": "B" * 300,
         "user_context_previous": None,
         "heartbeat_instructions": "C" * 300,
-        "heartbeat_instructions_previous": None,
         "version": 1,
     }
     defaults.update(overrides)
