@@ -10,7 +10,7 @@ Routes to the appropriate image adapter based on the model's provider prefix:
 import base64
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.cloudflare_image import CloudflareImageAdapter
 from app.adapters.gemini_image import GeminiImageAdapter
-from app.adapters.image_base import ImageAdapter
+from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.adapters.minimax_image import MinimaxImageAdapter
 from app.adapters.nvidia_image import NvidiaImageAdapter
 from app.constants import GEMINI_IMAGE, MODEL_CATALOG_BY_ID
@@ -163,6 +163,96 @@ async def _create_image_session(
     return session
 
 
+async def _try_generate_with_fallback(
+    model_chain: list[str],
+    request: ImageGenerationRequest,
+    ref_image_bytes: bytes | None,
+    http_request: Request,
+) -> ImageGenerationResult:
+    """Try models in order, returning the first successful result."""
+    last_error: Exception | None = None
+    for idx, model_id in enumerate(model_chain):
+        try:
+            adapter = _get_image_adapter(model_id)
+            result = await adapter.generate_image(
+                prompt=request.prompt,
+                model=model_id,
+                size=request.size,
+                style=request.style,
+                reference_image=ref_image_bytes,
+                reference_mime_type=request.reference_mime_type,
+            )
+            if idx > 0:
+                http_request.state.used_fallback = True
+                http_request.state.fallback_model = model_id
+                logger.info("Image generation fallback succeeded with model=%s", model_id)
+            return result
+        except (RateLimitError, AuthenticationError, ProviderError, ValueError) as e:
+            last_error = e
+            logger.warning("Image generation failed for model=%s: %s", model_id, e)
+
+    if last_error:
+        raise last_error
+    raise ProviderError("No image model could serve the request", provider="image", retriable=False)
+
+
+async def _complete_image_generation(
+    session: DBSession,
+    db: AsyncSession,
+    result: ImageGenerationResult,
+    session_id: str,
+) -> ImageGenerationResponse:
+    """Update session to completed and build the response."""
+    session.provider = result.provider
+    session.model = result.model
+    session.status = "completed"
+    await db.commit()
+    await publish_complete(session_id, input_tokens=0, output_tokens=0, cost=0.0)
+    image_base64 = base64.b64encode(result.image_data).decode("utf-8")
+    return ImageGenerationResponse(
+        image_base64=image_base64,
+        mime_type=result.mime_type,
+        model=result.model,
+        provider=result.provider,
+        session_id=session_id,
+    )
+
+
+async def _fail_and_raise(session: DBSession, db: AsyncSession, exc: Exception) -> NoReturn:
+    """Mark session as failed and raise the appropriate HTTPException."""
+    session.status = "failed"
+    await db.commit()
+    if isinstance(exc, ValueError):
+        logger.error("Configuration error: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration error: {exc}. Check provider credentials in Settings or environment.",
+        ) from exc
+    if isinstance(exc, RateLimitError):
+        logger.warning("Rate limit for %s", exc.provider)
+        retry_after = str(int(exc.retry_after)) if exc.retry_after else "60"
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded for {exc.provider}. Wait {retry_after}s.",
+            headers={"Retry-After": retry_after},
+        ) from exc
+    if isinstance(exc, AuthenticationError):
+        logger.error("Auth error for %s", exc.provider)
+        raise HTTPException(
+            status_code=401,
+            detail=f"Authentication failed for {exc.provider}. Check credentials in Settings or environment.",
+        ) from exc
+    if isinstance(exc, ProviderError):
+        logger.error("Provider error: %s", exc)
+        status_code = exc.status_code or 500
+        detail = str(exc)
+        if exc.retriable:
+            detail += " This error may be transient; retry may succeed."
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    logger.exception("Unexpected error in /generate-image: %s", exc)
+    raise HTTPException(status_code=500, detail="Internal server error. Check logs for details.") from exc
+
+
 @router.post("/generate-image", response_model=ImageGenerationResponse)
 async def generate_image(
     request: ImageGenerationRequest,
@@ -178,15 +268,10 @@ async def generate_image(
     http_request.state.used_fallback = False
     http_request.state.fallback_model = None
 
-    # Create session for tracking
     session = await _create_image_session(db, request.project_id, request.model, provider)
     session_id = session.id
-
-    # Publish session start event
     await publish_session_start(session_id, request.model, request.project_id)
 
-    # Decode reference image from base64 if provided (before try block so
-    # HTTPException isn't caught by the generic Exception handler below)
     ref_image_bytes: bytes | None = None
     if request.reference_image:
         try:
@@ -196,102 +281,12 @@ async def generate_image(
 
     try:
         model_chain = await _resolve_model_chain(db, request.model, request.agent_slug)
-        result = None
-        last_error: Exception | None = None
-
-        for idx, model_id in enumerate(model_chain):
-            try:
-                adapter = _get_image_adapter(model_id)
-                result = await adapter.generate_image(
-                    prompt=request.prompt,
-                    model=model_id,
-                    size=request.size,
-                    style=request.style,
-                    reference_image=ref_image_bytes,
-                    reference_mime_type=request.reference_mime_type,
-                )
-                if idx > 0:
-                    http_request.state.used_fallback = True
-                    http_request.state.fallback_model = model_id
-                    logger.info("Image generation fallback succeeded with model=%s", model_id)
-                break
-            except (RateLimitError, AuthenticationError, ProviderError, ValueError) as e:
-                last_error = e
-                logger.warning("Image generation failed for model=%s: %s", model_id, e)
-                continue
-
-        if result is None:
-            if last_error:
-                raise last_error
-            raise ProviderError("No image model could serve the request", provider="image", retriable=False)
-
-        # Update session status to completed
-        session.provider = result.provider
-        session.model = result.model
-        session.status = "completed"
-        await db.commit()
-
-        # Publish complete event (image gen doesn't have tokens in same way)
-        await publish_complete(session_id, input_tokens=0, output_tokens=0, cost=0.0)
-
-        # Encode image as base64
-        image_base64 = base64.b64encode(result.image_data).decode("utf-8")
-
-        return ImageGenerationResponse(
-            image_base64=image_base64,
-            mime_type=result.mime_type,
-            model=result.model,
-            provider=result.provider,
-            session_id=session_id,
-        )
-
-    except ValueError as e:
-        logger.error("Configuration error: %s", e)
-        session.status = "failed"
-        await db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Configuration error: {e}. Check provider credentials in Settings or environment.",
-        ) from e
-
-    except RateLimitError as e:
-        logger.warning("Rate limit for %s", e.provider)
-        session.status = "failed"
-        await db.commit()
-        retry_after = str(int(e.retry_after)) if e.retry_after else "60"
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded for {e.provider}. Wait {retry_after}s.",
-            headers={"Retry-After": retry_after},
-        ) from e
-
-    except AuthenticationError as e:
-        logger.error("Auth error for %s", e.provider)
-        session.status = "failed"
-        await db.commit()
-        raise HTTPException(
-            status_code=401,
-            detail=f"Authentication failed for {e.provider}. Check credentials in Settings or environment.",
-        ) from e
-
-    except ProviderError as e:
-        logger.error("Provider error: %s", e)
-        session.status = "failed"
-        await db.commit()
-        status_code = e.status_code or 500
-        detail = str(e)
-        if e.retriable:
-            detail += " This error may be transient; retry may succeed."
-        raise HTTPException(status_code=status_code, detail=detail) from e
+        result = await _try_generate_with_fallback(model_chain, request, ref_image_bytes, http_request)
+        return await _complete_image_generation(session, db, result, session_id)
 
     except HTTPException:
         raise
 
     except Exception as e:
-        logger.exception("Unexpected error in /generate-image: %s", e)
-        session.status = "failed"
-        await db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail="Internal server error. Check logs for details.",
-        ) from e
+        await _fail_and_raise(session, db, e)
+        raise  # unreachable; _fail_and_raise always raises
