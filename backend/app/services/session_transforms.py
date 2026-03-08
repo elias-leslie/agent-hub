@@ -16,6 +16,7 @@ from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.models.session import SessionEventType
 from app.services.agent_routing import get_provider_for_model
+from app.services.session_live_activity import build_live_activity_response
 from app.services.tools.project_env import detect_main_repo
 
 
@@ -248,6 +249,7 @@ def build_session_list_items(
             is_worktree=_is_worktree(working_dir),
             workstream_status=_optional_str(s.workstream_status),
             summary_oneliner=_optional_str(s.summary_oneliner),
+            live_activity=build_live_activity_response(s),
             message_count=msg_counts.get(s.id, 0),
             total_input_tokens=token_stats.get(s.id, {}).get("input", 0),
             total_output_tokens=token_stats.get(s.id, {}).get("output", 0),
@@ -302,6 +304,7 @@ def build_session_response(
         session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
+        live_activity=build_live_activity_response(session),
         messages=messages or [],
         context_usage=context_usage,
         agent_token_breakdown=agent_breakdown or [],

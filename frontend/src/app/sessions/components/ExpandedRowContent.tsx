@@ -38,6 +38,7 @@ export function ExpandedRowContent({
     expandedData.total_input_tokens || 0,
     expandedData.total_output_tokens || 0
   );
+  const live = expandedData.live_activity;
 
   return (
     <div className="flex flex-col bg-slate-900/95">
@@ -108,6 +109,22 @@ export function ExpandedRowContent({
           </span>
         </div>
 
+        {live && (
+          <div className="flex items-center gap-1.5 text-slate-400">
+            <span className="text-[10px] font-mono">
+              {live.health} · {live.phase}
+            </span>
+            {live.current_tool_name && (
+              <>
+                <span className="text-slate-600">·</span>
+                <span className="text-[10px] font-mono">
+                  {live.current_tool_name}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -126,6 +143,21 @@ export function ExpandedRowContent({
       </div>
 
       {/* Event Timeline */}
+      {live && (
+        <div className="px-5 py-3 border-b border-slate-700/50 text-[11px] font-mono text-slate-400 space-y-1">
+          {live.summary && <p>{live.summary}</p>}
+          {(live.last_validation_command || live.last_command || live.last_read_path || live.last_write_path || live.stall_reason) && (
+            <div className="space-y-1 break-all">
+              {live.stall_reason && <p>{live.stall_reason}</p>}
+              {live.last_validation_command && <p>validation: {live.last_validation_command}</p>}
+              {!live.last_validation_command && live.last_command && <p>command: {live.last_command}</p>}
+              {live.last_read_path && <p>read: {live.last_read_path}</p>}
+              {live.last_write_path && <p>write: {live.last_write_path}</p>}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="h-[400px]">
         <EventTimeline events={eventsData.events} />
       </div>

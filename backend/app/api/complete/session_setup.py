@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.services.events import publish_session_start
+from app.services.session_live_activity import mark_session_execution_start
 
 from .session_manager import get_or_create_session
 
@@ -61,6 +62,7 @@ async def _init_session(
         requested_provider=requested_provider,
         requested_model=requested_model,
     )
+    mark_session_execution_start(session)
     if is_new:
         await publish_session_start(session.id, model, project_id)
     return session, ctx, is_new

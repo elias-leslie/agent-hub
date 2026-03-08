@@ -155,6 +155,10 @@ class TestMemoryInjectEvent:
     @pytest.mark.asyncio
     async def test_store_event_syncs_sequencer_from_db_for_existing_session(self) -> None:
         db = MagicMock()
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
         sequencer = get_sequencer()
         sequencer._sessions.clear()
@@ -169,11 +173,16 @@ class TestMemoryInjectEvent:
 
         assert event.turn == 2
         assert event.sequence == 8
-        assert db.execute.await_count == 3
+        assert db.execute.await_count == 2
+        assert parent_session.provider_metadata["live_activity"]["phase"] == "finalizing"
 
     @pytest.mark.asyncio
     async def test_store_event_touches_parent_session_updated_at(self) -> None:
         db = MagicMock()
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 
@@ -185,11 +194,47 @@ class TestMemoryInjectEvent:
             content="hello",
         )
 
-        assert db.execute.await_count == 2
+        assert db.execute.await_count == 1
+        assert parent_session.updated_at is not None
+
+    @pytest.mark.asyncio
+    async def test_store_tool_events_update_live_activity_summary(self) -> None:
+        db = MagicMock()
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        db.get = AsyncMock(return_value=parent_session)
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        get_sequencer()._sessions.clear()
+
+        await store_event(
+            db=db,
+            session_id="sess-tool",
+            event_type="tool_use",
+            tool_name="Bash",
+            tool_input={"command": "dt pytest backend/tests/api/test_sessions.py -q"},
+        )
+        await store_event(
+            db=db,
+            session_id="sess-tool",
+            event_type="tool_result",
+            tool_name="Bash",
+            tool_output={"exit_code": 0, "is_error": False},
+        )
+
+        live_activity = parent_session.provider_metadata["live_activity"]
+        assert live_activity["phase"] == "waiting_for_model"
+        assert live_activity["last_validation_command"] == "dt pytest backend/tests/api/test_sessions.py -q"
+        assert live_activity["last_command_exit_code"] == 0
+        assert live_activity["tool_calls_count"] == 1
 
     @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
         db = MagicMock()
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
         get_sequencer()._sessions.clear()
 

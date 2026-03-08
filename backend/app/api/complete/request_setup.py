@@ -20,6 +20,7 @@ from app.services.memory import (
     track_loaded_batch,
 )
 from app.services.response_cache import get_response_cache
+from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
 
 if TYPE_CHECKING:
@@ -76,6 +77,7 @@ async def setup_session(
             requested_model=resolved_model,
         )
         session_id = session.id
+        mark_session_execution_start(session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
 

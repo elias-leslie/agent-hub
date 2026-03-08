@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete
+from app.services.session_live_activity import mark_session_terminal_state
 from app.services.token_counter import estimate_cost
 
 from .citation_tracker import track_citations
@@ -92,6 +93,13 @@ async def finalize_result(
     )
     if is_new_session or session.session_type in ("completion",):
         session.status = "completed"
+    mark_session_terminal_state(
+        session,
+        phase="completed",
+        status="completed",
+        summary="Execution completed",
+        termination_reason=None,
+    )
     await db.commit()
     return _build_success_result(
         content, model, provider, session_id, loaded_memory_uuids,

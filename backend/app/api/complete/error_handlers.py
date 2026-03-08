@@ -12,7 +12,9 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
+from app.models import Session
 from app.services.events import publish_error
+from app.services.session_live_activity import mark_session_terminal_state
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +35,16 @@ async def _store_error_event(
             db, session_id, error_type, error_message,
             agent_id=agent_id, model_used=model_used,
         )
+        session = await db.get(Session, session_id)
+        if session is not None:
+            session.status = "failed"
+            mark_session_terminal_state(
+                session,
+                phase="error",
+                status="error",
+                summary=f"{error_type}: {error_message[:120]}",
+                termination_reason=f"{error_type}: {error_message}",
+            )
         await db.commit()
     except Exception:
         logger.debug("Failed to store error event (non-critical)", exc_info=True)

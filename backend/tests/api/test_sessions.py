@@ -117,6 +117,18 @@ class TestGetSession:
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
+            "live_activity": {
+                "phase": "reading_file",
+                "status": "active",
+                "summary": "Reading frontend/src/app/persona/components/ActivityTimeline.tsx",
+                "last_event_at": "2026-01-06T10:00:00+00:00",
+                "last_model_activity_at": "2026-01-06T10:00:00+00:00",
+                "last_event_type": "tool_use",
+                "last_tool_name": "Read",
+                "files_touched": [],
+                "outstanding_tool_calls": 1,
+                "tool_calls_count": 1,
+            },
         }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
@@ -191,6 +203,8 @@ class TestGetSession:
         assert data["effective_model"] == "codex/gpt-5.4"
         assert data["fallback_used"] is True
         assert data["fallback_reason"] == "TimeoutError: primary timed out"
+        assert data["live_activity"]["phase"] == "reading_file"
+        assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
         # Verify context_usage is included
@@ -302,6 +316,17 @@ class TestListSessions:
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Waiting for model after Bash",
+                "last_event_at": "2026-01-06T10:00:00+00:00",
+                "last_model_activity_at": "2026-01-06T10:00:00+00:00",
+                "last_event_type": "tool_result",
+                "files_touched": ["frontend/src/app/persona/components/ActivityTimeline.tsx"],
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            },
         }
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
@@ -345,6 +370,8 @@ class TestListSessions:
         assert data["sessions"][0]["requested_model"] == CLAUDE_SONNET
         assert data["sessions"][0]["effective_model"] == "codex/gpt-5.4"
         assert data["sessions"][0]["fallback_used"] is True
+        assert data["sessions"][0]["live_activity"]["phase"] == "waiting_for_model"
+        assert data["sessions"][0]["live_activity"]["tool_calls_count"] == 2
         assert data["sessions"][0]["message_count"] == 5
         assert data["sessions"][0]["total_input_tokens"] == 100
         assert data["sessions"][0]["total_output_tokens"] == 200
