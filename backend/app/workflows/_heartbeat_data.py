@@ -8,14 +8,16 @@ import subprocess
 from datetime import UTC, datetime
 
 from app.services.ownership_lanes import (
+    STALE_WORKSTREAM_IDLE_MINUTES,
     collapse_active_workstream_rows,
+    idle_minutes_from_timestamps,
     infer_task_id,
 )
 
 logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
-_STALE_ACTIVE_MINUTES = 10
+_STALE_ACTIVE_MINUTES = STALE_WORKSTREAM_IDLE_MINUTES
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 
@@ -358,16 +360,11 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
             "created_at": row.created_at,
             "updated_at": row.updated_at,
             "age_minutes": int((now - row.created_at).total_seconds() / 60),
-            "idle_minutes": int(
-                (
-                    now
-                    - (
-                        row.workstream_updated_at
-                        or row.updated_at
-                        or row.created_at
-                    )
-                ).total_seconds()
-                / 60
+            "idle_minutes": idle_minutes_from_timestamps(
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+                workstream_updated_at=row.workstream_updated_at,
+                now=now,
             ),
         }
         for row in rows

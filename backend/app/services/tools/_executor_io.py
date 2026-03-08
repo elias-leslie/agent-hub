@@ -14,6 +14,11 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from app.services.ownership_lanes import (
+    STALE_WORKSTREAM_IDLE_MINUTES,
+    idle_minutes_from_timestamps,
+)
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -144,11 +149,25 @@ async def _mark_stale_active_sessions(
     *,
     workstream_status: str,
     note_prefix: str,
+    only_if_stale: bool = True,
 ) -> int:
     """Convert stale active sessions into completed sessions with lifecycle markers."""
     from app.db import async_session
 
-    stale_active = [s for s in sessions if s.status == "active"]
+    stale_active = [
+        s
+        for s in sessions
+        if s.status == "active"
+        and (
+            not only_if_stale
+            or idle_minutes_from_timestamps(
+                created_at=s.created_at,
+                updated_at=getattr(s, "updated_at", None),
+                workstream_updated_at=getattr(s, "workstream_updated_at", None),
+            )
+            >= STALE_WORKSTREAM_IDLE_MINUTES
+        )
+    ]
     if not stale_active:
         return 0
 
@@ -156,9 +175,15 @@ async def _mark_stale_active_sessions(
     async with async_session() as db:
         for session in stale_active:
             branch = getattr(session, "current_branch", None) or "unknown branch"
+            idle_minutes = idle_minutes_from_timestamps(
+                created_at=session.created_at,
+                updated_at=getattr(session, "updated_at", None),
+                workstream_updated_at=getattr(session, "workstream_updated_at", None),
+                now=now,
+            )
             session.status = "completed"
             session.workstream_status = workstream_status
-            session.workstream_note = f"{note_prefix} ({branch})"
+            session.workstream_note = f"{note_prefix} after {idle_minutes}m inactivity ({branch})"
             session.workstream_updated_at = now
             db.add(session)
         await db.commit()
@@ -210,12 +235,21 @@ async def _reconcile_task_lane(
 
     active_sessions = [s for s in sessions if s.status == "active"]
     if active_sessions:
+        retired = await _mark_stale_active_sessions(
+            sessions,
+            workstream_status="superseded",
+            note_prefix="Marked stale active during reconcile",
+        )
+        if retired:
+            sessions = await _load_task_lane_sessions(task_id)
+            active_sessions = [s for s in sessions if s.status == "active"]
         task_status = await _get_task_status(bash_fn, task_id, project_id)
-        if _task_is_terminal(task_status):
+        if active_sessions and _task_is_terminal(task_status):
             retired = await _mark_stale_active_sessions(
                 sessions,
                 workstream_status="superseded",
                 note_prefix=f"Marked stale active during reconcile because task is {task_status}",
+                only_if_stale=False,
             )
             if retired:
                 sessions = await _load_task_lane_sessions(task_id)
@@ -274,12 +308,21 @@ async def _retire_task_lane(
 
     active_sessions = [s for s in sessions if s.status == "active"]
     if active_sessions:
+        retired = await _mark_stale_active_sessions(
+            sessions,
+            workstream_status="retired",
+            note_prefix="Retired stale active lane during retire_lane",
+        )
+        if retired:
+            sessions = await _load_task_lane_sessions(task_id)
+            active_sessions = [s for s in sessions if s.status == "active"]
         task_status = await _get_task_status(bash_fn, task_id, project_id)
-        if _task_is_terminal(task_status):
+        if active_sessions and _task_is_terminal(task_status):
             retired = await _mark_stale_active_sessions(
                 sessions,
                 workstream_status="retired",
                 note_prefix=f"Retired stale active lane because task is {task_status}",
+                only_if_stale=False,
             )
             if retired:
                 sessions = await _load_task_lane_sessions(task_id)
