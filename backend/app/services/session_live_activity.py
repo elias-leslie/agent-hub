@@ -20,6 +20,7 @@ _ACTIVE_PHASES = {
 }
 _QUIET_AFTER_SECONDS = 60
 _STALL_AFTER_SECONDS = 180
+_POST_TOOL_STALL_AFTER_SECONDS = 120
 _TOUCHED_FILES_LIMIT = 10
 
 
@@ -286,10 +287,22 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
 
     if session.status == "active" and phase in _ACTIVE_PHASES:
         health = "active"
-        if quiet_for_seconds is not None and quiet_for_seconds >= _STALL_AFTER_SECONDS:
+        post_tool_wait = (
+            phase == "waiting_for_model"
+            and response.get("last_event_type") == "tool_result"
+            and int(response.get("outstanding_tool_calls") or 0) == 0
+        )
+        stall_after_seconds = (
+            _POST_TOOL_STALL_AFTER_SECONDS if post_tool_wait else _STALL_AFTER_SECONDS
+        )
+        if quiet_for_seconds is not None and quiet_for_seconds >= stall_after_seconds:
             health = "stalled"
             stalled = True
-            stall_reason = f"No model activity for {quiet_for_seconds}s while phase={phase}"
+            stall_reason = (
+                f"No model activity for {quiet_for_seconds}s after tool_result"
+                if post_tool_wait
+                else f"No model activity for {quiet_for_seconds}s while phase={phase}"
+            )
         elif quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
             health = "quiet"
     elif status == "error":

@@ -80,35 +80,7 @@ class DirectToolHandler(ToolHandler):
             id=tool_call.id, name=tool_name, input=tool_call.input,
             caller=tool_call.caller, original_id=tool_call.original_id,
         )
-
-        # Fail-closed: any exception during permission checking denies access.
-        try:
-            decision = await self.check_permission(normalized_call)
-        except Exception as e:
-            logger.error("Permission check error for tool '%s': %s — denying", tool_name, e)
-            decision = ToolDecision.DENY
-
-        if decision == ToolDecision.DENY:
-            duration_ms = int((time.monotonic() - start) * 1000)
-            return ToolResult(
-                tool_use_id=tool_call.id,
-                content=f"Error: Tool '{tool_name}' denied by permission policy",
-                is_error=True,
-                duration_ms=duration_ms,
-            )
-
-        try:
-            output = await self._executor.dispatch(tool_name, tool_call.input)
-        except Exception as e:
-            output = f"Tool execution error: {e}"
-
-        duration_ms = int((time.monotonic() - start) * 1000)
-        return ToolResult(
-            tool_use_id=tool_call.id,
-            content=output,
-            is_error=output.startswith("Error:") or output.startswith("Unknown tool:"),
-            duration_ms=duration_ms,
-        )
+        return await self._permitted_dispatch(tool_call.id, normalized_call, tool_name, start)
 
     async def _execute_catalog_tool(self, tool_call: ToolCall, start: float) -> ToolResult:
         """Execute a discovered catalog tool without bypassing its permission checks."""
@@ -126,40 +98,52 @@ class DirectToolHandler(ToolHandler):
         )
 
         if not self._executor.has_catalog_tool(target_name):
-            duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(
                 tool_use_id=tool_call.id,
                 content=f"Error: Unknown catalog tool '{target_name}'",
                 is_error=True,
-                duration_ms=duration_ms,
+                duration_ms=int((time.monotonic() - start) * 1000),
             )
 
+        return await self._permitted_dispatch(tool_call.id, nested_call, target_name, start)
+
+    async def _permitted_dispatch(
+        self,
+        tool_use_id: str,
+        call: ToolCall,
+        tool_name: str,
+        start: float,
+    ) -> ToolResult:
+        """Check permission then dispatch, returning a ToolResult.
+
+        Fail-closed: permission exceptions and dispatch exceptions both surface
+        as error ToolResults rather than propagating to the caller.
+        """
+        # Fail-closed: any exception during permission checking denies access.
         try:
-            decision = await self.check_permission(nested_call)
+            decision = await self.check_permission(call)
         except Exception as e:
-            logger.error("Permission check error for catalog tool '%s': %s — denying", target_name, e)
+            logger.error("Permission check error for tool '%s': %s — denying", tool_name, e)
             decision = ToolDecision.DENY
 
         if decision == ToolDecision.DENY:
-            duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(
-                tool_use_id=tool_call.id,
-                content=f"Error: Tool '{target_name}' denied by permission policy",
+                tool_use_id=tool_use_id,
+                content=f"Error: Tool '{tool_name}' denied by permission policy",
                 is_error=True,
-                duration_ms=duration_ms,
+                duration_ms=int((time.monotonic() - start) * 1000),
             )
 
         try:
-            output = await self._executor.dispatch(target_name, nested_call.input)
+            output = await self._executor.dispatch(tool_name, call.input)
         except Exception as e:
             output = f"Tool execution error: {e}"
 
-        duration_ms = int((time.monotonic() - start) * 1000)
         return ToolResult(
-            tool_use_id=tool_call.id,
+            tool_use_id=tool_use_id,
             content=output,
             is_error=output.startswith("Error:") or output.startswith("Unknown tool:"),
-            duration_ms=duration_ms,
+            duration_ms=int((time.monotonic() - start) * 1000),
         )
 
 
@@ -211,6 +195,38 @@ def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
     return _hook
 
 
+def _collect_hooks(
+    working_dir: str | None,
+    permission_config: dict[str, str | list[str]] | None,
+    project_id: str | None,
+) -> list[PreToolUseHook]:
+    """Build the ordered list of pre-hooks for a new DirectToolHandler.
+
+    Order: project permission → cross-project boundary → worktree boundary →
+    config-based permission. First DENY wins during execution.
+    """
+    hooks: list[PreToolUseHook] = []
+
+    if project_id:
+        hooks.append(_create_project_permission_hook(project_id))
+        hooks.append(_create_cross_project_permission_hook(project_id))
+
+    if working_dir:
+        from app.services.tools._worktree_boundary_hook import create_worktree_boundary_hook
+
+        hooks.append(create_worktree_boundary_hook(working_dir))
+
+    if permission_config:
+        from app.services.tools.permissions import PermissionChecker, PermissionConfig
+
+        config = PermissionConfig.from_dict(permission_config)
+        checker = PermissionChecker(config)
+        hooks.append(checker.create_hook())
+        logger.info(f"Created tool handler with permission mode: {config.mode.value}")
+
+    return hooks
+
+
 def create_direct_handler(
     working_dir: str | None = None,
     permission_config: dict[str, str | list[str]] | None = None,
@@ -231,24 +247,7 @@ def create_direct_handler(
     Returns:
         DirectToolHandler configured for the directory with permission hook
     """
-    hooks: list[PreToolUseHook] = []
-
-    if project_id:
-        hooks.append(_create_project_permission_hook(project_id))
-        hooks.append(_create_cross_project_permission_hook(project_id))
-
-    if working_dir:
-        from app.services.tools._worktree_boundary_hook import create_worktree_boundary_hook
-
-        hooks.append(create_worktree_boundary_hook(working_dir))
-
-    if permission_config:
-        from app.services.tools.permissions import PermissionChecker, PermissionConfig
-
-        config = PermissionConfig.from_dict(permission_config)
-        checker = PermissionChecker(config)
-        hooks.append(checker.create_hook())
-        logger.info(f"Created tool handler with permission mode: {config.mode.value}")
+    hooks = _collect_hooks(working_dir, permission_config, project_id)
 
     pre_hook: PreToolUseHook | None = None
     if len(hooks) == 1:
