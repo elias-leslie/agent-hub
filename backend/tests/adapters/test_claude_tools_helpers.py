@@ -13,7 +13,7 @@ class ResultMessage:
 
 
 @pytest.mark.asyncio
-async def test_stream_sdk_messages_stops_after_result_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_stream_sdk_messages_drains_after_result_message(monkeypatch: pytest.MonkeyPatch) -> None:
     yielded = []
 
     async def fake_query(*, prompt, options):
@@ -32,4 +32,4 @@ async def test_stream_sdk_messages_stops_after_result_message(monkeypatch: pytes
         seen.append((type(message).__name__, session_id))
 
     assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
-    assert yielded == ["assistant", "result"]
+    assert yielded == ["assistant", "result", "after-result"]
