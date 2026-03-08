@@ -248,6 +248,8 @@ class AsyncAgentHubClient(
         model: str = "gemini-3-pro-image-preview",
         size: str = "1024x1024",
         style: str | None = None,
+        reference_image: str | None = None,
+        reference_mime_type: str | None = None,
     ) -> ImageGenerationResponse:
         """Generate an image from a text prompt asynchronously."""
         client = await self._get_client()
@@ -261,6 +263,8 @@ class AsyncAgentHubClient(
             model=model,
             size=size,
             style=style,
+            reference_image=reference_image,
+            reference_mime_type=reference_mime_type,
         )
 
     def session(

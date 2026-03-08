@@ -92,6 +92,16 @@ class MinimaxImageAdapter(ImageAdapter):
         key = resolve_api_key("minimax", None)
         if not key:
             raise AuthenticationError("minimax")
+        if key.startswith("sk-cp-"):
+            raise ProviderError(
+                (
+                    "MiniMax coding-plan API keys are not valid for image_generation. "
+                    "Use a pay-as-you-go MiniMax API key from Account > API Keys."
+                ),
+                provider="minimax",
+                status_code=400,
+                retriable=False,
+            )
         return key
 
     async def generate_image(

@@ -17,6 +17,8 @@ def generate_image_sync(
     model: str = "gemini-3-pro-image-preview",
     size: str = "1024x1024",
     style: str | None = None,
+    reference_image: str | None = None,
+    reference_mime_type: str | None = None,
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt (sync).
 
@@ -43,6 +45,10 @@ def generate_image_sync(
         payload["purpose"] = purpose
     if style:
         payload["style"] = style
+    if reference_image:
+        payload["reference_image"] = reference_image
+    if reference_mime_type:
+        payload["reference_mime_type"] = reference_mime_type
 
     response = client.post("/api/generate-image", json=payload, headers=headers)
 
@@ -61,6 +67,8 @@ async def generate_image_async(
     model: str = "gemini-3-pro-image-preview",
     size: str = "1024x1024",
     style: str | None = None,
+    reference_image: str | None = None,
+    reference_mime_type: str | None = None,
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt (async).
 
@@ -87,6 +95,10 @@ async def generate_image_async(
         payload["purpose"] = purpose
     if style:
         payload["style"] = style
+    if reference_image:
+        payload["reference_image"] = reference_image
+    if reference_mime_type:
+        payload["reference_mime_type"] = reference_mime_type
 
     response = await client.post("/api/generate-image", json=payload, headers=headers)
 
