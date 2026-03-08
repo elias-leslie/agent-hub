@@ -93,6 +93,7 @@ async def _stream_sdk_messages(
     from claude_agent_sdk import query
 
     session_id: str | None = None
+    done_emitted = False
     async with _sdk_semaphore:
         try:
             async for message in query(prompt=prompt, options=options):
@@ -100,9 +101,13 @@ async def _stream_sdk_messages(
                     session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
                     if session_id:
                         logger.info(f"Claude SDK session ID: {session_id}")
-                yield (message, session_id)
                 if type(message).__name__ == "ResultMessage":
-                    return
+                    yield (message, session_id)
+                    done_emitted = True
+                    continue
+                if done_emitted:
+                    continue
+                yield (message, session_id)
         except Exception as e:
             logger.error(f"Claude tool error: {e}")
             raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
