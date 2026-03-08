@@ -33,6 +33,8 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=completed_ready_for_closure` means reconcile and close the task lane instead of redispatching into it
 - `state=stale_active` means verify whether the session is truly live before trusting it
 - `state=stale_running_task` means the queue still says `running` but no live lane backs it; reconcile it immediately
+- If the target project shows any `state=stale_running_task`, make that your first execution action before reviewing duplicate specialists or considering new dispatches.
+- Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task reconciliation when the coding lane itself is gone.
 - `state=mixed` means split, promote, or clean up the lane before adding more implementation work
 - `state=reconciled` means an authoritative lane is already recorded; do not reopen old branches without new evidence
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
