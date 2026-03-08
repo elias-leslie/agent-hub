@@ -6,27 +6,18 @@ Handles agent consultation, dispatch, steering, listing, and cancellation.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models import Session as DBSession
 
 logger = logging.getLogger(__name__)
 
 _CODING_TASK_KEYWORDS = (
-    "code",
-    "coding",
-    "bug",
-    "fix",
-    "refactor",
-    "implement",
-    "test",
-    "build",
-    "lint",
-    "compile",
-    "typescript",
-    "python",
-    "sql",
-    "frontend",
-    "backend",
-    "api",
-    "file",
+    "code", "coding", "bug", "fix", "refactor", "implement", "test",
+    "build", "lint", "compile", "typescript", "python", "sql",
+    "frontend", "backend", "api", "file",
 )
 
 
@@ -46,8 +37,65 @@ def _provider_model_label(provider: str, model: str) -> str:
 
 def _looks_like_coding_task(task: str) -> bool:
     """Heuristic to detect tasks likely requiring code modification."""
-    task_lc = task.lower()
-    return any(keyword in task_lc for keyword in _CODING_TASK_KEYWORDS)
+    return any(keyword in task.lower() for keyword in _CODING_TASK_KEYWORDS)
+
+
+def _dispatch_result_text(agent_slug: str, is_coding_agent: bool, task: str) -> str:
+    warning = (
+        "Warning: task looks code-heavy but selected agent is marked non-coding. "
+        "Proceeding as requested.\n"
+        if _looks_like_coding_task(task) and not is_coding_agent
+        else ""
+    )
+    kind = "coding" if is_coding_agent else "general"
+    return (
+        f"{warning}Dispatched {agent_slug} ({kind}). "
+        f"Results will appear in your next heartbeat context, "
+        f"or use query_sessions(agent_slug='{agent_slug}') to check status."
+    )
+
+
+def _build_consultation_messages(
+    system_content: str | None, prompt: str
+) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    if system_content:
+        messages.append({"role": "system", "content": system_content})
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+
+def _empty_sessions_msg(
+    hours_back: int,
+    agent_slug: str | None,
+    status: str | None,
+    parent_session_id: str | None,
+) -> str:
+    parts = [
+        *([f"agent={agent_slug}"] if agent_slug else []),
+        *([f"status={status}"] if status else []),
+        *([f"parent={parent_session_id}"] if parent_session_id else []),
+    ]
+    filter_str = f" ({', '.join(parts)})" if parts else ""
+    return f"(No sessions found in last {hours_back}h{filter_str})"
+
+
+def _format_session_line(s: DBSession, now: datetime) -> str:
+    ago = int((now - s.created_at).total_seconds() / 60)
+    time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
+    summary = f" — {s.summary_oneliner}" if s.summary_oneliner else ""
+    lane_parts = [
+        *([f"task={s.external_id}"] if s.external_id else []),
+        *([f"branch={s.current_branch}"] if getattr(s, "current_branch", None) else []),
+        *([f"lane={s.workstream_status}"] if getattr(s, "workstream_status", None) else []),
+        *([f"cwd={cwd}"] if (cwd := _session_working_dir(s)) else []),
+    ]
+    lane_suffix = f" | {' | '.join(lane_parts)}" if lane_parts else ""
+    return (
+        f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
+        f"{_provider_model_label(s.provider, s.model)}{lane_suffix} | "
+        f"status={s.status} | {time_label}{summary}"
+    )
 
 
 async def dispatch_agent(
@@ -73,8 +121,6 @@ async def dispatch_agent(
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
-        is_coding_agent = bool(resolved.agent.is_coding_agent)
-        coding_task = _looks_like_coding_task(task)
 
         dispatch_wake(
             agent_slug=agent_slug,
@@ -88,20 +134,7 @@ async def dispatch_agent(
             max_turns=max_turns,
             parent_session_id=parent_session_id,
         )
-
-        warning = ""
-        if coding_task and not is_coding_agent:
-            warning = (
-                "Warning: task looks code-heavy but selected agent is marked non-coding. "
-                "Proceeding as requested.\n"
-            )
-
-        return (
-            f"{warning}Dispatched {agent_slug} "
-            f"({'coding' if is_coding_agent else 'general'}). "
-            f"Results will appear in your next heartbeat "
-            f"context, or use query_sessions(agent_slug='{agent_slug}') to check status."
-        )
+        return _dispatch_result_text(agent_slug, bool(resolved.agent.is_coding_agent), task)
     except Exception as e:
         logger.exception(f"dispatch_agent failed for '{agent_slug}'")
         return f"Error dispatching agent '{agent_slug}': {e}"
@@ -117,9 +150,7 @@ async def consult_agent(
     if not project_id:
         return "Error: project_id not configured, cannot consult agent"
 
-    prompt = question
-    if context:
-        prompt = f"Context:\n{context}\n\nQuestion:\n{question}"
+    prompt = f"Context:\n{context}\n\nQuestion:\n{question}" if context else question
 
     try:
         from app.api.complete.core import complete_internal
@@ -128,16 +159,11 @@ async def consult_agent(
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
-
             mandate = await inject_agent_mandates(
                 resolved.agent, db, prompt_mode="minimal",
                 project_id=project_id,
             )
-            messages: list[dict[str, str]] = []
-            if mandate.system_content:
-                messages.append({"role": "system", "content": mandate.system_content})
-            messages.append({"role": "user", "content": prompt})
-
+            messages = _build_consultation_messages(mandate.system_content, prompt)
             result = await complete_internal(
                 messages=messages,
                 model=resolved.model,
@@ -152,11 +178,8 @@ async def consult_agent(
                 max_turns=1,
                 execute_tools=False,
             )
-            session_id = result.session_id if hasattr(result, "session_id") else None
-            content = result.content
-            if session_id:
-                return f"[session:{session_id}] {content}"
-            return content
+        session_id = result.session_id if hasattr(result, "session_id") else None
+        return f"[session:{session_id}] {result.content}" if session_id else result.content
     except Exception as e:
         logger.exception(f"consult_agent failed for '{agent_slug}'")
         return f"Error consulting agent '{agent_slug}': {e}"
@@ -200,8 +223,6 @@ async def list_consultations(
 ) -> str:
     """List recent consultation sessions."""
     try:
-        from datetime import UTC, datetime, timedelta
-
         from sqlalchemy import select
 
         from app.db import async_session
@@ -221,21 +242,17 @@ async def list_consultations(
             )
             if agent_slug:
                 query = query.where(DBSession.agent_slug == agent_slug)
-
             result = await db.execute(query)
             sessions = result.scalars().all()
 
         if not sessions:
             return f"(No consultations in the last {hours_back} hours)"
 
-        lines = []
-        for s in sessions:
-            created = s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "?"
-            lines.append(
-                f"- {s.agent_slug or '?'} | session={s.id} | "
-                f"status={s.status} | created={created}"
-            )
-
+        lines = [
+            f"- {s.agent_slug or '?'} | session={s.id} | "
+            f"status={s.status} | created={s.created_at.strftime('%Y-%m-%d %H:%M') if s.created_at else '?'}"
+            for s in sessions
+        ]
         return "\n".join(lines)
     except Exception as e:
         logger.exception("list_consultations failed")
@@ -251,19 +268,13 @@ async def query_sessions(
 ) -> str:
     """Query agent sessions for observability — check progress, find stuck agents."""
     try:
-        from datetime import UTC, datetime, timedelta
-
         from sqlalchemy import and_, select
 
         from app.db import async_session
         from app.models import Session as DBSession
 
         cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
-        conditions = [
-            DBSession.created_at >= cutoff,
-            DBSession.agent_slug.is_not(None),
-        ]
-
+        conditions = [DBSession.created_at >= cutoff, DBSession.agent_slug.is_not(None)]
         if agent_slug:
             conditions.append(DBSession.agent_slug == agent_slug)
         if status:
@@ -272,50 +283,19 @@ async def query_sessions(
             conditions.append(DBSession.parent_session_id == parent_session_id)
 
         async with async_session() as db:
-            query = (
+            result = await db.execute(
                 select(DBSession)
                 .where(and_(*conditions))
                 .order_by(DBSession.created_at.desc())
                 .limit(limit)
             )
-            result = await db.execute(query)
             sessions = result.scalars().all()
 
         if not sessions:
-            filters = []
-            if agent_slug:
-                filters.append(f"agent={agent_slug}")
-            if status:
-                filters.append(f"status={status}")
-            if parent_session_id:
-                filters.append(f"parent={parent_session_id}")
-            filter_str = f" ({', '.join(filters)})" if filters else ""
-            return f"(No sessions found in last {hours_back}h{filter_str})"
+            return _empty_sessions_msg(hours_back, agent_slug, status, parent_session_id)
 
         now = datetime.now(UTC)
-        lines = []
-        for s in sessions:
-            ago = int((now - s.created_at).total_seconds() / 60)
-            time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
-            summary = ""
-            if s.summary_oneliner:
-                summary = f" — {s.summary_oneliner}"
-            lane_parts: list[str] = []
-            if s.external_id:
-                lane_parts.append(f"task={s.external_id}")
-            if getattr(s, "current_branch", None):
-                lane_parts.append(f"branch={s.current_branch}")
-            if getattr(s, "workstream_status", None):
-                lane_parts.append(f"lane={s.workstream_status}")
-            if cwd := _session_working_dir(s):
-                lane_parts.append(f"cwd={cwd}")
-            lane_suffix = f" | {' | '.join(lane_parts)}" if lane_parts else ""
-            lines.append(
-                f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
-                f"{_provider_model_label(s.provider, s.model)}{lane_suffix} | "
-                f"status={s.status} | {time_label}{summary}"
-            )
-        return "\n".join(lines)
+        return "\n".join(_format_session_line(s, now) for s in sessions)
     except Exception as e:
         logger.exception("query_sessions failed")
         return f"Error querying sessions: {e}"
@@ -336,10 +316,8 @@ async def cancel_consultation(session_id: str) -> str:
             session = result.scalar_one_or_none()
             if not session:
                 return f"Error: Session '{session_id}' not found."
-
             if session.request_source != "consultation":
                 return f"Error: Session '{session_id}' is not a consultation."
-
             session.status = "completed"
             await db.commit()
             return f"Consultation session {session_id} closed."
