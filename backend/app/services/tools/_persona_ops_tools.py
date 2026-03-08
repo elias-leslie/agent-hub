@@ -22,6 +22,8 @@ MANAGE_TASKS_TOOL = Tool(
                     "get_context",
                     "create",
                     "dispatch",
+                    "cleanup_status",
+                    "cleanup_worktrees",
                     "reconcile",
                     "retire_lane",
                     "done",
@@ -58,7 +60,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "project_id": {
                 "type": "string",
-                "description": "Project ID for routing (e.g., summitflow, agent-hub)",
+                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status and cleanup_worktrees",
             },
             "objective": {
                 "type": "string",

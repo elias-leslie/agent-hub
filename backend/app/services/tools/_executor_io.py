@@ -492,6 +492,26 @@ async def _handle_dispatch(
     return warning + result
 
 
+async def _handle_cleanup_status(
+    bash_fn: Callable[..., Awaitable[str]],
+    project_id: str | None,
+) -> str:
+    """Return canonical cleanup status for a concrete project."""
+    if not project_id:
+        return 'Error: project_id required for cleanup_status'
+    return await bash_fn(_st_cmd("cleanup status", project_id))
+
+
+async def _handle_cleanup_worktrees(
+    bash_fn: Callable[..., Awaitable[str]],
+    project_id: str | None,
+) -> str:
+    """Safely clean worktrees for a concrete project."""
+    if not project_id:
+        return 'Error: project_id required for cleanup_worktrees'
+    return await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
+
+
 async def manage_tasks(
     bash_fn: Callable[..., Awaitable[str]],
     action: str,
@@ -531,6 +551,12 @@ async def manage_tasks(
             return "Error: task_id required for dispatch"
         return await _handle_dispatch(bash_fn, task_id, project_id)
 
+    if action == "cleanup_status":
+        return await _handle_cleanup_status(bash_fn, project_id)
+
+    if action == "cleanup_worktrees":
+        return await _handle_cleanup_worktrees(bash_fn, project_id)
+
     if action == "reconcile":
         if not task_id:
             return "Error: task_id required for reconcile"
@@ -558,5 +584,6 @@ async def manage_tasks(
 
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/reconcile/retire_lane/done/abandon/cancel."
+        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/"
+        "reconcile/retire_lane/done/abandon/cancel."
     )
