@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 
 class TestHeartbeatStatus:
     """Tests for GET /api/heartbeat/status."""
@@ -11,7 +13,7 @@ class TestHeartbeatStatus:
     def test_heartbeat_status_when_idle_returns_not_running(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -43,7 +45,7 @@ class TestHeartbeatStatus:
     def test_heartbeat_status_when_running_returns_running(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 45},
             ),
@@ -73,7 +75,7 @@ class TestHeartbeatStatus:
     def test_heartbeat_status_when_never_run_returns_null_last_run(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -103,7 +105,7 @@ class TestHeartbeatStatus:
     def test_heartbeat_status_includes_runtime_metadata(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -143,6 +145,31 @@ class TestHeartbeatStatus:
         assert data["runtime"]["heartbeat_supported"] is True
         assert data["runtime"]["supports_tools"] is True
 
+    @pytest.mark.asyncio
+    async def test_get_effective_running_info_clears_stale_lock(self) -> None:
+        with (
+            patch(
+                "app.api.heartbeat.get_heartbeat_running_info",
+                new_callable=AsyncMock,
+                return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 400},
+            ),
+            patch(
+                "app.api.heartbeat._has_live_heartbeat_session",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch(
+                "app.api.heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_clear,
+        ):
+            from app.api.heartbeat import _get_effective_running_info
+
+            result = await _get_effective_running_info()
+
+        assert result is None
+        mock_clear.assert_awaited_once()
+
 
 class TestHeartbeatTrigger:
     """Tests for POST /api/heartbeat/trigger."""
@@ -150,7 +177,7 @@ class TestHeartbeatTrigger:
     def test_heartbeat_trigger_when_idle_dispatches_task(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -178,7 +205,7 @@ class TestHeartbeatTrigger:
     def test_heartbeat_trigger_with_target_project_dispatches_scoped_run(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -213,7 +240,7 @@ class TestHeartbeatTrigger:
 
     def test_heartbeat_trigger_when_running_returns_409(self, api_client):
         with patch(
-            "app.api.heartbeat.get_heartbeat_running_info",
+            "app.api.heartbeat._get_effective_running_info",
             new_callable=AsyncMock,
             return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 30},
         ):
@@ -225,7 +252,7 @@ class TestHeartbeatTrigger:
     def test_heartbeat_trigger_when_not_onboarded_returns_400(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -243,7 +270,7 @@ class TestHeartbeatTrigger:
     def test_heartbeat_trigger_when_permission_denied_returns_403(self, api_client):
         with (
             patch(
-                "app.api.heartbeat.get_heartbeat_running_info",
+                "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
                 return_value=None,
             ),

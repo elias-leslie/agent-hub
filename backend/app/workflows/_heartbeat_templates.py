@@ -57,6 +57,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 ## Anti-Repeat Recovery
 - Treat recent completed sessions as evidence, not just history.
 - Treat already-active specialist sessions as current work, not fresh opportunities to redispatch the same lane.
+- If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`) or active specialists already attached to that task, do not queue that task again in the same heartbeat; monitor, reconcile, or complement it instead.
 - If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
 - Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
 - Treat follow-up branches and worktrees as single workstreams, not shared scratchpads.
