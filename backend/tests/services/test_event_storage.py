@@ -9,6 +9,7 @@ import pytest
 from app.services.event_storage import (
     EventSequencer,
     _extract_tool_result_content,
+    get_sequencer,
     store_event,
     store_memory_inject_event,
 )
@@ -152,9 +153,29 @@ class TestExtractToolResultContent:
 
 class TestMemoryInjectEvent:
     @pytest.mark.asyncio
+    async def test_store_event_syncs_sequencer_from_db_for_existing_session(self) -> None:
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
+        sequencer = get_sequencer()
+        sequencer._sessions.clear()
+
+        event = await store_event(
+            db=db,
+            session_id="sess-existing",
+            event_type="assistant_message",
+            role="assistant",
+            content="hello",
+        )
+
+        assert event.turn == 2
+        assert event.sequence == 8
+        assert db.execute.await_count == 3
+
+    @pytest.mark.asyncio
     async def test_store_event_touches_parent_session_updated_at(self) -> None:
         db = MagicMock()
-        db.execute = AsyncMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        get_sequencer()._sessions.clear()
 
         await store_event(
             db=db,
@@ -164,12 +185,13 @@ class TestMemoryInjectEvent:
             content="hello",
         )
 
-        assert db.execute.await_count == 1
+        assert db.execute.await_count == 2
 
     @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
         db = MagicMock()
-        db.execute = AsyncMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        get_sequencer()._sessions.clear()
 
         event = await store_memory_inject_event(
             db=db,

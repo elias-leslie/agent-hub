@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from .tool_models import AgentProgress
+
+logger = logging.getLogger(__name__)
 
 
 class ProgressTracker:
@@ -14,6 +17,20 @@ class ProgressTracker:
     def __init__(self, callback: Callable[[AgentProgress], Any] | None = None):
         self.callback = callback
         self.log: list[AgentProgress] = []
+
+    async def _emit_callback(self, progress: AgentProgress) -> None:
+        """Report progress without letting observability failures abort execution."""
+        if not self.callback:
+            return
+        try:
+            await self.callback(progress)
+        except Exception:
+            logger.warning(
+                "Progress callback failed for turn=%s status=%s; continuing execution",
+                progress.turn,
+                progress.status,
+                exc_info=True,
+            )
 
     async def report_tool_use(
         self,
@@ -29,8 +46,7 @@ class ProgressTracker:
             tool_calls=[{"name": tool_name, "input": tool_input}],
         )
         self.log.append(progress)
-        if self.callback:
-            await self.callback(progress)
+        await self._emit_callback(progress)
 
     async def report_complete(
         self,
@@ -44,5 +60,4 @@ class ProgressTracker:
             message=f"Completed with {tool_calls_count} tool calls",
         )
         self.log.append(progress)
-        if self.callback:
-            await self.callback(progress)
+        await self._emit_callback(progress)
