@@ -755,6 +755,54 @@ class TestManageTasks:
         assert "Dispatched" in result
 
     @pytest.mark.asyncio
+    async def test_cleanup_status_requires_project_id(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(mock_bash, action="cleanup_status")
+
+        assert "project_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_status(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="CLEANUP[current]:repos=1 needs_cleanup=1")
+        result = await manage_tasks(
+            mock_bash,
+            action="cleanup_status",
+            project_id="agent-hub",
+        )
+
+        assert "CLEANUP[current]" in result
+        mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
+
+    @pytest.mark.asyncio
+    async def test_cleanup_worktrees_requires_project_id(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(mock_bash, action="cleanup_worktrees")
+
+        assert "project_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_worktrees(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Cleaned 2, skipped 1, errors 0")
+        result = await manage_tasks(
+            mock_bash,
+            action="cleanup_worktrees",
+            project_id="agent-hub",
+        )
+
+        assert "Cleaned 2" in result
+        mock_bash.assert_awaited_once_with("st -P agent-hub cleanup worktrees --auto")
+
+    @pytest.mark.asyncio
     async def test_done(self):
         from app.services.tools._executor_io import manage_tasks
 
