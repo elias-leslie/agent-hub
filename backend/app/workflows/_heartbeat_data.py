@@ -15,7 +15,7 @@ from app.services.ownership_lanes import (
 logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
-_STALE_ACTIVE_MINUTES = 4 * 60
+_STALE_ACTIVE_MINUTES = 10
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 
@@ -358,6 +358,17 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
             "created_at": row.created_at,
             "updated_at": row.updated_at,
             "age_minutes": int((now - row.created_at).total_seconds() / 60),
+            "idle_minutes": int(
+                (
+                    now
+                    - (
+                        row.workstream_updated_at
+                        or row.updated_at
+                        or row.created_at
+                    )
+                ).total_seconds()
+                / 60
+            ),
         }
         for row in rows
     ]
@@ -389,10 +400,11 @@ def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
     if len(active_rows) > 1 and len(branches) > 1:
         return "mixed"
     if active_rows:
-        freshest_active_age = min(
-            int(row.get("age_minutes", _STALE_ACTIVE_MINUTES + 1)) for row in active_rows
+        freshest_active_idle = min(
+            int(row.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1))
+            for row in active_rows
         )
-        if freshest_active_age >= _STALE_ACTIVE_MINUTES:
+        if freshest_active_idle >= _STALE_ACTIVE_MINUTES:
             return "stale_active"
         return "active"
     if completed_rows:
@@ -453,6 +465,11 @@ def _format_workstream_lane(
     completed_count = sum(
         1 for row in lane_rows if row.get("status") == "completed"
     )
+    idle_minutes = min(
+        int(row.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1))
+        for row in lane_rows
+        if row.get("status") == "active"
+    ) if active_count else None
     workstream_statuses = {
         str(row["workstream_status"])
         for row in lane_rows
@@ -475,6 +492,8 @@ def _format_workstream_lane(
         f"state={state}",
         f"active={active_count}",
     ]
+    if idle_minutes is not None:
+        parts.append(f"idle={idle_minutes}m")
     if completed_count:
         parts.append(f"completed={completed_count}")
     if workstream_statuses:
