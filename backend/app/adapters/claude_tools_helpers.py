@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -112,10 +113,24 @@ async def _stream_sdk_messages(
     """Yield (message, session_id) pairs from claude_agent_sdk query."""
     from claude_agent_sdk import query
 
+    async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
+        if hasattr(message_iter, "aclose"):
+            with suppress(Exception):
+                await message_iter.aclose()
+        if next_task is not None:
+            next_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await asyncio.wait_for(next_task, timeout=1.0)
+
     async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
         if idle_timeout is None:
             return await anext(message_iter)
-        return await asyncio.wait_for(anext(message_iter), timeout=idle_timeout)
+        next_task = asyncio.create_task(anext(message_iter))
+        done, _pending = await asyncio.wait({next_task}, timeout=idle_timeout)
+        if next_task in done:
+            return await next_task
+        await _abort_message_iter(message_iter, next_task)
+        raise TimeoutError
 
     def _message_has_tool_use(message: Any) -> bool:
         for block in getattr(message, "content", []) or []:
