@@ -31,7 +31,7 @@ def _metadata_dict(session: Session) -> dict[str, Any]:
     metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else None
     if metadata is None:
         metadata = {}
-    return metadata
+    return dict(metadata)
 
 
 def _live_activity(metadata: dict[str, Any]) -> dict[str, Any]:

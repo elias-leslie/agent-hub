@@ -156,7 +156,8 @@ class TestMemoryInjectEvent:
     async def test_store_event_syncs_sequencer_from_db_for_existing_session(self) -> None:
         db = MagicMock()
         parent_session = MagicMock()
-        parent_session.provider_metadata = {}
+        original_metadata: dict[str, object] = {"cwd": "/tmp/example"}
+        parent_session.provider_metadata = original_metadata
         parent_session.updated_at = None
         db.get = AsyncMock(return_value=parent_session)
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: 2), MagicMock(scalar_one_or_none=lambda: 7), None])
@@ -175,6 +176,7 @@ class TestMemoryInjectEvent:
         assert event.sequence == 8
         assert db.execute.await_count == 2
         assert parent_session.provider_metadata["live_activity"]["phase"] == "finalizing"
+        assert parent_session.provider_metadata is not original_metadata
 
     @pytest.mark.asyncio
     async def test_store_event_touches_parent_session_updated_at(self) -> None:
