@@ -180,6 +180,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Treat recent completed sessions as evidence, not just history." in prompt
         assert "Treat already-active specialist sessions as current work" in prompt
         assert 'If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`)' in prompt
+        assert 'If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")`' in prompt
         assert "prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type" in prompt
         assert "Only redispatch the same specialist lane when you have concrete evidence the active session is stuck" in prompt
         assert "Treat follow-up branches and worktrees as single workstreams, not shared scratchpads" in prompt
@@ -191,6 +192,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "your default next action is `manage_tasks` / task-state repair / verification follow-through" in prompt
         assert "create it fully execution-ready with objective, done_when, and subtasks" in prompt
         assert "Do not immediately dispatch intent-only or draft tasks" in prompt
+        assert "Never dispatch a newly created task in the same heartbeat unless you first verify via `manage_tasks(action=\"get_context\")`" in prompt
         assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
