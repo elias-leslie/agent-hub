@@ -86,6 +86,13 @@ async def store_event(
     """
     sequencer = get_sequencer()
     if turn is None or sequence is None:
+        if session_id not in sequencer._sessions:
+            current_turn = await get_max_turn(db, session_id)
+            current_sequence = (
+                await get_max_sequence(db, session_id, current_turn) if current_turn else 0
+            )
+            if current_turn:
+                sequencer.set_turn(session_id, current_turn, current_sequence)
         turn, sequence = sequencer.get_turn_sequence(session_id)
 
     event = SessionEvent(

@@ -136,4 +136,12 @@ async def report_progress(
 ) -> None:
     """Report progress if callback is provided."""
     if callback:
-        await callback(progress)
+        try:
+            await callback(progress)
+        except Exception:
+            logger.warning(
+                "Progress callback failed for turn=%s status=%s; continuing execution",
+                progress.turn,
+                progress.status,
+                exc_info=True,
+            )
