@@ -150,11 +150,14 @@ class NvidiaImageAdapter(ImageAdapter):
         width, height = _parse_size(size)
         api_key = self._api_key()
 
-        # Encode reference image as data URI for NVIDIA API
+        # Kontext expects raw base64; img2img models expect a data URI.
         ref_b64: str | None = None
         if reference_image:
             encoded = base64.b64encode(reference_image).decode()
-            ref_b64 = f"data:{reference_mime_type};base64,{encoded}"
+            if model == _KONTEXT_MODEL:
+                ref_b64 = encoded
+            else:
+                ref_b64 = f"data:{reference_mime_type};base64,{encoded}"
 
         # Kontext model doesn't participate in the standard fallback chain
         if model == _KONTEXT_MODEL:

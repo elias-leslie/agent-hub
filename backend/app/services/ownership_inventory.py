@@ -19,7 +19,9 @@ from app.services.ownership_lanes import (
 from app.services.tools.project_env import detect_main_repo
 
 _LOOKBACK_HOURS = 24
-_STALE_ACTIVE_MINUTES = 4 * 60
+# Align live-lane stale classification with completion-session cleanup so downstream
+# coordinators can reconcile abandoned lanes shortly after Agent Hub would auto-complete them.
+_STALE_ACTIVE_MINUTES = 30
 _GHOST_SESSION_MINUTES = 15
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
