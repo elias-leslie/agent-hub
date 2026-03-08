@@ -62,6 +62,7 @@ async def test_stream_sdk_messages_synthesizes_result_after_idle_post_tool_resul
     class HangingIterator:
         def __init__(self) -> None:
             self._step = 0
+            self._closed = False
 
         def __aiter__(self) -> HangingIterator:
             return self
@@ -76,8 +77,16 @@ async def test_stream_sdk_messages_synthesizes_result_after_idle_post_tool_resul
                     is_error=False,
                 )
                 return types.SimpleNamespace(content=[block], subtype=None)
-            await asyncio.Event().wait()
+            while not self._closed:
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError:
+                    # Simulate the SDK ignoring the first cancellation attempt.
+                    continue
             raise StopAsyncIteration
+
+        async def aclose(self) -> None:
+            self._closed = True
 
     def fake_query(*, prompt, options):
         return HangingIterator()
