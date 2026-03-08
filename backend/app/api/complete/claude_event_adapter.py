@@ -64,6 +64,14 @@ def _convert_user_message(msg: Any) -> list[ToolEvent]:
     return events
 
 
+def _convert_result_message(msg: Any) -> list[ToolEvent]:
+    """Convert Claude ResultMessage into a terminal result event."""
+    result_text = getattr(msg, "result", None)
+    if isinstance(result_text, str) and result_text.strip():
+        return [ToolEvent(type="result", result=result_text)]
+    return []
+
+
 def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     """Convert a single Claude SDK message into a list of ToolEvents.
 
@@ -74,7 +82,7 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     Returns:
         List of ToolEvent objects (may be empty for unrecognized types)
     """
-    from claude_agent_sdk.types import AssistantMessage, UserMessage
+    from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
     # Top-level thinking block (not inside AssistantMessage)
     if is_thinking_block(msg):
@@ -110,6 +118,9 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
 
     if isinstance(msg, UserMessage):
         return _convert_user_message(msg)
+
+    if isinstance(msg, ResultMessage) or type(msg).__name__ == "ResultMessage":
+        return _convert_result_message(msg)
 
     return []
 

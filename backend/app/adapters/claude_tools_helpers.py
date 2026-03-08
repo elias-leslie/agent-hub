@@ -101,6 +101,8 @@ async def _stream_sdk_messages(
                     if session_id:
                         logger.info(f"Claude SDK session ID: {session_id}")
                 yield (message, session_id)
+                if type(message).__name__ == "ResultMessage":
+                    return
         except Exception as e:
             logger.error(f"Claude tool error: {e}")
             raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
