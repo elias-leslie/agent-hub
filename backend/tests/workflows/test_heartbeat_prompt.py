@@ -194,6 +194,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Do not immediately dispatch intent-only or draft tasks" in prompt
         assert "Never dispatch a newly created task in the same heartbeat unless you first verify via `manage_tasks(action=\"get_context\")`" in prompt
         assert "`state=stale_running_task` means the queue still says `running` but no live lane backs it" in prompt
+        assert "make that your first execution action before reviewing duplicate specialists or considering new dispatches" in prompt
+        assert "Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task reconciliation" in prompt
         assert "prefer `fixer` or `coder` (or close it yourself) over sending another `reviewer`/`debugger` pass" in prompt
         assert "trust the current state and frame the dispatch around that truth instead of repeating the stale description" in prompt
 
