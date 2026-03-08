@@ -87,7 +87,9 @@ async def _failover_stream(
     kwargs: dict[str, Any],
 ) -> AsyncIterator[StreamEvent]:
     """Try SDK stream across keys; fail over on retryable pre-content errors."""
-    from app.adapters._gemini_cloudcode_ops import _is_retryable_error  # avoid circular at module level
+    from app.adapters._gemini_cloudcode_ops import (
+        _is_retryable_error,  # avoid circular at module level
+    )
 
     clients = sdk_clients or ([client] if client is not None else [])
     if not clients:
@@ -213,6 +215,10 @@ class GeminiAdapter(ProviderAdapter):
     def _refresh_api_key(self) -> None:
         """Refresh API key clients from CredentialManager."""
         self._refresh_credentials()
+
+    def _has_api_key_fallback(self) -> bool:
+        """Return True when OAuth is primary and API-key fallback clients exist."""
+        return self._auth_mode == "oauth" and bool(self._sdk_clients)
 
     async def complete(
         self,
