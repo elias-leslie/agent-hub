@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 from app.api.complete.claude_event_adapter import adapt_claude_message, adapt_claude_stream
