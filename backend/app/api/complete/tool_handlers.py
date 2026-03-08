@@ -65,6 +65,43 @@ async def _store_partial_response(
             pass
 
 
+async def _execute_and_handle_errors(
+    adapter: Any,
+    state: _ExecutionState,
+    provider: str,
+    model: str,
+    tools: list[dict[str, Any]] | None,
+    tool_catalog: list[dict[str, Any]] | None,
+    working_dir: str | None,
+    permission_config: dict[str, Any] | None,
+    session_id: str,
+    loaded_memory_uuids: list[str],
+    db: AsyncSession,
+    session: DBSession,
+    tracker: ProgressTracker,
+    max_turns: int,
+    project_id: str | None,
+) -> ToolExecutionResult | None:
+    """Run the tool loop and handle errors. Returns an error result or None on success."""
+    try:
+        error_result = await _run_tool_loop(
+            adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
+            session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
+        )
+        if error_result is not None:
+            await _store_partial_response(db, session_id, session, state, model, error_detail=error_result.error)
+            return error_result
+        await db.commit()
+        return None
+    except Exception as e:
+        logger.exception(f"{provider} complete_with_tools error: {e}")
+        await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
+        return build_error_result(
+            e, model, provider, session_id, loaded_memory_uuids,
+            turns=state.turn, tool_calls_count=state.tool_calls_count,
+        )
+
+
 async def _complete_with_tools(
     adapter: Any,
     messages: list[dict[str, Any]],
@@ -94,31 +131,14 @@ async def _complete_with_tools(
     """
     state = _init_execution_state(session, messages)
     tracker = ProgressTracker(progress_callback)
-
     await store_user_messages(db, session_id, messages_for_db, agent_id=state.agent_slug)
 
-    try:
-        error_result = await _run_tool_loop(
-            adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
-            session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
-        )
-        if error_result is not None:
-            await _store_partial_response(
-                db, session_id, session, state, model,
-                error_detail=error_result.error,
-            )
-            return error_result
-        await db.commit()
-    except Exception as e:
-        logger.exception(f"{provider} complete_with_tools error: {e}")
-        await _store_partial_response(
-            db, session_id, session, state, model,
-            error_detail=str(e),
-        )
-        return build_error_result(
-            e, model, provider, session_id, loaded_memory_uuids,
-            turns=state.turn, tool_calls_count=state.tool_calls_count,
-        )
+    error_result = await _execute_and_handle_errors(
+        adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
+        session_id, loaded_memory_uuids, db, session, tracker, max_turns, project_id,
+    )
+    if error_result is not None:
+        return error_result
 
     return await finalize_response(
         db, session, session_id, is_new_session, model, provider,
