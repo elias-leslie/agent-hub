@@ -27,26 +27,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Application lifespan manager."""
-    # Startup
+async def _startup() -> None:
+    """Run all startup tasks."""
     logger.info("Starting agent-hub on port %d", settings.port)
 
-    # Initialize OpenTelemetry tracing
     init_telemetry()
     logger.info("OpenTelemetry initialized")
 
-    # Load credentials from database into cache
     try:
         async with async_session() as db:
             credential_manager = get_credential_manager()
             loaded = await credential_manager.load(db)
-            logger.info(f"Loaded {loaded} credentials at startup")
+            logger.info("Loaded %d credentials at startup", loaded)
     except Exception as e:
-        logger.warning(f"Failed to load credentials at startup: {e}")
+        logger.warning("Failed to load credentials at startup: %s", e)
 
-    # Load auth preferences into adapter caches
     try:
         async with async_session() as db:
             from app.adapters.gemini import set_gemini_auth_preference, set_gemini_vertex_project
@@ -56,15 +51,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             set_gemini_auth_preference(gemini_pref)
             vertex_project = await get_preference_value(db, "gemini_vertex_project", "")
             set_gemini_vertex_project(vertex_project)
-            logger.info(f"Loaded auth preferences: gemini={gemini_pref}, vertex_project={vertex_project}")
+            logger.info("Loaded auth preferences: gemini=%s, vertex_project=%s", gemini_pref, vertex_project)
     except Exception as e:
-        logger.warning(f"Failed to load auth preferences at startup: {e}")
+        logger.warning("Failed to load auth preferences at startup: %s", e)
 
-    # Start background usage tracking flush task (30s interval)
     await start_usage_tracker()
     logger.info("Usage tracker started")
 
-    # Warm project IDs cache from project_permissions table
     try:
         from app.constants.projects import refresh_project_ids_cache
         project_ids = await refresh_project_ids_cache()
@@ -72,28 +65,25 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning("Failed to load project IDs at startup: %s", e)
 
-    # Normalize legacy memory scope encodings (idempotent integrity guard).
     try:
         normalized = await normalize_legacy_scope_rows()
         updated_rows = sum(normalized.values())
         if updated_rows:
-            logger.warning(
-                "Normalized %d legacy memory scope row(s) at startup: %s",
-                updated_rows,
-                normalized,
-            )
+            logger.warning("Normalized %d legacy memory scope row(s) at startup: %s", updated_rows, normalized)
         else:
             logger.info("Memory scope integrity check passed")
     except Exception as e:
         logger.warning("Failed memory scope normalization at startup: %s", e)
 
-    # Start health prober for all registered providers
-    from app.services.health_prober import init_health_prober, shutdown_health_prober
+    from app.services.health_prober import init_health_prober
     prober = init_health_prober()
     logger.info("Health prober started for %d providers", len(prober._providers))
 
-    yield
-    # Shutdown
+
+async def _shutdown() -> None:
+    """Run all shutdown tasks."""
+    from app.services.health_prober import shutdown_health_prober
+
     await stop_all_stream_bridges()
     logger.info("Hatchet stream bridges stopped")
     await shutdown_health_prober()
@@ -101,6 +91,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await shutdown_usage_tracker()
     logger.info("Usage tracker stopped")
     logger.info("Shutting down agent-hub")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Application lifespan manager."""
+    await _startup()
+    yield
+    await _shutdown()
 
 
 app = FastAPI(
