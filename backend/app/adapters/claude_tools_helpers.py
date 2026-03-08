@@ -1,7 +1,9 @@
 """Tool handling and helpers for Claude adapter — permission checking, MCP, and SDK tool execution."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
 from app.adapters.base import Message, ProviderError
@@ -18,10 +20,12 @@ from app.adapters.claude_tools_permissions import (
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
+    extract_block_content,
     extract_system_and_conversation,
 )
 
 logger = logging.getLogger(__name__)
+_SDK_TERMINAL_GRACE_SECONDS = 45.0
 
 # Re-export constants callers may reference
 _CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
@@ -31,6 +35,22 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
     "Write": "write_file",
     "Edit": "write_file",
 }
+
+
+@dataclass
+class ResultMessage:
+    """Fallback terminal message when the Claude SDK omits its final result frame."""
+
+    subtype: str = "result"
+    duration_ms: int = 0
+    duration_api_ms: int = 0
+    is_error: bool = False
+    num_turns: int = 0
+    session_id: str | None = None
+    total_cost_usd: float | None = None
+    usage: dict[str, Any] | None = None
+    result: str | None = None
+    structured_output: Any = None
 
 
 def _normalize_tool_name(name: str) -> str:
@@ -92,21 +112,75 @@ async def _stream_sdk_messages(
     """Yield (message, session_id) pairs from claude_agent_sdk query."""
     from claude_agent_sdk import query
 
+    async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
+        if idle_timeout is None:
+            return await anext(message_iter)
+        return await asyncio.wait_for(anext(message_iter), timeout=idle_timeout)
+
+    def _message_has_tool_use(message: Any) -> bool:
+        for block in getattr(message, "content", []) or []:
+            if extract_block_content(block)["type"] == "tool_use":
+                return True
+        return False
+
+    def _message_has_tool_result(message: Any) -> bool:
+        for block in getattr(message, "content", []) or []:
+            if extract_block_content(block)["type"] == "tool_result":
+                return True
+        return False
+
+    def _make_fallback_result() -> ResultMessage:
+        return ResultMessage(session_id=session_id)
+
     session_id: str | None = None
     done_emitted = False
+    saw_payload = False
+    pending_tool_calls = 0
     async with _sdk_semaphore:
         try:
-            async for message in query(prompt=prompt, options=options):
+            message_iter = query(prompt=prompt, options=options).__aiter__()
+            while True:
+                idle_timeout = (
+                    _SDK_TERMINAL_GRACE_SECONDS
+                    if saw_payload and pending_tool_calls == 0 and not done_emitted
+                    else None
+                )
+                try:
+                    message = await _next_message(message_iter, idle_timeout)
+                except StopAsyncIteration:
+                    if saw_payload and not done_emitted:
+                        logger.warning(
+                            "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
+                        )
+                        yield (_make_fallback_result(), session_id)
+                    return
+                except TimeoutError:
+                    if saw_payload and pending_tool_calls == 0 and not done_emitted:
+                        logger.warning(
+                            "Claude SDK stream went idle for %.1fs without ResultMessage; "
+                            "synthesizing terminal result",
+                            _SDK_TERMINAL_GRACE_SECONDS,
+                        )
+                        yield (_make_fallback_result(), session_id)
+                        return
+                    raise
+
                 if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
                     session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
                     if session_id:
                         logger.info(f"Claude SDK session ID: {session_id}")
+                    continue
                 if type(message).__name__ == "ResultMessage":
                     yield (message, session_id)
                     done_emitted = True
                     continue
                 if done_emitted:
                     continue
+                saw_payload = True
+                if _message_has_tool_use(message):
+                    pending_tool_calls += 1
+                if _message_has_tool_result(message):
+                    pending_tool_calls = max(0, pending_tool_calls - 1)
                 yield (message, session_id)
         except Exception as e:
             logger.error(f"Claude tool error: {e}")
