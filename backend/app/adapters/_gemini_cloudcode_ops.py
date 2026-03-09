@@ -277,40 +277,6 @@ def _stream_tool_event(part: dict[str, Any]) -> StreamEvent:
     )
 
 
-def _make_text_event(text: str, session_id: str) -> tuple[ToolEvent, str]:
-    """Build an assistant text ToolEvent."""
-    return (
-        ToolEvent(
-            type="assistant",
-            message=ToolMessage(
-                content=[ToolContentBlock(type="text", text=text)],
-            ),
-        ),
-        session_id,
-    )
-
-
-def _make_tool_result_events(
-    tool_calls: list[ToolCall],
-    tool_results: list[Any],
-    session_id: str,
-) -> list[tuple[ToolEvent, str]]:
-    """Build tool_result ToolEvents for each executed tool."""
-    return [
-        (
-            ToolEvent(
-                type="tool_result",
-                content=result.content,
-                tool_use_id=tc.id,
-                is_error=result.is_error,
-                duration_ms=result.duration_ms,
-            ),
-            session_id,
-        )
-        for tc, result in zip(tool_calls, tool_results, strict=True)
-    ]
-
-
 async def _process_tool_loop_turn(
     client: CloudCodeClient,
     model: str,
@@ -340,18 +306,35 @@ async def _process_tool_loop_turn(
     events: list[tuple[ToolEvent, str]] = []
     if text_content:
         accumulated_text += text_content
-        events.append(_make_text_event(text_content, session_id))
+        events.append((
+            ToolEvent(type="assistant", message=ToolMessage(content=[ToolContentBlock(type="text", text=text_content)])),
+            session_id,
+        ))
 
     for tc in tool_calls:
-        events.append(_tool_call_event(tc, session_id))
+        events.append((
+            ToolEvent(type="assistant", message=ToolMessage(content=[
+                ToolContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id),
+            ])),
+            session_id,
+        ))
 
     if not tool_calls:
         events.append((ToolEvent(type="result", subtype="success", result=accumulated_text), session_id))
         return accumulated_text, events, True
 
-    tool_results, tool_response_parts = await _execute_tools(tool_calls, tool_handler)
-    events.extend(_make_tool_result_events(tool_calls, tool_results, session_id))
+    # Execute tools and build function-response parts for the next turn
+    tool_results: list[Any] = []
+    tool_response_parts: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        result = await tool_handler.execute(tc)
+        tool_results.append(result)
+        tool_response_parts.append({"functionResponse": {"name": tc.name, "id": tc.id, "response": {"result": result.content}}})
 
+    events.extend([
+        (ToolEvent(type="tool_result", content=r.content, tool_use_id=tc.id, is_error=r.is_error, duration_ms=r.duration_ms), session_id)
+        for tc, r in zip(tool_calls, tool_results, strict=True)
+    ])
     contents.append({"role": "model", "parts": _build_model_parts(parts)})
     contents.append({"role": "user", "parts": tool_response_parts})
 
@@ -429,26 +412,6 @@ def _parse_candidate_parts(
     return text_content, tool_calls
 
 
-def _tool_call_event(tc: ToolCall, session_id: str) -> tuple[ToolEvent, str]:
-    """Build a ToolEvent for a tool_use action."""
-    return (
-        ToolEvent(
-            type="assistant",
-            message=ToolMessage(
-                content=[
-                    ToolContentBlock(
-                        type="tool_use",
-                        name=tc.name,
-                        input=tc.input,
-                        id=tc.id,
-                    ),
-                ],
-            ),
-        ),
-        session_id,
-    )
-
-
 def _build_model_parts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Build model turn parts preserving thoughtSignature for CloudCode PA API."""
     model_parts: list[dict[str, Any]] = []
@@ -468,53 +431,23 @@ def _build_model_parts(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return model_parts
 
 
-async def _execute_tools(
-    tool_calls: list[ToolCall],
-    tool_handler: Any,
-) -> tuple[list[Any], list[dict[str, Any]]]:
-    """Execute tools, returning (result_objects, functionResponse_parts)."""
-    results = []
-    tool_response_parts: list[dict[str, Any]] = []
-    for tc in tool_calls:
-        result = await tool_handler.execute(tc)
-        results.append(result)
-        tool_response_parts.append({
-            "functionResponse": {
-                "name": tc.name,
-                "id": tc.id,
-                "response": {"result": result.content},
-            },
-        })
-    return results, tool_response_parts
-
-
-def _is_retryable_status(status_code: int) -> bool:
-    return status_code in {429, 500, 502, 503, 504}
+_RETRYABLE_STATUSES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_RETRYABLE_KEYWORDS = (
+    "resource exhausted", "rate limit", "overloaded", "service unavailable",
+    "deadline_exceeded", "http 429", "http 500", "http 502", "http 503", "http 504",
+)
 
 
 def _is_retryable_error(text: str) -> bool:
+    """Check if an error string indicates a retryable condition."""
     lower = text.lower()
-    return any(
-        kw in lower
-        for kw in (
-            "resource exhausted",
-            "rate limit",
-            "overloaded",
-            "service unavailable",
-            "deadline_exceeded",
-            "http 429",
-            "http 500",
-            "http 502",
-            "http 503",
-            "http 504",
-        )
-    )
+    return any(kw in lower for kw in _RETRYABLE_KEYWORDS)
 
 
 def _is_retryable(e: Exception) -> bool:
     """Check if any exception is retryable (combines type and string checks)."""
     if isinstance(e, httpx.HTTPStatusError):
-        return _is_retryable_status(e.response.status_code)
+        return e.response.status_code in _RETRYABLE_STATUSES
     if isinstance(e, (httpx.ConnectError, httpx.ReadTimeout)):
         return True
     return _is_retryable_error(str(e))
