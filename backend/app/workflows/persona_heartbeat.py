@@ -197,16 +197,17 @@ async def _do_completion(interval_minutes: int, target_project_id: str | None = 
 
     model_review_due, model_review_label = await get_model_review_status()
     execution_project = target_project_id or HEARTBEAT_PROJECT
-    heartbeat_prompt = await build_heartbeat_prompt(
-        model_review_due,
-        model_review_label,
-        target_project_id=target_project_id,
-    )
 
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content, agent_memory_config = await _resolve_persona(
             db,
             project_id=execution_project,
+        )
+        heartbeat_prompt = await build_heartbeat_prompt(
+            model_review_due,
+            model_review_label,
+            target_project_id=target_project_id,
+            provider=provider,
         )
         persona = await get_persona(db)
         max_turns = get_persona_limit(persona, "max_turns") or 200

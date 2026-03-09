@@ -487,7 +487,12 @@ class TestHeartbeatCompletionRouting:
             result = await _do_completion(60, target_project_id="agent-hub")
 
         assert result is complete_result
-        mock_prompt.assert_awaited_once_with(False, "not due", target_project_id="agent-hub")
+        mock_prompt.assert_awaited_once_with(
+            False,
+            "not due",
+            target_project_id="agent-hub",
+            provider="claude",
+        )
         mock_resolve_persona.assert_awaited_once_with(mock_db, project_id="agent-hub")
         kwargs = mock_complete.await_args.kwargs
         assert kwargs["project_id"] == "agent-hub"

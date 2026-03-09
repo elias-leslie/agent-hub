@@ -117,6 +117,36 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "tool1, tool2" in prompt
         assert "Follow your <heartbeat_instructions> from your system context." in prompt
 
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_git_status_summary", return_value="")
+    @patch(
+        "app.workflows._heartbeat_prompt.require_prompt_content",
+        new_callable=AsyncMock,
+        return_value="Tools: {persona_tool_list}",
+    )
+    @patch("app.workflows._heartbeat_prompt._get_active_work_summary", new_callable=AsyncMock, return_value="")
+    @patch(
+        "app.workflows._heartbeat_prompt._get_persona_tool_summary",
+        return_value=(2, "mcp__agent-hub__manage_tasks, mcp__agent-hub__query_sessions"),
+    )
+    @patch("app.workflows._heartbeat_prompt.get_project_access_summary", new_callable=AsyncMock, return_value="test")
+    @patch("app.workflows._heartbeat_prompt._get_persona_timezone", new_callable=AsyncMock, return_value="UTC")
+    async def test_claude_prompt_uses_provider_specific_tool_names(self, *mocks: MagicMock) -> None:
+        from app.workflows._heartbeat_prompt import build_heartbeat_prompt
+
+        prompt = await build_heartbeat_prompt(
+            model_review_due=False,
+            model_review_label="skip",
+            provider="claude",
+        )
+
+        assert "mcp__agent-hub__manage_tasks" in prompt
+        assert "mcp__agent-hub__query_sessions" in prompt
+
 
 class TestProtectionStatusSummary:
     """Tests for the heartbeat protection summary block."""
@@ -352,6 +382,33 @@ class TestGetWorkstreamInventory:
         assert "task-123" in result
         assert "state=completed_ready_for_closure" in result
         assert 'manage_tasks(action="reconcile"' in result
+
+    @pytest.mark.asyncio
+    async def test_reports_claude_callable_names_for_workstream_actions(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-1",
+                "agent_slug": "coder",
+                "project_id": "summitflow",
+                "external_id": "task-123",
+                "current_branch": "task-123/main",
+                "status": "completed",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ), patch(
+            "app.workflows._heartbeat_data._fetch_task_overview",
+            return_value="agent-hub (1)\n  * task-123 pending Refactor",
+        ):
+            result = await _get_workstream_inventory(provider="claude")
+
+        assert 'mcp__agent-hub__manage_tasks(action="reconcile"' in result
 
     @pytest.mark.asyncio
     async def test_branch_only_completed_lane_still_recovers_task_id(self) -> None:
@@ -732,4 +789,15 @@ class TestWorkstreamLaneContract:
                 task_id="task-6",
             )
             == "superseded_lane_no_action"
+        )
+
+    def test_build_next_action_uses_claude_mcp_names(self) -> None:
+        assert (
+            _build_workstream_next_action(
+                state="completed_ready_for_closure",
+                project_id="agent-hub",
+                task_id="task-6",
+                provider="claude",
+            )
+            == 'mcp__agent-hub__manage_tasks(action="reconcile", task_id="task-6", project_id="agent-hub")'
         )

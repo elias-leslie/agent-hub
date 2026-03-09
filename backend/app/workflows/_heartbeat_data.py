@@ -27,6 +27,7 @@ _STALE_ACTIVE_MINUTES = STALE_WORKSTREAM_IDLE_MINUTES
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
+_CLAUDE_MCP_PREFIX = "mcp__agent-hub__"
 
 # Contract: workstream inventory states are derived in precedence order.
 # Highest precedence first:
@@ -75,12 +76,30 @@ async def get_project_access_summary() -> str:
     return "\n".join(lines)
 
 
-def _get_persona_tool_summary() -> tuple[int, str]:
+def _render_persona_tool_name(tool_name: str, provider: str | None = None) -> str:
+    """Render a callable persona tool name for the target provider."""
+    if provider == "claude":
+        return f"{_CLAUDE_MCP_PREFIX}{tool_name}"
+    return tool_name
+
+
+def _tool_call(
+    tool_name: str,
+    arguments: str = "",
+    *,
+    provider: str | None = None,
+) -> str:
+    """Render a callable tool invocation string for heartbeat guidance."""
+    rendered_name = _render_persona_tool_name(tool_name, provider)
+    return f"{rendered_name}({arguments})" if arguments else f"{rendered_name}()"
+
+
+def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
     """Return (count, comma-separated list) of persona-specific tool names."""
     try:
         from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
 
-        names = [t.name for t in PERSONA_EXTRA_TOOLS]
+        names = [_render_persona_tool_name(t.name, provider) for t in PERSONA_EXTRA_TOOLS]
         return len(names), ", ".join(names)
     except Exception:
         logger.exception("Failed to list persona tools")
@@ -432,22 +451,36 @@ def _build_workstream_next_action(
     state: str,
     project_id: str,
     task_id: str | None,
+    provider: str | None = None,
 ) -> str:
     """Return a concrete next action for a classified workstream lane."""
     if state == "completed_ready_for_closure" and task_id:
-        return (
-            f'manage_tasks(action="reconcile", task_id="{task_id}", '
-            f'project_id="{project_id}")'
+        return _tool_call(
+            "manage_tasks",
+            f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+            provider=provider,
         )
     if state == "completed_ready_for_closure" and not task_id:
         return "completed_no_task_id"
     if state == "stale_active":
         if task_id:
-            return (
-                f'query_sessions(status="active") then manage_tasks(action="retire_lane", '
-                f'task_id="{task_id}", project_id="{project_id}") if truly stale'
+            query_active = _tool_call(
+                "query_sessions",
+                'status="active"',
+                provider=provider,
             )
-        return "query_sessions(status='active') then verify or retire the stale lane"
+            retire_lane = _tool_call(
+                "manage_tasks",
+                f'action="retire_lane", task_id="{task_id}", project_id="{project_id}"',
+                provider=provider,
+            )
+            return (
+                f"{query_active} then {retire_lane} if truly stale"
+            )
+        return (
+            f"{_tool_call('query_sessions', 'status=\"active\"', provider=provider)} "
+            "then verify or retire the stale lane"
+        )
     if state == "mixed":
         return "split/promotion cleanup; do not dispatch more implementation onto this lane"
     if state == "reconciled":
@@ -459,7 +492,7 @@ def _build_workstream_next_action(
     return "monitor"
 
 
-async def _get_workstream_inventory() -> str:
+async def _get_workstream_inventory(provider: str | None = None) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
@@ -519,9 +552,10 @@ async def _get_workstream_inventory() -> str:
             ):
                 continue
             if task_id and (project_id, task_id) in stale_keys:
-                next_action = (
-                    f'manage_tasks(action="reconcile", task_id="{task_id}", '
-                    f'project_id="{project_id}")'
+                next_action = _tool_call(
+                    "manage_tasks",
+                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                    provider=provider,
                 )
                 lines.append(
                     f"- {project_id} | {task_id} | state=stale_running_task | "
@@ -545,7 +579,7 @@ async def _get_workstream_inventory() -> str:
             }
             working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
             next_action = _build_workstream_next_action(
-                state=lane_state, project_id=project_id, task_id=task_id,
+                state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
             )
             label = task_id or lane_key
             parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={active_count}"]
@@ -567,9 +601,10 @@ async def _get_workstream_inventory() -> str:
         for project_id, task_id in sorted(stale_keys):
             if (project_id, task_id) in grouped:
                 continue
-            next_action = (
-                f'manage_tasks(action="reconcile", task_id="{task_id}", '
-                f'project_id="{project_id}")'
+            next_action = _tool_call(
+                "manage_tasks",
+                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                provider=provider,
             )
             lines.append(
                 f"- {project_id} | {task_id} | state=stale_running_task | "
@@ -766,5 +801,7 @@ __all__ = [
     "_get_workstream_inventory",
     "_query_active_specialist_sessions",
     "_query_recent_workstream_sessions",
+    "_render_persona_tool_name",
+    "_tool_call",
     "get_project_access_summary",
 ]

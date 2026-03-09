@@ -86,6 +86,7 @@ async def _build_core_prompt(
     model_review_due: bool,
     model_review_label: str,
     target_project_id: str | None,
+    provider: str | None = None,
 ) -> str:
     """Render the template-based core prompt and append the execution target if set."""
     from zoneinfo import ZoneInfo
@@ -97,7 +98,7 @@ async def _build_core_prompt(
 
     review_status = "DUE" if model_review_due else f"not due — {model_review_label}"
     review_instructions = MODEL_REVIEW_DO if model_review_due else MODEL_REVIEW_SKIP
-    tool_count, persona_tool_list = _get_persona_tool_summary()
+    tool_count, persona_tool_list = _get_persona_tool_summary(provider)
     template = await require_prompt_content(PERSONA_HEARTBEAT_PROMPT_SLUG)
 
     prompt = template.format(
@@ -119,7 +120,11 @@ async def _build_core_prompt(
     return prompt
 
 
-async def _append_dynamic_sections(prompt: str, target_project_id: str | None = None) -> str:
+async def _append_dynamic_sections(
+    prompt: str,
+    target_project_id: str | None = None,
+    provider: str | None = None,
+) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
     for section in (
         await _get_active_work_summary(),
@@ -127,7 +132,7 @@ async def _append_dynamic_sections(prompt: str, target_project_id: str | None = 
         _get_cleanup_status_summary(),
         await _get_active_specialist_inventory(),
         await _get_agent_roster_summary(),
-        await _get_workstream_inventory(),
+        await _get_workstream_inventory(provider),
         _get_git_status_summary(),
         await _get_feedback_summary_section(),
     ):
@@ -140,10 +145,16 @@ async def build_heartbeat_prompt(
     model_review_due: bool,
     model_review_label: str,
     target_project_id: str | None = None,
+    provider: str | None = None,
 ) -> str:
     """Build the heartbeat prompt with dynamic model review and project access."""
-    prompt = await _build_core_prompt(model_review_due, model_review_label, target_project_id)
-    return await _append_dynamic_sections(prompt, target_project_id)
+    prompt = await _build_core_prompt(
+        model_review_due,
+        model_review_label,
+        target_project_id,
+        provider,
+    )
+    return await _append_dynamic_sections(prompt, target_project_id, provider)
 
 
 __all__ = [
