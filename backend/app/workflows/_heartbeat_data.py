@@ -702,19 +702,30 @@ async def _get_feedback_summary_section() -> str:
         # Type breakdown from counts_by_type_status
         type_counts: dict[str, int] = {}
         for row in summary.get("counts_by_type_status", []):
-            if row.get("status") == "open":
+            if row.get("status") in {"open", "acknowledged"}:
                 ft = row.get("feedback_type", "unknown")
                 type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
 
-        open_count = sum(type_counts.values())
-        if open_count == 0:
+        unresolved_count = sum(type_counts.values())
+        if unresolved_count == 0:
             return ""
 
-        lines = [f"Open items: {open_count} (of {total} total, last 30d)"]
+        lines = [f"Unresolved items: {unresolved_count} (of {total} total, last 30d)"]
 
         if type_counts:
             breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
             lines.append(f"By type: {breakdown}")
+
+        hot_components = [
+            row for row in summary.get("by_component", [])
+            if int(row.get("open_count", 0) or 0) > 0
+        ][:3]
+        if hot_components:
+            hotspots = ", ".join(
+                f"{row['component_id']} open={row['open_count']} votes={row['total_votes'] or 0}"
+                for row in hot_components
+            )
+            lines.append(f"Hotspots: {hotspots}")
 
         lines.append("")
         lines.append(f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title")
@@ -728,7 +739,7 @@ async def _get_feedback_summary_section() -> str:
             )
 
         body = "\n".join(lines)
-        logger.info("Feedback summary: %d open items", open_count)
+        logger.info("Feedback summary: %d unresolved items", unresolved_count)
         return f"\n<feedback_summary>\n{body}\n</feedback_summary>"
     except Exception:
         logger.debug("Failed to fetch feedback summary for heartbeat", exc_info=True)
