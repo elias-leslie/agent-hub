@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 _TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "failed"}
 _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
 _RETIRE_NOTE = 'Retired via manage_tasks(action="retire_lane")'
+_NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
 
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
@@ -346,6 +347,10 @@ async def _reconcile_task_lane(
         )
         return await bash_fn(admin_cmd)
     if "Cannot merge - task" in result or "Failed to merge " in result:
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        if _task_is_terminal(task_status):
+            return await _handle_finalize_merge(bash_fn, task_id, project_id)
+    if _NO_CHECKPOINT_MERGE_PHRASE in result.lower():
         task_status = await _get_task_status(bash_fn, task_id, project_id)
         if _task_is_terminal(task_status):
             return await _handle_finalize_merge(bash_fn, task_id, project_id)
