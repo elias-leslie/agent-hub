@@ -27,6 +27,21 @@ _CACHE_TTL = 60  # seconds
 # Singleton Redis client
 _redis: aioredis.Redis | None = None
 
+# Reason strings for tool permission results
+_REASON_ALLOWED = "allowed"
+_REASON_PERSONA_EXEMPT = "persona-internal tool (tier-exempt)"
+_REASON_TIER_OFF = "project permission tier is off"
+
+# Reason strings for execution permission results
+_EXEC_REASON_ALLOWED = "allowed"
+_EXEC_REASON_PROJECT_NOT_FOUND = "project_not_found"
+_EXEC_REASON_TIER_OFF = "permission_tier_off"
+_EXEC_REASON_AUTO_EXEC_DISABLED = "auto_exec_disabled"
+_EXEC_REASON_OUTSIDE_HOURS = "outside_execution_hours"
+
+# Unknown tier sentinel for ExecutionPermissionResult
+_TIER_UNKNOWN = "unknown"
+
 
 def _get_redis() -> aioredis.Redis:
     """Get or create async Redis client for permission cache."""
@@ -240,8 +255,36 @@ async def update_project_permission(
 
 
 # ---------------------------------------------------------------------------
+# Internal helpers for tool permission checks
+# ---------------------------------------------------------------------------
+
+async def _load_perm_from_db(
+    project_id: str, db: AsyncSession | None
+) -> ProjectPermission | None:
+    """Load a permission row from DB, creating a session if none provided."""
+    if db is not None:
+        return await get_project_permission(db, project_id)
+    from app.db import async_session  # lazy import to avoid cycles
+    async with async_session() as fresh_db:
+        return await get_project_permission(fresh_db, project_id)
+
+
+# ---------------------------------------------------------------------------
 # Tool permission checks (hot path)
 # ---------------------------------------------------------------------------
+
+async def _check_persona_tool_allowed(
+    project_id: str, db: AsyncSession | None
+) -> tuple[bool, str]:
+    """Persona tools are tier-exempt; only blocked when tier is explicitly 'off'."""
+    tier = await _get_cached_tier(project_id)
+    if tier is None:
+        perm = await _load_perm_from_db(project_id, db)
+        tier = perm.permission_tier if perm else None
+    if tier == "off":
+        return False, _REASON_TIER_OFF
+    return True, _REASON_PERSONA_EXEMPT
+
 
 async def check_tool_allowed(
     project_id: str, tool_name: str, *, db: AsyncSession | None = None
@@ -249,54 +292,28 @@ async def check_tool_allowed(
     """Check whether a tool call is allowed for a project.
 
     Uses Redis cache for fast lookups. Falls back to DB on cache miss.
-
     All error paths fail-closed (deny access) for security.
 
     Returns:
         (allowed, reason) tuple.  Never raises.
     """
     try:
-        # 0. Persona-internal tools bypass project tier (they modify
-        #    Jenny's own config, not the project codebase). Still
-        #    blocked when tier is explicitly "off".
         if tool_name in _PERSONA_TOOLS:
-            tier = await _get_cached_tier(project_id)
-            if tier is None:
-                if db is None:
-                    from app.db import async_session
-                    async with async_session() as fresh_db:
-                        perm = await get_project_permission(fresh_db, project_id)
-                else:
-                    perm = await get_project_permission(db, project_id)
-                tier = perm.permission_tier if perm else None
-            if tier == "off":
-                return False, "project permission tier is off"
-            return True, "persona-internal tool (tier-exempt)"
+            return await _check_persona_tool_allowed(project_id, db)
 
-        # 1. Try cache
+        # Regular tool: cache → DB → check
         tier = await _get_cached_tier(project_id)
-
-        # 2. Fall back to DB
         if tier is None:
-            if db is None:
-                from app.db import async_session
-                async with async_session() as fresh_db:
-                    perm = await get_project_permission(fresh_db, project_id)
-            else:
-                perm = await get_project_permission(db, project_id)
-
+            perm = await _load_perm_from_db(project_id, db)
             if perm is None:
-                # Unknown project — fail closed (deny access)
                 logger.warning(
                     "No permission record for project %s — denying tool '%s'",
                     project_id, tool_name,
                 )
                 return False, f"no permission record for project '{project_id}'"
-            else:
-                tier = perm.permission_tier
-                await _set_cache(project_id, tier, perm.auto_exec_enabled)
+            tier = perm.permission_tier
+            await _set_cache(project_id, tier, perm.auto_exec_enabled)
 
-        # 3. Validate tier is recognized
         if tier not in TIER_TOOLS:
             logger.warning(
                 "Unrecognized tier '%s' for project %s — denying tool '%s'",
@@ -304,15 +321,11 @@ async def check_tool_allowed(
             )
             return False, f"unrecognized permission tier '{tier}'"
 
-        # 4. Check
-        allowed_tools = get_tools_for_tier(tier)
-        if tool_name in allowed_tools:
-            return True, "allowed"
-
+        if tool_name in get_tools_for_tier(tier):
+            return True, _REASON_ALLOWED
         return False, f"tool '{tool_name}' not permitted at tier '{tier}'"
 
     except Exception as e:
-        # Fail-closed: any unexpected error denies access
         logger.error(
             "Error checking tool permission for project %s, tool %s: %s",
             project_id, tool_name, e,
@@ -335,6 +348,16 @@ class ExecutionPermissionResult:
     reason: str
 
 
+def _is_in_time_window(start: int, end: int, current_hour: int) -> bool:
+    """Return True if current_hour falls within [start, end) with wrap-around support."""
+    if start == end:
+        return False  # zero-length window — never allowed
+    if start < end:
+        return start <= current_hour < end
+    # Wrap-around (e.g., 22 to 6)
+    return current_hour >= start or current_hour < end
+
+
 async def check_execution_permission(
     db: AsyncSession, project_id: str
 ) -> ExecutionPermissionResult:
@@ -342,66 +365,26 @@ async def check_execution_permission(
 
     Checks tier != "off", auto_exec_enabled, and time window.
     """
+    # Helper alias for brevity
+    R = ExecutionPermissionResult
+
     perm = await get_project_permission(db, project_id)
     if perm is None:
-        return ExecutionPermissionResult(
-            allowed=False,
-            permission_tier="unknown",
-            auto_exec_enabled=False,
-            in_time_window=False,
-            reason="project_not_found",
-        )
+        return R(False, _TIER_UNKNOWN, False, False, _EXEC_REASON_PROJECT_NOT_FOUND)
 
     tier = perm.permission_tier
     auto_exec = perm.auto_exec_enabled
 
-    # Check tier
     if tier == "off":
-        return ExecutionPermissionResult(
-            allowed=False,
-            permission_tier=tier,
-            auto_exec_enabled=auto_exec,
-            in_time_window=False,
-            reason="permission_tier_off",
-        )
+        return R(False, tier, auto_exec, False, _EXEC_REASON_TIER_OFF)
 
-    # Check auto_exec
     if not auto_exec:
-        return ExecutionPermissionResult(
-            allowed=False,
-            permission_tier=tier,
-            auto_exec_enabled=auto_exec,
-            in_time_window=True,
-            reason="auto_exec_disabled",
-        )
+        return R(False, tier, auto_exec, True, _EXEC_REASON_AUTO_EXEC_DISABLED)
 
-    # Check time window
-    current_hour = datetime.now().hour
-    start = perm.execution_start_hour
-    end = perm.execution_end_hour
-
-    if start == end:
-        # Zero-length window — never allowed (e.g., 0→0 or 10→10)
-        in_window = False
-    elif start < end:
-        in_window = start <= current_hour < end
-    else:
-        # Wrap-around (e.g., 22 to 6)
-        in_window = current_hour >= start or current_hour < end
-
-    if not in_window:
-        return ExecutionPermissionResult(
-            allowed=False,
-            permission_tier=tier,
-            auto_exec_enabled=auto_exec,
-            in_time_window=False,
-            reason="outside_execution_hours",
-        )
-
-    return ExecutionPermissionResult(
-        allowed=True,
-        permission_tier=tier,
-        auto_exec_enabled=auto_exec,
-        in_time_window=True,
-        reason="allowed",
+    in_window = _is_in_time_window(
+        perm.execution_start_hour, perm.execution_end_hour, datetime.now().hour
     )
+    if not in_window:
+        return R(False, tier, auto_exec, False, _EXEC_REASON_OUTSIDE_HOURS)
+
+    return R(True, tier, auto_exec, True, _EXEC_REASON_ALLOWED)
