@@ -19,8 +19,6 @@ from .analytics_models import (
     MemoryAnalyticsDashboard,
     MemoryAnalyticsState,
     OutcomeSummary,
-    ScopeDistribution,
-    TierDistribution,
     TimePeriodMetrics,
     TopMemory,
     UsageTotals,
@@ -70,91 +68,67 @@ def _format_period_key(created_at: datetime, period: str) -> str:
 
 def _build_outcome_summary(records: list[dict[str, Any]]) -> OutcomeSummary:
     """Summarize outcome coverage and success for a set of injection records."""
-    success_count = sum(1 for record in records if record.get("task_succeeded") is True)
-    fail_count = sum(1 for record in records if record.get("task_succeeded") is False)
-    unknown_count = sum(1 for record in records if record.get("task_succeeded") is None)
+    success_count = sum(1 for r in records if r.get("task_succeeded") is True)
+    fail_count = sum(1 for r in records if r.get("task_succeeded") is False)
+    unknown_count = sum(1 for r in records if r.get("task_succeeded") is None)
     known_count = success_count + fail_count
     total = known_count + unknown_count
-    coverage_rate = known_count / total if total > 0 else 0.0
-    success_rate = success_count / known_count if known_count > 0 else 0.0
     return OutcomeSummary(
         success_count=success_count,
         fail_count=fail_count,
         unknown_count=unknown_count,
         known_count=known_count,
-        coverage_rate=coverage_rate,
-        success_rate=success_rate,
+        coverage_rate=known_count / total if total > 0 else 0.0,
+        success_rate=success_count / known_count if known_count > 0 else 0.0,
     )
 
 
-async def get_recent_usage_totals(lookback_delta: timedelta) -> dict[str, int]:
-    """Aggregate usage_stat_log rows inside the requested window."""
-    cutoff = datetime.now(UTC) - lookback_delta
-    stmt = (
-        select(UsageStatLog.metric_type, func.coalesce(func.sum(UsageStatLog.value), 0))
-        .where(UsageStatLog.timestamp >= cutoff)
-        .group_by(UsageStatLog.metric_type)
-    )
-
-    async with async_session() as session:
-        rows = (await session.execute(stmt)).all()
-
-    totals = {"loaded": 0, "referenced": 0, "helpful": 0, "harmful": 0, "success": 0}
-    for metric_type, value in rows:
-        if metric_type in totals:
-            totals[metric_type] = int(value or 0)
-    return totals
+def _list_len(value: Any) -> int:
+    """Return len if value is a list, else 0."""
+    return len(value) if isinstance(value, list) else 0
 
 
-def _accumulate_injection_records(
-    raw_records: list[Any],
+def _accumulate_injection_record(
+    record: Any,
     period: str,
-) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
-    """Aggregate raw injection records into variant/period buckets."""
-    variant_data: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "success": 0, "fail": 0, "unknown": 0, "latency_sum": 0, "tokens_sum": 0, "loaded_sum": 0, "cited_sum": 0}
-    )
-    period_data: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
-    )
-    normalized_records: list[dict[str, Any]] = []
+    variant_data: dict[str, dict[str, Any]],
+    period_data: dict[str, dict[str, Any]],
+    normalized: list[dict[str, Any]],
+) -> None:
+    """Accumulate one injection record into variant and period buckets."""
+    loaded = record.memories_loaded or []
+    cited = record.memories_cited or []
+    task_succeeded = record.task_succeeded
+    normalized.append({"task_succeeded": task_succeeded})
 
-    for record in raw_records:
-        loaded = record.memories_loaded or []
-        cited = record.memories_cited or []
-        task_succeeded = record.task_succeeded
-        normalized_records.append({"task_succeeded": task_succeeded})
-        loaded_count = len(loaded) if isinstance(loaded, list) else 0
-        cited_count = len(cited) if isinstance(cited, list) else 0
+    variant = record.variant or "BASELINE"
+    vb = variant_data[variant]
+    vb["count"] += 1
+    if task_succeeded is True:
+        vb["success"] += 1
+    elif task_succeeded is False:
+        vb["fail"] += 1
+    else:
+        vb["unknown"] += 1
+    vb["latency_sum"] += record.injection_latency_ms or 0
+    vb["tokens_sum"] += record.total_tokens or 0
+    vb["loaded_sum"] += _list_len(loaded)
+    vb["cited_sum"] += _list_len(cited)
 
-        vb = variant_data[record.variant or "BASELINE"]
-        vb["count"] += 1
-        if task_succeeded is True:
-            vb["success"] += 1
-        elif task_succeeded is False:
-            vb["fail"] += 1
-        else:
-            vb["unknown"] += 1
-        vb["latency_sum"] += record.injection_latency_ms or 0
-        vb["tokens_sum"] += record.total_tokens or 0
-        vb["loaded_sum"] += loaded_count
-        vb["cited_sum"] += cited_count
-
-        pb = period_data[_format_period_key(record.created_at, period)]
-        pb["count"] += 1
-        if task_succeeded is True:
-            pb["success"] += 1
-            pb["known"] += 1
-        elif task_succeeded is False:
-            pb["known"] += 1
-        pb["loaded"] += loaded_count
-        pb["cited"] += cited_count
-
-    return variant_data, period_data, normalized_records
+    period_key = _format_period_key(record.created_at, period)
+    pb = period_data[period_key]
+    pb["count"] += 1
+    if task_succeeded is True:
+        pb["success"] += 1
+        pb["known"] += 1
+    elif task_succeeded is False:
+        pb["known"] += 1
+    pb["loaded"] += _list_len(loaded)
+    pb["cited"] += _list_len(cited)
 
 
-def _build_variant_metrics(variant_data: dict[str, dict[str, Any]]) -> list[VariantMetrics]:
-    """Build sorted VariantMetrics list from accumulated buckets."""
+def _build_variant_metrics_list(variant_data: dict[str, dict[str, Any]]) -> list[VariantMetrics]:
+    """Build sorted VariantMetrics list from accumulated variant buckets."""
     result = []
     for variant, data in sorted(variant_data.items()):
         count = data["count"]
@@ -167,7 +141,9 @@ def _build_variant_metrics(variant_data: dict[str, dict[str, Any]]) -> list[Vari
                 fail_count=data["fail"],
                 unknown_count=data["unknown"],
                 success_rate=round(data["success"] / known if known > 0 else 0.0, 3),
-                citation_rate=round(data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0, 3),
+                citation_rate=round(
+                    data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0, 3
+                ),
                 avg_latency_ms=round(data["latency_sum"] / count if count > 0 else 0.0, 1),
                 avg_tokens=round(data["tokens_sum"] / count if count > 0 else 0.0, 1),
             )
@@ -175,20 +151,59 @@ def _build_variant_metrics(variant_data: dict[str, dict[str, Any]]) -> list[Vari
     return result
 
 
-def _build_period_metrics(period_data: dict[str, dict[str, Any]]) -> list[TimePeriodMetrics]:
-    """Build sorted TimePeriodMetrics list from accumulated buckets."""
-    result = []
-    for period_key in sorted(period_data):
-        data = period_data[period_key]
-        result.append(
-            TimePeriodMetrics(
-                period=period_key,
-                injection_count=data["count"],
-                avg_success_rate=round(data["success"] / data["known"] if data["known"] > 0 else 0.0, 3),
-                avg_citation_rate=round(data["cited"] / data["loaded"] if data["loaded"] > 0 else 0.0, 3),
-            )
+def _build_period_metrics_list(period_data: dict[str, dict[str, Any]]) -> list[TimePeriodMetrics]:
+    """Build sorted TimePeriodMetrics list from accumulated period buckets."""
+    return [
+        TimePeriodMetrics(
+            period=period_key,
+            injection_count=data["count"],
+            avg_success_rate=round(
+                data["success"] / data["known"] if data["known"] > 0 else 0.0, 3
+            ),
+            avg_citation_rate=round(
+                data["cited"] / data["loaded"] if data["loaded"] > 0 else 0.0, 3
+            ),
         )
-    return result
+        for period_key, data in sorted(period_data.items())
+    ]
+
+
+async def _fetch_injection_records(
+    start_date: datetime,
+    end_date: datetime,
+    variant_filter: str | None,
+    project_id_filter: str | None,
+) -> list[Any]:
+    """Execute the injection metrics query and return raw ORM records."""
+    query = select(MemoryInjectionMetric).where(
+        MemoryInjectionMetric.created_at >= start_date,
+        MemoryInjectionMetric.created_at <= end_date,
+    )
+    if variant_filter:
+        query = query.where(MemoryInjectionMetric.variant == variant_filter)
+    if project_id_filter:
+        query = query.where(MemoryInjectionMetric.project_id == project_id_filter)
+    async with async_session() as session:
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+
+async def get_recent_usage_totals(lookback_delta: timedelta) -> dict[str, int]:
+    """Aggregate usage_stat_log rows inside the requested window."""
+    cutoff = datetime.now(UTC) - lookback_delta
+    stmt = (
+        select(UsageStatLog.metric_type, func.coalesce(func.sum(UsageStatLog.value), 0))
+        .where(UsageStatLog.timestamp >= cutoff)
+        .group_by(UsageStatLog.metric_type)
+    )
+    async with async_session() as session:
+        rows = (await session.execute(stmt)).all()
+
+    totals = {"loaded": 0, "referenced": 0, "helpful": 0, "harmful": 0, "success": 0}
+    for metric_type, value in rows:
+        if metric_type in totals:
+            totals[metric_type] = int(value or 0)
+    return totals
 
 
 async def get_injection_metrics_summary(
@@ -205,20 +220,24 @@ async def get_injection_metrics_summary(
 
     end_date = datetime.now(UTC)
     start_date = end_date - lookback_delta
-
-    query = select(MemoryInjectionMetric).where(
-        MemoryInjectionMetric.created_at >= start_date,
-        MemoryInjectionMetric.created_at <= end_date,
+    raw_records = await _fetch_injection_records(
+        start_date, end_date, variant_filter, project_id_filter
     )
-    if variant_filter:
-        query = query.where(MemoryInjectionMetric.variant == variant_filter)
-    if project_id_filter:
-        query = query.where(MemoryInjectionMetric.project_id == project_id_filter)
 
-    async with async_session() as session:
-        raw_records = (await session.execute(query)).scalars().all()
+    variant_data: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "success": 0, "fail": 0, "unknown": 0,
+                 "latency_sum": 0, "tokens_sum": 0, "loaded_sum": 0, "cited_sum": 0}
+    )
+    period_data: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
+    )
+    normalized_records: list[dict[str, Any]] = []
 
-    variant_data, period_data, normalized_records = _accumulate_injection_records(raw_records, period)
+    for record in raw_records:
+        _accumulate_injection_record(record, period, variant_data, period_data, normalized_records)
+
+    by_variant = _build_variant_metrics_list(variant_data)
+    by_period = _build_period_metrics_list(period_data)
     outcomes = _build_outcome_summary(normalized_records)
     total_loaded = sum(d["loaded_sum"] for d in variant_data.values())
     total_cited = sum(d["cited_sum"] for d in variant_data.values())
@@ -228,8 +247,8 @@ async def get_injection_metrics_summary(
         period_start=start_date.isoformat(),
         period_end=end_date.isoformat(),
         period_granularity=period,
-        by_variant=_build_variant_metrics(variant_data),
-        by_period=_build_period_metrics(period_data),
+        by_variant=by_variant,
+        by_period=by_period,
         overall_success_rate=round(outcomes.success_rate, 3),
         overall_citation_rate=round(total_cited / total_loaded, 3) if total_loaded > 0 else 0.0,
         outcomes=outcomes,
@@ -245,38 +264,6 @@ async def get_top_memories(
     return await get_top_memories_query(group_id, sort_by, limit)
 
 
-async def _fetch_state_data(
-    group_id: str | None,
-    top_memories_sort_by: str,
-    top_memories_limit: int,
-) -> tuple[
-    list[TierDistribution],
-    list[ScopeDistribution],
-    UsageTotals,
-    float,
-    float,
-    dict[str, float],
-    list[TopMemory],
-]:
-    """Fetch all state-oriented analytics."""
-    tier_dist = await get_tier_distribution(group_id)
-    scope_dist = await get_scope_distribution(group_id)
-    usage_totals = _normalize_usage_totals(await get_usage_aggregates(group_id))
-    avg_utility = await get_avg_utility_score(group_id)
-    avg_lifecycle = await get_avg_lifecycle_score(group_id)
-    lifecycle_tiers = await get_lifecycle_by_tier(group_id)
-    top_memories = await get_top_memories_query(group_id, top_memories_sort_by, top_memories_limit)
-    return (
-        tier_dist,
-        scope_dist,
-        usage_totals,
-        avg_utility,
-        avg_lifecycle,
-        lifecycle_tiers,
-        top_memories,
-    )
-
-
 async def get_memory_dashboard(
     *,
     group_id: str | None = None,
@@ -287,15 +274,14 @@ async def get_memory_dashboard(
 ) -> MemoryAnalyticsDashboard:
     """Return the explicit analytics dashboard payload for the memory page."""
     period = _determine_activity_period(lookback_delta)
-    (
-        tier_dist,
-        scope_dist,
-        state_usage_totals,
-        avg_utility,
-        avg_lifecycle,
-        lifecycle_tiers,
-        top_memories,
-    ) = await _fetch_state_data(group_id, top_memories_sort_by, top_memories_limit)
+
+    tier_dist = await get_tier_distribution(group_id)
+    scope_dist = await get_scope_distribution(group_id)
+    state_usage_totals = _normalize_usage_totals(await get_usage_aggregates(group_id))
+    avg_utility = await get_avg_utility_score(group_id)
+    avg_lifecycle = await get_avg_lifecycle_score(group_id)
+    lifecycle_tiers = await get_lifecycle_by_tier(group_id)
+    top_memories = await get_top_memories_query(group_id, top_memories_sort_by, top_memories_limit)
 
     activity_usage_totals = _normalize_usage_totals(await get_recent_usage_totals(lookback_delta))
     injection_metrics = await get_injection_metrics_summary(lookback_delta, period=period)
