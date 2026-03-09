@@ -760,9 +760,30 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                '[{"id":"task-running"}]',
                 "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\n"
                 "agent-hub worktrees:2 dirty:0 orphan:1 prunable:0 finalize:task-old conflicts:task-conflict",
+            ]
+        )
+
+        result = await manage_tasks(
+            mock_bash,
+            action="dispatch",
+            task_id="42",
+            project_id="agent-hub",
+        )
+
+        assert "Dispatch blocked" in result
+        assert "cleanup residue" in result
+        assert mock_bash.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_dispatch_warns_on_running_tasks_when_cleanup_is_clear(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\nagent-hub worktrees:2 dirty:0 orphan:1 prunable:0 tasks:task-1",
+                '[{"id":"task-running"}]',
                 '{"task_id":"42","status":"queued"}',
             ]
         )
@@ -775,7 +796,6 @@ class TestManageTasks:
         )
 
         assert "task(s) already running" in result
-        assert "unresolved merge/conflict residue" in result
         assert '"status":"queued"' in result
         assert mock_bash.await_count == 3
 

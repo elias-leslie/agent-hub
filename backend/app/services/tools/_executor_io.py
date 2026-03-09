@@ -491,12 +491,35 @@ async def _build_dispatch_warning(
         return ""  # Never block dispatch on warning failure
 
 
+async def _cleanup_dispatch_block_reason(
+    bash_fn: Callable[..., Awaitable[str]],
+    project_id: str | None,
+) -> str | None:
+    """Return a blocking reason when cleanup residue should stop new dispatches."""
+    if not project_id:
+        return None
+    try:
+        cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
+    except Exception:
+        return None
+
+    if " finalize:" in cleanup_status or " conflicts:" in cleanup_status or " review:" in cleanup_status:
+        return (
+            "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
+            "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
+        )
+    return None
+
+
 async def _handle_dispatch(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
     project_id: str | None,
 ) -> str:
     """Dispatch a task via autocode, prefixed with any running-task warning."""
+    block_reason = await _cleanup_dispatch_block_reason(bash_fn, project_id)
+    if block_reason:
+        return block_reason
     warning = await _build_dispatch_warning(bash_fn, project_id)
     result = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
     return warning + result
