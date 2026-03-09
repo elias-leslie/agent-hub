@@ -16,6 +16,7 @@ from app.workflows._heartbeat_data import (
     _get_cleanup_status_summary,
     _get_git_project_status,
     _get_git_status_summary,
+    _get_protection_status_summary,
     _get_workstream_inventory,
 )
 
@@ -172,6 +173,10 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
+        "app.workflows._heartbeat_prompt._get_protection_status_summary",
+        return_value="\n<protection_status>\nLATEST bkp-123|completed|8.5MB\nSOURCE:agent-hub|enabled|daily|retention_days:30\n</protection_status>",
+    )
+    @patch(
         "app.workflows._heartbeat_prompt._get_cleanup_status_summary",
         return_value="\n<cleanup_status>\nCLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 orphan=1 prunable=0\n</cleanup_status>",
     )
@@ -200,6 +205,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
         from app.workflows._heartbeat_prompt import build_heartbeat_prompt
 
         prompt = await build_heartbeat_prompt(model_review_due=False, model_review_label="skip")
+        assert "<protection_status>" in prompt
+        assert "LATEST bkp-123|completed|8.5MB" in prompt
         assert "<cleanup_status>" in prompt
         assert "CLEANUP[all]:repos=2 needs_cleanup=1" in prompt
         assert "<git_state>" in prompt
@@ -210,6 +217,40 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "## Available Tools (5 total)" in prompt
         assert "tool1, tool2" in prompt
         assert "Follow your <heartbeat_instructions> from your system context." in prompt
+
+
+class TestProtectionStatusSummary:
+    """Tests for the heartbeat protection summary block."""
+
+    @patch("app.workflows._heartbeat_data._fetch_backup_schedule")
+    @patch("app.workflows._heartbeat_data._fetch_backup_status")
+    def test_returns_target_project_backup_summary(
+        self,
+        mock_status: MagicMock,
+        mock_schedule: MagicMock,
+    ) -> None:
+        mock_status.return_value = "LATEST bkp-123|completed|8.5MB"
+        mock_schedule.return_value = "SOURCE:agent-hub|enabled|daily|retention_days:30"
+
+        result = _get_protection_status_summary("agent-hub")
+
+        assert result.startswith("\n<protection_status>")
+        assert "LATEST bkp-123|completed|8.5MB" in result
+        assert "SOURCE:agent-hub|enabled|daily|retention_days:30" in result
+        mock_status.assert_called_once_with("agent-hub")
+        mock_schedule.assert_called_once_with("agent-hub")
+
+    @patch("app.workflows._heartbeat_data._fetch_backup_schedule")
+    @patch("app.workflows._heartbeat_data._fetch_backup_status")
+    def test_empty_when_no_backup_data(
+        self,
+        mock_status: MagicMock,
+        mock_schedule: MagicMock,
+    ) -> None:
+        mock_status.return_value = ""
+        mock_schedule.return_value = ""
+
+        assert _get_protection_status_summary("agent-hub") == ""
 
 
 class TestActiveSpecialistInventory:

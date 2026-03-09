@@ -66,6 +66,7 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
 # workflows regardless of the project's read/write tier.
 _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_tasks",
+    "manage_backups",
     "schedule_job",
     "cancel_scheduled_job",
     "send_push",

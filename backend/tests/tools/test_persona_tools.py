@@ -1511,3 +1511,83 @@ class TestManageTasks:
         result = await manage_tasks(mock_bash, action="nonsense")
         assert "Error" in result
         assert "Unknown action" in result
+
+
+class TestManageBackups:
+    """Tests for manage_backups tool."""
+
+    @pytest.mark.asyncio
+    async def test_protection_status_for_project(self):
+        from app.services.tools._executor_backups import manage_backups
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "LATEST bkp-123|completed|8.5MB",
+                "SOURCE:agent-hub|enabled|daily|retention_days:30",
+            ]
+        )
+
+        result = await manage_backups(
+            mock_bash,
+            action="protection_status",
+            project_id="agent-hub",
+        )
+
+        assert "LATEST bkp-123|completed|8.5MB" in result
+        assert "SOURCE:agent-hub|enabled|daily|retention_days:30" in result
+        assert "---" in result
+        mock_bash.assert_any_await("st -P agent-hub backup status")
+        mock_bash.assert_any_await("st backup schedule agent-hub")
+
+    @pytest.mark.asyncio
+    async def test_create_project_backup(self):
+        from app.services.tools._executor_backups import manage_backups
+
+        mock_bash = AsyncMock(return_value="QUEUED backup-task-1")
+        result = await manage_backups(
+            mock_bash,
+            action="create",
+            project_id="agent-hub",
+            note="Pre-risk cleanup",
+        )
+
+        assert "QUEUED" in result
+        mock_bash.assert_awaited_once_with("st -P agent-hub backup create -n 'Pre-risk cleanup'")
+
+    @pytest.mark.asyncio
+    async def test_restore_requires_backup_id(self):
+        from app.services.tools._executor_backups import manage_backups
+
+        mock_bash = AsyncMock()
+        result = await manage_backups(mock_bash, action="restore", project_id="agent-hub")
+
+        assert "backup_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_schedule_requires_source_id(self):
+        from app.services.tools._executor_backups import manage_backups
+
+        mock_bash = AsyncMock()
+        result = await manage_backups(mock_bash, action="schedule")
+
+        assert "source_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_restore_dry_run_uses_source(self):
+        from app.services.tools._executor_backups import manage_backups
+
+        mock_bash = AsyncMock(return_value="DRY_RUN task-restore-1")
+        result = await manage_backups(
+            mock_bash,
+            action="restore",
+            source_id=".claude",
+            backup_id="bkp-123",
+            dry_run=True,
+        )
+
+        assert "DRY_RUN" in result
+        mock_bash.assert_awaited_once_with(
+            "st backup restore bkp-123 --dry-run --source .claude"
+        )
