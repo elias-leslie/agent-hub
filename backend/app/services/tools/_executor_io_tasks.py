@@ -8,6 +8,8 @@ import shlex
 import tempfile
 from collections.abc import Awaitable, Callable
 
+from app.services.cleanup_summary import build_actionable_cleanup_summary
+
 logger = logging.getLogger(__name__)
 
 
@@ -158,7 +160,9 @@ async def _handle_cleanup_status(
     """Return canonical cleanup status for a concrete project."""
     if not project_id:
         return 'Error: project_id required for cleanup_status'
-    return await bash_fn(_st_cmd("cleanup status", project_id))
+    cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
+    actionable = build_actionable_cleanup_summary(cleanup_status)
+    return f"{cleanup_status}\n\n{actionable}" if actionable else cleanup_status
 
 
 async def _handle_cleanup_worktrees(

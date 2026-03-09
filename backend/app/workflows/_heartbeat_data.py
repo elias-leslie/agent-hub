@@ -7,6 +7,7 @@ import re
 import subprocess
 from datetime import UTC, datetime
 
+from app.services.cleanup_summary import build_actionable_cleanup_summary
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     collapse_active_workstream_rows,
@@ -110,7 +111,11 @@ def _fetch_cleanup_status() -> str:
             text=True,
             timeout=15,
         )
-        return proc.stdout.strip() if proc.stdout.strip() else ""
+        output = proc.stdout.strip()
+        if not output:
+            return ""
+        actionable = build_actionable_cleanup_summary(output)
+        return f"{output}\n\n{actionable}" if actionable else output
     except Exception:
         logger.debug("Failed to fetch cleanup status for heartbeat prompt", exc_info=True)
         return ""
