@@ -8,8 +8,6 @@ import {
   Inbox,
   ChevronRight,
   CheckCircle2,
-  Activity,
-  Sparkles,
 } from "lucide-react";
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -43,9 +41,6 @@ interface ActivityTimelineProps {
   heartbeatRunning?: boolean;
   heartbeatLastRun?: string | null;
 }
-
-type FilterMode = "highlights" | "all";
-
 /* ── Helpers ───────────────────────────────────────── */
 
 const isHeartbeatSession = (s: ActivitySession) =>
@@ -228,37 +223,6 @@ function CollapsedOKGroup({ sessions }: { sessions: ActivitySession[] }) {
   );
 }
 
-/* ── All Quiet State ───────────────────────────────── */
-
-function AllQuietState({
-  okCount,
-  onShowAll,
-}: {
-  okCount: number;
-  onShowAll: () => void;
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/20 flex items-center justify-center mb-4">
-        <CheckCircle2 className="w-7 h-7 text-emerald-400/60 dark:text-emerald-500/50" />
-      </div>
-      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-        All quiet
-      </p>
-      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
-        {okCount} routine check{okCount !== 1 ? "s" : ""} passed — no actions
-        needed
-      </p>
-      <button
-        onClick={onShowAll}
-        className="mt-4 text-[11px] font-medium text-amber-600/70 dark:text-amber-500/70 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
-      >
-        Show all activity &rarr;
-      </button>
-    </div>
-  );
-}
-
 /* ── Chat Session Card ─────────────────────────────── */
 
 function ChatSessionCard({
@@ -369,7 +333,6 @@ export function ActivityTimeline({
   heartbeatLastRun = null,
 }: ActivityTimelineProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
-  const [filterMode, setFilterMode] = useState<FilterMode>("highlights");
   const [sessions, setSessions] = useState<ActivitySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -418,7 +381,7 @@ export function ActivityTimeline({
     fetchActivity(nextPage, timeRange);
   }, [page, timeRange, fetchActivity]);
 
-  /* Group sessions by date, separating highlights from routine OK checks */
+  /* Group sessions by date, separating significant activity from routine OK checks */
   const groupedView = useMemo(() => {
     const groups: {
       date: string;
@@ -435,26 +398,17 @@ export function ActivityTimeline({
       }
       const group = groups[groups.length - 1];
 
-      if (filterMode === "highlights") {
-        if (isHighlight(session)) {
-          group.highlights.push(session);
-        } else if (isHeartbeatSession(session)) {
-          group.okHeartbeats.push(session);
-        }
-      } else {
-        // "all" mode: everything rendered individually
+      if (isHighlight(session)) {
         group.highlights.push(session);
+      } else if (isHeartbeatSession(session)) {
+        group.okHeartbeats.push(session);
       }
     }
 
     return groups;
-  }, [sessions, filterMode]);
+  }, [sessions]);
 
   /* Stats */
-  const highlightCount = useMemo(
-    () => sessions.filter(isHighlight).length,
-    [sessions],
-  );
   const okCount = useMemo(
     () =>
       sessions.filter(
@@ -475,8 +429,7 @@ export function ActivityTimeline({
     heartbeatRunning || sessions.some((s) => isHeartbeatSession(s) && s.status === "active");
 
   const hasAnyContent = sessions.length > 0;
-  const hasHighlights =
-    filterMode === "highlights" && groupedView.some((g) => g.highlights.length > 0);
+  const hasHighlights = groupedView.some((g) => g.highlights.length > 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -491,41 +444,13 @@ export function ActivityTimeline({
 
       {/* Filter bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setFilterMode("highlights")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all",
-              filterMode === "highlights"
-                ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-500/20"
-                : "text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
-            )}
-          >
-            <Sparkles className="w-3 h-3" />
-            Highlights
-            {!loading && highlightCount > 0 && (
-              <span className="text-[9px] font-mono ml-0.5 opacity-70">
-                {highlightCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setFilterMode("all")}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all",
-              filterMode === "all"
-                ? "bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border border-slate-200/50 dark:border-slate-600/30"
-                : "text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
-            )}
-          >
-            <Activity className="w-3 h-3" />
-            All
-            {!loading && (
-              <span className="text-[9px] font-mono ml-0.5 opacity-70">
-                {total}
-              </span>
-            )}
-          </button>
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium text-slate-600 dark:text-slate-300">
+            Single activity feed
+          </p>
+          <p className="text-[10px] text-slate-400 dark:text-slate-500">
+            Routine heartbeat checks stay collapsed unless they need attention.
+          </p>
         </div>
         <TimeRangeDropdown value={timeRange} onChange={handleTimeRangeChange} />
       </div>
@@ -567,11 +492,19 @@ export function ActivityTimeline({
               Try a wider range or wait for the next heartbeat cycle
             </p>
           </div>
-        ) : filterMode === "highlights" && !hasHighlights ? (
-          <AllQuietState
-            okCount={okCount}
-            onShowAll={() => setFilterMode("all")}
-          />
+        ) : !hasHighlights && okCount > 0 ? (
+          <div className="space-y-1.5">
+            {groupedView.map((group) => {
+              if (group.okHeartbeats.length === 0) return null;
+
+              return (
+                <div key={group.date}>
+                  <DateDivider date={group.date} />
+                  <CollapsedOKGroup sessions={group.okHeartbeats} />
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="space-y-1.5">
             {groupedView.map((group) => {

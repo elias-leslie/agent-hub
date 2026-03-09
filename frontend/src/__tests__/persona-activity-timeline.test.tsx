@@ -45,10 +45,11 @@ describe("ActivityTimeline", () => {
     render(<ActivityTimeline />);
 
     await waitFor(() => {
-      expect(screen.getByText("All quiet")).toBeInTheDocument();
+      expect(screen.getByText("Single activity feed")).toBeInTheDocument();
     });
 
     expect(screen.getByText(/1 routine check passed/)).toBeInTheDocument();
+    expect(screen.queryByText("All quiet")).not.toBeInTheDocument();
   });
 
   it("renders generic completion sessions as autonomous runs instead of heartbeats", async () => {
@@ -80,5 +81,25 @@ describe("ActivityTimeline", () => {
     });
 
     expect(screen.getByText("network down")).toBeInTheDocument();
+  });
+
+  it("does not render highlight/all toggle controls anymore", async () => {
+    vi.mocked(fetchApi).mockResolvedValueOnce(
+      jsonResponse({
+        sessions: [{ ...baseSession, session_type: "completion" }],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      }),
+    );
+
+    render(<ActivityTimeline />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Single activity feed")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Highlights")).not.toBeInTheDocument();
+    expect(screen.queryByText("All")).not.toBeInTheDocument();
   });
 });
