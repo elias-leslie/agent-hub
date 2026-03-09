@@ -23,6 +23,18 @@ class EpisodeValidator:
     CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?<![\|])\s*::\s*|(?<!\|)\s*->\s*(?!\|)"
     )
+    HEARTBEAT_JOURNAL_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
+    )
+    TASK_EXECUTION_LOG_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?i)\b(subtask\s+[a-z0-9-]+.*\battempts?\b|merge of task\s+[a-z0-9-]+|task-[a-z0-9]{6,})\b"
+    )
+    DOCUMENT_ARTIFACT_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?i)(document pattern for this household|source document:\s|^question:\s|^answer:\s)"
+    )
+    SESSION_SUMMARY_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?im)^\[session summary:"
+    )
 
     # Verbose patterns that indicate conversational/verbose content
     VERBOSE_PATTERNS: ClassVar[list[str]] = [
@@ -109,6 +121,46 @@ class EpisodeValidator:
             )
 
         return None
+
+    @classmethod
+    def validate_reusability(cls, content: str) -> None:
+        """Validate that content is reusable memory rather than an operational log."""
+        detected = cls._detect_non_reusable_patterns(content)
+        if detected:
+            raise EpisodeValidationError(
+                message=(
+                    "Episode is not reusable long-term memory. Store operational logs, "
+                    "heartbeat journals, session summaries, and document-specific app state "
+                    "in project/session data instead. "
+                    f"Detected patterns: {', '.join(repr(pattern) for pattern in detected)}"
+                ),
+                detected_patterns=detected,
+            )
+
+    @classmethod
+    def validate_reusability_simple(cls, content: str) -> str | None:
+        """Return an error message when content looks like non-reusable operational data."""
+        detected = cls._detect_non_reusable_patterns(content)
+        if not detected:
+            return None
+        return (
+            "Content is not reusable long-term memory. Store operational logs, heartbeat "
+            "journals, session summaries, and document-specific app state in project/session "
+            f"data instead. Detected patterns: {', '.join(repr(pattern) for pattern in detected)}"
+        )
+
+    @classmethod
+    def _detect_non_reusable_patterns(cls, content: str) -> list[str]:
+        detected: list[str] = []
+        if cls.HEARTBEAT_JOURNAL_PATTERN.search(content):
+            detected.append("heartbeat journal")
+        if cls.TASK_EXECUTION_LOG_PATTERN.search(content):
+            detected.append("task execution log")
+        if cls.DOCUMENT_ARTIFACT_PATTERN.search(content):
+            detected.append("document-specific artifact")
+        if cls.SESSION_SUMMARY_PATTERN.search(content):
+            detected.append("session summary")
+        return detected
 
     @classmethod
     def validate_summary(cls, summary: str) -> None:
