@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from typing import NoReturn
 
 from app.adapters.base import (
     Message,
@@ -133,6 +134,18 @@ async def _try_escalation(
     return CompletionResult(result=result, model_used=escalation, used_fallback=True)
 
 
+def _raise_all_models_failed(
+    agent: AgentDTO, primary_model: str, primary_reason: str | None
+) -> NoReturn:
+    """Raise ProviderError reporting exhausted model chain."""
+    raise ProviderError(
+        provider=get_provider_for_model(primary_model),
+        message=f"All models failed for agent {agent.slug}: primary={primary_model}, "
+        f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}, "
+        f"primary_error={primary_reason}",
+    )
+
+
 async def complete_with_fallback(
     messages: list[Message],
     agent: AgentDTO,
@@ -154,7 +167,6 @@ async def complete_with_fallback(
     primary_model = primary_model_override or agent.primary_model_id
     verbosity_level = getattr(agent, "verbosity_level", None)
 
-    # Try primary (possibly overridden by @mention)
     result, primary_error = await _try_model(
         messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level
     )
@@ -179,13 +191,7 @@ async def complete_with_fallback(
         escalation_result.fallback_reason = primary_reason
         return escalation_result
 
-    primary_provider = get_provider_for_model(primary_model)
-    raise ProviderError(
-        provider=primary_provider,
-        message=f"All models failed for agent {agent.slug}: primary={primary_model}, "
-        f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}, "
-        f"primary_error={primary_reason}",
-    )
+    _raise_all_models_failed(agent, primary_model, primary_reason)
 
 
 def inject_system_prompt_into_messages(
