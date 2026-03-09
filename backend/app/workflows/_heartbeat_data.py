@@ -108,6 +108,35 @@ def _fetch_cleanup_status() -> str:
         return ""
 
 
+def _fetch_backup_status(project_id: str | None = None) -> str:
+    """Fetch most recent backup status for a project-backed source."""
+    cmd = ["st"]
+    if project_id:
+        cmd.extend(["-P", project_id])
+    cmd.extend(["backup", "status"])
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return proc.stdout.strip() if proc.stdout.strip() else ""
+    except Exception:
+        logger.debug("Failed to fetch backup status for heartbeat prompt", exc_info=True)
+        return ""
+
+
+def _fetch_backup_schedule(source_id: str) -> str:
+    """Fetch schedule details for a single backup source."""
+    try:
+        proc = subprocess.run(
+            ["st", "backup", "schedule", source_id],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        return proc.stdout.strip() if proc.stdout.strip() else ""
+    except Exception:
+        logger.debug("Failed to fetch backup schedule for heartbeat prompt", exc_info=True)
+        return ""
+
+
 def _format_session_line(session: dict[str, object]) -> str:
     """Format a single session dict into a summary line."""
     agent = session.get("agent_slug", "session")
@@ -631,6 +660,24 @@ def _get_cleanup_status_summary() -> str:
     return f"\n<cleanup_status>\n{cleanup_status}\n</cleanup_status>"
 
 
+def _get_protection_status_summary(target_project_id: str | None = None) -> str:
+    """Build a <protection_status> XML block from canonical backup surfaces."""
+    sections: list[str] = []
+
+    latest = _fetch_backup_status(target_project_id)
+    if latest:
+        sections.append(latest)
+
+    target_source = target_project_id or "persona-sandbox"
+    schedule = _fetch_backup_schedule(target_source)
+    if schedule:
+        sections.append(schedule)
+
+    if not sections:
+        return ""
+    return "\n<protection_status>\n" + "\n---\n".join(sections) + "\n</protection_status>"
+
+
 async def _get_agent_roster_summary() -> str:
     """Build an <agent_roster> XML block listing active agents with descriptions."""
     try:
@@ -786,6 +833,7 @@ __all__ = [
     "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
+    "_get_protection_status_summary",
     "_get_workstream_inventory",
     "get_project_access_summary",
 ]

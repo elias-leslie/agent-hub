@@ -118,6 +118,93 @@ MANAGE_TASKS_TOOL = Tool(
     usage_examples=["Get full context for a task before dispatching follow-up work."],
 )
 
+MANAGE_BACKUPS_TOOL = Tool(
+    name="manage_backups",
+    description=(
+        "Inspect protection state and run backup operations. Use this for routine backup "
+        "checks, pre-risk snapshots, schedule review, and restore dry-runs."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": [
+                    "protection_status",
+                    "status",
+                    "sources",
+                    "list",
+                    "create",
+                    "restore",
+                    "schedule",
+                ],
+                "description": "The backup operation to perform",
+            },
+            "project_id": {
+                "type": "string",
+                "description": "Project-scoped backup target (e.g. summitflow, agent-hub)",
+            },
+            "source_id": {
+                "type": "string",
+                "description": "Non-project backup source (e.g. .claude, persona-sandbox) or explicit source for schedule",
+            },
+            "backup_id": {
+                "type": "string",
+                "description": "Backup ID for restore",
+            },
+            "note": {
+                "type": "string",
+                "description": "Optional note for manual backups",
+            },
+            "keep_local": {
+                "type": "boolean",
+                "description": "Keep a local copy of a manual backup",
+                "default": False,
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Preview a restore without applying it",
+                "default": True,
+            },
+            "source_type": {
+                "type": "string",
+                "enum": ["project", "config", "workspace"],
+                "description": "Optional source-type filter for sources/protection checks",
+            },
+            "status": {
+                "type": "string",
+                "description": "Optional backup status filter for list",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max backups to show for list",
+                "default": 10,
+            },
+            "enable": {
+                "type": "boolean",
+                "description": "Enable or disable a backup schedule",
+            },
+            "frequency": {
+                "type": "string",
+                "enum": ["daily", "weekly", "monthly"],
+                "description": "Schedule frequency to set",
+            },
+            "retention_days": {
+                "type": "integer",
+                "description": "Retention period for scheduled backups",
+            },
+        },
+        "required": ["action"],
+    },
+    category="operations",
+    search_keywords=["backup", "restore", "dr", "recovery", "schedule"],
+    usage_examples=[
+        "Check protection state before risky cleanup work.",
+        "Create a manual backup before a destructive bulk operation.",
+        "Dry-run a restore before attempting full disaster recovery.",
+    ],
+)
+
 # --- Model configuration tool ---
 
 MANAGE_MODEL_CONFIG_TOOL = Tool(

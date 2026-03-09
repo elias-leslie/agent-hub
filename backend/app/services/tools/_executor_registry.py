@@ -51,6 +51,82 @@ async def _manage_model_config(
     )
 
 
+async def _manage_backups(
+    bash_fn: Any,
+    action: str,
+    project_id: str | None = None,
+    source_id: str | None = None,
+    backup_id: str | None = None,
+    note: str | None = None,
+    keep_local: bool = False,
+    dry_run: bool = True,
+    source_type: str | None = None,
+    status: str | None = None,
+    limit: int = 10,
+    enable: bool | None = None,
+    frequency: str | None = None,
+    retention_days: int | None = None,
+) -> str:
+    """Dispatch backup management actions to the operational backup helper."""
+    from app.services.tools._executor_backups import manage_backups
+
+    return await manage_backups(
+        bash_fn,
+        action,
+        project_id=project_id,
+        source_id=source_id,
+        backup_id=backup_id,
+        note=note,
+        keep_local=keep_local,
+        dry_run=dry_run,
+        source_type=source_type,
+        status=status,
+        limit=limit,
+        enable=enable,
+        frequency=frequency,
+        retention_days=retention_days,
+    )
+
+
+def _make_manage_backups_bound(bash_fn: Any, project_id: str | None) -> Any:
+    """Return a manage_backups callable bound to the given bash function and project."""
+    bound_project_id = project_id
+
+    async def _manage_backups_bound(
+        action: str,
+        project_id: str | None = bound_project_id,
+        source_id: str | None = None,
+        backup_id: str | None = None,
+        note: str | None = None,
+        keep_local: bool = False,
+        dry_run: bool = True,
+        source_type: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
+        enable: bool | None = None,
+        frequency: str | None = None,
+        retention_days: int | None = None,
+    ) -> str:
+        return await _manage_backups(
+            bash_fn,
+            action,
+            project_id=project_id,
+            source_id=source_id,
+            backup_id=backup_id,
+            note=note,
+            keep_local=keep_local,
+            dry_run=dry_run,
+            source_type=source_type,
+            status=status,
+            limit=limit,
+            enable=enable,
+            frequency=frequency,
+            retention_days=retention_days,
+        )
+
+    return _manage_backups_bound
+
+
 def _make_manage_tasks_bound(bash_fn: Any, project_id: str | None) -> Any:
     """Return a manage_tasks callable bound to the given bash function and project."""
     from app.services.tools._executor_io import manage_tasks
@@ -139,6 +215,7 @@ def build_tool_registry(
         "cancel_scheduled_job": cancel_scheduled_job,
         "send_push": send_push,
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
+        "manage_backups": _make_manage_backups_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
         "manage_feedback": manage_feedback,
         "query_sessions": query_sessions,

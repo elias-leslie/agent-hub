@@ -16,6 +16,7 @@ from app.workflows._heartbeat_data import (
     _get_feedback_summary_section,
     _get_git_status_summary,
     _get_persona_tool_summary,
+    _get_protection_status_summary,
     _get_workstream_inventory,
     get_project_access_summary,
 )
@@ -118,10 +119,11 @@ async def _build_core_prompt(
     return prompt
 
 
-async def _append_dynamic_sections(prompt: str) -> str:
+async def _append_dynamic_sections(prompt: str, target_project_id: str | None = None) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
     for section in (
         await _get_active_work_summary(),
+        _get_protection_status_summary(target_project_id),
         _get_cleanup_status_summary(),
         await _get_active_specialist_inventory(),
         await _get_agent_roster_summary(),
@@ -141,7 +143,7 @@ async def build_heartbeat_prompt(
 ) -> str:
     """Build the heartbeat prompt with dynamic model review and project access."""
     prompt = await _build_core_prompt(model_review_due, model_review_label, target_project_id)
-    return await _append_dynamic_sections(prompt)
+    return await _append_dynamic_sections(prompt, target_project_id)
 
 
 __all__ = [
