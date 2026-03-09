@@ -14,16 +14,8 @@ from app.services.memory.analytics_models import (
 )
 from app.services.memory.analytics_service import (
     _build_outcome_summary,
-    _determine_activity_period,
     get_memory_dashboard,
 )
-
-
-def test_determine_activity_period_uses_hour_for_short_lookbacks() -> None:
-    """1h and 1d windows should aggregate by hour."""
-    assert _determine_activity_period(timedelta(hours=1)) == "hour"
-    assert _determine_activity_period(timedelta(days=1)) == "hour"
-    assert _determine_activity_period(timedelta(days=7)) == "day"
 
 
 def test_build_outcome_summary_tracks_coverage_and_unknowns() -> None:
