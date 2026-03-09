@@ -1088,6 +1088,48 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
+    async def test_reconcile_finalizes_after_admin_done_without_checkpoint_merge(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "Task not ready to complete: unknown",
+                "Task task-42 completed without checkpoint merge.",
+                "TASK:task-42|completed|P2|refactor|SIMPLE",
+                '{"task_id":"task-42","status":"merged"}',
+            ]
+        )
+        mock_db = AsyncMock()
+        completed_session = MagicMock(
+            status="completed",
+            summary_oneliner="Fixed the regression",
+            created_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert '"status":"merged"' in result
+        assert mock_bash.await_args_list[1].args[0] == (
+            "st -P summitflow done task-42 --admin --message "
+            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
+
+    @pytest.mark.asyncio
     async def test_reconcile_uses_finalize_for_terminal_merge_residue(self):
         from app.services.tools._executor_io import manage_tasks
 

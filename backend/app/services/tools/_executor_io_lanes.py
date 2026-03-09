@@ -294,6 +294,19 @@ async def _reconcile_task_lane(
     """Reconcile a task lane using Agent Hub session evidence."""
     from ._executor_io_tasks import _handle_finalize_merge
 
+    async def _finalize_if_terminal_merge_residue(result: str) -> str:
+        lowered = result.lower()
+        if (
+            "cannot merge - task" not in lowered
+            and "failed to merge " not in lowered
+            and _NO_CHECKPOINT_MERGE_PHRASE not in lowered
+        ):
+            return result
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        if _task_is_terminal(task_status):
+            return await _handle_finalize_merge(bash_fn, task_id, project_id)
+        return result
+
     sessions = await _load_task_lane_sessions(task_id)
     if not sessions:
         task_status = await _get_task_status(bash_fn, task_id, project_id)
@@ -345,13 +358,6 @@ async def _reconcile_task_lane(
             f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
             project_id,
         )
-        return await bash_fn(admin_cmd)
-    if "Cannot merge - task" in result or "Failed to merge " in result:
-        task_status = await _get_task_status(bash_fn, task_id, project_id)
-        if _task_is_terminal(task_status):
-            return await _handle_finalize_merge(bash_fn, task_id, project_id)
-    if _NO_CHECKPOINT_MERGE_PHRASE in result.lower():
-        task_status = await _get_task_status(bash_fn, task_id, project_id)
-        if _task_is_terminal(task_status):
-            return await _handle_finalize_merge(bash_fn, task_id, project_id)
-    return result
+        admin_result = await bash_fn(admin_cmd)
+        return await _finalize_if_terminal_merge_residue(admin_result)
+    return await _finalize_if_terminal_merge_residue(result)
