@@ -84,6 +84,33 @@ class TestEpisodeCreatorValidation:
 
         assert "i recommend" in str(exc.value)
 
+    @pytest.mark.parametrize(
+        ("content", "needle"),
+        [
+            (
+                "## Heartbeat: 20:56 EST\n\n### Orient\n- Active tasks: 1",
+                "heartbeat journal",
+            ),
+            (
+                "Subtask 53a75439 [refactor] required 3 attempts (1 self-fix, 1 guided).",
+                "task execution log",
+            ),
+            (
+                "**Pattern Walmart**: Document pattern for this household: 'receipt.pdf' classified as receipt.",
+                "document-specific artifact",
+            ),
+        ],
+    )
+    def test_rejects_low_value_operational_or_app_state_content(
+        self,
+        content: str,
+        needle: str,
+    ) -> None:
+        with pytest.raises(EpisodeValidationError) as exc:
+            EpisodeValidator.validate_reusability(content)
+
+        assert needle in str(exc.value).lower()
+
 
 class TestEpisodeCreatorCreate:
     """Tests for EpisodeCreator.create()."""
@@ -142,6 +169,19 @@ class TestEpisodeCreatorCreate:
         assert result.success is False
         assert result.validation_error is not None
         assert "too verbose" in result.validation_error.lower()
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_heartbeat_journal_for_learning_profile(self):
+        """Learning profile should reject operational heartbeat journals."""
+        result = await self.creator.create(
+            content="## Heartbeat: 20:56 EST\n\n### Orient\n- Active tasks: 1",
+            name="heartbeat_journal",
+            config=LEARNING,
+        )
+
+        assert result.success is False
+        assert result.validation_error is not None
+        assert "heartbeat journal" in result.validation_error.lower()
 
     @pytest.mark.asyncio
     async def test_create_skips_validation_for_chat_stream(self):

@@ -10,6 +10,7 @@ import pytest
 from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_injector import format_context_with_reference_index
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
+from app.services.memory.context_injector_queries import build_reference_toon_index
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -152,3 +153,47 @@ class TestReferenceInjection:
         assert "[R:f2ae2668]" in result
         assert "## Reference Index" in result
         assert "015a8754" in result
+
+    @pytest.mark.asyncio
+    async def test_build_reference_toon_index_skips_operational_noise(self) -> None:
+        with patch(
+            "app.services.memory.context_injector_queries.get_episodes_by_tier",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "uuid": "good-uuid",
+                        "summary": "Service scripts",
+                        "content": "**Service Scripts**: Use rebuild.sh for frontend changes.",
+                        "pinned": False,
+                        "metadata": {},
+                        "source_description": "learning",
+                    },
+                    {
+                        "uuid": "summary-uuid",
+                        "summary": "Session summary",
+                        "content": "[Session Summary: abc]\nSomething happened.",
+                        "pinned": False,
+                        "metadata": {"is_session_summary": True},
+                        "source_description": "session_summary",
+                    },
+                    {
+                        "uuid": "heartbeat-uuid",
+                        "summary": "Heartbeat",
+                        "content": "## Heartbeat: 20:56 EST\n\n### Orient",
+                        "pinned": False,
+                        "metadata": {},
+                        "source_description": "learning",
+                    },
+                ]
+            ),
+        ):
+            result = await build_reference_toon_index(MemoryScope.PROJECT, "portfolio-ai")
+
+        assert result == [
+            (
+                "good-uuid",
+                "Service scripts",
+                "**Service Scripts**: Use rebuild.sh for frontend changes.",
+                False,
+            )
+        ]

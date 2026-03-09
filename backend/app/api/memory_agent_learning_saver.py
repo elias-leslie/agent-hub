@@ -22,6 +22,7 @@ async def validate_learning_request(request: SaveLearningRequest) -> SaveLearnin
 
     EpisodeValidator.validate_content(request.content)
     EpisodeValidator.validate_summary(request.summary)
+    EpisodeValidator.validate_reusability(request.content)
     return None
 
 

@@ -11,7 +11,7 @@ from datetime import datetime
 from .embedder import EMBEDDING_MODEL
 from .episode_creator_models import CreateResult
 from .episode_validation import EpisodeValidator
-from .ingestion_config import IngestionConfig
+from .ingestion_config import LEARNING, IngestionConfig
 from .repository import MemoryRepository
 
 logger = logging.getLogger(__name__)
@@ -24,6 +24,10 @@ def validate_content(content: str, config: IngestionConfig) -> CreateResult | No
     validation_error = EpisodeValidator.validate_content_simple(content)
     if validation_error:
         return CreateResult(success=False, validation_error=validation_error)
+    if config == LEARNING:
+        reusability_error = EpisodeValidator.validate_reusability_simple(content)
+        if reusability_error:
+            return CreateResult(success=False, validation_error=reusability_error)
     return None
 
 
