@@ -707,10 +707,18 @@ class TestManageTasks:
     async def test_overview(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value="No tasks ready")
+        mock_bash = AsyncMock(
+            return_value=(
+                "READY-ALL[1 ready, 0 blocked, 0 active, 0 stale across 1 projects]\n\n"
+                "agent-hub (1 ready)\n"
+                "    task-52831804 P3 refactor [A] Refactor: backend/app/services/tools/_executor_consultation.py\n"
+            )
+        )
         result = await manage_tasks(mock_bash, action="overview")
 
-        assert "No tasks ready" in result
+        assert "READY-ALL[1 ready" in result
+        assert "ACTIONABLE-READY[1]" in result
+        assert "task-52831804" in result
 
     @pytest.mark.asyncio
     async def test_get_context_requires_task_id(self):

@@ -9,6 +9,8 @@ import logging
 import shlex
 from collections.abc import Awaitable, Callable
 
+from app.services.task_overview_summary import build_actionable_ready_summary
+
 from ._executor_io_lanes import (
     _load_task_lane_sessions,
     _reconcile_task_lane,
@@ -76,7 +78,9 @@ async def manage_tasks(
 ) -> str:
     """Quick task operations via st CLI."""
     if action == "overview":
-        return await bash_fn("st ready-all")
+        overview = await bash_fn("st ready-all")
+        actionable = build_actionable_ready_summary(overview)
+        return f"{overview}\n\n{actionable}" if actionable else overview
     if action == "get_context":
         err = _require_task_id(action, task_id)
         return err if err else await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id))  # type: ignore[arg-type]
