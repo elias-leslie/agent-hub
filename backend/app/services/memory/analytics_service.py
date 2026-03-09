@@ -38,13 +38,6 @@ from .analytics_queries import (
 logger = logging.getLogger(__name__)
 
 
-def _determine_activity_period(lookback_delta: timedelta) -> str:
-    """Use hourly buckets for short windows and daily buckets otherwise."""
-    if lookback_delta <= timedelta(days=1):
-        return "hour"
-    return "day"
-
-
 def _normalize_usage_totals(raw: dict[str, int]) -> UsageTotals:
     """Convert raw usage mappings into the dashboard schema."""
     return UsageTotals(
@@ -83,11 +76,6 @@ def _build_outcome_summary(records: list[dict[str, Any]]) -> OutcomeSummary:
     )
 
 
-def _list_len(value: Any) -> int:
-    """Return len if value is a list, else 0."""
-    return len(value) if isinstance(value, list) else 0
-
-
 def _accumulate_injection_record(
     record: Any,
     period: str,
@@ -112,8 +100,8 @@ def _accumulate_injection_record(
         vb["unknown"] += 1
     vb["latency_sum"] += record.injection_latency_ms or 0
     vb["tokens_sum"] += record.total_tokens or 0
-    vb["loaded_sum"] += _list_len(loaded)
-    vb["cited_sum"] += _list_len(cited)
+    vb["loaded_sum"] += len(loaded)
+    vb["cited_sum"] += len(cited)
 
     period_key = _format_period_key(record.created_at, period)
     pb = period_data[period_key]
@@ -123,8 +111,8 @@ def _accumulate_injection_record(
         pb["known"] += 1
     elif task_succeeded is False:
         pb["known"] += 1
-    pb["loaded"] += _list_len(loaded)
-    pb["cited"] += _list_len(cited)
+    pb["loaded"] += len(loaded)
+    pb["cited"] += len(cited)
 
 
 def _build_variant_metrics_list(variant_data: dict[str, dict[str, Any]]) -> list[VariantMetrics]:
@@ -273,7 +261,7 @@ async def get_memory_dashboard(
     top_memories_limit: int = 8,
 ) -> MemoryAnalyticsDashboard:
     """Return the explicit analytics dashboard payload for the memory page."""
-    period = _determine_activity_period(lookback_delta)
+    period = "hour" if lookback_delta <= timedelta(days=1) else "day"
 
     tier_dist = await get_tier_distribution(group_id)
     scope_dist = await get_scope_distribution(group_id)
