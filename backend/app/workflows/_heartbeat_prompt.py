@@ -29,6 +29,18 @@ MODEL_REVIEW_DO = (
     "`send_push` to flag stale benchmarks. Evaluate model assignments. Log via `log_agent_performance`."
 )
 MODEL_REVIEW_SKIP = "Not due — skip model review this heartbeat."
+_IANA_TZ_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b")
+
+
+def _validate_iana_timezone(tz_value: str) -> bool:
+    """Return True if tz_value is a valid IANA timezone identifier."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        ZoneInfo(tz_value)
+        return True
+    except (ZoneInfoNotFoundError, KeyError):
+        return False
 
 
 async def _get_persona_timezone() -> str:
@@ -39,8 +51,6 @@ async def _get_persona_timezone() -> str:
       2. Timezone mentioned in persona.user_context (best-effort regex)
       3. Fall back to America/New_York
     """
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
     from app.db import async_session
     from app.services._persona_crud import get_persona
 
@@ -58,25 +68,15 @@ async def _get_persona_timezone() -> str:
     if persona.limits and isinstance(persona.limits, dict):
         tz_value = persona.limits.get("timezone")
         if tz_value and isinstance(tz_value, str):
-            try:
-                ZoneInfo(tz_value)
+            if _validate_iana_timezone(tz_value):
                 return tz_value
-            except (ZoneInfoNotFoundError, KeyError):
-                logger.warning("Invalid timezone in persona.limits: %s", tz_value)
+            logger.warning("Invalid timezone in persona.limits: %s", tz_value)
 
-    # 2. Best-effort extraction from user_context
+    # 2. Best-effort extraction from user_context (IANA format e.g. America/Chicago)
     if persona.user_context:
-        # Match common IANA timezone patterns like America/Chicago, Europe/London, etc.
-        match = re.search(
-            r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b", persona.user_context
-        )
-        if match:
-            candidate = match.group(1)
-            try:
-                ZoneInfo(candidate)
-                return candidate
-            except (ZoneInfoNotFoundError, KeyError):
-                pass
+        match = _IANA_TZ_PATTERN.search(persona.user_context)
+        if match and _validate_iana_timezone(match.group(1)):
+            return match.group(1)
 
     return _DEFAULT_TIMEZONE
 
@@ -147,15 +147,5 @@ async def build_heartbeat_prompt(
 __all__ = [
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
-    "_get_active_specialist_inventory",
-    "_get_active_work_summary",
-    "_get_agent_roster_summary",
-    "_get_cleanup_status_summary",
-    "_get_feedback_summary_section",
-    "_get_git_status_summary",
-    "_get_persona_timezone",
-    "_get_persona_tool_summary",
-    "_get_workstream_inventory",
     "build_heartbeat_prompt",
-    "get_project_access_summary",
 ]
