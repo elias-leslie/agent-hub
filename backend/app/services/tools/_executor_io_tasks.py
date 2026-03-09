@@ -176,20 +176,13 @@ async def _handle_cleanup_worktrees(
         return 'Error: project_id required for cleanup_worktrees'
     cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
     actionable = build_actionable_cleanup_summary(cleanup_status)
-    has_active_worktrees = " worktrees:0 " not in cleanup_status
-    if not has_active_worktrees:
-        if actionable:
-            return (
-                f"{cleanup_status}\n\n{actionable}\n\n"
-                "No active worktrees remain. Do not call cleanup_worktrees again this heartbeat "
-                "unless cleanup_status changes. Use reconcile/get_context for actionable residue."
-            )
-        return (
-            f"{cleanup_status}\n\n"
-            "No active worktrees remain. Do not call cleanup_worktrees again this heartbeat "
-            "unless cleanup_status changes."
-        )
-    return await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
+    header = cleanup_status.splitlines()[0] if cleanup_status else ""
+    has_active_worktrees = "worktrees=0" not in header
+    has_branch_residue = "orphan=0" not in header or "prunable=0" not in header
+    if not has_active_worktrees and not has_branch_residue:
+        return f"{cleanup_status}\n\nCleanup complete for {project_id}."
+    result = await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
+    return f"{result}\n\n{actionable}" if actionable else result
 
 
 async def _handle_cleanup_all_safe(

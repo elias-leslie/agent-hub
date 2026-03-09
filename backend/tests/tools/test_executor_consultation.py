@@ -69,3 +69,46 @@ async def test_query_sessions_includes_external_id_when_present() -> None:
     assert "Closed the loop" in result
     assert "codex/gpt-5.4" in result
     assert "codex/codex/gpt-5.4" not in result
+
+
+@pytest.mark.asyncio
+async def test_query_sessions_includes_live_activity_health_phase_and_quiet() -> None:
+    """query_sessions should surface live activity so quiet sessions are observable."""
+    mock_db = AsyncMock()
+    session = SimpleNamespace(
+        id="sess-active",
+        agent_slug="reviewer",
+        project_id="agent-hub",
+        provider="claude",
+        model="claude-opus-4-6",
+        external_id=None,
+        current_branch=None,
+        workstream_status=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "last_event_type": "thinking",
+                "last_model_activity_at": (datetime.now(UTC) - timedelta(seconds=95)).isoformat(),
+            }
+        },
+        status="active",
+        created_at=datetime.now(UTC) - timedelta(minutes=3),
+        summary_oneliner=None,
+    )
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [session]
+    mock_db.execute.return_value = mock_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with patch("app.db.async_session", _session):
+        result = await query_sessions(status="active")
+
+    assert "status=active" in result
+    assert "health=quiet" in result
+    assert "phase=waiting_for_model" in result
+    assert "quiet=" in result
+    assert "last=thinking" in result

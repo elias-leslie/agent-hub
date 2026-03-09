@@ -91,10 +91,34 @@ def _format_session_line(s: DBSession, now: datetime) -> str:
         *([f"cwd={cwd}"] if (cwd := _session_working_dir(s)) else []),
     ]
     lane_suffix = f" | {' | '.join(lane_parts)}" if lane_parts else ""
+    activity_suffix = ""
+    try:
+        from app.services.session_live_activity import build_live_activity_response
+
+        activity = build_live_activity_response(s)
+    except Exception:
+        logger.debug("Failed to build live activity response for query_sessions", exc_info=True)
+        activity = None
+
+    if activity:
+        activity_parts = [
+            f"health={activity.get('health') or 'unknown'}",
+            f"phase={activity.get('phase') or 'unknown'}",
+        ]
+        quiet_for_seconds = activity.get("quiet_for_seconds")
+        if quiet_for_seconds is not None:
+            activity_parts.append(f"quiet={quiet_for_seconds}s")
+        if activity.get("current_tool_name"):
+            activity_parts.append(f"tool={activity['current_tool_name']}")
+        elif activity.get("last_event_type"):
+            activity_parts.append(f"last={activity['last_event_type']}")
+        if activity.get("stalled") and activity.get("stall_reason"):
+            activity_parts.append(f"stall={activity['stall_reason']}")
+        activity_suffix = f" | {' | '.join(activity_parts)}"
     return (
         f"- {s.id} | {s.agent_slug or '?'} | {s.project_id} | "
         f"{_provider_model_label(s.provider, s.model)}{lane_suffix} | "
-        f"status={s.status} | {time_label}{summary}"
+        f"status={s.status}{activity_suffix} | {time_label}{summary}"
     )
 
 
