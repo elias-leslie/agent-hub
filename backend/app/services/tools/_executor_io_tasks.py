@@ -133,9 +133,12 @@ async def _cleanup_dispatch_block_reason(
     except Exception:
         return (None, None)
     if " finalize:" in cleanup_status or " conflicts:" in cleanup_status or " review:" in cleanup_status:
+        actionable = build_actionable_cleanup_summary(cleanup_status)
+        detail = f"\n\n{actionable}" if actionable else ""
         return (
             "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
             "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
+            f"{detail}"
         ), cleanup_status
     return None, cleanup_status
 
