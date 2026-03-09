@@ -1,7 +1,7 @@
 """Integration tests for Jenny persona — tools, permissions, sandbox, and providers.
 
 Verifies the full persona pipeline is functional:
-1. All 20 persona tools dispatch correctly via DirectToolExecutor
+1. All persona tools dispatch correctly via DirectToolExecutor
 2. Persona-sandbox working directory (bash, read_file, write_file)
 3. Permission tier exemptions (persona tools bypass project tier)
 4. Permission DENY at tier=off
@@ -523,12 +523,13 @@ class TestPersonaToolTierExemption:
         "send_push",
         "steer_consultation",
         "cancel_consultation",
+        "inspect_session",
     ]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + ALL_PERSONA_OPERATIONAL)
     async def test_persona_tools_allowed_at_read_tier(self, tool_name: str):
-        """All 19 persona tools should be allowed even when project is at read tier."""
+        """All persona tools should be allowed even when project is at read tier."""
         from app.services.project_permission_service import check_tool_allowed
 
         mock_db = AsyncMock()

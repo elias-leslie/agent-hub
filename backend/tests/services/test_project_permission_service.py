@@ -279,13 +279,24 @@ class TestPersonaToolSets:
         assert _PERSONA_TOOLS == _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
 
     def test_internal_contains_identity_tools(self):
-        for tool in ("read_personality", "write_personality",
-                      "read_user_context", "write_user_context"):
+        for tool in (
+            "read_personality",
+            "write_personality",
+            "read_user_context",
+            "write_user_context",
+        ):
             assert tool in _PERSONA_INTERNAL
 
     def test_operational_contains_agency_tools(self):
-        for tool in ("manage_tasks", "schedule_job", "cancel_scheduled_job",
-                      "send_push", "steer_consultation", "cancel_consultation"):
+        for tool in (
+            "manage_tasks",
+            "schedule_job",
+            "cancel_scheduled_job",
+            "send_push",
+            "steer_consultation",
+            "cancel_consultation",
+            "inspect_session",
+        ):
             assert tool in _PERSONA_OPERATIONAL
 
 
@@ -373,7 +384,9 @@ class TestPersonaToolTierExemption:
 class TestCheckExecutionPermission:
     @pytest.mark.asyncio
     async def test_allowed_when_all_conditions_met(self):
-        mock_perm = _make_permission("proj", "yolo", auto_exec=True, start_hour=0, end_hour=24)
+        mock_perm = _make_permission(
+            "proj", "yolo", auto_exec=True, start_hour=0, end_hour=24
+        )
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = mock_perm
@@ -425,8 +438,11 @@ class TestCheckExecutionPermission:
         # Pick a 1-hour window that doesn't contain current hour
         bad_hour = (current_hour + 12) % 24
         mock_perm = _make_permission(
-            "proj", "yolo", auto_exec=True,
-            start_hour=bad_hour, end_hour=(bad_hour + 1) % 24 or 24,
+            "proj",
+            "yolo",
+            auto_exec=True,
+            start_hour=bad_hour,
+            end_hour=(bad_hour + 1) % 24 or 24,
         )
         mock_db = AsyncMock()
         mock_result = MagicMock()
@@ -458,9 +474,7 @@ def _patch_current_hour(hour: int):
     mock_now = MagicMock()
     mock_now.hour = hour
     mock_dt.now.return_value = mock_now
-    return patch(
-        "app.services.project_permission_service.datetime", mock_dt
-    )
+    return patch("app.services.project_permission_service.datetime", mock_dt)
 
 
 class TestTimeWindowEdgeCases:
@@ -696,7 +710,9 @@ class TestCheckToolAllowedFailClosed:
             # _get_cached_tier already catches exceptions and returns None,
             # but if it somehow propagated, the outer try/except catches it.
             # Here we test: the outer try/except catches the error and denies.
-            allowed, reason = await check_tool_allowed("proj", "write_file", db=mock_db)
+            allowed, reason = await check_tool_allowed(
+                "proj", "write_file", db=mock_db
+            )
             assert allowed is False
             assert "permission check error" in reason
 
@@ -713,7 +729,9 @@ class TestCheckToolAllowedFailClosed:
             mock_db = AsyncMock()
             mock_db.execute.side_effect = Exception("DB connection refused")
 
-            allowed, reason = await check_tool_allowed("proj", "read_file", db=mock_db)
+            allowed, reason = await check_tool_allowed(
+                "proj", "read_file", db=mock_db
+            )
             assert allowed is False
             assert "permission check error" in reason
 
@@ -730,7 +748,9 @@ class TestCheckToolAllowedFailClosed:
             new_callable=AsyncMock,
             return_value=None,
         ):
-            allowed, reason = await check_tool_allowed("unknown-proj", "read_file", db=mock_db)
+            allowed, reason = await check_tool_allowed(
+                "unknown-proj", "read_file", db=mock_db
+            )
             assert allowed is False
             assert "no permission record" in reason
 

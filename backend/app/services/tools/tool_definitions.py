@@ -17,6 +17,7 @@ from app.services.tools._notification_tools import SEND_PUSH_TOOL
 from app.services.tools._persona_tools import (
     CANCEL_CONSULTATION_TOOL,
     CANCEL_SCHEDULED_JOB_TOOL,
+    INSPECT_SESSION_TOOL,
     LIST_CONSULTATIONS_TOOL,
     LIST_SCHEDULED_JOBS_TOOL,
     LOG_AGENT_PERFORMANCE_TOOL,
@@ -55,6 +56,7 @@ __all__ = [
     "CONSULT_AGENT_TOOL",
     "CREATE_TASK_TOOL",
     "DEFAULT_TIMEOUT",
+    "INSPECT_SESSION_TOOL",
     "LIST_CONSULTATIONS_TOOL",
     "LIST_SCHEDULED_JOBS_TOOL",
     "LOG_AGENT_PERFORMANCE_TOOL",
@@ -93,6 +95,7 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     ],
     "governance-auditor": [
         *STANDARD_TOOLS,
+        INSPECT_SESSION_TOOL,
         MANAGE_FEEDBACK_TOOL,
         QUERY_SESSIONS_TOOL,
         READ_HEARTBEAT_INSTRUCTIONS_TOOL,

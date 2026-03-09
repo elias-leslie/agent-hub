@@ -168,6 +168,7 @@ def build_tool_registry(
     """
     from app.services.tools._executor_consultation import (
         cancel_consultation,
+        inspect_session,
         list_consultations,
         query_sessions,
         steer_consultation,
@@ -219,4 +220,5 @@ def build_tool_registry(
         "manage_model_config": _manage_model_config,
         "manage_feedback": manage_feedback,
         "query_sessions": query_sessions,
+        "inspect_session": inspect_session,
     }

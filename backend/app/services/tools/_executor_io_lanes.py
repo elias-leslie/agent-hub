@@ -7,6 +7,7 @@ of Agent Hub sessions linked to SummitFlow task lanes.
 from __future__ import annotations
 
 import logging
+import re
 import shlex
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -26,6 +27,16 @@ _TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "fa
 _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
 _RETIRE_NOTE = 'Retired via manage_tasks(action="retire_lane")'
 _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
+_EXEC_LOG_RECENT_MINUTES = 5
+_EXEC_LOG_ACTIVE_MARKERS = (
+    "Verification failed",
+    "Self-heal attempt",
+    "Calling agent for fix attempt",
+    "Starting autonomous execution",
+    "Running pristine check",
+    "Worktree ready:",
+)
+_EXEC_LOG_LINE_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\|")
 
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
@@ -117,6 +128,37 @@ async def _task_has_checkpoint(
         logger.exception("Failed to inspect checkpoints for stale-lane recovery", extra={"task_id": task_id})
         return None
     return _MISSING_CHECKPOINT_PHRASE not in output
+
+
+async def _has_recent_execution_activity(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether the task shows recent execution activity that should block reconcile closure."""
+    try:
+        output = await bash_fn(_st_cmd(f"exec-log {shlex.quote(task_id)} -n 40 --debug", project_id))
+    except Exception:
+        logger.exception("Failed to inspect execution log for reconcile guard", extra={"task_id": task_id})
+        return False
+
+    current = now or datetime.now()
+    for raw_line in output.splitlines():
+        if not any(marker in raw_line for marker in _EXEC_LOG_ACTIVE_MARKERS):
+            continue
+        match = _EXEC_LOG_LINE_RE.match(raw_line)
+        if not match:
+            continue
+        try:
+            event_time = datetime.fromisoformat(match.group("ts"))
+        except ValueError:
+            continue
+        age_seconds = (current - event_time).total_seconds()
+        if 0 <= age_seconds <= _EXEC_LOG_RECENT_MINUTES * 60:
+            return True
+    return False
 
 
 async def _recover_orphan_running_task(
@@ -351,6 +393,13 @@ async def _reconcile_task_lane(
             f"(statuses={statuses or 'unknown'}){task_detail}.{next_step}"
         )
 
+    if await _has_recent_execution_activity(bash_fn, task_id, project_id):
+        return (
+            f"Reconcile stopped for {task_id}: SummitFlow execution log shows recent autonomous "
+            "activity. Do not close the task from session evidence while execution/self-heal is "
+            "still active or just resumed."
+        )
+
     authoritative_session = _choose_authoritative_session(completed_sessions)
     await _persist_workstream_resolution(sessions, authoritative_session)
     summary = _normalize_summary(getattr(authoritative_session, "summary_oneliner", None))
@@ -358,10 +407,16 @@ async def _reconcile_task_lane(
 
     cmd = _st_cmd(f"done {shlex.quote(task_id)} --message {shlex.quote(message)}", project_id)
     result = await bash_fn(cmd)
+    if "Task not ready to complete:" in result:
+        return (
+            f"Reconcile stopped for {task_id}: SummitFlow reported the task is not ready to "
+            "complete. Do not admin-close it from session evidence. "
+            'Inspect task context/verification and keep the lane open.\n'
+            f"Original result: {result.strip()}"
+        )
     if (
         (_MISSING_CHECKPOINT_PHRASE in result and "Was it claimed?" in result)
         or "Claimed worktree has uncommitted changes." in result
-        or "Task not ready to complete:" in result
     ):
         admin_cmd = _st_cmd(
             f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",

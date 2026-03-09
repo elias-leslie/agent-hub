@@ -472,6 +472,28 @@ QUERY_SESSIONS_TOOL = Tool(
     usage_examples=["List recent completed coder sessions from the last two hours."],
 )
 
+INSPECT_SESSION_TOOL = Tool(
+    name="inspect_session",
+    description=(
+        "Inspect one session by id and return its status, summary, recent tools, "
+        "and latest assistant result. Use this to consume delegated-agent output."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "session_id": {
+                "type": "string",
+                "description": "Exact Agent Hub session id to inspect",
+            },
+        },
+        "required": ["session_id"],
+    },
+    category="observability",
+    search_keywords=["session details", "delegated result", "child session"],
+    usage_examples=["Inspect a completed governance-auditor session before deciding the next action."],
+    defer_loading=True,
+)
+
 REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
     name="review_agent_performance",
     description=(

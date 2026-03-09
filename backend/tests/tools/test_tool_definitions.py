@@ -15,4 +15,5 @@ def test_governance_auditor_tool_registry_includes_governance_surfaces() -> None
     assert "read_file" in tool_names
     assert "manage_feedback" in tool_names
     assert "query_sessions" in tool_names
+    assert "inspect_session" in tool_names
     assert "read_heartbeat_instructions" in tool_names
