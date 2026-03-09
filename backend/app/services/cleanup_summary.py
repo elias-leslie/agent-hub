@@ -9,7 +9,10 @@ _REPO_LINE_RE = re.compile(
     r"^(?P<project>[a-z0-9-]+) worktrees:(?P<worktrees>\d+) dirty:(?P<dirty>\d+) "
     r"orphan:(?P<orphan>\d+) prunable:(?P<prunable>\d+)(?P<rest>.*)$"
 )
-_TOKEN_RE = re.compile(r"(?P<kind>finalize|conflicts|review):(?P<tasks>task-[a-z0-9]+(?:,task-[a-z0-9]+)*)")
+_TOKEN_RE = re.compile(
+    r"(?P<kind>finalize|conflicts|review|salvage|review_orphans):"
+    r"(?P<tasks>task-[a-z0-9]+(?:,task-[a-z0-9]+)*)"
+)
 _ORPHAN_BRANCH_RE = re.compile(
     r"orphan_branches:(?P<branches>task-[a-z0-9]+/main(?:,task-[a-z0-9]+/main)*)"
 )
