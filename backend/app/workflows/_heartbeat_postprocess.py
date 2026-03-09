@@ -118,95 +118,100 @@ _RETRYABLE_TOOLS: set[str] = {
 }
 
 
-async def _retry_failed_mcp_tools(session_id: str) -> int:
-    """Retry MCP tools that failed with 'Stream closed'.
+async def _query_stream_closed_failures(session_id: str) -> list:
+    """Query session_events for tool_result rows that failed with 'Stream closed'."""
+    from sqlalchemy import text
 
-    Queries session_events for tool_result events with "Stream closed",
-    finds the matching tool_use event to get original args, and retries
-    known-safe tools by calling the Python function directly.
+    from app.db import async_session
 
-    Returns the number of tools successfully retried.
-    """
+    async with async_session() as db:
+        result = await db.execute(
+            text(
+                "SELECT se.tool_name, se.sequence FROM session_events se"
+                " WHERE se.session_id = :sid AND se.event_type = 'tool_result'"
+                " AND (se.tool_output->>'content' = 'Stream closed'"
+                "  OR se.content = 'Stream closed')"
+                " ORDER BY se.sequence"
+            ),
+            {"sid": session_id},
+        )
+        return list(result.fetchall())
+
+
+async def _fetch_tool_args(session_id: str, tool_name: str, seq: int) -> dict | None:
+    """Return the tool_input dict for the tool_use event that preceded *seq*, or None."""
+    import json
+
+    from sqlalchemy import text
+
+    from app.db import async_session
+
+    async with async_session() as db:
+        use_result = await db.execute(
+            text(
+                "SELECT tool_input FROM session_events"
+                " WHERE session_id = :sid AND event_type = 'tool_use'"
+                " AND tool_name = :tool AND sequence < :seq"
+                " ORDER BY sequence DESC LIMIT 1"
+            ),
+            {"sid": session_id, "tool": tool_name, "seq": seq},
+        )
+        row = use_result.fetchone()
+
+    if not row or not row.tool_input:
+        logger.warning("No tool_use args found for %s retry (session=%s)", tool_name, session_id)
+        return None
+
+    return row.tool_input if isinstance(row.tool_input, dict) else json.loads(row.tool_input)
+
+
+async def _execute_tool_retry(tool_name: str, tool_args: dict) -> None:
+    """Call the Python function that backs *tool_name* with *tool_args*."""
+    if tool_name == "mcp__agent-hub__log_agent_performance":
+        from app.services.tools._executor_performance import log_agent_performance
+
+        await log_agent_performance(**tool_args)
+    elif tool_name == "mcp__agent-hub__dispatch_agent":
+        from app.services.tools._executor_consultation import dispatch_agent
+
+        await dispatch_agent(
+            project_id=tool_args.get("project_id"),
+            agent_slug=tool_args.get("agent_slug", ""),
+            task=tool_args.get("task", ""),
+            max_turns=tool_args.get("max_turns", 25),
+        )
+
+
+async def _retry_single_tool(session_id: str, tool_name: str, seq: int) -> bool:
+    """Retry one failed MCP tool call. Returns True on success."""
+    if tool_name not in _RETRYABLE_TOOLS:
+        logger.warning(
+            "MCP 'Stream closed' for non-retryable tool %s (session=%s, seq=%d)",
+            tool_name, session_id, seq,
+        )
+        return False
+
+    tool_args = await _fetch_tool_args(session_id, tool_name, seq)
+    if tool_args is None:
+        return False
+
     try:
-        import json
+        await _execute_tool_retry(tool_name, tool_args)
+        logger.info("MCP retry succeeded: %s (session=%s)", tool_name, session_id)
+        return True
+    except Exception:
+        logger.exception("MCP retry failed: %s (session=%s)", tool_name, session_id)
+        return False
 
-        from sqlalchemy import text
 
-        from app.db import async_session
-
-        async with async_session() as db:
-            # Find all "Stream closed" tool_result events
-            result = await db.execute(
-                text(
-                    "SELECT se.tool_name, se.sequence FROM session_events se"
-                    " WHERE se.session_id = :sid AND se.event_type = 'tool_result'"
-                    " AND (se.tool_output->>'content' = 'Stream closed'"
-                    "  OR se.content = 'Stream closed')"
-                    " ORDER BY se.sequence"
-                ),
-                {"sid": session_id},
-            )
-            failures = result.fetchall()
-
+async def _retry_failed_mcp_tools(session_id: str) -> int:
+    """Retry MCP tools that failed with 'Stream closed'. Returns count retried."""
+    try:
+        failures = await _query_stream_closed_failures(session_id)
         if not failures:
             return 0
-
-        retried = 0
-        for tool_name, seq in failures:
-            if tool_name not in _RETRYABLE_TOOLS:
-                logger.warning(
-                    "MCP 'Stream closed' for non-retryable tool %s (session=%s, seq=%d)",
-                    tool_name, session_id, seq,
-                )
-                continue
-
-            # Find the matching tool_use event to get original args
-            async with async_session() as db:
-                use_result = await db.execute(
-                    text(
-                        "SELECT tool_input FROM session_events"
-                        " WHERE session_id = :sid AND event_type = 'tool_use'"
-                        " AND tool_name = :tool AND sequence < :seq"
-                        " ORDER BY sequence DESC LIMIT 1"
-                    ),
-                    {"sid": session_id, "tool": tool_name, "seq": seq},
-                )
-                row = use_result.fetchone()
-
-            if not row or not row.tool_input:
-                logger.warning(
-                    "No tool_use args found for %s retry (session=%s)",
-                    tool_name, session_id,
-                )
-                continue
-
-            tool_args = row.tool_input if isinstance(row.tool_input, dict) else json.loads(row.tool_input)
-
-            try:
-                if tool_name == "mcp__agent-hub__log_agent_performance":
-                    from app.services.tools._executor_performance import log_agent_performance
-
-                    await log_agent_performance(**tool_args)
-                elif tool_name == "mcp__agent-hub__dispatch_agent":
-                    from app.services.tools._executor_consultation import dispatch_agent
-
-                    await dispatch_agent(
-                        project_id=tool_args.get("project_id"),
-                        agent_slug=tool_args.get("agent_slug", ""),
-                        task=tool_args.get("task", ""),
-                        max_turns=tool_args.get("max_turns", 25),
-                    )
-
-                retried += 1
-                logger.info(
-                    "MCP retry succeeded: %s (session=%s)", tool_name, session_id,
-                )
-            except Exception:
-                logger.exception(
-                    "MCP retry failed: %s (session=%s)", tool_name, session_id,
-                )
-
-        return retried
+        results = [await _retry_single_tool(session_id, tool_name, seq) for tool_name, seq in failures]
+        return sum(results)
     except Exception:
         logger.exception("_retry_failed_mcp_tools failed for session %s", session_id)
         return 0
