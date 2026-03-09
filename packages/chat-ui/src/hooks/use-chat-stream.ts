@@ -24,6 +24,7 @@ interface UseChatStreamOptions {
   workingDir?: string;
   toolsEnabled?: boolean;
   apiConfig?: ChatStreamApiConfig;
+  loadInitialSession?: boolean;
 }
 
 interface UseChatStreamReturn {
@@ -51,6 +52,7 @@ export function useChatStream(
     workingDir,
     toolsEnabled = false,
     apiConfig = {},
+    loadInitialSession = true,
   } = options;
 
   const {
@@ -81,6 +83,11 @@ export function useChatStream(
       return;
     }
 
+    if (!loadInitialSession) {
+      setCurrentSessionId(sessionId);
+      return;
+    }
+
     // Skip loading if this session was just created by our own stream —
     // we already have the messages in state and the backend may not have
     // persisted them yet (async save).
@@ -103,7 +110,7 @@ export function useChatStream(
     };
 
     load();
-  }, [sessionId]);
+  }, [sessionId, loadInitialSession]);
 
   // Wrap setCurrentSessionId to track stream-established sessions
   const setCurrentSessionIdWithTracking = useCallback(

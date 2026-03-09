@@ -20,6 +20,7 @@ from .schemas import (
     PersonaResponse,
     PersonaUpdate,
 )
+from .stream import router as _stream_router
 
 logger = logging.getLogger(__name__)
 
@@ -134,5 +135,6 @@ async def update_personality(
 
 
 router.include_router(_activity_router)
+router.include_router(_stream_router)
 
 __all__ = ["router"]

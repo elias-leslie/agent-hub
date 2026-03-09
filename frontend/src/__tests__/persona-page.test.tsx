@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,24 +16,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({ children, href }: { children: unknown; href: string }) => (
+    <a href={href}>{children as string}</a>
   ),
 }));
 
-vi.mock("@/components/chat", () => ({
-  ChatPanel: ({ sessionId }: { sessionId?: string }) => (
-    <div data-testid="chat-panel">chat:{sessionId ?? "new"}</div>
-  ),
-}));
-
-vi.mock("@/components/chat/session-dropdown", () => ({
-  SessionDropdown: () => <div data-testid="session-dropdown">sessions</div>,
-}));
-
-vi.mock("@/app/persona/components/ActivityTimeline", () => ({
-  ActivityTimeline: ({ heartbeatRunning }: { heartbeatRunning?: boolean }) => (
-    <div data-testid="activity-timeline">activity:{heartbeatRunning ? "running" : "idle"}</div>
+vi.mock("@/app/persona/components/UnifiedPersonaWorkspace", () => ({
+  UnifiedPersonaWorkspace: ({ activeSessionId }: { activeSessionId: string | null }) => (
+    <div data-testid="unified-workspace">workspace:{activeSessionId ?? "new"}</div>
   ),
 }));
 
@@ -77,12 +66,11 @@ describe("PersonaPage", () => {
     vi.clearAllMocks();
   });
 
-  it("renders chat and activity together in one workspace", async () => {
+  it("renders the unified workspace", async () => {
     render(<PersonaPage />);
 
     expect(await screen.findByText("Unified workspace")).toBeInTheDocument();
-    expect(screen.getByTestId("chat-panel")).toHaveTextContent("chat:sess-123");
-    expect(screen.getByTestId("activity-timeline")).toHaveTextContent("activity:idle");
+    expect(screen.getByTestId("unified-workspace")).toHaveTextContent("workspace:sess-123");
   });
 
   it("pauses auto-run from the main workspace header", async () => {
