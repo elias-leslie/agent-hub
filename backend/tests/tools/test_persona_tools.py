@@ -863,6 +863,24 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P summitflow git finalize-task task-42")
 
     @pytest.mark.asyncio
+    async def test_finalize_merge_not_found_adds_review_hint(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            return_value='ERROR Failed to finalize task merge: {"error":"http_error","message":"Task not found","details":[]}'
+        )
+        result = await manage_tasks(
+            mock_bash,
+            action="finalize_merge",
+            task_id="task-missing",
+            project_id="agent-hub",
+        )
+
+        assert "Task not found" in result
+        assert "review:" in result
+        mock_bash.assert_awaited_once_with("st -P agent-hub git finalize-task task-missing")
+
+    @pytest.mark.asyncio
     async def test_done(self):
         from app.services.tools._executor_io import manage_tasks
 

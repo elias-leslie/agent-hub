@@ -563,7 +563,15 @@ async def _handle_finalize_merge(
     """Finalize merge/cleanup for a residue task lane."""
     if not task_id:
         return "Error: task_id required for finalize_merge"
-    return await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+    result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+    lowered = result.lower()
+    if "task not found" in lowered:
+        return (
+            f"{result}\n"
+            "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
+            "Use cleanup_worktrees, get_context, query_sessions, or reconcile first."
+        )
+    return result
 
 
 async def manage_tasks(
