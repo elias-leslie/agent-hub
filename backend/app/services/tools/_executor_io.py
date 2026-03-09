@@ -578,6 +578,28 @@ async def _handle_finalize_merge(
     return result
 
 
+async def _handle_resolve_conflict(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Reopen residue conflict work and dispatch it immediately."""
+    if not task_id:
+        return "Error: task_id required for resolve_conflict"
+    prepare = await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
+    try:
+        prepare_json = json.loads(prepare)
+    except Exception:
+        prepare_json = None
+    if not (
+        isinstance(prepare_json, dict)
+        and str(prepare_json.get("status") or "") == "ready_for_conflict_resolution"
+    ):
+        return prepare
+    dispatch = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
+    return f"{prepare}\n{dispatch}"
+
+
 async def manage_tasks(
     bash_fn: Callable[..., Awaitable[str]],
     action: str,
@@ -626,6 +648,9 @@ async def manage_tasks(
     if action == "finalize_merge":
         return await _handle_finalize_merge(bash_fn, task_id, project_id)
 
+    if action == "resolve_conflict":
+        return await _handle_resolve_conflict(bash_fn, task_id, project_id)
+
     if action == "reconcile":
         if not task_id:
             return "Error: task_id required for reconcile"
@@ -654,5 +679,5 @@ async def manage_tasks(
     return (
         f"Error: Unknown action '{action}'. "
         "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/"
-        "finalize_merge/reconcile/retire_lane/done/abandon/cancel."
+        "finalize_merge/resolve_conflict/reconcile/retire_lane/done/abandon/cancel."
     )
