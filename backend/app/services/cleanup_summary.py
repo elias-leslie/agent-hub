@@ -10,6 +10,9 @@ _REPO_LINE_RE = re.compile(
     r"orphan:(?P<orphan>\d+) prunable:(?P<prunable>\d+)(?P<rest>.*)$"
 )
 _TOKEN_RE = re.compile(r"(?P<kind>finalize|conflicts|review):(?P<tasks>task-[a-z0-9]+(?:,task-[a-z0-9]+)*)")
+_ORPHAN_BRANCH_RE = re.compile(
+    r"orphan_branches:(?P<branches>task-[a-z0-9]+/main(?:,task-[a-z0-9]+/main)*)"
+)
 
 
 @dataclass(frozen=True)
@@ -22,7 +25,7 @@ class CleanupActionItem:
 
 
 def extract_cleanup_action_items(cleanup_status: str) -> list[CleanupActionItem]:
-    """Extract actionable finalize/conflict/review tasks from cleanup status output."""
+    """Extract actionable cleanup tasks from cleanup status output."""
     items: list[CleanupActionItem] = []
     for raw_line in cleanup_status.splitlines():
         line = raw_line.strip()
@@ -35,6 +38,11 @@ def extract_cleanup_action_items(cleanup_status: str) -> list[CleanupActionItem]
             kind = token.group("kind")
             for task_id in token.group("tasks").split(","):
                 items.append(CleanupActionItem(project_id=project_id, kind=kind, task_id=task_id))
+        orphan_match = _ORPHAN_BRANCH_RE.search(rest)
+        if orphan_match:
+            for branch_name in orphan_match.group("branches").split(","):
+                task_id = branch_name.split("/", 1)[0]
+                items.append(CleanupActionItem(project_id=project_id, kind="orphan_branch", task_id=task_id))
     return items
 
 
