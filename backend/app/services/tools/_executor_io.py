@@ -462,21 +462,31 @@ async def _build_dispatch_warning(
 ) -> str:
     """Return a warning string if tasks are already running, else empty string."""
     try:
+        warnings: list[str] = []
         running_json = await bash_fn(
             _st_cmd("list --status running --json", project_id)
         )
         running: list[dict[str, str]] = (
             json.loads(running_json) if running_json.strip() else []
         )
-        if not running:
-            return ""
-        ids = ", ".join(t.get("id", "?") for t in running[:5])
         project_label = f" in {project_id}" if project_id else ""
-        return (
-            f"WARNING: {len(running)} task(s) already running"
-            f"{project_label}: {ids}. "
-            "Risk of merge conflicts.\n\n"
-        )
+        if running:
+            ids = ", ".join(t.get("id", "?") for t in running[:5])
+            warnings.append(
+                f"WARNING: {len(running)} task(s) already running"
+                f"{project_label}: {ids}. "
+                "Risk of merge conflicts."
+            )
+
+        if project_id:
+            cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
+            if " finalize:" in cleanup_status or " conflicts:" in cleanup_status:
+                warnings.append(
+                    "WARNING: unresolved merge/conflict residue detected in cleanup status. "
+                    "Prefer finalize_merge or reconcile before dispatching more low-confidence work."
+                )
+
+        return "\n\n".join(warnings) + ("\n\n" if warnings else "")
     except Exception:
         return ""  # Never block dispatch on warning failure
 

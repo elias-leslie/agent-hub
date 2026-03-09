@@ -8,17 +8,17 @@ Create Date: 2026-03-08 23:17:39.056422
 
 from __future__ import annotations
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'd1f2ec627e4b'
-down_revision: Union[str, Sequence[str], None] = '0787049c485f'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = '0787049c485f'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 HEARTBEAT_PROMPT = "persona-heartbeat-orchestrator"
 OLD_TEXT = (
