@@ -858,7 +858,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(side_effect=[
             "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
             "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-1",
-            "Cleaned 2, skipped 1, errors 0",
+            "Cleaned 2, skipped 1, errors 0\n  Pruned closed orphan task branches: 0",
         ])
         result = await manage_tasks(
             mock_bash,
@@ -873,13 +873,38 @@ class TestManageTasks:
         ]
 
     @pytest.mark.asyncio
-    async def test_cleanup_worktrees_with_no_worktrees_returns_actionable_noop(self):
+    async def test_cleanup_worktrees_with_orphan_branches_still_runs_auto_cleanup(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(side_effect=[
+            (
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=0 dirty=0 orphan=1 prunable=0\n"
+                "agent-hub worktrees:0 dirty:0 orphan:1 prunable:0 orphan_branches:task-aa44180c/main"
+            ),
+            "No worktrees found\n  Pruned git worktree registrations in 1 repo(s)\n  Pruned merged orphan task branches: 0\n  Pruned closed orphan task branches: 1",
+        ])
+        result = await manage_tasks(
+            mock_bash,
+            action="cleanup_worktrees",
+            project_id="agent-hub",
+        )
+
+        assert "Pruned closed orphan task branches: 1" in result
+        assert "ACTIONABLE-CLEANUP[1]" in result
+        assert "agent-hub | orphan_branch | task-aa44180c" in result
+        assert mock_bash.await_args_list == [
+            call("st -P agent-hub cleanup status"),
+            call("st -P agent-hub cleanup worktrees --auto"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cleanup_worktrees_with_no_residue_returns_complete_noop(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             return_value=(
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=0 dirty=0 orphan=1 prunable=0\n"
-                "agent-hub worktrees:0 dirty:0 orphan:1 prunable:0 orphan_branches:task-aa44180c/main"
+                "CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub clean"
             )
         )
         result = await manage_tasks(
@@ -888,9 +913,7 @@ class TestManageTasks:
             project_id="agent-hub",
         )
 
-        assert "ACTIONABLE-CLEANUP[1]" in result
-        assert "agent-hub | orphan_branch | task-aa44180c" in result
-        assert "Do not call cleanup_worktrees again this heartbeat" in result
+        assert "Cleanup complete for agent-hub." in result
         mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
 
     @pytest.mark.asyncio
@@ -903,18 +926,20 @@ class TestManageTasks:
                 "agent-hub worktrees:1 dirty:0 orphan:7 prunable:3\n"
                 "terminal worktrees:1 dirty:0 orphan:3 prunable:1"
             ),
-            "Cleaned 0, skipped 0, errors 0\n  Pruned git worktree registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4",
+            "Cleaned 0, skipped 0, errors 0\n  Pruned git worktree registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4\n  Pruned closed orphan task branches: 10",
             (
-                "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=3 orphan=14 prunable=0\n"
-                "agent-hub worktrees:1 dirty:1 orphan:4 prunable:0\n"
-                "terminal worktrees:1 dirty:1 orphan:2 prunable:0"
+                "CLEANUP[all]:repos=5 needs_cleanup=2 worktrees=4 dirty=1 orphan=4 prunable=0\n"
+                "agent-hub worktrees:0 dirty:0 orphan:0 prunable:0\n"
+                "portfolio-ai worktrees:3 dirty:0 orphan:3 prunable:0\n"
+                "monkey-fight worktrees:1 dirty:1 orphan:1 prunable:0"
             ),
         ])
         result = await manage_tasks(mock_bash, action="cleanup_all_safe")
 
         assert "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4" in result
         assert "Pruned merged orphan task branches: 4" in result
-        assert "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=3 orphan=14 prunable=0" in result
+        assert "Pruned closed orphan task branches: 10" in result
+        assert "CLEANUP[all]:repos=5 needs_cleanup=2 worktrees=4 dirty=1 orphan=4 prunable=0" in result
         mock_bash.assert_has_awaits([
             call("st cleanup status --all"),
             call("st cleanup worktrees --auto --all"),
