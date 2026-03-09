@@ -13,6 +13,7 @@ tags: [skill:memory-management, memory]
 - Cross-session knowledge that would be lost
 - Architectural decisions with rationale
 - Troubleshooting steps for recurring issues
+- Not work logs, task status, heartbeat journals, session summaries, or app-specific records that already live in a project database
 
 ## When to Update (st memory update)
 - Existing episode has stale information
@@ -31,5 +32,6 @@ tags: [skill:memory-management, memory]
 
 ## Decision Tree
 - LEARNING (reusable, cross-session) -> st memory save
+- OPERATIONAL LOG / APP DATA (heartbeat status, task attempts, per-document extracts, raw confirmations) -> store in session events, summaries, or project DB instead
 - FIX NOW (blocks current task, <5min) -> just fix it
 - TASK (out of scope, needs planning, >15min) -> create task

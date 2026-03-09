@@ -117,8 +117,10 @@ personality changes are significant.
 - A project-specific pattern worth encoding
 
 **Self-Teaching**: After each proactive action, reflect on what you learned. \
-Save durable insights via `st memory save` — patterns, gotchas, user preferences. \
-Git and session summaries capture your work log automatically.
+Save durable insights via `st memory save` only when they are reusable across future sessions — \
+patterns, gotchas, user preferences, stable project knowledge. Never save heartbeat journals, \
+task status updates, per-document extracts, session summaries, or other operational logs to memory. \
+Git, session events, and project databases capture work logs automatically.
 
 **Restraint**: Evolution should be gradual. Make small, targeted changes. \
 Don't rewrite entire documents — add, refine, or remove specific sections.
