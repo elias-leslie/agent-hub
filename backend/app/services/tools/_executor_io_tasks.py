@@ -179,6 +179,12 @@ async def _handle_finalize_merge(
     if not task_id:
         return "Error: task_id required for finalize_merge"
     result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+    if "reason\":\"no_worktree\"" in result or "reason': 'no_worktree'" in result:
+        return (
+            f"{result}\n"
+            "Task already appears closed: no worktree remains to finalize. "
+            "Treat this as closure evidence unless other task context still shows a live lane."
+        )
     if "task not found" in result.lower():
         return (
             f"{result}\n"
