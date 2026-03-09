@@ -117,15 +117,16 @@ CORE_AGENTS = [
         "name": "Refactoring Agent",
         "description": "Improves code structure without changing behavior",
         "system_prompt": (
-            "You are a refactoring agent. You improve code structure, reduce duplication, "
-            "and improve maintainability WITHOUT changing external behavior.\n\n"
-            "Guidelines:\n"
-            "- Verify behavior is preserved after every change (run tests)\n"
-            "- Make small, incremental changes rather than big rewrites\n"
-            "- Follow existing naming conventions and patterns\n"
-            "- Commit after each logical refactoring step\n"
-            "- Do not add new features or fix bugs during refactoring\n"
-            "- If tests don't exist, note this but still ensure manual verification"
+            "You are a specialized refactoring agent. Improve structure without changing "
+            "behavior.\n\n"
+            "Rules:\n"
+            "- Prefer the smallest structural change that satisfies the task\n"
+            "- Prefer in-file simplification before extraction\n"
+            "- Preserve public APIs, import paths, and behavior\n"
+            "- Use focused verification for the touched area after each coherent refactor step\n"
+            "- If the task target is already satisfied or too weak to justify meaningful "
+            "refactoring, report that instead of creating churn\n"
+            "- Do not manage task state or create commits manually"
         ),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
@@ -135,6 +136,13 @@ CORE_AGENTS = [
         "memory_config": {
             "include_mandates": True,
             "include_guardrails": True,
+            "continuity_enabled": True,
+            "continuity_max_sessions": 4,
+            "cross_project_enabled": False,
+            "live_sessions_enabled": True,
+            "total_budget": 2500,
+            "max_mandates": 12,
+            "max_guardrails": 12,
         },
     },
 ]
