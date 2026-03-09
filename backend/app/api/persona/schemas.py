@@ -109,3 +109,36 @@ class ActivityResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PersonaStreamEntry(BaseModel):
+    """Single item in Jenny's unified chronological stream."""
+
+    id: str
+    entry_type: str
+    timestamp: datetime
+    session_id: str
+    parent_session_id: str | None = None
+    project_id: str
+    agent_slug: str | None = None
+    session_type: str
+    status: str
+    role: str | None = None
+    content: str | None = None
+    summary_oneliner: str | None = None
+    current_branch: str | None = None
+    external_id: str | None = None
+    model: str | None = None
+    live_summary: str | None = None
+    live_status: str | None = None
+    message_count: int = 0
+    tool_count: int = 0
+
+
+class PersonaStreamResponse(BaseModel):
+    """Unified timeline response for the persona workspace."""
+
+    entries: list[PersonaStreamEntry]
+    total: int
+    page: int
+    page_size: int

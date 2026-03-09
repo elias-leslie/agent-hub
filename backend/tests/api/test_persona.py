@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -202,6 +202,11 @@ def _make_mock_session(session_id: str, **overrides: Any) -> MagicMock:
         "project_id": "persona-sandbox",
         "session_type": "chat",
         "summary_oneliner": None,
+        "parent_session_id": None,
+        "current_branch": None,
+        "external_id": None,
+        "provider_metadata": {},
+        "model": "claude-sonnet",
         "status": "completed",
         "created_at": now,
         "updated_at": now,
@@ -501,3 +506,92 @@ class TestActivityEndpointEmptySessionFilter:
 
         assert response.status_code == 200
         assert response.json()["sessions"][0]["session_type"] == "completion"
+
+
+class TestPersonaStreamHelpers:
+    """Tests for the unified persona stream helper logic."""
+
+    def test_build_stream_entries_includes_messages_heartbeats_and_child_runs(self) -> None:
+        from app.api.persona.stream import _build_stream_entries
+
+        base_time = datetime.now(UTC)
+        chat_session = _make_mock_session(
+            "chat-1",
+            session_type="chat",
+            project_id="persona-sandbox",
+            created_at=base_time - timedelta(minutes=3),
+        )
+        heartbeat_session = _make_mock_session(
+            "hb-1",
+            session_type="completion",
+            project_id="persona-sandbox",
+            summary_oneliner="HEARTBEAT_ACTION - fixed issue",
+            provider_metadata={"live_activity": {"summary": "Checking tasks", "status": "active"}},
+            created_at=base_time - timedelta(minutes=2),
+        )
+        child_session = _make_mock_session(
+            "child-1",
+            agent_slug="git-agent",
+            project_id="agent-hub",
+            parent_session_id="hb-1",
+            summary_oneliner="Updated files",
+            current_branch="task-branch",
+            created_at=base_time - timedelta(minutes=1),
+        )
+        event = _make_mock_event(
+            "chat-1",
+            id="evt-1",
+            role="user",
+            content="pause that work",
+            created_at=base_time - timedelta(minutes=4),
+            model_used="claude-sonnet",
+        )
+
+        entries = _build_stream_entries(
+            persona_sessions=[chat_session, heartbeat_session],
+            child_sessions=[child_session],
+            message_events=[event],
+            message_counts={"chat-1": 2, "hb-1": 1, "child-1": 3},
+            tool_counts={"chat-1": 0, "hb-1": 4, "child-1": 2},
+        )
+
+        assert [entry.entry_type for entry in entries] == ["child_run", "heartbeat", "message"]
+        heartbeat_entry = next(entry for entry in entries if entry.entry_type == "heartbeat")
+        child_entry = next(entry for entry in entries if entry.entry_type == "child_run")
+        message_entry = next(entry for entry in entries if entry.entry_type == "message")
+
+        assert message_entry.content == "pause that work"
+        assert heartbeat_entry.session_type == "heartbeat"
+        assert heartbeat_entry.live_summary == "Checking tasks"
+        assert child_entry.agent_slug == "git-agent"
+        assert child_entry.current_branch == "task-branch"
+
+    def test_slice_entries_centers_on_focused_session(self) -> None:
+        from app.api.persona.schemas import PersonaStreamEntry
+        from app.api.persona.stream import _slice_entries
+
+        base_time = datetime.now(UTC)
+        entries = [
+            PersonaStreamEntry(
+                id=f"e-{idx}",
+                entry_type="message",
+                timestamp=base_time,
+                session_id=f"s-{idx}",
+                project_id="persona-sandbox",
+                agent_slug="persona",
+                session_type="chat",
+                status="completed",
+                role="user",
+                content=f"msg {idx}",
+            )
+            for idx in range(10)
+        ]
+
+        sliced = _slice_entries(
+            entries,
+            page=1,
+            page_size=4,
+            focus_session_id="s-5",
+        )
+
+        assert [entry.session_id for entry in sliced] == ["s-3", "s-4", "s-5", "s-6"]
