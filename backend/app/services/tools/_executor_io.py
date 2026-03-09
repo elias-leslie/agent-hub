@@ -291,6 +291,10 @@ async def _reconcile_task_lane(
             project_id,
         )
         return await bash_fn(admin_cmd)
+    if "Cannot merge - task" in result or "Failed to merge " in result:
+        task_status = await _get_task_status(bash_fn, task_id, project_id)
+        if _task_is_terminal(task_status):
+            return await _handle_finalize_merge(bash_fn, task_id, project_id)
     return result
 
 
