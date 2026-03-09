@@ -1,0 +1,84 @@
+"""add finalize-merge guidance to heartbeat prompt
+
+Revision ID: d1f2ec627e4b
+Revises: 0787049c485f
+Create Date: 2026-03-08 23:17:39.056422
+
+"""
+
+from __future__ import annotations
+
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+from alembic import op
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'd1f2ec627e4b'
+down_revision: Union[str, Sequence[str], None] = '0787049c485f'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+HEARTBEAT_PROMPT = "persona-heartbeat-orchestrator"
+OLD_TEXT = (
+    "- If cleanup debt is present and the project has no more urgent live execution problem, "
+    "use `manage_tasks(action=\"cleanup_worktrees\", project_id=\"...\")` to clear safe worktree "
+    "cleanup cases before dispatching additional low-confidence maintenance work.\n"
+    "- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, "
+    "or review-needed worktrees, stop there and reconcile the underlying task/workstream instead "
+    "of forcing deletion.\n"
+)
+NEW_TEXT = (
+    "- If cleanup debt is present and the project has no more urgent live execution problem, "
+    "use `manage_tasks(action=\"cleanup_worktrees\", project_id=\"...\")` to clear safe worktree "
+    "cleanup cases before dispatching additional low-confidence maintenance work.\n"
+    "- If cleanup output shows `NEEDS_MERGE` or `CONFLICT` for a completed, failed, blocked, or "
+    "conflicted task residue, use `manage_tasks(action=\"finalize_merge\", task_id=\"...\", "
+    "project_id=\"...\")` to finish the canonical merge/cleanup path before dispatching more work.\n"
+    "- Do not treat a task as fully closed just because it says `completed` if cleanup still shows "
+    "`NEEDS_MERGE` or `CONFLICT`; finalize it or reconcile why it cannot merge.\n"
+    "- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, "
+    "or review-needed worktrees, stop there and reconcile the underlying task/workstream instead "
+    "of forcing deletion.\n"
+)
+
+
+def upgrade() -> None:
+    """Update heartbeat prompt with explicit residue finalize guidance."""
+    bind = op.get_bind()
+    bind.execute(
+        sa.text(
+            """
+            UPDATE prompts
+            SET content = REPLACE(content, :old_text, :new_text),
+                updated_at = NOW()
+            WHERE slug = :slug
+            """
+        ),
+        {
+            "slug": HEARTBEAT_PROMPT,
+            "old_text": OLD_TEXT,
+            "new_text": NEW_TEXT,
+        },
+    )
+
+
+def downgrade() -> None:
+    """Restore the previous heartbeat guidance."""
+    bind = op.get_bind()
+    bind.execute(
+        sa.text(
+            """
+            UPDATE prompts
+            SET content = REPLACE(content, :new_text, :old_text),
+                updated_at = NOW()
+            WHERE slug = :slug
+            """
+        ),
+        {
+            "slug": HEARTBEAT_PROMPT,
+            "old_text": OLD_TEXT,
+            "new_text": NEW_TEXT,
+        },
+    )

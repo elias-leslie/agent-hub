@@ -512,6 +512,17 @@ async def _handle_cleanup_worktrees(
     return await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
 
 
+async def _handle_finalize_merge(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Finalize merge/cleanup for a residue task lane."""
+    if not task_id:
+        return "Error: task_id required for finalize_merge"
+    return await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+
+
 async def manage_tasks(
     bash_fn: Callable[..., Awaitable[str]],
     action: str,
@@ -557,6 +568,9 @@ async def manage_tasks(
     if action == "cleanup_worktrees":
         return await _handle_cleanup_worktrees(bash_fn, project_id)
 
+    if action == "finalize_merge":
+        return await _handle_finalize_merge(bash_fn, task_id, project_id)
+
     if action == "reconcile":
         if not task_id:
             return "Error: task_id required for reconcile"
@@ -585,5 +599,5 @@ async def manage_tasks(
     return (
         f"Error: Unknown action '{action}'. "
         "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/"
-        "reconcile/retire_lane/done/abandon/cancel."
+        "finalize_merge/reconcile/retire_lane/done/abandon/cancel."
     )

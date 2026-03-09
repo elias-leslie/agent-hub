@@ -803,6 +803,21 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P agent-hub cleanup worktrees --auto")
 
     @pytest.mark.asyncio
+    async def test_finalize_merge(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value='{"status":"merged"}')
+        result = await manage_tasks(
+            mock_bash,
+            action="finalize_merge",
+            task_id="task-42",
+            project_id="summitflow",
+        )
+
+        assert '"status":"merged"' in result
+        mock_bash.assert_awaited_once_with("st -P summitflow git finalize-task task-42")
+
+    @pytest.mark.asyncio
     async def test_done(self):
         from app.services.tools._executor_io import manage_tasks
 
