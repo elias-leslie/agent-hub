@@ -18,6 +18,7 @@ from ._executor_io_lanes import (
     _st_cmd,
 )
 from ._executor_io_tasks import (
+    _handle_cleanup_all_safe,
     _handle_cleanup_status,
     _handle_cleanup_worktrees,
     _handle_create,
@@ -99,6 +100,8 @@ async def manage_tasks(
         return await _handle_cleanup_status(bash_fn, project_id)
     if action == "cleanup_worktrees":
         return await _handle_cleanup_worktrees(bash_fn, project_id)
+    if action == "cleanup_all_safe":
+        return await _handle_cleanup_all_safe(bash_fn)
     if action == "finalize_merge":
         return await _handle_finalize_merge(bash_fn, task_id, project_id)
     if action == "resolve_conflict":
@@ -113,7 +116,7 @@ async def manage_tasks(
         return err if err else await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))  # type: ignore[arg-type]
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/"
+        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/cleanup_all_safe/"
         "finalize_merge/resolve_conflict/reconcile/retire_lane/done/abandon/cancel."
     )
 
