@@ -132,7 +132,7 @@ def _parse_delta(event: dict[str, Any]) -> str:
     return ""
 
 
-def _parse_completion_event(event: dict[str, Any], resolved_model: str) -> dict[str, Any]:
+def _parse_completion_event(event: dict[str, Any], resolved_model: str = "") -> dict[str, Any]:
     """Extract usage, finish_reason, and model from a completion event."""
     resp_data = event.get("response", {})
     usage = resp_data.get("usage", {})
@@ -148,6 +148,20 @@ def _parse_completion_event(event: dict[str, Any], resolved_model: str) -> dict[
     }
 
 
+def _error_message(event_type: str, event: dict[str, Any]) -> str | None:
+    """Return a formatted error message for error events, else None."""
+    if event_type == "error":
+        raw = event.get("message") or event.get("code") or json.dumps(event)
+        return f"Codex error: {raw}"
+    if event_type == "response.failed":
+        return (
+            (event.get("response") or {})
+            .get("error", {})
+            .get("message", "Codex response failed")
+        )
+    return None
+
+
 async def parse_sse_lines(response: httpx.Response) -> AsyncIterator[dict[str, Any]]:
     """Yield parsed JSON event dicts from an SSE response stream."""
     async for line in response.aiter_lines():
@@ -160,6 +174,83 @@ async def parse_sse_lines(response: httpx.Response) -> AsyncIterator[dict[str, A
             yield json.loads(raw)
         except json.JSONDecodeError:
             continue
+
+
+def _handle_output_item_added(
+    item: dict[str, Any],
+    reasoning_by_id: dict[str, list[str]],
+    tool_call_args: dict[str, str],
+) -> None:
+    """Register a new output item in the tracking dicts."""
+    item_type = item.get("type")
+    if item_type == "reasoning":
+        reasoning_by_id[str(item.get("id", ""))] = []
+    elif item_type == "function_call":
+        tool_call_args[str(item.get("call_id", ""))] = item.get("arguments", "") or ""
+
+
+def _handle_reasoning_delta(
+    event: dict[str, Any],
+    reasoning_by_id: dict[str, list[str]],
+) -> None:
+    """Append a reasoning summary delta to the appropriate reasoning item."""
+    item_id = event.get("item_id")
+    if item_id is not None and item_id in reasoning_by_id:
+        reasoning_by_id[item_id].append(event.get("delta", ""))
+    else:
+        active_ids = list(reasoning_by_id)
+        if active_ids:
+            reasoning_by_id[active_ids[-1]].append(event.get("delta", ""))
+
+
+def _handle_function_call_delta(
+    event: dict[str, Any],
+    tool_call_args: dict[str, str],
+) -> None:
+    """Append a function call arguments delta to the appropriate call."""
+    call_id = event.get("call_id")
+    if call_id is not None and call_id in tool_call_args:
+        tool_call_args[call_id] += event.get("delta", "")
+    else:
+        active_ids = list(tool_call_args)
+        if active_ids:
+            tool_call_args[active_ids[-1]] += event.get("delta", "")
+
+
+def _finalize_function_call(
+    item: dict[str, Any],
+    tool_call_args: dict[str, str],
+) -> ToolCallResult:
+    """Build a ToolCallResult from a completed function_call output item."""
+    call_id = str(item.get("call_id", ""))
+    raw_args = tool_call_args.get(call_id) or item.get("arguments", "") or "{}"
+    try:
+        parsed_args = json.loads(raw_args) if raw_args else {}
+    except json.JSONDecodeError:
+        parsed_args = {}
+    return ToolCallResult(
+        id=call_id,
+        original_id=str(item.get("id", "")) or None,
+        name=str(item.get("name", "")),
+        input=parsed_args,
+    )
+
+
+def _handle_output_item_done(
+    item: dict[str, Any],
+    reasoning_by_id: dict[str, list[str]],
+    tool_call_args: dict[str, str],
+    thinking_parts: list[str],
+    tool_calls: list[ToolCallResult],
+) -> None:
+    """Update thinking_parts or tool_calls from a completed output item."""
+    item_type = item.get("type")
+    if item_type == "reasoning":
+        summary = "".join(reasoning_by_id.get(str(item.get("id", "")), []))
+        if summary:
+            thinking_parts.append(summary)
+    elif item_type == "function_call":
+        tool_calls.append(_finalize_function_call(item, tool_call_args))
 
 
 async def collect_completion(
@@ -179,72 +270,22 @@ async def collect_completion(
 
     async for event in parse_sse_lines(response):
         event_type = event.get("type", "")
-
-        if event_type == "error":
-            msg = event.get("message") or event.get("code") or json.dumps(event)
-            raise ProviderError(f"Codex error: {msg}", provider="codex", retriable=False)
-
-        if event_type == "response.failed":
-            msg = (
-                (event.get("response") or {})
-                .get("error", {})
-                .get("message", "Codex response failed")
-            )
+        msg = _error_message(event_type, event)
+        if msg is not None:
             raise ProviderError(msg, provider="codex", retriable=False)
-
         delta = _parse_delta(event)
         if delta:
             content_parts.append(delta)
-
         if event_type == "response.output_item.added":
-            item = event.get("item", {})
-            item_type = item.get("type")
-            if item_type == "reasoning":
-                reasoning_by_id[str(item.get("id", ""))] = []
-            elif item_type == "function_call":
-                tool_call_args[str(item.get("call_id", ""))] = item.get("arguments", "") or ""
-
+            _handle_output_item_added(event.get("item", {}), reasoning_by_id, tool_call_args)
         if event_type == "response.reasoning_summary_text.delta":
-            item_id = event.get("item_id")
-            if item_id is not None and item_id in reasoning_by_id:
-                reasoning_by_id[item_id].append(event.get("delta", ""))
-            else:
-                active_ids = list(reasoning_by_id)
-                if active_ids:
-                    reasoning_by_id[active_ids[-1]].append(event.get("delta", ""))
-
+            _handle_reasoning_delta(event, reasoning_by_id)
         if event_type == "response.function_call_arguments.delta":
-            call_id = event.get("call_id")
-            if call_id is not None and call_id in tool_call_args:
-                tool_call_args[call_id] += event.get("delta", "")
-            else:
-                active_ids = list(tool_call_args)
-                if active_ids:
-                    tool_call_args[active_ids[-1]] += event.get("delta", "")
-
+            _handle_function_call_delta(event, tool_call_args)
         if event_type == "response.output_item.done":
-            item = event.get("item", {})
-            item_type = item.get("type")
-            if item_type == "reasoning":
-                summary = "".join(reasoning_by_id.get(str(item.get("id", "")), []))
-                if summary:
-                    thinking_parts.append(summary)
-            elif item_type == "function_call":
-                call_id = str(item.get("call_id", ""))
-                raw_args = tool_call_args.get(call_id) or item.get("arguments", "") or "{}"
-                try:
-                    parsed_args = json.loads(raw_args) if raw_args else {}
-                except json.JSONDecodeError:
-                    parsed_args = {}
-                tool_calls.append(
-                    ToolCallResult(
-                        id=call_id,
-                        original_id=str(item.get("id", "")) or None,
-                        name=str(item.get("name", "")),
-                        input=parsed_args,
-                    )
-                )
-
+            _handle_output_item_done(
+                event.get("item", {}), reasoning_by_id, tool_call_args, thinking_parts, tool_calls
+            )
         if event_type in ("response.completed", "response.done"):
             parsed = _parse_completion_event(event, resolved_model)
             input_tokens = parsed["input_tokens"]
@@ -275,17 +316,8 @@ async def iter_stream_events(
     async for event in parse_sse_lines(response):
         event_type = event.get("type", "")
 
-        if event_type == "error":
-            msg = event.get("message") or event.get("code") or json.dumps(event)
-            yield StreamEvent(type="error", error=f"Codex error: {msg}")
-            return
-
-        if event_type == "response.failed":
-            msg = (
-                (event.get("response") or {})
-                .get("error", {})
-                .get("message", "Codex response failed")
-            )
+        msg = _error_message(event_type, event)
+        if msg is not None:
             yield StreamEvent(type="error", error=msg)
             return
 
@@ -294,16 +326,10 @@ async def iter_stream_events(
             yield StreamEvent(type="content", content=delta)
 
         if event_type in ("response.completed", "response.done"):
-            resp_data = event.get("response", {})
-            usage = resp_data.get("usage", {})
-            input_tokens = usage.get("input_tokens", 0)
-            output_tokens = usage.get("output_tokens", 0)
-            status = resp_data.get("status", "completed")
-            finish_reason = (
-                "stop"
-                if status == "completed"
-                else ("length" if status == "incomplete" else status)
-            )
+            parsed = _parse_completion_event(event)
+            input_tokens = parsed["input_tokens"]
+            output_tokens = parsed["output_tokens"]
+            finish_reason = parsed["finish_reason"]
 
     yield StreamEvent(
         type="done",
