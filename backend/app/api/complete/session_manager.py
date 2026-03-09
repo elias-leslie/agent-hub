@@ -54,6 +54,19 @@ async def _create_session(
     return session, [], True
 
 
+async def _validate_project(project_id: str) -> None:
+    """Ensure project_id is known, refreshing the cache if stale."""
+    from app.constants import VALID_PROJECT_IDS
+    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
+
+    if is_cache_stale():
+        await refresh_project_ids_cache()
+    if project_id not in VALID_PROJECT_IDS:
+        raise ValueError(
+            f"Unknown project_id '{project_id}'. Valid projects: {sorted(VALID_PROJECT_IDS)}"
+        )
+
+
 async def get_or_create_session(
     db: AsyncSession,
     session_id: str | None,
@@ -72,15 +85,7 @@ async def get_or_create_session(
     requested_model: str | None = None,
 ) -> _SessionResult:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
-    from app.constants import VALID_PROJECT_IDS
-    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
-
-    if is_cache_stale():
-        await refresh_project_ids_cache()
-    if project_id not in VALID_PROJECT_IDS:
-        raise ValueError(
-            f"Unknown project_id '{project_id}'. Valid projects: {sorted(VALID_PROJECT_IDS)}"
-        )
+    await _validate_project(project_id)
 
     if session_id:
         existing = await load_session(
