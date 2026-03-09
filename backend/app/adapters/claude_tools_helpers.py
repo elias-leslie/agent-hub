@@ -37,6 +37,8 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
     "Edit": "write_file",
 }
 
+_STREAM_STOP = object()  # Sentinel: async iteration exhausted
+
 
 @dataclass
 class ResultMessage:
@@ -91,6 +93,17 @@ def _build_mcp_server(
     return _build_mcp_server_impl(tools, working_dir, project_id, tool_catalog=tool_catalog)
 
 
+def _resolve_can_use_tool(
+    yolo_mode: bool,
+    permission_checker: Any | None,
+    project_id: str | None,
+) -> Any | None:
+    """Return can_use_tool callback when permission hooks are needed, else None."""
+    if yolo_mode or not (permission_checker or project_id):
+        return None
+    return _build_can_use_tool(checker=permission_checker, project_id=project_id)
+
+
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
     """Wrap a string prompt as an async iterable for SDK streaming mode."""
 
@@ -105,95 +118,112 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
     return _stream()
 
 
+async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
+    if hasattr(message_iter, "aclose"):
+        with suppress(Exception):
+            await message_iter.aclose()
+    if next_task is not None:
+        next_task.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await asyncio.wait_for(next_task, timeout=1.0)
+
+
+async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
+    if idle_timeout is None:
+        return await anext(message_iter)
+    next_task = asyncio.create_task(anext(message_iter))
+    done, _pending = await asyncio.wait({next_task}, timeout=idle_timeout)
+    if next_task in done:
+        return await next_task
+    await _abort_message_iter(message_iter, next_task)
+    raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s")
+
+
+def _message_has_tool_use(message: Any) -> bool:
+    for block in getattr(message, "content", []) or []:
+        if extract_block_content(block)["type"] == "tool_use":
+            return True
+    return False
+
+
+def _message_has_tool_result(message: Any) -> bool:
+    for block in getattr(message, "content", []) or []:
+        if extract_block_content(block)["type"] == "tool_result":
+            return True
+    return False
+
+
+async def _fetch_next_or_stop(
+    message_iter: Any,
+    idle_timeout: float | None,
+    provider_name: str,
+) -> Any:
+    """Fetch next message, return _STREAM_STOP on exhaustion, raise ProviderError on timeout."""
+    try:
+        return await _next_message(message_iter, idle_timeout)
+    except StopAsyncIteration:
+        return _STREAM_STOP
+    except TimeoutError as exc:
+        logger.error(str(exc))
+        raise ProviderError(str(exc), provider=provider_name, retriable=True) from exc
+
+
+async def _iterate_sdk_messages(
+    prompt: str | Any,
+    options: Any,
+    provider_name: str,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Core message-processing loop over the claude_agent_sdk query iterator."""
+    from claude_agent_sdk import query
+
+    session_id: str | None = None
+    done_emitted = False
+    saw_payload = False
+    pending_tool_calls = 0
+    message_iter = query(prompt=prompt, options=options).__aiter__()
+    while True:
+        idle_timeout = (
+            _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
+            if saw_payload and pending_tool_calls == 0 and not done_emitted
+            else None
+        )
+        message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
+        if message is _STREAM_STOP:
+            if saw_payload and not done_emitted:
+                logger.warning(
+                    "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
+                )
+                yield (ResultMessage(session_id=session_id), session_id)
+            return
+        if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+            session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
+            if session_id:
+                logger.info(f"Claude SDK session ID: {session_id}")
+            continue
+        if type(message).__name__ == "ResultMessage":
+            yield (message, session_id)
+            done_emitted = True
+            continue
+        if done_emitted:
+            continue
+        saw_payload = True
+        if _message_has_tool_use(message):
+            pending_tool_calls += 1
+        if _message_has_tool_result(message):
+            pending_tool_calls = max(0, pending_tool_calls - 1)
+        yield (message, session_id)
+
+
 async def _stream_sdk_messages(
     prompt: str | Any,
     options: Any,
     provider_name: str,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Yield (message, session_id) pairs from claude_agent_sdk query."""
-    from claude_agent_sdk import query
-
-    async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
-        if hasattr(message_iter, "aclose"):
-            with suppress(Exception):
-                await message_iter.aclose()
-        if next_task is not None:
-            next_task.cancel()
-            with suppress(asyncio.CancelledError, Exception):
-                await asyncio.wait_for(next_task, timeout=1.0)
-
-    async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
-        if idle_timeout is None:
-            return await anext(message_iter)
-        next_task = asyncio.create_task(anext(message_iter))
-        done, _pending = await asyncio.wait({next_task}, timeout=idle_timeout)
-        if next_task in done:
-            return await next_task
-        await _abort_message_iter(message_iter, next_task)
-        raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s")
-
-    def _message_has_tool_use(message: Any) -> bool:
-        for block in getattr(message, "content", []) or []:
-            if extract_block_content(block)["type"] == "tool_use":
-                return True
-        return False
-
-    def _message_has_tool_result(message: Any) -> bool:
-        for block in getattr(message, "content", []) or []:
-            if extract_block_content(block)["type"] == "tool_result":
-                return True
-        return False
-
-    def _make_fallback_result() -> ResultMessage:
-        return ResultMessage(session_id=session_id)
-
-    session_id: str | None = None
-    done_emitted = False
-    saw_payload = False
-    pending_tool_calls = 0
     async with _sdk_semaphore:
         try:
-            message_iter = query(prompt=prompt, options=options).__aiter__()
-            while True:
-                try:
-                    idle_timeout = (
-                        _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
-                        if saw_payload and pending_tool_calls == 0 and not done_emitted
-                        else None
-                    )
-                    message = await _next_message(message_iter, idle_timeout)
-                except StopAsyncIteration:
-                    if saw_payload and not done_emitted:
-                        logger.warning(
-                            "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
-                        )
-                        yield (_make_fallback_result(), session_id)
-                    return
-                except TimeoutError as exc:
-                    logger.error(str(exc))
-                    raise ProviderError(
-                        str(exc),
-                        provider=provider_name,
-                        retriable=True,
-                    ) from exc
-
-                if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                    session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
-                    if session_id:
-                        logger.info(f"Claude SDK session ID: {session_id}")
-                    continue
-                if type(message).__name__ == "ResultMessage":
-                    yield (message, session_id)
-                    done_emitted = True
-                    continue
-                if done_emitted:
-                    continue
-                saw_payload = True
-                if _message_has_tool_use(message):
-                    pending_tool_calls += 1
-                if _message_has_tool_result(message):
-                    pending_tool_calls = max(0, pending_tool_calls - 1)
-                yield (message, session_id)
+            async for item in _iterate_sdk_messages(prompt, options, provider_name):
+                yield item
         except Exception as e:
             logger.error(f"Claude tool error: {e}")
             raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
@@ -221,15 +251,7 @@ async def complete_with_tools(
     # The can_use_tool callback here is only for non-boundary permission
     # hooks (project tier, per-request checker) since the SDK subprocess
     # does not invoke can_use_tool for built-in tools.
-    has_permission_hooks = bool(permission_checker or project_id)
-    can_use_tool_cb = (
-        _build_can_use_tool(
-            checker=permission_checker if not yolo_mode else None,
-            project_id=project_id if not yolo_mode else None,
-        )
-        if has_permission_hooks and not yolo_mode
-        else None
-    )
+    can_use_tool_cb = _resolve_can_use_tool(yolo_mode, permission_checker, project_id)
     mcp_server = _build_mcp_server(tools, working_dir, project_id, tool_catalog) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
@@ -238,9 +260,7 @@ async def complete_with_tools(
     from app.adapters._claude_constants import build_allowed_tools
 
     allowed_tools = build_allowed_tools(tools) if tools else None
-
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
-
     options, use_streaming_prompt = build_sdk_options(
         cli_path=cli_path,
         model=model,
