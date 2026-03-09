@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters._errors_types import ProviderError
 from app.adapters._gemini_cloudcode_ops import (
     _GENERATE_MAX_RETRIES,
     _compute_retry_delay,
@@ -116,3 +117,52 @@ async def sdk_stream(
             await asyncio.sleep(delay)
 
     yield StreamEvent(type="error", error="Gemini stream retries exhausted")
+
+
+async def sdk_stream_with_failover(
+    sdk_clients: list[Any],
+    client: Any,
+    messages: Any,
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+    provider_name: str,
+    kwargs: dict[str, Any],
+) -> AsyncIterator[StreamEvent]:
+    """Try SDK stream across keys; fail over on retryable pre-content errors."""
+    if sdk_clients:
+        clients = sdk_clients
+    elif client is not None:
+        clients = [client]
+    else:
+        raise ProviderError(
+            "Gemini API key is not configured",
+            provider=provider_name,
+            retriable=False,
+        )
+
+    for i, c in enumerate(clients):
+        emitted_non_error = False
+        async for event in sdk_stream(c, messages, model, temperature, max_tokens, provider_name, kwargs):
+            if event.type != "error":
+                emitted_non_error = True
+                yield event
+                continue
+
+            can_fail_over = (
+                not emitted_non_error
+                and i < len(clients) - 1
+                and bool(event.error)
+                and _is_retryable_error(event.error or "")
+            )
+            if can_fail_over:
+                logger.warning(
+                    "Gemini API key #%d stream failed (%s), trying next key", i + 1, event.error,
+                )
+                break
+            yield event
+            return
+        else:
+            return
+
+    yield StreamEvent(type="error", error="Gemini stream retries exhausted across API keys")
