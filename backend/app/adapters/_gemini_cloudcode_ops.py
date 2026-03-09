@@ -277,6 +277,47 @@ def _stream_tool_event(part: dict[str, Any]) -> StreamEvent:
     )
 
 
+def _build_assistant_events(
+    text_content: str,
+    tool_calls: list[ToolCall],
+    session_id: str,
+) -> tuple[str, list[tuple[ToolEvent, str]]]:
+    """Build assistant ToolEvents for text and tool_use turns; returns (extra_text, events)."""
+    events: list[tuple[ToolEvent, str]] = []
+    if text_content:
+        events.append((
+            ToolEvent(type="assistant", message=ToolMessage(content=[ToolContentBlock(type="text", text=text_content)])),
+            session_id,
+        ))
+    for tc in tool_calls:
+        events.append((
+            ToolEvent(type="assistant", message=ToolMessage(content=[
+                ToolContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id),
+            ])),
+            session_id,
+        ))
+    return text_content, events
+
+
+async def _execute_tool_calls(
+    tool_calls: list[ToolCall],
+    tool_handler: Any,
+    session_id: str,
+) -> tuple[list[tuple[ToolEvent, str]], list[dict[str, Any]]]:
+    """Execute tool calls; returns (result_events, function_response_parts)."""
+    tool_results: list[Any] = []
+    response_parts: list[dict[str, Any]] = []
+    for tc in tool_calls:
+        result = await tool_handler.execute(tc)
+        tool_results.append(result)
+        response_parts.append({"functionResponse": {"name": tc.name, "id": tc.id, "response": {"result": result.content}}})
+    result_events = [
+        (ToolEvent(type="tool_result", content=r.content, tool_use_id=tc.id, is_error=r.is_error, duration_ms=r.duration_ms), session_id)
+        for tc, r in zip(tool_calls, tool_results, strict=True)
+    ]
+    return result_events, response_parts
+
+
 async def _process_tool_loop_turn(
     client: CloudCodeClient,
     model: str,
@@ -289,55 +330,24 @@ async def _process_tool_loop_turn(
     session_id: str,
 ) -> tuple[str, list[tuple[ToolEvent, str]], bool]:
     """Execute one turn of the tool loop; returns (accumulated_text, events, done)."""
-    data = await _generate_with_retry(
-        client, model, contents, system_instruction, gen_config, cc_tools,
-    )
-
-    response = data.get("response", data)
-    candidates = response.get("candidates", [])
-
+    data = await _generate_with_retry(client, model, contents, system_instruction, gen_config, cc_tools)
+    candidates = data.get("response", data).get("candidates", [])
     if not candidates:
         return accumulated_text, [(ToolEvent(type="error", error="Empty response from model"), session_id)], True
 
-    candidate = candidates[0]
-    parts = (candidate.get("content") or {}).get("parts", [])
+    parts = (candidates[0].get("content") or {}).get("parts", [])
     text_content, tool_calls = _parse_candidate_parts(parts)
-
-    events: list[tuple[ToolEvent, str]] = []
-    if text_content:
-        accumulated_text += text_content
-        events.append((
-            ToolEvent(type="assistant", message=ToolMessage(content=[ToolContentBlock(type="text", text=text_content)])),
-            session_id,
-        ))
-
-    for tc in tool_calls:
-        events.append((
-            ToolEvent(type="assistant", message=ToolMessage(content=[
-                ToolContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id),
-            ])),
-            session_id,
-        ))
+    extra_text, events = _build_assistant_events(text_content, tool_calls, session_id)
+    accumulated_text += extra_text
 
     if not tool_calls:
         events.append((ToolEvent(type="result", subtype="success", result=accumulated_text), session_id))
         return accumulated_text, events, True
 
-    # Execute tools and build function-response parts for the next turn
-    tool_results: list[Any] = []
-    tool_response_parts: list[dict[str, Any]] = []
-    for tc in tool_calls:
-        result = await tool_handler.execute(tc)
-        tool_results.append(result)
-        tool_response_parts.append({"functionResponse": {"name": tc.name, "id": tc.id, "response": {"result": result.content}}})
-
-    events.extend([
-        (ToolEvent(type="tool_result", content=r.content, tool_use_id=tc.id, is_error=r.is_error, duration_ms=r.duration_ms), session_id)
-        for tc, r in zip(tool_calls, tool_results, strict=True)
-    ])
+    result_events, response_parts = await _execute_tool_calls(tool_calls, tool_handler, session_id)
+    events.extend(result_events)
     contents.append({"role": "model", "parts": _build_model_parts(parts)})
-    contents.append({"role": "user", "parts": tool_response_parts})
-
+    contents.append({"role": "user", "parts": response_parts})
     return accumulated_text, events, False
 
 
