@@ -147,16 +147,9 @@ class DirectToolExecutor:
         self._tool_catalog = {
             str(tool["name"]): dict(tool) for tool in (tool_catalog or [])
         }
-        self._allowed_root: Path | None = self._resolve_project_root(project_id)
+        root = KNOWN_ROOTS.get(project_id) if project_id else None
+        self._allowed_root: Path | None = Path(root) if root else None
         self._registry: dict[str, Any] = build_tool_registry(project_id, self.bash)
-
-    @staticmethod
-    def _resolve_project_root(project_id: str | None) -> Path | None:
-        """Resolve the allowed root path for a project."""
-        if not project_id:
-            return None
-        root = KNOWN_ROOTS.get(project_id)
-        return Path(root) if root else None
 
     def _is_path_allowed(self, path: Path) -> bool:
         """Check if a resolved path is within the project's allowed root or working dir."""
