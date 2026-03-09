@@ -24,6 +24,7 @@ MANAGE_TASKS_TOOL = Tool(
                     "dispatch",
                     "cleanup_status",
                     "cleanup_worktrees",
+                    "cleanup_all_safe",
                     "finalize_merge",
                     "resolve_conflict",
                     "reconcile",
@@ -62,7 +63,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "project_id": {
                 "type": "string",
-                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status and cleanup_worktrees and recommended for finalize_merge",
+                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status and cleanup_worktrees, not used by cleanup_all_safe, and recommended for finalize_merge",
             },
             "objective": {
                 "type": "string",

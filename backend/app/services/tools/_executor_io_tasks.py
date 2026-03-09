@@ -189,6 +189,20 @@ async def _handle_cleanup_worktrees(
     return await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
 
 
+async def _handle_cleanup_all_safe(
+    bash_fn: Callable[..., Awaitable[str]],
+) -> str:
+    """Exhaust safe cleanup across all managed projects in one canonical call."""
+    before = await bash_fn("st cleanup status --all")
+    cleanup_result = await bash_fn("st cleanup worktrees --auto --all")
+    after = await bash_fn("st cleanup status --all")
+    actionable = build_actionable_cleanup_summary(after)
+    parts = [before, cleanup_result, after]
+    if actionable:
+        parts.append(actionable)
+    return "\n\n".join(part for part in parts if part)
+
+
 async def _handle_finalize_merge(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str | None,

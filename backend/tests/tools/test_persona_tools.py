@@ -891,6 +891,34 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
 
     @pytest.mark.asyncio
+    async def test_cleanup_all_safe_exhausts_cross_project_safe_cleanup(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(side_effect=[
+            (
+                "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4\n"
+                "agent-hub worktrees:1 dirty:0 orphan:7 prunable:3\n"
+                "terminal worktrees:1 dirty:0 orphan:3 prunable:1"
+            ),
+            "Cleaned 0, skipped 0, errors 0\n  Pruned git worktree registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4",
+            (
+                "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=3 orphan=14 prunable=0\n"
+                "agent-hub worktrees:1 dirty:1 orphan:4 prunable:0\n"
+                "terminal worktrees:1 dirty:1 orphan:2 prunable:0"
+            ),
+        ])
+        result = await manage_tasks(mock_bash, action="cleanup_all_safe")
+
+        assert "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4" in result
+        assert "Pruned merged orphan task branches: 4" in result
+        assert "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=3 orphan=14 prunable=0" in result
+        mock_bash.assert_has_awaits([
+            call("st cleanup status --all"),
+            call("st cleanup worktrees --auto --all"),
+            call("st cleanup status --all"),
+        ])
+
+    @pytest.mark.asyncio
     async def test_finalize_merge(self):
         from app.services.tools._executor_io import manage_tasks
 
