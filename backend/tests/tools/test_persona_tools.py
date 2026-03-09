@@ -782,6 +782,9 @@ class TestManageTasks:
 
         assert "Dispatch blocked" in result
         assert "cleanup residue" in result
+        assert "ACTIONABLE-CLEANUP[2]" in result
+        assert "agent-hub | finalize | task-old" in result
+        assert "agent-hub | conflicts | task-conflict" in result
         assert mock_bash.await_count == 1
 
     @pytest.mark.asyncio
