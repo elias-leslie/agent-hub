@@ -16,6 +16,20 @@ from app.models.memory_unified import Memory
 from ._repo_helpers import TIER_MAP
 
 
+def _parse_pagination_cursor(cursor: str) -> tuple[datetime, _uuid.UUID | None]:
+    """Parse a pagination cursor into timestamp and optional UUID tie-breaker."""
+    if "|" not in cursor:
+        return datetime.fromisoformat(cursor), None
+
+    timestamp_raw, uuid_raw = cursor.split("|", 1)
+    return datetime.fromisoformat(timestamp_raw), _uuid.UUID(uuid_raw)
+
+
+def _build_pagination_cursor(created_at: datetime, memory_id: _uuid.UUID) -> str:
+    """Build a stable pagination cursor using created_at plus UUID tie-breaker."""
+    return f"{created_at.isoformat()}|{memory_id}"
+
+
 def _apply_list_order(stmt: Any, order_by: str) -> Any:
     """Apply ordering to a Memory select statement."""
     if order_by == "display_order":
@@ -189,9 +203,18 @@ class QueryRepository:
                 stmt = stmt.where(Memory.tier == tier_num)
         if cursor:
             with contextlib.suppress(ValueError):
-                stmt = stmt.where(Memory.created_at < datetime.fromisoformat(cursor))
+                cursor_time, cursor_id = _parse_pagination_cursor(cursor)
+                if cursor_id is None:
+                    stmt = stmt.where(Memory.created_at < cursor_time)
+                else:
+                    stmt = stmt.where(
+                        or_(
+                            Memory.created_at < cursor_time,
+                            and_(Memory.created_at == cursor_time, Memory.id < cursor_id),
+                        )
+                    )
 
-        stmt = stmt.order_by(Memory.created_at.desc()).limit(limit + 1)
+        stmt = stmt.order_by(Memory.created_at.desc(), Memory.id.desc()).limit(limit + 1)
 
         if db:
             result = await db.execute(stmt)
@@ -203,7 +226,11 @@ class QueryRepository:
 
         has_more = len(rows) > limit
         memories = rows[:limit]
-        next_cursor = memories[-1].created_at.isoformat() if memories and has_more else None
+        next_cursor = (
+            _build_pagination_cursor(memories[-1].created_at, memories[-1].id)
+            if memories and has_more
+            else None
+        )
         return {"memories": memories, "total": len(memories), "cursor": next_cursor, "has_more": has_more}
 
     async def text_search(

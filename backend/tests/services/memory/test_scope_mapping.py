@@ -134,3 +134,28 @@ async def test_list_episodes_paginated_handles_nullable_name_content() -> None:
     assert result.total == 1
     assert result.episodes[0].name == ""
     assert result.episodes[0].content == ""
+
+
+@pytest.mark.asyncio
+async def test_list_episodes_paginated_preserves_repository_cursor() -> None:
+    mock_repo = AsyncMock()
+    repo_cursor = "2026-03-09T20:00:00+00:00|12345678-1234-5678-1234-567812345678"
+    mock_repo.list_paginated = AsyncMock(
+        return_value={
+            "memories": [_mem(mem_id="123", group_id="project-agent-hub")],
+            "has_more": True,
+            "cursor": repo_cursor,
+        }
+    )
+
+    with patch("app.services.memory.list_operations.get_memory_repository", return_value=mock_repo):
+        result = await list_episodes_paginated(
+            group_id=None,
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            limit=50,
+            cursor=None,
+            category=None,
+        )
+
+    assert result.cursor == repo_cursor

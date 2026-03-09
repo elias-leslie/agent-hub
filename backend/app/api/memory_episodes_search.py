@@ -27,7 +27,7 @@ async def handle_search_memory(
             query=query,
             limit=limit,
             min_score=min_score,
-            all_groups=True,
+            all_groups=False,
         )
         return SearchResponse(
             query=query,
@@ -50,7 +50,7 @@ async def handle_text_search_memory(
             query=query,
             limit=limit,
             category=category,
-            all_groups=True,
+            all_groups=False,
         )
         return MemoryListResult(
             episodes=episodes,

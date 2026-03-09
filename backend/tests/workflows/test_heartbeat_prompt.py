@@ -15,7 +15,6 @@ from app.workflows._heartbeat_data import (
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_cleanup_status_summary,
-    _get_git_project_status,
     _get_git_status_summary,
     _get_protection_status_summary,
     _get_workstream_inventory,
@@ -36,132 +35,31 @@ def _mock_async_session_with_rows(rows: list[object]):
     return _session, mock_db
 
 
-class TestGetGitProjectStatus:
-    """Tests for _get_git_project_status."""
-
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_returns_none_when_no_git_state(self, mock_run: MagicMock) -> None:
-        """Clean repo with no notable state returns None."""
-        mock_run.return_value = MagicMock(stdout="", returncode=0)
-        result = _get_git_project_status("summitflow", "/home/kasadis/summitflow")
-        assert result is None
-
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_shows_uncommitted_changes(self, mock_run: MagicMock) -> None:
-        """Uncommitted files appear in output."""
-        def side_effect(args, **kwargs):
-            mock = MagicMock(returncode=0)
-            if "status" in args:
-                mock.stdout = " M backend/app/main.py\n?? new_file.py\n"
-            else:
-                mock.stdout = ""
-            return mock
-
-        mock_run.side_effect = side_effect
-        result = _get_git_project_status("summitflow", "/home/kasadis/summitflow")
-
-        assert result is not None
-        assert "[summitflow]" in result
-        assert "uncommitted" in result
-        assert "backend/app/main.py" in result
-
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_shows_recent_commits(self, mock_run: MagicMock) -> None:
-        """Recent commits appear in output."""
-        def side_effect(args, **kwargs):
-            mock = MagicMock(returncode=0)
-            if "log" in args:
-                mock.stdout = "abc1234 Fix bug (SummitFlow Dev)\ndef5678 Add feature (kasadis)\n"
-            else:
-                mock.stdout = ""
-            return mock
-
-        mock_run.side_effect = side_effect
-        result = _get_git_project_status("agent-hub", "/home/kasadis/agent-hub")
-
-        assert result is not None
-        assert "recent commits" in result
-        assert "SummitFlow Dev" in result
-
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_shows_task_branches(self, mock_run: MagicMock) -> None:
-        """Task branches appear in output."""
-        def side_effect(args, **kwargs):
-            mock = MagicMock(returncode=0)
-            if "branch" in args:
-                mock.stdout = "  task-42-fix-login\n  task-99-add-feature\n"
-            else:
-                mock.stdout = ""
-            return mock
-
-        mock_run.side_effect = side_effect
-        result = _get_git_project_status("summitflow", "/home/kasadis/summitflow")
-
-        assert result is not None
-        assert "task branches" in result
-        assert "task-42-fix-login" in result
-
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_all_sections_combined(self, mock_run: MagicMock) -> None:
-        """All three sections appear when all have data."""
-        def side_effect(args, **kwargs):
-            mock = MagicMock(returncode=0)
-            if "status" in args:
-                mock.stdout = " M file.py\n"
-            elif "log" in args:
-                mock.stdout = "abc1234 Fix (Dev)\n"
-            elif "branch" in args:
-                mock.stdout = "  task-1-test\n"
-            else:
-                mock.stdout = ""
-            return mock
-
-        mock_run.side_effect = side_effect
-        result = _get_git_project_status("test-project", "/tmp/test")
-
-        assert result is not None
-        assert "uncommitted" in result
-        assert "recent commits" in result
-        assert "task branches" in result
-
-
 class TestGetGitStatusSummary:
     """Tests for _get_git_status_summary."""
 
-    @patch("app.constants.projects.get_known_roots", return_value={})
-    def test_empty_when_no_roots(self, _mock: MagicMock) -> None:
-        result = _get_git_status_summary()
-        assert result == ""
-
     @patch("app.workflows._heartbeat_data.subprocess.run")
-    @patch(
-        "app.constants.projects.get_known_roots",
-        return_value={"summitflow": "/home/kasadis/summitflow"},
-    )
-    def test_returns_xml_block(self, _mock_roots: MagicMock, mock_run: MagicMock) -> None:
-        """Returns <git_state> XML when projects have state."""
-        def side_effect(args, **kwargs):
-            mock = MagicMock(returncode=0)
-            if "log" in args:
-                mock.stdout = "abc Fix (Dev)\n"
-            else:
-                mock.stdout = ""
-            return mock
-
-        mock_run.side_effect = side_effect
+    def test_returns_xml_block(self, mock_run: MagicMock) -> None:
+        """Returns <git_state> XML when compact git status has content."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout=(
+                "GIT[2]\n"
+                "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
+                "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
+            ),
+        )
         result = _get_git_status_summary()
 
         assert result.startswith("\n<git_state>")
         assert result.endswith("</git_state>")
-        assert "[summitflow]" in result
+        assert "GIT[2]" in result
+        assert "ACTIONABLE-GIT[1]" in result
+        assert "agent-hub" in result
 
     @patch("app.workflows._heartbeat_data.subprocess.run")
-    @patch(
-        "app.constants.projects.get_known_roots",
-        return_value={"summitflow": "/home/kasadis/summitflow"},
-    )
-    def test_empty_when_no_git_state(self, _mock_roots: MagicMock, mock_run: MagicMock) -> None:
-        """Returns empty when all projects are clean."""
+    def test_empty_when_no_git_state(self, mock_run: MagicMock) -> None:
+        """Returns empty when compact git status output is empty."""
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = _get_git_status_summary()
         assert result == ""

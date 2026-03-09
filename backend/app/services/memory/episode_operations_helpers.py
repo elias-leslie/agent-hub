@@ -16,10 +16,10 @@ def record_to_get_dict(record: dict[str, Any]) -> dict[str, Any]:
     """
     return {
         "uuid": record.get("uuid", ""),
-        "name": record.get("name"),
+        "name": record.get("name") or "",
         "content": record.get("content", ""),
         "injection_tier": record.get("injection_tier"),
-        "source_description": record.get("source_description"),
+        "source_description": record.get("source_description") or "",
         "created_at": record.get("created_at"),
         "pinned": record.get("pinned", False),
         "auto_inject": record.get("auto_inject", False),
@@ -31,6 +31,7 @@ def record_to_get_dict(record: dict[str, Any]) -> dict[str, Any]:
         "helpful_count": record.get("helpful_count", 0),
         "harmful_count": record.get("harmful_count", 0),
         "utility_score": record.get("utility_score"),
+        "lifecycle_score": record.get("lifecycle_score"),
     }
 
 

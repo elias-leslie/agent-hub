@@ -1,0 +1,354 @@
+- slug: persona-heartbeat-orchestrator
+  name: Persona Heartbeat Orchestrator
+  is_global: false
+  description: Workflow prompt that drives persona heartbeat orchestration.
+  content: 'Run your regular heartbeat check. Current time: {timestamp} ({local_time})
+
+
+    {project_access_summary}
+
+
+    ## Model Review ({model_review_status})
+
+    {model_review_instructions}
+
+
+    ## Durable Insights
+
+    If you discover a pattern, gotcha, or user preference worth preserving:
+
+    - Durable cross-session insight -> `st memory save -s project --scope-id <project>
+    "content"` or `st memory save -s global "content"`
+
+    - Friction/idea/improvement -> use `[[F:type:component:description]]` inline tag
+
+    - Git captures your work log automatically via commit messages. Do NOT duplicate
+    it.
+
+
+    ## Memory Curation
+
+    Review injected memories in your context. Use `mark_memory_relevant` for memories
+    useful to your ongoing operations. Use `mark_memory_irrelevant` for noise/outdated
+    ones.
+
+
+    ## Adaptive Loop
+
+    - Prefer generalizable heuristics over one-off patches to your own operating model.
+
+    - If the same failure class appears twice, identify the canonical layer to fix:
+    task shaping, queue state, observability, tool surface, agent prompt, or model
+    assignment.
+
+    - After you improve your own operating model, record the learning in memory and
+    update your heartbeat instructions when the lesson should persist.
+
+    - Use `write_heartbeat_instructions` for durable Jenny-specific workflow improvements,
+    not for transient incidents.
+
+
+    ## Feedback Triage
+
+    If <feedback_summary> is present, use `manage_feedback` to triage:
+
+    - Resolve items you know are fixed (action="resolve")
+
+    - Vote on items you''ve also observed (action="vote")
+
+    - For high-vote friction/improvement items needing code changes: create a task
+    via manage_tasks
+
+    - Search for context on unfamiliar items (action="search")
+
+    - Do not use `bash` to run `st feedback`, `st memory`, `st sessions`, or other
+    control-plane CLI commands when an equivalent persona tool already exists.
+
+
+    ## Workstream Hygiene
+
+    If <workstream_inventory> is present, treat it as your retirement queue:
+
+    - `state=completed_ready_for_closure` means reconcile and close the task lane
+    instead of redispatching into it
+
+    - `state=stale_active` means verify whether the session is truly live before trusting
+    it
+
+    - `state=stale_running_task` means the queue still says `running` but no live
+    lane backs it; reconcile it immediately
+
+    - If `manage_tasks(action="get_context")` shows `LANE:disp:reconcile` or `kind:stale_same_task`,
+    treat that as stale-lane cleanup work, not an active implementation lane.
+
+    - When `LANE:disp:reconcile` is present and the primary implementation specialist
+    is no longer active, do not protect the lane just because a leftover helper/feedback
+    session still exists on the same task.
+
+    - If the target project shows any `state=stale_running_task`, make that your first
+    execution action before reviewing duplicate specialists or considering new dispatches.
+
+    - Duplicate or lingering reviewer sessions do NOT justify deferring stale-running-task
+    reconciliation when the coding lane itself is gone.
+
+    - `state=mixed` means split, promote, or clean up the lane before adding more
+    implementation work
+
+    - `state=reconciled` means an authoritative lane is already recorded; do not reopen
+    old branches without new evidence
+
+    - `state=retired` or `state=superseded` means the lane is no longer authoritative
+
+    - Do not spend a whole heartbeat clearing completed-task residue if the project
+    is otherwise safe. Reconcile at most two completed/no-worktree tasks per project
+    per heartbeat, then move on.
+
+    - If reconcile says a completed task is already closed or completed without checkpoint
+    merge, treat that as closure evidence and do not follow it with `done`, `cancel`,
+    or `abandon` in the same heartbeat.
+
+    - When there are no active coding lanes and no stranded running tasks, do not
+    query or audit more than two completed tasks before dispatching a fresh ready
+    task.
+
+
+    ## Protection & Recovery
+
+    If <protection_status> is present, treat it as the canonical backup coverage summary:
+
+    - Use `manage_backups(action="protection_status", project_id="...")` before potentially
+    destructive work in that project.
+
+    - Routine code edits are already protected by git history, task worktrees, checkpoints,
+    and merge/reconcile flows. Do NOT create a manual backup for every task.
+
+    - Create a manual backup only before destructive or bulk-risk operations such
+    as: large cleanup sweeps, force-closing or mass-retiring worktrees/branches, restore
+    operations, bulk prompt/persona rewrites, schema/data changes, or anything that
+    could invalidate multiple projects or destroy state quickly.
+
+    - When creating a manual backup, include a specific note describing the risk.
+
+    - For recovery, prefer this order: inspect protection status -> inspect cleanup/task
+    state -> dry-run restore -> actual restore only if still necessary.
+
+    - Never run a real restore first when a dry-run can answer the question.
+
+
+    ## Git Hygiene
+
+    If <cleanup_status> is present, treat it as the canonical branch/worktree hygiene
+    summary:
+
+    - `orphan` and `prunable` counts are cleanup debt; prefer reducing them before
+    spawning low-confidence new maintenance work in that same project.
+
+    - `dirty` worktrees mean in-progress edits exist outside a clean merged lane;
+    verify whether they are valid progress, stale residue, or need reconciliation.
+
+    - Active worktrees alone are not cleanup debt, but mixed active worktrees plus
+    orphan/prunable counts usually indicate a project that needs tidying before more
+    branch fan-out.
+
+    - When cleanup debt is nonzero and no higher-priority production issue is active,
+    favor reconciliation, closure, or a cleanup task over another speculative scan.
+
+    - If you need a current cleanup read on one project, use `manage_tasks(action="cleanup_status",
+    project_id="...")` instead of ad hoc shell inspection.
+
+    - Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:`
+    means use `manage_tasks(action="finalize_merge", ...)`; `conflicts:` means use
+    `manage_tasks(action="resolve_conflict", ...)` to reopen and dispatch conflict-resolution
+    work on that exact task before any new low-confidence work; `review:` means do
+    NOT use `finalize_merge` blindly and do NOT dispatch more low-confidence work
+    until you inspect or reconcile the residue.
+
+    - If cleanup debt is present and the project has no more urgent live execution
+    problem, use `manage_tasks(action="cleanup_worktrees", project_id="...")` to clear
+    safe worktree cleanup cases before dispatching additional low-confidence maintenance
+    work.
+
+    - Do not use `manage_tasks(action="finalize_merge", ...)` for a cleanup candidate
+    that is only surfaced under `review:`. Review candidates usually mean missing-task
+    residue, dirty worktrees, or ambiguous state; inspect with `get_context`, `query_sessions`,
+    `cleanup_worktrees`, or `reconcile` first.
+
+    - Do not treat a task as fully closed just because it says `completed` if cleanup
+    still shows `finalize:` or `conflicts:` residue; finish the canonical merge/cleanup
+    path or reconcile why it cannot merge before dispatching more work.
+
+    - Safe cleanup means merged/retired residue only. If cleanup output shows dirty,
+    conflicting, or review-needed worktrees, stop there and reconcile the underlying
+    task/workstream instead of forcing deletion.
+
+    - If <git_state> is present, treat it as the canonical repo-publish summary.
+
+    - `ACTIONABLE-GIT` lines are execution obligations, not advisory text. Consume
+    the best next git action for each permitted project during the heartbeat unless
+    a higher-priority outage or a concrete blocker is present.
+
+    - `next=inspect_then_publish` means inspect the repo, then use `manage_tasks(action="smart_sync",
+    project_id="...")` when the dirty/ahead state is a coherent batch.
+
+    - `next=publish_pending_commits` means publish the pending commits this heartbeat
+    unless the repo is behind, failing verification, or contains junk that makes
+    a truthful publish impossible.
+
+    - `next=inspect_then_commit_or_dispatch` means inspect whether the dirty repo
+    is valid in-progress work, stale residue, or should be turned into a task lane;
+    do not leave it unclassified.
+
+    - `next=sync_before_new_work` means sync first and do not start new work on stale
+    base state.
+
+    - Do not treat dirty/ahead repos as harmless background noise. A permitted project
+    with publishable repo debt MUST either be published in the heartbeat or explicitly
+    classified with the exact blocker.
+
+    - Prefer the canonical tool path over ad hoc shell commits: `manage_tasks(action="smart_sync",
+    project_id="...")` for publishable repo state, `manage_tasks(action="done", task_id="...")`
+    for task closure, and `manage_tasks(action="cleanup_*", ...)` for cleanup debt.
+
+
+    ## Specialist Hygiene
+
+    If <active_specialist_inventory> is present, treat it as an in-flight advisory
+    queue:
+
+    - Each line is an active non-owner specialist already working that project.
+
+    - Do not dispatch the same specialist on the same project while it is listed there
+    unless you have concrete evidence the active session is stuck, failed, or is solving
+    the wrong problem.
+
+    - If a project/agent pair already shows `active>1`, treat that as duplicate fan-out
+    to unwind or wait on, not permission to dispatch a third copy.
+
+    - When a coding lane is already active and a specialist is already reviewing that
+    same project, prefer consuming the pending evidence or dispatching a complementary
+    role instead of another reviewer/debugger pass.
+
+
+    ## Available Tools ({tool_count} total)
+
+    Beyond bash/read_file/write_file, you have: {persona_tool_list}
+
+
+    ## Execution Boundaries
+
+    - Your heartbeat working directory is persona-sandbox, not every project root.
+
+    - Do not use `bash` or `read_file` to inspect another project''s filesystem unless
+    that project is already your active working root and the action is clearly allowed.
+
+    - For task triage, feedback, memory, session inspection, dispatch bookkeeping,
+    protection checks, and cleanup status, stay inside persona tools (`manage_tasks`,
+    `manage_backups`, `manage_feedback`, `query_sessions`, memory tools) instead of
+    shelling out to `st`.
+
+    - If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch",
+    task_id=...)` so execution runs in the task lane/worktree instead of a freeform
+    project session.
+
+    - Use `dispatch_agent` for freeform specialist help only when there is no concrete
+    task lane yet or when the work is intentionally non-task-scoped.
+
+    - If you need code-health, dirty-tree, or implementation validation on another
+    project before a task exists, prefer `dispatch_agent` to a coding-capable specialist
+    instead of direct shell/file inspection.
+
+    - For code-heavy investigation, prefer coding-capable agents like `reviewer`,
+    `debugger`, or `coder`, not non-coding validation agents.
+
+
+    ## Anti-Repeat Recovery
+
+    - Treat recent completed sessions as evidence, not just history.
+
+    - Treat already-active specialist sessions as current work, not fresh opportunities
+    to redispatch the same lane.
+
+    - If `manage_tasks(action="get_context")` shows an active same-task lane (`LANE:`)
+    or active specialists already attached to that task, do not queue that task again
+    in the same heartbeat; monitor, reconcile, or complement it instead.
+
+    - Exception: if `manage_tasks(action="get_context")` shows `LANE:disp:reconcile`
+    / `kind:stale_same_task`, the right follow-through is reconcile/retire/repair,
+    not passive waiting.
+
+    - If `manage_tasks(action="get_context")` shows `status=running`, do not call
+    `manage_tasks(action="dispatch")` for that same task in the same heartbeat.
+
+    - If the right agent type is already active on the same project/task lane, prefer
+    monitoring, waiting, or dispatching a complementary role instead of sending a
+    duplicate agent of the same type.
+
+    - Only redispatch the same specialist lane when you have concrete evidence the
+    active session is stuck, mis-scoped, failed, or contradicted by newer facts.
+
+    - Treat follow-up branches and worktrees as single workstreams, not shared scratchpads.
+
+    - Reuse an existing follow-up branch only when the new work is the same task lane
+    or a direct fixup of the same validated diff.
+
+    - If the new work is a different concern, subsystem, or task lane, create a new
+    task/worktree instead of piling onto the old branch.
+
+    - If a branch already mixes multiple concerns, your next action is split/promotion/cleanup,
+    not another implementation dispatch onto that same branch.
+
+    - If a recently completed session already established the same blocker or stale-state
+    finding, do not redispatch the same investigation unless new contradictory evidence
+    appeared.
+
+    - When the same stale condition is already confirmed, create or advance the recovery
+    task instead of re-opening another review loop.
+
+    - For repeated stale running-task or stale session-state findings, your default
+    next action is `manage_tasks` / task-state repair / verification follow-through,
+    not another reviewer dispatch.
+
+    - Prefer follow-through, bug creation, verification, or task-state repair over
+    repeating the same diagnostic pass.
+
+    - If you create a follow-up task and want it dispatched in the same heartbeat,
+    create it fully execution-ready with objective, done_when, and subtasks. Do not
+    immediately dispatch intent-only or draft tasks.
+
+    - Never dispatch a newly created task in the same heartbeat unless you first verify
+    via `manage_tasks(action="get_context")` that it is execution-ready (`ready:yes`
+    / approved workflow).
+
+    - If a newly created task is still draft or not execution-ready, stop after creating
+    it; leave dispatch for a later heartbeat or first shape the task properly.
+
+    - If recent reviewer/debugger output already narrowed the problem to a concrete
+    code fix, closure step, or task-scope mismatch, prefer `fixer` or `coder` (or
+    close it yourself) over sending another `reviewer`/`debugger` pass.
+
+    - When converting recent session evidence into a follow-through dispatch, distinguish
+    stale evidence from current facts. If current `git` state, task context, or session
+    status conflicts with an older summary, trust the current state and frame the
+    dispatch around that truth instead of repeating the stale description.
+
+    - Once protection is healthy, cleanup is safe, and there is no active coding lane,
+    dispatch one high-confidence ready task instead of continuing to audit completed
+    history.
+
+    - Do not call `query_sessions(status="completed")` or inspect more completed-task
+    contexts after lightweight hygiene unless you already found a concrete stale/blocked
+    lane that truly needs follow-through first.
+
+
+    Follow your <heartbeat_instructions> from your system context.
+
+
+    Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`,
+    followed by a 1-2 sentence summary. Also include a `[[S:completed:summary here]]`
+    or `[[S:partial:summary here]]` tag so the session gets a searchable summary.
+
+
+    If approaching your turn limit, prioritize saving durable insights before doing
+    more work.
+
+    '
