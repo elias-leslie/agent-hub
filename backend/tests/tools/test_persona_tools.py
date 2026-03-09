@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -852,7 +852,11 @@ class TestManageTasks:
     async def test_cleanup_worktrees(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value="Cleaned 2, skipped 1, errors 0")
+        mock_bash = AsyncMock(side_effect=[
+            "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
+            "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-1",
+            "Cleaned 2, skipped 1, errors 0",
+        ])
         result = await manage_tasks(
             mock_bash,
             action="cleanup_worktrees",
@@ -860,7 +864,31 @@ class TestManageTasks:
         )
 
         assert "Cleaned 2" in result
-        mock_bash.assert_awaited_once_with("st -P agent-hub cleanup worktrees --auto")
+        assert mock_bash.await_args_list == [
+            call("st -P agent-hub cleanup status"),
+            call("st -P agent-hub cleanup worktrees --auto"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cleanup_worktrees_with_no_worktrees_returns_actionable_noop(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            return_value=(
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=0 dirty=0 orphan=1 prunable=0\n"
+                "agent-hub worktrees:0 dirty:0 orphan:1 prunable:0 orphan_branches:task-aa44180c/main"
+            )
+        )
+        result = await manage_tasks(
+            mock_bash,
+            action="cleanup_worktrees",
+            project_id="agent-hub",
+        )
+
+        assert "ACTIONABLE-CLEANUP[1]" in result
+        assert "agent-hub | orphan_branch | task-aa44180c" in result
+        assert "Do not call cleanup_worktrees again this heartbeat" in result
+        mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
 
     @pytest.mark.asyncio
     async def test_finalize_merge(self):
