@@ -24,7 +24,9 @@ MANAGE_TASKS_TOOL = Tool(
                     "dispatch",
                     "cleanup_status",
                     "cleanup_worktrees",
+                    "salvage_orphan",
                     "cleanup_all_safe",
+                    "smart_sync",
                     "finalize_merge",
                     "resolve_conflict",
                     "reconcile",
@@ -37,7 +39,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "task_id": {
                 "type": "string",
-                "description": "Task ID (for get_context, dispatch, finalize_merge, resolve_conflict, reconcile, retire_lane, done, abandon, cancel)",
+                "description": "Task ID (for get_context, dispatch, salvage_orphan, finalize_merge, resolve_conflict, reconcile, retire_lane, done, abandon, cancel)",
             },
             "title": {
                 "type": "string",
@@ -63,7 +65,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "project_id": {
                 "type": "string",
-                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status and cleanup_worktrees, not used by cleanup_all_safe, and recommended for finalize_merge",
+                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status, cleanup_worktrees, salvage_orphan, and smart_sync, not used by cleanup_all_safe, and recommended for finalize_merge",
             },
             "objective": {
                 "type": "string",

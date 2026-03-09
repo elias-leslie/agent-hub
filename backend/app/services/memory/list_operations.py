@@ -56,9 +56,7 @@ async def list_episodes_paginated(
     episodes = convert_raw_episodes(memories, scope=scope, scope_id=scope_id)
 
     # Calculate cursor for next page
-    next_cursor = None
-    if episodes and has_more:
-        next_cursor = episodes[-1].valid_at.isoformat()
+    next_cursor = result.get("cursor") if has_more else None
 
     return MemoryListResult(
         episodes=episodes,

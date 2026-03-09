@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 
+from .episode_operations_helpers import record_to_get_dict
 from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
@@ -79,7 +80,10 @@ async def get_episode_details(episode_uuid: str) -> dict[str, Any] | None:
         Dict with episode details and usage stats, or None if not found
     """
     repo = get_memory_repository()
-    return await repo.get_as_dict(episode_uuid)
+    result = await repo.get_as_dict(episode_uuid)
+    if result is None:
+        return None
+    return record_to_get_dict(result)
 
 
 async def batch_get_episode_details(
@@ -95,4 +99,5 @@ async def batch_get_episode_details(
         Dict mapping UUID to episode details (missing UUIDs not included)
     """
     repo = get_memory_repository()
-    return await repo.batch_get(episode_uuids)
+    batch = await repo.batch_get(episode_uuids)
+    return {uuid: record_to_get_dict(data) for uuid, data in batch.items()}

@@ -185,6 +185,17 @@ async def _handle_cleanup_worktrees(
     return f"{result}\n\n{actionable}" if actionable else result
 
 
+async def _handle_cleanup_salvage_orphan(
+    bash_fn: Callable[..., Awaitable[str]], task_id: str | None, project_id: str | None,
+) -> str:
+    """Recover a missing-task salvage candidate into a normal task lane."""
+    if not task_id:
+        return "Error: task_id required for salvage_orphan"
+    if not project_id:
+        return "Error: project_id required for salvage_orphan"
+    return await bash_fn(_st_cmd(f"cleanup salvage {shlex.quote(task_id)}", project_id))
+
+
 async def _handle_cleanup_all_safe(
     bash_fn: Callable[..., Awaitable[str]],
 ) -> str:
@@ -197,6 +208,16 @@ async def _handle_cleanup_all_safe(
     if actionable:
         parts.append(actionable)
     return "\n\n".join(part for part in parts if part)
+
+
+async def _handle_smart_sync(
+    bash_fn: Callable[..., Awaitable[str]],
+    project_id: str | None,
+) -> str:
+    """Publish one project's coherent repo state via the canonical smart-sync path."""
+    if not project_id:
+        return "Error: project_id required for smart_sync"
+    return await bash_fn(f"st git smart-sync {shlex.quote(project_id)}")
 
 
 async def _handle_finalize_merge(

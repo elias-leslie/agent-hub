@@ -19,12 +19,14 @@ from ._executor_io_lanes import (
 )
 from ._executor_io_tasks import (
     _handle_cleanup_all_safe,
+    _handle_cleanup_salvage_orphan,
     _handle_cleanup_status,
     _handle_cleanup_worktrees,
     _handle_create,
     _handle_dispatch,
     _handle_finalize_merge,
     _handle_resolve_conflict,
+    _handle_smart_sync,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,8 +102,12 @@ async def manage_tasks(
         return await _handle_cleanup_status(bash_fn, project_id)
     if action == "cleanup_worktrees":
         return await _handle_cleanup_worktrees(bash_fn, project_id)
+    if action == "salvage_orphan":
+        return await _handle_cleanup_salvage_orphan(bash_fn, task_id, project_id)
     if action == "cleanup_all_safe":
         return await _handle_cleanup_all_safe(bash_fn)
+    if action == "smart_sync":
+        return await _handle_smart_sync(bash_fn, project_id)
     if action == "finalize_merge":
         return await _handle_finalize_merge(bash_fn, task_id, project_id)
     if action == "resolve_conflict":
@@ -116,8 +122,8 @@ async def manage_tasks(
         return err if err else await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))  # type: ignore[arg-type]
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/cleanup_all_safe/"
-        "finalize_merge/resolve_conflict/reconcile/retire_lane/done/abandon/cancel."
+        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/salvage_orphan/cleanup_all_safe/"
+        "smart_sync/finalize_merge/resolve_conflict/reconcile/retire_lane/done/abandon/cancel."
     )
 
 

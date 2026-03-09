@@ -917,6 +917,49 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
 
     @pytest.mark.asyncio
+    async def test_cleanup_salvage_orphan_requires_task_id(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(
+            mock_bash,
+            action="salvage_orphan",
+            project_id="summitflow",
+        )
+
+        assert "task_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_salvage_orphan_requires_project_id(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(
+            mock_bash,
+            action="salvage_orphan",
+            task_id="task-24310aaf",
+        )
+
+        assert "project_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_cleanup_salvage_orphan_routes_to_cli(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Recovered orphan branch task-24310aaf/main into task task-24310aaf")
+        result = await manage_tasks(
+            mock_bash,
+            action="salvage_orphan",
+            task_id="task-24310aaf",
+            project_id="summitflow",
+        )
+
+        assert "Recovered orphan branch" in result
+        mock_bash.assert_awaited_once_with("st -P summitflow cleanup salvage task-24310aaf")
+
+    @pytest.mark.asyncio
     async def test_cleanup_all_safe_exhausts_cross_project_safe_cleanup(self):
         from app.services.tools._executor_io import manage_tasks
 
@@ -945,6 +988,32 @@ class TestManageTasks:
             call("st cleanup worktrees --auto --all"),
             call("st cleanup status --all"),
         ])
+
+    @pytest.mark.asyncio
+    async def test_smart_sync_requires_project_id(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+
+        result = await manage_tasks(mock_bash, action="smart_sync")
+
+        assert "project_id required" in result
+        mock_bash.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_smart_sync_routes_to_cli(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value='{"status":"success","project_id":"agent-hub"}')
+
+        result = await manage_tasks(
+            mock_bash,
+            action="smart_sync",
+            project_id="agent-hub",
+        )
+
+        assert '"status":"success"' in result
+        mock_bash.assert_awaited_once_with("st git smart-sync agent-hub")
 
     @pytest.mark.asyncio
     async def test_finalize_merge(self):

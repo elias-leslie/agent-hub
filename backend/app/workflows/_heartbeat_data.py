@@ -8,6 +8,7 @@ import subprocess
 from datetime import UTC, datetime
 
 from app.services.cleanup_summary import build_actionable_cleanup_summary
+from app.services.git_status_summary import build_actionable_git_summary
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     collapse_active_workstream_rows,
@@ -661,74 +662,25 @@ async def _get_agent_roster_summary() -> str:
         return ""
 
 
-def _get_git_project_status(project_id: str, root_path: str) -> str | None:
-    """Get git status summary for a single project. Returns formatted text or None."""
-    sections: list[str] = []
-    _kw: dict = dict(capture_output=True, text=True, timeout=5, cwd=root_path)
-
-    # Uncommitted changes
-    try:
-        porcelain = subprocess.run(["git", "status", "--porcelain"], **_kw).stdout.strip()
-    except (subprocess.TimeoutExpired, OSError):
-        porcelain = ""
-    if porcelain:
-        lines = porcelain.splitlines()[:10]
-        sections.append(
-            f"  uncommitted ({len(porcelain.splitlines())} files):\n"
-            + "\n".join(f"    {line}" for line in lines)
-        )
-
-    # Recent commits with author
-    try:
-        log_output = subprocess.run(
-            ["git", "log", "--oneline", "--format=%h %s (%an)", "-n", "5"], **_kw
-        ).stdout.strip()
-    except (subprocess.TimeoutExpired, OSError):
-        log_output = ""
-    if log_output:
-        sections.append(
-            "  recent commits:\n"
-            + "\n".join(f"    {line}" for line in log_output.splitlines())
-        )
-
-    # Active task worktree branches
-    try:
-        branches = subprocess.run(["git", "branch", "--list", "task-*"], **_kw).stdout.strip()
-    except (subprocess.TimeoutExpired, OSError):
-        branches = ""
-    if branches:
-        branch_lines = [b.strip() for b in branches.splitlines()[:5]]
-        sections.append(
-            "  task branches:\n" + "\n".join(f"    {b}" for b in branch_lines)
-        )
-
-    if not sections:
-        return None
-
-    return f"[{project_id}] ({root_path})\n" + "\n".join(sections)
-
-
 def _get_git_status_summary() -> str:
-    """Build a <git_state> XML block with git status for all known projects."""
-    from app.constants.projects import get_known_roots
-
-    roots = get_known_roots()
-    if not roots:
+    """Build a <git_state> XML block from the canonical `st git status` surface."""
+    try:
+        proc = subprocess.run(
+            ["st", "--compact", "git", "status"],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except Exception:
+        logger.debug("Failed to fetch git status for heartbeat prompt", exc_info=True)
         return ""
 
-    project_sections: list[str] = []
-    for project_id, root_path in sorted(roots.items()):
-        try:
-            section = _get_git_project_status(project_id, root_path)
-            if section:
-                project_sections.append(section)
-        except Exception:
-            logger.debug("Git status failed for %s", project_id, exc_info=True)
-
-    if not project_sections:
+    git_status = proc.stdout.strip()
+    if not git_status:
         return ""
 
-    body = "\n\n".join(project_sections)
+    actionable = build_actionable_git_summary(git_status)
+    body = f"{git_status}\n\n{actionable}" if actionable else git_status
     return f"\n<git_state>\n{body}\n</git_state>"
 
 
@@ -797,7 +749,6 @@ __all__ = [
     "_get_agent_roster_summary",
     "_get_cleanup_status_summary",
     "_get_feedback_summary_section",
-    "_get_git_project_status",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
