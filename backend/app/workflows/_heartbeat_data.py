@@ -107,9 +107,7 @@ def _fetch_cleanup_status() -> str:
     try:
         proc = subprocess.run(
             ["st", "cleanup", "status", "--all"],
-            capture_output=True,
-            text=True,
-            timeout=15,
+            capture_output=True, text=True, timeout=15,
         )
         output = proc.stdout.strip()
         if not output:
@@ -140,30 +138,12 @@ def _fetch_backup_schedule(source_id: str) -> str:
     try:
         proc = subprocess.run(
             ["st", "backup", "schedule", source_id],
-            capture_output=True,
-            text=True,
-            timeout=15,
+            capture_output=True, text=True, timeout=15,
         )
         return proc.stdout.strip() if proc.stdout.strip() else ""
     except Exception:
         logger.debug("Failed to fetch backup schedule for heartbeat prompt", exc_info=True)
         return ""
-
-
-def _format_session_line(session: dict[str, object]) -> str:
-    """Format a single session dict into a summary line."""
-    agent = session.get("agent_slug", "session")
-    project = session.get("project_id", "unknown")
-    parts: list[str] = []
-    if session.get("external_id"):
-        parts.append(str(session["external_id"]))
-    if session.get("current_branch"):
-        parts.append(f"branch: {session['current_branch']}")
-    fc = session.get("touched_file_count", 0)
-    if fc:
-        parts.append(f"files: {fc}")
-    detail = ", ".join(parts) if parts else f"{session.get('event_count', 0)} events"
-    return f"- {agent} on {project}, {detail}"
 
 
 async def _fetch_active_sessions_section() -> str:
@@ -180,50 +160,23 @@ async def _fetch_active_sessions_section() -> str:
         if not sessions:
             return ""
         lines = [f"Active agent sessions: {len(sessions)}"]
-        lines.extend(_format_session_line(s) for s in sessions)
+        for s in sessions:
+            parts: list[str] = []
+            if s.get("external_id"):
+                parts.append(str(s["external_id"]))
+            if s.get("current_branch"):
+                parts.append(f"branch: {s['current_branch']}")
+            fc = s.get("touched_file_count", 0)
+            if fc:
+                parts.append(f"files: {fc}")
+            detail = ", ".join(parts) if parts else f"{s.get('event_count', 0)} events"
+            lines.append(
+                f"- {s.get('agent_slug', 'session')} on {s.get('project_id', 'unknown')}, {detail}"
+            )
         return "\n".join(lines)
     except Exception:
         logger.debug("Failed to fetch active sessions for heartbeat prompt", exc_info=True)
         return ""
-
-
-async def _query_completed_sessions(cutoff: datetime) -> list:
-    """Fetch recently completed non-persona sessions from the DB."""
-    from sqlalchemy import and_, select
-
-    from app.db import async_session
-    from app.models import Session
-
-    async with async_session() as db:
-        result = await db.execute(
-            select(
-                Session.agent_slug,
-                Session.project_id,
-                Session.summary_oneliner,
-                Session.created_at,
-            )
-            .where(
-                and_(
-                    Session.status == "completed",
-                    Session.created_at >= cutoff,
-                    Session.summary_oneliner.isnot(None),
-                    Session.agent_slug != "persona",
-                )
-            )
-            .order_by(Session.created_at.desc())
-            .limit(10)
-        )
-        return list(result.all())
-
-
-def _format_completed_session_line(row, now: datetime) -> str:
-    """Format a single completed session row into a heartbeat summary line."""
-    ago = int((now - row.created_at).total_seconds() / 60)
-    time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
-    return (
-        f"- {row.agent_slug or '?'} on {row.project_id}: "
-        f"{row.summary_oneliner} ({time_label})"
-    )
 
 
 async def _fetch_recently_completed_sessions_section() -> str:
@@ -234,13 +187,45 @@ async def _fetch_recently_completed_sessions_section() -> str:
     try:
         from datetime import timedelta
 
+        from sqlalchemy import and_, select
+
+        from app.db import async_session
+        from app.models import Session
+
         cutoff = datetime.now(UTC) - timedelta(hours=2)
-        rows = await _query_completed_sessions(cutoff)
+        now = datetime.now(UTC)
+
+        async with async_session() as db:
+            result = await db.execute(
+                select(
+                    Session.agent_slug,
+                    Session.project_id,
+                    Session.summary_oneliner,
+                    Session.created_at,
+                )
+                .where(
+                    and_(
+                        Session.status == "completed",
+                        Session.created_at >= cutoff,
+                        Session.summary_oneliner.isnot(None),
+                        Session.agent_slug != "persona",
+                    )
+                )
+                .order_by(Session.created_at.desc())
+                .limit(10)
+            )
+            rows = list(result.all())
+
         if not rows:
             return ""
-        now = datetime.now(UTC)
         lines = [f"Recently completed sessions: {len(rows)}"]
-        lines.extend(_format_completed_session_line(row, now) for row in rows)
+        for row in rows:
+            ago = int((now - row.created_at).total_seconds() / 60)
+            time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
+            lines.append(
+                f"- {row.agent_slug or '?'} on {row.project_id}: "
+                f"{row.summary_oneliner} ({time_label})"
+            )
         return "\n".join(lines)
     except Exception:
         logger.debug(
@@ -300,41 +285,6 @@ async def _query_active_specialist_sessions() -> list[dict[str, object]]:
     ]
 
 
-def _format_active_specialist_group(
-    project_id: str,
-    agent_slug: str,
-    rows: list[dict[str, object]],
-) -> str:
-    """Format an active specialist group into a heartbeat summary line."""
-    session_ids = [str(row["session_id"]) for row in rows if row.get("session_id")]
-    parent_ids = {
-        str(row["parent_session_id"])
-        for row in rows
-        if row.get("parent_session_id")
-    }
-    request_sources = {
-        str(row["request_source"])
-        for row in rows
-        if row.get("request_source")
-    }
-    oldest_age = max(int(row.get("age_minutes", 0)) for row in rows)
-    newest_age = min(int(row.get("age_minutes", 0)) for row in rows)
-    duplicate = len(rows) > 1
-    parts = [
-        f"- {project_id} | {agent_slug}",
-        f"active={len(rows)}",
-        f"age={newest_age}-{oldest_age}m" if duplicate else f"age={oldest_age}m",
-        "next=dedupe_or_wait" if duplicate else "next=wait_or_complement",
-    ]
-    if request_sources:
-        parts.append(f"source={','.join(sorted(request_sources))}")
-    if parent_ids:
-        parts.append(f"parents={len(parent_ids)}")
-    if session_ids:
-        parts.append(f"sessions={','.join(session_ids[:2])}")
-    return " | ".join(parts)
-
-
 async def _get_active_specialist_inventory() -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
@@ -349,41 +299,35 @@ async def _get_active_specialist_inventory() -> str:
 
         lines = ["Active specialist sessions:"]
         for (project_id, agent_slug), group_rows in sorted(grouped.items()):
-            lines.append(_format_active_specialist_group(project_id, agent_slug, group_rows))
+            session_ids = [str(r["session_id"]) for r in group_rows if r.get("session_id")]
+            parent_ids = {
+                str(r["parent_session_id"]) for r in group_rows if r.get("parent_session_id")
+            }
+            request_sources = {
+                str(r["request_source"]) for r in group_rows if r.get("request_source")
+            }
+            oldest_age = max(int(r.get("age_minutes", 0)) for r in group_rows)
+            newest_age = min(int(r.get("age_minutes", 0)) for r in group_rows)
+            duplicate = len(group_rows) > 1
+            parts = [
+                f"- {project_id} | {agent_slug}",
+                f"active={len(group_rows)}",
+                f"age={newest_age}-{oldest_age}m" if duplicate else f"age={oldest_age}m",
+                "next=dedupe_or_wait" if duplicate else "next=wait_or_complement",
+            ]
+            if request_sources:
+                parts.append(f"source={','.join(sorted(request_sources))}")
+            if parent_ids:
+                parts.append(f"parents={len(parent_ids)}")
+            if session_ids:
+                parts.append(f"sessions={','.join(session_ids[:2])}")
+            lines.append(" | ".join(parts))
+
         body = "\n".join(lines)
         return f"\n<active_specialist_inventory>\n{body}\n</active_specialist_inventory>"
     except Exception:
         logger.debug("Failed to build active specialist inventory for heartbeat", exc_info=True)
         return ""
-
-
-def _map_workstream_row(row, now: datetime) -> dict[str, object]:
-    """Map a raw DB row to a workstream session dict."""
-    return {
-        "session_id": row.id,
-        "agent_slug": row.agent_slug,
-        "project_id": row.project_id,
-        "external_id": row.external_id,
-        "current_branch": row.current_branch,
-        "working_dir": (
-            row.provider_metadata.get("cwd")
-            if isinstance(row.provider_metadata, dict)
-            else None
-        ),
-        "status": row.status,
-        "workstream_status": row.workstream_status,
-        "workstream_note": row.workstream_note,
-        "workstream_updated_at": row.workstream_updated_at,
-        "created_at": row.created_at,
-        "updated_at": row.updated_at,
-        "age_minutes": int((now - row.created_at).total_seconds() / 60),
-        "idle_minutes": idle_minutes_from_timestamps(
-            created_at=row.created_at,
-            updated_at=row.updated_at,
-            workstream_updated_at=row.workstream_updated_at,
-            now=now,
-        ),
-    }
 
 
 async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
@@ -421,14 +365,34 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
         rows = (await db.execute(query)).all()
 
     now = datetime.now(UTC)
-    return [_map_workstream_row(row, now) for row in rows]
-
-
-def _infer_task_id(row: dict[str, object]) -> str | None:
-    """Infer a task id from explicit linkage or task branch naming."""
-    external_id = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-    branch = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-    return infer_task_id(external_id, branch)
+    return [
+        {
+            "session_id": row.id,
+            "agent_slug": row.agent_slug,
+            "project_id": row.project_id,
+            "external_id": row.external_id,
+            "current_branch": row.current_branch,
+            "working_dir": (
+                row.provider_metadata.get("cwd")
+                if isinstance(row.provider_metadata, dict)
+                else None
+            ),
+            "status": row.status,
+            "workstream_status": row.workstream_status,
+            "workstream_note": row.workstream_note,
+            "workstream_updated_at": row.workstream_updated_at,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "age_minutes": int((now - row.created_at).total_seconds() / 60),
+            "idle_minutes": idle_minutes_from_timestamps(
+                created_at=row.created_at,
+                updated_at=row.updated_at,
+                workstream_updated_at=row.workstream_updated_at,
+                now=now,
+            ),
+        }
+        for row in rows
+    ]
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
@@ -494,134 +458,57 @@ def _build_workstream_next_action(
     return "monitor"
 
 
-def _collect_lane_metadata(lane_rows: list[dict[str, object]]) -> dict[str, object]:
-    """Collect computed metadata fields from a group of workstream lane rows."""
-    task_id = next((_infer_task_id(row) for row in lane_rows if _infer_task_id(row)), None)
-    branches = {str(row["current_branch"]) for row in lane_rows if row.get("current_branch")}
-    agents = {str(row["agent_slug"]) for row in lane_rows if row.get("agent_slug")}
-    active_rows = [row for row in lane_rows if row.get("status") == "active"]
-    active_count = len(active_rows)
-    completed_count = sum(1 for row in lane_rows if row.get("status") == "completed")
-    idle_minutes = (
-        min(int(row.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for row in active_rows)
-        if active_count else None
-    )
-    workstream_statuses = {
-        str(row["workstream_status"]) for row in lane_rows if row.get("workstream_status")
-    }
-    working_dirs = {str(row["working_dir"]) for row in lane_rows if row.get("working_dir")}
-    return {
-        "task_id": task_id,
-        "branches": branches,
-        "agents": agents,
-        "active_count": active_count,
-        "completed_count": completed_count,
-        "idle_minutes": idle_minutes,
-        "workstream_statuses": workstream_statuses,
-        "working_dirs": working_dirs,
-        "state": _classify_workstream_lane(lane_rows),
-    }
-
-
-def _format_workstream_lane(
-    project_id: str,
-    lane_key: str,
-    lane_rows: list[dict[str, object]],
-) -> str:
-    """Format a single workstream lane into a summary line."""
-    meta = _collect_lane_metadata(lane_rows)
-    next_action = _build_workstream_next_action(
-        state=str(meta["state"]),
-        project_id=project_id,
-        task_id=meta["task_id"],
-    )
-    label = meta["task_id"] or lane_key
-    parts = [f"- {project_id} | {label}", f"state={meta['state']}", f"active={meta['active_count']}"]
-    if meta["idle_minutes"] is not None:
-        parts.append(f"idle={meta['idle_minutes']}m")
-    if meta["completed_count"]:
-        parts.append(f"completed={meta['completed_count']}")
-    if meta["workstream_statuses"]:
-        parts.append(f"lifecycle={','.join(sorted(meta['workstream_statuses']))}")
-    if meta["branches"]:
-        parts.append(f"branches={len(meta['branches'])}")
-    if meta["working_dirs"]:
-        parts.append(f"worktree={next(iter(sorted(meta['working_dirs'])))}")
-    if meta["agents"]:
-        parts.append(f"agents={','.join(sorted(meta['agents']))}")
-    parts.append(f"next={next_action}")
-    return " | ".join(parts)
-
-
-def _extract_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
-    """Parse stale-running task entries from `st ready-all` output."""
-    project_id: str | None = None
-    stale_tasks: list[dict[str, str]] = []
-
-    for raw_line in task_overview.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        if not line.startswith(" ") and "(" in line and line.endswith(")"):
-            project_id = line.split(" ", 1)[0]
-            continue
-        match = _STALE_READY_ALL_LINE.match(line)
-        if match and project_id:
-            stale_tasks.append({
-                "project_id": project_id,
-                "task_id": match.group(1),
-            })
-
-    return stale_tasks
-
-
-def _extract_task_ids(task_overview: str) -> set[str]:
-    """Extract all task ids present in the current queue snapshot."""
-    return {match.group(0) for match in _TASK_ID_PATTERN.finditer(task_overview)}
-
-
-def _format_stale_running_task(project_id: str, task_id: str) -> str:
-    """Format an orphan running task from queue truth into the workstream inventory."""
-    next_action = (
-        f'manage_tasks(action="reconcile", task_id="{task_id}", project_id="{project_id}")'
-    )
-    return (
-        f"- {project_id} | {task_id} | state=stale_running_task | "
-        f"active=0 | next={next_action}"
-    )
-
-
-def _group_workstream_rows(
-    rows: list[dict[str, object]],
-) -> dict[tuple[str, str], list[dict[str, object]]]:
-    """Group collapsed workstream rows by (project_id, lane_key)."""
-    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
-    for row in rows:
-        task_id = _infer_task_id(row) or ""
-        branch = str(row.get("current_branch") or row.get("session_id") or "")
-        lane_key = task_id or branch
-        if not lane_key:
-            continue
-        grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
-    return grouped
-
-
 async def _get_workstream_inventory() -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
         task_overview = _fetch_task_overview()
-        visible_task_ids = _extract_task_ids(task_overview)
-        stale_tasks = _extract_stale_running_tasks(task_overview)
+        visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
+
+        # Parse stale-running task entries from ready-all output
+        stale_tasks: list[dict[str, str]] = []
+        cur_project: str | None = None
+        for raw_line in task_overview.splitlines():
+            line = raw_line.rstrip()
+            if not line:
+                continue
+            if not line.startswith(" ") and "(" in line and line.endswith(")"):
+                cur_project = line.split(" ", 1)[0]
+                continue
+            m = _STALE_READY_ALL_LINE.match(line)
+            if m and cur_project:
+                stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
+
         if not rows and not stale_tasks:
             return ""
-        grouped = _group_workstream_rows(rows)
+
+        # Group rows by (project_id, lane_key)
+        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in rows:
+            ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+            br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+            tid = infer_task_id(ei, br) or ""
+            lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
+            if not lane_key:
+                continue
+            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+
         if not grouped and not stale_tasks:
             return ""
+
         lines = ["Recent workstreams:"]
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
+
         for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-            task_id = next((_infer_task_id(row) for row in lane_rows if _infer_task_id(row)), None)
+            # Derive task_id for this lane
+            task_id: str | None = None
+            for row in lane_rows:
+                ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+                br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+                task_id = infer_task_id(ei, br)
+                if task_id:
+                    break
+
             lane_state = _classify_workstream_lane(lane_rows)
             if (
                 lane_state == "completed_ready_for_closure"
@@ -631,14 +518,63 @@ async def _get_workstream_inventory() -> str:
             ):
                 continue
             if task_id and (project_id, task_id) in stale_keys:
-                lines.append(_format_stale_running_task(project_id, task_id))
+                next_action = (
+                    f'manage_tasks(action="reconcile", task_id="{task_id}", '
+                    f'project_id="{project_id}")'
+                )
+                lines.append(
+                    f"- {project_id} | {task_id} | state=stale_running_task | "
+                    f"active=0 | next={next_action}"
+                )
                 stale_keys.discard((project_id, task_id))
                 continue
-            lines.append(_format_workstream_lane(project_id, lane_key, lane_rows))
+
+            # Format workstream lane inline
+            branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
+            agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+            active_rows = [r for r in lane_rows if r.get("status") == "active"]
+            active_count = len(active_rows)
+            completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
+            idle_minutes = (
+                min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
+                if active_count else None
+            )
+            ws_statuses = {
+                str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")
+            }
+            working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
+            next_action = _build_workstream_next_action(
+                state=lane_state, project_id=project_id, task_id=task_id,
+            )
+            label = task_id or lane_key
+            parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={active_count}"]
+            if idle_minutes is not None:
+                parts.append(f"idle={idle_minutes}m")
+            if completed_count:
+                parts.append(f"completed={completed_count}")
+            if ws_statuses:
+                parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
+            if branches:
+                parts.append(f"branches={len(branches)}")
+            if working_dirs:
+                parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
+            if agents:
+                parts.append(f"agents={','.join(sorted(agents))}")
+            parts.append(f"next={next_action}")
+            lines.append(" | ".join(parts))
+
         for project_id, task_id in sorted(stale_keys):
             if (project_id, task_id) in grouped:
                 continue
-            lines.append(_format_stale_running_task(project_id, task_id))
+            next_action = (
+                f'manage_tasks(action="reconcile", task_id="{task_id}", '
+                f'project_id="{project_id}")'
+            )
+            lines.append(
+                f"- {project_id} | {task_id} | state=stale_running_task | "
+                f"active=0 | next={next_action}"
+            )
+
         if len(lines) == 1:
             return ""
         body = "\n".join(lines)
@@ -728,37 +664,43 @@ async def _get_agent_roster_summary() -> str:
 def _get_git_project_status(project_id: str, root_path: str) -> str | None:
     """Get git status summary for a single project. Returns formatted text or None."""
     sections: list[str] = []
-
-    def _run(args: list[str]) -> str:
-        try:
-            proc = subprocess.run(
-                args, capture_output=True, text=True, timeout=5, cwd=root_path,
-            )
-            return proc.stdout.strip()
-        except (subprocess.TimeoutExpired, OSError):
-            return ""
+    _kw: dict = dict(capture_output=True, text=True, timeout=5, cwd=root_path)
 
     # Uncommitted changes
-    porcelain = _run(["git", "status", "--porcelain"])
+    try:
+        porcelain = subprocess.run(["git", "status", "--porcelain"], **_kw).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        porcelain = ""
     if porcelain:
         lines = porcelain.splitlines()[:10]
-        sections.append(f"  uncommitted ({len(porcelain.splitlines())} files):\n" +
-                        "\n".join(f"    {line}" for line in lines))
+        sections.append(
+            f"  uncommitted ({len(porcelain.splitlines())} files):\n"
+            + "\n".join(f"    {line}" for line in lines)
+        )
 
     # Recent commits with author
-    log_output = _run([
-        "git", "log", "--oneline", "--format=%h %s (%an)", "-n", "5",
-    ])
+    try:
+        log_output = subprocess.run(
+            ["git", "log", "--oneline", "--format=%h %s (%an)", "-n", "5"], **_kw
+        ).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        log_output = ""
     if log_output:
-        sections.append("  recent commits:\n" +
-                        "\n".join(f"    {line}" for line in log_output.splitlines()))
+        sections.append(
+            "  recent commits:\n"
+            + "\n".join(f"    {line}" for line in log_output.splitlines())
+        )
 
     # Active task worktree branches
-    branches = _run(["git", "branch", "--list", "task-*"])
+    try:
+        branches = subprocess.run(["git", "branch", "--list", "task-*"], **_kw).stdout.strip()
+    except (subprocess.TimeoutExpired, OSError):
+        branches = ""
     if branches:
         branch_lines = [b.strip() for b in branches.splitlines()[:5]]
-        sections.append("  task branches:\n" +
-                        "\n".join(f"    {b}" for b in branch_lines))
+        sections.append(
+            "  task branches:\n" + "\n".join(f"    {b}" for b in branch_lines)
+        )
 
     if not sections:
         return None
@@ -842,19 +784,25 @@ async def _get_feedback_summary_section() -> str:
 
 
 __all__ = [
+    "_build_workstream_next_action",
+    "_classify_workstream_lane",
     "_fetch_active_sessions_section",
+    "_fetch_backup_schedule",
+    "_fetch_backup_status",
     "_fetch_cleanup_status",
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
-    "_format_session_line",
     "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
     "_get_cleanup_status_summary",
     "_get_feedback_summary_section",
+    "_get_git_project_status",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
     "_get_workstream_inventory",
+    "_query_active_specialist_sessions",
+    "_query_recent_workstream_sessions",
     "get_project_access_summary",
 ]
