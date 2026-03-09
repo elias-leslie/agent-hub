@@ -1,4 +1,4 @@
-"""Tests for _executor_feedback — manage_feedback search/resolve/vote."""
+"""Tests for _executor_feedback — manage_feedback governance actions."""
 
 from __future__ import annotations
 
@@ -74,6 +74,134 @@ class TestManageFeedbackSearch:
             result = await manage_feedback(action="search")
 
         assert "No open feedback" in result
+
+
+class TestManageFeedbackList:
+    @pytest.mark.anyio
+    async def test_list_returns_table(self) -> None:
+        item = _make_item()
+        item.status = "acknowledged"
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.search_feedback_items",
+                new_callable=AsyncMock,
+                return_value=[item],
+            ) as mock_search,
+        ):
+            result = await manage_feedback(action="list", status="acknowledged", sort="newest")
+
+        assert "Feedback items" in result
+        assert "acknowledged" in result
+        mock_search.assert_called_once()
+
+    @pytest.mark.anyio
+    async def test_list_empty(self) -> None:
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.search_feedback_items",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+        ):
+            result = await manage_feedback(action="list")
+
+        assert "No feedback items" in result
+
+
+class TestManageFeedbackGet:
+    @pytest.mark.anyio
+    async def test_get_returns_details(self) -> None:
+        item = _make_item()
+        item.status = "open"
+        item.project_id = "agent-hub"
+        item.severity = "medium"
+        item.created_at = MagicMock(isoformat=MagicMock(return_value="2026-03-09T12:00:00+00:00"))
+        item.description = "Detailed description"
+        item.resolution_note = None
+        item.linked_task_id = "task-123"
+        vote = MagicMock(session_id="sess-1", agent_slug="persona", comment="seen this too")
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.resolve_feedback_id",
+                new_callable=AsyncMock,
+                return_value=str(item.id),
+            ),
+            patch(
+                "app.services.feedback_storage.get_feedback_item",
+                new_callable=AsyncMock,
+                return_value=item,
+            ),
+            patch(
+                "app.services.feedback_storage.get_feedback_votes",
+                new_callable=AsyncMock,
+                return_value=[vote],
+            ),
+        ):
+            result = await manage_feedback(action="get", item_id="12345678")
+
+        assert "Detailed description" in result
+        assert "Linked task: task-123" in result
+        assert "sess-1 by persona" in result
+
+    @pytest.mark.anyio
+    async def test_get_requires_id(self) -> None:
+        result = await manage_feedback(action="get")
+        assert "item_id is required" in result
+
+
+class TestManageFeedbackSummary:
+    @pytest.mark.anyio
+    async def test_summary_returns_clusters(self) -> None:
+        session_factory, _mock_db = _mock_async_session()
+        summary = {
+            "total_items": 6,
+            "counts_by_type_status": [
+                {"feedback_type": "friction", "status": "open", "count": 2},
+                {"feedback_type": "idea", "status": "acknowledged", "count": 1},
+                {"feedback_type": "praise", "status": "resolved", "count": 3},
+            ],
+            "by_component": [
+                {
+                    "component_id": "sf.cli",
+                    "open_count": 2,
+                    "resolved_count": 1,
+                    "total_votes": 4,
+                }
+            ],
+            "top_unresolved": [
+                {
+                    "id": "12345678-1234-1234-1234-123456789abc",
+                    "feedback_type": "friction",
+                    "component_id": "sf.cli",
+                    "vote_count": 4,
+                    "title": "CLI output is noisy",
+                }
+            ],
+        }
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.get_feedback_summary",
+                new_callable=AsyncMock,
+                return_value=summary,
+            ),
+        ):
+            result = await manage_feedback(action="summary", days=14)
+
+        assert "Feedback summary (14d)" in result
+        assert "unresolved=3" in result
+        assert "sf.cli: open=2" in result
+        assert "CLI output is noisy" in result
 
 
 class TestManageFeedbackResolve:
@@ -177,6 +305,41 @@ class TestManageFeedbackVote:
 class TestManageFeedbackUnknownAction:
     @pytest.mark.anyio
     async def test_unknown_action(self) -> None:
-        result = await manage_feedback(action="delete")
+        result = await manage_feedback(action="archive")
         assert "Unknown action" in result
-        assert "search/resolve/vote" in result
+        assert "search/list/get/summary/resolve/vote/delete" in result
+
+
+class TestManageFeedbackDelete:
+    @pytest.mark.anyio
+    async def test_delete_success(self) -> None:
+        item = _make_item()
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.resolve_feedback_id",
+                new_callable=AsyncMock,
+                return_value=str(item.id),
+            ),
+            patch(
+                "app.services.feedback_storage.get_feedback_item",
+                new_callable=AsyncMock,
+                return_value=item,
+            ),
+            patch(
+                "app.services.feedback_storage.delete_feedback_item",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+        ):
+            result = await manage_feedback(action="delete", item_id="12345678")
+
+        assert "Deleted" in result
+        assert "12345678" in result
+
+    @pytest.mark.anyio
+    async def test_delete_requires_id(self) -> None:
+        result = await manage_feedback(action="delete", item_id=None)
+        assert "item_id is required" in result

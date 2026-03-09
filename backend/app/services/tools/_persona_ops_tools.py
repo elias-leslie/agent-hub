@@ -362,20 +362,21 @@ LOG_AGENT_PERFORMANCE_TOOL = Tool(
 MANAGE_FEEDBACK_TOOL = Tool(
     name="manage_feedback",
     description=(
-        "Triage feedback items: search open items, resolve fixed ones, "
-        "or vote on items you've also observed. Use [[F:...]] tags to file new feedback."
+        "Review and manage feedback items: search/list items, inspect details, "
+        "summarize hotspots, resolve or delete cleaned-up items, and vote on items "
+        "you've also observed. Use [[F:...]] tags to file new feedback."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["search", "resolve", "vote"],
+                "enum": ["search", "list", "get", "summary", "resolve", "vote", "delete"],
                 "description": "The feedback operation to perform",
             },
             "item_id": {
                 "type": "string",
-                "description": "Feedback item ID or prefix (for resolve, vote)",
+                "description": "Feedback item ID or prefix (for get, resolve, vote, delete)",
             },
             "query": {
                 "type": "string",
@@ -405,18 +406,29 @@ MANAGE_FEEDBACK_TOOL = Tool(
             },
             "project_id": {
                 "type": "string",
-                "description": "Filter by project (for search)",
+                "description": "Filter by project (for search, list, summary)",
+            },
+            "sort": {
+                "type": "string",
+                "enum": ["votes", "newest", "oldest"],
+                "description": "Sort order (for list, default: votes)",
+                "default": "votes",
             },
             "limit": {
                 "type": "integer",
-                "description": "Max results to return (for search, default: 20)",
+                "description": "Max results to return (for search, list, default: 20)",
                 "default": 20,
+            },
+            "days": {
+                "type": "integer",
+                "description": "Lookback window in days (for summary, default: 30)",
+                "default": 30,
             },
         },
         "required": ["action"],
     },
     category="observability",
-    search_keywords=["feedback", "friction", "vote", "resolve"],
+    search_keywords=["feedback", "friction", "vote", "resolve", "summary", "cleanup"],
     usage_examples=["Search for existing feedback before filing a duplicate item."],
     defer_loading=True,
 )
