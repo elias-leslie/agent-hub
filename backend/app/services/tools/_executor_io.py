@@ -583,21 +583,10 @@ async def _handle_resolve_conflict(
     task_id: str | None,
     project_id: str | None,
 ) -> str:
-    """Reopen residue conflict work and dispatch it immediately."""
+    """Reopen residue conflict work and hand it to the canonical execution path."""
     if not task_id:
         return "Error: task_id required for resolve_conflict"
-    prepare = await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
-    try:
-        prepare_json = json.loads(prepare)
-    except Exception:
-        prepare_json = None
-    if not (
-        isinstance(prepare_json, dict)
-        and str(prepare_json.get("status") or "") == "ready_for_conflict_resolution"
-    ):
-        return prepare
-    dispatch = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
-    return f"{prepare}\n{dispatch}"
+    return await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
 
 
 async def manage_tasks(

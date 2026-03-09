@@ -885,10 +885,7 @@ class TestManageTasks:
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
-            side_effect=[
-                '{"task_id":"task-42","status":"ready_for_conflict_resolution"}',
-                "AUTOCODE:STARTED:task-42",
-            ]
+            return_value='{"task_id":"task-42","status":"dispatched_for_conflict_resolution"}'
         )
         result = await manage_tasks(
             mock_bash,
@@ -897,10 +894,8 @@ class TestManageTasks:
             project_id="summitflow",
         )
 
-        assert "ready_for_conflict_resolution" in result
-        assert "AUTOCODE:STARTED:task-42" in result or mock_bash.await_count == 2
-        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow git resolve-conflict task-42"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow autocode task-42"
+        assert "dispatched_for_conflict_resolution" in result
+        mock_bash.assert_awaited_once_with("st -P summitflow git resolve-conflict task-42")
 
     @pytest.mark.asyncio
     async def test_done(self):
