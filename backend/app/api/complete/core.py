@@ -79,6 +79,15 @@ def _build_ctx(
     )
 
 
+def _ensure_user_messages(
+    messages: list[dict[str, Any]], user_messages_for_db: list[MessageInput] | None,
+) -> list[MessageInput]:
+    """Return user_messages_for_db, defaulting from messages if None."""
+    if user_messages_for_db is not None:
+        return user_messages_for_db
+    return [MessageInput(role=m["role"], content=m["content"]) for m in messages if "role" in m and "content" in m]
+
+
 async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
     """Inject memory, check cache, then execute completion and return result."""
     msgs, loaded_uuids, cached = await check_memory_and_cache(
@@ -139,17 +148,12 @@ async def complete_internal(
     requested_provider: str | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
-    if user_messages_for_db is None:
-        user_messages_for_db = [
-            MessageInput(role=m["role"], content=m["content"])
-            for m in messages if "role" in m and "content" in m
-        ]
+    user_messages_for_db = _ensure_user_messages(messages, user_messages_for_db)
     session, session_id, is_new, messages_dict = await setup_completion_session(
         db, session_id, project_id, provider, model,
         external_id, client_id, request_source, agent_slug, current_branch, working_dir,
         parent_session_id, messages,
-        requested_provider=requested_provider or provider,
-        requested_model=requested_model or model,
+        requested_provider=requested_provider or provider, requested_model=requested_model or model,
     )
     ctx = _build_ctx(
         db=db, session=session, session_id=session_id, is_new=is_new,
@@ -158,14 +162,11 @@ async def complete_internal(
         tools=tools, working_dir=working_dir, permission_config=permission_config,
         use_memory=use_memory, memory_group_id=memory_group_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
-        current_branch=current_branch, agent_slug=agent_slug,
-        skip_cache=skip_cache, progress_callback=progress_callback,
-        max_turns=max_turns, execute_tools=execute_tools,
-        enable_programmatic_tools=enable_programmatic_tools,
-        defer_tool_loading=defer_tool_loading,
-        enable_caching=enable_caching, cache_ttl=cache_ttl,
-        thinking_level=thinking_level, container_id=container_id,
-        response_format=response_format,
+        current_branch=current_branch, agent_slug=agent_slug, skip_cache=skip_cache,
+        progress_callback=progress_callback, max_turns=max_turns, execute_tools=execute_tools,
+        enable_programmatic_tools=enable_programmatic_tools, defer_tool_loading=defer_tool_loading,
+        enable_caching=enable_caching, cache_ttl=cache_ttl, thinking_level=thinking_level,
+        container_id=container_id, response_format=response_format,
     )
     return await _run_after_session(ctx)
 
