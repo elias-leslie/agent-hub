@@ -13,6 +13,10 @@ from app.services.ownership_lanes import (
     idle_minutes_from_timestamps,
     infer_task_id,
 )
+from app.services.task_overview_summary import (
+    build_actionable_ready_summary,
+    parse_task_overview_stats,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +91,11 @@ def _fetch_task_overview() -> str:
         proc = subprocess.run(
             ["st", "ready-all"], capture_output=True, text=True, timeout=15,
         )
-        return proc.stdout.strip() if proc.stdout.strip() else ""
+        output = proc.stdout.strip()
+        if not output:
+            return ""
+        actionable = build_actionable_ready_summary(output)
+        return f"{output}\n\n{actionable}" if actionable else output
     except Exception:
         logger.debug("Failed to fetch task overview for heartbeat prompt", exc_info=True)
         return ""
@@ -638,8 +646,16 @@ async def _get_workstream_inventory() -> str:
 async def _get_active_work_summary() -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
     task_overview = _fetch_task_overview()
+    overview_stats = parse_task_overview_stats(task_overview)
     sessions_section = await _fetch_active_sessions_section()
-    completed_section = await _fetch_recently_completed_sessions_section()
+    suppress_completed = (
+        overview_stats.ready > 0 and overview_stats.active == 0 and overview_stats.stale == 0
+    )
+    completed_section = (
+        ""
+        if suppress_completed
+        else await _fetch_recently_completed_sessions_section()
+    )
 
     sections = [s for s in (task_overview, sessions_section, completed_section) if s]
 

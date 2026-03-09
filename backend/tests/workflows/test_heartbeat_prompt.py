@@ -13,6 +13,7 @@ from app.workflows._heartbeat_data import (
     _classify_workstream_lane,
     _fetch_recently_completed_sessions_section,
     _get_active_specialist_inventory,
+    _get_active_work_summary,
     _get_cleanup_status_summary,
     _get_git_project_status,
     _get_git_status_summary,
@@ -336,6 +337,71 @@ class TestRecentlyCompletedSessionsSection:
         assert "Refactored the tool handler" in result
         assert "persona" not in result
         assert "sessions.agent_slug != :agent_slug_1" in executed_query
+
+
+class TestActiveWorkSummary:
+    """Tests for active_work shaping in heartbeat context."""
+
+    @pytest.mark.asyncio
+    async def test_suppresses_completed_sessions_when_ready_work_exists_and_queue_is_clean(self) -> None:
+        fake_overview = """READY-ALL[2 ready, 0 blocked, 0 active, 0 stale across 1 projects]
+
+agent-hub (2 ready)
+    task-52831804 P3 refactor [A] Refactor: backend/app/services/tools/_executor_consultation.py
+    task-0e20ca4d P3 refactor [A] Refactor: backend/app/services/memory/session_analysis.py
+"""
+
+        with (
+            patch(
+                "app.workflows._heartbeat_data._fetch_task_overview",
+                return_value=fake_overview,
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_active_sessions_section",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_recently_completed_sessions_section",
+                new_callable=AsyncMock,
+                return_value="Recently completed sessions: 1\n- refactor on agent-hub: old summary",
+            ) as mock_completed,
+        ):
+            result = await _get_active_work_summary()
+
+        assert "task-52831804" in result
+        assert "Recently completed sessions" not in result
+        mock_completed.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_keeps_completed_sessions_when_live_or_stale_work_exists(self) -> None:
+        fake_overview = """READY-ALL[1 ready, 0 blocked, 0 active, 1 stale across 1 projects]
+
+agent-hub (1 ready, 1 stale)
+  ? task-de53b498 P1 task     [M] Fix stale running queue state [stale-running]
+    task-52831804 P3 refactor [A] Refactor: backend/app/services/tools/_executor_consultation.py
+"""
+
+        with (
+            patch(
+                "app.workflows._heartbeat_data._fetch_task_overview",
+                return_value=fake_overview,
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_active_sessions_section",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_recently_completed_sessions_section",
+                new_callable=AsyncMock,
+                return_value="Recently completed sessions: 1\n- refactor on agent-hub: old summary",
+            ) as mock_completed,
+        ):
+            result = await _get_active_work_summary()
+
+        assert "Recently completed sessions: 1" in result
+        mock_completed.assert_awaited_once()
 
 
 class TestCleanupStatusSummary:
