@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.tools._executor_consultation import query_sessions
+from app.services.tools._executor_consultation import inspect_session, query_sessions
 
 
 @pytest.mark.asyncio
@@ -112,3 +112,66 @@ async def test_query_sessions_includes_live_activity_health_phase_and_quiet() ->
     assert "phase=waiting_for_model" in result
     assert "quiet=" in result
     assert "last=thinking" in result
+
+
+@pytest.mark.asyncio
+async def test_inspect_session_returns_summary_and_latest_message() -> None:
+    mock_db = AsyncMock()
+    session = SimpleNamespace(
+        id="sess-1",
+        agent_slug="governance-auditor",
+        project_id="agent-hub",
+        status="completed",
+        summary_oneliner="Governance audit found a tool gap",
+    )
+    assistant_event = SimpleNamespace(
+        session_id="sess-1",
+        event_type="assistant_message",
+        content="VERDICT: action_needed\nRECOMMENDATIONS:\n- type=tool_fix",
+        tool_name=None,
+        turn=1,
+        sequence=4,
+    )
+    tool_event = SimpleNamespace(
+        session_id="sess-1",
+        event_type="tool_use",
+        content=None,
+        tool_name="manage_feedback",
+        turn=1,
+        sequence=2,
+    )
+    session_result = MagicMock()
+    session_result.scalar_one_or_none.return_value = session
+    events_result = MagicMock()
+    events_result.scalars.return_value.all.return_value = [assistant_event, tool_event]
+    mock_db.execute.side_effect = [session_result, events_result]
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with patch("app.db.async_session", _session):
+        result = await inspect_session("sess-1")
+
+    assert "Session: sess-1" in result
+    assert "Agent: governance-auditor" in result
+    assert "Summary: Governance audit found a tool gap" in result
+    assert "Recent tools: manage_feedback" in result
+    assert "VERDICT: action_needed" in result
+
+
+@pytest.mark.asyncio
+async def test_inspect_session_not_found() -> None:
+    mock_db = AsyncMock()
+    session_result = MagicMock()
+    session_result.scalar_one_or_none.return_value = None
+    mock_db.execute.return_value = session_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with patch("app.db.async_session", _session):
+        result = await inspect_session("missing")
+
+    assert "session 'missing' not found" in result

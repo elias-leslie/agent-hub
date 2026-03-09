@@ -325,6 +325,66 @@ async def query_sessions(
         return f"Error querying sessions: {e}"
 
 
+async def inspect_session(session_id: str) -> str:
+    """Inspect a specific session and return a concise result-oriented summary."""
+    try:
+        from sqlalchemy import select
+
+        from app.db import async_session
+        from app.models import Session as DBSession
+        from app.models import SessionEvent as DBSessionEvent
+
+        async with async_session() as db:
+            session_result = await db.execute(
+                select(DBSession).where(DBSession.id == session_id)
+            )
+            session = session_result.scalar_one_or_none()
+            if session is None:
+                return f"Error: session '{session_id}' not found"
+
+            events_result = await db.execute(
+                select(DBSessionEvent)
+                .where(DBSessionEvent.session_id == session_id)
+                .order_by(DBSessionEvent.turn.desc(), DBSessionEvent.sequence.desc())
+                .limit(50)
+            )
+            events = list(events_result.scalars().all())
+
+        latest_assistant = next(
+            (e for e in events if e.event_type == "assistant_message" and e.content),
+            None,
+        )
+        latest_error = next(
+            (e for e in events if e.event_type == "error" and e.content),
+            None,
+        )
+        recent_tools = [
+            e.tool_name for e in events
+            if e.event_type == "tool_use" and e.tool_name
+        ][:5]
+
+        lines = [
+            f"Session: {session.id}",
+            f"Agent: {session.agent_slug or '?'}",
+            f"Project: {session.project_id}",
+            f"Status: {session.status}",
+        ]
+        if session.summary_oneliner:
+            lines.append(f"Summary: {session.summary_oneliner}")
+        if recent_tools:
+            lines.append(f"Recent tools: {', '.join(recent_tools)}")
+        if latest_assistant and latest_assistant.content:
+            lines.extend(["Latest assistant message:", latest_assistant.content.strip()])
+        elif latest_error and latest_error.content:
+            lines.extend(["Latest error:", latest_error.content.strip()])
+        else:
+            lines.append("Latest result: (no assistant message stored yet)")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("inspect_session failed")
+        return f"Error inspecting session: {e}"
+
+
 async def cancel_consultation(session_id: str) -> str:
     """Close a running consultation session."""
     try:

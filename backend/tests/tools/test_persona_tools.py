@@ -1093,7 +1093,12 @@ class TestManageTasks:
     async def test_reconcile_closes_completed_lane(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value="Completed task task-42")
+        mock_bash = AsyncMock(
+            side_effect=[
+                "",
+                "Completed task task-42",
+            ]
+        )
         mock_db = AsyncMock()
         completed_session = MagicMock(
             status="completed",
@@ -1117,7 +1122,8 @@ class TestManageTasks:
             )
 
         assert "Completed task task-42" in result
-        mock_bash.assert_awaited_once_with(
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message 'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
 
@@ -1127,6 +1133,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "ERROR No checkpoint found for task-42. Was it claimed?\n",
                 "Completed task task-42",
             ]
@@ -1155,10 +1162,13 @@ class TestManageTasks:
 
         assert "Completed task task-42" in result
         assert mock_bash.await_args_list[0].args[0] == (
+            "st -P summitflow exec-log task-42 -n 40 --debug"
+        )
+        assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[1].args[0] == (
+        assert mock_bash.await_args_list[2].args[0] == (
             "st -P summitflow done task-42 --admin --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
@@ -1169,6 +1179,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "Claimed worktree has uncommitted changes.\n  Path: /tmp/worktree/task-42\nCommit or stash there before running st done.",
                 "Completed task task-42",
             ]
@@ -1197,22 +1208,25 @@ class TestManageTasks:
 
         assert "Completed task task-42" in result
         assert mock_bash.await_args_list[0].args[0] == (
+            "st -P summitflow exec-log task-42 -n 40 --debug"
+        )
+        assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[1].args[0] == (
+        assert mock_bash.await_args_list[2].args[0] == (
             "st -P summitflow done task-42 --admin --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_falls_back_to_admin_close_when_task_is_not_ready(self):
+    async def test_reconcile_stops_when_task_is_not_ready(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "ERROR Task not ready to complete: subtasks, steps\n",
-                "Completed task task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -1237,14 +1251,51 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Completed task task-42" in result
-        assert mock_bash.await_args_list[0].args[0] == (
+        assert "Reconcile stopped for task-42" in result
+        assert "not ready to complete" in result
+        assert "Do not admin-close it from session evidence" in result
+        assert mock_bash.await_count == 2
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
+        assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow done task-42 --admin --message "
-            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+
+    @pytest.mark.asyncio
+    async def test_reconcile_stops_when_recent_execution_activity_is_present(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        recent_line = (
+            f"{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}|INFO|Starting autonomous execution"
+        )
+        mock_bash = AsyncMock(side_effect=[f"{recent_line}\n"])
+        mock_db = AsyncMock()
+        completed_session = MagicMock(
+            status="completed",
+            summary_oneliner="Fixed the regression",
+            created_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Reconcile stopped for task-42" in result
+        assert "recent autonomous activity" in result
+        assert mock_bash.await_count == 1
+        assert mock_bash.await_args_list[0].args[0] == (
+            "st -P summitflow exec-log task-42 -n 40 --debug"
         )
 
     @pytest.mark.asyncio
@@ -1253,7 +1304,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "Task not ready to complete: unknown",
+                "",
+                "ERROR No checkpoint found for task-42. Was it claimed?\n",
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
@@ -1283,11 +1335,15 @@ class TestManageTasks:
 
         assert '"status":"merged"' in result
         assert mock_bash.await_args_list[1].args[0] == (
+            "st -P summitflow done task-42 --message "
+            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+        assert mock_bash.await_args_list[2].args[0] == (
             "st -P summitflow done task-42 --admin --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow context task-42 --compact"
+        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow git finalize-task task-42"
 
     @pytest.mark.asyncio
     async def test_reconcile_uses_finalize_for_terminal_merge_residue(self):
@@ -1295,6 +1351,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
@@ -1323,6 +1380,7 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
     @pytest.mark.asyncio
     async def test_reconcile_finalizes_after_completed_without_checkpoint_merge(self):
@@ -1330,6 +1388,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
@@ -1358,8 +1417,12 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[1].args[0] == (
+            "st -P summitflow done task-42 --message "
+            "'Reconciled from Agent Hub session evidence: Fixed the regression'"
+        )
+        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
 
     @pytest.mark.asyncio
     async def test_reconcile_treats_no_worktree_finalize_as_already_closed(self):
@@ -1367,6 +1430,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
+                "",
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"skipped","reason":"no_worktree"}',
@@ -1397,11 +1461,14 @@ class TestManageTasks:
         assert "Task already appears closed" in result
         assert '"reason":"no_worktree"' in result
         assert mock_bash.await_args_list[0].args[0] == (
+            "st -P summitflow exec-log task-42 -n 40 --debug"
+        )
+        assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
 
     @pytest.mark.asyncio
     async def test_reconcile_cancels_orphan_running_task_without_lane_evidence(self):
@@ -1543,6 +1610,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 "TASK:task-42|blocked|P2|bug|SIMPLE",
+                "",
                 "Completed task task-42",
             ]
         )
@@ -1595,6 +1663,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 "TASK:task-42|running|P2|bug|SIMPLE",
+                "",
                 "Completed task task-42",
             ]
         )
