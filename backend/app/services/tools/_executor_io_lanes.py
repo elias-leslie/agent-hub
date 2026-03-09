@@ -336,10 +336,19 @@ async def _reconcile_task_lane(
         if s.status == "completed" and getattr(s, "workstream_status", None) != "superseded"
     ]
     if not completed_sessions:
+        if task_status is None:
+            task_status = await _get_task_status(bash_fn, task_id, project_id)
         statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
+        task_detail = f" (task={task_status})" if task_status else ""
+        next_step = (
+            ' Treat this as queue/worktree state, not closure residue. '
+            'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.'
+            if task_status == "blocked"
+            else ""
+        )
         return (
             f"Reconcile skipped for {task_id}: no completed sessions to justify closure "
-            f"(statuses={statuses or 'unknown'})."
+            f"(statuses={statuses or 'unknown'}){task_detail}.{next_step}"
         )
 
     authoritative_session = _choose_authoritative_session(completed_sessions)

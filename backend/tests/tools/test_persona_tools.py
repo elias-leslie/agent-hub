@@ -1346,6 +1346,42 @@ class TestManageTasks:
         assert mock_bash.await_count == 2
 
     @pytest.mark.asyncio
+    async def test_reconcile_blocked_without_completed_sessions_points_back_to_queue_state(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="TASK:task-42|blocked|P2|task|SIMPLE")
+        mock_db = AsyncMock()
+        blocked_session = MagicMock(
+            status="blocked",
+            current_branch="task-42/main",
+            created_at=datetime.now(UTC) - timedelta(minutes=5),
+            updated_at=datetime.now(UTC) - timedelta(minutes=5),
+            workstream_status=None,
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [blocked_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="reconcile",
+                task_id="task-42",
+                project_id="summitflow",
+            )
+
+        assert "Reconcile skipped for task-42: no completed sessions to justify closure" in result
+        assert "Treat this as queue/worktree state, not closure residue." in result
+        assert 'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.' in result
+        mock_bash.assert_awaited_once_with("st -P summitflow context task-42 --compact")
+
+    @pytest.mark.asyncio
     async def test_reconcile_refuses_when_lane_is_still_active(self):
         from app.services.tools._executor_io import manage_tasks
 
