@@ -193,7 +193,7 @@ grep -n "soft_limit" ~/agent-hub/backend/app/api/complete/multi_turn_executor.py
 ### 5. Fix Any Issues Found
 
 If heartbeat reveals gaps:
-- **Instruction gap** → update heartbeat_instructions via `st persona update --heartbeat-instructions <file>`
+- **Instruction gap** → edit the DB-backed instructions via `st persona instructions -e` (or import a draft once with `st persona update --heartbeat-instructions <file>`)
 - **Data gap** → edit `~/agent-hub/backend/app/workflows/_heartbeat_data.py`
 - **Permission gap** → update project_permissions via db CLI
 - **Tool gap** → check tool availability in persona agent config
