@@ -43,6 +43,8 @@ function buildStreamResponse(options?: {
   heartbeatLiveStatus?: string | null;
   includeSecondHeartbeat?: boolean;
 }) {
+  const longToolFrictionSummary =
+    'git status --short --branch && st context task-123 && st done task-123 --message "Verified autocode completion; quality gate passed." after repeated retries before success.';
   const heartbeatStatus = options?.heartbeatStatus ?? "completed";
   const heartbeatLiveStatus = options?.heartbeatLiveStatus ?? null;
   const entries = [
@@ -212,7 +214,7 @@ function buildStreamResponse(options?: {
               root_causes: ["tool"],
               primary_root_cause: "tool",
               title: "dt -q -d hit tool friction",
-              summary: "The tool path wasted turns before progress resumed.",
+              summary: longToolFrictionSummary,
               fingerprint: "tool-friction:dt-q-d",
             },
           ],
@@ -537,6 +539,31 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
     expect(screen.queryByText("Checked active work")).not.toBeInTheDocument();
     expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
+  });
+
+  it("expands truncated issue summaries inline with More and Less", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
+    });
+
+    const moreButtons = screen.getAllByRole("button", { name: "More" });
+    expect(moreButtons.length).toBeGreaterThan(0);
+    fireEvent.click(moreButtons[0]);
+
+    expect(screen.getByText(/quality gate passed/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Less" })).toBeInTheDocument();
   });
 
   it("renders stream items in chronological order with newest at the bottom", async () => {

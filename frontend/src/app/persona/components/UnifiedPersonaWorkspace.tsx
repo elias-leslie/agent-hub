@@ -330,6 +330,37 @@ function HighlightedText({
   );
 }
 
+function ExpandableText({
+  text,
+  className,
+  collapsedLength = 180,
+}: {
+  text: string;
+  className?: string;
+  collapsedLength?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (text.length <= collapsedLength) {
+    return <HighlightedText text={text} className={className} />;
+  }
+
+  return (
+    <div>
+      <HighlightedText
+        text={expanded ? text : shortenText(text, collapsedLength)}
+        className={className}
+      />
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="mt-1 inline-flex items-center rounded-full border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      >
+        {expanded ? "Less" : "More"}
+      </button>
+    </div>
+  );
+}
+
 function eventLabel(eventType: string): string {
   return eventType.replaceAll("_", " ");
 }
@@ -894,44 +925,36 @@ function EntryIssueSummary({
 }: {
   issueMarkers: PersonaIssueMarker[];
 }) {
-  const markers = useMemo(() => {
-    return issueMarkers.slice(0, issueMarkers.length > 2 ? 3 : 2);
-  }, [issueMarkers]);
-
-  if (markers.length === 0) {
+  const primaryMarker = issueMarkers[0];
+  if (!primaryMarker) {
     return null;
   }
+  const additionalCount = Math.max(issueMarkers.length - 1, 0);
 
   return (
-    <section className="mt-3 space-y-2">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-        Issues
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/50">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(primaryMarker.primary_tag))}>
+          {pulseTagLabel(primaryMarker.primary_tag)}
+        </span>
+        {primaryMarker.primary_root_cause && (
+          <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(primaryMarker.primary_root_cause))}>
+            {rootCauseLabel(primaryMarker.primary_root_cause)}
+          </span>
+        )}
+        {additionalCount > 0 && (
+          <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            +{additionalCount} more
+          </span>
+        )}
       </div>
-      <div className="space-y-2">
-        {markers.map((marker) => (
-          <div
-            key={`${marker.event_id}-${marker.primary_tag}`}
-            className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/50"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(marker.primary_tag))}>
-                {pulseTagLabel(marker.primary_tag)}
-              </span>
-              {marker.primary_root_cause && (
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(marker.primary_root_cause))}>
-                  {rootCauseLabel(marker.primary_root_cause)}
-                </span>
-              )}
-            </div>
-            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{marker.title}</div>
-            <HighlightedText
-              text={marker.summary}
-              className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
-            />
-          </div>
-        ))}
-      </div>
-    </section>
+      <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{primaryMarker.title}</div>
+      <ExpandableText
+        text={primaryMarker.summary}
+        className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+        collapsedLength={160}
+      />
+    </div>
   );
 }
 
@@ -1101,17 +1124,19 @@ function SessionDetailBlockCard({
       </div>
       {block.lead && (
         <div className="mt-2 rounded-xl border border-black/5 bg-white/70 px-2.5 py-2 dark:border-white/5 dark:bg-slate-950/60">
-          <HighlightedText
+          <ExpandableText
             text={block.lead}
             className="block whitespace-pre-wrap break-words text-sm font-medium"
+            collapsedLength={240}
           />
         </div>
       )}
       {block.textBlocks.map((text, index) => (
-        <HighlightedText
+        <ExpandableText
           key={`${block.id}-text-${index}`}
           text={text}
           className="mt-2 block whitespace-pre-wrap break-words text-sm"
+          collapsedLength={240}
         />
       ))}
       {block.fields.length > 0 && (
@@ -1130,9 +1155,10 @@ function SessionDetailBlockCard({
                   field.tone ? badgeToneClasses(field.tone) : "bg-slate-100/80 dark:bg-slate-900/70",
                 )}
               >
-                <HighlightedText
+                <ExpandableText
                   text={field.value}
                   className="block whitespace-pre-wrap break-words text-sm"
+                  collapsedLength={220}
                 />
               </div>
             </div>
@@ -1820,9 +1846,10 @@ function ChildRunCard({
               </span>
             )}
           </div>
-          <HighlightedText
+          <ExpandableText
             text={entry.summary_oneliner || entry.live_summary || "Child run activity"}
             className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+            collapsedLength={220}
           />
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">task {entry.external_id}</span>}
@@ -1842,9 +1869,10 @@ function ChildRunCard({
             ))}
           </div>
           {entry.pulse_summary && (
-            <HighlightedText
+            <ExpandableText
               text={entry.pulse_summary}
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
+              collapsedLength={180}
             />
           )}
           <EntryIssueSummary issueMarkers={issueMarkers} />
@@ -1917,14 +1945,16 @@ function HeartbeatCard({
               </span>
             )}
           </div>
-          <HighlightedText
+          <ExpandableText
             text={entry.summary_oneliner || entry.live_summary || "Routine check completed"}
             className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+            collapsedLength={220}
           />
           {entry.live_summary && entry.summary_oneliner !== entry.live_summary && (
-            <HighlightedText
+            <ExpandableText
               text={entry.live_summary}
               className="mt-2 block text-xs text-slate-400 dark:text-slate-500"
+              collapsedLength={180}
             />
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
@@ -1944,9 +1974,10 @@ function HeartbeatCard({
             ))}
           </div>
           {entry.pulse_summary && (
-            <HighlightedText
+            <ExpandableText
               text={entry.pulse_summary}
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
+              collapsedLength={180}
             />
           )}
           <EntryIssueSummary issueMarkers={issueMarkers} />
@@ -2613,7 +2644,7 @@ export function UnifiedPersonaWorkspace({
     [expandedEntryIds, expandedRoutineGroupIds],
   );
   const virtualRows = virtualizer.getVirtualItems();
-  const renderVirtualRows = !hasExpandedTimelineContent && virtualRows.length > 0;
+  const renderVirtualRows = false;
   const renderedRows = renderVirtualRows
     ? virtualRows.map((virtualRow) => ({
         key: virtualRow.key,
