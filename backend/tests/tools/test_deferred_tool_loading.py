@@ -50,6 +50,23 @@ def test_build_deferred_toolset_adds_virtual_catalog_tools() -> None:
     ]
 
 
+def test_persona_heartbeat_hot_tools_stay_loaded_in_deferred_mode() -> None:
+    """Heartbeat-critical persona tools must remain directly callable."""
+    from app.services.tools.tool_definitions import get_agent_tool_specs
+
+    persona_tools = get_agent_tool_specs("persona")
+    assert persona_tools is not None
+
+    loaded_tools, _catalog_tools = build_deferred_toolset(persona_tools)
+    loaded_names = {tool["name"] for tool in loaded_tools}
+
+    assert "manage_tasks" in loaded_names
+    assert "query_sessions" in loaded_names
+    assert "schedule_job" in loaded_names
+    assert "manage_feedback" in loaded_names
+    assert "inspect_session" in loaded_names
+
+
 @pytest.mark.asyncio
 async def test_tool_catalog_checks_nested_tool_permissions() -> None:
     """The virtual dispatcher must not bypass permission checks on the real tool."""

@@ -55,7 +55,6 @@ SCHEDULE_JOB_TOOL = Tool(
     category="persona-ops",
     search_keywords=["reminder", "cron", "schedule", "follow-up"],
     usage_examples=["Schedule a one-shot reminder for Monday at 09:00."],
-    defer_loading=True,
 )
 
 LIST_SCHEDULED_JOBS_TOOL = Tool(
