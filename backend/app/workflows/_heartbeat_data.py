@@ -199,6 +199,35 @@ async def _fetch_active_sessions_section() -> str:
         return ""
 
 
+async def _query_completed_sessions(cutoff: datetime) -> list:
+    """Fetch recently completed non-persona sessions from the DB."""
+    from sqlalchemy import and_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(
+                Session.agent_slug,
+                Session.project_id,
+                Session.summary_oneliner,
+                Session.created_at,
+            )
+            .where(
+                and_(
+                    Session.status == "completed",
+                    Session.created_at >= cutoff,
+                    Session.summary_oneliner.isnot(None),
+                    Session.agent_slug != "persona",
+                )
+            )
+            .order_by(Session.created_at.desc())
+            .limit(10)
+        )
+        return list(result.all())
+
+
 async def _fetch_recently_completed_sessions_section() -> str:
     """Show recently completed agent sessions with their summaries.
 
@@ -207,34 +236,9 @@ async def _fetch_recently_completed_sessions_section() -> str:
     try:
         from datetime import timedelta
 
-        from sqlalchemy import and_, select
-
-        from app.db import async_session
-        from app.models import Session
-
         cutoff = datetime.now(UTC) - timedelta(hours=2)
         now = datetime.now(UTC)
-
-        async with async_session() as db:
-            result = await db.execute(
-                select(
-                    Session.agent_slug,
-                    Session.project_id,
-                    Session.summary_oneliner,
-                    Session.created_at,
-                )
-                .where(
-                    and_(
-                        Session.status == "completed",
-                        Session.created_at >= cutoff,
-                        Session.summary_oneliner.isnot(None),
-                        Session.agent_slug != "persona",
-                    )
-                )
-                .order_by(Session.created_at.desc())
-                .limit(10)
-            )
-            rows = list(result.all())
+        rows = await _query_completed_sessions(cutoff)
 
         if not rows:
             return ""
@@ -350,6 +354,35 @@ async def _get_active_specialist_inventory() -> str:
         return ""
 
 
+def _workstream_row_to_dict(row: object, now: datetime) -> dict[str, object]:
+    """Convert a raw DB session row into a workstream dict."""
+    return {
+        "session_id": row.id,  # type: ignore[attr-defined]
+        "agent_slug": row.agent_slug,  # type: ignore[attr-defined]
+        "project_id": row.project_id,  # type: ignore[attr-defined]
+        "external_id": row.external_id,  # type: ignore[attr-defined]
+        "current_branch": row.current_branch,  # type: ignore[attr-defined]
+        "working_dir": (
+            row.provider_metadata.get("cwd")  # type: ignore[attr-defined]
+            if isinstance(row.provider_metadata, dict)  # type: ignore[attr-defined]
+            else None
+        ),
+        "status": row.status,  # type: ignore[attr-defined]
+        "workstream_status": row.workstream_status,  # type: ignore[attr-defined]
+        "workstream_note": row.workstream_note,  # type: ignore[attr-defined]
+        "workstream_updated_at": row.workstream_updated_at,  # type: ignore[attr-defined]
+        "created_at": row.created_at,  # type: ignore[attr-defined]
+        "updated_at": row.updated_at,  # type: ignore[attr-defined]
+        "age_minutes": int((now - row.created_at).total_seconds() / 60),  # type: ignore[attr-defined]
+        "idle_minutes": idle_minutes_from_timestamps(
+            created_at=row.created_at,  # type: ignore[attr-defined]
+            updated_at=row.updated_at,  # type: ignore[attr-defined]
+            workstream_updated_at=row.workstream_updated_at,  # type: ignore[attr-defined]
+            now=now,
+        ),
+    }
+
+
 async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
     """Fetch recent session rows that look like task/worktree lanes."""
     from datetime import timedelta
@@ -385,34 +418,7 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
         rows = (await db.execute(query)).all()
 
     now = datetime.now(UTC)
-    return [
-        {
-            "session_id": row.id,
-            "agent_slug": row.agent_slug,
-            "project_id": row.project_id,
-            "external_id": row.external_id,
-            "current_branch": row.current_branch,
-            "working_dir": (
-                row.provider_metadata.get("cwd")
-                if isinstance(row.provider_metadata, dict)
-                else None
-            ),
-            "status": row.status,
-            "workstream_status": row.workstream_status,
-            "workstream_note": row.workstream_note,
-            "workstream_updated_at": row.workstream_updated_at,
-            "created_at": row.created_at,
-            "updated_at": row.updated_at,
-            "age_minutes": int((now - row.created_at).total_seconds() / 60),
-            "idle_minutes": idle_minutes_from_timestamps(
-                created_at=row.created_at,
-                updated_at=row.updated_at,
-                workstream_updated_at=row.workstream_updated_at,
-                now=now,
-            ),
-        }
-        for row in rows
-    ]
+    return [_workstream_row_to_dict(row, now) for row in rows]
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
@@ -492,125 +498,151 @@ def _build_workstream_next_action(
     return "monitor"
 
 
+def _infer_task_id_from_lane(lane_rows: list[dict[str, object]]) -> str | None:
+    """Return the first inferred task_id found across a group of lane rows."""
+    for row in lane_rows:
+        ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+        br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+        task_id = infer_task_id(ei, br)
+        if task_id:
+            return task_id
+    return None
+
+
+def _parse_stale_tasks_from_overview(task_overview: str) -> list[dict[str, str]]:
+    """Extract stale-running task entries from ready-all TOON output."""
+    stale_tasks: list[dict[str, str]] = []
+    cur_project: str | None = None
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if not line.startswith(" ") and "(" in line and line.endswith(")"):
+            cur_project = line.split(" ", 1)[0]
+            continue
+        m = _STALE_READY_ALL_LINE.match(line)
+        if m and cur_project:
+            stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
+    return stale_tasks
+
+
+def _format_lane_line(
+    *,
+    project_id: str,
+    lane_key: str,
+    lane_rows: list[dict[str, object]],
+    lane_state: str,
+    task_id: str | None,
+    provider: str | None,
+) -> str:
+    """Format a single workstream lane as a pipe-separated inventory line."""
+    branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
+    agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+    active_rows = [r for r in lane_rows if r.get("status") == "active"]
+    active_count = len(active_rows)
+    completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
+    idle_minutes = (
+        min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
+        if active_count else None
+    )
+    ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
+    working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
+    next_action = _build_workstream_next_action(
+        state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
+    )
+    label = task_id or lane_key
+    parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={active_count}"]
+    if idle_minutes is not None:
+        parts.append(f"idle={idle_minutes}m")
+    if completed_count:
+        parts.append(f"completed={completed_count}")
+    if ws_statuses:
+        parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
+    if branches:
+        parts.append(f"branches={len(branches)}")
+    if working_dirs:
+        parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
+    if agents:
+        parts.append(f"agents={','.join(sorted(agents))}")
+    parts.append(f"next={next_action}")
+    return " | ".join(parts)
+
+
+def _group_workstream_rows(
+    rows: list[dict[str, object]],
+) -> dict[tuple[str, str], list[dict[str, object]]]:
+    """Group collapsed workstream rows by (project_id, lane_key)."""
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+        br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+        tid = infer_task_id(ei, br) or ""
+        lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
+        if lane_key:
+            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+    return grouped
+
+
+def _reconcile_line(project_id: str, task_id: str, provider: str | None) -> str:
+    """Format a stale_running_task reconcile line."""
+    next_action = _tool_call(
+        "manage_tasks",
+        f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+        provider=provider,
+    )
+    return f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_action}"
+
+
+def _build_workstream_lines(
+    grouped: dict[tuple[str, str], list[dict[str, object]]],
+    stale_keys: set[tuple[str, str]],
+    visible_task_ids: set[str],
+    task_overview: str,
+    provider: str | None,
+) -> list[str]:
+    """Build per-lane inventory lines from grouped rows and stale task set."""
+    lines = ["Recent workstreams:"]
+    for (project_id, lane_key), lane_rows in sorted(grouped.items()):
+        task_id = _infer_task_id_from_lane(lane_rows)
+        lane_state = _classify_workstream_lane(lane_rows)
+        if (
+            lane_state == "completed_ready_for_closure"
+            and task_id and task_overview
+            and task_id not in visible_task_ids
+        ):
+            continue
+        if task_id and (project_id, task_id) in stale_keys:
+            lines.append(_reconcile_line(project_id, task_id, provider))
+            stale_keys.discard((project_id, task_id))
+            continue
+        lines.append(_format_lane_line(
+            project_id=project_id, lane_key=lane_key, lane_rows=lane_rows,
+            lane_state=lane_state, task_id=task_id, provider=provider,
+        ))
+    for project_id, task_id in sorted(stale_keys):
+        if (project_id, task_id) not in grouped:
+            lines.append(_reconcile_line(project_id, task_id, provider))
+    return lines
+
+
 async def _get_workstream_inventory(provider: str | None = None) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
         task_overview = _fetch_task_overview()
         visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
-
-        # Parse stale-running task entries from ready-all output
-        stale_tasks: list[dict[str, str]] = []
-        cur_project: str | None = None
-        for raw_line in task_overview.splitlines():
-            line = raw_line.rstrip()
-            if not line:
-                continue
-            if not line.startswith(" ") and "(" in line and line.endswith(")"):
-                cur_project = line.split(" ", 1)[0]
-                continue
-            m = _STALE_READY_ALL_LINE.match(line)
-            if m and cur_project:
-                stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
+        stale_tasks = _parse_stale_tasks_from_overview(task_overview)
 
         if not rows and not stale_tasks:
             return ""
 
-        # Group rows by (project_id, lane_key)
-        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
-        for row in rows:
-            ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-            br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-            tid = infer_task_id(ei, br) or ""
-            lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
-            if not lane_key:
-                continue
-            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+        grouped = _group_workstream_rows(rows)
+        stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
 
         if not grouped and not stale_tasks:
             return ""
 
-        lines = ["Recent workstreams:"]
-        stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
-
-        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-            # Derive task_id for this lane
-            task_id: str | None = None
-            for row in lane_rows:
-                ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-                br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-                task_id = infer_task_id(ei, br)
-                if task_id:
-                    break
-
-            lane_state = _classify_workstream_lane(lane_rows)
-            if (
-                lane_state == "completed_ready_for_closure"
-                and task_id
-                and task_overview
-                and task_id not in visible_task_ids
-            ):
-                continue
-            if task_id and (project_id, task_id) in stale_keys:
-                next_action = _tool_call(
-                    "manage_tasks",
-                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                    provider=provider,
-                )
-                lines.append(
-                    f"- {project_id} | {task_id} | state=stale_running_task | "
-                    f"active=0 | next={next_action}"
-                )
-                stale_keys.discard((project_id, task_id))
-                continue
-
-            # Format workstream lane inline
-            branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
-            agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
-            active_rows = [r for r in lane_rows if r.get("status") == "active"]
-            active_count = len(active_rows)
-            completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
-            idle_minutes = (
-                min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
-                if active_count else None
-            )
-            ws_statuses = {
-                str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")
-            }
-            working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
-            next_action = _build_workstream_next_action(
-                state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
-            )
-            label = task_id or lane_key
-            parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={active_count}"]
-            if idle_minutes is not None:
-                parts.append(f"idle={idle_minutes}m")
-            if completed_count:
-                parts.append(f"completed={completed_count}")
-            if ws_statuses:
-                parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
-            if branches:
-                parts.append(f"branches={len(branches)}")
-            if working_dirs:
-                parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
-            if agents:
-                parts.append(f"agents={','.join(sorted(agents))}")
-            parts.append(f"next={next_action}")
-            lines.append(" | ".join(parts))
-
-        for project_id, task_id in sorted(stale_keys):
-            if (project_id, task_id) in grouped:
-                continue
-            next_action = _tool_call(
-                "manage_tasks",
-                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                provider=provider,
-            )
-            lines.append(
-                f"- {project_id} | {task_id} | state=stale_running_task | "
-                f"active=0 | next={next_action}"
-            )
-
+        lines = _build_workstream_lines(grouped, stale_keys, visible_task_ids, task_overview, provider)
         if len(lines) == 1:
             return ""
         body = "\n".join(lines)
@@ -719,6 +751,47 @@ def _get_git_status_summary() -> str:
     return f"\n<git_state>\n{body}\n</git_state>"
 
 
+def _aggregate_open_type_counts(summary: dict) -> dict[str, int]:
+    """Sum feedback counts by type for open/acknowledged items."""
+    type_counts: dict[str, int] = {}
+    for row in summary.get("counts_by_type_status", []):
+        if row.get("status") not in {"open", "acknowledged"}:
+            continue
+        ft = row.get("feedback_type", "unknown")
+        type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
+    return type_counts
+
+
+def _format_feedback_header(summary: dict, unresolved_count: int, total: int) -> list[str]:
+    """Build header lines: count, type breakdown, and hotspots."""
+    lines = [f"Unresolved items: {unresolved_count} (of {total} total, last 30d)"]
+    type_counts = _aggregate_open_type_counts(summary)
+    if type_counts:
+        breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
+        lines.append(f"By type: {breakdown}")
+    hot = [r for r in summary.get("by_component", []) if int(r.get("open_count", 0) or 0) > 0][:3]
+    if hot:
+        hotspots = ", ".join(
+            f"{r['component_id']} open={r['open_count']} votes={r['total_votes'] or 0}"
+            for r in hot
+        )
+        lines.append(f"Hotspots: {hotspots}")
+    return lines
+
+
+def _format_feedback_table_rows(top_items: list) -> list[str]:
+    """Format the tabular feedback item rows (header + data)."""
+    lines = ["", f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title", "-" * 78]
+    for item in top_items[:5]:
+        short_id = str(item.id)[:8]
+        lines.append(
+            f"{short_id:>8}  {item.feedback_type:<11}  "
+            f"{item.component_id:<20}  {item.vote_count:>5}  "
+            f"{(item.title or '')[:40]}"
+        )
+    return lines
+
+
 async def _get_feedback_summary_section() -> str:
     """Build a <feedback_summary> XML block with open feedback stats and top items."""
     try:
@@ -728,51 +801,18 @@ async def _get_feedback_summary_section() -> str:
         async with async_session() as db:
             summary = await get_feedback_summary(db, days=30)
 
-        total = summary.get("total_items", 0)
         top_items = summary.get("top_unresolved", [])
-
         if not top_items:
             return ""
 
-        # Type breakdown from counts_by_type_status
-        type_counts: dict[str, int] = {}
-        for row in summary.get("counts_by_type_status", []):
-            if row.get("status") in {"open", "acknowledged"}:
-                ft = row.get("feedback_type", "unknown")
-                type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
-
-        unresolved_count = sum(type_counts.values())
+        unresolved_count = sum(_aggregate_open_type_counts(summary).values())
         if unresolved_count == 0:
             return ""
 
-        lines = [f"Unresolved items: {unresolved_count} (of {total} total, last 30d)"]
-
-        if type_counts:
-            breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
-            lines.append(f"By type: {breakdown}")
-
-        hot_components = [
-            row for row in summary.get("by_component", [])
-            if int(row.get("open_count", 0) or 0) > 0
-        ][:3]
-        if hot_components:
-            hotspots = ", ".join(
-                f"{row['component_id']} open={row['open_count']} votes={row['total_votes'] or 0}"
-                for row in hot_components
-            )
-            lines.append(f"Hotspots: {hotspots}")
-
-        lines.append("")
-        lines.append(f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title")
-        lines.append("-" * 78)
-        for item in top_items[:5]:
-            short_id = str(item.id)[:8]
-            lines.append(
-                f"{short_id:>8}  {item.feedback_type:<11}  "
-                f"{item.component_id:<20}  {item.vote_count:>5}  "
-                f"{(item.title or '')[:40]}"
-            )
-
+        lines = (
+            _format_feedback_header(summary, unresolved_count, summary.get("total_items", 0))
+            + _format_feedback_table_rows(top_items)
+        )
         body = "\n".join(lines)
         logger.info("Feedback summary: %d unresolved items", unresolved_count)
         return f"\n<feedback_summary>\n{body}\n</feedback_summary>"
