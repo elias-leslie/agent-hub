@@ -136,6 +136,11 @@ class PersonaStreamEntry(BaseModel):
     message_count: int = 0
     tool_count: int = 0
     event_previews: list[PersonaStreamEventPreview] = Field(default_factory=list)
+    pulse_tags: list[str] = Field(default_factory=list)
+    primary_pulse_tag: str | None = None
+    root_causes: list[str] = Field(default_factory=list)
+    primary_root_cause: str | None = None
+    pulse_summary: str | None = None
 
 
 class PersonaStreamEventPreview(BaseModel):
@@ -162,6 +167,7 @@ class PersonaStreamResponse(BaseModel):
     page_size: int
     matches: list[PersonaStreamMatch] = Field(default_factory=list)
     match_count: int = 0
+    pulse: PersonaPulseSummary = Field(default_factory=lambda: PersonaPulseSummary())
 
 
 class PersonaStreamMatch(BaseModel):
@@ -172,3 +178,53 @@ class PersonaStreamMatch(BaseModel):
     entry_type: str
     timestamp: datetime
     snippet: str
+
+
+class PersonaPulseMetric(BaseModel):
+    """Single metric shown in Jenny's pulse strip."""
+
+    key: str
+    label: str
+    count: int
+    description: str
+
+
+class PersonaIssueGroup(BaseModel):
+    """Repeated issue fingerprint aggregated across Jenny sessions."""
+
+    fingerprint: str
+    title: str
+    summary: str
+    count: int
+    primary_tag: str
+    root_cause: str | None = None
+    agent_slugs: list[str] = Field(default_factory=list)
+    latest_entry_id: str | None = None
+    latest_session_id: str | None = None
+    latest_timestamp: datetime | None = None
+
+
+class PersonaAgentScorecard(BaseModel):
+    """Per-agent health summary for the selected timeline window."""
+
+    agent_slug: str
+    label: str
+    session_count: int
+    success_count: int
+    friction_count: int
+    error_count: int
+    recovered_count: int
+    stalled_count: int
+    instruction_drift_count: int
+    tool_friction_count: int
+    median_runtime_seconds: int | None = None
+    top_issue: str | None = None
+    top_root_cause: str | None = None
+
+
+class PersonaPulseSummary(BaseModel):
+    """Pulse snapshot for the current Jenny history window."""
+
+    metrics: list[PersonaPulseMetric] = Field(default_factory=list)
+    issue_groups: list[PersonaIssueGroup] = Field(default_factory=list)
+    agent_scorecards: list[PersonaAgentScorecard] = Field(default_factory=list)

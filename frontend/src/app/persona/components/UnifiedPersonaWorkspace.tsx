@@ -41,20 +41,28 @@ import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } fr
 import { fetchSessionEvents } from "@/lib/api/sessions";
 import {
   type PersonaStreamMatch,
+  type PersonaPulseSummary,
   fetchPersonaStream,
   type PersonaStreamEventPreview,
   type PersonaStreamEntry,
 } from "@/lib/api/persona-stream";
 import type { SessionEvent as LiveSessionEvent, TimelineEvent } from "@/types/events";
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
+import {
+  entryHasPulseTag,
+  filterModeToPulseTag,
+  type FilterMode,
+  pulseTagToFilterMode,
+  pulseTagClasses,
+  pulseTagLabel,
+  rootCauseLabel,
+} from "./pulse-helpers";
 
 const PROJECT_ID = "persona-sandbox";
 const PAGE_SIZE = 120;
 const LIVE_REFRESH_MS = 5_000;
 const AUTO_FOLLOW_BOTTOM_THRESHOLD = 160;
 const PROGRAMMATIC_SCROLL_GRACE_MS = 400;
-
-type FilterMode = "all" | "messages" | "work" | "errors" | "heartbeats";
 
 interface UnifiedPersonaWorkspaceProps {
   agentSlug: string;
@@ -136,6 +144,12 @@ interface SessionDetailBlock {
   score: number;
   defaultVisible: boolean;
 }
+
+const EMPTY_PULSE: PersonaPulseSummary = {
+  metrics: [],
+  issue_groups: [],
+  agent_scorecards: [],
+};
 
 type TimelineRow =
   | { kind: "divider"; id: string; label: string }
@@ -809,6 +823,36 @@ function outcomeToneClasses(hasErrors: boolean): string {
   return hasErrors
     ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
     : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+}
+
+function rootCauseClasses(rootCause: string): string {
+  switch (rootCause) {
+    case "workflow":
+      return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
+    case "tool":
+      return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+    case "context":
+      return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+    case "infra":
+      return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+    case "prompt":
+      return "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
+    default:
+      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+  }
+}
+
+function formatRuntimeLabel(seconds: number | null): string | null {
+  if (seconds == null) {
+    return null;
+  }
+  if (seconds < 60) {
+    return `${seconds}s median`;
+  }
+  if (seconds < 3600) {
+    return `${Math.round(seconds / 60)}m median`;
+  }
+  return `${(seconds / 3600).toFixed(1)}h median`;
 }
 
 function SessionDetailBlockCard({
@@ -1496,7 +1540,26 @@ function ChildRunCard({
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">task {entry.external_id}</span>}
             {entry.current_branch && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{entry.current_branch}</span>}
+            {entry.pulse_tags.filter((tag) => tag !== "friction").map((tag) => (
+              <span key={`${entry.session_id}-${tag}`} className={cn("rounded-full px-2 py-0.5", pulseTagClasses(tag))}>
+                {pulseTagLabel(tag)}
+              </span>
+            ))}
+            {entry.root_causes.map((rootCause) => (
+              <span
+                key={`${entry.session_id}-${rootCause}`}
+                className={cn("rounded-full px-2 py-0.5", rootCauseClasses(rootCause))}
+              >
+                {rootCauseLabel(rootCause)}
+              </span>
+            ))}
           </div>
+          {entry.pulse_summary && (
+            <HighlightedText
+              text={entry.pulse_summary}
+              className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
+            />
+          )}
           {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
@@ -1567,7 +1630,26 @@ function HeartbeatCard({
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{entry.external_id}</span>}
+            {entry.pulse_tags.filter((tag) => tag !== "friction").map((tag) => (
+              <span key={`${entry.session_id}-${tag}`} className={cn("rounded-full px-2 py-0.5", pulseTagClasses(tag))}>
+                {pulseTagLabel(tag)}
+              </span>
+            ))}
+            {entry.root_causes.map((rootCause) => (
+              <span
+                key={`${entry.session_id}-${rootCause}`}
+                className={cn("rounded-full px-2 py-0.5", rootCauseClasses(rootCause))}
+              >
+                {rootCauseLabel(rootCause)}
+              </span>
+            ))}
           </div>
+          {entry.pulse_summary && (
+            <HighlightedText
+              text={entry.pulse_summary}
+              className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
+            />
+          )}
           {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
@@ -1601,6 +1683,7 @@ export function UnifiedPersonaWorkspace({
   const [autoFollow, setAutoFollow] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [entries, setEntries] = useState<PersonaStreamEntry[]>([]);
+  const [pulse, setPulse] = useState<PersonaPulseSummary>(EMPTY_PULSE);
   const [searchMatches, setSearchMatches] = useState<PersonaStreamMatch[]>([]);
   const [matchCount, setMatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1764,12 +1847,15 @@ export function UnifiedPersonaWorkspace({
         if (filterMode === "all") return true;
         if (filterMode === "messages") return item.kind === "message";
         if (filterMode === "heartbeats") return item.kind === "heartbeat";
-        if (filterMode === "errors") {
-          if (item.kind === "message") return /error|failed|warning|blocked/i.test(item.message.content);
-          return item.entry.status === "failed" || item.entry.event_previews.some((preview) => preview.event_type === "error");
-        }
         if (filterMode === "work") {
           return item.kind === "child_run" || item.kind === "heartbeat";
+        }
+        const pulseTag = filterModeToPulseTag(filterMode);
+        if (pulseTag) {
+          if (item.kind === "message") {
+            return pulseTag === "error" ? /error|failed|warning|blocked/i.test(item.message.content) : false;
+          }
+          return entryHasPulseTag(item.entry, pulseTag);
         }
         return true;
       })
@@ -1927,12 +2013,14 @@ export function UnifiedPersonaWorkspace({
           setTotal(data.total);
           setSearchMatches(data.matches);
           setMatchCount(data.match_count);
+          setPulse(data.pulse ?? EMPTY_PULSE);
           setError(null);
         });
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load stream");
+          setPulse(EMPTY_PULSE);
         }
       })
       .finally(() => {
@@ -2241,8 +2329,16 @@ export function UnifiedPersonaWorkspace({
       all: hydratedEntries.length + messages.length,
       messages: [...hydratedEntries.filter((entry) => entry.entry_type === "message"), ...messages].length,
       work: hydratedEntries.filter((entry) => entry.entry_type === "heartbeat" || entry.entry_type === "child_run").length,
-      errors: hydratedEntries.filter((entry) => entry.status === "failed" || entry.event_previews.some((preview) => preview.event_type === "error")).length,
       heartbeats: hydratedEntries.filter((entry) => entry.entry_type === "heartbeat").length,
+      friction: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "friction")).length,
+      errors: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "error")).length,
+      warnings: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "warning")).length,
+      stalled: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "stalled")).length,
+      drift: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "instruction_drift")).length,
+      tool_friction: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "tool_friction")).length,
+      retries: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "retries")).length,
+      recovered: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "recovered")).length,
+      escalations: hydratedEntries.filter((entry) => entryHasPulseTag(entry, "escalation")).length,
     };
     return counts;
   }, [hydratedEntries, messages]);
@@ -2376,6 +2472,26 @@ export function UnifiedPersonaWorkspace({
     setAutoFollow(false);
   };
 
+  const visiblePulseMetrics = useMemo(
+    () => pulse.metrics.filter((metric) => metric.count > 0 || metric.key === "friction"),
+    [pulse.metrics],
+  );
+
+  const applyPulseFilter = (nextMode: FilterMode, nextAnchorEntryId?: string | null) => {
+    setFilterMode(nextMode);
+    if (nextAnchorEntryId) {
+      setAnchorEntryId(nextAnchorEntryId);
+      setAutoFollow(false);
+    }
+  };
+
+  const inspectAgentPulse = (agentSlugValue: string) => {
+    setFilterMode("friction");
+    setSearch(`agent:${agentSlugValue}`);
+    setAnchorEntryId(null);
+    setAutoFollow(false);
+  };
+
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
@@ -2431,13 +2547,144 @@ export function UnifiedPersonaWorkspace({
         <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
           Search everything, or use prefixes like <span className="font-semibold">task:</span>, <span className="font-semibold">file:</span>, <span className="font-semibold">agent:</span>, <span className="font-semibold">status:</span>, and <span className="font-semibold">project:</span>.
         </div>
+        {visiblePulseMetrics.length > 0 && (
+          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {visiblePulseMetrics.map((metric) => {
+              const mode = pulseTagToFilterMode(metric.key);
+              return (
+                <button
+                  key={metric.key}
+                  type="button"
+                  onClick={() => applyPulseFilter(mode)}
+                  className={cn(
+                    "rounded-2xl border px-3 py-3 text-left transition",
+                    metric.count > 0
+                      ? "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-950"
+                      : "border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/60",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(metric.key))}>
+                      {metric.label}
+                    </span>
+                    <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{metric.count}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.description}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {(pulse.issue_groups.length > 0 || pulse.agent_scorecards.length > 0) && (
+          <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+            <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                <AlertCircle className="h-3.5 w-3.5" />
+                Repeated Friction
+              </div>
+              {pulse.issue_groups.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No repeated issue fingerprints in this window.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {pulse.issue_groups.map((issue) => (
+                    <button
+                      key={issue.fingerprint}
+                      type="button"
+                      onClick={() => applyPulseFilter(pulseTagToFilterMode(issue.primary_tag), issue.latest_entry_id)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(issue.primary_tag))}>
+                          {pulseTagLabel(issue.primary_tag)}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {issue.count} hits
+                        </span>
+                        {issue.root_cause && (
+                          <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(issue.root_cause))}>
+                            {rootCauseLabel(issue.root_cause)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{issue.title}</div>
+                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{issue.summary}</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                        {issue.agent_slugs.map((agentSlugValue) => (
+                          <span key={`${issue.fingerprint}-${agentSlugValue}`} className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                            {agentSlugValue}
+                          </span>
+                        ))}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                <Sparkles className="h-3.5 w-3.5" />
+                Agent Scorecards
+              </div>
+              {pulse.agent_scorecards.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No agent sessions in this window yet.</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {pulse.agent_scorecards.map((scorecard) => {
+                    const successRate = scorecard.session_count > 0
+                      ? Math.round((scorecard.success_count / scorecard.session_count) * 100)
+                      : 0;
+                    const runtimeLabel = formatRuntimeLabel(scorecard.median_runtime_seconds);
+                    return (
+                      <button
+                        key={scorecard.agent_slug}
+                        type="button"
+                        onClick={() => inspectAgentPulse(scorecard.agent_slug)}
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{scorecard.label}</div>
+                            <div className="text-xs text-slate-500 dark:text-slate-400">{successRate}% completed across {scorecard.session_count} runs</div>
+                          </div>
+                          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", scorecard.friction_count > 0 ? pulseTagClasses("friction") : pulseTagClasses("recovered"))}>
+                            {scorecard.friction_count > 0 ? `${scorecard.friction_count} friction` : "steady"}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.error_count} errors</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.tool_friction_count} tool friction</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.instruction_drift_count} drift</span>
+                          {runtimeLabel && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{runtimeLabel}</span>}
+                        </div>
+                        {(scorecard.top_issue || scorecard.top_root_cause) && (
+                          <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                            {scorecard.top_issue ?? "Primary friction trend"}
+                            {scorecard.top_root_cause ? ` · ${rootCauseLabel(scorecard.top_root_cause)}` : ""}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {([
             ["all", "All"],
             ["messages", "Messages"],
             ["work", "Work"],
-            ["errors", "Errors"],
             ["heartbeats", "Heartbeats"],
+            ["friction", "Friction"],
+            ["errors", "Errors"],
+            ["warnings", "Warnings"],
+            ["stalled", "Stalled"],
+            ["drift", "Drift"],
+            ["tool_friction", "Tool Friction"],
+            ["retries", "Retries"],
+            ["recovered", "Recovered"],
+            ["escalations", "Escalations"],
           ] as Array<[FilterMode, string]>).map(([value, label]) => (
             <button
               key={value}

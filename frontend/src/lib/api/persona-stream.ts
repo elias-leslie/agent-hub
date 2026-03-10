@@ -34,6 +34,11 @@ export interface PersonaStreamEntry {
   message_count: number;
   tool_count: number;
   event_previews: PersonaStreamEventPreview[];
+  pulse_tags: string[];
+  primary_pulse_tag: string | null;
+  root_causes: string[];
+  primary_root_cause: string | null;
+  pulse_summary: string | null;
 }
 
 export interface PersonaStreamResponse {
@@ -43,6 +48,7 @@ export interface PersonaStreamResponse {
   page_size: number;
   matches: PersonaStreamMatch[];
   match_count: number;
+  pulse: PersonaPulseSummary;
 }
 
 export interface PersonaStreamMatch {
@@ -51,6 +57,48 @@ export interface PersonaStreamMatch {
   entry_type: "message" | "heartbeat" | "child_run";
   timestamp: string;
   snippet: string;
+}
+
+export interface PersonaPulseMetric {
+  key: string;
+  label: string;
+  count: number;
+  description: string;
+}
+
+export interface PersonaIssueGroup {
+  fingerprint: string;
+  title: string;
+  summary: string;
+  count: number;
+  primary_tag: string;
+  root_cause: string | null;
+  agent_slugs: string[];
+  latest_entry_id: string | null;
+  latest_session_id: string | null;
+  latest_timestamp: string | null;
+}
+
+export interface PersonaAgentScorecard {
+  agent_slug: string;
+  label: string;
+  session_count: number;
+  success_count: number;
+  friction_count: number;
+  error_count: number;
+  recovered_count: number;
+  stalled_count: number;
+  instruction_drift_count: number;
+  tool_friction_count: number;
+  median_runtime_seconds: number | null;
+  top_issue: string | null;
+  top_root_cause: string | null;
+}
+
+export interface PersonaPulseSummary {
+  metrics: PersonaPulseMetric[];
+  issue_groups: PersonaIssueGroup[];
+  agent_scorecards: PersonaAgentScorecard[];
 }
 
 interface FetchPersonaStreamParams {
