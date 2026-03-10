@@ -20,7 +20,7 @@ async def validate_learning_request(request: SaveLearningRequest) -> SaveLearnin
             message=f"Confidence {request.confidence}% is below provisional threshold ({PROVISIONAL_THRESHOLD}%)",
         )
 
-    EpisodeValidator.validate_content(request.content)
+    EpisodeValidator.validate_content(request.content, tier=request.injection_tier.value)
     EpisodeValidator.validate_summary(request.summary)
     EpisodeValidator.validate_reusability(request.content)
     return None

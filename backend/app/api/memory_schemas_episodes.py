@@ -102,7 +102,7 @@ class UpdateEpisodePropertiesRequest(BaseModel):
     )
     summary: str | None = Field(
         None,
-        max_length=50,
+        max_length=40,
         description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')",
     )
 

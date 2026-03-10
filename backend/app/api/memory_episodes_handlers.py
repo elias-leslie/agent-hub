@@ -192,15 +192,38 @@ async def handle_update_episode(
     request: UpdateEpisodeRequest,
 ) -> UpdateEpisodeResponse:
     """Update episode content and/or tier without rotating UUID."""
+    from app.services.memory.episode_validation import EpisodeValidationError, EpisodeValidator
+
     from .memory_schemas import UpdateEpisodeResponse
 
     if request.content is None and request.injection_tier is None:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    repo = get_memory_repository()
     updates: dict[str, object] = {}
     messages: list[str] = []
 
     if request.content is not None:
+        existing_episode: dict[str, object] | None = None
+        if request.injection_tier is None:
+            existing_episode = await repo.get_as_dict(full_uuid)
+            if existing_episode is None:
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+        if request.injection_tier is not None:
+            effective_tier = request.injection_tier.value
+        else:
+            effective_tier = str((existing_episode or {}).get("injection_tier") or "reference")
+        try:
+            EpisodeValidator.validate_content(request.content, tier=effective_tier)
+        except EpisodeValidationError as e:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "validation_error",
+                    "message": e.message,
+                    "details": [{"message": pattern} for pattern in e.detected_patterns],
+                },
+            ) from e
         embedder = get_embedder()
         updates["content"] = request.content
         updates["embedding"] = await embedder.embed(request.content)
@@ -210,7 +233,6 @@ async def handle_update_episode(
         updates["injection_tier"] = request.injection_tier.value
         messages.append(f"injection_tier={request.injection_tier.value}")
 
-    repo = get_memory_repository()
     try:
         success = await repo.update(full_uuid, **updates)
         if not success:

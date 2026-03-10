@@ -84,6 +84,16 @@ class TestEpisodeCreatorValidation:
 
         assert "i recommend" in str(exc.value)
 
+    def test_rejects_wrong_tier_header_when_tier_is_provided(self):
+        """Tier-aware validation should require exact mandate/guardrail/reference headers."""
+        with pytest.raises(EpisodeValidationError) as exc:
+            EpisodeValidator.validate_content(
+                "**Git Safety**: Use /commit_it for commits when available.",
+                tier="mandate",
+            )
+
+        assert "exact tier header" in str(exc.value).lower()
+
     @pytest.mark.parametrize(
         ("content", "needle"),
         [

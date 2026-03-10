@@ -102,6 +102,7 @@ class TestUpdateEpisodeEndpoint:
         mock_embedder = AsyncMock()
         mock_embedder.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
         mock_repo = AsyncMock()
+        mock_repo.get_as_dict = AsyncMock(return_value={"injection_tier": "reference"})
         mock_repo.update = AsyncMock(return_value=True)
 
         with (
@@ -110,7 +111,7 @@ class TestUpdateEpisodeEndpoint:
         ):
             response = await client.patch(
                 "/api/memory/episode/test-uuid-123",
-                json={"content": "**Rule**: Updated content"},
+                json={"content": "**Reference**: Use refreshed episode content."},
             )
 
         assert response.status_code == 200
@@ -118,7 +119,7 @@ class TestUpdateEpisodeEndpoint:
         assert data["success"] is True
         assert data["episode_id"] == "test-uuid-123"
         assert "content" in data["message"].lower()
-        mock_embedder.embed.assert_awaited_once_with("**Rule**: Updated content")
+        mock_embedder.embed.assert_awaited_once_with("**Reference**: Use refreshed episode content.")
         mock_repo.update.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -141,6 +142,25 @@ class TestUpdateEpisodeEndpoint:
         mock_repo.update.assert_awaited_once_with("test-uuid-123", injection_tier="mandate")
 
     @pytest.mark.asyncio
+    async def test_update_episode_rejects_invalid_content_for_existing_tier(
+        self, client: AsyncClient
+    ):
+        """Content-only updates should still enforce the stored tier header format."""
+        mock_repo = AsyncMock()
+        mock_repo.get_as_dict = AsyncMock(return_value={"injection_tier": "mandate"})
+
+        with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
+            response = await client.patch(
+                "/api/memory/episode/test-uuid-123",
+                json={"content": "**Git Safety**: Use /commit_it for commits when available."},
+            )
+
+        assert response.status_code == 422
+        body = response.json()
+        assert "exact tier header" in body["message"].lower()
+        assert body["error"] == "validation_error"
+
+    @pytest.mark.asyncio
     async def test_update_episode_requires_fields(self, client: AsyncClient):
         """Empty payload should be rejected clearly."""
         response = await client.patch(
@@ -150,6 +170,28 @@ class TestUpdateEpisodeEndpoint:
 
         assert response.status_code == 400
         assert "No fields to update" in response.json()["message"]
+
+
+class TestSaveLearningEndpoint:
+    """Tests for POST /api/memory/save-learning endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_save_learning_validation_uses_message_and_hint(self, client: AsyncClient):
+        """Invalid learning format should return normalized validation payload."""
+        response = await client.post(
+            "/api/memory/save-learning",
+            json={
+                "content": "**Git Safety**: Use /commit_it for commits when available.",
+                "summary": "Use commit flow",
+                "injection_tier": "mandate",
+            },
+        )
+
+        assert response.status_code == 422
+        body = response.json()
+        assert body["error"] == "validation_error"
+        assert "exact tier header" in body["message"].lower()
+        assert "FORMAT_STANDARD" in body["hint"]
 
 
 class TestBulkDeleteEndpoint:

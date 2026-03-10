@@ -245,24 +245,24 @@ async def api_save_learning(
         raise HTTPException(
             status_code=422,
             detail={
-                "error": "Content validation failed",
+                "error": "validation_error",
                 "message": e.message,
-                "detected_patterns": e.detected_patterns,
+                "details": [{"message": pattern} for pattern in e.detected_patterns],
                 "hint": """FORMAT_STANDARD for memory episodes:
 
 | # | Rule | Check |
 |---|------|-------|
-| 1 | Header format | Must start with **Topic**: |
+| 1 | Tier header | Must start with **Mandate**:, **Guardrail**:, or **Reference**: matching tier |
 | 2 | Imperative mood | Commands not suggestions |
-| 3 | Articles dropped | Remove the/a/an where natural |
-| 4 | One atomic rule | Single concept per episode |
+| 3 | Strong verb first | Lead with use / never / always / check / follow |
+| 4 | One atomic rule | Single concept per episode, not a list |
 | 5 | No custom delimiters | No ::, -> except in tables |
 | 6 | No conversational | No please/remember/note:/you should |
-| 7 | Terse content | Compress wordiness |
-| 8 | Summary | 10-50 chars |
+| 7 | Terse content | Prefer 3 sentences max and 280 chars max |
+| 8 | Summary | 10-40 chars |
 
 Example of GOOD format:
-  **Git Safety**: Never git stash. Use /commit_it first. Lost work risk.
+  **Mandate**: Use /commit_it for commits when available. Never use raw git commit unless explicitly requested. Why: shared checks and publish flow stay consistent.
 
 Example of BAD format:
   When working with git, you should remember to always commit first.
