@@ -569,6 +569,66 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByRole("button", { name: "Less" })).toBeInTheDocument();
   });
 
+  it("dedupes duplicate warning markers and humanizes wrapped task payloads", async () => {
+    const response = buildStreamResponse();
+    const heartbeat = response.entries.find((entry) => entry.id === "h-1");
+    if (!heartbeat) {
+      throw new Error("Missing heartbeat entry");
+    }
+    heartbeat.issue_markers = [
+      {
+        event_id: "preview-h-issue",
+        event_type: "assistant_message",
+        created_at: "2026-03-09T10:01:20Z",
+        tool_name: null,
+        tags: ["warning"],
+        primary_tag: "warning",
+        root_causes: ["context"],
+        primary_root_cause: "context",
+        title: "Completed with warnings",
+        summary: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Jenny dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm Jenny still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use Jenny on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
+        detail: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Jenny dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm Jenny still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use Jenny on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
+        fingerprint: "warning:task-605a52fc",
+      },
+      {
+        event_id: "summary-h-1",
+        event_type: "session_summary",
+        created_at: "2026-03-09T10:01:25Z",
+        tool_name: null,
+        tags: ["warning"],
+        primary_tag: "warning",
+        root_causes: ["context"],
+        primary_root_cause: "context",
+        title: "Completed with warnings",
+        summary: "Completed with warnings while reviewing task-605a52fc",
+        detail: "Completed with warnings while reviewing task-605a52fc",
+        fingerprint: null,
+      },
+    ];
+    mockFetchPersonaStream.mockResolvedValueOnce(response);
+
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Task task-605a52fc/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Completed with warnings")).toHaveLength(1);
+    expect(screen.getAllByText(/Task task-605a52fc/i)).toHaveLength(1);
+    expect(screen.queryByText(/\[\{'type': 'text'/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Title: Live validation: Jenny dispatch judgment after workflow cleanup/i)).toBeInTheDocument();
+  });
+
   it("renders stream items in chronological order with newest at the bottom", async () => {
     render(
       <UnifiedPersonaWorkspace
