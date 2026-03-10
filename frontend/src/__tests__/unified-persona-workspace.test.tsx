@@ -7,11 +7,14 @@ const mockFetchPersonaStream = vi.fn();
 const mockUseChatStream = vi.fn();
 const mockFetchSessionEvents = vi.fn();
 
-function buildStreamResponse(options?: { heartbeatStatus?: "active" | "completed"; heartbeatLiveStatus?: string | null }) {
+function buildStreamResponse(options?: {
+  heartbeatStatus?: "active" | "completed";
+  heartbeatLiveStatus?: string | null;
+  includeSecondHeartbeat?: boolean;
+}) {
   const heartbeatStatus = options?.heartbeatStatus ?? "completed";
   const heartbeatLiveStatus = options?.heartbeatLiveStatus ?? null;
-  return {
-    entries: [
+  const entries = [
       {
         id: "m-1",
         entry_type: "message",
@@ -69,6 +72,45 @@ function buildStreamResponse(options?: { heartbeatStatus?: "active" | "completed
           },
         ],
       },
+      ...(options?.includeSecondHeartbeat
+        ? [
+            {
+              id: "h-2",
+              entry_type: "heartbeat",
+              timestamp: "2026-03-09T10:03:00Z",
+              session_id: "hb-2",
+              parent_session_id: null,
+              project_id: "persona-sandbox",
+              agent_slug: "persona",
+              session_type: "heartbeat",
+              status: "completed",
+              role: null,
+              content: null,
+              summary_oneliner: "Checked backlog state",
+              current_branch: null,
+              external_id: null,
+              model: "claude-sonnet",
+              live_summary: null,
+              live_status: null,
+              message_count: 0,
+              tool_count: 1,
+              event_previews: [
+                {
+                  id: "preview-h-2",
+                  event_type: "tool_result",
+                  created_at: "2026-03-09T10:03:10Z",
+                  role: null,
+                  tool_name: "st ready-all",
+                  content_preview: "No additional work",
+                  tool_input_preview: null,
+                  tool_output_preview: '{"status":"ok"}',
+                  duration_ms: 800,
+                  model_used: "claude-sonnet",
+                },
+              ],
+            },
+          ]
+        : []),
       {
         id: "c-1",
         entry_type: "child_run",
@@ -104,8 +146,10 @@ function buildStreamResponse(options?: { heartbeatStatus?: "active" | "completed
           },
         ],
       },
-    ],
-    total: 3,
+    ];
+  return {
+    entries,
+    total: entries.length,
     page: 1,
     page_size: 100,
     matches: [
@@ -212,6 +256,32 @@ describe("UnifiedPersonaWorkspace", () => {
               agent_id: null,
               agent_name: null,
               created_at: "2026-03-09T10:01:11Z",
+            },
+          ],
+        };
+      }
+      if (sessionId === "hb-2") {
+        return {
+          session_id: "hb-2",
+          total: 1,
+          max_turn: 1,
+          events: [
+            {
+              id: "evt-h-3",
+              turn: 1,
+              sequence: 1,
+              event_type: "tool_result",
+              role: null,
+              content: null,
+              tool_name: "st ready-all",
+              tool_input: null,
+              tool_output: { status: "ok", content: "No additional work" },
+              tokens: null,
+              duration_ms: 800,
+              model_used: "claude-sonnet",
+              agent_id: null,
+              agent_name: null,
+              created_at: "2026-03-09T10:03:10Z",
             },
           ],
         };
@@ -402,6 +472,36 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getAllByText("agent-hub").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
     expect(screen.queryByText(/\"status\"/)).not.toBeInTheDocument();
+  });
+
+  it("expands only the selected heartbeat detail block", async () => {
+    mockFetchPersonaStream.mockResolvedValue(buildStreamResponse({ includeSecondHeartbeat: true }));
+
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Show heartbeat details")).toHaveLength(2);
+    });
+
+    fireEvent.click(screen.getAllByText("Show heartbeat details")[0]);
+
+    await waitFor(() => {
+      expect(mockFetchSessionEvents).toHaveBeenCalledWith("hb-1", { page: 1, page_size: 500 });
+    });
+
+    expect(screen.getAllByText("Hide heartbeat details")).toHaveLength(1);
+    expect(screen.getAllByText("Show heartbeat details")).toHaveLength(1);
+    expect(screen.getAllByText(/Full session detail/i)).toHaveLength(1);
   });
 
   it("shows search match chips and can jump through them", async () => {
