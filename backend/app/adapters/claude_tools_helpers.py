@@ -203,7 +203,7 @@ async def _iterate_sdk_messages(
                 yield (ResultMessage(session_id=session_id), session_id)
             return
         if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-            session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
+            session_id = message.data.get("session_id")
             if session_id:
                 logger.info(f"Claude SDK session ID: {session_id}")
             continue
@@ -287,6 +287,7 @@ async def complete_with_tools(
         max_turns=max_turns,
         system_prompt=system_prompt,
         allowed_tools=allowed_tools,
+        agent_slug=agent_slug,
     )
     prompt: str | Any = await _wrap_prompt_as_stream(conversation_prompt) if use_streaming_prompt else conversation_prompt
     async for item in _stream_sdk_messages(prompt, options, provider_name):

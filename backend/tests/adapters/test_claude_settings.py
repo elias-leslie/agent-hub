@@ -157,6 +157,18 @@ class TestBuildBoundaryHook:
         assert self._is_allowed(result)
 
     @pytest.mark.asyncio
+    async def test_blocks_persona_raw_git_commit_bash(self) -> None:
+        hook = self._get_hook("/tmp/worktree", agent_slug="persona")
+        result = await self._call_hook(hook, "Bash", {"command": "git commit -m 'test'"})
+        assert self._is_denied(result)
+
+    @pytest.mark.asyncio
+    async def test_allows_non_persona_raw_git_commit_bash(self) -> None:
+        hook = self._get_hook("/tmp/worktree", agent_slug="coder")
+        result = await self._call_hook(hook, "Bash", {"command": "git commit -m 'test'"})
+        assert self._is_allowed(result)
+
+    @pytest.mark.asyncio
     async def test_blocks_multiedit_outside_boundary(self) -> None:
         hook = self._get_hook("/tmp/worktree")
         result = await self._call_hook(hook, "MultiEdit", {"file_path": "/home/user/evil.py"})
@@ -179,10 +191,10 @@ class TestBuildBoundaryHook:
         assert "/tmp/worktree" in reason
 
     @staticmethod
-    def _get_hook(working_dir: str) -> Any:
+    def _get_hook(working_dir: str, agent_slug: str | None = None) -> Any:
         from app.adapters._claude_settings import build_boundary_hook
 
-        hooks = build_boundary_hook(working_dir)
+        hooks = build_boundary_hook(working_dir, agent_slug=agent_slug)
         return hooks["PreToolUse"][0].hooks[0]
 
     @staticmethod

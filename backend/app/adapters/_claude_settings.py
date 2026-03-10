@@ -19,7 +19,7 @@ import json
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 _WRITE_ALLOWLIST: tuple[Path, ...] = (
     Path("/tmp"),
     Path.home() / ".claude",
+)
+_PERSONA_BLOCKED_BASH_SUBSTRINGS = (
+    "git commit",
+    "git push ",
 )
 
 
@@ -86,7 +90,20 @@ def write_boundary_settings(working_dir: str) -> str:
     return path
 
 
-def build_boundary_hook(working_dir: str) -> dict[str, list[Any]]:
+def _deny_output(reason: str) -> Any:
+    return cast(
+        Any,
+        {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": reason,
+        },
+        },
+    )
+
+
+def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict[str, list[Any]]:
     """Build SDK PreToolUse hook for write boundary enforcement.
 
     Returns a hooks dict suitable for ``ClaudeAgentOptions(hooks=...)``.
@@ -103,6 +120,20 @@ def build_boundary_hook(working_dir: str) -> dict[str, list[Any]]:
         context: HookContext,
     ) -> HookJSONOutput:
         tool_name = input_data.get("tool_name", "")
+        if tool_name == "Bash" and agent_slug == "persona":
+            tool_input = input_data.get("tool_input", {})
+            command = tool_input.get("command", "")
+            if isinstance(command, str) and any(
+                blocked in command.lower().strip()
+                for blocked in _PERSONA_BLOCKED_BASH_SUBSTRINGS
+            ):
+                logger.info("Boundary hook DENY: Bash workflow policy for persona (%s)", command)
+                return _deny_output(
+                    "Jenny must not use raw git commit/push from Bash. "
+                    "Use manage_tasks(action='smart_sync', project_id='...') for coherent publish debt, "
+                    "or the canonical commit.sh flow only when direct code intervention is operationally required."
+                )
+
         if tool_name not in ("Write", "Edit", "MultiEdit"):
             return {}
 
@@ -120,20 +151,12 @@ def build_boundary_hook(working_dir: str) -> dict[str, list[Any]]:
         logger.info(
             "Boundary hook DENY: %s on %s (boundary=%s)", tool_name, path, boundary,
         )
-        return {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": (
-                    f"Write blocked: {path} is outside worktree boundary {boundary}"
-                ),
-            },
-        }
+        return _deny_output(f"Write blocked: {path} is outside worktree boundary {boundary}")
 
     return {
         "PreToolUse": [
             HookMatcher(
-                matcher="Write|Edit|MultiEdit",
+                matcher="Write|Edit|MultiEdit|Bash",
                 hooks=[_check_write_boundary],
             ),
         ],
