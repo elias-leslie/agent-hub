@@ -220,9 +220,26 @@ describe("UnifiedPersonaWorkspace", () => {
       if (sessionId === "hb-1") {
         return {
           session_id: "hb-1",
-          total: 2,
+          total: 3,
           max_turn: 1,
           events: [
+            {
+              id: "evt-h-0",
+              turn: 1,
+              sequence: 0,
+              event_type: "system_message",
+              role: "system",
+              content: "# PERSONA SAFETY BOUNDARIES\n<heartbeat_instructions>\nKeep every raw heartbeat detail forever.",
+              tool_name: null,
+              tool_input: null,
+              tool_output: null,
+              tokens: null,
+              duration_ms: null,
+              model_used: "claude-sonnet",
+              agent_id: null,
+              agent_name: null,
+              created_at: "2026-03-09T10:01:09Z",
+            },
             {
               id: "evt-h-1",
               turn: 1,
@@ -469,9 +486,14 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getAllByText("dt -q -d").length).toBeGreaterThan(0);
     expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
     expect(screen.getByText("Checks passed")).toBeInTheDocument();
+    expect(screen.getAllByText("Overview").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Important events").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("button", { name: /Show full trace/i })).toBeInTheDocument();
+    expect(screen.queryByText(/PERSONA SAFETY BOUNDARIES/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("agent-hub").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
     expect(screen.queryByText(/\"status\"/)).not.toBeInTheDocument();
+
   });
 
   it("expands only the selected heartbeat detail block", async () => {
@@ -501,7 +523,8 @@ describe("UnifiedPersonaWorkspace", () => {
 
     expect(screen.getAllByText("Hide heartbeat details")).toHaveLength(1);
     expect(screen.getAllByText("Show heartbeat details")).toHaveLength(1);
-    expect(screen.getAllByText(/Full session detail/i)).toHaveLength(1);
+    expect(screen.getAllByText("Overview")).toHaveLength(1);
+    expect(screen.getAllByText("Important events")).toHaveLength(1);
   });
 
   it("shows search match chips and can jump through them", async () => {

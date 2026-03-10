@@ -124,6 +124,19 @@ interface DetailField {
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
 }
 
+interface SessionDetailBlock {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  label: string;
+  title: string | null;
+  lead: string | null;
+  textBlocks: string[];
+  fields: DetailField[];
+  score: number;
+  defaultVisible: boolean;
+}
+
 type TimelineRow =
   | { kind: "divider"; id: string; label: string }
   | { kind: "unread"; id: string }
@@ -624,6 +637,243 @@ function buildEventDetails(event: TimelineEvent): {
   };
 }
 
+function dedupeDetailFields(fields: DetailField[]): DetailField[] {
+  const seen = new Set<string>();
+  return fields.filter((field) => {
+    const key = `${field.label}:${normalizeText(field.value)}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function dedupeTextBlocks(values: string[]): string[] {
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    addUniqueText(deduped, seen, value);
+  }
+  return deduped;
+}
+
+function isPromptLikeText(value: string | null): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.toLowerCase();
+  return (
+    normalized.includes("# persona safety boundaries")
+    || normalized.includes("<persona_context>")
+    || normalized.includes("<heartbeat_instructions>")
+    || (value.length > 900 && value.split("\n").length > 20)
+  );
+}
+
+function isGenericStatusText(value: string | null): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = normalizeText(value);
+  return (
+    normalized === "execution completed"
+    || normalized === "session started"
+    || normalized === "new message"
+    || normalized === "tool"
+    || normalized.startsWith("waiting for model after")
+  );
+}
+
+function eventImportanceScore(event: TimelineEvent, details: ReturnType<typeof buildEventDetails>): number {
+  const combinedText = [details.lead, ...details.textBlocks].join(" ").toLowerCase();
+  const fieldText = details.fields.map((field) => `${field.label} ${field.value}`).join(" ").toLowerCase();
+
+  if (event.event_type === "error") {
+    return 100;
+  }
+  if (event.event_type === "memory_inject" || event.event_type === "memory_cite") {
+    return 0;
+  }
+  if ((event.event_type === "system_message" || event.role === "system") && isPromptLikeText(event.content)) {
+    return 0;
+  }
+  if (event.event_type === "thinking") {
+    return combinedText.includes("error") || combinedText.includes("blocked") ? 40 : 5;
+  }
+  if (event.event_type === "tool_result") {
+    const hasFailureSignal =
+      combinedText.includes("error")
+      || combinedText.includes("failed")
+      || fieldText.includes("exit code 1")
+      || fieldText.includes("status failed")
+      || fieldText.includes("error true");
+    if (hasFailureSignal) {
+      return 95;
+    }
+    const hasStrongOutcome =
+      combinedText.includes("publish")
+      || combinedText.includes("commit")
+      || combinedText.includes("verified")
+      || combinedText.includes("merged")
+      || combinedText.includes("completed")
+      || combinedText.includes("passed")
+      || fieldText.includes("task")
+      || fieldText.includes("files touched");
+    if (hasStrongOutcome) {
+      return 82;
+    }
+    return isGenericStatusText(details.lead) ? 20 : 55;
+  }
+  if (event.event_type === "tool_use") {
+    const hasActionSignal =
+      combinedText.includes("publish")
+      || combinedText.includes("commit")
+      || combinedText.includes("verify")
+      || combinedText.includes("dispatch")
+      || fieldText.includes("task")
+      || fieldText.includes("file");
+    return hasActionSignal ? 58 : 25;
+  }
+  if (event.event_type === "assistant_message" || event.event_type === "user_message") {
+    if (isPromptLikeText(event.content)) {
+      return 0;
+    }
+    return isGenericStatusText(details.lead) ? 20 : 72;
+  }
+  return isGenericStatusText(details.lead) ? 18 : 48;
+}
+
+function buildSessionDetailBlocks(events: TimelineEvent[]): SessionDetailBlock[] {
+  const blocks: SessionDetailBlock[] = [];
+
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    const nextEvent = events[index + 1];
+
+    if (
+      event.event_type === "tool_use"
+      && nextEvent
+      && nextEvent.event_type === "tool_result"
+      && nextEvent.turn === event.turn
+      && nextEvent.tool_name === event.tool_name
+    ) {
+      const useDetails = buildEventDetails(event);
+      const resultDetails = buildEventDetails(nextEvent);
+      const mergedText = dedupeTextBlocks([
+        resultDetails.lead,
+        useDetails.lead,
+        ...resultDetails.textBlocks,
+        ...useDetails.textBlocks,
+      ].filter((value): value is string => Boolean(value)));
+      const mergedFields = dedupeDetailFields([...useDetails.fields, ...resultDetails.fields]);
+      const mergedLead = mergedText[0] ?? resultDetails.lead ?? useDetails.lead ?? null;
+      const resultScore = eventImportanceScore(nextEvent, resultDetails);
+
+      blocks.push({
+        id: `${event.id}:${nextEvent.id}`,
+        timestamp: nextEvent.created_at,
+        eventType: nextEvent.event_type,
+        label: event.tool_name || "Tool",
+        title: event.tool_name ? `${event.tool_name}` : "Tool activity",
+        lead: mergedLead,
+        textBlocks: mergedLead ? mergedText.slice(1) : mergedText,
+        fields: mergedFields,
+        score: Math.max(resultScore, 48),
+        defaultVisible: resultScore >= 60,
+      });
+      index += 1;
+      continue;
+    }
+
+    const details = buildEventDetails(event);
+    const score = eventImportanceScore(event, details);
+    blocks.push({
+      id: event.id,
+      timestamp: event.created_at,
+      eventType: event.event_type,
+      label: event.tool_name || eventSummaryLabel(event.event_type),
+      title: event.tool_name || eventSummaryLabel(event.event_type),
+      lead: details.lead,
+      textBlocks: details.lead ? details.textBlocks.slice(1) : details.textBlocks,
+      fields: details.fields,
+      score,
+      defaultVisible: score >= 60,
+    });
+  }
+
+  return blocks;
+}
+
+function outcomeToneClasses(hasErrors: boolean): string {
+  return hasErrors
+    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
+    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+}
+
+function SessionDetailBlockCard({
+  block,
+}: {
+  block: SessionDetailBlock;
+}) {
+  const headerTime = formatTimeLabel(new Date(block.timestamp));
+
+  return (
+    <div className={cn("rounded-xl border px-3 py-3 text-sm", eventToneClasses(block.eventType))}>
+      <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
+        <span className={cn("rounded-full px-2 py-0.5", eventAccentClasses(block.eventType))}>
+          {eventSummaryLabel(block.eventType)}
+        </span>
+        <time dateTime={block.timestamp} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
+          <Clock3 className="h-3 w-3" />
+          {headerTime}
+        </time>
+        {block.title && <span className="normal-case tracking-normal font-medium">{block.title}</span>}
+      </div>
+      {block.lead && (
+        <div className="mt-2 rounded-xl border border-black/5 bg-white/70 px-2.5 py-2 dark:border-white/5 dark:bg-slate-950/60">
+          <HighlightedText
+            text={block.lead}
+            className="block whitespace-pre-wrap break-words text-sm font-medium"
+          />
+        </div>
+      )}
+      {block.textBlocks.map((text, index) => (
+        <HighlightedText
+          key={`${block.id}-text-${index}`}
+          text={text}
+          className="mt-2 block whitespace-pre-wrap break-words text-sm"
+        />
+      ))}
+      {block.fields.length > 0 && (
+        <div className="mt-3 grid gap-2 md:grid-cols-2">
+          {block.fields.map((field) => (
+            <div
+              key={`${block.id}-${field.label}-${field.value}`}
+              className="rounded-xl border border-black/5 bg-white/70 px-3 py-2 dark:border-white/5 dark:bg-slate-950/60"
+            >
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                {field.label}
+              </div>
+              <div
+                className={cn(
+                  "mt-1 rounded-lg px-2 py-1",
+                  field.tone ? badgeToneClasses(field.tone) : "bg-slate-100/80 dark:bg-slate-900/70",
+                )}
+              >
+                <HighlightedText
+                  text={field.value}
+                  className="block whitespace-pre-wrap break-words text-sm"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function entryStatusClasses(status: string): string {
   const normalized = status.toLowerCase();
   if (normalized === "failed" || normalized === "error") {
@@ -923,6 +1173,32 @@ function SessionDetailsPanel({
   details: SessionEventDetailsState | undefined;
   previewCount: number;
 }) {
+  const [showFullTrace, setShowFullTrace] = useState(false);
+  const detailEvents = details?.events ?? [];
+  const detailResetKey = useMemo(
+    () => detailEvents.map((event) => event.id).join("|"),
+    [detailEvents],
+  );
+  const blocks = useMemo(() => buildSessionDetailBlocks(detailEvents), [detailEvents]);
+  const importantBlocks = useMemo(
+    () => blocks.filter((block) => block.defaultVisible),
+    [blocks],
+  );
+  const visibleImportantBlocks = useMemo(
+    () => {
+      if (importantBlocks.length > 0) {
+        return importantBlocks.slice(0, 6);
+      }
+      const fallbackBlocks = blocks.filter((block) => block.score > 0).slice(0, Math.min(blocks.length, 3));
+      return fallbackBlocks.length > 0 ? fallbackBlocks : blocks.slice(0, 1);
+    },
+    [blocks, importantBlocks],
+  );
+
+  useEffect(() => {
+    setShowFullTrace(false);
+  }, [detailResetKey]);
+
   if (!details || details.loading) {
     return (
       <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
@@ -947,71 +1223,87 @@ function SessionDetailsPanel({
       </div>
     );
   }
+  const totalHiddenCount = Math.max(blocks.length - visibleImportantBlocks.length, 0);
+  const errorCount = blocks.filter((block) => block.eventType === "error").length;
+  const toolActivityCount = blocks.filter(
+    (block) => block.eventType === "tool_use" || block.eventType === "tool_result",
+  ).length;
+  const visibleSectionTitle = showFullTrace ? "Full trace" : "Important events";
+  const visibleSectionDescription = showFullTrace
+    ? "Every recorded step is shown below in chronological order."
+    : "Only the highest-signal steps are shown first. Routine chatter stays hidden until you ask for it.";
+  const visibleBlocks = showFullTrace ? blocks : visibleImportantBlocks;
+  const totalSummaryMarkers = previewCount > 0 ? `${previewCount} summary marker${previewCount === 1 ? "" : "s"}` : null;
+  const overviewBadges = [
+    `${blocks.length} event${blocks.length === 1 ? "" : "s"} recorded`,
+    `${visibleImportantBlocks.length} key event${visibleImportantBlocks.length === 1 ? "" : "s"} surfaced`,
+    totalHiddenCount > 0 ? `${totalHiddenCount} routine item${totalHiddenCount === 1 ? "" : "s"} hidden` : "No routine items hidden",
+    toolActivityCount > 0 ? `${toolActivityCount} tool step${toolActivityCount === 1 ? "" : "s"}` : null,
+    errorCount > 0 ? `${errorCount} error${errorCount === 1 ? "" : "s"}` : "No errors recorded",
+    totalSummaryMarkers,
+  ].filter((value): value is string => Boolean(value));
 
   return (
     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-        Full session detail · {details.events.length} events{previewCount > 0 ? ` · ${previewCount} summary markers` : ""}
-      </div>
-      {details.events.map((event) => {
-        const { lead, textBlocks, fields } = buildEventDetails(event);
-        const headerTime = formatTimeLabel(new Date(event.created_at));
-        return (
-          <div key={event.id} className={cn("rounded-xl border px-3 py-3 text-sm", eventToneClasses(event.event_type))}>
-            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
-              <span className={cn("rounded-full px-2 py-0.5", eventAccentClasses(event.event_type))}>
-                {eventSummaryLabel(event.event_type)}
+      <section className="space-y-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+          Overview
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-3 py-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-300">
+          <div className="flex flex-wrap gap-2">
+            {overviewBadges.map((badge) => (
+              <span
+                key={badge}
+                className={cn(
+                  "rounded-full px-2.5 py-1 text-xs font-medium",
+                  badge.toLowerCase().includes("error") && !badge.toLowerCase().includes("no errors")
+                    ? outcomeToneClasses(true)
+                    : "bg-slate-200/80 text-slate-600 dark:bg-slate-800 dark:text-slate-300",
+                )}
+              >
+                {badge}
               </span>
-              <time dateTime={event.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
-                <Clock3 className="h-3 w-3" />
-                {headerTime}
-              </time>
-              {event.tool_name && <span className="normal-case tracking-normal font-medium">{event.tool_name}</span>}
-              {event.role && <span className="normal-case tracking-normal opacity-80">{event.role}</span>}
-            </div>
-            {lead && (
-              <div className="mt-2 rounded-xl border border-black/5 bg-white/70 px-2.5 py-2 dark:border-white/5 dark:bg-slate-950/60">
-                <HighlightedText
-                  text={lead}
-                  className="block whitespace-pre-wrap break-words text-sm font-medium"
-                />
-              </div>
-            )}
-            {textBlocks.slice(1).map((text, index) => (
-              <HighlightedText
-                key={`${event.id}-text-${index}`}
-                text={text}
-                className="mt-2 block whitespace-pre-wrap break-words text-sm"
-              />
             ))}
-            {fields.length > 0 && (
-              <div className="mt-3 grid gap-2 md:grid-cols-2">
-                {fields.map((field) => (
-                  <div
-                    key={`${event.id}-${field.label}-${field.value}`}
-                    className="rounded-xl border border-black/5 bg-white/70 px-3 py-2 dark:border-white/5 dark:bg-slate-950/60"
-                  >
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                      {field.label}
-                    </div>
-                    <div
-                      className={cn(
-                        "mt-1 rounded-lg px-2 py-1",
-                        field.tone ? badgeToneClasses(field.tone) : "bg-slate-100/80 dark:bg-slate-900/70",
-                      )}
-                    >
-                      <HighlightedText
-                        text={field.value}
-                        className="block whitespace-pre-wrap break-words text-sm"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-        );
-      })}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              {visibleSectionTitle}
+            </div>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              {visibleSectionDescription}
+            </p>
+          </div>
+          {blocks.length > visibleImportantBlocks.length && (
+            <button
+              type="button"
+              onClick={() => setShowFullTrace((current) => !current)}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:text-white"
+            >
+              {showFullTrace ? (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  Show key events
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  Show full trace ({blocks.length} events)
+                </>
+              )}
+            </button>
+          )}
+        </div>
+        <div className="space-y-2">
+          {visibleBlocks.map((block) => (
+            <SessionDetailBlockCard key={block.id} block={block} />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
