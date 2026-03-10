@@ -26,8 +26,13 @@ import { usePersonaRuntime } from "./hooks/usePersonaRuntime";
 import { UnifiedPersonaWorkspace } from "./components/UnifiedPersonaWorkspace";
 import { useToastActions } from "@/components/error/toast";
 
-function formatRuntimeLabel(phase: string | undefined, autoRunPaused: boolean): string {
-  if (autoRunPaused) return "Paused";
+function formatRuntimeLabel(
+  phase: string | undefined,
+  executionState: "active" | "paused",
+  autoRunDisabled: boolean,
+): string {
+  if (executionState === "paused") return "Paused";
+  if (autoRunDisabled) return "Auto-run off";
   if (!phase) return "Idle";
   if (phase === "error") return "Blocked";
   if (phase === "waiting_for_model") return "Waiting";
@@ -41,6 +46,9 @@ function runtimeToneClasses(label: string): string {
   }
   if (label === "Paused") {
     return "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800";
+  }
+  if (label === "Auto-run off") {
+    return "bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700";
   }
   if (label === "Working") {
     return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800";
@@ -66,27 +74,48 @@ function PersonaContent() {
   const heartbeatTooltip = heartbeatStatus?.last_run
     ? `Last: ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
     : "Never run";
-  const autoRunPaused = (persona?.heartbeat_interval_minutes ?? 0) === 0;
+  const executionState = persona?.execution_state ?? "active";
+  const jennyPaused = executionState === "paused";
+  const autoRunDisabled = (persona?.heartbeat_interval_minutes ?? 0) === 0;
   const heartbeatSummary = isHeartbeatRunning
     ? "Jenny is actively working"
-    : autoRunPaused
-      ? "Auto-run is paused"
+    : jennyPaused
+      ? "Jenny is paused"
+      : autoRunDisabled
+        ? "Auto-run is disabled"
       : heartbeatStatus?.last_run
         ? `Last heartbeat ${formatDistanceToNow(new Date(heartbeatStatus.last_run), {
             addSuffix: true,
           })}`
         : "No heartbeat has run yet";
-  const runtimeLabel = formatRuntimeLabel(runtime.primarySession?.live_activity?.phase, autoRunPaused);
+  const runtimeLabel = formatRuntimeLabel(runtime.primarySession?.live_activity?.phase, executionState, autoRunDisabled);
   const activeChildCount = runtime.activeChildSessions.length;
   const liveSummary = runtime.primarySession?.live_activity?.summary || heartbeatSummary;
   const currentTool = runtime.primarySession?.live_activity?.current_tool_name
     || runtime.primarySession?.live_activity?.last_tool_name;
   const touchedFiles = runtime.primarySession?.live_activity?.files_touched?.slice(-3) || [];
 
-  const handleAutoRunToggle = () => {
+  const handleJennyPauseResume = async () => {
+    if (jennyPaused) {
+      updatePersona({
+        execution_state: "active",
+      });
+      toast.success("Jenny resumed");
+      return;
+    }
+
     updatePersona({
-      heartbeat_interval_minutes: autoRunPaused ? 60 : 0,
+      execution_state: "paused",
     });
+
+    if (runtime.primarySession) {
+      const cancelled = await runtime.stopCurrentStream();
+      if (cancelled) {
+        toast.success("Jenny paused and live stream stopped");
+        return;
+      }
+    }
+    toast.success("Jenny paused");
   };
 
   const handleStopCurrentStream = async () => {
@@ -149,30 +178,30 @@ function PersonaContent() {
             </span>
 
             <button
-              onClick={handleAutoRunToggle}
+              onClick={handleJennyPauseResume}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                autoRunPaused
+                jennyPaused
                   ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800"
                   : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
               )}
-              title={autoRunPaused ? "Resume scheduled heartbeats" : "Pause scheduled heartbeats"}
+              title={jennyPaused ? "Resume Jenny" : "Pause Jenny and stop live work if active"}
             >
-              {autoRunPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
-              {autoRunPaused ? "Resume auto-run" : "Pause auto-run"}
+              {jennyPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
+              {jennyPaused ? "Resume Jenny" : "Pause Jenny"}
             </button>
 
             <button
               onClick={triggerHeartbeat}
-              disabled={isHeartbeatRunning}
+              disabled={isHeartbeatRunning || jennyPaused}
               aria-busy={isHeartbeatRunning}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
-                isHeartbeatRunning
+                isHeartbeatRunning || jennyPaused
                   ? "text-rose-500 dark:text-rose-400 cursor-not-allowed"
                   : "bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-300 dark:ring-sky-800",
               )}
-              title={heartbeatTooltip}
+              title={jennyPaused ? "Resume Jenny to run a heartbeat" : heartbeatTooltip}
             >
               <HeartPulse
                 className={cn(

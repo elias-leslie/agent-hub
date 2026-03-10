@@ -42,6 +42,11 @@ const EVENT_CONFIG: Record<
     color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30",
     label: "Tool",
   },
+  tool_result: {
+    icon: CheckCircle,
+    color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30",
+    label: "Result",
+  },
   complete: {
     icon: CheckCircle,
     color: "text-green-500 bg-green-100 dark:bg-green-900/30",
@@ -91,6 +96,11 @@ function getEventSummary(event: SessionEvent): string {
         return `Tool: ${data.tool_name}`;
       }
       return "Tool use";
+    case "tool_result":
+      if ("tool_name" in data && data.tool_name) {
+        return `Result: ${data.tool_name}`;
+      }
+      return "Tool result";
     case "complete":
       if ("input_tokens" in data && "output_tokens" in data) {
         return `Tokens: ${data.input_tokens} in / ${data.output_tokens} out`;

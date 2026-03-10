@@ -21,6 +21,8 @@ interface SessionItem {
   status: string;
   agent_slug: string | null;
   session_type: string;
+  external_id?: string | null;
+  current_branch?: string | null;
   summary_oneliner?: string | null;
   message_count: number;
   total_input_tokens: number;
@@ -34,6 +36,7 @@ interface SessionDropdownProps {
   onSelectSession: (sessionId: string | null) => void;
   onNewSession: () => void;
   projectId?: string;
+  agentSlug?: string;
   /** Increment to trigger a refresh of the session list */
   refreshTrigger?: number;
 }
@@ -43,6 +46,7 @@ export function SessionDropdown({
   onSelectSession,
   onNewSession,
   projectId = "agent-hub",
+  agentSlug,
   refreshTrigger = 0,
 }: SessionDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -57,10 +61,12 @@ export function SessionDropdown({
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set("page_size", "20");
-      params.set("session_type", "chat");
+      params.set("page_size", "30");
       if (projectId) {
         params.set("project_id", projectId);
+      }
+      if (agentSlug) {
+        params.set("agent_slug", agentSlug);
       }
 
       const res = await fetchApi(
@@ -138,9 +144,23 @@ export function SessionDropdown({
 
   const getSessionTitle = (session: SessionItem): string => {
     if (session.summary_oneliner) return session.summary_oneliner;
-    if (session.agent_slug) return session.agent_slug;
+    if (session.external_id) return `${session.external_id} • ${session.session_type}`;
+    if (session.current_branch) return session.current_branch;
+    if (session.agent_slug) return `${session.agent_slug} • ${session.session_type}`;
     const modelName = session.model.split("-").slice(-2).join(" ");
-    return `${modelName} chat`;
+    return `${modelName} ${session.session_type}`;
+  };
+
+  const getSessionMeta = (session: SessionItem): string[] => {
+    const parts: string[] = [];
+    parts.push(session.session_type);
+    if (session.external_id) {
+      parts.push(session.external_id);
+    }
+    if (session.project_id && session.project_id !== "persona-sandbox") {
+      parts.push(session.project_id);
+    }
+    return parts;
   };
 
   const handleSelectSession = (sessionId: string) => {
@@ -228,6 +248,16 @@ export function SessionDropdown({
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate block">
                         {getSessionTitle(session)}
                       </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {getSessionMeta(session).map((meta) => (
+                          <span
+                            key={`${session.id}-${meta}`}
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                          >
+                            {meta}
+                          </span>
+                        ))}
+                      </div>
                       <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />

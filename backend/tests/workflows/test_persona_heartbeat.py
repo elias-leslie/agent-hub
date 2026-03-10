@@ -17,6 +17,7 @@ from app.workflows.persona_heartbeat import (
     _build_runtime_warning,
     _do_completion,
     _run_persona_heartbeat,
+    _should_run,
     get_heartbeat_runtime_info,
 )
 
@@ -130,6 +131,29 @@ class TestPersonaHeartbeatTask:
     """Tests for heartbeat task compatibility guardrails."""
 
     @pytest.mark.asyncio
+    async def test_should_run_skips_when_persona_is_paused(self):
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="paused",
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_redis_elapsed",
+                new_callable=AsyncMock,
+            ) as mock_elapsed,
+        ):
+            result = await _should_run()
+
+        assert result == (False, 60, True, "paused")
+        mock_elapsed.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_manual_heartbeat_skips_when_runtime_is_incompatible(self):
         ctx = SimpleNamespace(log=MagicMock())
 
@@ -138,6 +162,11 @@ class TestPersonaHeartbeatTask:
                 "app.workflows.persona_heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.workflows.persona_heartbeat.check_project_permission",
@@ -180,6 +209,11 @@ class TestPersonaHeartbeatTask:
                 return_value=(60, True),
             ),
             patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
                 "app.workflows.persona_heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
@@ -210,6 +244,36 @@ class TestPersonaHeartbeatTask:
         mock_execute.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_manual_heartbeat_skips_when_persona_is_paused(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="paused",
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+            ) as mock_permission,
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+        ):
+            result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
+
+        assert result["status"] == "skipped"
+        mock_permission.assert_not_awaited()
+        mock_set_running.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_manual_heartbeat_runs_when_runtime_is_supported(self):
         ctx = SimpleNamespace(log=MagicMock())
 
@@ -218,6 +282,11 @@ class TestPersonaHeartbeatTask:
                 "app.workflows.persona_heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.workflows.persona_heartbeat.check_project_permission",
@@ -264,6 +333,11 @@ class TestPersonaHeartbeatTask:
                 "app.workflows.persona_heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.workflows.persona_heartbeat.check_project_permission",

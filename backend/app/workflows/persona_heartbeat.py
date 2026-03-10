@@ -134,24 +134,41 @@ async def get_heartbeat_interval() -> tuple[int, bool]:
     return _DEFAULT_INTERVAL_MINUTES, False
 
 
-async def _should_run() -> tuple[bool, int, bool]:
-    """Return (should_run, interval_minutes, onboarding_complete) based on schedule.
+async def get_persona_execution_state() -> str:
+    """Return the current persona execution state."""
+    from app.db import async_session
+    from app.services.persona_service import get_persona
+
+    async with async_session() as db:
+        persona = await get_persona(db)
+        if persona and getattr(persona, "execution_state", None):
+            return str(persona.execution_state)
+    return "active"
+
+
+async def _should_run() -> tuple[bool, int, bool, str]:
+    """Return (should_run, interval_minutes, onboarding_complete, execution_state) based on schedule.
 
     Skips if onboarding is not complete or if heartbeat is disabled.
     """
     interval_minutes, onboarding_complete = await get_heartbeat_interval()
+    execution_state = await get_persona_execution_state()
 
     if not onboarding_complete:
-        return False, interval_minutes, onboarding_complete
+        return False, interval_minutes, onboarding_complete, execution_state
+    if execution_state == "paused":
+        return False, interval_minutes, onboarding_complete, execution_state
     if interval_minutes == 0:
-        return False, 0, onboarding_complete
+        return False, 0, onboarding_complete, execution_state
 
     elapsed = await check_redis_elapsed(interval_minutes)
-    return elapsed, interval_minutes, onboarding_complete
+    return elapsed, interval_minutes, onboarding_complete, execution_state
 
 
-def _get_skip_reason(interval_minutes: int, onboarding_complete: bool) -> str:
+def _get_skip_reason(interval_minutes: int, onboarding_complete: bool, execution_state: str = "active") -> str:
     """Return a human-readable reason the heartbeat was skipped."""
+    if execution_state == "paused":
+        return "paused"
     if interval_minutes == 0:
         return "disabled"
     return "not onboarded" if not onboarding_complete else "interval not elapsed"
@@ -246,15 +263,19 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
 
     # Manual triggers skip the interval check but still require onboarding + permissions
     if not manual:
-        should_run, interval_minutes, onboarding_complete = await _should_run()
+        should_run, interval_minutes, onboarding_complete, execution_state = await _should_run()
         if not should_run:
-            reason = _get_skip_reason(interval_minutes, onboarding_complete)
+            reason = _get_skip_reason(interval_minutes, onboarding_complete, execution_state)
             ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
     else:
         interval_minutes, onboarding_complete = await get_heartbeat_interval()
+        execution_state = await get_persona_execution_state()
         if not onboarding_complete:
             ctx.log("Manual heartbeat skipped (not onboarded)")
+            return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+        if execution_state == "paused":
+            ctx.log("Manual heartbeat skipped (paused)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
     if not await check_project_permission(target_project_id or HEARTBEAT_PROJECT):

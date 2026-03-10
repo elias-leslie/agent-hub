@@ -52,6 +52,7 @@ export type LegacySessionEventType =
   | "session_start"
   | "message"
   | "tool_use"
+  | "tool_result"
   | "complete"
   | "error";
 
@@ -72,6 +73,7 @@ export type SessionEventData =
   | SessionStartData
   | MessageData
   | ToolUseData
+  | ToolResultData
   | CompleteData
   | ErrorData;
 
@@ -90,6 +92,13 @@ export interface ToolUseData {
   tool_name: string;
   tool_input: Record<string, unknown>;
   tool_output?: unknown;
+}
+
+export interface ToolResultData {
+  tool_name?: string | null;
+  tool_output?: unknown;
+  duration_ms?: number | null;
+  is_error?: boolean | null;
 }
 
 export interface CompleteData {

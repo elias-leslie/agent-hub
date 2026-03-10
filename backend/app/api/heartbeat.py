@@ -25,6 +25,7 @@ from app.workflows.persona_heartbeat import (
     check_project_permission,
     get_heartbeat_interval,
     get_heartbeat_runtime_info,
+    get_persona_execution_state,
     persona_heartbeat_task,
 )
 
@@ -41,6 +42,7 @@ class HeartbeatStatusResponse(BaseModel):
     last_run: str | None = None
     elapsed_seconds: int | None = None
     interval_minutes: int
+    execution_state: str = "active"
     # Last completed heartbeat metrics (from Redis)
     last_session_id: str | None = None
     last_turns: int | None = None
@@ -109,6 +111,7 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     running_info = await _get_effective_running_info()
     last_run = await get_last_run_info()
     interval_minutes, _ = await get_heartbeat_interval()
+    execution_state = await get_persona_execution_state()
     metrics = await get_heartbeat_metrics()
     runtime = await get_heartbeat_runtime_info()
 
@@ -117,6 +120,7 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
         last_run=last_run,
         elapsed_seconds=running_info.get("elapsed_seconds") if running_info else None,
         interval_minutes=interval_minutes,
+        execution_state=execution_state,
         runtime=runtime,
     )
 
@@ -152,6 +156,8 @@ async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> H
     _, onboarding_complete = await get_heartbeat_interval()
     if not onboarding_complete:
         raise HTTPException(status_code=400, detail="Persona onboarding not complete")
+    if await get_persona_execution_state() == "paused":
+        raise HTTPException(status_code=409, detail="Jenny is paused")
 
     # Check project permissions
     permission_project = target_project_id or HEARTBEAT_PROJECT

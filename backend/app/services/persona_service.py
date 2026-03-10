@@ -81,6 +81,7 @@ async def get_or_create_persona(db: AsyncSession) -> Persona:
         voice_id="en-US-AriaNeural",
         voice_enabled=False,
         heartbeat_interval_minutes=60,
+        execution_state="active",
     )
     db.add(persona)
     await db.commit()

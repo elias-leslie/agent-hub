@@ -177,6 +177,7 @@ from .events_publishers import (  # noqa: E402
     publish_error,
     publish_message,
     publish_session_start,
+    publish_tool_result,
     publish_tool_use,
 )
 
@@ -191,6 +192,7 @@ __all__ = [
     "publish_error",
     "publish_message",
     "publish_session_start",
+    "publish_tool_result",
     "publish_tool_use",
     "start_hatchet_stream_bridge",
     "stop_all_stream_bridges",

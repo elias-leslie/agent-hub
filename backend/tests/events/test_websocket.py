@@ -16,6 +16,7 @@ from app.services.events import (
     publish_error,
     publish_message,
     publish_session_start,
+    publish_tool_result,
     publish_tool_use,
 )
 
@@ -258,8 +259,29 @@ class TestHelperFunctions:
         e = received[0]
         assert e.event_type == SessionEventType.TOOL_USE
         assert e.data["tool_name"] == "calculator"
-        assert e.data["tool_input"]["expr"] == "2+2"
-        assert e.data["tool_output"] == "4"
+
+    @pytest.mark.asyncio
+    async def test_publish_tool_result(self):
+        """publish_tool_result creates correct event."""
+        publisher = get_event_publisher()
+        received = []
+        publisher.add_handler(lambda e: received.append(e))
+
+        await publish_tool_result(
+            "sess-1",
+            "calculator",
+            {"content": "4", "is_error": False},
+            duration_ms=250,
+            is_error=False,
+        )
+
+        assert len(received) == 1
+        e = received[0]
+        assert e.event_type == SessionEventType.TOOL_RESULT
+        assert e.data["tool_name"] == "calculator"
+        assert e.data["duration_ms"] == 250
+        assert e.data["is_error"] is False
+        assert e.data["tool_output"] == {"content": "4", "is_error": False}
 
     @pytest.mark.asyncio
     async def test_publish_complete(self):

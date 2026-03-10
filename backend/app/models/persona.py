@@ -39,6 +39,9 @@ class Persona(Base):
     voice_id: Mapped[str] = mapped_column(String(200), default="en-US-AriaNeural")
     voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     heartbeat_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
+    execution_state: Mapped[str] = mapped_column(
+        String(16), default="active", server_default="active"
+    )
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     greeting: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)

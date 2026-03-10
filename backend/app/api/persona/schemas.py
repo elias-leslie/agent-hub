@@ -22,6 +22,7 @@ class PersonaResponse(BaseModel):
     voice_id: str = "en-US-AriaNeural"
     voice_enabled: bool = False
     heartbeat_interval_minutes: int = 60
+    execution_state: str = "active"
     avatar_url: str | None = None
     greeting: str | None = None
     onboarding_complete: bool = False
@@ -45,6 +46,7 @@ class PersonaUpdate(BaseModel):
     voice_id: str | None = Field(default=None, max_length=200)
     voice_enabled: bool | None = None
     heartbeat_interval_minutes: int | None = Field(default=None, ge=0, le=1440)
+    execution_state: str | None = Field(default=None, pattern="^(active|paused)$")
     avatar_url: str | None = Field(default=None, max_length=500)
     greeting: str | None = None
     session_reset_mode: str | None = Field(default=None, pattern="^(off|daily|idle)$")

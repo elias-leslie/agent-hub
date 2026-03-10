@@ -71,6 +71,7 @@ const basePersona: Persona = {
   voice_id: "voice-1",
   voice_enabled: false,
   heartbeat_interval_minutes: 60,
+  execution_state: "active",
   avatar_url: null,
   greeting: "Hello",
   onboarding_complete: true,

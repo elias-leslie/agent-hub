@@ -76,6 +76,34 @@ async def publish_tool_use(
     )
 
 
+async def publish_tool_result(
+    session_id: str,
+    tool_name: str | None,
+    tool_output: Any | None = None,
+    *,
+    duration_ms: int | None = None,
+    is_error: bool | None = None,
+) -> None:
+    """Helper to publish tool_result event."""
+    from .events import get_event_publisher
+
+    publisher = get_event_publisher()
+    payload: dict[str, Any] = {
+        "tool_name": tool_name,
+        "tool_output": tool_output,
+        "duration_ms": duration_ms,
+    }
+    if is_error is not None:
+        payload["is_error"] = is_error
+    await publisher.publish(
+        SessionEvent(
+            event_type=SessionEventType.TOOL_RESULT,
+            session_id=session_id,
+            data=payload,
+        )
+    )
+
+
 async def publish_complete(
     session_id: str,
     input_tokens: int,
