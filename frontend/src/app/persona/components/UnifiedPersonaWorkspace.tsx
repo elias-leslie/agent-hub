@@ -879,6 +879,9 @@ function shouldRenderPulseSummary(summary: string | null, issueMarkers: PersonaI
   if (!summary) {
     return false;
   }
+  if (issueMarkers.length > 0) {
+    return false;
+  }
   const normalizedSummary = normalizeText(prettifyDisplayText(summary));
   if (!normalizedSummary || isGenericStatusText(normalizedSummary)) {
     return false;
