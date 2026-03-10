@@ -935,6 +935,151 @@ function EntryIssueSummary({
   );
 }
 
+function PulseOverviewPanels({
+  visiblePulseMetrics,
+  pulse,
+  applyPulseFilter,
+  inspectAgentPulse,
+}: {
+  visiblePulseMetrics: PersonaPulseSummary["metrics"];
+  pulse: PersonaPulseSummary;
+  applyPulseFilter: (nextMode: FilterMode, nextAnchorEntryId?: string | null) => void;
+  inspectAgentPulse: (agentSlugValue: string) => void;
+}) {
+  if (visiblePulseMetrics.length === 0 && pulse.issue_groups.length === 0 && pulse.agent_scorecards.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mb-5 space-y-4">
+      {visiblePulseMetrics.length > 0 && (
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {visiblePulseMetrics.map((metric) => {
+            const mode = pulseTagToFilterMode(metric.key);
+            return (
+              <button
+                key={metric.key}
+                type="button"
+                onClick={() => applyPulseFilter(mode)}
+                className={cn(
+                  "rounded-2xl border px-3 py-3 text-left transition",
+                  metric.count > 0
+                    ? "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-950"
+                    : "border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/60",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(metric.key))}>
+                    {metric.label}
+                  </span>
+                  <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{metric.count}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {(pulse.issue_groups.length > 0 || pulse.agent_scorecards.length > 0) && (
+        <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Repeated Friction
+            </div>
+            {pulse.issue_groups.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No repeated issue fingerprints in this window.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {pulse.issue_groups.map((issue) => (
+                  <button
+                    key={issue.fingerprint}
+                    type="button"
+                    onClick={() => applyPulseFilter(pulseTagToFilterMode(issue.primary_tag), issue.latest_entry_id)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(issue.primary_tag))}>
+                        {pulseTagLabel(issue.primary_tag)}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        {issue.count} hits
+                      </span>
+                      {issue.root_cause && (
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(issue.root_cause))}>
+                          {rootCauseLabel(issue.root_cause)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{issue.title}</div>
+                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{issue.summary}</p>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                      {issue.agent_slugs.map((agentSlugValue) => (
+                        <span key={`${issue.fingerprint}-${agentSlugValue}`} className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                          {agentSlugValue}
+                        </span>
+                      ))}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+          <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              <Sparkles className="h-3.5 w-3.5" />
+              Agent Scorecards
+            </div>
+            {pulse.agent_scorecards.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No agent sessions in this window yet.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {pulse.agent_scorecards.map((scorecard) => {
+                  const successRate = scorecard.session_count > 0
+                    ? Math.round((scorecard.success_count / scorecard.session_count) * 100)
+                    : 0;
+                  const runtimeLabel = formatRuntimeLabel(scorecard.median_runtime_seconds);
+                  return (
+                    <button
+                      key={scorecard.agent_slug}
+                      type="button"
+                      onClick={() => inspectAgentPulse(scorecard.agent_slug)}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{scorecard.label}</div>
+                          <div className="text-xs text-slate-500 dark:text-slate-400">{successRate}% completed across {scorecard.session_count} runs</div>
+                        </div>
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", scorecard.friction_count > 0 ? pulseTagClasses("friction") : pulseTagClasses("recovered"))}>
+                          {scorecard.friction_count > 0 ? `${scorecard.friction_count} friction` : "steady"}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.error_count} errors</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.tool_friction_count} tool friction</span>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.instruction_drift_count} drift</span>
+                        {runtimeLabel && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{runtimeLabel}</span>}
+                      </div>
+                      {(scorecard.top_issue || scorecard.top_root_cause) && (
+                        <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                          {scorecard.top_issue ?? "Primary friction trend"}
+                          {scorecard.top_root_cause ? ` · ${rootCauseLabel(scorecard.top_root_cause)}` : ""}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SessionDetailBlockCard({
   block,
 }: {
@@ -2724,129 +2869,6 @@ export function UnifiedPersonaWorkspace({
         <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
           Search everything, or use prefixes like <span className="font-semibold">task:</span>, <span className="font-semibold">file:</span>, <span className="font-semibold">agent:</span>, <span className="font-semibold">status:</span>, and <span className="font-semibold">project:</span>.
         </div>
-        {visiblePulseMetrics.length > 0 && (
-          <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            {visiblePulseMetrics.map((metric) => {
-              const mode = pulseTagToFilterMode(metric.key);
-              return (
-                <button
-                  key={metric.key}
-                  type="button"
-                  onClick={() => applyPulseFilter(mode)}
-                  className={cn(
-                    "rounded-2xl border px-3 py-3 text-left transition",
-                    metric.count > 0
-                      ? "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700 dark:hover:bg-slate-950"
-                      : "border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/60",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(metric.key))}>
-                      {metric.label}
-                    </span>
-                    <span className="text-lg font-semibold text-slate-900 dark:text-slate-100">{metric.count}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{metric.description}</p>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {(pulse.issue_groups.length > 0 || pulse.agent_scorecards.length > 0) && (
-          <div className="mt-4 grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-            <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                <AlertCircle className="h-3.5 w-3.5" />
-                Repeated Friction
-              </div>
-              {pulse.issue_groups.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No repeated issue fingerprints in this window.</p>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  {pulse.issue_groups.map((issue) => (
-                    <button
-                      key={issue.fingerprint}
-                      type="button"
-                      onClick={() => applyPulseFilter(pulseTagToFilterMode(issue.primary_tag), issue.latest_entry_id)}
-                      className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(issue.primary_tag))}>
-                          {pulseTagLabel(issue.primary_tag)}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                          {issue.count} hits
-                        </span>
-                        {issue.root_cause && (
-                          <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(issue.root_cause))}>
-                            {rootCauseLabel(issue.root_cause)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{issue.title}</div>
-                      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{issue.summary}</p>
-                      <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-                        {issue.agent_slugs.map((agentSlugValue) => (
-                          <span key={`${issue.fingerprint}-${agentSlugValue}`} className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
-                            {agentSlugValue}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-            <section className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-4 dark:border-slate-800 dark:bg-slate-900/70">
-              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                <Sparkles className="h-3.5 w-3.5" />
-                Agent Scorecards
-              </div>
-              {pulse.agent_scorecards.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No agent sessions in this window yet.</p>
-              ) : (
-                <div className="mt-3 space-y-3">
-                  {pulse.agent_scorecards.map((scorecard) => {
-                    const successRate = scorecard.session_count > 0
-                      ? Math.round((scorecard.success_count / scorecard.session_count) * 100)
-                      : 0;
-                    const runtimeLabel = formatRuntimeLabel(scorecard.median_runtime_seconds);
-                    return (
-                      <button
-                        key={scorecard.agent_slug}
-                        type="button"
-                        onClick={() => inspectAgentPulse(scorecard.agent_slug)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-slate-700"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{scorecard.label}</div>
-                            <div className="text-xs text-slate-500 dark:text-slate-400">{successRate}% completed across {scorecard.session_count} runs</div>
-                          </div>
-                          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", scorecard.friction_count > 0 ? pulseTagClasses("friction") : pulseTagClasses("recovered"))}>
-                            {scorecard.friction_count > 0 ? `${scorecard.friction_count} friction` : "steady"}
-                          </span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.error_count} errors</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.tool_friction_count} tool friction</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{scorecard.instruction_drift_count} drift</span>
-                          {runtimeLabel && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{runtimeLabel}</span>}
-                        </div>
-                        {(scorecard.top_issue || scorecard.top_root_cause) && (
-                          <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                            {scorecard.top_issue ?? "Primary friction trend"}
-                            {scorecard.top_root_cause ? ` · ${rootCauseLabel(scorecard.top_root_cause)}` : ""}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {([
             ["all", "All"],
@@ -2937,6 +2959,15 @@ export function UnifiedPersonaWorkspace({
       </div>
 
       <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="mx-auto max-w-4xl">
+          <PulseOverviewPanels
+            visiblePulseMetrics={visiblePulseMetrics}
+            pulse={pulse}
+            applyPulseFilter={applyPulseFilter}
+            inspectAgentPulse={inspectAgentPulse}
+          />
+        </div>
+
         {(error || chatError) && (
           <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
             <AlertCircle className="h-4 w-4" />
