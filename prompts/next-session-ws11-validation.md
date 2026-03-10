@@ -131,7 +131,7 @@ st session-events <session-id>
 ### 5. Fix Any Issues Found
 
 If the heartbeat reveals gaps:
-- **Instruction gap** → update heartbeat_instructions via `st persona update --heartbeat-instructions <file>`
+- **Instruction gap** → edit the DB-backed instructions via `st persona instructions -e` (or import a draft once with `st persona update --heartbeat-instructions <file>`)
 - **Data gap** → edit `~/agent-hub/backend/app/workflows/_heartbeat_data.py`
 - **Permission gap** → update project_permissions: `db -P agent-hub exec "UPDATE project_permissions SET permission_tier='yolo', auto_exec_enabled=1 WHERE project_id='summitflow'"`
 - **Tool gap** → check tool availability in persona agent config
