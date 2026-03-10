@@ -87,6 +87,8 @@ describe("UnifiedPersonaWorkspace", () => {
               role: null,
               tool_name: "st ready-all",
               content_preview: null,
+              tool_input_preview: '{"project":"agent-hub"}',
+              tool_output_preview: null,
               duration_ms: null,
               model_used: "claude-sonnet",
             },
@@ -120,6 +122,8 @@ describe("UnifiedPersonaWorkspace", () => {
               role: null,
               tool_name: "dt -q -d",
               content_preview: "passed",
+              tool_input_preview: null,
+              tool_output_preview: '{"status":"ok"}',
               duration_ms: 1200,
               model_used: "claude-sonnet",
             },
@@ -183,6 +187,26 @@ describe("UnifiedPersonaWorkspace", () => {
     ]);
   });
 
+  it("nests child runs under their parent work block", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Spawned Agents")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Spawned Agents")).toHaveLength(1);
+    expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
+  });
+
   it("expands heartbeat and child run details inline", async () => {
     render(
       <UnifiedPersonaWorkspace
@@ -205,5 +229,7 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("st ready-all")).toBeInTheDocument();
     expect(screen.getByText("dt -q -d")).toBeInTheDocument();
     expect(screen.getByText("passed")).toBeInTheDocument();
+    expect(screen.getByText('{"project":"agent-hub"}')).toBeInTheDocument();
+    expect(screen.getByText('{"status":"ok"}')).toBeInTheDocument();
   });
 });

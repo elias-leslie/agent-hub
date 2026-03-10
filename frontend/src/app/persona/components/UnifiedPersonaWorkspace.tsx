@@ -52,15 +52,36 @@ interface UnifiedPersonaWorkspaceProps {
   onNewSession: () => void;
 }
 
-type FeedItem =
-  | { kind: "message"; id: string; sessionId: string | null; timestamp: Date; message: ChatMessage }
-  | {
-      kind: "heartbeat" | "child_run";
-      id: string;
-      sessionId: string;
-      timestamp: Date;
-      entry: PersonaStreamEntry;
-    };
+type FeedMessage = { kind: "message"; id: string; sessionId: string | null; timestamp: Date; message: ChatMessage };
+type FeedHeartbeat = {
+  kind: "heartbeat";
+  id: string;
+  sessionId: string;
+  timestamp: Date;
+  entry: PersonaStreamEntry;
+};
+type FeedChildRun = {
+  kind: "child_run";
+  id: string;
+  sessionId: string;
+  timestamp: Date;
+  entry: PersonaStreamEntry;
+};
+type FeedAnchor = FeedMessage | FeedHeartbeat | FeedChildRun;
+type FeedItem = FeedAnchor;
+
+interface TimelineBlock {
+  anchorItem: FeedAnchor;
+  childRuns: FeedChildRun[];
+}
+
+function isChildRunItem(item: FeedItem): item is FeedChildRun {
+  return item.kind === "child_run";
+}
+
+function canAnchorChildRuns(item: FeedAnchor): item is FeedMessage | FeedHeartbeat {
+  return item.kind !== "child_run";
+}
 
 function buildChatMessage(entry: PersonaStreamEntry): ChatMessage {
   return {
@@ -191,6 +212,8 @@ function entrySearchText(entry: PersonaStreamEntry): string {
     ...entry.event_previews.flatMap((preview) => [
       preview.tool_name,
       preview.content_preview,
+      preview.tool_input_preview,
+      preview.tool_output_preview,
       preview.model_used,
       preview.event_type,
     ]),
@@ -198,6 +221,61 @@ function entrySearchText(entry: PersonaStreamEntry): string {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function eventToneClasses(eventType: string): string {
+  if (eventType === "error") {
+    return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300";
+  }
+  if (eventType === "tool_result") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300";
+  }
+  if (eventType === "tool_use") {
+    return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300";
+  }
+  if (eventType === "thinking") {
+    return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-300";
+  }
+  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300";
+}
+
+function eventSummaryLabel(preview: PersonaStreamEventPreview): string {
+  if (preview.event_type === "tool_use") {
+    return "Tool call";
+  }
+  if (preview.event_type === "tool_result") {
+    return "Tool result";
+  }
+  if (preview.event_type === "error") {
+    return "Error";
+  }
+  if (preview.event_type === "thinking") {
+    return "Reasoning";
+  }
+  return eventLabel(preview.event_type);
+}
+
+function PreviewCodeBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null;
+}) {
+  if (!value) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-slate-200 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+        {label}
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-700 dark:text-slate-200">
+        {value}
+      </pre>
+    </div>
+  );
 }
 
 function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] }) {
@@ -208,25 +286,83 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
         return (
           <div
             key={preview.id}
-            className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-950/50 dark:text-slate-300"
+            className={cn("rounded-xl border px-3 py-2 text-sm", eventToneClasses(preview.event_type))}
           >
-            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-              <span>{eventLabel(preview.event_type)}</span>
-              <time dateTime={preview.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
+              <span>{eventSummaryLabel(preview)}</span>
+              <time dateTime={preview.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
                 <Clock3 className="h-3 w-3" />
                 {formatTimeLabel(new Date(preview.created_at))}
               </time>
-              {preview.tool_name && <span className="normal-case tracking-normal">{preview.tool_name}</span>}
-              {duration && <span className="normal-case tracking-normal">{duration}</span>}
+              {preview.tool_name && <span className="normal-case tracking-normal font-medium">{preview.tool_name}</span>}
+              {duration && <span className="normal-case tracking-normal opacity-80">{duration}</span>}
             </div>
             {preview.content_preview && (
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm">
                 {preview.content_preview}
               </p>
             )}
+            <PreviewCodeBlock label="Input" value={preview.tool_input_preview} />
+            <PreviewCodeBlock label="Output" value={preview.tool_output_preview} />
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ChildRunStack({
+  childRuns,
+  activeSessionId,
+  expandedEntryIds,
+  onToggle,
+  matchedIds,
+  activeMatchId,
+}: {
+  childRuns: FeedChildRun[];
+  activeSessionId: string | null;
+  expandedEntryIds: Record<string, boolean>;
+  onToggle: (entryId: string) => void;
+  matchedIds: Set<string>;
+  activeMatchId: string | null;
+}) {
+  return (
+    <div className="ml-5 mt-3 border-l border-dashed border-sky-200 pl-4 dark:border-sky-900">
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">
+        Spawned Agents
+      </div>
+      <div className="space-y-3">
+        {childRuns.map((childRun) => {
+          const selected = childRun.sessionId === activeSessionId;
+          const matched = matchedIds.has(childRun.id);
+          const activeMatched = activeMatchId === childRun.id;
+
+          return (
+            <div
+              key={childRun.id}
+              data-session-anchor={childRun.sessionId}
+              data-testid="stream-item"
+              data-stream-item-id={childRun.id}
+              data-timestamp={childRun.timestamp.toISOString()}
+              className={cn(
+                "flex items-start gap-3 rounded-2xl",
+                matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+              )}
+            >
+              <TimelineTimestamp timestamp={childRun.timestamp} />
+              <div className="min-w-0 flex-1">
+                <ChildRunCard
+                  entry={childRun.entry}
+                  selected={selected}
+                  expanded={!!expandedEntryIds[childRun.id]}
+                  onToggle={() => onToggle(childRun.id)}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -390,7 +526,8 @@ export function UnifiedPersonaWorkspace({
   const [page, setPage] = useState(1);
   const [focusSessionId, setFocusSessionId] = useState<string | null>(activeSessionId);
   const [expandedEntryIds, setExpandedEntryIds] = useState<Record<string, boolean>>({});
-  const [activeSearchMatch, setActiveSearchMatch] = useState(0);
+  const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
+  const [pendingSearchDirection, setPendingSearchDirection] = useState<1 | -1 | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const apiConfig = useMemo(
@@ -510,15 +647,27 @@ export function UnifiedPersonaWorkspace({
   }, [entries, messages, currentSessionId, activeSessionId]);
 
   const groupedItems = useMemo(() => {
-    const groups: Array<{ label: string; items: FeedItem[] }> = [];
+    const groups: Array<{ label: string; blocks: TimelineBlock[] }> = [];
     let currentLabel = "";
     for (const item of mergedItems) {
       const label = formatDayLabel(item.timestamp);
       if (label !== currentLabel) {
         currentLabel = label;
-        groups.push({ label, items: [] });
+        groups.push({ label, blocks: [] });
       }
-      groups[groups.length - 1].items.push(item);
+      const currentBlocks = groups[groups.length - 1].blocks;
+      if (isChildRunItem(item) && item.entry.parent_session_id) {
+        const parentBlockIndex = currentBlocks.findLastIndex(
+          (block) =>
+            canAnchorChildRuns(block.anchorItem) &&
+            block.anchorItem.sessionId === item.entry.parent_session_id,
+        );
+        if (parentBlockIndex >= 0) {
+          currentBlocks[parentBlockIndex].childRuns.push(item);
+          continue;
+        }
+      }
+      currentBlocks.push({ anchorItem: item, childRuns: [] });
     }
     return groups;
   }, [mergedItems]);
@@ -537,23 +686,51 @@ export function UnifiedPersonaWorkspace({
   }, [deferredSearch, mergedItems]);
 
   const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.id)), [searchMatches]);
-  const activeMatchId = searchMatches[activeSearchMatch]?.id ?? null;
+  const activeSearchMatch = useMemo(
+    () => searchMatches.findIndex((item) => item.id === activeSearchMatchId),
+    [activeSearchMatchId, searchMatches],
+  );
+  const activeMatchId = activeSearchMatchId && searchMatches.some((item) => item.id === activeSearchMatchId)
+    ? activeSearchMatchId
+    : searchMatches.at(-1)?.id ?? null;
 
   useEffect(() => {
-    setActiveSearchMatch(0);
-  }, [deferredSearch, mergedItems.length]);
+    if (!deferredSearch.trim()) {
+      setActiveSearchMatchId(null);
+      setPendingSearchDirection(null);
+      return;
+    }
 
-  useEffect(() => {
     if (searchMatches.length === 0) {
       return;
     }
-    const target = searchMatches[activeSearchMatch];
+
+    const currentIndex = searchMatches.findIndex((item) => item.id === activeSearchMatchId);
+    if (pendingSearchDirection === -1 && currentIndex > 0) {
+      setActiveSearchMatchId(searchMatches[currentIndex - 1].id);
+      setPendingSearchDirection(null);
+      return;
+    }
+
+    if (currentIndex >= 0) {
+      setPendingSearchDirection(null);
+      return;
+    }
+
+    setActiveSearchMatchId(searchMatches.at(-1)?.id ?? null);
+    setPendingSearchDirection(null);
+  }, [deferredSearch, searchMatches, activeSearchMatchId, pendingSearchDirection]);
+
+  useEffect(() => {
+    if (!activeMatchId) {
+      return;
+    }
     const timeout = window.setTimeout(() => {
-      const node = document.querySelector<HTMLElement>(`[data-stream-item-id="${target.id}"]`);
+      const node = document.querySelector<HTMLElement>(`[data-stream-item-id="${activeMatchId}"]`);
       node?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 120);
     return () => window.clearTimeout(timeout);
-  }, [activeSearchMatch, searchMatches]);
+  }, [activeMatchId]);
 
   const handleSessionJump = (sessionId: string | null) => {
     onSelectSession(sessionId);
@@ -571,16 +748,26 @@ export function UnifiedPersonaWorkspace({
     if (searchMatches.length === 0) {
       return;
     }
-    setActiveSearchMatch((current) => {
-      const next = current + direction;
-      if (next < 0) {
-        return searchMatches.length - 1;
-      }
-      if (next >= searchMatches.length) {
-        return 0;
-      }
-      return next;
-    });
+    const currentIndex = searchMatches.findIndex((item) => item.id === activeMatchId);
+    const fallbackIndex = searchMatches.length - 1;
+    const resolvedIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
+
+    if (direction === -1 && resolvedIndex === 0 && total > entries.length) {
+      setPendingSearchDirection(-1);
+      setPage((value) => value + 1);
+      return;
+    }
+
+    const nextIndex = resolvedIndex + direction;
+    if (nextIndex < 0) {
+      setActiveSearchMatchId(searchMatches.at(-1)?.id ?? null);
+      return;
+    }
+    if (nextIndex >= searchMatches.length) {
+      setActiveSearchMatchId(searchMatches[0]?.id ?? null);
+      return;
+    }
+    setActiveSearchMatchId(searchMatches[nextIndex].id);
   };
 
   return (
@@ -610,7 +797,7 @@ export function UnifiedPersonaWorkspace({
             <span>
               {searchMatches.length === 0
                 ? `No matches for "${deferredSearch.trim()}"`
-                : `${activeSearchMatch + 1} of ${searchMatches.length} loaded matches for "${deferredSearch.trim()}"${total > entries.length ? ` (${entries.length} of ${total} entries loaded)` : ""}`}
+                : `${Math.max(activeSearchMatch, 0) + 1} of ${searchMatches.length} loaded matches for "${deferredSearch.trim()}"${total > entries.length ? ` (${entries.length} of ${total} entries loaded)` : ""}`}
             </span>
             {searchMatches.length > 0 && (
               <div className="flex items-center gap-2">
@@ -658,7 +845,8 @@ export function UnifiedPersonaWorkspace({
               <div key={group.label}>
                 <DateDivider label={group.label} />
                 <div className="space-y-3">
-                  {group.items.map((item) => {
+                  {group.blocks.map((block) => {
+                    const item = block.anchorItem;
                     const selected = !!item.sessionId && item.sessionId === activeSessionId;
                     const matched = matchedIds.has(item.id);
                     const activeMatched = activeMatchId === item.id;
@@ -685,6 +873,16 @@ export function UnifiedPersonaWorkspace({
                               canEdit={false}
                               canRegenerate={false}
                             />
+                            {block.childRuns.length > 0 && (
+                              <ChildRunStack
+                                childRuns={block.childRuns}
+                                activeSessionId={activeSessionId}
+                                expandedEntryIds={expandedEntryIds}
+                                onToggle={toggleExpanded}
+                                matchedIds={matchedIds}
+                                activeMatchId={activeMatchId}
+                              />
+                            )}
                           </div>
                         </div>
                       );
@@ -736,6 +934,16 @@ export function UnifiedPersonaWorkspace({
                             expanded={!!expandedEntryIds[item.id]}
                             onToggle={() => toggleExpanded(item.id)}
                           />
+                          {block.childRuns.length > 0 && (
+                            <ChildRunStack
+                              childRuns={block.childRuns}
+                              activeSessionId={activeSessionId}
+                              expandedEntryIds={expandedEntryIds}
+                              onToggle={toggleExpanded}
+                              matchedIds={matchedIds}
+                              activeMatchId={activeMatchId}
+                            />
+                          )}
                         </div>
                       </div>
                     );
