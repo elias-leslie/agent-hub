@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   useDeferredValue,
   useEffect,
@@ -275,6 +276,12 @@ function ChildRunCard({
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span>task {entry.external_id}</span>}
             {entry.current_branch && <span>{entry.current_branch}</span>}
+            <Link
+              href={`/sessions/${entry.session_id}`}
+              className="text-sky-600 transition hover:text-sky-500 dark:text-sky-300 dark:hover:text-sky-200"
+            >
+              open session
+            </Link>
           </div>
           {entry.event_previews.length > 0 && (
             <button
@@ -340,6 +347,14 @@ function HeartbeatCard({
               {entry.live_summary}
             </p>
           )}
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+            <Link
+              href={`/sessions/${entry.session_id}`}
+              className="text-amber-700 transition hover:text-amber-600 dark:text-amber-300 dark:hover:text-amber-200"
+            >
+              open session
+            </Link>
+          </div>
           {entry.event_previews.length > 0 && (
             <button
               type="button"
@@ -595,7 +610,7 @@ export function UnifiedPersonaWorkspace({
             <span>
               {searchMatches.length === 0
                 ? `No matches for "${deferredSearch.trim()}"`
-                : `${activeSearchMatch + 1} of ${searchMatches.length} matches for "${deferredSearch.trim()}"`}
+                : `${activeSearchMatch + 1} of ${searchMatches.length} loaded matches for "${deferredSearch.trim()}"${total > entries.length ? ` (${entries.length} of ${total} entries loaded)` : ""}`}
             </span>
             {searchMatches.length > 0 && (
               <div className="flex items-center gap-2">
@@ -735,7 +750,7 @@ export function UnifiedPersonaWorkspace({
                   onClick={() => setPage((value) => value + 1)}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
-                  Load older entries
+                  {deferredSearch.trim() ? "Load more matching entries" : "Load older entries"}
                 </button>
               </div>
             )}
