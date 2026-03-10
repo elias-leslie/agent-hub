@@ -216,6 +216,41 @@ describe("UnifiedPersonaWorkspace", () => {
     ]);
   });
 
+  it("lands at the latest entry on initial load instead of jumping to the active chat session", async () => {
+    const scrollToSpy = vi.fn();
+    const scrollIntoViewSpy = vi.fn();
+
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoViewSpy,
+    });
+
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("pause that task")).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(scrollToSpy).toHaveBeenCalled();
+    });
+
+    expect(scrollIntoViewSpy).not.toHaveBeenCalled();
+  });
+
   it("nests child runs under their parent work block", async () => {
     render(
       <UnifiedPersonaWorkspace
@@ -322,6 +357,10 @@ describe("UnifiedPersonaWorkspace", () => {
     Object.defineProperty(container, "scrollHeight", { configurable: true, value: 1000 });
     Object.defineProperty(container, "clientHeight", { configurable: true, value: 400 });
     Object.defineProperty(container, "scrollTop", { configurable: true, writable: true, value: 600 });
+
+    await waitFor(() => {
+      expect(scrollToSpy).toHaveBeenCalled();
+    });
 
     scrollToSpy.mockClear();
     await act(async () => {
