@@ -53,7 +53,7 @@ Merged two separate tool processing paths into one:
 - `openai_event_adapter.py` — OpenAI-compat CompletionResult → ToolEvent
 - Native: Gemini/CloudCode already emit ToolEvent
 
-**Result**: Tool execution works for all 8 providers that support it (all except Codex). No `if provider == "claude"` branching anywhere in the pipeline.
+**Result**: Tool execution works for all registered tool-capable providers. No `if provider == "claude"` branching anywhere in the pipeline.
 
 ### Phase 2: Shared CloudCode Client (`c87d216`)
 
@@ -191,7 +191,7 @@ Supports both async iteration (streaming events) and `.result()` awaiting (get f
 | Cache retention | Parameter ignored | Active — 1h TTL on system prompts |
 | Abort signal | 300s Hatchet kill | Graceful `asyncio.Event` cancellation |
 | Streaming progress | Wait for full response | EventStream: iterate + await result |
-| Tool providers | 2 (Claude, Gemini) | 8 (all except Codex) |
+| Tool providers | 2 (Claude, Gemini) | 10 (all except Minimax) |
 
 ## How to Add a New Provider
 

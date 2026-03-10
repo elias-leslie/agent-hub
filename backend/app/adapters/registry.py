@@ -131,7 +131,9 @@ def _ensure_registered() -> None:
     register("cloudcode", _cloudcode, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
     ))
-    register("codex", _codex, ProviderCapabilities())
+    register("codex", _codex, ProviderCapabilities(
+        supports_tool_execution=True,
+    ))
     register("openai", _openai, ProviderCapabilities(
         supports_tool_execution=True, supports_images=True,
     ))
