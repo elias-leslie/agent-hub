@@ -431,6 +431,8 @@ def _append_summary_marker_if_needed(
     markers: list[PersonaIssueMarker],
     seen_fingerprints: set[str],
 ) -> None:
+    if markers:
+        return
     summary_text = (session.summary_oneliner or "").strip()
     if not summary_text:
         return

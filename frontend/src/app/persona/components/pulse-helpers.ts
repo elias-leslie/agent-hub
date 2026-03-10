@@ -143,11 +143,70 @@ export function issueMarkerHasPulseTag(marker: PersonaIssueMarker, tag: string):
   return marker.tags.includes(tag);
 }
 
-export function filterIssueMarkers(issueMarkers: PersonaIssueMarker[], tag: string | null): PersonaIssueMarker[] {
-  if (!tag || tag === "recovered") {
-    return issueMarkers;
+function normalizeIssueText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function issueTaskId(marker: PersonaIssueMarker): string | null {
+  const combined = `${marker.title}\n${marker.summary}\n${marker.detail ?? ""}`;
+  const match = combined.match(/\btask-[a-z0-9]+\b/i);
+  return match ? match[0].toLowerCase() : null;
+}
+
+function dedupeIssueMarkers(issueMarkers: PersonaIssueMarker[]): PersonaIssueMarker[] {
+  const preferred = [...issueMarkers].sort((left, right) => {
+    if (left.event_type === "session_summary" && right.event_type !== "session_summary") {
+      return 1;
+    }
+    if (right.event_type === "session_summary" && left.event_type !== "session_summary") {
+      return -1;
+    }
+    return 0;
+  });
+  const selected: PersonaIssueMarker[] = [];
+
+  for (const marker of preferred) {
+    const markerTaskId = issueTaskId(marker);
+    const markerDetail = normalizeIssueText(marker.detail ?? marker.summary);
+    const markerSummary = normalizeIssueText(marker.summary);
+    const isDuplicate = selected.some((existing) => {
+      if (existing.primary_tag !== marker.primary_tag) {
+        return false;
+      }
+      if ((existing.primary_root_cause ?? "") !== (marker.primary_root_cause ?? "")) {
+        return false;
+      }
+      if (existing.fingerprint && marker.fingerprint) {
+        return existing.fingerprint === marker.fingerprint;
+      }
+      const existingTaskId = issueTaskId(existing);
+      if (existingTaskId && markerTaskId) {
+        return existingTaskId === markerTaskId;
+      }
+      const existingDetail = normalizeIssueText(existing.detail ?? existing.summary);
+      const existingSummary = normalizeIssueText(existing.summary);
+      return (
+        existingDetail === markerDetail
+        || existingDetail === markerSummary
+        || existingSummary === markerDetail
+        || existingDetail.includes(markerSummary)
+        || markerDetail.includes(existingSummary)
+      );
+    });
+    if (!isDuplicate) {
+      selected.push(marker);
+    }
   }
-  return issueMarkers.filter((marker) => issueMarkerHasPulseTag(marker, tag));
+
+  return selected;
+}
+
+export function filterIssueMarkers(issueMarkers: PersonaIssueMarker[], tag: string | null): PersonaIssueMarker[] {
+  const deduped = dedupeIssueMarkers(issueMarkers);
+  if (!tag || tag === "recovered") {
+    return deduped;
+  }
+  return deduped.filter((marker) => issueMarkerHasPulseTag(marker, tag));
 }
 
 export function visibleIssueMarkers(entry: PersonaStreamEntry, tag: string | null): PersonaIssueMarker[] {

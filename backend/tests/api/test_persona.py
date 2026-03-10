@@ -780,6 +780,38 @@ class TestPersonaStreamHelpers:
         assert instruction_marker.detail is not None
         assert "pytest tests/api/test_persona.py" in instruction_marker.detail
 
+    def test_classify_session_pulse_skips_summary_marker_when_event_issue_exists(self) -> None:
+        from app.api.persona.pulse import classify_session_pulse
+        from app.api.persona.schemas import PersonaStreamEventPreview
+
+        session = _make_mock_session(
+            "hb-1",
+            agent_slug="persona",
+            project_id="persona-sandbox",
+            status="completed",
+            summary_oneliner="Completed with warnings while reviewing task-605a52fc",
+            created_at=datetime.now(UTC) - timedelta(minutes=3),
+            updated_at=datetime.now(UTC),
+        )
+        previews = [
+            PersonaStreamEventPreview(
+                id="preview-warning",
+                event_type=SessionEventType.ASSISTANT_MESSAGE,
+                created_at=datetime.now(UTC) - timedelta(minutes=1),
+                tool_name=None,
+                content_preview='Blocked on follow-up\nTASK:task-605a52fc|pending|P2|task|STANDARD\nTITLE:Live validation\nDESCRIPTION:Temporary validation task\nWORKFLOW:plan:approved|ready:yes|issues:0|decisions:1',
+                tool_input_preview=None,
+                tool_output_preview=None,
+                duration_ms=None,
+                model_used="claude-sonnet",
+            )
+        ]
+
+        pulse = classify_session_pulse(session, previews)
+
+        assert len(pulse.issue_markers) == 1
+        assert pulse.issue_markers[0].event_type != "session_summary"
+
     def test_build_pulse_summary_groups_repeated_issue_fingerprints(self) -> None:
         from app.api.persona.pulse import SessionPulse, build_pulse_summary
         from app.api.persona.schemas import PersonaIssueMarker, PersonaStreamEntry

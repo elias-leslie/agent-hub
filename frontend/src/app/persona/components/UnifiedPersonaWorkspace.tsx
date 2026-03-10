@@ -342,17 +342,18 @@ function ExpandableText({
   collapsedLength?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const fullText = expandedText && expandedText.trim().length > 0 ? expandedText : text;
-  const shouldCollapse = fullText.length > collapsedLength || fullText !== text;
+  const collapsedText = prettifyDisplayText(text);
+  const fullText = prettifyDisplayText(expandedText && expandedText.trim().length > 0 ? expandedText : text);
+  const shouldCollapse = fullText.length > collapsedLength || fullText !== collapsedText;
 
   if (!shouldCollapse) {
-    return <HighlightedText text={text} className={className} />;
+    return <HighlightedText text={fullText} className={className} />;
   }
 
   return (
     <div>
       <HighlightedText
-        text={expanded ? fullText : shortenText(text, collapsedLength)}
+        text={expanded ? fullText : shortenText(collapsedText, collapsedLength)}
         className={className}
       />
       <button
@@ -473,6 +474,141 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+function unescapeDisplayText(value: string): string {
+  return value
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, "\"")
+    .replace(/\\'/g, "'")
+    .replace(/\\\\/g, "\\");
+}
+
+function extractWrappedTextPayload(value: string): string | null {
+  const keyMatch = /['"]text['"]\s*:/.exec(value);
+  if (!keyMatch) {
+    return null;
+  }
+  let index = keyMatch.index + keyMatch[0].length;
+  while (index < value.length && /\s/.test(value[index])) {
+    index += 1;
+  }
+  const quote = value[index];
+  if (quote !== "\"" && quote !== "'") {
+    return null;
+  }
+  index += 1;
+  let escaped = false;
+  let result = "";
+  for (; index < value.length; index += 1) {
+    const char = value[index];
+    if (escaped) {
+      result += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      result += char;
+      escaped = true;
+      continue;
+    }
+    if (char === quote) {
+      break;
+    }
+    result += char;
+  }
+  const unescaped = unescapeDisplayText(result).trim();
+  return unescaped || null;
+}
+
+function humanizeTaskContextText(value: string): string {
+  const lines = value.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (!lines.some((line) => line.startsWith("TASK:task-"))) {
+    return value;
+  }
+
+  const prettified: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("TASK:")) {
+      const [taskId, status, priority, taskType, size] = line.slice(5).split("|");
+      prettified.push(
+        `Task ${taskId}${status ? ` · ${status}` : ""}${priority ? ` · ${priority}` : ""}${taskType ? ` · ${taskType}` : ""}${size ? ` · ${size}` : ""}`,
+      );
+      continue;
+    }
+    if (line.startsWith("TITLE:")) {
+      prettified.push(`Title: ${line.slice(6).trim()}`);
+      continue;
+    }
+    if (line.startsWith("DESCRIPTION:")) {
+      prettified.push(`Description: ${line.slice(12).trim()}`);
+      continue;
+    }
+    if (line.startsWith("OBJECTIVE:")) {
+      prettified.push(`Objective: ${line.slice(10).trim()}`);
+      continue;
+    }
+    if (line.startsWith("SPIRIT_ANTI:")) {
+      prettified.push(`Avoid: ${line.slice(12).trim()}`);
+      continue;
+    }
+    if (line.startsWith("WORKFLOW:")) {
+      prettified.push(`Workflow: ${line.slice(9).trim().replaceAll("|", " · ")}`);
+      continue;
+    }
+    if (line.startsWith("CONSTRAINTS")) {
+      const [, content = ""] = line.split(":", 2);
+      prettified.push(`Constraints: ${content.replaceAll(" | ", "; ").trim()}`);
+      continue;
+    }
+    if (line.startsWith("DONE_WHEN")) {
+      const [, content = ""] = line.split(":", 2);
+      prettified.push(`Done when: ${content.replaceAll(" | ", "; ").trim()}`);
+      continue;
+    }
+    if (line.startsWith("COMPLETE_READY:")) {
+      prettified.push(`Ready gates: ${line.slice(15).trim().replaceAll("|", " · ")}`);
+      continue;
+    }
+    if (line.startsWith("SYNC_SKIPS:")) {
+      prettified.push(`Sync skips: ${line.slice(11).trim()}`);
+      continue;
+    }
+    if (line.startsWith("LANE:")) {
+      prettified.push(`Lane: ${line.slice(5).trim().replaceAll("|", " · ")}`);
+      continue;
+    }
+    if (line.startsWith("SPECIALISTS:")) {
+      prettified.push(`Specialists: ${line.slice(12).trim().replaceAll("|", " · ")}`);
+      continue;
+    }
+    if (line.startsWith("DECISIONS[")) {
+      prettified.push("Decisions:");
+      continue;
+    }
+    if (/^d\d+:/i.test(line)) {
+      prettified.push(`- ${line.replace(/^d\d+:/i, "").replace("→", " -> ").trim()}`);
+      continue;
+    }
+    if (line.startsWith("SUBTASKS[")) {
+      const [, content = ""] = line.split(":", 2);
+      prettified.push(`Subtasks: ${content.trim()}`);
+      continue;
+    }
+    if (/^\d+(\.\d+)?\s+_+/.test(line)) {
+      prettified.push(line.replace(/_+/g, "").replace(/\s+/g, " ").trim());
+      continue;
+    }
+    prettified.push(line);
+  }
+
+  return prettified.join("\n");
+}
+
+function prettifyDisplayText(value: string): string {
+  const extracted = extractWrappedTextPayload(value);
+  const base = extracted ?? value;
+  return humanizeTaskContextText(unescapeDisplayText(base).trim());
+}
+
 function addUniqueText(target: string[], seen: Set<string>, value: string | null | undefined): void {
   if (!value) {
     return;
@@ -494,7 +630,8 @@ function describeValue(value: unknown): string | null {
     return null;
   }
   if (typeof value === "string") {
-    return value.trim() || null;
+    const prettified = prettifyDisplayText(value);
+    return prettified || null;
   }
   if (typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -738,6 +875,24 @@ function isGenericStatusText(value: string | null): boolean {
   );
 }
 
+function shouldRenderPulseSummary(summary: string | null, issueMarkers: PersonaIssueMarker[]): boolean {
+  if (!summary) {
+    return false;
+  }
+  const normalizedSummary = normalizeText(prettifyDisplayText(summary));
+  if (!normalizedSummary || isGenericStatusText(normalizedSummary)) {
+    return false;
+  }
+  return !issueMarkers.some((marker) => {
+    const markerText = normalizeText(prettifyDisplayText(`${marker.title}\n${marker.detail ?? marker.summary}`));
+    return (
+      markerText === normalizedSummary
+      || markerText.includes(normalizedSummary)
+      || normalizedSummary.includes(markerText)
+    );
+  });
+}
+
 function eventImportanceScore(event: TimelineEvent, details: ReturnType<typeof buildEventDetails>): number {
   const combinedText = [details.lead, ...details.textBlocks].join(" ").toLowerCase();
   const fieldText = details.fields.map((field) => `${field.label} ${field.value}`).join(" ").toLowerCase();
@@ -866,7 +1021,7 @@ function blockMatchesIssueMarker(block: SessionDetailBlock, marker: PersonaIssue
   if (marker.tool_name && haystack.includes(marker.tool_name.toLowerCase())) {
     return true;
   }
-  const markerWords = `${marker.title} ${marker.summary}`
+  const markerWords = `${marker.title} ${marker.summary} ${marker.detail ?? ""}`
     .toLowerCase()
     .split(/\s+/)
     .filter((token) => token.length > 4);
@@ -1829,6 +1984,12 @@ function ChildRunCard({
   details?: SessionEventDetailsState;
 }) {
   const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
+  const showPulseSummary = shouldRenderPulseSummary(entry.pulse_summary, issueMarkers);
+  const primaryIssue = issueMarkers[0];
+  const visiblePulseTags = entry.pulse_tags.filter(
+    (tag) => tag !== "friction" && tag !== primaryIssue?.primary_tag,
+  );
+  const visibleRootCauses = entry.root_causes.filter((rootCause) => rootCause !== primaryIssue?.primary_root_cause);
 
   return (
     <div
@@ -1866,12 +2027,12 @@ function ChildRunCard({
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">task {entry.external_id}</span>}
             {entry.current_branch && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{entry.current_branch}</span>}
-            {entry.pulse_tags.filter((tag) => tag !== "friction").map((tag) => (
+            {visiblePulseTags.map((tag) => (
               <span key={`${entry.session_id}-${tag}`} className={cn("rounded-full px-2 py-0.5", pulseTagClasses(tag))}>
                 {pulseTagLabel(tag)}
               </span>
             ))}
-            {entry.root_causes.map((rootCause) => (
+            {visibleRootCauses.map((rootCause) => (
               <span
                 key={`${entry.session_id}-${rootCause}`}
                 className={cn("rounded-full px-2 py-0.5", rootCauseClasses(rootCause))}
@@ -1880,7 +2041,7 @@ function ChildRunCard({
               </span>
             ))}
           </div>
-          {entry.pulse_summary && (
+          {showPulseSummary && entry.pulse_summary && (
             <ExpandableText
               text={entry.pulse_summary}
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
@@ -1928,6 +2089,12 @@ function HeartbeatCard({
   details?: SessionEventDetailsState;
 }) {
   const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
+  const showPulseSummary = shouldRenderPulseSummary(entry.pulse_summary, issueMarkers);
+  const primaryIssue = issueMarkers[0];
+  const visiblePulseTags = entry.pulse_tags.filter(
+    (tag) => tag !== "friction" && tag !== primaryIssue?.primary_tag,
+  );
+  const visibleRootCauses = entry.root_causes.filter((rootCause) => rootCause !== primaryIssue?.primary_root_cause);
 
   return (
     <div
@@ -1962,7 +2129,7 @@ function HeartbeatCard({
             className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
             collapsedLength={220}
           />
-          {entry.live_summary && entry.summary_oneliner !== entry.live_summary && (
+          {entry.live_summary && entry.summary_oneliner !== entry.live_summary && !isGenericStatusText(entry.live_summary) && (
             <ExpandableText
               text={entry.live_summary}
               className="mt-2 block text-xs text-slate-400 dark:text-slate-500"
@@ -1971,12 +2138,12 @@ function HeartbeatCard({
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{entry.external_id}</span>}
-            {entry.pulse_tags.filter((tag) => tag !== "friction").map((tag) => (
+            {visiblePulseTags.map((tag) => (
               <span key={`${entry.session_id}-${tag}`} className={cn("rounded-full px-2 py-0.5", pulseTagClasses(tag))}>
                 {pulseTagLabel(tag)}
               </span>
             ))}
-            {entry.root_causes.map((rootCause) => (
+            {visibleRootCauses.map((rootCause) => (
               <span
                 key={`${entry.session_id}-${rootCause}`}
                 className={cn("rounded-full px-2 py-0.5", rootCauseClasses(rootCause))}
@@ -1985,7 +2152,7 @@ function HeartbeatCard({
               </span>
             ))}
           </div>
-          {entry.pulse_summary && (
+          {showPulseSummary && entry.pulse_summary && (
             <ExpandableText
               text={entry.pulse_summary}
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
