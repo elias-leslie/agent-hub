@@ -14,7 +14,7 @@ from app.db import get_db
 from app.models.session import Session, SessionEvent
 
 from .constants import HOURS_MAP
-from .schemas import PersonaStreamEntry, PersonaStreamResponse
+from .schemas import PersonaStreamEntry, PersonaStreamEventPreview, PersonaStreamResponse
 
 router = APIRouter()
 
@@ -154,12 +154,54 @@ async def _fetch_persona_chat_events(
     return list((await db.execute(query)).scalars().all())
 
 
+async def _fetch_event_previews(
+    db: AsyncSession,
+    session_ids: list[str],
+    *,
+    limit_per_session: int = 8,
+) -> dict[str, list[PersonaStreamEventPreview]]:
+    if not session_ids:
+        return {}
+
+    query = (
+        select(SessionEvent)
+        .where(
+            SessionEvent.session_id.in_(session_ids),
+            SessionEvent.event_type.notin_(_CHAT_MESSAGE_TYPES),
+        )
+        .order_by(SessionEvent.created_at.desc(), SessionEvent.turn.desc(), SessionEvent.sequence.desc())
+    )
+    events = list((await db.execute(query)).scalars().all())
+    previews: dict[str, list[PersonaStreamEventPreview]] = {}
+
+    for event in events:
+        session_previews = previews.setdefault(event.session_id, [])
+        if len(session_previews) >= limit_per_session:
+            continue
+        preview_content = event.content[:240] if event.content else None
+        session_previews.append(
+            PersonaStreamEventPreview(
+                id=event.id,
+                event_type=event.event_type,
+                created_at=event.created_at,
+                role=event.role,
+                tool_name=event.tool_name,
+                content_preview=preview_content,
+                duration_ms=event.duration_ms,
+                model_used=event.model_used,
+            )
+        )
+
+    return previews
+
+
 def _build_stream_entries(
     persona_sessions: list[Session],
     child_sessions: list[Session],
     message_events: list[SessionEvent],
     message_counts: dict[str, int],
     tool_counts: dict[str, int],
+    event_previews: dict[str, list[PersonaStreamEventPreview]],
 ) -> list[PersonaStreamEntry]:
     persona_by_id = {session.id: session for session in persona_sessions}
     entries: list[PersonaStreamEntry] = []
@@ -212,6 +254,7 @@ def _build_stream_entries(
                 live_status=live_status,
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
+                event_previews=event_previews.get(session.id, []),
             )
         )
 
@@ -236,6 +279,7 @@ def _build_stream_entries(
                 live_status=live_status,
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
+                event_previews=event_previews.get(session.id, []),
             )
         )
 
@@ -296,6 +340,7 @@ async def get_persona_stream(
     count_session_ids = persona_session_ids + [session.id for session in child_sessions]
     message_counts = await _fetch_message_counts(db, count_session_ids)
     tool_counts = await _fetch_tool_counts(db, count_session_ids)
+    event_previews = await _fetch_event_previews(db, count_session_ids)
     persona_chat_ids = [session.id for session in persona_sessions if session.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids, search_term)
 
@@ -305,6 +350,7 @@ async def get_persona_stream(
         message_events,
         message_counts,
         tool_counts,
+        event_previews,
     )
 
     sliced_entries = _slice_entries(

@@ -133,6 +133,20 @@ class PersonaStreamEntry(BaseModel):
     live_status: str | None = None
     message_count: int = 0
     tool_count: int = 0
+    event_previews: list[PersonaStreamEventPreview] = Field(default_factory=list)
+
+
+class PersonaStreamEventPreview(BaseModel):
+    """Compact event preview for expandable stream cards."""
+
+    id: str
+    event_type: str
+    created_at: datetime
+    role: str | None = None
+    tool_name: str | None = None
+    content_preview: str | None = None
+    duration_ms: int | None = None
+    model_used: str | None = None
 
 
 class PersonaStreamResponse(BaseModel):
