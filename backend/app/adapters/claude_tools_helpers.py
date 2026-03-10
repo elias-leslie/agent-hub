@@ -197,37 +197,42 @@ async def _iterate_sdk_messages(
     saw_payload = False
     pending_tool_calls = 0
     message_iter = query(prompt=prompt, options=options).__aiter__()
-    while True:
-        idle_timeout = (
-            _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
-            if saw_payload and pending_tool_calls == 0 and not done_emitted
-            else None
-        )
-        message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
-        if message is _STREAM_STOP:
-            if saw_payload and not done_emitted:
-                logger.warning(
-                    "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
-                )
-                yield (ResultMessage(session_id=session_id), session_id)
-            return
-        if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-            session_id = message.data.get("session_id")
-            if session_id:
-                logger.info(f"Claude SDK session ID: {session_id}")
-            continue
-        if type(message).__name__ == "ResultMessage":
+    try:
+        while True:
+            idle_timeout = (
+                _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
+                if saw_payload and pending_tool_calls == 0 and not done_emitted
+                else None
+            )
+            message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
+            if message is _STREAM_STOP:
+                if saw_payload and not done_emitted:
+                    logger.warning(
+                        "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
+                    )
+                    yield (ResultMessage(session_id=session_id), session_id)
+                return
+            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                session_id = message.data.get("session_id")
+                if session_id:
+                    logger.info(f"Claude SDK session ID: {session_id}")
+                continue
+            if type(message).__name__ == "ResultMessage":
+                yield (message, session_id)
+                done_emitted = True
+                return
+            if done_emitted:
+                continue
+            saw_payload = True
+            if _message_has_tool_use(message):
+                pending_tool_calls += 1
+            if _message_has_tool_result(message):
+                pending_tool_calls = max(0, pending_tool_calls - 1)
             yield (message, session_id)
-            done_emitted = True
-            continue
-        if done_emitted:
-            continue
-        saw_payload = True
-        if _message_has_tool_use(message):
-            pending_tool_calls += 1
-        if _message_has_tool_result(message):
-            pending_tool_calls = max(0, pending_tool_calls - 1)
-        yield (message, session_id)
+    finally:
+        if hasattr(message_iter, "aclose"):
+            with suppress(Exception):
+                await message_iter.aclose()
 
 
 async def _stream_sdk_messages(

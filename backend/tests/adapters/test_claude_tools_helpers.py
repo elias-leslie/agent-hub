@@ -15,16 +15,37 @@ class ResultMessage:
 
 
 @pytest.mark.asyncio
-async def test_stream_sdk_messages_drains_after_result_message(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_stream_sdk_messages_closes_after_result_message(monkeypatch: pytest.MonkeyPatch) -> None:
     yielded = []
+    iterator_holder: dict[str, object] = {}
 
-    async def fake_query(*, prompt, options):
-        yielded.append("assistant")
-        yield types.SimpleNamespace(content=[], subtype=None)
-        yielded.append("result")
-        yield ResultMessage()
-        yielded.append("after-result")
-        yield types.SimpleNamespace(content=[], subtype=None)
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self.closed = False
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                yielded.append("assistant")
+                return types.SimpleNamespace(content=[], subtype=None)
+            if self._step == 1:
+                self._step += 1
+                yielded.append("result")
+                return ResultMessage()
+            yielded.append("after-result")
+            raise AssertionError("stream should be closed immediately after ResultMessage")
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    def fake_query(*, prompt, options):
+        iterator = ClosingIterator()
+        iterator_holder["iterator"] = iterator
+        return iterator
 
     fake_sdk = types.SimpleNamespace(query=fake_query)
     monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
@@ -33,16 +54,39 @@ async def test_stream_sdk_messages_drains_after_result_message(monkeypatch: pyte
     async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
         seen.append((type(message).__name__, session_id))
 
+    iterator = iterator_holder["iterator"]
     assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
-    assert yielded == ["assistant", "result", "after-result"]
+    assert yielded == ["assistant", "result"]
+    assert iterator.closed is True
 
 
 @pytest.mark.asyncio
 async def test_stream_sdk_messages_synthesizes_result_when_stream_ends_without_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_query(*, prompt, options):
-        yield types.SimpleNamespace(content=[], subtype=None)
+    iterator_holder: dict[str, object] = {}
+
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self.closed = False
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                return types.SimpleNamespace(content=[], subtype=None)
+            raise StopAsyncIteration
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    def fake_query(*, prompt, options):
+        iterator = ClosingIterator()
+        iterator_holder["iterator"] = iterator
+        return iterator
 
     fake_sdk = types.SimpleNamespace(query=fake_query)
     monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
@@ -51,7 +95,9 @@ async def test_stream_sdk_messages_synthesizes_result_when_stream_ends_without_o
     async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
         seen.append((type(message).__name__, session_id))
 
+    iterator = iterator_holder["iterator"]
     assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
+    assert iterator.closed is True
 
 
 @pytest.mark.asyncio

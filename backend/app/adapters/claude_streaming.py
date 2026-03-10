@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from contextlib import suppress
 
 from app.adapters.base import Message, StreamEvent
 from app.adapters.claude_tools_helpers import _build_mcp_server, _wrap_prompt_as_stream
@@ -58,29 +59,38 @@ async def _yield_sdk_events(prompt: object, options: object) -> AsyncIterator[St
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
     done_emitted = False
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, ResultMessage):
-            usage = message.usage or {}
-            yield StreamEvent(
-                type="done",
-                input_tokens=usage.get("input_tokens", 0),
-                output_tokens=usage.get("output_tokens", 0),
-                finish_reason="end_turn",
-            )
-            done_emitted = True
-            # continue (not return): early return triggers RuntimeError via GC athrow(GeneratorExit).
-            continue
-        if done_emitted:
-            continue
-        # Include all message types: ToolResultBlock arrives in non-assistant messages.
-        content_blocks = getattr(message, "content", None)
-        if not isinstance(content_blocks, list):
-            continue
+    message_iter = query(prompt=prompt, options=options).__aiter__()
+    try:
+        while True:
+            try:
+                message = await anext(message_iter)
+            except StopAsyncIteration:
+                return
+            if isinstance(message, ResultMessage):
+                usage = message.usage or {}
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                    finish_reason="end_turn",
+                )
+                done_emitted = True
+                return
+            if done_emitted:
+                continue
+            # Include all message types: ToolResultBlock arrives in non-assistant messages.
+            content_blocks = getattr(message, "content", None)
+            if not isinstance(content_blocks, list):
+                continue
 
-        is_assistant = isinstance(message, AssistantMessage)
-        for block in content_blocks:
-            for event in _events_for_block(block, is_assistant):
-                yield event
+            is_assistant = isinstance(message, AssistantMessage)
+            for block in content_blocks:
+                for event in _events_for_block(block, is_assistant):
+                    yield event
+    finally:
+        if hasattr(message_iter, "aclose"):
+            with suppress(Exception):
+                await message_iter.aclose()
 
 
 def _build_oauth_options(
