@@ -147,10 +147,10 @@ class TestCapabilities:
         assert caps.supports_cache_retention is True
         assert caps.supports_streaming is True
 
-    def test_codex_provider_is_conservative_without_model_context(self):
-        """Provider-level Codex defaults stay conservative without a model hint."""
+    def test_codex_provider_defaults_include_tool_execution(self):
+        """Provider-level Codex capabilities should reflect the adapter tool loop."""
         caps = registry.get_capabilities("codex")
-        assert caps.supports_tool_execution is False
+        assert caps.supports_tool_execution is True
         assert caps.supports_thinking is False
         assert caps.supports_images is False
         assert caps.supports_cache_retention is False
@@ -179,7 +179,7 @@ class TestCapabilities:
         """supports_tools() should return correct results."""
         assert registry.supports_tools("claude") is True
         assert registry.supports_tools("gemini") is True
-        assert registry.supports_tools("codex") is False
+        assert registry.supports_tools("codex") is True
         assert registry.supports_tools("codex", "codex/gpt-5.4") is True
 
     def test_supports_thinking_query(self):
@@ -202,8 +202,8 @@ class TestCapabilities:
         assert "claude" in tool_providers
         assert "gemini" in tool_providers
         assert "openai" in tool_providers
-        assert "codex" not in tool_providers
-        assert len(tool_providers) == 9  # all except codex and minimax
+        assert "codex" in tool_providers
+        assert len(tool_providers) == 10  # all except minimax
 
     def test_list_providers_with_thinking(self):
         """Should list thinking-capable providers."""

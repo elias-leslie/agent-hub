@@ -46,7 +46,7 @@ async def route_tool_execution(
     """Route tool execution to the unified handler for any supported provider.
 
     Args:
-        provider: Provider name (any provider except codex)
+        provider: Provider name for any tool-capable provider
         messages_dict: Conversation messages
         user_messages_for_db: Original user messages to save
         model: Model identifier
