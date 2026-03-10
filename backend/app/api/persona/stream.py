@@ -16,6 +16,7 @@ from app.db import get_db
 from app.models.session import Session, SessionEvent
 
 from .constants import HOURS_MAP
+from .pulse import build_pulse_summary, build_session_pulses
 from .schemas import (
     PersonaStreamEntry,
     PersonaStreamEventPreview,
@@ -395,6 +396,25 @@ async def _fetch_event_previews(
     return previews
 
 
+async def _fetch_session_events_map(
+    db: AsyncSession,
+    session_ids: list[str],
+) -> dict[str, list[SessionEvent]]:
+    if not session_ids:
+        return {}
+
+    query = (
+        select(SessionEvent)
+        .where(SessionEvent.session_id.in_(session_ids))
+        .order_by(SessionEvent.session_id, SessionEvent.turn.asc(), SessionEvent.sequence.asc(), SessionEvent.created_at.asc())
+    )
+    events = list((await db.execute(query)).scalars().all())
+    events_by_session_id: dict[str, list[SessionEvent]] = {}
+    for event in events:
+        events_by_session_id.setdefault(event.session_id, []).append(event)
+    return events_by_session_id
+
+
 def _stringify_preview(value: Any, *, limit: int = 280) -> str | None:
     if value is None:
         return None
@@ -417,9 +437,11 @@ def _build_stream_entries(
     message_counts: dict[str, int],
     tool_counts: dict[str, int],
     event_previews: dict[str, list[PersonaStreamEventPreview]],
+    session_pulses: dict[str, Any] | None = None,
 ) -> list[PersonaStreamEntry]:
     persona_by_id = {session.id: session for session in persona_sessions}
     entries: list[PersonaStreamEntry] = []
+    session_pulses = session_pulses or {}
 
     for event in message_events:
         session = persona_by_id.get(event.session_id)
@@ -450,6 +472,7 @@ def _build_stream_entries(
         if session.session_type == "chat":
             continue
         live_summary, live_status = _live_activity_summary(session)
+        pulse = session_pulses.get(session.id)
         entries.append(
             PersonaStreamEntry(
                 id=f"session-{session.id}",
@@ -470,11 +493,17 @@ def _build_stream_entries(
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
                 event_previews=event_previews.get(session.id, []),
+                pulse_tags=pulse.tags if pulse else [],
+                primary_pulse_tag=pulse.primary_tag if pulse else None,
+                root_causes=pulse.root_causes if pulse else [],
+                primary_root_cause=pulse.primary_root_cause if pulse else None,
+                pulse_summary=pulse.summary if pulse else None,
             )
         )
 
     for session in child_sessions:
         live_summary, live_status = _live_activity_summary(session)
+        pulse = session_pulses.get(session.id)
         entries.append(
             PersonaStreamEntry(
                 id=f"child-{session.id}",
@@ -495,6 +524,11 @@ def _build_stream_entries(
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
                 event_previews=event_previews.get(session.id, []),
+                pulse_tags=pulse.tags if pulse else [],
+                primary_pulse_tag=pulse.primary_tag if pulse else None,
+                root_causes=pulse.root_causes if pulse else [],
+                primary_root_cause=pulse.primary_root_cause if pulse else None,
+                pulse_summary=pulse.summary if pulse else None,
             )
         )
 
@@ -595,8 +629,10 @@ async def get_persona_stream(
     message_counts = await _fetch_message_counts(db, count_session_ids)
     tool_counts = await _fetch_tool_counts(db, count_session_ids)
     event_previews = await _fetch_event_previews(db, count_session_ids)
+    session_events_map = await _fetch_session_events_map(db, count_session_ids)
     persona_chat_ids = [session.id for session in persona_sessions if session.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
+    session_pulses = build_session_pulses([*persona_sessions, *child_sessions], session_events_map)
 
     entries = _build_stream_entries(
         persona_sessions,
@@ -605,8 +641,10 @@ async def get_persona_stream(
         message_counts,
         tool_counts,
         event_previews,
+        session_pulses,
     )
     matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
+    pulse = build_pulse_summary(entries, [*persona_sessions, *child_sessions], session_pulses)
 
     sliced_entries = _slice_entries(
         entries,
@@ -622,4 +660,5 @@ async def get_persona_stream(
         page_size=page_size,
         matches=matches,
         match_count=match_count,
+        pulse=pulse,
     )

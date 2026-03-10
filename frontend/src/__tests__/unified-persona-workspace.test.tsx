@@ -7,6 +7,23 @@ const mockFetchPersonaStream = vi.fn();
 const mockUseChatStream = vi.fn();
 const mockFetchSessionEvents = vi.fn();
 
+function buildPulseFields(overrides?: Partial<{
+  pulse_tags: string[];
+  primary_pulse_tag: string | null;
+  root_causes: string[];
+  primary_root_cause: string | null;
+  pulse_summary: string | null;
+}>) {
+  return {
+    pulse_tags: [],
+    primary_pulse_tag: null,
+    root_causes: [],
+    primary_root_cause: null,
+    pulse_summary: null,
+    ...overrides,
+  };
+}
+
 function buildStreamResponse(options?: {
   heartbeatStatus?: "active" | "completed";
   heartbeatLiveStatus?: string | null;
@@ -36,6 +53,7 @@ function buildStreamResponse(options?: {
         message_count: 2,
         tool_count: 0,
         event_previews: [],
+        ...buildPulseFields(),
       },
       {
         id: "h-1",
@@ -71,6 +89,13 @@ function buildStreamResponse(options?: {
             model_used: "claude-sonnet",
           },
         ],
+        ...buildPulseFields({
+          pulse_tags: ["friction", "warning", "recovered"],
+          primary_pulse_tag: "warning",
+          root_causes: ["context"],
+          primary_root_cause: "context",
+          pulse_summary: "completed with warnings; recovered before completion",
+        }),
       },
       ...(options?.includeSecondHeartbeat
         ? [
@@ -108,6 +133,7 @@ function buildStreamResponse(options?: {
                   model_used: "claude-sonnet",
                 },
               ],
+              ...buildPulseFields(),
             },
           ]
         : []),
@@ -145,6 +171,13 @@ function buildStreamResponse(options?: {
             model_used: "claude-sonnet",
           },
         ],
+        ...buildPulseFields({
+          pulse_tags: ["friction", "tool_friction", "retries"],
+          primary_pulse_tag: "tool_friction",
+          root_causes: ["tool"],
+          primary_root_cause: "tool",
+          pulse_summary: "dt -q -d hit repeated tool friction; retried repeated steps",
+        }),
       },
     ];
   return {
@@ -162,6 +195,65 @@ function buildStreamResponse(options?: {
       },
     ],
     match_count: 1,
+    pulse: {
+      metrics: [
+        {
+          key: "friction",
+          label: "Friction",
+          count: 2,
+          description: "Sessions that showed warnings, failures, stalls, or other operational drag.",
+        },
+        {
+          key: "warning",
+          label: "Warnings",
+          count: 1,
+          description: "Runs that completed but still reported warnings or blockers.",
+        },
+        {
+          key: "tool_friction",
+          label: "Tool Friction",
+          count: 1,
+          description: "Runs where tools failed, were missing, or wasted turns before progress resumed.",
+        },
+        {
+          key: "recovered",
+          label: "Recovered",
+          count: 1,
+          description: "Runs that hit trouble but still recovered before finishing.",
+        },
+      ],
+      issue_groups: [
+        {
+          fingerprint: "tool-friction:dt-q-d",
+          title: "dt -q -d kept failing or wasting turns",
+          summary: "dt -q -d hit repeated tool friction",
+          count: 1,
+          primary_tag: "tool_friction",
+          root_cause: "tool",
+          agent_slugs: ["git-agent"],
+          latest_entry_id: "c-1",
+          latest_session_id: "child-1",
+          latest_timestamp: "2026-03-09T10:02:00Z",
+        },
+      ],
+      agent_scorecards: [
+        {
+          agent_slug: "git-agent",
+          label: "git agent",
+          session_count: 1,
+          success_count: 1,
+          friction_count: 1,
+          error_count: 0,
+          recovered_count: 0,
+          stalled_count: 0,
+          instruction_drift_count: 0,
+          tool_friction_count: 1,
+          median_runtime_seconds: 90,
+          top_issue: "dt -q -d kept failing or wasting turns",
+          top_root_cause: "tool",
+        },
+      ],
+    },
   };
 }
 
@@ -368,8 +460,38 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
     expect(screen.getByTestId("message-input")).toBeInTheDocument();
     expect(screen.getByTestId("session-dropdown")).toBeInTheDocument();
+    expect(screen.getByText("Repeated Friction")).toBeInTheDocument();
+    expect(screen.getByText("Agent Scorecards")).toBeInTheDocument();
+    expect(screen.getByText("dt -q -d kept failing or wasting turns")).toBeInTheDocument();
     const timelineTimes = document.querySelectorAll("time[datetime]");
     expect(timelineTimes).toHaveLength(3);
+  });
+
+  it("filters the timeline from the pulse controls", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Tool Friction")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getAllByText("Tool Friction")[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText("pause that task")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
+    expect(screen.queryByText("Checked active work")).not.toBeInTheDocument();
   });
 
   it("renders stream items in chronological order with newest at the bottom", async () => {
@@ -482,14 +604,16 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(mockFetchSessionEvents).toHaveBeenCalledWith("child-1", { page: 1, page_size: 500 });
     });
 
-    expect(screen.getAllByText("st ready-all").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("dt -q -d").length).toBeGreaterThan(0);
     expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
     expect(screen.getByText("Checks passed")).toBeInTheDocument();
     expect(screen.getAllByText("Overview").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Important events").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: /Show full trace/i })).toBeInTheDocument();
     expect(screen.queryByText(/PERSONA SAFETY BOUNDARIES/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Warning").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Recovered").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Tool Friction").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Retries").length).toBeGreaterThan(0);
     expect(screen.getAllByText("agent-hub").length).toBeGreaterThan(0);
     expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
     expect(screen.queryByText(/\"status\"/)).not.toBeInTheDocument();

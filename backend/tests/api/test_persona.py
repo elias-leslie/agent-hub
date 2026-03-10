@@ -539,6 +539,7 @@ class TestPersonaStreamHelpers:
         assert _stringify_preview(None) is None
 
     def test_build_stream_entries_includes_messages_heartbeats_and_child_runs(self) -> None:
+        from app.api.persona.pulse import SessionPulse
         from app.api.persona.stream import _build_stream_entries
 
         base_time = datetime.now(UTC)
@@ -608,6 +609,22 @@ class TestPersonaStreamHelpers:
                     }
                 ],
             },
+            session_pulses={
+                "hb-1": SessionPulse(
+                    tags=["friction", "warning"],
+                    primary_tag="warning",
+                    root_causes=["context"],
+                    primary_root_cause="context",
+                    summary="completed with warnings",
+                ),
+                "child-1": SessionPulse(
+                    tags=["friction", "tool_friction", "retries"],
+                    primary_tag="tool_friction",
+                    root_causes=["tool"],
+                    primary_root_cause="tool",
+                    summary="tool friction detected",
+                ),
+            },
         )
 
         assert [entry.entry_type for entry in entries] == ["child_run", "heartbeat", "message"]
@@ -620,10 +637,150 @@ class TestPersonaStreamHelpers:
         assert heartbeat_entry.live_summary == "Checking tasks"
         assert heartbeat_entry.event_previews[0].tool_name == "st ready-all"
         assert heartbeat_entry.event_previews[0].tool_input_preview == '{"project":"agent-hub"}'
+        assert heartbeat_entry.pulse_tags == ["friction", "warning"]
+        assert heartbeat_entry.primary_root_cause == "context"
         assert child_entry.agent_slug == "git-agent"
         assert child_entry.current_branch == "task-branch"
         assert child_entry.event_previews[0].content_preview == "passed"
         assert child_entry.event_previews[0].tool_output_preview == '{"status":"ok"}'
+        assert child_entry.primary_pulse_tag == "tool_friction"
+        assert child_entry.pulse_summary == "tool friction detected"
+
+    def test_classify_session_pulse_detects_tool_friction_instruction_drift_and_recovery(self) -> None:
+        from app.api.persona.pulse import classify_session_pulse
+
+        session = _make_mock_session(
+            "child-1",
+            agent_slug="git-agent",
+            project_id="agent-hub",
+            status="completed",
+            created_at=datetime.now(UTC) - timedelta(minutes=3),
+            updated_at=datetime.now(UTC),
+        )
+        events = [
+            _make_mock_event(
+                "child-1",
+                event_type=SessionEventType.TOOL_USE,
+                tool_name="shell",
+                tool_input={"command": "pytest tests/api/test_persona.py"},
+            ),
+            _make_mock_event(
+                "child-1",
+                event_type=SessionEventType.TOOL_RESULT,
+                tool_name="shell",
+                tool_output={"status": "failed", "stderr": "dt not found", "exit_code": 1, "is_error": True},
+            ),
+            _make_mock_event(
+                "child-1",
+                event_type=SessionEventType.TOOL_USE,
+                tool_name="dt -q -d",
+                tool_input={"command": "dt -q -d"},
+            ),
+            _make_mock_event(
+                "child-1",
+                event_type=SessionEventType.TOOL_RESULT,
+                tool_name="dt -q -d",
+                tool_output={"status": "ok", "content": "Checks passed", "exit_code": 0},
+            ),
+        ]
+
+        pulse = classify_session_pulse(session, events)
+
+        assert "friction" in pulse.tags
+        assert "instruction_drift" in pulse.tags
+        assert "tool_friction" in pulse.tags
+        assert "recovered" in pulse.tags
+        assert pulse.primary_tag == "instruction_drift"
+        assert pulse.primary_root_cause == "workflow"
+        assert pulse.summary is not None
+        assert "raw pytest" in pulse.summary.lower()
+
+    def test_build_pulse_summary_groups_repeated_issue_fingerprints(self) -> None:
+        from app.api.persona.pulse import SessionPulse, build_pulse_summary
+        from app.api.persona.schemas import PersonaStreamEntry
+
+        base_time = datetime.now(UTC)
+        sessions = [
+            _make_mock_session(
+                "child-1",
+                agent_slug="git-agent",
+                project_id="agent-hub",
+                status="completed",
+                created_at=base_time - timedelta(minutes=5),
+                updated_at=base_time - timedelta(minutes=4),
+            ),
+            _make_mock_session(
+                "child-2",
+                agent_slug="git-agent",
+                project_id="agent-hub",
+                status="completed",
+                created_at=base_time - timedelta(minutes=3),
+                updated_at=base_time - timedelta(minutes=2),
+            ),
+        ]
+        entries = [
+            PersonaStreamEntry(
+                id="child-child-1",
+                entry_type="child_run",
+                timestamp=base_time - timedelta(minutes=5),
+                session_id="child-1",
+                parent_session_id="hb-1",
+                project_id="agent-hub",
+                agent_slug="git-agent",
+                session_type="completion",
+                status="completed",
+                pulse_tags=["friction", "tool_friction"],
+                primary_pulse_tag="tool_friction",
+                root_causes=["tool"],
+                primary_root_cause="tool",
+                pulse_summary="dt -q -d hit repeated tool friction",
+            ),
+            PersonaStreamEntry(
+                id="child-child-2",
+                entry_type="child_run",
+                timestamp=base_time - timedelta(minutes=3),
+                session_id="child-2",
+                parent_session_id="hb-2",
+                project_id="agent-hub",
+                agent_slug="git-agent",
+                session_type="completion",
+                status="completed",
+                pulse_tags=["friction", "tool_friction"],
+                primary_pulse_tag="tool_friction",
+                root_causes=["tool"],
+                primary_root_cause="tool",
+                pulse_summary="dt -q -d hit repeated tool friction",
+            ),
+        ]
+        session_pulses = {
+            "child-1": SessionPulse(
+                tags=["friction", "tool_friction"],
+                primary_tag="tool_friction",
+                root_causes=["tool"],
+                primary_root_cause="tool",
+                summary="dt -q -d hit repeated tool friction",
+                fingerprint="tool-friction:dt-q-d",
+                issue_title="dt -q -d kept failing or wasting turns",
+            ),
+            "child-2": SessionPulse(
+                tags=["friction", "tool_friction"],
+                primary_tag="tool_friction",
+                root_causes=["tool"],
+                primary_root_cause="tool",
+                summary="dt -q -d hit repeated tool friction",
+                fingerprint="tool-friction:dt-q-d",
+                issue_title="dt -q -d kept failing or wasting turns",
+            ),
+        }
+
+        pulse = build_pulse_summary(entries, sessions, session_pulses)
+
+        assert pulse.metrics[0].key == "friction"
+        assert pulse.metrics[0].count == 2
+        assert pulse.issue_groups[0].fingerprint == "tool-friction:dt-q-d"
+        assert pulse.issue_groups[0].count == 2
+        assert pulse.agent_scorecards[0].agent_slug == "git-agent"
+        assert pulse.agent_scorecards[0].tool_friction_count == 2
 
     def test_slice_entries_centers_on_focused_session(self) -> None:
         from app.api.persona.schemas import PersonaStreamEntry
