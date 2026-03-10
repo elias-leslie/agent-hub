@@ -16,6 +16,11 @@ import {
   Bot,
   Sparkles,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  ArrowDown,
+  ArrowUp,
+  Clock3,
 } from "lucide-react";
 import {
   MessageBubble,
@@ -29,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
 import {
   fetchPersonaStream,
+  type PersonaStreamEventPreview,
   type PersonaStreamEntry,
 } from "@/lib/api/persona-stream";
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
@@ -118,7 +124,123 @@ function formatDayLabel(date: Date): string {
   });
 }
 
-function ChildRunCard({ entry, selected }: { entry: PersonaStreamEntry; selected: boolean }) {
+function formatTimeLabel(date: Date): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatTimestampTitle(date: Date): string {
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function TimelineTimestamp({ timestamp }: { timestamp: Date }) {
+  const label = formatTimeLabel(timestamp);
+  const title = formatTimestampTitle(timestamp);
+
+  return (
+    <time
+      dateTime={timestamp.toISOString()}
+      title={title}
+      className="shrink-0 pt-2 text-[11px] font-medium tabular-nums tracking-[0.08em] text-slate-400 dark:text-slate-500"
+    >
+      {label}
+    </time>
+  );
+}
+
+function formatDurationLabel(durationMs: number | null): string | null {
+  if (durationMs == null) {
+    return null;
+  }
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+  if (durationMs < 60_000) {
+    return `${(durationMs / 1000).toFixed(1)}s`;
+  }
+  const minutes = Math.floor(durationMs / 60_000);
+  const seconds = Math.floor((durationMs % 60_000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
+function eventLabel(eventType: string): string {
+  return eventType.replaceAll("_", " ");
+}
+
+function entrySearchText(entry: PersonaStreamEntry): string {
+  return [
+    entry.content,
+    entry.summary_oneliner,
+    entry.live_summary,
+    entry.agent_slug,
+    entry.project_id,
+    entry.external_id,
+    entry.current_branch,
+    entry.model,
+    ...entry.event_previews.flatMap((preview) => [
+      preview.tool_name,
+      preview.content_preview,
+      preview.model_used,
+      preview.event_type,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] }) {
+  return (
+    <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+      {previews.map((preview) => {
+        const duration = formatDurationLabel(preview.duration_ms);
+        return (
+          <div
+            key={preview.id}
+            className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-950/50 dark:text-slate-300"
+          >
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+              <span>{eventLabel(preview.event_type)}</span>
+              <time dateTime={preview.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal">
+                <Clock3 className="h-3 w-3" />
+                {formatTimeLabel(new Date(preview.created_at))}
+              </time>
+              {preview.tool_name && <span className="normal-case tracking-normal">{preview.tool_name}</span>}
+              {duration && <span className="normal-case tracking-normal">{duration}</span>}
+            </div>
+            {preview.content_preview && (
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700 dark:text-slate-200">
+                {preview.content_preview}
+              </p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChildRunCard({
+  entry,
+  selected,
+  expanded,
+  onToggle,
+}: {
+  entry: PersonaStreamEntry;
+  selected: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   return (
     <div
       className={cn(
@@ -154,13 +276,34 @@ function ChildRunCard({ entry, selected }: { entry: PersonaStreamEntry; selected
             {entry.external_id && <span>task {entry.external_id}</span>}
             {entry.current_branch && <span>{entry.current_branch}</span>}
           </div>
+          {entry.event_previews.length > 0 && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {expanded ? "Hide run details" : `Show run details (${entry.event_previews.length})`}
+            </button>
+          )}
+          {expanded && <EventPreviewList previews={entry.event_previews} />}
         </div>
       </div>
     </div>
   );
 }
 
-function HeartbeatCard({ entry, selected }: { entry: PersonaStreamEntry; selected: boolean }) {
+function HeartbeatCard({
+  entry,
+  selected,
+  expanded,
+  onToggle,
+}: {
+  entry: PersonaStreamEntry;
+  selected: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   return (
     <div
       className={cn(
@@ -197,6 +340,17 @@ function HeartbeatCard({ entry, selected }: { entry: PersonaStreamEntry; selecte
               {entry.live_summary}
             </p>
           )}
+          {entry.event_previews.length > 0 && (
+            <button
+              type="button"
+              onClick={onToggle}
+              className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {expanded ? "Hide heartbeat details" : `Show heartbeat details (${entry.event_previews.length})`}
+            </button>
+          )}
+          {expanded && <EventPreviewList previews={entry.event_previews} />}
         </div>
       </div>
     </div>
@@ -220,6 +374,8 @@ export function UnifiedPersonaWorkspace({
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [focusSessionId, setFocusSessionId] = useState<string | null>(activeSessionId);
+  const [expandedEntryIds, setExpandedEntryIds] = useState<Record<string, boolean>>({});
+  const [activeSearchMatch, setActiveSearchMatch] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const apiConfig = useMemo(
@@ -352,9 +508,64 @@ export function UnifiedPersonaWorkspace({
     return groups;
   }, [mergedItems]);
 
+  const searchMatches = useMemo(() => {
+    const query = deferredSearch.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
+    return mergedItems.filter((item) => {
+      if (item.kind === "message") {
+        return item.message.content.toLowerCase().includes(query);
+      }
+      return entrySearchText(item.entry).includes(query);
+    });
+  }, [deferredSearch, mergedItems]);
+
+  const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.id)), [searchMatches]);
+  const activeMatchId = searchMatches[activeSearchMatch]?.id ?? null;
+
+  useEffect(() => {
+    setActiveSearchMatch(0);
+  }, [deferredSearch, mergedItems.length]);
+
+  useEffect(() => {
+    if (searchMatches.length === 0) {
+      return;
+    }
+    const target = searchMatches[activeSearchMatch];
+    const timeout = window.setTimeout(() => {
+      const node = document.querySelector<HTMLElement>(`[data-stream-item-id="${target.id}"]`);
+      node?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(timeout);
+  }, [activeSearchMatch, searchMatches]);
+
   const handleSessionJump = (sessionId: string | null) => {
     onSelectSession(sessionId);
     setFocusSessionId(sessionId);
+  };
+
+  const toggleExpanded = (entryId: string) => {
+    setExpandedEntryIds((current) => ({
+      ...current,
+      [entryId]: !current[entryId],
+    }));
+  };
+
+  const jumpToSearchMatch = (direction: 1 | -1) => {
+    if (searchMatches.length === 0) {
+      return;
+    }
+    setActiveSearchMatch((current) => {
+      const next = current + direction;
+      if (next < 0) {
+        return searchMatches.length - 1;
+      }
+      if (next >= searchMatches.length) {
+        return 0;
+      }
+      return next;
+    });
   };
 
   return (
@@ -379,6 +590,35 @@ export function UnifiedPersonaWorkspace({
           </div>
           <TimeRangeDropdown value={timeRange} onChange={setTimeRange} />
         </div>
+        {deferredSearch.trim() && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+            <span>
+              {searchMatches.length === 0
+                ? `No matches for "${deferredSearch.trim()}"`
+                : `${activeSearchMatch + 1} of ${searchMatches.length} matches for "${deferredSearch.trim()}"`}
+            </span>
+            {searchMatches.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => jumpToSearchMatch(-1)}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  Prev match
+                </button>
+                <button
+                  type="button"
+                  onClick={() => jumpToSearchMatch(1)}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  Next match
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
@@ -405,32 +645,83 @@ export function UnifiedPersonaWorkspace({
                 <div className="space-y-3">
                   {group.items.map((item) => {
                     const selected = !!item.sessionId && item.sessionId === activeSessionId;
+                    const matched = matchedIds.has(item.id);
+                    const activeMatched = activeMatchId === item.id;
                     if (item.kind === "message") {
                       return (
                         <div
                           key={item.id}
                           data-session-anchor={item.sessionId ?? undefined}
-                          className={cn(selected && "rounded-2xl bg-sky-50/40 px-2 py-1 dark:bg-sky-950/10")}
+                          data-testid="stream-item"
+                          data-stream-item-id={item.id}
+                          data-timestamp={item.timestamp.toISOString()}
+                          className={cn(
+                            "flex items-start gap-3",
+                            selected && "rounded-2xl bg-sky-50/40 px-2 py-1 dark:bg-sky-950/10",
+                            matched && "rounded-2xl px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                            activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                          )}
                         >
-                          <MessageBubble
-                            message={item.message}
-                            isStreaming={status !== "idle" && status !== "error"}
-                            canEdit={false}
-                            canRegenerate={false}
-                          />
+                          <TimelineTimestamp timestamp={item.timestamp} />
+                          <div className="min-w-0 flex-1">
+                            <MessageBubble
+                              message={item.message}
+                              isStreaming={status !== "idle" && status !== "error"}
+                              canEdit={false}
+                              canRegenerate={false}
+                            />
+                          </div>
                         </div>
                       );
                     }
                     if (item.kind === "child_run") {
                       return (
-                        <div key={item.id} data-session-anchor={item.sessionId}>
-                          <ChildRunCard entry={item.entry} selected={selected} />
+                        <div
+                          key={item.id}
+                          data-session-anchor={item.sessionId}
+                          data-testid="stream-item"
+                          data-stream-item-id={item.id}
+                          data-timestamp={item.timestamp.toISOString()}
+                          className={cn(
+                            "flex items-start gap-3 rounded-2xl",
+                            matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                            activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                          )}
+                        >
+                          <TimelineTimestamp timestamp={item.timestamp} />
+                          <div className="min-w-0 flex-1">
+                            <ChildRunCard
+                              entry={item.entry}
+                              selected={selected}
+                              expanded={!!expandedEntryIds[item.id]}
+                              onToggle={() => toggleExpanded(item.id)}
+                            />
+                          </div>
                         </div>
                       );
                     }
                     return (
-                      <div key={item.id} data-session-anchor={item.sessionId}>
-                        <HeartbeatCard entry={item.entry} selected={selected} />
+                      <div
+                        key={item.id}
+                        data-session-anchor={item.sessionId}
+                        data-testid="stream-item"
+                        data-stream-item-id={item.id}
+                        data-timestamp={item.timestamp.toISOString()}
+                        className={cn(
+                          "flex items-start gap-3 rounded-2xl",
+                          matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                          activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                        )}
+                      >
+                        <TimelineTimestamp timestamp={item.timestamp} />
+                        <div className="min-w-0 flex-1">
+                          <HeartbeatCard
+                            entry={item.entry}
+                            selected={selected}
+                            expanded={!!expandedEntryIds[item.id]}
+                            onToggle={() => toggleExpanded(item.id)}
+                          />
+                        </div>
                       </div>
                     );
                   })}

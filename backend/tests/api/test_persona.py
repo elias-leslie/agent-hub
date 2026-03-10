@@ -553,6 +553,30 @@ class TestPersonaStreamHelpers:
             message_events=[event],
             message_counts={"chat-1": 2, "hb-1": 1, "child-1": 3},
             tool_counts={"chat-1": 0, "hb-1": 4, "child-1": 2},
+            event_previews={
+                "hb-1": [
+                    {
+                        "id": "preview-1",
+                        "event_type": "tool_use",
+                        "created_at": base_time - timedelta(minutes=2),
+                        "tool_name": "st ready-all",
+                        "content_preview": None,
+                        "duration_ms": None,
+                        "model_used": "claude-sonnet",
+                    }
+                ],
+                "child-1": [
+                    {
+                        "id": "preview-2",
+                        "event_type": "tool_result",
+                        "created_at": base_time - timedelta(minutes=1),
+                        "tool_name": "dt -q -d",
+                        "content_preview": "passed",
+                        "duration_ms": 1200,
+                        "model_used": "claude-sonnet",
+                    }
+                ],
+            },
         )
 
         assert [entry.entry_type for entry in entries] == ["child_run", "heartbeat", "message"]
@@ -563,8 +587,10 @@ class TestPersonaStreamHelpers:
         assert message_entry.content == "pause that work"
         assert heartbeat_entry.session_type == "heartbeat"
         assert heartbeat_entry.live_summary == "Checking tasks"
+        assert heartbeat_entry.event_previews[0].tool_name == "st ready-all"
         assert child_entry.agent_slug == "git-agent"
         assert child_entry.current_branch == "task-branch"
+        assert child_entry.event_previews[0].content_preview == "passed"
 
     def test_slice_entries_centers_on_focused_session(self) -> None:
         from app.api.persona.schemas import PersonaStreamEntry

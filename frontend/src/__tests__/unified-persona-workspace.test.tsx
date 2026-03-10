@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UnifiedPersonaWorkspace } from "@/app/persona/components/UnifiedPersonaWorkspace";
@@ -57,6 +57,7 @@ describe("UnifiedPersonaWorkspace", () => {
           live_status: null,
           message_count: 2,
           tool_count: 0,
+          event_previews: [],
         },
         {
           id: "h-1",
@@ -78,6 +79,18 @@ describe("UnifiedPersonaWorkspace", () => {
           live_status: null,
           message_count: 0,
           tool_count: 3,
+          event_previews: [
+            {
+              id: "preview-h-1",
+              event_type: "tool_use",
+              created_at: "2026-03-09T10:01:10Z",
+              role: null,
+              tool_name: "st ready-all",
+              content_preview: null,
+              duration_ms: null,
+              model_used: "claude-sonnet",
+            },
+          ],
         },
         {
           id: "c-1",
@@ -99,6 +112,18 @@ describe("UnifiedPersonaWorkspace", () => {
           live_status: null,
           message_count: 1,
           tool_count: 2,
+          event_previews: [
+            {
+              id: "preview-c-1",
+              event_type: "tool_result",
+              created_at: "2026-03-09T10:02:10Z",
+              role: null,
+              tool_name: "dt -q -d",
+              content_preview: "passed",
+              duration_ms: 1200,
+              model_used: "claude-sonnet",
+            },
+          ],
         },
       ],
       total: 3,
@@ -127,5 +152,58 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
     expect(screen.getByTestId("message-input")).toBeInTheDocument();
     expect(screen.getByTestId("session-dropdown")).toBeInTheDocument();
+    const timelineTimes = document.querySelectorAll("time[datetime]");
+    expect(timelineTimes).toHaveLength(3);
+  });
+
+  it("renders stream items in chronological order with newest at the bottom", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("stream-item")).toHaveLength(3);
+    });
+
+    const timestamps = screen
+      .getAllByTestId("stream-item")
+      .map((item) => item.getAttribute("data-timestamp"));
+
+    expect(timestamps).toEqual([
+      "2026-03-09T10:00:00.000Z",
+      "2026-03-09T10:01:00.000Z",
+      "2026-03-09T10:02:00.000Z",
+    ]);
+  });
+
+  it("expands heartbeat and child run details inline", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Show heartbeat details (1)")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Show heartbeat details (1)"));
+    fireEvent.click(screen.getByText("Show run details (1)"));
+
+    expect(screen.getByText("st ready-all")).toBeInTheDocument();
+    expect(screen.getByText("dt -q -d")).toBeInTheDocument();
+    expect(screen.getByText("passed")).toBeInTheDocument();
   });
 });

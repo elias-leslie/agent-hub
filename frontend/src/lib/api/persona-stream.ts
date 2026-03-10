@@ -1,5 +1,16 @@
 import { fetchApi } from "@/lib/api-config";
 
+export interface PersonaStreamEventPreview {
+  id: string;
+  event_type: string;
+  created_at: string;
+  role: string | null;
+  tool_name: string | null;
+  content_preview: string | null;
+  duration_ms: number | null;
+  model_used: string | null;
+}
+
 export interface PersonaStreamEntry {
   id: string;
   entry_type: "message" | "heartbeat" | "child_run";
@@ -20,6 +31,7 @@ export interface PersonaStreamEntry {
   live_status: string | null;
   message_count: number;
   tool_count: number;
+  event_previews: PersonaStreamEventPreview[];
 }
 
 export interface PersonaStreamResponse {
