@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,14 +24,14 @@ class OwnershipOwner:
     workstream_note: str | None
     ownership_kind: str
     scope_paths: list[str]
-    declared_scope_paths: list[str]
-    observed_read_paths: list[str]
-    observed_write_paths: list[str]
-    scope_confidence: str | None
-    updated_at: datetime | None
-    created_at: datetime
-    age_minutes: int
-    is_stale: bool
+    declared_scope_paths: list[str] = field(default_factory=list)
+    observed_read_paths: list[str] = field(default_factory=list)
+    observed_write_paths: list[str] = field(default_factory=list)
+    scope_confidence: str | None = None
+    updated_at: datetime | None = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    age_minutes: int = 0
+    is_stale: bool = False
 
 
 @dataclass(frozen=True)
