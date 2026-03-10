@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException
 
 from app.services.memory import MemoryService
+from app.services.memory.embedder import get_embedder
 from app.services.memory.episode_creator import get_episode_creator
+from app.services.memory.repository import get_memory_repository
 
 if TYPE_CHECKING:
     from .memory_schemas import (
@@ -17,6 +19,8 @@ if TYPE_CHECKING:
         EpisodeDetailResponse,
         UpdateEpisodePropertiesRequest,
         UpdateEpisodePropertiesResponse,
+        UpdateEpisodeRequest,
+        UpdateEpisodeResponse,
     )
 
 
@@ -181,3 +185,43 @@ async def handle_update_episode_properties(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update properties: {e}") from e
+
+
+async def handle_update_episode(
+    full_uuid: str,
+    request: UpdateEpisodeRequest,
+) -> UpdateEpisodeResponse:
+    """Update episode content and/or tier without rotating UUID."""
+    from .memory_schemas import UpdateEpisodeResponse
+
+    if request.content is None and request.injection_tier is None:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    updates: dict[str, object] = {}
+    messages: list[str] = []
+
+    if request.content is not None:
+        embedder = get_embedder()
+        updates["content"] = request.content
+        updates["embedding"] = await embedder.embed(request.content)
+        messages.append("content")
+
+    if request.injection_tier is not None:
+        updates["injection_tier"] = request.injection_tier.value
+        messages.append(f"injection_tier={request.injection_tier.value}")
+
+    repo = get_memory_repository()
+    try:
+        success = await repo.update(full_uuid, **updates)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+        return UpdateEpisodeResponse(
+            success=True,
+            episode_id=full_uuid,
+            injection_tier=request.injection_tier.value if request.injection_tier is not None else None,
+            message=f"Updated: {', '.join(messages)}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update episode: {e}") from e

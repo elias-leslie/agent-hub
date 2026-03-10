@@ -825,6 +825,115 @@ class TestCrossProjectPathEnforcement:
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
+    async def test_cross_project_read_worktree_denied_at_off_tier(self, tmp_path: Path):
+        """Reading a file from another project's worktree should honor that project's tier."""
+        main_repo = tmp_path / "summitflow"
+        main_repo.mkdir()
+        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
+        target_file = worktree / "backend" / "app.py"
+        target_file.parent.mkdir(parents=True)
+        target_file.write_text("x = 1\n")
+
+        with patch(
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": str(main_repo), "persona-sandbox": SANDBOX_DIR},
+        ):
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="off",
+            ):
+                call = ToolCall(id="x6b", name="read_file", input={"path": str(target_file)})
+                decision = await hook(call)
+
+        assert decision == ToolDecision.DENY
+
+    @pytest.mark.asyncio
+    async def test_bash_same_project_worktree_allowed(self, tmp_path: Path):
+        """Bash should allow a session project to operate inside its own worktree."""
+        main_repo = tmp_path / "summitflow"
+        main_repo.mkdir()
+        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
+
+        with patch(
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": str(main_repo), "agent-hub": str(tmp_path / "agent-hub")},
+        ):
+            hook = _create_cross_project_permission_hook("summitflow")
+            call = ToolCall(
+                id="x6c",
+                name="bash",
+                input={"command": f"cd {worktree} && git status --short"},
+            )
+            decision = await hook(call)
+
+        assert decision == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_bash_same_project_worktree_allowed_with_broader_root_present(self, tmp_path: Path):
+        """More-specific project roots should win over broader parent roots."""
+        main_repo = tmp_path / "summitflow"
+        main_repo.mkdir()
+        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
+
+        with patch(
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"st-cli": str(tmp_path), "summitflow": str(main_repo)},
+        ):
+            hook = _create_cross_project_permission_hook("summitflow")
+            call = ToolCall(
+                id="x6c2",
+                name="bash",
+                input={"command": f"cd {worktree} && git status --short"},
+            )
+            decision = await hook(call)
+
+        assert decision == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_bash_cross_project_worktree_denied_at_read_tier(self, tmp_path: Path):
+        """Bash should deny another project's worktree when that target is read-only."""
+        summitflow = tmp_path / "summitflow"
+        summitflow.mkdir()
+        (summitflow / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        (worktree / ".git").write_text(f"gitdir: {summitflow / '.git' / 'worktrees' / 'task-123'}\n")
+
+        with patch(
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": str(summitflow), "agent-hub": str(tmp_path / "agent-hub")},
+        ):
+            hook = _create_cross_project_permission_hook("agent-hub")
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="read",
+            ):
+                call = ToolCall(
+                    id="x6d",
+                    name="bash",
+                    input={"command": f"cd {worktree} && git status --short"},
+                )
+                decision = await hook(call)
+
+        assert decision == ToolDecision.DENY
+
+    @pytest.mark.asyncio
     async def test_persona_tools_not_path_gated(self):
         """Persona-specific tools (non-file, non-bash) skip cross-project checks."""
         hook = _create_cross_project_permission_hook("persona-sandbox")

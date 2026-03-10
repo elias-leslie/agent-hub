@@ -33,6 +33,8 @@ from .memory_schemas_episodes import (
     EpisodeDetailResponse,
     UpdateEpisodePropertiesRequest,
     UpdateEpisodePropertiesResponse,
+    UpdateEpisodeRequest,
+    UpdateEpisodeResponse,
 )
 
 # Re-export settings schemas
@@ -72,6 +74,8 @@ __all__ = [
     "TriggeredReferencesResponse",
     "UpdateEpisodePropertiesRequest",
     "UpdateEpisodePropertiesResponse",
+    "UpdateEpisodeRequest",
+    "UpdateEpisodeResponse",
 ]
 
 
