@@ -66,6 +66,25 @@ class DeleteEpisodeResponse(BaseModel):
     message: str
 
 
+class UpdateEpisodeRequest(BaseModel):
+    """Request body for in-place episode updates."""
+
+    content: str | None = Field(None, description="Updated content for the episode")
+    injection_tier: InjectionTier | None = Field(
+        None,
+        description="Updated injection tier (mandate/guardrail/reference/archive)",
+    )
+
+
+class UpdateEpisodeResponse(BaseModel):
+    """Response body for in-place episode updates."""
+
+    success: bool
+    episode_id: str
+    injection_tier: str | None = None
+    message: str
+
+
 class UpdateEpisodePropertiesRequest(BaseModel):
     """Request body for updating episode properties."""
 

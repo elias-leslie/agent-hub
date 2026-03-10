@@ -13,9 +13,12 @@ Enforcement matrix:
 from __future__ import annotations
 
 import logging
+import re
+import shlex
 from pathlib import Path
 
 from app.services.tools.base import PreToolUseHook, ToolCall, ToolDecision
+from app.services.tools.project_env import detect_main_repo
 
 logger = logging.getLogger(__name__)
 
@@ -38,12 +41,65 @@ async def _resolve_tier(proj_id: str) -> str | None:
     return perm.permission_tier if perm else None
 
 
+def _path_within_root(resolved_path: str, root: str) -> bool:
+    """Return True when *resolved_path* is inside *root*."""
+    try:
+        Path(resolved_path).relative_to(Path(root))
+        return True
+    except ValueError:
+        return False
+
+
 def _find_target_project(resolved_path: str, known_roots: dict[str, str]) -> str | None:
     """Return the project ID whose root contains *resolved_path*, or None."""
-    for proj_id, root in known_roots.items():
-        if resolved_path.startswith(root):
+    roots_by_specificity = sorted(
+        ((proj_id, root) for proj_id, root in known_roots.items() if root),
+        key=lambda item: len(item[1]),
+        reverse=True,
+    )
+    for proj_id, root in roots_by_specificity:
+        if _path_within_root(resolved_path, root):
             return proj_id
     return None
+
+
+def _resolve_worktree_project(path: Path, known_roots: dict[str, str]) -> str | None:
+    """Map a git worktree path back to its owning project when possible."""
+    for candidate in (path, *path.parents):
+        try:
+            main_repo = detect_main_repo(candidate)
+        except OSError:
+            continue
+        if main_repo is None:
+            continue
+        target_project = _find_target_project(str(main_repo.resolve()), known_roots)
+        if target_project:
+            return target_project
+    return None
+
+
+def _infer_target_project(path: Path, known_roots: dict[str, str]) -> str | None:
+    """Infer the owning project for a resolved path, including git worktrees."""
+    resolved_path = str(path.resolve(strict=False))
+    return _resolve_worktree_project(path, known_roots) or _find_target_project(resolved_path, known_roots)
+
+
+def _extract_absolute_paths(command: str) -> list[Path]:
+    """Extract likely absolute paths from a bash command string."""
+    candidates: list[str] = []
+    try:
+        for token in shlex.split(command):
+            stripped = token.strip("\"'")
+            if stripped.startswith("/"):
+                candidates.append(stripped)
+                continue
+            if "=/" in stripped:
+                _, value = stripped.split("=/", 1)
+                candidates.append(f"/{value}")
+    except ValueError:
+        candidates.extend(re.findall(r"(?<![A-Za-z0-9_.-])(/[^\s;&|]+)", command))
+
+    return [Path(candidate.rstrip(");,")) for candidate in candidates if candidate.startswith("/")]
 
 
 async def _check_file_tool(
@@ -56,8 +112,7 @@ async def _check_file_tool(
     if not path:
         return ToolDecision.ALLOW
 
-    resolved = str(Path(path).resolve())
-    target_project = _find_target_project(resolved, known_roots)
+    target_project = _infer_target_project(Path(path), known_roots)
 
     if target_project is None or target_project == session_project_id:
         return ToolDecision.ALLOW
@@ -90,16 +145,19 @@ async def _check_bash_tool(
     if not command:
         return ToolDecision.ALLOW
 
-    for proj_id, root in known_roots.items():
-        if proj_id == session_project_id or root not in command:
+    checked_projects: set[str] = set()
+    for candidate in _extract_absolute_paths(command):
+        target_project = _infer_target_project(candidate, known_roots)
+        if target_project is None or target_project == session_project_id or target_project in checked_projects:
             continue
+        checked_projects.add(target_project)
 
-        tier = await _resolve_tier(proj_id)
+        tier = await _resolve_tier(target_project)
         if tier in (None, "off", "read"):
             logger.info(
                 "Cross-project DENY: bash referencing %s (target=%s, tier=%s). "
                 "Use read_file/write_file for enforced cross-project access.",
-                root, proj_id, tier,
+                candidate, target_project, tier,
             )
             return ToolDecision.DENY
 

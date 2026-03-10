@@ -1,6 +1,6 @@
 """Tests for memory API endpoints."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -89,6 +89,67 @@ class TestDeleteEpisodeEndpoint:
         assert response.status_code == 500
         data = response.json()
         assert "failed" in data["message"].lower()
+
+
+class TestUpdateEpisodeEndpoint:
+    """Tests for PATCH /api/memory/episode/{id} endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_update_episode_content_keeps_uuid(
+        self, client: AsyncClient
+    ):
+        """Content updates should patch in place and preserve UUID."""
+        mock_embedder = AsyncMock()
+        mock_embedder.embed = AsyncMock(return_value=[0.1, 0.2, 0.3])
+        mock_repo = AsyncMock()
+        mock_repo.update = AsyncMock(return_value=True)
+
+        with (
+            patch("app.api.memory_episodes_handlers.get_embedder", return_value=mock_embedder),
+            patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo),
+        ):
+            response = await client.patch(
+                "/api/memory/episode/test-uuid-123",
+                json={"content": "**Rule**: Updated content"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["episode_id"] == "test-uuid-123"
+        assert "content" in data["message"].lower()
+        mock_embedder.embed.assert_awaited_once_with("**Rule**: Updated content")
+        mock_repo.update.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_episode_tier_only(
+        self, client: AsyncClient
+    ):
+        """Tier-only updates should not require re-embedding."""
+        mock_repo = AsyncMock()
+        mock_repo.update = AsyncMock(return_value=True)
+
+        with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
+            response = await client.patch(
+                "/api/memory/episode/test-uuid-123",
+                json={"injection_tier": "mandate"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["injection_tier"] == "mandate"
+        mock_repo.update.assert_awaited_once_with("test-uuid-123", injection_tier="mandate")
+
+    @pytest.mark.asyncio
+    async def test_update_episode_requires_fields(self, client: AsyncClient):
+        """Empty payload should be rejected clearly."""
+        response = await client.patch(
+            "/api/memory/episode/test-uuid-123",
+            json={},
+        )
+
+        assert response.status_code == 400
+        assert "No fields to update" in response.json()["detail"]
 
 
 class TestBulkDeleteEndpoint:

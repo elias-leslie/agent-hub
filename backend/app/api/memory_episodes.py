@@ -14,6 +14,7 @@ from .memory_episodes_handlers import (
     handle_add_episode,
     handle_delete_episode,
     handle_get_episode,
+    handle_update_episode,
     handle_update_episode_properties,
 )
 from .memory_episodes_query import (
@@ -37,6 +38,8 @@ from .memory_schemas import (
     SearchResponse,
     UpdateEpisodePropertiesRequest,
     UpdateEpisodePropertiesResponse,
+    UpdateEpisodeRequest,
+    UpdateEpisodeResponse,
 )
 
 router = APIRouter()
@@ -118,6 +121,15 @@ async def delete_episode(
 ) -> DeleteEpisodeResponse:
     """Delete episode and clean up orphaned entities/edges. Accepts UUID or 8-char prefix."""
     return await handle_delete_episode(full_uuid, memory)
+
+
+@router.patch("/episode/{episode_id}", response_model=UpdateEpisodeResponse)
+async def update_episode(
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
+    request: UpdateEpisodeRequest,
+) -> UpdateEpisodeResponse:
+    """Update episode content and/or tier in place. Accepts UUID or 8-char prefix."""
+    return await handle_update_episode(full_uuid, request)
 
 
 @router.patch("/episode/{episode_id}/properties", response_model=UpdateEpisodePropertiesResponse)
