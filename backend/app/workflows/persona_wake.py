@@ -7,13 +7,17 @@ Each wake gets its own ephemeral session for isolation.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from typing import Any
 
 from hatchet_sdk import Context
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.hatchet_app import hatchet
+from app.models.session import Session
 from app.workflows._session_postprocess import ensure_session_summary
 
 logger = logging.getLogger(__name__)
@@ -76,6 +80,34 @@ def _build_wake_prompt(prompt: str) -> str:
     return f"{_WAKE_TOOLING_HINTS}\nTask:\n{prompt}" if prompt else _WAKE_TOOLING_HINTS.strip()
 
 
+def _wake_external_id(ctx: Context) -> str | None:
+    """Build a stable external_id so replayed Hatchet step runs are idempotent."""
+    return f"wake-step:{ctx.step_run_id}" if getattr(ctx, "step_run_id", None) else None
+
+
+async def _find_existing_wake_session(
+    db: Any,
+    *,
+    external_id: str | None,
+    project_id: str,
+    agent_slug: str,
+) -> Session | None:
+    """Return an existing wake session for the same Hatchet step run if present."""
+    if not external_id:
+        return None
+    result = await db.execute(
+        select(Session)
+        .where(
+            Session.external_id == external_id,
+            Session.project_id == project_id,
+            Session.agent_slug == agent_slug,
+        )
+        .order_by(Session.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 @hatchet.task(
     name="agent-wake",
     execution_timeout="7200s",
@@ -100,39 +132,67 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             ).model_dump()
 
     memory_group = f"{input.project_id}:wake:{input.event_type}"
+    external_id = _wake_external_id(ctx)
 
     # Resolve max_turns: explicit > persona limit > 200 fallback
     from app.services._persona_crud import get_persona_limit
     from app.services.persona_service import get_persona
 
     async with async_session() as db:
+        existing = await _find_existing_wake_session(
+            db,
+            external_id=external_id,
+            project_id=input.project_id,
+            agent_slug=input.agent_slug,
+        )
+        if existing is not None:
+            ctx.log(
+                "Wake replay detected; reusing prior session "
+                f"{existing.id} for step_run_id={ctx.step_run_id}"
+            )
+            return WakeResult(
+                status="skipped",
+                event_type=input.event_type,
+                error=f"duplicate_step_run:{existing.id}",
+                summary_stored=bool(existing.summary_oneliner or existing.summary_generated_at),
+            ).model_dump()
+
         if input.max_turns:
             max_turns = input.max_turns
         else:
             persona = await get_persona(db)
             max_turns = get_persona_limit(persona, "max_turns") or 200
 
-        result = await complete_internal(
-            messages=[{"role": "user", "content": _build_wake_prompt(input.prompt)}],
-            model=input.model,
-            provider=input.provider,
-            temperature=input.temperature,
-            project_id=input.project_id,
-            db=db,
-            agent_slug=input.agent_slug,
-            use_memory=True,
-            memory_group_id=memory_group,
-            enable_caching=False,
-            skip_cache=True,
-            max_turns=max_turns,
-            execute_tools=True,
-            enable_programmatic_tools=True,
-            defer_tool_loading=True,
-            task_type="wake",
-            phase=input.event_type,
-            thinking_level=input.thinking_level,
-            parent_session_id=input.parent_session_id,
-        )
+        try:
+            result = await complete_internal(
+                messages=[{"role": "user", "content": _build_wake_prompt(input.prompt)}],
+                model=input.model,
+                provider=input.provider,
+                temperature=input.temperature,
+                project_id=input.project_id,
+                db=db,
+                external_id=external_id,
+                request_source=f"persona_wake:{input.event_type}",
+                agent_slug=input.agent_slug,
+                use_memory=True,
+                memory_group_id=memory_group,
+                enable_caching=False,
+                skip_cache=True,
+                max_turns=max_turns,
+                execute_tools=True,
+                enable_programmatic_tools=True,
+                defer_tool_loading=True,
+                task_type="wake",
+                phase=input.event_type,
+                thinking_level=input.thinking_level,
+                parent_session_id=input.parent_session_id,
+            )
+        except asyncio.CancelledError:
+            with suppress(Exception):
+                await db.rollback()
+            with suppress(Exception):
+                await db.close()
+            raise
 
     summary_stored = await ensure_session_summary(
         result.session_id,

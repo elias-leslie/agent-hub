@@ -135,6 +135,7 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
 
 
 async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
+    logger.warning("Claude SDK aborting message iterator after post-tool stall")
     if hasattr(message_iter, "aclose"):
         with suppress(Exception):
             await message_iter.aclose()
@@ -196,6 +197,7 @@ async def _iterate_sdk_messages(
     done_emitted = False
     saw_payload = False
     pending_tool_calls = 0
+    idle_watch_armed = False
     message_iter = query(prompt=prompt, options=options).__aiter__()
     try:
         while True:
@@ -204,6 +206,21 @@ async def _iterate_sdk_messages(
                 if saw_payload and pending_tool_calls == 0 and not done_emitted
                 else None
             )
+            if idle_timeout is not None and not idle_watch_armed:
+                logger.warning(
+                    "Claude SDK post-tool idle watchdog armed: session_id=%s timeout=%.1fs",
+                    session_id,
+                    idle_timeout,
+                )
+                idle_watch_armed = True
+            elif idle_timeout is None and idle_watch_armed:
+                logger.info(
+                    "Claude SDK post-tool idle watchdog cleared: session_id=%s pending_tool_calls=%d done=%s",
+                    session_id,
+                    pending_tool_calls,
+                    done_emitted,
+                )
+                idle_watch_armed = False
             message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
             if message is _STREAM_STOP:
                 if saw_payload and not done_emitted:
@@ -230,6 +247,8 @@ async def _iterate_sdk_messages(
                 pending_tool_calls = max(0, pending_tool_calls - 1)
             yield (message, session_id)
     finally:
+        if idle_watch_armed:
+            logger.info("Claude SDK idle watchdog still armed during iterator close: session_id=%s", session_id)
         if hasattr(message_iter, "aclose"):
             with suppress(Exception):
                 await message_iter.aclose()
