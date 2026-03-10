@@ -30,7 +30,8 @@ def _now_iso() -> str:
 
 
 def _metadata_dict(session: Session) -> dict[str, Any]:
-    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else None
+    raw_metadata = getattr(session, "provider_metadata", None)
+    metadata = raw_metadata if isinstance(raw_metadata, dict) else None
     if metadata is None:
         metadata = {}
     return dict(metadata)

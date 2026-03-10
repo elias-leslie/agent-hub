@@ -51,6 +51,7 @@ class DirectToolHandler(ToolHandler):
         pre_hook: PreToolUseHook | None = None,
         project_id: str | None = None,
         session_id: str | None = None,
+        agent_slug: str | None = None,
         tool_catalog: list[dict[str, object]] | None = None,
     ):
         """Initialize with working directory and optional permission hook.
@@ -65,6 +66,7 @@ class DirectToolHandler(ToolHandler):
             working_dir,
             project_id=project_id,
             session_id=session_id,
+            agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
 
@@ -232,6 +234,7 @@ def create_direct_handler(
     permission_config: dict[str, str | list[str]] | None = None,
     project_id: str | None = None,
     session_id: str | None = None,
+    agent_slug: str | None = None,
     tool_catalog: list[dict[str, object]] | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
@@ -260,5 +263,6 @@ def create_direct_handler(
         pre_hook=pre_hook,
         project_id=project_id,
         session_id=session_id,
+        agent_slug=agent_slug,
         tool_catalog=tool_catalog,
     )

@@ -225,6 +225,7 @@ async def execute_tool_loop(
         working_dir,
         permission_config,
         project_id=project_id,
+        agent_slug=kwargs.get("agent_slug"),
         tool_catalog=kwargs.get("tool_catalog"),
     )
     session_id = str(uuid.uuid4())
