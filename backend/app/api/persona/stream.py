@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, String, and_, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
@@ -33,6 +34,29 @@ _SEARCHABLE_EVENT_TYPES = (
     "tool_result",
     "error",
 )
+_STRUCTURED_PREFIXES = {"task", "file", "agent", "status", "project"}
+
+
+@dataclass(slots=True)
+class ParsedSearch:
+    general_terms: list[str] = field(default_factory=list)
+    task_terms: list[str] = field(default_factory=list)
+    file_terms: list[str] = field(default_factory=list)
+    agent_terms: list[str] = field(default_factory=list)
+    status_terms: list[str] = field(default_factory=list)
+    project_terms: list[str] = field(default_factory=list)
+
+    def has_terms(self) -> bool:
+        return any(
+            [
+                self.general_terms,
+                self.task_terms,
+                self.file_terms,
+                self.agent_terms,
+                self.status_terms,
+                self.project_terms,
+            ]
+        )
 
 
 def _apply_since(query: Select, hours: int) -> Select:
@@ -85,10 +109,76 @@ def _entry_match_text(entry: PersonaStreamEntry) -> str:
     ).lower()
 
 
-def _entry_matches_search(entry: PersonaStreamEntry, search: str) -> bool:
+def _parse_search(search: str | None) -> ParsedSearch:
+    parsed = ParsedSearch()
     if not search:
+        return parsed
+
+    for raw_token in search.split():
+        token = raw_token.strip()
+        if not token:
+            continue
+        prefix, separator, value = token.partition(":")
+        normalized_prefix = prefix.lower()
+        normalized_value = value.strip().lower()
+        if separator and normalized_prefix in _STRUCTURED_PREFIXES and normalized_value:
+            getattr(parsed, f"{normalized_prefix}_terms").append(normalized_value)
+            continue
+        parsed.general_terms.append(token.lower())
+    return parsed
+
+
+def _matches_terms(text: str, terms: list[str]) -> bool:
+    return all(term in text for term in terms)
+
+
+def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch) -> bool:
+    if not parsed_search.has_terms():
         return False
-    return search.lower() in _entry_match_text(entry)
+    entry_text = _entry_match_text(entry)
+    if parsed_search.general_terms and not _matches_terms(entry_text, parsed_search.general_terms):
+        return False
+
+    if parsed_search.task_terms:
+        task_text = " ".join(
+            value.lower()
+            for value in [entry.external_id, entry.summary_oneliner, entry.live_summary, entry.content]
+            if isinstance(value, str) and value
+        )
+        if not _matches_terms(task_text, parsed_search.task_terms):
+            return False
+
+    if parsed_search.file_terms and not _matches_terms(entry_text, parsed_search.file_terms):
+        return False
+
+    if parsed_search.agent_terms:
+        agent_text = " ".join(
+            value.lower()
+            for value in [entry.agent_slug, entry.summary_oneliner, entry.live_summary]
+            if isinstance(value, str) and value
+        )
+        if not _matches_terms(agent_text, parsed_search.agent_terms):
+            return False
+
+    if parsed_search.status_terms:
+        status_text = " ".join(
+            value.lower()
+            for value in [entry.status, entry.live_status, entry.summary_oneliner, entry.live_summary]
+            if isinstance(value, str) and value
+        )
+        if not _matches_terms(status_text, parsed_search.status_terms):
+            return False
+
+    if parsed_search.project_terms:
+        project_text = " ".join(
+            value.lower()
+            for value in [entry.project_id, entry.current_branch, entry.summary_oneliner]
+            if isinstance(value, str) and value
+        )
+        if not _matches_terms(project_text, parsed_search.project_terms):
+            return False
+
+    return True
 
 
 def _entry_match_snippet(entry: PersonaStreamEntry) -> str:
@@ -104,32 +194,88 @@ def _entry_match_snippet(entry: PersonaStreamEntry) -> str:
     return f"{entry.entry_type} in {entry.project_id}"
 
 
-def _session_search_predicates(search: str) -> list[Any]:
-    term = f"%{search}%"
-    event_match = (
+def _event_match_predicate(term: str) -> Any:
+    wildcard = f"%{term}%"
+    return (
         select(SessionEvent.id)
         .where(
             SessionEvent.session_id == Session.id,
             SessionEvent.event_type.in_(_SEARCHABLE_EVENT_TYPES),
             or_(
-                SessionEvent.content.ilike(term),
-                SessionEvent.tool_name.ilike(term),
+                SessionEvent.content.ilike(wildcard),
+                SessionEvent.tool_name.ilike(wildcard),
+                cast(SessionEvent.tool_input, String).ilike(wildcard),
+                cast(SessionEvent.tool_output, String).ilike(wildcard),
             ),
         )
         .correlate(Session)
         .exists()
     )
-    return [
-        Session.summary_oneliner.ilike(term),
-        Session.project_id.ilike(term),
-        Session.agent_slug.ilike(term),
-        Session.external_id.ilike(term),
-        Session.current_branch.ilike(term),
-        event_match,
-    ]
 
 
-def _persona_session_query(hours: int, search: str | None) -> Select:
+def _session_search_predicates(parsed_search: ParsedSearch) -> list[Any]:
+    predicates: list[Any] = []
+
+    for term in parsed_search.general_terms:
+        wildcard = f"%{term}%"
+        predicates.append(
+            or_(
+                Session.summary_oneliner.ilike(wildcard),
+                Session.project_id.ilike(wildcard),
+                Session.agent_slug.ilike(wildcard),
+                Session.external_id.ilike(wildcard),
+                Session.current_branch.ilike(wildcard),
+                _event_match_predicate(term),
+            )
+        )
+
+    for term in parsed_search.task_terms:
+        wildcard = f"%{term}%"
+        predicates.append(
+            or_(
+                Session.external_id.ilike(wildcard),
+                Session.summary_oneliner.ilike(wildcard),
+                _event_match_predicate(term),
+            )
+        )
+
+    for term in parsed_search.file_terms:
+        predicates.append(_event_match_predicate(term))
+
+    for term in parsed_search.agent_terms:
+        wildcard = f"%{term}%"
+        predicates.append(
+            or_(
+                Session.agent_slug.ilike(wildcard),
+                Session.summary_oneliner.ilike(wildcard),
+                _event_match_predicate(term),
+            )
+        )
+
+    for term in parsed_search.status_terms:
+        wildcard = f"%{term}%"
+        predicates.append(
+            or_(
+                Session.status.ilike(wildcard),
+                Session.summary_oneliner.ilike(wildcard),
+                _event_match_predicate(term),
+            )
+        )
+
+    for term in parsed_search.project_terms:
+        wildcard = f"%{term}%"
+        predicates.append(
+            or_(
+                Session.project_id.ilike(wildcard),
+                Session.current_branch.ilike(wildcard),
+                Session.summary_oneliner.ilike(wildcard),
+                _event_match_predicate(term),
+            )
+        )
+    return predicates
+
+
+def _persona_session_query(hours: int, parsed_search: ParsedSearch | None) -> Select:
     has_events = (
         select(SessionEvent.session_id)
         .where(SessionEvent.session_id == Session.id)
@@ -138,12 +284,12 @@ def _persona_session_query(hours: int, search: str | None) -> Select:
     )
     query = select(Session).where(Session.agent_slug == "persona", has_events)
     query = _apply_since(query, hours)
-    if search:
-        query = query.where(or_(*_session_search_predicates(search)))
+    if parsed_search and parsed_search.has_terms():
+        query = query.where(and_(*_session_search_predicates(parsed_search)))
     return query
 
 
-def _child_session_query(persona_session_ids: Iterable[str], hours: int, search: str | None) -> Select:
+def _child_session_query(persona_session_ids: Iterable[str], hours: int, parsed_search: ParsedSearch | None) -> Select:
     ids = list(persona_session_ids)
     query = select(Session).where(
         Session.parent_session_id.in_(ids),
@@ -151,8 +297,8 @@ def _child_session_query(persona_session_ids: Iterable[str], hours: int, search:
         Session.agent_slug != "persona",
     )
     query = _apply_since(query, hours)
-    if search:
-        query = query.where(or_(*_session_search_predicates(search)))
+    if parsed_search and parsed_search.has_terms():
+        query = query.where(and_(*_session_search_predicates(parsed_search)))
     return query
 
 
@@ -191,7 +337,6 @@ async def _fetch_tool_counts(db: AsyncSession, session_ids: list[str]) -> dict[s
 async def _fetch_persona_chat_events(
     db: AsyncSession,
     session_ids: list[str],
-    search: str | None,
 ) -> list[SessionEvent]:
     if not session_ids:
         return []
@@ -204,8 +349,6 @@ async def _fetch_persona_chat_events(
         )
         .order_by(SessionEvent.created_at.desc(), SessionEvent.turn.desc(), SessionEvent.sequence.desc())
     )
-    if search:
-        query = query.where(SessionEvent.content.ilike(f"%{search}%"))
     return list((await db.execute(query)).scalars().all())
 
 
@@ -362,15 +505,15 @@ def _build_stream_entries(
 def _build_search_matches(
     entries: list[PersonaStreamEntry],
     *,
-    search: str | None,
+    parsed_search: ParsedSearch,
     limit: int = 150,
 ) -> tuple[list[PersonaStreamMatch], int]:
-    if not search:
+    if not parsed_search.has_terms():
         return [], 0
     matches: list[PersonaStreamMatch] = []
     total_matches = 0
     for entry in entries:
-        if not _entry_matches_search(entry, search):
+        if not _entry_matches_search(entry, parsed_search):
             continue
         total_matches += 1
         if len(matches) < limit:
@@ -428,10 +571,11 @@ async def get_persona_stream(
 ) -> PersonaStreamResponse:
     """Return the unified Jenny stream: chat messages, heartbeats, and child runs."""
     search_term = search.strip() if search else None
+    parsed_search = _parse_search(search_term)
     hours = 0 if search_term else HOURS_MAP.get(time_range, 24)
 
     persona_sessions = list(
-        (await db.execute(_persona_session_query(hours, search_term).order_by(Session.created_at.desc()))).scalars().all()
+        (await db.execute(_persona_session_query(hours, parsed_search).order_by(Session.created_at.desc()))).scalars().all()
     )
     persona_session_ids = [session.id for session in persona_sessions]
 
@@ -440,7 +584,7 @@ async def get_persona_stream(
         child_sessions = list(
             (
                 await db.execute(
-                    _child_session_query(persona_session_ids, hours, search_term).order_by(Session.created_at.desc())
+                    _child_session_query(persona_session_ids, hours, parsed_search).order_by(Session.created_at.desc())
                 )
             )
             .scalars()
@@ -452,7 +596,7 @@ async def get_persona_stream(
     tool_counts = await _fetch_tool_counts(db, count_session_ids)
     event_previews = await _fetch_event_previews(db, count_session_ids)
     persona_chat_ids = [session.id for session in persona_sessions if session.session_type == "chat"]
-    message_events = await _fetch_persona_chat_events(db, persona_chat_ids, search_term)
+    message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
 
     entries = _build_stream_entries(
         persona_sessions,
@@ -462,7 +606,7 @@ async def get_persona_stream(
         tool_counts,
         event_previews,
     )
-    matches, match_count = _build_search_matches(entries, search=search_term)
+    matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
 
     sliced_entries = _slice_entries(
         entries,

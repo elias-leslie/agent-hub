@@ -5,6 +5,7 @@ import { UnifiedPersonaWorkspace } from "@/app/persona/components/UnifiedPersona
 
 const mockFetchPersonaStream = vi.fn();
 const mockUseChatStream = vi.fn();
+const mockFetchSessionEvents = vi.fn();
 
 function buildStreamResponse(options?: { heartbeatStatus?: "active" | "completed"; heartbeatLiveStatus?: string | null }) {
   const heartbeatStatus = options?.heartbeatStatus ?? "completed";
@@ -124,6 +125,14 @@ vi.mock("@/lib/api/persona-stream", () => ({
   fetchPersonaStream: (...args: unknown[]) => mockFetchPersonaStream(...args),
 }));
 
+vi.mock("@/lib/api/sessions", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api/sessions")>("@/lib/api/sessions");
+  return {
+    ...actual,
+    fetchSessionEvents: (...args: unknown[]) => mockFetchSessionEvents(...args),
+  };
+});
+
 vi.mock("@/components/chat/session-dropdown", () => ({
   SessionDropdown: () => <div data-testid="session-dropdown">sessions</div>,
 }));
@@ -163,6 +172,92 @@ describe("UnifiedPersonaWorkspace", () => {
       cancelStream: vi.fn(),
     });
     mockFetchPersonaStream.mockResolvedValue(buildStreamResponse());
+    mockFetchSessionEvents.mockImplementation(async (sessionId: string) => {
+      if (sessionId === "hb-1") {
+        return {
+          session_id: "hb-1",
+          total: 2,
+          max_turn: 1,
+          events: [
+            {
+              id: "evt-h-1",
+              turn: 1,
+              sequence: 1,
+              event_type: "tool_use",
+              role: null,
+              content: null,
+              tool_name: "st ready-all",
+              tool_input: { project: "agent-hub", command: "st ready-all --compact" },
+              tool_output: null,
+              tokens: null,
+              duration_ms: null,
+              model_used: "claude-sonnet",
+              agent_id: null,
+              agent_name: null,
+              created_at: "2026-03-09T10:01:10Z",
+            },
+            {
+              id: "evt-h-2",
+              turn: 1,
+              sequence: 2,
+              event_type: "tool_result",
+              role: null,
+              content: null,
+              tool_name: "st ready-all",
+              tool_input: null,
+              tool_output: { status: "ok", content: "Ready queue is clear" },
+              tokens: null,
+              duration_ms: 900,
+              model_used: "claude-sonnet",
+              agent_id: null,
+              agent_name: null,
+              created_at: "2026-03-09T10:01:11Z",
+            },
+          ],
+        };
+      }
+      return {
+        session_id: "child-1",
+        total: 2,
+        max_turn: 1,
+        events: [
+          {
+            id: "evt-c-1",
+            turn: 1,
+            sequence: 1,
+            event_type: "tool_use",
+            role: null,
+            content: null,
+            tool_name: "dt -q -d",
+            tool_input: { command: "dt -q -d", project: "agent-hub" },
+            tool_output: null,
+            tokens: null,
+            duration_ms: null,
+            model_used: "claude-sonnet",
+            agent_id: null,
+            agent_name: null,
+            created_at: "2026-03-09T10:02:09Z",
+          },
+          {
+            id: "evt-c-2",
+            turn: 1,
+            sequence: 2,
+            event_type: "tool_result",
+            role: null,
+            content: null,
+            tool_name: "dt -q -d",
+            tool_input: null,
+            tool_output: { status: "ok", content: "Checks passed", files_touched: ["frontend/src/app/persona/page.tsx"] },
+            tokens: null,
+            duration_ms: 1200,
+            model_used: "claude-sonnet",
+            agent_id: null,
+            agent_name: null,
+            created_at: "2026-03-09T10:02:10Z",
+          },
+        ],
+      };
+    });
   });
 
   it("renders a unified stream with messages, heartbeat summaries, child runs, and composer", async () => {
@@ -171,6 +266,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -195,6 +291,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -234,6 +331,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -257,6 +355,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -277,6 +376,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -284,17 +384,24 @@ describe("UnifiedPersonaWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Show heartbeat details (1)")).toBeInTheDocument();
+      expect(screen.getByText("Show heartbeat details")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Show heartbeat details (1)"));
-    fireEvent.click(screen.getByText("Show run details (1)"));
+    fireEvent.click(screen.getByText("Show heartbeat details"));
+    fireEvent.click(screen.getByText("Show run details"));
 
-    expect(screen.getByText("st ready-all")).toBeInTheDocument();
-    expect(screen.getByText("dt -q -d")).toBeInTheDocument();
-    expect(screen.getAllByText("passed").length).toBeGreaterThan(0);
-    expect(screen.getByText(/"project": "agent-hub"/)).toBeInTheDocument();
-    expect(screen.getByText(/"status": "ok"/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockFetchSessionEvents).toHaveBeenCalledWith("hb-1", { page: 1, page_size: 500 });
+      expect(mockFetchSessionEvents).toHaveBeenCalledWith("child-1", { page: 1, page_size: 500 });
+    });
+
+    expect(screen.getAllByText("st ready-all").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("dt -q -d").length).toBeGreaterThan(0);
+    expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
+    expect(screen.getByText("Checks passed")).toBeInTheDocument();
+    expect(screen.getAllByText("agent-hub").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\"status\"/)).not.toBeInTheDocument();
   });
 
   it("shows search match chips and can jump through them", async () => {
@@ -303,6 +410,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -343,6 +451,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
@@ -377,6 +486,7 @@ describe("UnifiedPersonaWorkspace", () => {
           agentSlug="persona"
           activeSessionId="chat-1"
           sidebarRefreshTrigger={1}
+          runtimeSyncKey=""
           onSelectSession={vi.fn()}
           onSessionCreated={vi.fn()}
           onNewSession={vi.fn()}
@@ -403,6 +513,7 @@ describe("UnifiedPersonaWorkspace", () => {
         agentSlug="persona"
         activeSessionId="chat-1"
         sidebarRefreshTrigger={0}
+        runtimeSyncKey=""
         onSelectSession={vi.fn()}
         onSessionCreated={vi.fn()}
         onNewSession={vi.fn()}
