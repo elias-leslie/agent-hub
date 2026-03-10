@@ -445,7 +445,6 @@ MANAGE_FEEDBACK_TOOL = Tool(
     category="observability",
     search_keywords=["feedback", "friction", "vote", "resolve", "summary", "cleanup"],
     usage_examples=["Search for existing feedback before filing a duplicate item."],
-    defer_loading=True,
 )
 
 QUERY_SESSIONS_TOOL = Tool(
@@ -506,7 +505,6 @@ INSPECT_SESSION_TOOL = Tool(
     category="observability",
     search_keywords=["session details", "delegated result", "child session"],
     usage_examples=["Inspect a completed governance-auditor session before deciding the next action."],
-    defer_loading=True,
 )
 
 REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
