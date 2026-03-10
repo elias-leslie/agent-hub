@@ -41,12 +41,23 @@ export interface PersonaStreamResponse {
   total: number;
   page: number;
   page_size: number;
+  matches: PersonaStreamMatch[];
+  match_count: number;
+}
+
+export interface PersonaStreamMatch {
+  entry_id: string;
+  session_id: string;
+  entry_type: "message" | "heartbeat" | "child_run";
+  timestamp: string;
+  snippet: string;
 }
 
 interface FetchPersonaStreamParams {
   timeRange: string;
   search?: string;
   focusSessionId?: string | null;
+  anchorEntryId?: string | null;
   page?: number;
   pageSize?: number;
 }
@@ -63,6 +74,9 @@ export async function fetchPersonaStream(
   }
   if (params.focusSessionId) {
     searchParams.set("focus_session_id", params.focusSessionId);
+  }
+  if (params.anchorEntryId) {
+    searchParams.set("anchor_entry_id", params.anchorEntryId);
   }
 
   const response = await fetchApi(`/api/persona/stream?${searchParams.toString()}`);

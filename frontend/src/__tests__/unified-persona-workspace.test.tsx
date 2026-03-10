@@ -1,10 +1,124 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UnifiedPersonaWorkspace } from "@/app/persona/components/UnifiedPersonaWorkspace";
 
 const mockFetchPersonaStream = vi.fn();
 const mockUseChatStream = vi.fn();
+
+function buildStreamResponse(options?: { heartbeatStatus?: "active" | "completed"; heartbeatLiveStatus?: string | null }) {
+  const heartbeatStatus = options?.heartbeatStatus ?? "completed";
+  const heartbeatLiveStatus = options?.heartbeatLiveStatus ?? null;
+  return {
+    entries: [
+      {
+        id: "m-1",
+        entry_type: "message",
+        timestamp: "2026-03-09T10:00:00Z",
+        session_id: "chat-1",
+        parent_session_id: null,
+        project_id: "persona-sandbox",
+        agent_slug: "persona",
+        session_type: "chat",
+        status: "completed",
+        role: "user",
+        content: "pause that task",
+        summary_oneliner: null,
+        current_branch: null,
+        external_id: null,
+        model: "claude-sonnet",
+        live_summary: null,
+        live_status: null,
+        message_count: 2,
+        tool_count: 0,
+        event_previews: [],
+      },
+      {
+        id: "h-1",
+        entry_type: "heartbeat",
+        timestamp: "2026-03-09T10:01:00Z",
+        session_id: "hb-1",
+        parent_session_id: null,
+        project_id: "persona-sandbox",
+        agent_slug: "persona",
+        session_type: "heartbeat",
+        status: heartbeatStatus,
+        role: null,
+        content: null,
+        summary_oneliner: "Checked active work",
+        current_branch: null,
+        external_id: null,
+        model: "claude-sonnet",
+        live_summary: heartbeatStatus === "active" ? "Running validation" : null,
+        live_status: heartbeatLiveStatus,
+        message_count: 0,
+        tool_count: 3,
+        event_previews: [
+          {
+            id: "preview-h-1",
+            event_type: "tool_use",
+            created_at: "2026-03-09T10:01:10Z",
+            role: null,
+            tool_name: "st ready-all",
+            content_preview: null,
+            tool_input_preview: '{"project":"agent-hub"}',
+            tool_output_preview: null,
+            duration_ms: null,
+            model_used: "claude-sonnet",
+          },
+        ],
+      },
+      {
+        id: "c-1",
+        entry_type: "child_run",
+        timestamp: "2026-03-09T10:02:00Z",
+        session_id: "child-1",
+        parent_session_id: "hb-1",
+        project_id: "agent-hub",
+        agent_slug: "git-agent",
+        session_type: "completion",
+        status: "completed",
+        role: null,
+        content: null,
+        summary_oneliner: "Updated files",
+        current_branch: "task-branch",
+        external_id: "task-123",
+        model: "claude-sonnet",
+        live_summary: null,
+        live_status: null,
+        message_count: 1,
+        tool_count: 2,
+        event_previews: [
+          {
+            id: "preview-c-1",
+            event_type: "tool_result",
+            created_at: "2026-03-09T10:02:10Z",
+            role: null,
+            tool_name: "dt -q -d",
+            content_preview: "passed",
+            tool_input_preview: null,
+            tool_output_preview: '{"status":"ok"}',
+            duration_ms: 1200,
+            model_used: "claude-sonnet",
+          },
+        ],
+      },
+    ],
+    total: 3,
+    page: 1,
+    page_size: 100,
+    matches: [
+      {
+        entry_id: "h-1",
+        session_id: "hb-1",
+        entry_type: "heartbeat",
+        timestamp: "2026-03-09T10:01:00Z",
+        snippet: "Checked active work",
+      },
+    ],
+    match_count: 1,
+  };
+}
 
 vi.mock("@/lib/api/persona-stream", () => ({
   fetchPersonaStream: (...args: unknown[]) => mockFetchPersonaStream(...args),
@@ -48,105 +162,7 @@ describe("UnifiedPersonaWorkspace", () => {
       sendMessage: vi.fn(),
       cancelStream: vi.fn(),
     });
-    mockFetchPersonaStream.mockResolvedValue({
-      entries: [
-        {
-          id: "m-1",
-          entry_type: "message",
-          timestamp: "2026-03-09T10:00:00Z",
-          session_id: "chat-1",
-          parent_session_id: null,
-          project_id: "persona-sandbox",
-          agent_slug: "persona",
-          session_type: "chat",
-          status: "completed",
-          role: "user",
-          content: "pause that task",
-          summary_oneliner: null,
-          current_branch: null,
-          external_id: null,
-          model: "claude-sonnet",
-          live_summary: null,
-          live_status: null,
-          message_count: 2,
-          tool_count: 0,
-          event_previews: [],
-        },
-        {
-          id: "h-1",
-          entry_type: "heartbeat",
-          timestamp: "2026-03-09T10:01:00Z",
-          session_id: "hb-1",
-          parent_session_id: null,
-          project_id: "persona-sandbox",
-          agent_slug: "persona",
-          session_type: "heartbeat",
-          status: "completed",
-          role: null,
-          content: null,
-          summary_oneliner: "Checked active work",
-          current_branch: null,
-          external_id: null,
-          model: "claude-sonnet",
-          live_summary: null,
-          live_status: null,
-          message_count: 0,
-          tool_count: 3,
-          event_previews: [
-            {
-              id: "preview-h-1",
-              event_type: "tool_use",
-              created_at: "2026-03-09T10:01:10Z",
-              role: null,
-              tool_name: "st ready-all",
-              content_preview: null,
-              tool_input_preview: '{"project":"agent-hub"}',
-              tool_output_preview: null,
-              duration_ms: null,
-              model_used: "claude-sonnet",
-            },
-          ],
-        },
-        {
-          id: "c-1",
-          entry_type: "child_run",
-          timestamp: "2026-03-09T10:02:00Z",
-          session_id: "child-1",
-          parent_session_id: "hb-1",
-          project_id: "agent-hub",
-          agent_slug: "git-agent",
-          session_type: "completion",
-          status: "completed",
-          role: null,
-          content: null,
-          summary_oneliner: "Updated files",
-          current_branch: "task-branch",
-          external_id: "task-123",
-          model: "claude-sonnet",
-          live_summary: null,
-          live_status: null,
-          message_count: 1,
-          tool_count: 2,
-          event_previews: [
-            {
-              id: "preview-c-1",
-              event_type: "tool_result",
-              created_at: "2026-03-09T10:02:10Z",
-              role: null,
-              tool_name: "dt -q -d",
-              content_preview: "passed",
-              tool_input_preview: null,
-              tool_output_preview: '{"status":"ok"}',
-              duration_ms: 1200,
-              model_used: "claude-sonnet",
-            },
-          ],
-        },
-      ],
-      total: 3,
-      page: 1,
-      page_size: 100,
-    });
+    mockFetchPersonaStream.mockResolvedValue(buildStreamResponse());
   });
 
   it("renders a unified stream with messages, heartbeat summaries, child runs, and composer", async () => {
@@ -241,8 +257,98 @@ describe("UnifiedPersonaWorkspace", () => {
 
     expect(screen.getByText("st ready-all")).toBeInTheDocument();
     expect(screen.getByText("dt -q -d")).toBeInTheDocument();
-    expect(screen.getByText("passed")).toBeInTheDocument();
+    expect(screen.getAllByText("passed").length).toBeGreaterThan(0);
     expect(screen.getByText('{"project":"agent-hub"}')).toBeInTheDocument();
     expect(screen.getByText('{"status":"ok"}')).toBeInTheDocument();
+  });
+
+  it("shows search match chips and can jump through them", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("pause that task")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("Search Jenny's history, task IDs, files, agents..."), {
+      target: { value: "active work" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 of 1 matches/)).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole("button", { name: /heartbeat.*checkedactivework/i })).toBeInTheDocument();
+    expect(mockFetchPersonaStream).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        search: "active work",
+      }),
+    );
+  });
+
+  it("turns off auto-follow when the user scrolls up to inspect older work", async () => {
+    mockFetchPersonaStream.mockResolvedValue(buildStreamResponse({ heartbeatStatus: "active", heartbeatLiveStatus: "active" }));
+
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    const { rerender } = render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("pause that task")).toBeInTheDocument();
+    });
+
+    const container = screen.getByTestId("stream-scroll-container");
+    Object.defineProperty(container, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(container, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(container, "scrollTop", { configurable: true, writable: true, value: 600 });
+
+    scrollToSpy.mockClear();
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      (container as HTMLDivElement).scrollTop = 120;
+      fireEvent.scroll(container);
+    });
+
+    expect(screen.getByText("Auto-follow off")).toBeInTheDocument();
+
+    await act(async () => {
+      rerender(
+        <UnifiedPersonaWorkspace
+          agentSlug="persona"
+          activeSessionId="chat-1"
+          sidebarRefreshTrigger={1}
+          onSelectSession={vi.fn()}
+          onSessionCreated={vi.fn()}
+          onNewSession={vi.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(mockFetchPersonaStream).toHaveBeenCalledTimes(2);
+    });
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
   });
 });

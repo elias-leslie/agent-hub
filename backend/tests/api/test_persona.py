@@ -634,6 +634,75 @@ class TestPersonaStreamHelpers:
             page=1,
             page_size=4,
             focus_session_id="s-5",
+            anchor_entry_id=None,
         )
 
         assert [entry.session_id for entry in sliced] == ["s-3", "s-4", "s-5", "s-6"]
+
+    def test_slice_entries_centers_on_anchor_entry(self) -> None:
+        from app.api.persona.schemas import PersonaStreamEntry
+        from app.api.persona.stream import _slice_entries
+
+        base_time = datetime.now(UTC)
+        entries = [
+            PersonaStreamEntry(
+                id=f"e-{idx}",
+                entry_type="heartbeat",
+                timestamp=base_time - timedelta(minutes=idx),
+                session_id=f"s-{idx}",
+                project_id="persona-sandbox",
+                agent_slug="persona",
+                session_type="heartbeat",
+                status="completed",
+            )
+            for idx in range(10)
+        ]
+
+        sliced = _slice_entries(
+            entries,
+            page=1,
+            page_size=4,
+            focus_session_id=None,
+            anchor_entry_id="e-6",
+        )
+
+        assert [entry.id for entry in sliced] == ["e-4", "e-5", "e-6", "e-7"]
+
+    def test_build_search_matches_returns_entry_metadata(self) -> None:
+        from app.api.persona.schemas import PersonaStreamEntry
+        from app.api.persona.stream import _build_search_matches
+
+        base_time = datetime.now(UTC)
+        entries = [
+            PersonaStreamEntry(
+                id="msg-1",
+                entry_type="message",
+                timestamp=base_time,
+                session_id="chat-1",
+                project_id="persona-sandbox",
+                agent_slug="persona",
+                session_type="chat",
+                status="completed",
+                role="assistant",
+                content="I am verifying task-123 now",
+            ),
+            PersonaStreamEntry(
+                id="hb-1",
+                entry_type="heartbeat",
+                timestamp=base_time - timedelta(minutes=1),
+                session_id="hb-1",
+                project_id="persona-sandbox",
+                agent_slug="persona",
+                session_type="heartbeat",
+                status="completed",
+                summary_oneliner="Checked active work",
+            ),
+        ]
+
+        matches, match_count = _build_search_matches(entries, search="task-123")
+
+        assert match_count == 1
+        assert len(matches) == 1
+        assert matches[0].entry_id == "msg-1"
+        assert matches[0].session_id == "chat-1"
+        assert "task-123" in matches[0].snippet

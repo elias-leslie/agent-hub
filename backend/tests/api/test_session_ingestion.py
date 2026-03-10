@@ -13,6 +13,7 @@ from app.main import app
 from app.services.session_ingestion import (
     AppendNormalizedEventsResult,
     FinalizeSessionResult,
+    SessionHeartbeatResult,
     SessionUpsertResult,
 )
 from tests.conftest import TEST_HEADERS
@@ -43,6 +44,20 @@ class TestSessionIngestionAPI:
         session.status = "active"
         session.agent_slug = None
         session.session_type = "agent"
+        session.external_id = "task-123"
+        session.current_branch = "task-123/main"
+        session.provider_metadata = {
+            "cwd": "/repo",
+            "repo_root": "/repo",
+            "worktree_path": "/repo/.worktrees/task-123",
+            "host": "devbox",
+            "tmux_session_name": "codex-agent-hub",
+            "tmux_pane_id": "%11",
+        }
+        session.declared_scope_paths = ["backend/app/services/session_scope.py"]
+        session.observed_read_paths = ["backend/app/services/session_ingestion/service.py"]
+        session.observed_write_paths = ["backend/app/services/session_scope.py"]
+        session.scope_confidence = "declared"
         session.created_at = datetime.now(UTC)
         session.updated_at = datetime.now(UTC)
 
@@ -62,6 +77,20 @@ class TestSessionIngestionAPI:
                     "provider": "codex",
                     "model": "codex/gpt-5.4",
                     "session_type": "agent",
+                    "external_id": "task-123",
+                    "current_branch": "task-123/main",
+                    "cwd": "/repo",
+                    "declared_scope_paths": ["backend/app/services/session_scope.py"],
+                    "observed_read_paths": ["backend/app/services/session_ingestion/service.py"],
+                    "observed_write_paths": ["backend/app/services/session_scope.py"],
+                    "scope_confidence": "declared",
+                    "provider_metadata": {
+                        "repo_root": "/repo",
+                        "worktree_path": "/repo/.worktrees/task-123",
+                        "host": "devbox",
+                        "tmux_session_name": "codex-agent-hub",
+                        "tmux_pane_id": "%11",
+                    },
                 },
             )
 
@@ -70,6 +99,92 @@ class TestSessionIngestionAPI:
         assert data["session_id"] == "session-123"
         assert data["created"] is True
         assert data["session"]["id"] == "session-123"
+        assert data["session"]["declared_scope_paths"] == ["backend/app/services/session_scope.py"]
+        assert data["session"]["observed_read_paths"] == [
+            "backend/app/services/session_ingestion/service.py"
+        ]
+        assert data["session"]["observed_write_paths"] == ["backend/app/services/session_scope.py"]
+        assert data["session"]["scope_confidence"] == "declared"
+        assert data["session"]["repo_root"] == "/repo"
+        assert data["session"]["worktree_path"] == "/repo/.worktrees/task-123"
+        assert data["session"]["tmux_session_name"] == "codex-agent-hub"
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_session_endpoint(self, client: AsyncClient) -> None:
+        """Heartbeat returns updated flag and refreshed session snapshot."""
+        session = MagicMock()
+        session.id = "session-123"
+        session.project_id = "agent-hub"
+        session.provider = "anthropic"
+        session.model = "claude/sonnet"
+        session.status = "active"
+        session.agent_slug = "coder"
+        session.session_type = "claude_code"
+        session.external_id = "task-123"
+        session.current_branch = "task-123/main"
+        session.provider_metadata = {
+            "cwd": "/repo",
+            "repo_root": "/repo",
+            "worktree_path": "/repo/.worktrees/task-123",
+            "host": "devbox",
+            "tmux_session_name": "claude-agent-hub",
+            "tmux_pane_id": "%12",
+            "live_activity": {
+                "phase": "running_tool",
+                "status": "active",
+                "summary": "Applying write",
+                "last_heartbeat_at": "2026-03-10T14:00:00+00:00",
+            },
+        }
+        session.declared_scope_paths = ["backend/app/services/ownership_inventory.py"]
+        session.observed_read_paths = ["backend/app/services/session_live_activity.py"]
+        session.observed_write_paths = ["backend/app/services/ownership_inventory.py"]
+        session.scope_confidence = "declared"
+        session.created_at = datetime.now(UTC)
+        session.updated_at = datetime.now(UTC)
+        session.last_heartbeat_at = datetime.now(UTC)
+
+        with patch(
+            "app.api.session_ingestion.heartbeat_session",
+            new_callable=AsyncMock,
+            return_value=(
+                session,
+                SessionHeartbeatResult(session_id="session-123", updated=True),
+            ),
+        ):
+            response = await client.post(
+                "/api/session-ingestion/sessions/session-123/heartbeat",
+                json={
+                    "cwd": "/repo",
+                    "current_branch": "task-123/main",
+                    "phase": "running_tool",
+                    "status": "active",
+                    "summary": "Applying write",
+                    "current_tool_name": "Write",
+                    "active_read_paths": ["backend/app/services/session_live_activity.py"],
+                    "active_write_paths": ["backend/app/services/ownership_inventory.py"],
+                    "provider_metadata": {
+                        "repo_root": "/repo",
+                        "worktree_path": "/repo/.worktrees/task-123",
+                        "host": "devbox",
+                        "tmux_session_name": "claude-agent-hub",
+                        "tmux_pane_id": "%12",
+                    },
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "session-123"
+        assert data["updated"] is True
+        assert data["session"]["live_activity"]["phase"] == "running_tool"
+        assert data["session"]["live_activity"]["last_heartbeat_at"] == "2026-03-10T14:00:00+00:00"
+        assert data["session"]["observed_read_paths"] == [
+            "backend/app/services/session_live_activity.py"
+        ]
+        assert data["session"]["observed_write_paths"] == [
+            "backend/app/services/ownership_inventory.py"
+        ]
 
     @pytest.mark.asyncio
     async def test_append_events_endpoint(self, client: AsyncClient) -> None:
