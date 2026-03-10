@@ -158,3 +158,15 @@ class PersonaStreamResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    matches: list[PersonaStreamMatch] = Field(default_factory=list)
+    match_count: int = 0
+
+
+class PersonaStreamMatch(BaseModel):
+    """Search match metadata for jumping through Jenny history."""
+
+    entry_id: str
+    session_id: str
+    entry_type: str
+    timestamp: datetime
+    snippet: str

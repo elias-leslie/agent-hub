@@ -26,6 +26,10 @@ async def test_query_project_ownership_includes_claimed_task_with_external_id_on
         status="active",
         workstream_status=None,
         workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
         provider_metadata={"cwd": "/repo/.worktrees/task-96cf4007"},
     )
 
@@ -50,6 +54,7 @@ async def test_query_project_ownership_includes_claimed_task_with_external_id_on
     assert owner.session_id == "sess-claim"
     assert owner.is_worktree is True
     assert owner.ownership_kind == "unscoped"
+    assert owner.scope_confidence == "unknown"
 
 
 @pytest.mark.asyncio
@@ -67,6 +72,10 @@ async def test_query_project_ownership_marks_external_id_only_task_lanes_as_unsc
         status="active",
         workstream_status=None,
         workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
         provider_metadata={"cwd": "/repo"},
     )
 
@@ -88,6 +97,7 @@ async def test_query_project_ownership_marks_external_id_only_task_lanes_as_unsc
     assert len(owners) == 1
     assert owners[0].task_id == "task-d0cf84cb"
     assert owners[0].ownership_kind == "unscoped"
+    assert owners[0].scope_confidence == "unknown"
 
 
 @pytest.mark.asyncio
@@ -103,6 +113,10 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
         status="active",
         workstream_status=None,
         workstream_note=None,
+        declared_scope_paths=["backend/app/services/ownership_inventory.py"],
+        observed_read_paths=["backend/app/services/session_live_activity.py"],
+        observed_write_paths=["backend/app/services/ownership_inventory.py"],
+        scope_confidence="declared",
         provider_metadata={"cwd": "/repo/.worktrees/task-a2178df4"},
     )
 
@@ -125,3 +139,6 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
     assert owners[0].task_id == "task-a2178df4"
     assert owners[0].is_stale is True
     assert owners[0].ownership_kind == "stale"
+    assert owners[0].declared_scope_paths == ["backend/app/services/ownership_inventory.py"]
+    assert owners[0].observed_read_paths == ["backend/app/services/session_live_activity.py"]
+    assert owners[0].observed_write_paths == ["backend/app/services/ownership_inventory.py"]

@@ -15,7 +15,12 @@ from app.db import get_db
 from app.models.session import Session, SessionEvent
 
 from .constants import HOURS_MAP
-from .schemas import PersonaStreamEntry, PersonaStreamEventPreview, PersonaStreamResponse
+from .schemas import (
+    PersonaStreamEntry,
+    PersonaStreamEventPreview,
+    PersonaStreamMatch,
+    PersonaStreamResponse,
+)
 
 router = APIRouter()
 
@@ -48,6 +53,55 @@ def _live_activity_summary(session: Session) -> tuple[str | None, str | None]:
         summary if isinstance(summary, str) else None,
         status if isinstance(status, str) else None,
     )
+
+
+def _entry_match_text(entry: PersonaStreamEntry) -> str:
+    return " ".join(
+        value
+        for value in [
+            entry.content,
+            entry.summary_oneliner,
+            entry.live_summary,
+            entry.agent_slug,
+            entry.project_id,
+            entry.external_id,
+            entry.current_branch,
+            entry.model,
+            *[
+                preview_value
+                for preview in entry.event_previews
+                for preview_value in [
+                    preview.tool_name,
+                    preview.content_preview,
+                    preview.tool_input_preview,
+                    preview.tool_output_preview,
+                    preview.model_used,
+                    preview.event_type,
+                ]
+                if isinstance(preview_value, str)
+            ],
+        ]
+        if isinstance(value, str) and value
+    ).lower()
+
+
+def _entry_matches_search(entry: PersonaStreamEntry, search: str) -> bool:
+    if not search:
+        return False
+    return search.lower() in _entry_match_text(entry)
+
+
+def _entry_match_snippet(entry: PersonaStreamEntry) -> str:
+    for value in [
+        entry.content,
+        entry.summary_oneliner,
+        entry.live_summary,
+        *[preview.content_preview for preview in entry.event_previews],
+        *[preview.tool_name for preview in entry.event_previews],
+    ]:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return f"{entry.entry_type} in {entry.project_id}"
 
 
 def _session_search_predicates(search: str) -> list[Any]:
@@ -305,13 +359,50 @@ def _build_stream_entries(
     return entries
 
 
+def _build_search_matches(
+    entries: list[PersonaStreamEntry],
+    *,
+    search: str | None,
+    limit: int = 150,
+) -> tuple[list[PersonaStreamMatch], int]:
+    if not search:
+        return [], 0
+    matches: list[PersonaStreamMatch] = []
+    total_matches = 0
+    for entry in entries:
+        if not _entry_matches_search(entry, search):
+            continue
+        total_matches += 1
+        if len(matches) < limit:
+            matches.append(
+                PersonaStreamMatch(
+                    entry_id=entry.id,
+                    session_id=entry.session_id,
+                    entry_type=entry.entry_type,
+                    timestamp=entry.timestamp,
+                    snippet=_entry_match_snippet(entry),
+                )
+            )
+    return matches, total_matches
+
+
 def _slice_entries(
     entries: list[PersonaStreamEntry],
     *,
     page: int,
     page_size: int,
     focus_session_id: str | None,
+    anchor_entry_id: str | None,
 ) -> list[PersonaStreamEntry]:
+    if anchor_entry_id:
+        anchor_indexes = [idx for idx, entry in enumerate(entries) if entry.id == anchor_entry_id]
+        if anchor_indexes:
+            anchor_idx = anchor_indexes[0]
+            start = max(anchor_idx - (page_size // 2), 0)
+            end = min(start + page_size, len(entries))
+            start = max(end - page_size, 0)
+            return entries[start:end]
+
     if focus_session_id:
         focus_indexes = [idx for idx, entry in enumerate(entries) if entry.session_id == focus_session_id]
         if focus_indexes:
@@ -331,6 +422,7 @@ async def get_persona_stream(
     time_range: str = Query(default="24h", description="Time range: 6h, 24h, 7d, 30d, all"),
     search: str | None = Query(default=None, description="Search across Jenny messages and activity"),
     focus_session_id: str | None = Query(default=None, description="Center the response around a specific session"),
+    anchor_entry_id: str | None = Query(default=None, description="Center the response around a specific entry"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=300),
 ) -> PersonaStreamResponse:
@@ -370,16 +462,20 @@ async def get_persona_stream(
         tool_counts,
         event_previews,
     )
+    matches, match_count = _build_search_matches(entries, search=search_term)
 
     sliced_entries = _slice_entries(
         entries,
         page=page,
         page_size=page_size,
         focus_session_id=focus_session_id,
+        anchor_entry_id=anchor_entry_id,
     )
     return PersonaStreamResponse(
         entries=sliced_entries,
         total=len(entries),
         page=page,
         page_size=page_size,
+        matches=matches,
+        match_count=match_count,
     )

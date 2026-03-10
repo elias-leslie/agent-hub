@@ -34,6 +34,10 @@ def _owner(**overrides: object) -> OwnershipOwner:
         "workstream_note": "Current owner",
         "ownership_kind": "scoped",
         "scope_paths": ["backend/app/services/tools/catalog.py"],
+        "declared_scope_paths": ["backend/app/services/tools/catalog.py"],
+        "observed_read_paths": ["backend/app/services/session_live_activity.py"],
+        "observed_write_paths": ["backend/app/services/tools/catalog.py"],
+        "scope_confidence": "declared",
         "updated_at": now,
         "created_at": now,
         "age_minutes": 12,
@@ -108,6 +112,16 @@ class TestProjectOwnership:
         assert data["active_owners"][0]["scope_paths"] == [
             "backend/app/services/tools/catalog.py"
         ]
+        assert data["active_owners"][0]["declared_scope_paths"] == [
+            "backend/app/services/tools/catalog.py"
+        ]
+        assert data["active_owners"][0]["observed_read_paths"] == [
+            "backend/app/services/session_live_activity.py"
+        ]
+        assert data["active_owners"][0]["observed_write_paths"] == [
+            "backend/app/services/tools/catalog.py"
+        ]
+        assert data["active_owners"][0]["scope_confidence"] == "declared"
         assert data["active_owners"][1]["ownership_kind"] == "unscoped"
         assert data["active_owners"][1]["scope_paths"] == []
         assert len(data["active_specialists"]) == 1

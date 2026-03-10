@@ -37,15 +37,19 @@ import { useSessionEvents } from "@/hooks/use-session-events";
 import { cn } from "@/lib/utils";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
 import {
+  type PersonaStreamMatch,
   fetchPersonaStream,
   type PersonaStreamEventPreview,
   type PersonaStreamEntry,
 } from "@/lib/api/persona-stream";
+import type { SessionEvent as LiveSessionEvent } from "@/types/events";
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
 
 const PROJECT_ID = "persona-sandbox";
 const PAGE_SIZE = 120;
 const LIVE_REFRESH_MS = 5_000;
+const AUTO_FOLLOW_BOTTOM_THRESHOLD = 160;
+const PROGRAMMATIC_SCROLL_GRACE_MS = 400;
 
 type FilterMode = "all" | "messages" | "work" | "errors" | "heartbeats";
 
@@ -76,9 +80,27 @@ type FeedChildRun = {
 type FeedAnchor = FeedMessage | FeedHeartbeat | FeedChildRun;
 type FeedItem = FeedAnchor;
 
-interface TimelineBlock {
+interface ItemTimelineBlock {
+  kind: "item";
   anchorItem: FeedAnchor;
   childRuns: FeedChildRun[];
+}
+
+interface RoutineHeartbeatTimelineBlock {
+  kind: "routine_group";
+  id: string;
+  items: Array<{
+    anchorItem: FeedHeartbeat;
+    childRuns: FeedChildRun[];
+  }>;
+}
+
+type TimelineBlock = ItemTimelineBlock | RoutineHeartbeatTimelineBlock;
+
+interface LiveSessionPatch {
+  liveSummary: string | null;
+  liveStatus: string | null;
+  eventPreviews: PersonaStreamEventPreview[];
 }
 
 function isChildRunItem(item: FeedItem): item is FeedChildRun {
@@ -201,6 +223,25 @@ function formatDurationLabel(durationMs: number | null): string | null {
   return `${minutes}m ${seconds}s`;
 }
 
+function parseJsonPreview(value: string | null): Record<string, unknown> | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function shortenText(value: string, maxLength = 88): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return `${value.slice(0, maxLength - 1)}…`;
+}
+
 function highlightKeywordClass(token: string): string {
   const normalized = token.toLowerCase();
   if (["error", "failed", "failure", "blocked"].includes(normalized)) {
@@ -248,28 +289,9 @@ function eventLabel(eventType: string): string {
   return eventType.replaceAll("_", " ");
 }
 
-function entrySearchText(entry: PersonaStreamEntry): string {
-  return [
-    entry.content,
-    entry.summary_oneliner,
-    entry.live_summary,
-    entry.agent_slug,
-    entry.project_id,
-    entry.external_id,
-    entry.current_branch,
-    entry.model,
-    ...entry.event_previews.flatMap((preview) => [
-      preview.tool_name,
-      preview.content_preview,
-      preview.tool_input_preview,
-      preview.tool_output_preview,
-      preview.model_used,
-      preview.event_type,
-    ]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+function isNearBottom(container: HTMLDivElement): boolean {
+  const distanceFromBottom = container.scrollHeight - container.clientHeight - container.scrollTop;
+  return distanceFromBottom <= AUTO_FOLLOW_BOTTOM_THRESHOLD;
 }
 
 function eventToneClasses(eventType: string): string {
@@ -289,6 +311,15 @@ function eventToneClasses(eventType: string): string {
 }
 
 function eventSummaryLabel(preview: PersonaStreamEventPreview): string {
+  if (preview.event_type === "assistant_message") {
+    return "Assistant";
+  }
+  if (preview.event_type === "user_message") {
+    return "User";
+  }
+  if (preview.event_type === "system_message") {
+    return "System";
+  }
   if (preview.event_type === "tool_use") {
     return "Tool call";
   }
@@ -302,6 +333,256 @@ function eventSummaryLabel(preview: PersonaStreamEventPreview): string {
     return "Reasoning";
   }
   return eventLabel(preview.event_type);
+}
+
+function eventLeadText(preview: PersonaStreamEventPreview): string | null {
+  const toolInput = parseJsonPreview(preview.tool_input_preview);
+  const toolOutput = parseJsonPreview(preview.tool_output_preview);
+
+  if (preview.event_type === "tool_use" && toolInput) {
+    const command = toolInput.command;
+    if (typeof command === "string" && command.trim()) {
+      return shortenText(command.trim(), 104);
+    }
+    const filePath = toolInput.file_path ?? toolInput.path;
+    if (typeof filePath === "string" && filePath.trim()) {
+      return shortenText(filePath.trim(), 104);
+    }
+    const action = toolInput.action;
+    const taskId = toolInput.task_id;
+    if (typeof action === "string" && action.trim()) {
+      return typeof taskId === "string" && taskId.trim()
+        ? `${action} ${taskId}`
+        : action;
+    }
+    const description = toolInput.description;
+    if (typeof description === "string" && description.trim()) {
+      return shortenText(description.trim(), 104);
+    }
+  }
+
+  if (preview.event_type === "tool_result" && toolOutput) {
+    const content = toolOutput.content;
+    if (typeof content === "string" && content.trim()) {
+      return shortenText(content.trim(), 104);
+    }
+  }
+
+  if (preview.content_preview) {
+    return shortenText(preview.content_preview.trim(), 104);
+  }
+
+  return null;
+}
+
+function eventAccentClasses(preview: PersonaStreamEventPreview): string {
+  if (preview.event_type === "error") {
+    return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+  if (preview.event_type === "tool_result") {
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (preview.event_type === "tool_use") {
+    return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+  }
+  if (preview.event_type === "assistant_message") {
+    return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
+  }
+  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+}
+
+function heartbeatIsImportant(entry: PersonaStreamEntry): boolean {
+  const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
+  const importantKeywords = [
+    "dispatch",
+    "publish",
+    "verified",
+    "verify",
+    "fixed",
+    "created ",
+    "reconciled",
+    "merged",
+    "review",
+    "audit",
+    "error",
+    "failed",
+    "blocked",
+    "warning",
+    "assess",
+    "investig",
+    "task-",
+  ];
+  return importantKeywords.some((keyword) => summary.includes(keyword));
+}
+
+function isRoutineHeartbeatBlock(
+  block: ItemTimelineBlock,
+  searchActive: boolean,
+  filterMode: FilterMode,
+): boolean {
+  if (searchActive || filterMode !== "all") {
+    return false;
+  }
+  if (block.anchorItem.kind !== "heartbeat") {
+    return false;
+  }
+  if (block.childRuns.length > 0) {
+    return false;
+  }
+  const entry = block.anchorItem.entry;
+  if (entry.status !== "completed" || entry.live_status === "active") {
+    return false;
+  }
+  if (entry.event_previews.some((preview) => preview.event_type === "error")) {
+    return false;
+  }
+  if (heartbeatIsImportant(entry)) {
+    return false;
+  }
+  const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
+  return entry.tool_count <= 3 || summary.includes("waiting for model") || summary.includes("execution completed");
+}
+
+function mergeEventPreviews(
+  original: PersonaStreamEventPreview[],
+  live: PersonaStreamEventPreview[],
+): PersonaStreamEventPreview[] {
+  if (live.length === 0) {
+    return original;
+  }
+  const deduped = new Map<string, PersonaStreamEventPreview>();
+  for (const preview of [...live, ...original]) {
+    if (!deduped.has(preview.id)) {
+      deduped.set(preview.id, preview);
+    }
+  }
+  return Array.from(deduped.values()).slice(0, 12);
+}
+
+function buildLivePreview(event: LiveSessionEvent): PersonaStreamEventPreview | null {
+  const previewId = `live:${event.session_id}:${event.timestamp}:${event.event_type}`;
+  if (event.event_type === "message") {
+    const role =
+      typeof event.data === "object" && event.data && "role" in event.data && typeof event.data.role === "string"
+        ? event.data.role
+        : null;
+    const content =
+      typeof event.data === "object" && event.data && "content" in event.data && typeof event.data.content === "string"
+        ? event.data.content
+        : null;
+    return {
+      id: previewId,
+      event_type: role ? `${role}_message` : "assistant_message",
+      created_at: event.timestamp,
+      role,
+      tool_name: null,
+      content_preview: content,
+      tool_input_preview: null,
+      tool_output_preview: null,
+      duration_ms: null,
+      model_used: null,
+    };
+  }
+  if (event.event_type === "tool_use") {
+    const toolName =
+      typeof event.data === "object" && event.data && "tool_name" in event.data && typeof event.data.tool_name === "string"
+        ? event.data.tool_name
+        : null;
+    const toolInput =
+      typeof event.data === "object" && event.data && "tool_input" in event.data
+        ? JSON.stringify(event.data.tool_input)
+        : null;
+    const toolOutput =
+      typeof event.data === "object" && event.data && "tool_output" in event.data
+        ? JSON.stringify(event.data.tool_output)
+        : null;
+    return {
+      id: previewId,
+      event_type: "tool_use",
+      created_at: event.timestamp,
+      role: null,
+      tool_name: toolName,
+      content_preview: null,
+      tool_input_preview: toolInput,
+      tool_output_preview: toolOutput,
+      duration_ms: null,
+      model_used: null,
+    };
+  }
+  if (event.event_type === "error") {
+    const errorMessage =
+      typeof event.data === "object" && event.data && "error_message" in event.data && typeof event.data.error_message === "string"
+        ? event.data.error_message
+        : "Session error";
+    return {
+      id: previewId,
+      event_type: "error",
+      created_at: event.timestamp,
+      role: null,
+      tool_name: null,
+      content_preview: errorMessage,
+      tool_input_preview: null,
+      tool_output_preview: null,
+      duration_ms: null,
+      model_used: null,
+    };
+  }
+  if (event.event_type === "complete") {
+    return {
+      id: previewId,
+      event_type: "tool_result",
+      created_at: event.timestamp,
+      role: null,
+      tool_name: null,
+      content_preview: "Execution completed",
+      tool_input_preview: null,
+      tool_output_preview: null,
+      duration_ms: null,
+      model_used: null,
+    };
+  }
+  return null;
+}
+
+function liveSummaryFromEvent(event: LiveSessionEvent): string | null {
+  if (event.event_type === "tool_use") {
+    const toolName =
+      typeof event.data === "object" && event.data && "tool_name" in event.data && typeof event.data.tool_name === "string"
+        ? event.data.tool_name
+        : "tool";
+    return `Running ${toolName}`;
+  }
+  if (event.event_type === "message") {
+    const content =
+      typeof event.data === "object" && event.data && "content" in event.data && typeof event.data.content === "string"
+        ? event.data.content
+        : null;
+    return content ? shortenText(content, 96) : "New message";
+  }
+  if (event.event_type === "error") {
+    const errorMessage =
+      typeof event.data === "object" && event.data && "error_message" in event.data && typeof event.data.error_message === "string"
+        ? event.data.error_message
+        : "Session error";
+    return `Error: ${shortenText(errorMessage, 88)}`;
+  }
+  if (event.event_type === "complete") {
+    return "Execution completed";
+  }
+  if (event.event_type === "session_start") {
+    return "Session started";
+  }
+  return null;
+}
+
+function liveStatusFromEvent(event: LiveSessionEvent): string | null {
+  if (event.event_type === "complete") {
+    return "completed";
+  }
+  if (event.event_type === "error") {
+    return "failed";
+  }
+  return "active";
 }
 
 function PreviewCodeBlock({
@@ -332,13 +613,16 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
       {previews.map((preview) => {
         const duration = formatDurationLabel(preview.duration_ms);
+        const leadText = eventLeadText(preview);
         return (
           <div
             key={preview.id}
             className={cn("rounded-xl border px-3 py-2 text-sm", eventToneClasses(preview.event_type))}
           >
             <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
-              <span>{eventSummaryLabel(preview)}</span>
+              <span className={cn("rounded-full px-2 py-0.5", eventAccentClasses(preview))}>
+                {eventSummaryLabel(preview)}
+              </span>
               <time dateTime={preview.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
                 <Clock3 className="h-3 w-3" />
                 {formatTimeLabel(new Date(preview.created_at))}
@@ -346,6 +630,14 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
               {preview.tool_name && <span className="normal-case tracking-normal font-medium">{preview.tool_name}</span>}
               {duration && <span className="normal-case tracking-normal opacity-80">{duration}</span>}
             </div>
+            {leadText && (
+              <div className="mt-2 rounded-xl border border-black/5 bg-white/70 px-2.5 py-2 dark:border-white/5 dark:bg-slate-950/60">
+                <HighlightedText
+                  text={leadText}
+                  className="block whitespace-pre-wrap break-words text-xs font-medium"
+                />
+              </div>
+            )}
             {preview.content_preview && (
               <HighlightedText
                 text={preview.content_preview}
@@ -357,6 +649,84 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function RoutineHeartbeatGroup({
+  block,
+  expanded,
+  onToggle,
+  activeSessionId,
+  expandedEntryIds,
+  onToggleEntry,
+}: {
+  block: RoutineHeartbeatTimelineBlock;
+  expanded: boolean;
+  onToggle: () => void;
+  activeSessionId: string | null;
+  expandedEntryIds: Record<string, boolean>;
+  onToggleEntry: (entryId: string) => void;
+}) {
+  const first = block.items[0]?.anchorItem;
+  const last = block.items.at(-1)?.anchorItem;
+  const timeRange =
+    first && last
+      ? `${formatTimeLabel(first.timestamp)} to ${formatTimeLabel(last.timestamp)}`
+      : null;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/80">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <Clock3 className="h-4 w-4 text-slate-400" />
+              {block.items.length} routine heartbeats
+            </span>
+            {timeRange && (
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {timeRange}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Routine checks stay collapsed until you need the full detail.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          {expanded ? "Hide routine checks" : "Show routine checks"}
+        </button>
+      </div>
+      {expanded && (
+        <div className="mt-3 space-y-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+          {block.items.map(({ anchorItem }) => (
+            <div
+              key={anchorItem.id}
+              data-session-anchor={anchorItem.sessionId}
+              data-testid="stream-item"
+              data-stream-item-id={anchorItem.id}
+              data-timestamp={anchorItem.timestamp.toISOString()}
+              className="flex items-start gap-3"
+            >
+              <TimelineTimestamp timestamp={anchorItem.timestamp} />
+              <div className="min-w-0 flex-1">
+                <HeartbeatCard
+                  entry={anchorItem.entry}
+                  selected={anchorItem.sessionId === activeSessionId}
+                  expanded={!!expandedEntryIds[anchorItem.id]}
+                  onToggle={() => onToggleEntry(anchorItem.id)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -576,16 +946,22 @@ export function UnifiedPersonaWorkspace({
   const [autoFollow, setAutoFollow] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [entries, setEntries] = useState<PersonaStreamEntry[]>([]);
+  const [searchMatches, setSearchMatches] = useState<PersonaStreamMatch[]>([]);
+  const [matchCount, setMatchCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [focusSessionId, setFocusSessionId] = useState<string | null>(activeSessionId);
+  const [anchorEntryId, setAnchorEntryId] = useState<string | null>(null);
   const [expandedEntryIds, setExpandedEntryIds] = useState<Record<string, boolean>>({});
+  const [expandedRoutineGroupIds, setExpandedRoutineGroupIds] = useState<Record<string, boolean>>({});
   const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
-  const [pendingSearchDirection, setPendingSearchDirection] = useState<1 | -1 | null>(null);
   const [liveRefreshTick, setLiveRefreshTick] = useState(0);
+  const [liveSessionPatches, setLiveSessionPatches] = useState<Record<string, LiveSessionPatch>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+  const autoFollowRef = useRef(true);
+  const programmaticScrollUntilRef = useRef(0);
 
   const apiConfig = useMemo(
     () => ({
@@ -615,22 +991,103 @@ export function UnifiedPersonaWorkspace({
     loadInitialSession: false,
   } as any);
 
-  const activeStreamSessionIds = useMemo(
+  useEffect(() => {
+    autoFollowRef.current = autoFollow;
+  }, [autoFollow]);
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const container = scrollRef.current;
+    if (!container || typeof container.scrollTo !== "function") {
+      return;
+    }
+    programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_GRACE_MS;
+    container.scrollTo({ top: container.scrollHeight, behavior });
+  };
+
+  const hydratedEntries = useMemo(
     () =>
-      entries
-        .filter((entry) => entry.status === "active" || entry.live_status === "active")
-        .map((entry) => entry.session_id),
-    [entries],
+      entries.map((entry) => {
+        const patch = liveSessionPatches[entry.session_id];
+        if (!patch) {
+          return entry;
+        }
+        return {
+          ...entry,
+          live_summary: patch.liveSummary ?? entry.live_summary,
+          live_status: patch.liveStatus ?? entry.live_status,
+          status:
+            patch.liveStatus === "failed"
+              ? "failed"
+              : patch.liveStatus === "completed" && entry.status === "active"
+                ? "completed"
+                : entry.status,
+          event_previews: mergeEventPreviews(entry.event_previews, patch.eventPreviews),
+        };
+      }),
+    [entries, liveSessionPatches],
   );
+
+  const activeStreamSessionIds = useMemo(() => {
+    const activeIds = new Set<string>();
+    for (const entry of hydratedEntries) {
+      if (entry.status === "active" || entry.live_status === "active") {
+        activeIds.add(entry.session_id);
+      }
+    }
+    return Array.from(activeIds);
+  }, [hydratedEntries]);
 
   useSessionEvents({
     sessionIds: activeStreamSessionIds,
     autoConnect: true,
     autoReconnect: true,
-    onEvent: () => {
-      setLiveRefreshTick((value) => value + 1);
+    onEvent: (event) => {
+      const preview = buildLivePreview(event);
+      const liveSummary = liveSummaryFromEvent(event);
+      const liveStatus = liveStatusFromEvent(event);
+      setLiveSessionPatches((current) => {
+        const existing = current[event.session_id] ?? {
+          liveSummary: null,
+          liveStatus: null,
+          eventPreviews: [],
+        };
+        return {
+          ...current,
+          [event.session_id]: {
+            liveSummary: liveSummary ?? existing.liveSummary,
+            liveStatus: liveStatus ?? existing.liveStatus,
+            eventPreviews: preview ? mergeEventPreviews(existing.eventPreviews, [preview]) : existing.eventPreviews,
+          },
+        };
+      });
+      if (!entries.some((entry) => entry.session_id === event.session_id)) {
+        setLiveRefreshTick((value) => value + 1);
+        return;
+      }
+      if (event.event_type === "complete" || event.event_type === "error") {
+        window.setTimeout(() => {
+          setLiveRefreshTick((value) => value + 1);
+        }, 600);
+      }
     },
   });
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) {
+      return;
+    }
+    const handleScroll = () => {
+      if (Date.now() < programmaticScrollUntilRef.current) {
+        return;
+      }
+      if (autoFollowRef.current && !isNearBottom(container)) {
+        setAutoFollow(false);
+      }
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -643,6 +1100,9 @@ export function UnifiedPersonaWorkspace({
   }, [activeSessionId]);
 
   useEffect(() => {
+    if (!deferredSearch.trim()) {
+      setAnchorEntryId(null);
+    }
     setPage(1);
   }, [timeRange, deferredSearch, focusSessionId, currentSessionId]);
 
@@ -650,10 +1110,11 @@ export function UnifiedPersonaWorkspace({
     let cancelled = false;
     setLoading(true);
     const effectiveRange = deferredSearch.trim() ? "all" : timeRange;
-    fetchPersonaStream({
+      fetchPersonaStream({
       timeRange: effectiveRange,
       search: deferredSearch.trim() || undefined,
       focusSessionId,
+      anchorEntryId,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -675,6 +1136,8 @@ export function UnifiedPersonaWorkspace({
             return merged;
           });
           setTotal(data.total);
+          setSearchMatches(data.matches);
+          setMatchCount(data.match_count);
           setError(null);
         });
       })
@@ -692,7 +1155,7 @@ export function UnifiedPersonaWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [timeRange, deferredSearch, focusSessionId, page, currentSessionId, sidebarRefreshTrigger, liveRefreshTick]);
+  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, page, currentSessionId, sidebarRefreshTrigger, liveRefreshTick]);
 
   useEffect(() => {
     if (!focusSessionId) {
@@ -708,29 +1171,29 @@ export function UnifiedPersonaWorkspace({
 
   useEffect(() => {
     const container = scrollRef.current;
-    if (!container || typeof container.scrollTo !== "function") {
+    if (!container || !autoFollow) {
       return;
     }
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-  }, [messages.length, status]);
+    scrollToBottom("smooth");
+  }, [messages.length, status, autoFollow]);
 
   useEffect(() => {
     if (!autoFollow) {
       return;
     }
-    const hasLiveWork = entries.some((entry) => entry.status === "active" || entry.live_status === "active");
+    const hasLiveWork = hydratedEntries.some((entry) => entry.status === "active" || entry.live_status === "active");
     if (!hasLiveWork) {
       return;
     }
     const container = scrollRef.current;
-    if (!container || typeof container.scrollTo !== "function") {
+    if (!container || !isNearBottom(container)) {
       return;
     }
-    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
-  }, [autoFollow, entries]);
+    scrollToBottom("smooth");
+  }, [autoFollow, hydratedEntries]);
 
   useEffect(() => {
-    const hasLiveWork = entries.some((entry) => entry.status === "active" || entry.live_status === "active");
+    const hasLiveWork = hydratedEntries.some((entry) => entry.status === "active" || entry.live_status === "active");
     if (!hasLiveWork) {
       return;
     }
@@ -738,10 +1201,10 @@ export function UnifiedPersonaWorkspace({
       setLiveRefreshTick((value) => value + 1);
     }, LIVE_REFRESH_MS);
     return () => window.clearInterval(interval);
-  }, [entries]);
+  }, [hydratedEntries]);
 
   const mergedItems = useMemo(() => {
-    const remote = buildRemoteFeedItems([...entries].reverse());
+    const remote = buildRemoteFeedItems([...hydratedEntries].reverse());
     const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId);
     return [...remote, ...local]
       .filter((item) => {
@@ -758,7 +1221,7 @@ export function UnifiedPersonaWorkspace({
         return true;
       })
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  }, [entries, messages, currentSessionId, activeSessionId, filterMode]);
+  }, [hydratedEntries, messages, currentSessionId, activeSessionId, filterMode]);
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ label: string; blocks: TimelineBlock[] }> = [];
@@ -773,81 +1236,101 @@ export function UnifiedPersonaWorkspace({
       if (isChildRunItem(item) && item.entry.parent_session_id) {
         const parentBlockIndex = currentBlocks.findLastIndex(
           (block) =>
+            block.kind === "item" &&
             canAnchorChildRuns(block.anchorItem) &&
             block.anchorItem.sessionId === item.entry.parent_session_id,
         );
         if (parentBlockIndex >= 0) {
-          currentBlocks[parentBlockIndex].childRuns.push(item);
+          const parentBlock = currentBlocks[parentBlockIndex];
+          if (parentBlock.kind === "item") {
+            parentBlock.childRuns.push(item);
+          }
           continue;
         }
       }
-      currentBlocks.push({ anchorItem: item, childRuns: [] });
+      currentBlocks.push({ kind: "item", anchorItem: item, childRuns: [] });
     }
-    return groups;
-  }, [mergedItems]);
+    return groups.map((group) => {
+      const compressedBlocks: TimelineBlock[] = [];
+      let pendingRoutine: ItemTimelineBlock[] = [];
+      const flushRoutine = () => {
+        if (pendingRoutine.length === 0) {
+          return;
+        }
+        if (pendingRoutine.length === 1) {
+          compressedBlocks.push(pendingRoutine[0]);
+        } else {
+          compressedBlocks.push({
+            kind: "routine_group",
+            id: `routine:${pendingRoutine[0].anchorItem.id}:${pendingRoutine.at(-1)?.anchorItem.id}`,
+            items: pendingRoutine.map((block) => ({
+              anchorItem: block.anchorItem as FeedHeartbeat,
+              childRuns: block.childRuns,
+            })),
+          });
+        }
+        pendingRoutine = [];
+      };
 
-  const searchMatches = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-    if (!query) {
-      return [];
-    }
-    return mergedItems.filter((item) => {
-      if (item.kind === "message") {
-        return item.message.content.toLowerCase().includes(query);
+      for (const block of group.blocks) {
+        if (block.kind !== "item") {
+          flushRoutine();
+          compressedBlocks.push(block);
+          continue;
+        }
+        if (isRoutineHeartbeatBlock(block, !!deferredSearch.trim(), filterMode)) {
+          pendingRoutine.push(block);
+          continue;
+        }
+        flushRoutine();
+        compressedBlocks.push(block);
       }
-      return entrySearchText(item.entry).includes(query);
+      flushRoutine();
+      return { ...group, blocks: compressedBlocks };
     });
-  }, [deferredSearch, mergedItems]);
+  }, [mergedItems, deferredSearch, filterMode]);
 
   const filterCounts = useMemo(() => {
     const counts: Record<FilterMode, number> = {
-      all: entries.length + messages.length,
-      messages: [...entries.filter((entry) => entry.entry_type === "message"), ...messages].length,
-      work: entries.filter((entry) => entry.entry_type === "heartbeat" || entry.entry_type === "child_run").length,
-      errors: entries.filter((entry) => entry.status === "failed" || entry.event_previews.some((preview) => preview.event_type === "error")).length,
-      heartbeats: entries.filter((entry) => entry.entry_type === "heartbeat").length,
+      all: hydratedEntries.length + messages.length,
+      messages: [...hydratedEntries.filter((entry) => entry.entry_type === "message"), ...messages].length,
+      work: hydratedEntries.filter((entry) => entry.entry_type === "heartbeat" || entry.entry_type === "child_run").length,
+      errors: hydratedEntries.filter((entry) => entry.status === "failed" || entry.event_previews.some((preview) => preview.event_type === "error")).length,
+      heartbeats: hydratedEntries.filter((entry) => entry.entry_type === "heartbeat").length,
     };
     return counts;
-  }, [entries, messages]);
+  }, [hydratedEntries, messages]);
 
-  const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.id)), [searchMatches]);
+  const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.entry_id)), [searchMatches]);
   const activeSearchMatch = useMemo(
-    () => searchMatches.findIndex((item) => item.id === activeSearchMatchId),
+    () => searchMatches.findIndex((item) => item.entry_id === activeSearchMatchId),
     [activeSearchMatchId, searchMatches],
   );
-  const activeMatchId = activeSearchMatchId && searchMatches.some((item) => item.id === activeSearchMatchId)
+  const activeMatchId = activeSearchMatchId && searchMatches.some((item) => item.entry_id === activeSearchMatchId)
     ? activeSearchMatchId
-    : searchMatches.at(-1)?.id ?? null;
+    : searchMatches[0]?.entry_id ?? null;
 
   useEffect(() => {
     if (!deferredSearch.trim()) {
       setActiveSearchMatchId(null);
-      setPendingSearchDirection(null);
       return;
     }
 
     if (searchMatches.length === 0) {
       return;
     }
-
-    const currentIndex = searchMatches.findIndex((item) => item.id === activeSearchMatchId);
-    if (pendingSearchDirection === -1 && currentIndex > 0) {
-      setActiveSearchMatchId(searchMatches[currentIndex - 1].id);
-      setPendingSearchDirection(null);
-      return;
+    if (!activeSearchMatchId || !searchMatches.some((item) => item.entry_id === activeSearchMatchId)) {
+      setActiveSearchMatchId(searchMatches[0]?.entry_id ?? null);
     }
-
-    if (currentIndex >= 0) {
-      setPendingSearchDirection(null);
-      return;
-    }
-
-    setActiveSearchMatchId(searchMatches.at(-1)?.id ?? null);
-    setPendingSearchDirection(null);
-  }, [deferredSearch, searchMatches, activeSearchMatchId, pendingSearchDirection]);
+  }, [deferredSearch, searchMatches, activeSearchMatchId]);
 
   useEffect(() => {
     if (!activeMatchId) {
+      return;
+    }
+    const loaded = mergedItems.some((item) => item.id === activeMatchId);
+    if (!loaded && anchorEntryId !== activeMatchId) {
+      setAnchorEntryId(activeMatchId);
       return;
     }
     const timeout = window.setTimeout(() => {
@@ -855,11 +1338,13 @@ export function UnifiedPersonaWorkspace({
       node?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 120);
     return () => window.clearTimeout(timeout);
-  }, [activeMatchId]);
+  }, [activeMatchId, mergedItems, anchorEntryId]);
 
   const handleSessionJump = (sessionId: string | null) => {
     onSelectSession(sessionId);
     setFocusSessionId(sessionId);
+    setAnchorEntryId(null);
+    setAutoFollow(false);
   };
 
   const toggleExpanded = (entryId: string) => {
@@ -869,30 +1354,49 @@ export function UnifiedPersonaWorkspace({
     }));
   };
 
+  const toggleRoutineGroup = (groupId: string) => {
+    setExpandedRoutineGroupIds((current) => ({
+      ...current,
+      [groupId]: !current[groupId],
+    }));
+  };
+
+  const visibleSearchMatches = useMemo(() => {
+    if (searchMatches.length === 0) {
+      return [];
+    }
+    if (activeSearchMatch < 0) {
+      return searchMatches.slice(0, 5);
+    }
+    const start = Math.max(activeSearchMatch - 2, 0);
+    const end = Math.min(start + 5, searchMatches.length);
+    return searchMatches.slice(Math.max(end - 5, 0), end);
+  }, [searchMatches, activeSearchMatch]);
+
   const jumpToSearchMatch = (direction: 1 | -1) => {
     if (searchMatches.length === 0) {
       return;
     }
-    const currentIndex = searchMatches.findIndex((item) => item.id === activeMatchId);
-    const fallbackIndex = searchMatches.length - 1;
+    const currentIndex = searchMatches.findIndex((item) => item.entry_id === activeMatchId);
+    const fallbackIndex = 0;
     const resolvedIndex = currentIndex >= 0 ? currentIndex : fallbackIndex;
-
-    if (direction === -1 && resolvedIndex === 0 && total > entries.length) {
-      setPendingSearchDirection(-1);
-      setPage((value) => value + 1);
-      return;
-    }
 
     const nextIndex = resolvedIndex + direction;
     if (nextIndex < 0) {
-      setActiveSearchMatchId(searchMatches.at(-1)?.id ?? null);
+      setActiveSearchMatchId(searchMatches.at(-1)?.entry_id ?? null);
+      setAnchorEntryId(searchMatches.at(-1)?.entry_id ?? null);
+      setAutoFollow(false);
       return;
     }
     if (nextIndex >= searchMatches.length) {
-      setActiveSearchMatchId(searchMatches[0]?.id ?? null);
+      setActiveSearchMatchId(searchMatches[0]?.entry_id ?? null);
+      setAnchorEntryId(searchMatches[0]?.entry_id ?? null);
+      setAutoFollow(false);
       return;
     }
-    setActiveSearchMatchId(searchMatches[nextIndex].id);
+    setActiveSearchMatchId(searchMatches[nextIndex].entry_id);
+    setAnchorEntryId(searchMatches[nextIndex].entry_id);
+    setAutoFollow(false);
   };
 
   return (
@@ -911,7 +1415,10 @@ export function UnifiedPersonaWorkspace({
             <input
               id={searchInputId}
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setAnchorEntryId(null);
+              }}
               placeholder="Search Jenny's history, task IDs, files, agents..."
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700"
             />
@@ -919,7 +1426,17 @@ export function UnifiedPersonaWorkspace({
           <TimeRangeDropdown value={timeRange} onChange={setTimeRange} />
           <button
             type="button"
-            onClick={() => setAutoFollow((value) => !value)}
+            onClick={() => {
+              setAutoFollow((value) => {
+                const next = !value;
+                if (next) {
+                  window.setTimeout(() => {
+                    scrollToBottom("smooth");
+                  }, 0);
+                }
+                return next;
+              });
+            }}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition",
               autoFollow
@@ -958,11 +1475,11 @@ export function UnifiedPersonaWorkspace({
         {deferredSearch.trim() && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             <span>
-              {searchMatches.length === 0
+              {matchCount === 0
                 ? `No matches for "${deferredSearch.trim()}"`
-                : `${Math.max(activeSearchMatch, 0) + 1} of ${searchMatches.length} loaded matches for "${deferredSearch.trim()}"${total > entries.length ? ` (${entries.length} of ${total} entries loaded)` : ""}`}
+                : `${Math.max(activeSearchMatch, 0) + 1} of ${matchCount} matches for "${deferredSearch.trim()}"`}
             </span>
-            {searchMatches.length > 0 && (
+            {matchCount > 0 && (
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -984,9 +1501,35 @@ export function UnifiedPersonaWorkspace({
             )}
           </div>
         )}
+        {deferredSearch.trim() && visibleSearchMatches.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {visibleSearchMatches.map((match) => (
+              <button
+                key={match.entry_id}
+                type="button"
+                onClick={() => {
+                  setActiveSearchMatchId(match.entry_id);
+                  setAnchorEntryId(match.entry_id);
+                  setAutoFollow(false);
+                }}
+                className={cn(
+                  "max-w-full rounded-2xl border px-3 py-2 text-left text-xs transition",
+                  match.entry_id === activeMatchId
+                    ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900",
+                )}
+              >
+                <div className="font-semibold uppercase tracking-[0.14em] text-[10px] opacity-70">
+                  {formatTimeLabel(new Date(match.timestamp))} · {match.entry_type}
+                </div>
+                <HighlightedText text={shortenText(match.snippet, 90)} className="mt-1 block" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-4 py-4">
         {(error || chatError) && (
           <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
             <AlertCircle className="h-4 w-4" />
@@ -1009,6 +1552,20 @@ export function UnifiedPersonaWorkspace({
                 <DateDivider label={group.label} />
                 <div className="space-y-3">
                   {group.blocks.map((block) => {
+                    if (block.kind === "routine_group") {
+                      return (
+                        <RoutineHeartbeatGroup
+                          key={block.id}
+                          block={block}
+                          expanded={!!expandedRoutineGroupIds[block.id]}
+                          onToggle={() => toggleRoutineGroup(block.id)}
+                          activeSessionId={activeSessionId}
+                          expandedEntryIds={expandedEntryIds}
+                          onToggleEntry={toggleExpanded}
+                        />
+                      );
+                    }
+
                     const item = block.anchorItem;
                     const selected = !!item.sessionId && item.sessionId === activeSessionId;
                     const matched = matchedIds.has(item.id);
@@ -1115,13 +1672,13 @@ export function UnifiedPersonaWorkspace({
               </div>
             ))}
 
-            {total > entries.length && (
+            {total > entries.length && !deferredSearch.trim() && (
               <div className="flex justify-center pt-6">
                 <button
                   onClick={() => setPage((value) => value + 1)}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
-                  {deferredSearch.trim() ? "Load more matching entries" : "Load older entries"}
+                  Load older entries
                 </button>
               </div>
             )}

@@ -3,7 +3,10 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
-from app.services.session_live_activity import build_live_activity_response
+from app.services.session_live_activity import (
+    apply_live_activity_heartbeat,
+    build_live_activity_response,
+)
 
 
 def test_build_live_activity_response_marks_post_tool_wait_as_stalled_earlier() -> None:
@@ -51,3 +54,28 @@ def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None
     assert response is not None
     assert response["health"] == "quiet"
     assert response["stalled"] is False
+
+
+def test_apply_live_activity_heartbeat_tracks_recent_paths() -> None:
+    session = MagicMock()
+    session.provider_metadata = {}
+
+    apply_live_activity_heartbeat(
+        session,
+        heartbeat_at="2026-03-10T14:00:00+00:00",
+        phase="running_tool",
+        status="active",
+        summary="Editing ownership inventory",
+        current_tool_name="Write",
+        current_command="Write backend/app/services/ownership_inventory.py",
+        last_event_type="tool_result",
+        active_read_paths=["backend/app/services/session_live_activity.py"],
+        active_write_paths=["backend/app/services/ownership_inventory.py"],
+    )
+
+    live = session.provider_metadata["live_activity"]
+    assert live["last_heartbeat_at"] == "2026-03-10T14:00:00+00:00"
+    assert live["current_tool_name"] == "Write"
+    assert live["current_command"] == "Write backend/app/services/ownership_inventory.py"
+    assert live["recent_read_paths"] == ["backend/app/services/session_live_activity.py"]
+    assert live["recent_write_paths"] == ["backend/app/services/ownership_inventory.py"]
