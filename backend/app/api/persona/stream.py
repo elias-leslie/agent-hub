@@ -243,65 +243,25 @@ def _event_match_predicate(term: str) -> Any:
     )
 
 
+# Each entry: (term_list, [Session columns to ilike-match])
+# File terms only match via events; all others also match additional columns.
+_SEARCH_TERM_COLUMNS: list[tuple[str, list[Any]]] = [
+    ("general_terms", [Session.summary_oneliner, Session.project_id, Session.agent_slug, Session.external_id, Session.current_branch]),
+    ("task_terms", [Session.external_id, Session.summary_oneliner]),
+    ("file_terms", []),
+    ("agent_terms", [Session.agent_slug, Session.summary_oneliner]),
+    ("status_terms", [Session.status, Session.summary_oneliner]),
+    ("project_terms", [Session.project_id, Session.current_branch, Session.summary_oneliner]),
+]
+
+
 def _session_search_predicates(parsed_search: ParsedSearch) -> list[Any]:
     predicates: list[Any] = []
-
-    for term in parsed_search.general_terms:
-        wildcard = f"%{term}%"
-        predicates.append(
-            or_(
-                Session.summary_oneliner.ilike(wildcard),
-                Session.project_id.ilike(wildcard),
-                Session.agent_slug.ilike(wildcard),
-                Session.external_id.ilike(wildcard),
-                Session.current_branch.ilike(wildcard),
-                _event_match_predicate(term),
-            )
-        )
-
-    for term in parsed_search.task_terms:
-        wildcard = f"%{term}%"
-        predicates.append(
-            or_(
-                Session.external_id.ilike(wildcard),
-                Session.summary_oneliner.ilike(wildcard),
-                _event_match_predicate(term),
-            )
-        )
-
-    for term in parsed_search.file_terms:
-        predicates.append(_event_match_predicate(term))
-
-    for term in parsed_search.agent_terms:
-        wildcard = f"%{term}%"
-        predicates.append(
-            or_(
-                Session.agent_slug.ilike(wildcard),
-                Session.summary_oneliner.ilike(wildcard),
-                _event_match_predicate(term),
-            )
-        )
-
-    for term in parsed_search.status_terms:
-        wildcard = f"%{term}%"
-        predicates.append(
-            or_(
-                Session.status.ilike(wildcard),
-                Session.summary_oneliner.ilike(wildcard),
-                _event_match_predicate(term),
-            )
-        )
-
-    for term in parsed_search.project_terms:
-        wildcard = f"%{term}%"
-        predicates.append(
-            or_(
-                Session.project_id.ilike(wildcard),
-                Session.current_branch.ilike(wildcard),
-                Session.summary_oneliner.ilike(wildcard),
-                _event_match_predicate(term),
-            )
-        )
+    for attr, columns in _SEARCH_TERM_COLUMNS:
+        for term in getattr(parsed_search, attr):
+            wildcard = f"%{term}%"
+            col_clauses = [col.ilike(wildcard) for col in columns]
+            predicates.append(or_(*col_clauses, _event_match_predicate(term)))
     return predicates
 
 
@@ -332,36 +292,22 @@ def _child_session_query(persona_session_ids: Iterable[str], hours: int, parsed_
     return query
 
 
-async def _fetch_message_counts(db: AsyncSession, session_ids: list[str]) -> dict[str, int]:
+async def _fetch_event_counts(
+    db: AsyncSession,
+    session_ids: list[str],
+    event_types: tuple[str, ...],
+) -> dict[str, int]:
     if not session_ids:
         return {}
-
     query = (
         select(SessionEvent.session_id, func.count().label("cnt"))
         .where(
             SessionEvent.session_id.in_(session_ids),
-            SessionEvent.event_type.in_(_CHAT_MESSAGE_TYPES),
+            SessionEvent.event_type.in_(event_types),
         )
         .group_by(SessionEvent.session_id)
     )
-    rows = (await db.execute(query)).all()
-    return {row.session_id: row.cnt for row in rows}
-
-
-async def _fetch_tool_counts(db: AsyncSession, session_ids: list[str]) -> dict[str, int]:
-    if not session_ids:
-        return {}
-
-    query = (
-        select(SessionEvent.session_id, func.count().label("cnt"))
-        .where(
-            SessionEvent.session_id.in_(session_ids),
-            SessionEvent.event_type == "tool_use",
-        )
-        .group_by(SessionEvent.session_id)
-    )
-    rows = (await db.execute(query)).all()
-    return {row.session_id: row.cnt for row in rows}
+    return {row.session_id: row.cnt for row in (await db.execute(query)).all()}
 
 
 async def _fetch_persona_chat_events(
@@ -458,6 +404,80 @@ def _stringify_preview(value: Any, *, limit: int | None = 280) -> str | None:
     return f"{text[: limit - 1]}…"
 
 
+def _pulse_fields(pulse: Any) -> dict[str, Any]:
+    """Return pulse-related kwargs for PersonaStreamEntry (empty defaults when pulse is None)."""
+    return {
+        "issue_markers": pulse.issue_markers if pulse else [],
+        "pulse_tags": pulse.tags if pulse else [],
+        "primary_pulse_tag": pulse.primary_tag if pulse else None,
+        "root_causes": pulse.root_causes if pulse else [],
+        "primary_root_cause": pulse.primary_root_cause if pulse else None,
+        "pulse_summary": pulse.summary if pulse else None,
+    }
+
+
+def _make_session_entry(
+    entry_id: str,
+    entry_type: str,
+    session: Session,
+    *,
+    message_counts: dict[str, int],
+    tool_counts: dict[str, int],
+    event_previews: dict[str, list[PersonaStreamEventPreview]],
+    session_pulses: dict[str, Any],
+    session_type_override: str | None = None,
+) -> PersonaStreamEntry:
+    live_summary, live_status = _live_activity_summary(session)
+    pulse = session_pulses.get(session.id)
+    return PersonaStreamEntry(
+        id=entry_id,
+        entry_type=entry_type,
+        timestamp=session.created_at,
+        session_id=session.id,
+        parent_session_id=session.parent_session_id,
+        project_id=session.project_id,
+        agent_slug=session.agent_slug,
+        session_type=session_type_override or session.session_type,
+        status=session.status,
+        summary_oneliner=session.summary_oneliner,
+        current_branch=session.current_branch,
+        external_id=session.external_id,
+        model=session.model,
+        live_summary=live_summary,
+        live_status=live_status,
+        message_count=message_counts.get(session.id, 0),
+        tool_count=tool_counts.get(session.id, 0),
+        event_previews=event_previews.get(session.id, []),
+        **_pulse_fields(pulse),
+    )
+
+
+def _make_message_entry(
+    event: SessionEvent,
+    session: Session,
+    message_counts: dict[str, int],
+    tool_counts: dict[str, int],
+) -> PersonaStreamEntry:
+    return PersonaStreamEntry(
+        id=event.id,
+        entry_type="message",
+        timestamp=event.created_at,
+        session_id=session.id,
+        parent_session_id=session.parent_session_id,
+        project_id=session.project_id,
+        agent_slug=session.agent_slug,
+        session_type=session.session_type,
+        status=session.status,
+        role=event.role,
+        content=event.content,
+        current_branch=session.current_branch,
+        external_id=session.external_id,
+        model=event.model_used or session.model,
+        message_count=message_counts.get(session.id, 0),
+        tool_count=tool_counts.get(session.id, 0),
+    )
+
+
 def _build_stream_entries(
     persona_sessions: list[Session],
     child_sessions: list[Session],
@@ -468,99 +488,28 @@ def _build_stream_entries(
     session_pulses: dict[str, Any] | None = None,
 ) -> list[PersonaStreamEntry]:
     persona_by_id = {session.id: session for session in persona_sessions}
-    entries: list[PersonaStreamEntry] = []
     session_pulses = session_pulses or {}
+    entries: list[PersonaStreamEntry] = []
 
     for event in message_events:
         session = persona_by_id.get(event.session_id)
-        if session is None:
-            continue
-        entries.append(
-            PersonaStreamEntry(
-                id=event.id,
-                entry_type="message",
-                timestamp=event.created_at,
-                session_id=session.id,
-                parent_session_id=session.parent_session_id,
-                project_id=session.project_id,
-                agent_slug=session.agent_slug,
-                session_type=session.session_type,
-                status=session.status,
-                role=event.role,
-                content=event.content,
-                current_branch=session.current_branch,
-                external_id=session.external_id,
-                model=event.model_used or session.model,
-                message_count=message_counts.get(session.id, 0),
-                tool_count=tool_counts.get(session.id, 0),
-            )
-        )
+        if session is not None:
+            entries.append(_make_message_entry(event, session, message_counts, tool_counts))
 
+    session_entry_kwargs = dict(
+        message_counts=message_counts,
+        tool_counts=tool_counts,
+        event_previews=event_previews,
+        session_pulses=session_pulses,
+    )
     for session in persona_sessions:
         if session.session_type == "chat":
             continue
-        live_summary, live_status = _live_activity_summary(session)
-        pulse = session_pulses.get(session.id)
-        entries.append(
-            PersonaStreamEntry(
-                id=f"session-{session.id}",
-                entry_type="heartbeat",
-                timestamp=session.created_at,
-                session_id=session.id,
-                parent_session_id=session.parent_session_id,
-                project_id=session.project_id,
-                agent_slug=session.agent_slug,
-                session_type="heartbeat" if session.project_id == "persona-sandbox" else session.session_type,
-                status=session.status,
-                summary_oneliner=session.summary_oneliner,
-                current_branch=session.current_branch,
-                external_id=session.external_id,
-                model=session.model,
-                live_summary=live_summary,
-                live_status=live_status,
-                message_count=message_counts.get(session.id, 0),
-                tool_count=tool_counts.get(session.id, 0),
-                event_previews=event_previews.get(session.id, []),
-                issue_markers=pulse.issue_markers if pulse else [],
-                pulse_tags=pulse.tags if pulse else [],
-                primary_pulse_tag=pulse.primary_tag if pulse else None,
-                root_causes=pulse.root_causes if pulse else [],
-                primary_root_cause=pulse.primary_root_cause if pulse else None,
-                pulse_summary=pulse.summary if pulse else None,
-            )
-        )
+        session_type = "heartbeat" if session.project_id == "persona-sandbox" else session.session_type
+        entries.append(_make_session_entry(f"session-{session.id}", "heartbeat", session, session_type_override=session_type, **session_entry_kwargs))
 
     for session in child_sessions:
-        live_summary, live_status = _live_activity_summary(session)
-        pulse = session_pulses.get(session.id)
-        entries.append(
-            PersonaStreamEntry(
-                id=f"child-{session.id}",
-                entry_type="child_run",
-                timestamp=session.created_at,
-                session_id=session.id,
-                parent_session_id=session.parent_session_id,
-                project_id=session.project_id,
-                agent_slug=session.agent_slug,
-                session_type=session.session_type,
-                status=session.status,
-                summary_oneliner=session.summary_oneliner,
-                current_branch=session.current_branch,
-                external_id=session.external_id,
-                model=session.model,
-                live_summary=live_summary,
-                live_status=live_status,
-                message_count=message_counts.get(session.id, 0),
-                tool_count=tool_counts.get(session.id, 0),
-                event_previews=event_previews.get(session.id, []),
-                issue_markers=pulse.issue_markers if pulse else [],
-                pulse_tags=pulse.tags if pulse else [],
-                primary_pulse_tag=pulse.primary_tag if pulse else None,
-                root_causes=pulse.root_causes if pulse else [],
-                primary_root_cause=pulse.primary_root_cause if pulse else None,
-                pulse_summary=pulse.summary if pulse else None,
-            )
-        )
+        entries.append(_make_session_entry(f"child-{session.id}", "child_run", session, **session_entry_kwargs))
 
     entries.sort(key=lambda entry: entry.timestamp, reverse=True)
     return entries
@@ -623,6 +572,30 @@ def _slice_entries(
     return entries[offset : offset + page_size]
 
 
+async def _fetch_sessions(
+    db: AsyncSession,
+    hours: int,
+    parsed_search: ParsedSearch,
+) -> tuple[list[Session], list[Session]]:
+    """Fetch persona sessions and their child sessions."""
+    persona_sessions = list(
+        (await db.execute(_persona_session_query(hours, parsed_search).order_by(Session.created_at.desc()))).scalars().all()
+    )
+    persona_session_ids = [s.id for s in persona_sessions]
+    child_sessions: list[Session] = []
+    if persona_session_ids:
+        child_sessions = list(
+            (
+                await db.execute(
+                    _child_session_query(persona_session_ids, hours, parsed_search).order_by(Session.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
+        )
+    return persona_sessions, child_sessions
+
+
 @router.get("/stream", response_model=PersonaStreamResponse)
 async def get_persona_stream(
     db: AsyncSession = Depends(get_db),
@@ -638,39 +611,19 @@ async def get_persona_stream(
     parsed_search = _parse_search(search_term)
     hours = 0 if search_term else HOURS_MAP.get(time_range, 24)
 
-    persona_sessions = list(
-        (await db.execute(_persona_session_query(hours, parsed_search).order_by(Session.created_at.desc()))).scalars().all()
-    )
-    persona_session_ids = [session.id for session in persona_sessions]
+    persona_sessions, child_sessions = await _fetch_sessions(db, hours, parsed_search)
+    all_session_ids = [s.id for s in persona_sessions] + [s.id for s in child_sessions]
 
-    child_sessions: list[Session] = []
-    if persona_session_ids:
-        child_sessions = list(
-            (
-                await db.execute(
-                    _child_session_query(persona_session_ids, hours, parsed_search).order_by(Session.created_at.desc())
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-    count_session_ids = persona_session_ids + [session.id for session in child_sessions]
-    message_counts = await _fetch_message_counts(db, count_session_ids)
-    tool_counts = await _fetch_tool_counts(db, count_session_ids)
-    event_previews = await _fetch_event_previews(db, count_session_ids)
-    persona_chat_ids = [session.id for session in persona_sessions if session.session_type == "chat"]
+    message_counts = await _fetch_event_counts(db, all_session_ids, _CHAT_MESSAGE_TYPES)
+    tool_counts = await _fetch_event_counts(db, all_session_ids, ("tool_use",))
+    event_previews = await _fetch_event_previews(db, all_session_ids)
+    persona_chat_ids = [s.id for s in persona_sessions if s.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
     session_pulses = build_session_pulses([*persona_sessions, *child_sessions], event_previews)
 
     entries = _build_stream_entries(
-        persona_sessions,
-        child_sessions,
-        message_events,
-        message_counts,
-        tool_counts,
-        event_previews,
-        session_pulses,
+        persona_sessions, child_sessions, message_events,
+        message_counts, tool_counts, event_previews, session_pulses,
     )
     matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
     pulse = build_pulse_summary(entries, [*persona_sessions, *child_sessions], session_pulses)
