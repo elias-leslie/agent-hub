@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -17,6 +18,10 @@ def _mock_async_session(mock_db):
         yield mock_db
 
     return _session
+
+
+def _mock_execute_result(value):
+    return SimpleNamespace(scalar_one_or_none=lambda: value)
 
 
 def assert_prompt_contains_all(prompt: str, substrings: list[str]) -> None:
@@ -65,6 +70,7 @@ def test_build_wake_prompt_includes_current_st_guidance():
 @pytest.mark.asyncio
 async def test_agent_wake_stores_summary_for_completed_session():
     mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
     complete_result = SimpleNamespace(
         status="success",
         turns=4,
@@ -126,11 +132,14 @@ async def test_agent_wake_stores_summary_for_completed_session():
     assert len(messages) == 1
     assert "st ready-all" in messages[0]["content"]
     assert "Task:\nInspect the dirty worktree" in messages[0]["content"]
+    assert mock_complete.await_args.kwargs["external_id"] == "wake-step:mock-step-run-id"
+    assert mock_complete.await_args.kwargs["request_source"] == "persona_wake:dispatch"
 
 
 @pytest.mark.asyncio
 async def test_agent_wake_forwards_parent_session_id():
     mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
     complete_result = SimpleNamespace(
         status="success",
         turns=2,
@@ -179,3 +188,96 @@ async def test_agent_wake_forwards_parent_session_id():
         )
 
     assert mock_complete.await_args.kwargs["parent_session_id"] == "parent-session-456"
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_skips_replayed_step_run() -> None:
+    existing = SimpleNamespace(
+        id="existing-wake-session",
+        summary_oneliner=None,
+        summary_generated_at=None,
+    )
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(existing))
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.workflows.persona_wake._wake_external_id",
+            return_value="wake-step:replayed",
+        ),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+        ) as mock_complete,
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+        ) as mock_summary,
+    ):
+        result = await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="debugger",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Advance recovery.",
+                project_id="summitflow",
+                event_type="dispatch",
+            )
+        )
+
+    assert result["status"] == "skipped"
+    assert result["error"] == "duplicate_step_run:existing-wake-session"
+    mock_complete.assert_not_awaited()
+    mock_summary.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_rolls_back_and_closes_on_cancellation() -> None:
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ),
+        patch(
+            "app.workflows.persona_wake._wake_external_id",
+            return_value="wake-step:cancelled",
+        ),pytest.raises(asyncio.CancelledError)
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="debugger",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Advance recovery.",
+                project_id="summitflow",
+                event_type="dispatch",
+            )
+        )
+
+    mock_db.rollback.assert_awaited_once()
+    mock_db.close.assert_awaited_once()

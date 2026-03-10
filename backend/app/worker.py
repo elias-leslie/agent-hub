@@ -8,8 +8,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 
 from app.hatchet_app import hatchet
+from app.worker_diagnostics import install_asyncio_task_dump_signal
 from app.workflows.coderabbit_review import coderabbit_daily_review_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
@@ -90,7 +92,18 @@ def main() -> None:
             session_reaper_task,
         ],
     )
-    worker.start()
+    worker._setup_loop()
+
+    if not worker.loop:
+        raise RuntimeError("event loop not set, cannot start worker")
+
+    install_asyncio_task_dump_signal(worker.loop)
+
+    asyncio.run_coroutine_threadsafe(worker._aio_start(), worker.loop)
+    worker.loop.run_forever()
+
+    if worker.handle_kill:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
