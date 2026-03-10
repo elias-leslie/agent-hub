@@ -64,6 +64,7 @@ def _normalize_tool_name(name: str) -> str:
 def _build_can_use_tool(
     checker: Any | None = None,
     project_id: str | None = None,
+    agent_slug: str | None = None,
 ) -> Any:
     """Build a can_use_tool callback with non-boundary permission layers.
 
@@ -79,7 +80,8 @@ def _build_can_use_tool(
     prepends 'mcp__<server>__' but hooks expect bare tool names.
     """
     return _make_can_use_tool_callback(
-        _compose_permission_hooks(checker, project_id)
+        _compose_permission_hooks(checker, project_id),
+        agent_slug=agent_slug,
     )
 
 
@@ -104,11 +106,18 @@ def _resolve_can_use_tool(
     yolo_mode: bool,
     permission_checker: Any | None,
     project_id: str | None,
+    agent_slug: str | None,
 ) -> Any | None:
     """Return can_use_tool callback when permission hooks are needed, else None."""
-    if yolo_mode or not (permission_checker or project_id):
+    if yolo_mode and agent_slug != "persona":
         return None
-    return _build_can_use_tool(checker=permission_checker, project_id=project_id)
+    if not (permission_checker or project_id or agent_slug == "persona"):
+        return None
+    return _build_can_use_tool(
+        checker=permission_checker,
+        project_id=project_id,
+        agent_slug=agent_slug,
+    )
 
 
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
@@ -259,7 +268,7 @@ async def complete_with_tools(
     # The can_use_tool callback here is only for non-boundary permission
     # hooks (project tier, per-request checker) since the SDK subprocess
     # does not invoke can_use_tool for built-in tools.
-    can_use_tool_cb = _resolve_can_use_tool(yolo_mode, permission_checker, project_id)
+    can_use_tool_cb = _resolve_can_use_tool(yolo_mode, permission_checker, project_id, agent_slug)
     mcp_server = _build_mcp_server(
         tools,
         working_dir,
