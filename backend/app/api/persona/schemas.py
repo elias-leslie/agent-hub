@@ -145,6 +145,8 @@ class PersonaStreamEventPreview(BaseModel):
     role: str | None = None
     tool_name: str | None = None
     content_preview: str | None = None
+    tool_input_preview: str | None = None
+    tool_output_preview: str | None = None
     duration_ms: int | None = None
     model_used: str | None = None
 

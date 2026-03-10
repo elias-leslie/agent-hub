@@ -511,6 +511,16 @@ class TestActivityEndpointEmptySessionFilter:
 class TestPersonaStreamHelpers:
     """Tests for the unified persona stream helper logic."""
 
+    def test_stringify_preview_serializes_tool_payloads(self) -> None:
+        from app.api.persona.stream import _stringify_preview
+
+        assert _stringify_preview({"project": "agent-hub"}) == '{"project": "agent-hub"}'
+        truncated = _stringify_preview({"status": "ok", "items": [1, 2]}, limit=18)
+        assert truncated is not None
+        assert truncated.endswith("…")
+        assert truncated.startswith('{"items": [1')
+        assert _stringify_preview(None) is None
+
     def test_build_stream_entries_includes_messages_heartbeats_and_child_runs(self) -> None:
         from app.api.persona.stream import _build_stream_entries
 
@@ -561,6 +571,8 @@ class TestPersonaStreamHelpers:
                         "created_at": base_time - timedelta(minutes=2),
                         "tool_name": "st ready-all",
                         "content_preview": None,
+                        "tool_input_preview": '{"project":"agent-hub"}',
+                        "tool_output_preview": None,
                         "duration_ms": None,
                         "model_used": "claude-sonnet",
                     }
@@ -572,6 +584,8 @@ class TestPersonaStreamHelpers:
                         "created_at": base_time - timedelta(minutes=1),
                         "tool_name": "dt -q -d",
                         "content_preview": "passed",
+                        "tool_input_preview": None,
+                        "tool_output_preview": '{"status":"ok"}',
                         "duration_ms": 1200,
                         "model_used": "claude-sonnet",
                     }
@@ -588,9 +602,11 @@ class TestPersonaStreamHelpers:
         assert heartbeat_entry.session_type == "heartbeat"
         assert heartbeat_entry.live_summary == "Checking tasks"
         assert heartbeat_entry.event_previews[0].tool_name == "st ready-all"
+        assert heartbeat_entry.event_previews[0].tool_input_preview == '{"project":"agent-hub"}'
         assert child_entry.agent_slug == "git-agent"
         assert child_entry.current_branch == "task-branch"
         assert child_entry.event_previews[0].content_preview == "passed"
+        assert child_entry.event_previews[0].tool_output_preview == '{"status":"ok"}'
 
     def test_slice_entries_centers_on_focused_session(self) -> None:
         from app.api.persona.schemas import PersonaStreamEntry

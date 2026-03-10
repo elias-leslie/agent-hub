@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -178,7 +179,7 @@ async def _fetch_event_previews(
         session_previews = previews.setdefault(event.session_id, [])
         if len(session_previews) >= limit_per_session:
             continue
-        preview_content = event.content[:240] if event.content else None
+        preview_content = _stringify_preview(event.content, limit=240)
         session_previews.append(
             PersonaStreamEventPreview(
                 id=event.id,
@@ -187,12 +188,29 @@ async def _fetch_event_previews(
                 role=event.role,
                 tool_name=event.tool_name,
                 content_preview=preview_content,
+                tool_input_preview=_stringify_preview(event.tool_input),
+                tool_output_preview=_stringify_preview(event.tool_output),
                 duration_ms=event.duration_ms,
                 model_used=event.model_used,
             )
         )
 
     return previews
+
+
+def _stringify_preview(value: Any, *, limit: int = 280) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=True, sort_keys=True)
+        except TypeError:
+            text = str(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 1]}…"
 
 
 def _build_stream_entries(
