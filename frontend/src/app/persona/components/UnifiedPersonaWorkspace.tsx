@@ -332,22 +332,27 @@ function HighlightedText({
 
 function ExpandableText({
   text,
+  expandedText,
   className,
   collapsedLength = 180,
 }: {
   text: string;
+  expandedText?: string | null;
   className?: string;
   collapsedLength?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
-  if (text.length <= collapsedLength) {
+  const fullText = expandedText && expandedText.trim().length > 0 ? expandedText : text;
+  const shouldCollapse = fullText.length > collapsedLength || fullText !== text;
+
+  if (!shouldCollapse) {
     return <HighlightedText text={text} className={className} />;
   }
 
   return (
     <div>
       <HighlightedText
-        text={expanded ? text : shortenText(text, collapsedLength)}
+        text={expanded ? fullText : shortenText(text, collapsedLength)}
         className={className}
       />
       <button
@@ -951,7 +956,8 @@ function EntryIssueSummary({
       <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{primaryMarker.title}</div>
       <ExpandableText
         text={primaryMarker.summary}
-        className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+        expandedText={primaryMarker.detail}
+        className="mt-1 block whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300"
         collapsedLength={160}
       />
     </div>
@@ -1036,7 +1042,11 @@ function PulseOverviewPanels({
                       )}
                     </div>
                     <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{issue.title}</div>
-                    <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{issue.summary}</p>
+                    <ExpandableText
+                      text={issue.summary}
+                      className="mt-1 block whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300"
+                      collapsedLength={160}
+                    />
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
                       {issue.agent_slugs.map((agentSlugValue) => (
                         <span key={`${issue.fingerprint}-${agentSlugValue}`} className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
@@ -1604,9 +1614,11 @@ function SessionDetailsPanel({
                     )}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{marker.title}</div>
-                  <HighlightedText
+                  <ExpandableText
                     text={marker.summary}
+                    expandedText={marker.detail}
                     className="mt-1 block whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300"
+                    collapsedLength={220}
                   />
                 </div>
               ))

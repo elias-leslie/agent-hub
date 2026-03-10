@@ -538,6 +538,38 @@ class TestPersonaStreamHelpers:
         assert truncated.startswith('{"items": [1')
         assert _stringify_preview(None) is None
 
+    @pytest.mark.asyncio
+    async def test_fetch_event_previews_preserves_full_issue_text_for_issue_events(self) -> None:
+        from app.api.persona.stream import _fetch_event_previews
+
+        issue_text = (
+            'git status --short --branch && st context task-123 && st done task-123 --message '
+            '"Verified autocode completion; quality gate passed." after repeated retries before success.'
+        )
+        event = _make_mock_event(
+            "child-1",
+            id="preview-issue",
+            event_type=SessionEventType.TOOL_RESULT,
+            tool_name="shell",
+            content=None,
+            tool_input={"command": issue_text},
+            tool_output={"status": "failed", "stderr": issue_text, "exit_code": 1, "is_error": True},
+            created_at=datetime.now(UTC),
+            role=None,
+            model_used="claude-sonnet",
+        )
+        execute_result = MagicMock()
+        execute_result.scalars.return_value.all.return_value = [event]
+        db = AsyncMock()
+        db.execute.return_value = execute_result
+
+        previews = await _fetch_event_previews(db, ["child-1"])
+
+        assert previews["child-1"][0].tool_input_preview is not None
+        assert "quality gate passed" in previews["child-1"][0].tool_input_preview
+        assert previews["child-1"][0].tool_output_preview is not None
+        assert "quality gate passed" in previews["child-1"][0].tool_output_preview
+
     def test_build_stream_entries_includes_messages_heartbeats_and_child_runs(self) -> None:
         from app.api.persona.pulse import SessionPulse
         from app.api.persona.schemas import PersonaIssueMarker, PersonaStreamEventPreview
@@ -624,6 +656,7 @@ class TestPersonaStreamHelpers:
                             primary_root_cause="context",
                             title="Work stalled waiting on context or follow-up",
                             summary="The run waited on follow-up.",
+                            detail="The run waited on follow-up.",
                             fingerprint="warning:context",
                         )
                     ],
@@ -646,6 +679,7 @@ class TestPersonaStreamHelpers:
                             primary_root_cause="tool",
                             title="dt -q -d hit tool friction",
                             summary="The tool path wasted turns before progress resumed.",
+                            detail="The tool path wasted turns before progress resumed.",
                             fingerprint="tool-friction:dt-q-d",
                         )
                     ],
@@ -739,6 +773,12 @@ class TestPersonaStreamHelpers:
         assert "recovered before completion" in pulse.summary.lower()
         assert any(marker.primary_tag == "instruction_drift" for marker in pulse.issue_markers)
         assert any(marker.title == "shell failed" for marker in pulse.issue_markers)
+        shell_failed_marker = next(marker for marker in pulse.issue_markers if marker.title == "shell failed")
+        assert shell_failed_marker.detail is not None
+        assert "dt not found" in shell_failed_marker.detail
+        instruction_marker = next(marker for marker in pulse.issue_markers if marker.primary_tag == "instruction_drift")
+        assert instruction_marker.detail is not None
+        assert "pytest tests/api/test_persona.py" in instruction_marker.detail
 
     def test_build_pulse_summary_groups_repeated_issue_fingerprints(self) -> None:
         from app.api.persona.pulse import SessionPulse, build_pulse_summary
@@ -786,6 +826,7 @@ class TestPersonaStreamHelpers:
                         primary_root_cause="tool",
                         title="dt -q -d hit tool friction",
                         summary="The tool path wasted turns before progress resumed.",
+                        detail="The tool path wasted turns before progress resumed.",
                         fingerprint="tool-friction:dt-q-d",
                     )
                 ],
@@ -817,6 +858,7 @@ class TestPersonaStreamHelpers:
                         primary_root_cause="tool",
                         title="dt -q -d hit tool friction",
                         summary="The tool path wasted turns before progress resumed.",
+                        detail="The tool path wasted turns before progress resumed.",
                         fingerprint="tool-friction:dt-q-d",
                     )
                 ],
@@ -841,6 +883,7 @@ class TestPersonaStreamHelpers:
                         primary_root_cause="tool",
                         title="dt -q -d hit tool friction",
                         summary="The tool path wasted turns before progress resumed.",
+                        detail="The tool path wasted turns before progress resumed.",
                         fingerprint="tool-friction:dt-q-d",
                     )
                 ],
@@ -863,6 +906,7 @@ class TestPersonaStreamHelpers:
                         primary_root_cause="tool",
                         title="dt -q -d hit tool friction",
                         summary="The tool path wasted turns before progress resumed.",
+                        detail="The tool path wasted turns before progress resumed.",
                         fingerprint="tool-friction:dt-q-d",
                     )
                 ],

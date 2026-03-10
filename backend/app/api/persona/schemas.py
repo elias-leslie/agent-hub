@@ -172,6 +172,7 @@ class PersonaIssueMarker(BaseModel):
     primary_root_cause: str | None = None
     title: str
     summary: str
+    detail: str | None = None
     fingerprint: str | None = None
 
 

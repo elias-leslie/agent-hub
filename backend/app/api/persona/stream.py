@@ -36,6 +36,23 @@ _SEARCHABLE_EVENT_TYPES = (
     "error",
 )
 _STRUCTURED_PREFIXES = {"task", "file", "agent", "status", "project"}
+_ISSUE_SIGNAL_TERMS = (
+    "error",
+    "failed",
+    "failure",
+    "warning",
+    "blocked",
+    "stalled",
+    "waiting",
+    "retry",
+    "retried",
+    "permission denied",
+    "timed out",
+    "timeout",
+    "not found",
+    "missing",
+    "interrupted",
+)
 
 
 @dataclass(slots=True)
@@ -389,7 +406,8 @@ async def _fetch_event_previews(
         session_previews = previews.setdefault(event.session_id, [])
         if len(session_previews) >= limit_per_session:
             continue
-        preview_content = _stringify_preview(event.content, limit=240)
+        preserve_full_text = _event_has_issue_signal(event)
+        preview_content = _stringify_preview(event.content, limit=None if preserve_full_text else 240)
         session_previews.append(
             PersonaStreamEventPreview(
                 id=event.id,
@@ -398,8 +416,8 @@ async def _fetch_event_previews(
                 role=event.role,
                 tool_name=event.tool_name,
                 content_preview=preview_content,
-                tool_input_preview=_stringify_preview(event.tool_input),
-                tool_output_preview=_stringify_preview(event.tool_output),
+                tool_input_preview=_stringify_preview(event.tool_input, limit=None if preserve_full_text else 280),
+                tool_output_preview=_stringify_preview(event.tool_output, limit=None if preserve_full_text else 280),
                 duration_ms=event.duration_ms,
                 model_used=event.model_used,
             )
@@ -408,7 +426,24 @@ async def _fetch_event_previews(
     return previews
 
 
-def _stringify_preview(value: Any, *, limit: int = 280) -> str | None:
+def _event_has_issue_signal(event: SessionEvent) -> bool:
+    if event.event_type == "error":
+        return True
+    combined = " ".join(
+        part
+        for part in [
+            _stringify_preview(event.content, limit=None),
+            _stringify_preview(event.tool_input, limit=None),
+            _stringify_preview(event.tool_output, limit=None),
+            event.tool_name,
+            event.role,
+        ]
+        if isinstance(part, str) and part
+    ).lower()
+    return any(term in combined for term in _ISSUE_SIGNAL_TERMS)
+
+
+def _stringify_preview(value: Any, *, limit: int | None = 280) -> str | None:
     if value is None:
         return None
     if isinstance(value, str):
@@ -418,7 +453,7 @@ def _stringify_preview(value: Any, *, limit: int = 280) -> str | None:
             text = json.dumps(value, ensure_ascii=True, sort_keys=True)
         except TypeError:
             text = str(value)
-    if len(text) <= limit:
+    if limit is None or len(text) <= limit:
         return text
     return f"{text[: limit - 1]}…"
 
