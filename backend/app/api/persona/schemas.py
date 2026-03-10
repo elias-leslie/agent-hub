@@ -136,6 +136,7 @@ class PersonaStreamEntry(BaseModel):
     message_count: int = 0
     tool_count: int = 0
     event_previews: list[PersonaStreamEventPreview] = Field(default_factory=list)
+    issue_markers: list[PersonaIssueMarker] = Field(default_factory=list)
     pulse_tags: list[str] = Field(default_factory=list)
     primary_pulse_tag: str | None = None
     root_causes: list[str] = Field(default_factory=list)
@@ -156,6 +157,22 @@ class PersonaStreamEventPreview(BaseModel):
     tool_output_preview: str | None = None
     duration_ms: int | None = None
     model_used: str | None = None
+
+
+class PersonaIssueMarker(BaseModel):
+    """Human-readable issue marker for a specific session event or synthetic issue."""
+
+    event_id: str
+    event_type: str
+    created_at: datetime
+    tool_name: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    primary_tag: str
+    root_causes: list[str] = Field(default_factory=list)
+    primary_root_cause: str | None = None
+    title: str
+    summary: str
+    fingerprint: str | None = None
 
 
 class PersonaStreamResponse(BaseModel):

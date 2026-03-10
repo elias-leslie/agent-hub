@@ -105,6 +105,18 @@ def _entry_match_text(entry: PersonaStreamEntry) -> str:
                 ]
                 if isinstance(preview_value, str)
             ],
+            *[
+                marker_value
+                for marker in entry.issue_markers
+                for marker_value in [
+                    marker.title,
+                    marker.summary,
+                    marker.tool_name,
+                    marker.primary_tag,
+                    marker.primary_root_cause,
+                ]
+                if isinstance(marker_value, str)
+            ],
         ]
         if isinstance(value, str) and value
     ).lower()
@@ -396,25 +408,6 @@ async def _fetch_event_previews(
     return previews
 
 
-async def _fetch_session_events_map(
-    db: AsyncSession,
-    session_ids: list[str],
-) -> dict[str, list[SessionEvent]]:
-    if not session_ids:
-        return {}
-
-    query = (
-        select(SessionEvent)
-        .where(SessionEvent.session_id.in_(session_ids))
-        .order_by(SessionEvent.session_id, SessionEvent.turn.asc(), SessionEvent.sequence.asc(), SessionEvent.created_at.asc())
-    )
-    events = list((await db.execute(query)).scalars().all())
-    events_by_session_id: dict[str, list[SessionEvent]] = {}
-    for event in events:
-        events_by_session_id.setdefault(event.session_id, []).append(event)
-    return events_by_session_id
-
-
 def _stringify_preview(value: Any, *, limit: int = 280) -> str | None:
     if value is None:
         return None
@@ -493,6 +486,7 @@ def _build_stream_entries(
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
                 event_previews=event_previews.get(session.id, []),
+                issue_markers=pulse.issue_markers if pulse else [],
                 pulse_tags=pulse.tags if pulse else [],
                 primary_pulse_tag=pulse.primary_tag if pulse else None,
                 root_causes=pulse.root_causes if pulse else [],
@@ -524,6 +518,7 @@ def _build_stream_entries(
                 message_count=message_counts.get(session.id, 0),
                 tool_count=tool_counts.get(session.id, 0),
                 event_previews=event_previews.get(session.id, []),
+                issue_markers=pulse.issue_markers if pulse else [],
                 pulse_tags=pulse.tags if pulse else [],
                 primary_pulse_tag=pulse.primary_tag if pulse else None,
                 root_causes=pulse.root_causes if pulse else [],
@@ -629,10 +624,9 @@ async def get_persona_stream(
     message_counts = await _fetch_message_counts(db, count_session_ids)
     tool_counts = await _fetch_tool_counts(db, count_session_ids)
     event_previews = await _fetch_event_previews(db, count_session_ids)
-    session_events_map = await _fetch_session_events_map(db, count_session_ids)
     persona_chat_ids = [session.id for session in persona_sessions if session.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
-    session_pulses = build_session_pulses([*persona_sessions, *child_sessions], session_events_map)
+    session_pulses = build_session_pulses([*persona_sessions, *child_sessions], event_previews)
 
     entries = _build_stream_entries(
         persona_sessions,

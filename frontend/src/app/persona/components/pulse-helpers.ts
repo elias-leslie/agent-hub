@@ -1,4 +1,4 @@
-import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
+import type { PersonaIssueMarker, PersonaStreamEntry } from "@/lib/api/persona-stream";
 
 export type FilterMode =
   | "all"
@@ -124,5 +124,32 @@ export function pulseTagClasses(tag: string): string {
 }
 
 export function entryHasPulseTag(entry: PersonaStreamEntry, tag: string): boolean {
+  if (tag === "friction") {
+    return entry.issue_markers.length > 0 || entry.pulse_tags.includes("friction");
+  }
+  if (tag === "recovered") {
+    return entry.pulse_tags.includes("recovered");
+  }
+  if (entry.issue_markers.some((marker) => marker.tags.includes(tag))) {
+    return true;
+  }
   return entry.pulse_tags.includes(tag);
+}
+
+export function issueMarkerHasPulseTag(marker: PersonaIssueMarker, tag: string): boolean {
+  if (tag === "friction") {
+    return true;
+  }
+  return marker.tags.includes(tag);
+}
+
+export function filterIssueMarkers(issueMarkers: PersonaIssueMarker[], tag: string | null): PersonaIssueMarker[] {
+  if (!tag || tag === "recovered") {
+    return issueMarkers;
+  }
+  return issueMarkers.filter((marker) => issueMarkerHasPulseTag(marker, tag));
+}
+
+export function visibleIssueMarkers(entry: PersonaStreamEntry, tag: string | null): PersonaIssueMarker[] {
+  return filterIssueMarkers(entry.issue_markers, tag);
 }
