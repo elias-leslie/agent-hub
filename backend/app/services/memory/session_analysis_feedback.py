@@ -38,7 +38,11 @@ async def persist_feedback_items(
 ) -> int:
     """Write feedback items to DB, skipping duplicates. Returns count created."""
     from app.models.feedback import FeedbackItem
-    from app.services.feedback_storage import create_feedback_item
+    from app.services.feedback_storage import (
+        create_feedback_item,
+        find_duplicate_candidates,
+        vote_on_item,
+    )
 
     existing_query = select(
         FeedbackItem.component_id, FeedbackItem.feedback_type
@@ -47,16 +51,38 @@ async def persist_feedback_items(
     existing_keys = {(r.component_id, r.feedback_type) for r in existing_rows}
 
     created = 0
+    voted = 0
     for tag_dict in tag_dicts:
         key = (tag_dict["component_id"], tag_dict["feedback_type"])
         if key in existing_keys:
             continue
         desc = tag_dict.get("description", "")
+        title = desc[:120] if desc else f"{tag_dict['feedback_type']} on {tag_dict['component_id']}"
+        duplicates = await find_duplicate_candidates(
+            db,
+            component_id=tag_dict["component_id"],
+            feedback_type=tag_dict["feedback_type"],
+            project_id=project_id,
+            title=title,
+            limit=1,
+        )
+        if duplicates:
+            vote = await vote_on_item(
+                db,
+                item_id=str(duplicates[0].id),
+                session_id=session_id,
+                comment=desc or None,
+                agent_slug=agent_slug,
+            )
+            existing_keys.add(key)
+            if vote is not None:
+                voted += 1
+            continue
         await create_feedback_item(
             db,
             component_id=tag_dict["component_id"],
             feedback_type=tag_dict["feedback_type"],
-            title=desc[:120] if desc else f"{tag_dict['feedback_type']} on {tag_dict['component_id']}",
+            title=title,
             description=desc or None,
             project_id=project_id,
             session_id=session_id,
@@ -66,8 +92,13 @@ async def persist_feedback_items(
         existing_keys.add(key)
         created += 1
 
-    if created:
+    if created or voted:
         await db.commit()
-        logger.info("Created %d feedback items for session %s", created, session_id)
+        logger.info(
+            "Tracked session feedback for %s: created=%d voted=%d",
+            session_id,
+            created,
+            voted,
+        )
 
     return created

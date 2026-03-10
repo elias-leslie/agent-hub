@@ -66,13 +66,13 @@ async def _create_new_feedback_items(
     session_id: str,
     agent_id: str | None,
     model_used: str | None,
-) -> int:
+) -> tuple[int, int]:
     """Create feedback items for tags not already in existing_keys.
 
     Cross-session dedup: if a similar open item already exists, vote on it
     instead of creating a duplicate.
 
-    Returns count of items created (not votes).
+    Returns (created_count, voted_count).
     """
     from app.services.feedback_storage import (
         create_feedback_item,
@@ -81,6 +81,7 @@ async def _create_new_feedback_items(
     )
 
     created = 0
+    voted = 0
     for tag in tags:
         key = (tag.component_id, tag.feedback_type)
         if key in existing_keys:
@@ -91,10 +92,15 @@ async def _create_new_feedback_items(
         # Cross-session dedup: check for existing similar items
         try:
             duplicates = await find_duplicate_candidates(
-                db, component_id=tag.component_id, title=title, limit=1,
+                db,
+                component_id=tag.component_id,
+                feedback_type=tag.feedback_type,
+                project_id=project_id,
+                title=title,
+                limit=1,
             )
             if duplicates:
-                await vote_on_item(
+                vote = await vote_on_item(
                     db,
                     item_id=str(duplicates[0].id),
                     session_id=session_id,
@@ -107,6 +113,8 @@ async def _create_new_feedback_items(
                     "Dedup vote: %s/%s → existing %s",
                     tag.component_id, tag.feedback_type, str(duplicates[0].id)[:8],
                 )
+                if vote is not None:
+                    voted += 1
                 continue
         except Exception:
             logger.debug("Dedup check failed, creating new item", exc_info=True)
@@ -125,7 +133,7 @@ async def _create_new_feedback_items(
         )
         existing_keys.add(key)
         created += 1
-    return created
+    return created, voted
 
 
 async def _track_memory_citations(

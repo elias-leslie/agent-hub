@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 async def manage_feedback(
     action: str,
     item_id: str | None = None,
+    target_item_id: str | None = None,
     query: str | None = None,
     component_id: str | None = None,
     feedback_type: str | None = None,
@@ -32,13 +33,17 @@ async def manage_feedback(
         return await _summary(project_id, days)
     if action == "resolve":
         return await _resolve(item_id, status, resolution_note)
+    if action == "archive":
+        return await _resolve(item_id, "archived", resolution_note)
     if action == "vote":
         return await _vote(item_id, comment)
+    if action == "merge":
+        return await _merge(item_id, target_item_id)
     if action == "delete":
         return await _delete(item_id)
     return (
         f"Error: Unknown action '{action}'. "
-        "Use search/list/get/summary/resolve/vote/delete."
+        "Use search/list/get/summary/resolve/archive/vote/merge/delete."
     )
 
 
@@ -60,7 +65,7 @@ async def _search(
                 query=query,
                 component_id=component_id,
                 feedback_type=feedback_type,
-                status="open",
+                status="active",
                 project_id=project_id,
                 sort="votes",
                 limit=limit,
@@ -105,7 +110,7 @@ async def _list(
                 query=query,
                 component_id=component_id,
                 feedback_type=feedback_type,
-                status=status,
+                status=status or "active",
                 project_id=project_id,
                 sort=sort,
                 limit=limit,
@@ -250,7 +255,7 @@ async def _resolve(
     status: str | None,
     resolution_note: str | None,
 ) -> str:
-    """Resolve a feedback item by ID."""
+    """Update a feedback item status by ID."""
     if not item_id:
         return "Error: item_id is required for resolve action"
 
@@ -274,7 +279,13 @@ async def _resolve(
         if not updated:
             return f"Error: Could not update feedback item '{item_id}'"
 
-        return f"Resolved: {str(updated.id)[:8]} — {updated.title}"
+        if updated.status == "archived":
+            verb = "Archived"
+        elif updated.status == "resolved":
+            verb = "Resolved"
+        else:
+            verb = "Updated"
+        return f"{verb}: {str(updated.id)[:8]} — {updated.title} ({updated.status})"
     except ValueError as e:
         return f"Error: {e}"
     except Exception as e:
@@ -314,6 +325,45 @@ async def _vote(item_id: str | None, comment: str | None) -> str:
     except Exception as e:
         logger.exception("manage_feedback vote failed")
         return f"Error voting on feedback: {e}"
+
+
+async def _merge(source_item_id: str | None, target_item_id: str | None) -> str:
+    """Merge a duplicate feedback item into a canonical item."""
+    if not source_item_id:
+        return "Error: item_id is required for merge action"
+    if not target_item_id:
+        return "Error: target_item_id is required for merge action"
+
+    try:
+        from app.db import async_session
+        from app.services.feedback_storage import merge_feedback_items, resolve_feedback_id
+
+        async with async_session() as db:
+            full_source_id = await resolve_feedback_id(db, source_item_id)
+            if not full_source_id:
+                return f"Error: No feedback item found matching '{source_item_id}'"
+            full_target_id = await resolve_feedback_id(db, target_item_id)
+            if not full_target_id:
+                return f"Error: No feedback item found matching '{target_item_id}'"
+            merged = await merge_feedback_items(
+                db,
+                source_item_id=full_source_id,
+                target_item_id=full_target_id,
+            )
+            await db.commit()
+
+        if merged is None:
+            return "Error: Could not merge feedback items"
+
+        return (
+            f"Merged: {str(full_source_id)[:8]} -> {str(full_target_id)[:8]} "
+            f"({merged.vote_count} votes)"
+        )
+    except ValueError as e:
+        return f"Error: {e}"
+    except Exception as e:
+        logger.exception("manage_feedback merge failed")
+        return f"Error merging feedback: {e}"
 
 
 async def _delete(item_id: str | None) -> str:

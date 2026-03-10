@@ -58,6 +58,7 @@ class TestManageFeedbackSearch:
         assert "sf.cli" in result
         assert "CLI is slow" in result
         mock_search.assert_called_once()
+        assert mock_search.call_args.kwargs["status"] == "active"
 
     @pytest.mark.anyio
     async def test_search_empty(self) -> None:
@@ -112,6 +113,22 @@ class TestManageFeedbackList:
             result = await manage_feedback(action="list")
 
         assert "No feedback items" in result
+
+    @pytest.mark.anyio
+    async def test_list_defaults_to_active_status(self) -> None:
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.search_feedback_items",
+                new_callable=AsyncMock,
+                return_value=[],
+            ) as mock_search,
+        ):
+            await manage_feedback(action="list")
+
+        assert mock_search.call_args.kwargs["status"] == "active"
 
 
 class TestManageFeedbackGet:
@@ -208,6 +225,7 @@ class TestManageFeedbackResolve:
     @pytest.mark.anyio
     async def test_resolve_success(self) -> None:
         item = _make_item()
+        item.status = "resolved"
         session_factory, _mock_db = _mock_async_session()
 
         with (
@@ -249,6 +267,31 @@ class TestManageFeedbackResolve:
     async def test_resolve_missing_id(self) -> None:
         result = await manage_feedback(action="resolve")
         assert "item_id is required" in result
+
+
+class TestManageFeedbackArchive:
+    @pytest.mark.anyio
+    async def test_archive_success(self) -> None:
+        item = _make_item()
+        item.status = "archived"
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.resolve_feedback_id",
+                new_callable=AsyncMock,
+                return_value=str(item.id),
+            ),
+            patch(
+                "app.services.feedback_storage.update_feedback_status",
+                new_callable=AsyncMock,
+                return_value=item,
+            ),
+        ):
+            result = await manage_feedback(action="archive", item_id="12345678")
+
+        assert "Archived" in result
 
 
 class TestManageFeedbackVote:
@@ -305,9 +348,41 @@ class TestManageFeedbackVote:
 class TestManageFeedbackUnknownAction:
     @pytest.mark.anyio
     async def test_unknown_action(self) -> None:
-        result = await manage_feedback(action="archive")
+        result = await manage_feedback(action="unknown")
         assert "Unknown action" in result
-        assert "search/list/get/summary/resolve/vote/delete" in result
+        assert "search/list/get/summary/resolve/archive/vote/merge/delete" in result
+
+
+class TestManageFeedbackMerge:
+    @pytest.mark.anyio
+    async def test_merge_success(self) -> None:
+        item = _make_item(id="87654321-1234-1234-1234-123456789abc", vote_count=4)
+        session_factory, _mock_db = _mock_async_session()
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.services.feedback_storage.resolve_feedback_id",
+                new_callable=AsyncMock,
+                side_effect=[
+                    "12345678-1234-1234-1234-123456789abc",
+                    str(item.id),
+                ],
+            ),
+            patch(
+                "app.services.feedback_storage.merge_feedback_items",
+                new_callable=AsyncMock,
+                return_value=item,
+            ),
+        ):
+            result = await manage_feedback(
+                action="merge",
+                item_id="12345678",
+                target_item_id="87654321",
+            )
+
+        assert "Merged" in result
+        assert "12345678 -> 87654321" in result
 
 
 class TestManageFeedbackDelete:

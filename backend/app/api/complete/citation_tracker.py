@@ -41,12 +41,17 @@ async def track_inline_feedback(
     if not project_id:
         project_id = await _resolve_project_id(db, session_id)
     existing_keys = await _get_existing_feedback_keys(db, session_id)
-    created = await _create_new_feedback_items(
+    created, voted = await _create_new_feedback_items(
         db, result.tags, existing_keys, project_id, session_id, agent_id, model_used
     )
-    if created:
+    if created or voted:
         await db.commit()
-        logger.info("Created %d inline feedback items for session %s", created, session_id)
+        logger.info(
+            "Tracked inline feedback for session %s: created=%d voted=%d",
+            session_id,
+            created,
+            voted,
+        )
     return created
 
 

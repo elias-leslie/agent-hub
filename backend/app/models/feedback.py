@@ -82,7 +82,7 @@ class FeedbackItem(Base):
             name="ck_feedback_items_type",
         ),
         CheckConstraint(
-            "status IN ('open', 'acknowledged', 'resolved', 'wont_fix')",
+            "status IN ('open', 'acknowledged', 'resolved', 'wont_fix', 'archived')",
             name="ck_feedback_items_status",
         ),
         Index("idx_feedback_items_component", "component_id"),

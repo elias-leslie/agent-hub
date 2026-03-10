@@ -32,6 +32,10 @@ class TestTrackInlineFeedback:
         ])
 
         with patch(
+            "app.services.feedback_storage.find_duplicate_candidates",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
             "app.services.feedback_storage.create_feedback_item",
             new_callable=AsyncMock,
         ) as mock_create:
@@ -66,6 +70,10 @@ class TestTrackInlineFeedback:
         ])
 
         with patch(
+            "app.services.feedback_storage.find_duplicate_candidates",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
             "app.services.feedback_storage.create_feedback_item",
             new_callable=AsyncMock,
         ) as mock_create:
@@ -108,6 +116,10 @@ class TestTrackInlineFeedback:
         ])
 
         with patch(
+            "app.services.feedback_storage.find_duplicate_candidates",
+            new_callable=AsyncMock,
+            return_value=[],
+        ), patch(
             "app.services.feedback_storage.create_feedback_item",
             new_callable=AsyncMock,
         ) as mock_create:
@@ -115,6 +127,38 @@ class TestTrackInlineFeedback:
 
         assert count == 0
         mock_create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_track_inline_feedback_votes_on_duplicate(self):
+        """Duplicate inline feedback votes on the existing item instead of creating a new one."""
+        content = "[F:friction:sf.cli] bad error message"
+        db = AsyncMock()
+        project_row = MagicMock()
+        project_row.scalar_one_or_none.return_value = "summitflow"
+        db.execute = AsyncMock(side_effect=[
+            project_row,
+            MagicMock(__iter__=lambda self: iter([])),
+        ])
+        duplicate = MagicMock(id="12345678-1234-1234-1234-123456789abc")
+
+        with patch(
+            "app.services.feedback_storage.find_duplicate_candidates",
+            new_callable=AsyncMock,
+            return_value=[duplicate],
+        ), patch(
+            "app.services.feedback_storage.vote_on_item",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ) as mock_vote, patch(
+            "app.services.feedback_storage.create_feedback_item",
+            new_callable=AsyncMock,
+        ) as mock_create:
+            count = await track_inline_feedback(content, db, "session-123")
+
+        assert count == 0
+        mock_vote.assert_awaited_once()
+        mock_create.assert_not_called()
+        db.commit.assert_awaited_once()
 
 
 @pytest.mark.unit

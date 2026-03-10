@@ -44,6 +44,12 @@ class MemoryCleanupResult(BaseModel):
     reason: str = ""
 
 
+class FeedbackCleanupResult(BaseModel):
+    status: str
+    archived: int = 0
+    purged: int = 0
+
+
 @hatchet.task(
     name="session-cleanup",
     input_validator=EmptyInput,
@@ -135,5 +141,31 @@ async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     ctx.log(
         f"Memory cleanup: retired={result.retired}, consolidated={result.consolidated}, "
         f"suggestions={result.redundancy_suggestions}, skipped={result.skipped}"
+    )
+    return result.model_dump()
+
+
+@hatchet.task(
+    name="feedback-cleanup",
+    input_validator=EmptyInput,
+    on_crons=["30 3 * * *"],
+    execution_timeout="180s",
+    concurrency=ConcurrencyExpression(
+        expression="'feedback_cleanup'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+    ),
+)
+async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
+    from app.tasks.feedback_cleanup import cleanup_feedback_lifecycle
+
+    result_data = await cleanup_feedback_lifecycle()
+    result = FeedbackCleanupResult(
+        status="success",
+        archived=int(result_data.get("archived", 0)),
+        purged=int(result_data.get("purged", 0)),
+    )
+    ctx.log(
+        f"Feedback cleanup: archived={result.archived}, purged={result.purged}"
     )
     return result.model_dump()

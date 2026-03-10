@@ -363,20 +363,35 @@ MANAGE_FEEDBACK_TOOL = Tool(
     name="manage_feedback",
     description=(
         "Review and manage feedback items: search/list items, inspect details, "
-        "summarize hotspots, resolve or delete cleaned-up items, and vote on items "
-        "you've also observed. Use [[F:...]] tags to file new feedback."
+        "summarize hotspots, archive or resolve cleaned-up items, merge duplicates, "
+        "delete junk, and vote on items you've also observed. Use [[F:...]] tags to "
+        "file new feedback."
     ),
     input_schema={
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["search", "list", "get", "summary", "resolve", "vote", "delete"],
+                "enum": [
+                    "search",
+                    "list",
+                    "get",
+                    "summary",
+                    "resolve",
+                    "archive",
+                    "vote",
+                    "merge",
+                    "delete",
+                ],
                 "description": "The feedback operation to perform",
             },
             "item_id": {
                 "type": "string",
-                "description": "Feedback item ID or prefix (for get, resolve, vote, delete)",
+                "description": "Feedback item ID or prefix (for get, resolve, archive, vote, merge, delete)",
+            },
+            "target_item_id": {
+                "type": "string",
+                "description": "Canonical feedback item ID or prefix (for merge)",
             },
             "query": {
                 "type": "string",
@@ -393,8 +408,8 @@ MANAGE_FEEDBACK_TOOL = Tool(
             },
             "status": {
                 "type": "string",
-                "enum": ["resolved", "wont_fix", "acknowledged"],
-                "description": "Status to set (for resolve, default: resolved)",
+                "enum": ["open", "acknowledged", "resolved", "wont_fix", "archived", "active"],
+                "description": "Status filter (for list) or status to set (for resolve, default: resolved)",
             },
             "resolution_note": {
                 "type": "string",

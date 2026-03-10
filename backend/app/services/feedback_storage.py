@@ -14,6 +14,10 @@ from app.models.feedback import FeedbackItem, FeedbackVote
 
 logger = logging.getLogger(__name__)
 
+ACTIVE_FEEDBACK_STATUSES = ("open", "acknowledged")
+TERMINAL_FEEDBACK_STATUSES = ("resolved", "wont_fix")
+ARCHIVED_FEEDBACK_STATUS = "archived"
+
 
 async def create_feedback_item(
     db: AsyncSession,
@@ -65,7 +69,10 @@ def _build_search_filters(
     if feedback_type:
         conditions.append(FeedbackItem.feedback_type == feedback_type)
     if status:
-        conditions.append(FeedbackItem.status == status)
+        if status == "active":
+            conditions.append(FeedbackItem.status.in_(ACTIVE_FEEDBACK_STATUSES))
+        else:
+            conditions.append(FeedbackItem.status == status)
     if project_id:
         conditions.append(FeedbackItem.project_id == project_id)
     return conditions
@@ -129,6 +136,8 @@ async def find_duplicate_candidates(
     db: AsyncSession,
     *,
     component_id: str,
+    feedback_type: str,
+    project_id: str,
     title: str,
     limit: int = 5,
 ) -> list[FeedbackItem]:
@@ -142,13 +151,22 @@ async def find_duplicate_candidates(
                ts_rank(fi.search_vector, plainto_tsquery('english', :title)) AS rank
         FROM feedback_items fi
         WHERE fi.component_id = :component_id
+        AND fi.feedback_type = :feedback_type
+        AND fi.project_id = :project_id
         AND fi.status IN ('open', 'acknowledged')
         AND fi.search_vector @@ plainto_tsquery('english', :title)
         ORDER BY rank DESC
         LIMIT :limit
     """)
     result = await db.execute(
-        stmt, {"component_id": component_id, "title": title, "limit": limit}
+        stmt,
+        {
+            "component_id": component_id,
+            "feedback_type": feedback_type,
+            "project_id": project_id,
+            "title": title,
+            "limit": limit,
+        },
     )
     rows = result.mappings().all()
     if not rows:
@@ -302,8 +320,10 @@ async def update_feedback_status(
 
     if status:
         item.status = status
-        if status == "resolved":
+        if status in TERMINAL_FEEDBACK_STATUSES:
             item.resolved_at = datetime.now(UTC)
+        elif status in ACTIVE_FEEDBACK_STATUSES:
+            item.resolved_at = None
     if resolution_note is not None:
         item.resolution_note = resolution_note
     if linked_task_id is not None:
@@ -311,6 +331,121 @@ async def update_feedback_status(
 
     await db.flush()
     return item
+
+
+def _append_merged_text(existing: str | None, incoming: str | None) -> str | None:
+    """Append unique merged text blocks while preserving readability."""
+    cleaned_incoming = (incoming or "").strip()
+    if not cleaned_incoming:
+        return existing
+    cleaned_existing = (existing or "").strip()
+    if not cleaned_existing:
+        return cleaned_incoming
+    if cleaned_incoming in cleaned_existing:
+        return cleaned_existing
+    return f"{cleaned_existing}\n\nMerged duplicate note:\n{cleaned_incoming}"
+
+
+async def merge_feedback_items(
+    db: AsyncSession,
+    *,
+    source_item_id: str,
+    target_item_id: str,
+) -> FeedbackItem | None:
+    """Merge a duplicate feedback item into a canonical item."""
+    if source_item_id == target_item_id:
+        raise ValueError("Cannot merge a feedback item into itself")
+
+    result = await db.execute(
+        select(FeedbackItem).where(FeedbackItem.id.in_([source_item_id, target_item_id]))
+    )
+    items = {item.id: item for item in result.scalars().all()}
+    source = items.get(source_item_id)
+    target = items.get(target_item_id)
+    if source is None or target is None:
+        return None
+
+    source_votes = await get_feedback_votes(db, source_item_id)
+    target_votes = await get_feedback_votes(db, target_item_id)
+    target_votes_by_session = {
+        vote.session_id: vote for vote in target_votes if vote.session_id is not None
+    }
+
+    for source_vote in source_votes:
+        if source_vote.session_id and source_vote.session_id in target_votes_by_session:
+            target_vote = target_votes_by_session[source_vote.session_id]
+            target_vote.comment = _append_merged_text(target_vote.comment, source_vote.comment)
+            await db.delete(source_vote)
+            continue
+        source_vote.feedback_item_id = target_item_id
+
+    target.description = _append_merged_text(target.description, source.description)
+    target.resolution_note = _append_merged_text(target.resolution_note, source.resolution_note)
+    if target.linked_task_id is None and source.linked_task_id is not None:
+        target.linked_task_id = source.linked_task_id
+    if target.severity is None and source.severity is not None:
+        target.severity = source.severity
+    if target.status == ARCHIVED_FEEDBACK_STATUS and source.status in ACTIVE_FEEDBACK_STATUSES:
+        target.status = source.status
+    if target.created_by_session_id is None and source.created_by_session_id is not None:
+        target.created_by_session_id = source.created_by_session_id
+
+    await db.flush()
+
+    vote_count_result = await db.execute(
+        select(func.count()).select_from(FeedbackVote).where(FeedbackVote.feedback_item_id == target_item_id)
+    )
+    target.vote_count = vote_count_result.scalar_one()
+
+    await db.execute(delete(FeedbackVote).where(FeedbackVote.feedback_item_id == source_item_id))
+    await db.delete(source)
+    await db.flush()
+    return target
+
+
+async def archive_stale_feedback_items(
+    db: AsyncSession,
+    *,
+    older_than_days: int = 14,
+) -> int:
+    """Archive resolved or won't-fix items after a short grace period."""
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    result = await db.execute(
+        update(FeedbackItem)
+        .where(
+            FeedbackItem.status.in_(TERMINAL_FEEDBACK_STATUSES),
+            FeedbackItem.resolved_at.is_not(None),
+            FeedbackItem.resolved_at < cutoff,
+        )
+        .values(status=ARCHIVED_FEEDBACK_STATUS)
+    )
+    return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def purge_old_archived_feedback_items(
+    db: AsyncSession,
+    *,
+    older_than_days: int = 90,
+    max_vote_count: int = 2,
+) -> int:
+    """Delete low-signal archived feedback after a long retention period."""
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    result = await db.execute(
+        select(FeedbackItem.id).where(
+            FeedbackItem.status == ARCHIVED_FEEDBACK_STATUS,
+            FeedbackItem.updated_at < cutoff,
+            FeedbackItem.vote_count <= max_vote_count,
+            FeedbackItem.linked_task_id.is_(None),
+        )
+    )
+    item_ids = list(result.scalars().all())
+    if not item_ids:
+        return 0
+
+    await db.execute(delete(FeedbackVote).where(FeedbackVote.feedback_item_id.in_(item_ids)))
+    await db.execute(delete(FeedbackItem).where(FeedbackItem.id.in_(item_ids)))
+    await db.flush()
+    return len(item_ids)
 
 
 
@@ -380,6 +515,8 @@ async def get_feedback_summary(
             component_id,
             COUNT(*) FILTER (WHERE status IN ('open', 'acknowledged')) AS open_count,
             COUNT(*) FILTER (WHERE status = 'resolved') AS resolved_count,
+            COUNT(*) FILTER (WHERE status = 'wont_fix') AS wont_fix_count,
+            COUNT(*) FILTER (WHERE status = 'archived') AS archived_count,
             COUNT(*) FILTER (WHERE feedback_type = 'friction') AS friction_count,
             COUNT(*) FILTER (WHERE feedback_type = 'idea') AS idea_count,
             COUNT(*) FILTER (WHERE feedback_type = 'praise') AS praise_count,
