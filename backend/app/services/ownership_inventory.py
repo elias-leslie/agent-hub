@@ -249,13 +249,16 @@ async def query_project_ownership(
             worktree_path,
             _READ_TOOL_NAMES,
         )
-        declared_scope_paths = normalize_scope_paths(session.declared_scope_paths, worktree_path)
+        declared_scope_paths = normalize_scope_paths(
+            getattr(session, "declared_scope_paths", None),
+            worktree_path,
+        )
         observed_write_paths = merge_scope_paths(
-            normalize_scope_paths(session.observed_write_paths, worktree_path),
+            normalize_scope_paths(getattr(session, "observed_write_paths", None), worktree_path),
             write_event_paths,
         )
         observed_read_paths = merge_scope_paths(
-            normalize_scope_paths(session.observed_read_paths, worktree_path),
+            normalize_scope_paths(getattr(session, "observed_read_paths", None), worktree_path),
             read_event_paths,
         )
         scope_paths = merge_scope_paths(
@@ -283,7 +286,7 @@ async def query_project_ownership(
                 observed_read_paths=observed_read_paths,
                 observed_write_paths=observed_write_paths,
                 scope_confidence=_derive_scope_confidence(
-                    session.scope_confidence,
+                    getattr(session, "scope_confidence", None),
                     declared_scope_paths,
                     observed_write_paths,
                     observed_read_paths,
