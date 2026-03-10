@@ -952,7 +952,7 @@ export function UnifiedPersonaWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [focusSessionId, setFocusSessionId] = useState<string | null>(activeSessionId);
+  const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
   const [anchorEntryId, setAnchorEntryId] = useState<string | null>(null);
   const [expandedEntryIds, setExpandedEntryIds] = useState<Record<string, boolean>>({});
   const [expandedRoutineGroupIds, setExpandedRoutineGroupIds] = useState<Record<string, boolean>>({});
@@ -962,6 +962,7 @@ export function UnifiedPersonaWorkspace({
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoFollowRef = useRef(true);
   const programmaticScrollUntilRef = useRef(0);
+  const initialViewportSettledRef = useRef(false);
 
   const apiConfig = useMemo(
     () => ({
@@ -1096,15 +1097,15 @@ export function UnifiedPersonaWorkspace({
   }, [currentSessionId, onSessionCreated]);
 
   useEffect(() => {
-    setFocusSessionId(activeSessionId);
-  }, [activeSessionId]);
-
-  useEffect(() => {
     if (!deferredSearch.trim()) {
       setAnchorEntryId(null);
     }
     setPage(1);
   }, [timeRange, deferredSearch, focusSessionId, currentSessionId]);
+
+  useEffect(() => {
+    initialViewportSettledRef.current = false;
+  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, activeSessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1176,6 +1177,22 @@ export function UnifiedPersonaWorkspace({
     }
     scrollToBottom("smooth");
   }, [messages.length, status, autoFollow]);
+
+  useEffect(() => {
+    if (initialViewportSettledRef.current || loading || !autoFollow) {
+      return;
+    }
+    if (deferredSearch.trim() || focusSessionId || anchorEntryId) {
+      return;
+    }
+    if (hydratedEntries.length === 0 && messages.length === 0) {
+      return;
+    }
+    initialViewportSettledRef.current = true;
+    window.setTimeout(() => {
+      scrollToBottom("auto");
+    }, 0);
+  }, [loading, autoFollow, deferredSearch, focusSessionId, anchorEntryId, hydratedEntries.length, messages.length]);
 
   useEffect(() => {
     if (!autoFollow) {
