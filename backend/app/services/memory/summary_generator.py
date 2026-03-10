@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import _get_session_factory
 from app.models import Session, SessionEvent, SessionSummarySegment
@@ -81,10 +82,17 @@ async def _store_summary_on_session(
     branch: str | None = None,
     is_worktree: bool = False,
     git_digest: str = "",
+    db: AsyncSession | None = None,
 ) -> None:
     """Persist structured summary on Session row and append a summary segment."""
-    async with _get_session_factory()() as db:
-        session = (await db.execute(select(Session).where(Session.id == session_id))).scalar_one_or_none()
+    owns_session = db is None
+    if db is None:
+        db = _get_session_factory()()
+
+    async with db if owns_session else _null_async_context(db) as session_db:
+        session = (
+            await session_db.execute(select(Session).where(Session.id == session_id))
+        ).scalar_one_or_none()
         if not session:
             logger.warning("Session %s not found for summary storage", session_id)
             return
@@ -95,12 +103,13 @@ async def _store_summary_on_session(
         session.summary_branch = branch
         session.summary_is_worktree = is_worktree
         session.summary_git_digest = git_digest or None
-        db.add(SessionSummarySegment(
+        session_db.add(SessionSummarySegment(
             session_id=session_id, summary_oneliner=summary_oneliner,
             summary_outcome=outcome, summary_git_digest=git_digest or None,
             summary_branch=branch, summary_is_worktree=is_worktree,
         ))
-        await db.commit()
+        if owns_session:
+            await session_db.commit()
     logger.info(
         "Stored summary + segment on session %s: outcome=%s branch=%s worktree=%s files=%d git_digest=%s",
         session_id, outcome, branch, is_worktree, len(files_touched), bool(git_digest),
@@ -170,6 +179,7 @@ async def store_summary_on_session(
     branch: str | None = None,
     is_worktree: bool = False,
     git_digest: str = "",
+    db: AsyncSession | None = None,
 ) -> None:
     """Public API to persist a structured summary on a Session row and append a summary segment."""
     await _store_summary_on_session(
@@ -180,7 +190,21 @@ async def store_summary_on_session(
         branch=branch,
         is_worktree=is_worktree,
         git_digest=git_digest,
+        db=db,
     )
+
+
+class _null_async_context:
+    """Async context manager wrapper for a caller-owned AsyncSession."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def __aenter__(self) -> AsyncSession:
+        return self._db
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
 
 
 async def generate_session_summary(

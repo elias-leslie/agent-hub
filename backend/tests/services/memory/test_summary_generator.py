@@ -508,6 +508,30 @@ class TestStoreSummaryOnSession:
 
         mock_db.add.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_uses_caller_owned_db_without_committing(self) -> None:
+        """Caller-owned sessions stay uncommitted so outer flows keep one transaction."""
+        mock_session = MagicMock()
+        mock_db = AsyncMock()
+
+        session_result = MagicMock()
+        session_result.scalar_one_or_none.return_value = mock_session
+        mock_db.execute = AsyncMock(return_value=session_result)
+        mock_db.commit = AsyncMock()
+        mock_db.add = MagicMock()
+
+        await _store_summary_on_session(
+            session_id="test-id",
+            summary_oneliner="Inline summary",
+            outcome="completed",
+            files_touched=["auth.py"],
+            db=mock_db,
+        )
+
+        assert mock_session.summary_oneliner == "Inline summary"
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_not_awaited()
+
 
 def _mock_event(
     event_type: str,

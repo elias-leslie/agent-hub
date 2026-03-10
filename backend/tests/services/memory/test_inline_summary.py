@@ -45,6 +45,7 @@ class TestTrackInlineSummaries:
                 outcome="completed",
                 files_touched=[],
                 git_digest="",
+                db=mock_db,
             )
 
     @pytest.mark.asyncio
@@ -70,6 +71,7 @@ class TestTrackInlineSummaries:
             call_kwargs = mock_store.call_args[1]
             assert call_kwargs["summary_oneliner"] == "Finished everything"
             assert call_kwargs["outcome"] == "completed"
+            assert call_kwargs["db"] is mock_db
 
     @pytest.mark.asyncio
     async def test_no_tags_returns_false(self) -> None:
