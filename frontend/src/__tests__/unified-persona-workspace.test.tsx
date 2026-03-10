@@ -18,6 +18,19 @@ vi.mock("@/app/persona/components/TimeRangeDropdown", () => ({
   TimeRangeDropdown: () => <div data-testid="time-range">24h</div>,
 }));
 
+vi.mock("@/hooks/use-session-events", () => ({
+  useSessionEvents: () => ({
+    events: [],
+    status: "connected",
+    error: null,
+    subscriptionId: "sub-1",
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    updateFilters: vi.fn(),
+    clearEvents: vi.fn(),
+  }),
+}));
+
 vi.mock("@agent-hub/chat-ui", () => ({
   MessageBubble: ({ message }: { message: { content: string } }) => <div>{message.content}</div>,
   MessageInput: () => <div data-testid="message-input">composer</div>,
@@ -152,7 +165,7 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(screen.getByText("pause that task")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Checked active work")).toBeInTheDocument();
+    expect(screen.getAllByTestId("stream-item")[1]).toHaveTextContent("Checked active work");
     expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
     expect(screen.getByTestId("message-input")).toBeInTheDocument();
     expect(screen.getByTestId("session-dropdown")).toBeInTheDocument();

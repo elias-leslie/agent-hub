@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path, PurePosixPath
-from typing import Any
+from pathlib import Path
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,7 @@ from app.services.ownership_lanes import (
     collapse_ownership_owners,
     infer_task_id,
 )
+from app.services.session_scope import merge_scope_paths, normalize_scope_paths
 from app.services.tools.project_env import detect_main_repo
 
 _LOOKBACK_HOURS = 24
@@ -25,6 +25,7 @@ _STALE_ACTIVE_MINUTES = 30
 _GHOST_SESSION_MINUTES = 15
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
+_READ_TOOL_NAMES = {"Read", "read_file"}
 
 
 @dataclass(frozen=True)
@@ -51,40 +52,6 @@ def _parse_timestamp(value: datetime | None) -> datetime | None:
 def _age_minutes(created_at: datetime, updated_at: datetime | None) -> int:
     reference = _parse_timestamp(updated_at) or _parse_timestamp(created_at) or datetime.now(UTC)
     return int((datetime.now(UTC) - reference).total_seconds() / 60)
-
-
-def _normalize_scope_path(raw_path: Any, worktree_path: str | None) -> str | None:
-    """Normalize event file paths to repo/worktree-relative POSIX form."""
-    if not isinstance(raw_path, str):
-        return None
-    path = raw_path.strip()
-    if not path:
-        return None
-    while path.startswith("./"):
-        path = path[2:]
-    if path.startswith("/"):
-        base_candidates: list[Path] = []
-        if worktree_path:
-            cwd = Path(worktree_path).resolve()
-            base_candidates.append(cwd)
-            main_repo = detect_main_repo(cwd)
-            if main_repo and main_repo != cwd:
-                base_candidates.append(main_repo.resolve())
-        absolute = Path(path).resolve()
-        for base in base_candidates:
-            try:
-                rel = absolute.relative_to(base)
-            except ValueError:
-                continue
-            return _normalize_scope_path(str(rel), None)
-        return None
-    if "\\" in path or "//" in path or path.endswith("/"):
-        return None
-    parts = path.split("/")
-    if any(part in {"", ".", ".."} for part in parts):
-        return None
-    normalized = str(PurePosixPath(path))
-    return None if normalized == "." else normalized
 
 
 def _derive_ownership_kind(
@@ -164,7 +131,7 @@ async def _fetch_scope_events(
                 and_(
                     SessionEvent.session_id.in_(session_ids),
                     SessionEvent.event_type == "tool_use",
-                    SessionEvent.tool_name.in_(_WRITE_TOOL_NAMES),
+                    SessionEvent.tool_name.in_(_WRITE_TOOL_NAMES | _READ_TOOL_NAMES),
                 )
             )
             .order_by(SessionEvent.created_at.desc())
@@ -217,18 +184,42 @@ async def _fetch_active_specialists(
     return specialists
 
 
-def _extract_scope_paths(events: list[SessionEvent], worktree_path: str | None) -> list[str]:
-    """Extract distinct normalized file paths from tool events."""
+def _extract_scope_paths(
+    events: list[SessionEvent],
+    worktree_path: str | None,
+    tool_names: set[str],
+) -> list[str]:
+    """Extract distinct normalized file paths from matching tool events."""
     paths: list[str] = []
     seen: set[str] = set()
     for event in events:
+        if event.tool_name not in tool_names:
+            continue
         tool_input = event.tool_input if isinstance(event.tool_input, dict) else {}
         raw = tool_input.get("file_path") or tool_input.get("path")
-        normalized = _normalize_scope_path(raw, worktree_path)
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            paths.append(normalized)
+        normalized = normalize_scope_paths([raw], worktree_path)
+        path = normalized[0] if normalized else None
+        if path and path not in seen:
+            seen.add(path)
+            paths.append(path)
     return sorted(paths)
+
+
+def _derive_scope_confidence(
+    stored_confidence: str | None,
+    declared_scope_paths: list[str],
+    observed_write_paths: list[str],
+    observed_read_paths: list[str],
+) -> str:
+    if stored_confidence in {"declared", "observed_write", "observed_read", "unknown"}:
+        return stored_confidence
+    if declared_scope_paths:
+        return "declared"
+    if observed_write_paths:
+        return "observed_write"
+    if observed_read_paths:
+        return "observed_read"
+    return "unknown"
 
 
 async def query_project_ownership(
@@ -242,8 +233,36 @@ async def query_project_ownership(
     owners: list[OwnershipOwner] = []
     for session in sessions:
         metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
-        worktree_path = metadata.get("cwd") if isinstance(metadata.get("cwd"), str) else None
-        scope_paths = _extract_scope_paths(scope_events.get(session.id, []), worktree_path)
+        worktree_path = None
+        for key in ("worktree_path", "cwd"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value:
+                worktree_path = value
+                break
+        write_event_paths = _extract_scope_paths(
+            scope_events.get(session.id, []),
+            worktree_path,
+            _WRITE_TOOL_NAMES,
+        )
+        read_event_paths = _extract_scope_paths(
+            scope_events.get(session.id, []),
+            worktree_path,
+            _READ_TOOL_NAMES,
+        )
+        declared_scope_paths = normalize_scope_paths(session.declared_scope_paths, worktree_path)
+        observed_write_paths = merge_scope_paths(
+            normalize_scope_paths(session.observed_write_paths, worktree_path),
+            write_event_paths,
+        )
+        observed_read_paths = merge_scope_paths(
+            normalize_scope_paths(session.observed_read_paths, worktree_path),
+            read_event_paths,
+        )
+        scope_paths = merge_scope_paths(
+            declared_scope_paths,
+            observed_write_paths,
+            observed_read_paths,
+        )
         age = _age_minutes(session.created_at, session.updated_at)
         is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
         ownership_kind = _derive_ownership_kind(session.workstream_status, scope_paths, is_stale)
@@ -260,6 +279,15 @@ async def query_project_ownership(
                 workstream_note=session.workstream_note,
                 ownership_kind=ownership_kind,
                 scope_paths=scope_paths,
+                declared_scope_paths=declared_scope_paths,
+                observed_read_paths=observed_read_paths,
+                observed_write_paths=observed_write_paths,
+                scope_confidence=_derive_scope_confidence(
+                    session.scope_confidence,
+                    declared_scope_paths,
+                    observed_write_paths,
+                    observed_read_paths,
+                ),
                 updated_at=_parse_timestamp(session.updated_at),
                 created_at=_parse_timestamp(session.created_at) or datetime.now(UTC),
                 age_minutes=age,

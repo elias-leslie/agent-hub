@@ -24,6 +24,10 @@ class OwnershipOwner:
     workstream_note: str | None
     ownership_kind: str
     scope_paths: list[str]
+    declared_scope_paths: list[str]
+    observed_read_paths: list[str]
+    observed_write_paths: list[str]
+    scope_confidence: str | None
     updated_at: datetime | None
     created_at: datetime
     age_minutes: int
@@ -127,6 +131,9 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
     for fingerprint, group in grouped.items():
         representative = max(group, key=_owner_rank)
         merged_scope_paths = sorted({path for owner in group for path in owner.scope_paths})
+        merged_declared_paths = sorted({path for owner in group for path in owner.declared_scope_paths})
+        merged_read_paths = sorted({path for owner in group for path in owner.observed_read_paths})
+        merged_write_paths = sorted({path for owner in group for path in owner.observed_write_paths})
         lane_is_stale = all(owner.is_stale for owner in group)
         freshest_age = min(owner.age_minutes for owner in group)
         latest_updated = max(
@@ -145,6 +152,10 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
                 workstream_note=representative.workstream_note,
                 ownership_kind=representative.ownership_kind,
                 scope_paths=merged_scope_paths,
+                declared_scope_paths=merged_declared_paths,
+                observed_read_paths=merged_read_paths,
+                observed_write_paths=merged_write_paths,
+                scope_confidence=representative.scope_confidence,
                 updated_at=latest_updated,
                 created_at=representative.created_at,
                 age_minutes=freshest_age,

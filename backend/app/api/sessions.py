@@ -36,8 +36,10 @@ from app.services.session_helpers import (
 from app.services.session_ingestion import (
     AppendNormalizedEventsRequest,
     NormalizedEvent,
+    SessionHeartbeatRequest,
     SessionUpsertRequest,
     append_normalized_events,
+    heartbeat_session,
     upsert_session,
 )
 
@@ -66,10 +68,32 @@ async def create_session(
                 model=request.model,
                 session_type=request.session_type,
                 agent_slug=request.agent_slug,
+                external_id=request.external_id,
+                current_branch=request.current_branch,
+                cwd=request.cwd,
+                declared_scope_paths=request.declared_scope_paths,
+                observed_read_paths=request.observed_read_paths,
+                observed_write_paths=request.observed_write_paths,
+                scope_confidence=request.scope_confidence,
+                provider_metadata=request.provider_metadata,
             ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+    return build_session_response(session)
+
+
+@router.post("/sessions/{session_id}/heartbeat", response_model=SessionResponse)
+async def heartbeat_existing_session(
+    session_id: str,
+    request: SessionHeartbeatRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionResponse:
+    """Update live session/process state for an existing session."""
+    try:
+        session, _ = await heartbeat_session(db, session_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return build_session_response(session)
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -13,7 +14,9 @@ from app.models.session import SessionEvent
 from app.services.agent_routing import resolve_agent
 from app.services.event_storage import get_max_sequence, get_max_turn, store_event
 from app.services.memory.session_analysis import analyze_session
+from app.services.session_live_activity import apply_live_activity_heartbeat
 from app.services.session_operations import _validate_project_id, get_or_create_session
+from app.services.session_scope import merge_scope_paths, normalize_scope_paths
 
 from .adapters.base import ProviderSessionRef
 from .adapters.claude_code import ClaudeCodeTranscriptAdapter
@@ -24,11 +27,20 @@ from .models import (
     FinalizeSessionRequest,
     FinalizeSessionResult,
     NormalizedEvent,
+    SessionHeartbeatRequest,
+    SessionHeartbeatResult,
     SessionUpsertRequest,
     SessionUpsertResult,
     TranscriptIngestRequest,
     TranscriptIngestResult,
 )
+
+_SCOPE_CONFIDENCE_RANK = {
+    "unknown": 0,
+    "observed_read": 1,
+    "observed_write": 2,
+    "declared": 3,
+}
 
 
 def _merge_metadata(
@@ -53,6 +65,76 @@ def _append_unique(values: list[str] | None, item: str | None) -> list[str]:
     return result
 
 
+def _scope_base_path(
+    metadata: dict[str, Any] | None,
+    cwd: str | None,
+) -> str | None:
+    payload = metadata if isinstance(metadata, dict) else {}
+    for key in ("worktree_path", "repo_root", "cwd"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return cwd
+
+
+def _resolve_scope_confidence(
+    explicit: str | None,
+    declared_scope_paths: list[str] | None,
+    observed_write_paths: list[str] | None,
+    observed_read_paths: list[str] | None,
+    existing: str | None = None,
+) -> str:
+    if explicit in _SCOPE_CONFIDENCE_RANK:
+        return explicit
+    derived = "unknown"
+    if declared_scope_paths:
+        derived = "declared"
+    elif observed_write_paths:
+        derived = "observed_write"
+    elif observed_read_paths:
+        derived = "observed_read"
+    if existing in _SCOPE_CONFIDENCE_RANK and _SCOPE_CONFIDENCE_RANK[existing] > _SCOPE_CONFIDENCE_RANK[derived]:
+        return existing
+    return derived
+
+
+def _apply_scope_state(
+    session: Session,
+    *,
+    base_path: str | None,
+    declared_scope_paths: list[str] | None = None,
+    observed_read_paths: list[str] | None = None,
+    observed_write_paths: list[str] | None = None,
+    scope_confidence: str | None = None,
+) -> None:
+    normalized_declared = normalize_scope_paths(declared_scope_paths, base_path)
+    normalized_reads = normalize_scope_paths(observed_read_paths, base_path)
+    normalized_writes = normalize_scope_paths(observed_write_paths, base_path)
+
+    if normalized_declared:
+        session.declared_scope_paths = normalized_declared
+    elif session.declared_scope_paths is None:
+        session.declared_scope_paths = []
+
+    if normalized_reads:
+        session.observed_read_paths = merge_scope_paths(session.observed_read_paths, normalized_reads)
+    elif session.observed_read_paths is None:
+        session.observed_read_paths = []
+
+    if normalized_writes:
+        session.observed_write_paths = merge_scope_paths(session.observed_write_paths, normalized_writes)
+    elif session.observed_write_paths is None:
+        session.observed_write_paths = []
+
+    session.scope_confidence = _resolve_scope_confidence(
+        scope_confidence,
+        session.declared_scope_paths,
+        session.observed_write_paths,
+        session.observed_read_paths,
+        session.scope_confidence,
+    )
+
+
 async def upsert_session(
     db: AsyncSession,
     request: SessionUpsertRequest,
@@ -65,6 +147,12 @@ async def upsert_session(
         resolved = await resolve_agent(request.agent_slug, db)
         provider = resolved.provider
         model = resolved.model
+
+    merged_metadata = _merge_metadata(
+        request.provider_metadata,
+        {"cwd": request.cwd} if request.cwd else None,
+    )
+    base_path = _scope_base_path(merged_metadata, request.cwd)
 
     existing, is_existing = await get_or_create_session(db, request.session_id)
     if is_existing and existing is not None:
@@ -84,12 +172,17 @@ async def upsert_session(
             request_source=request.request_source,
             current_branch=request.current_branch,
             parent_session_id=request.parent_session_id,
-            provider_metadata=_merge_metadata(
-                request.provider_metadata,
-                {"cwd": request.cwd} if request.cwd else None,
-            ),
+            provider_metadata=merged_metadata,
             models_used=[model],
             providers_used=[provider],
+        )
+        _apply_scope_state(
+            session,
+            base_path=base_path,
+            declared_scope_paths=request.declared_scope_paths,
+            observed_read_paths=request.observed_read_paths,
+            observed_write_paths=request.observed_write_paths,
+            scope_confidence=request.scope_confidence,
         )
         db.add(session)
         await db.commit()
@@ -110,19 +203,71 @@ async def upsert_session(
         session.parent_session_id = request.parent_session_id
     session.provider_metadata = _merge_metadata(
         session.provider_metadata,
-        request.provider_metadata,
+        merged_metadata,
     )
-    if request.cwd:
-        session.provider_metadata = _merge_metadata(
-            session.provider_metadata,
-            {"cwd": request.cwd},
-        )
     session.models_used = _append_unique(session.models_used, model)
     session.providers_used = _append_unique(session.providers_used, provider)
+    _apply_scope_state(
+        session,
+        base_path=base_path,
+        declared_scope_paths=request.declared_scope_paths,
+        observed_read_paths=request.observed_read_paths,
+        observed_write_paths=request.observed_write_paths,
+        scope_confidence=request.scope_confidence,
+    )
 
     await db.commit()
     await db.refresh(session)
     return session, SessionUpsertResult(session_id=session.id, created=created)
+
+
+async def heartbeat_session(
+    db: AsyncSession,
+    session_id: str,
+    request: SessionHeartbeatRequest,
+) -> tuple[Session, SessionHeartbeatResult]:
+    """Apply a live heartbeat update to an existing session."""
+    session = (
+        await db.execute(select(Session).where(Session.id == session_id).limit(1))
+    ).scalar_one_or_none()
+    if session is None:
+        raise ValueError(f"Session not found: {session_id}")
+
+    metadata = _merge_metadata(session.provider_metadata, request.provider_metadata)
+    if request.cwd:
+        metadata = _merge_metadata(metadata, {"cwd": request.cwd})
+    session.provider_metadata = metadata
+    if request.current_branch is not None:
+        session.current_branch = request.current_branch
+
+    base_path = _scope_base_path(metadata, request.cwd)
+    _apply_scope_state(
+        session,
+        base_path=base_path,
+        declared_scope_paths=request.declared_scope_paths,
+        observed_read_paths=request.active_read_paths,
+        observed_write_paths=request.active_write_paths,
+        scope_confidence=request.scope_confidence,
+    )
+
+    heartbeat_at = request.heartbeat_at or datetime.now(UTC)
+    session.last_heartbeat_at = heartbeat_at
+    apply_live_activity_heartbeat(
+        session,
+        heartbeat_at=heartbeat_at.isoformat(),
+        phase=request.phase,
+        status=request.status,
+        summary=request.summary,
+        current_tool_name=request.current_tool_name,
+        current_command=request.current_command,
+        last_event_type=request.last_event_type,
+        active_read_paths=normalize_scope_paths(request.active_read_paths, base_path),
+        active_write_paths=normalize_scope_paths(request.active_write_paths, base_path),
+    )
+
+    await db.commit()
+    await db.refresh(session)
+    return session, SessionHeartbeatResult(session_id=session.id, updated=True)
 
 
 async def append_normalized_events(

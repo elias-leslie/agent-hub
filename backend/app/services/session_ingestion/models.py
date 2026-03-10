@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -25,6 +26,22 @@ class SessionUpsertRequest(BaseModel):
         description="Optional parent session for dispatched or branched work",
     )
     cwd: str | None = Field(default=None, description="Provider working directory")
+    declared_scope_paths: list[str] = Field(
+        default_factory=list,
+        description="Explicit file/path scope declared for this session",
+    )
+    observed_read_paths: list[str] = Field(
+        default_factory=list,
+        description="Observed read paths captured during registration",
+    )
+    observed_write_paths: list[str] = Field(
+        default_factory=list,
+        description="Observed write paths captured during registration",
+    )
+    scope_confidence: str | None = Field(
+        default=None,
+        description="declared | observed_write | observed_read | unknown",
+    )
     provider_metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Provider-specific metadata merged onto the session row",
@@ -36,6 +53,32 @@ class SessionUpsertResult(BaseModel):
 
     session_id: str
     created: bool
+
+
+class SessionHeartbeatRequest(BaseModel):
+    """Canonical heartbeat request for live session/process state."""
+
+    cwd: str | None = Field(default=None, description="Current working directory")
+    current_branch: str | None = Field(default=None, description="Current git branch")
+    declared_scope_paths: list[str] = Field(default_factory=list)
+    active_read_paths: list[str] = Field(default_factory=list)
+    active_write_paths: list[str] = Field(default_factory=list)
+    scope_confidence: str | None = Field(default=None)
+    phase: str | None = Field(default=None)
+    status: str | None = Field(default=None)
+    summary: str | None = Field(default=None)
+    current_tool_name: str | None = Field(default=None)
+    current_command: str | None = Field(default=None)
+    last_event_type: str | None = Field(default=None)
+    heartbeat_at: datetime | None = Field(default=None, description="Explicit heartbeat timestamp")
+    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class SessionHeartbeatResult(BaseModel):
+    """Outcome of applying a session heartbeat."""
+
+    session_id: str
+    updated: bool = True
 
 
 class NormalizedEvent(BaseModel):

@@ -254,6 +254,12 @@ export function useSessionEvents(
     setEvents([]);
   }, []);
 
+  useEffect(() => {
+    if (subscriptionId) {
+      updateFilters(sessionIds, eventTypes);
+    }
+  }, [subscriptionId, sessionIds, eventTypes, updateFilters]);
+
   // Auto-connect on mount
   useEffect(() => {
     if (autoConnect) {

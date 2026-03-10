@@ -15,12 +15,15 @@ from app.services.session_ingestion import (
     AppendNormalizedEventsResult,
     FinalizeSessionRequest,
     FinalizeSessionResult,
+    SessionHeartbeatRequest,
+    SessionHeartbeatResult,
     SessionUpsertRequest,
     SessionUpsertResult,
     TranscriptIngestRequest,
     TranscriptIngestResult,
     append_normalized_events,
     finalize_session,
+    heartbeat_session,
     ingest_transcript_events,
     upsert_session,
 )
@@ -30,6 +33,12 @@ router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
 
 class SessionUpsertResponse(SessionUpsertResult):
     """Upsert response with the current session snapshot."""
+
+    session: SessionResponse
+
+
+class SessionHeartbeatResponse(SessionHeartbeatResult):
+    """Heartbeat response with the current session snapshot."""
 
     session: SessionResponse
 
@@ -48,6 +57,28 @@ async def upsert_session_endpoint(
     return SessionUpsertResponse(
         session_id=result.session_id,
         created=result.created,
+        session=build_session_response(session),
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/heartbeat",
+    response_model=SessionHeartbeatResponse,
+)
+async def heartbeat_session_endpoint(
+    session_id: str,
+    request: SessionHeartbeatRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionHeartbeatResponse:
+    """Apply a canonical heartbeat update to an existing session."""
+    try:
+        session, result = await heartbeat_session(db, session_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return SessionHeartbeatResponse(
+        session_id=result.session_id,
+        updated=result.updated,
         session=build_session_response(session),
     )
 

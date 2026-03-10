@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   useDeferredValue,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -22,6 +23,7 @@ import {
   ArrowDown,
   ArrowUp,
   Clock3,
+  Radio,
 } from "lucide-react";
 import {
   MessageBubble,
@@ -31,6 +33,7 @@ import {
 } from "@agent-hub/chat-ui";
 
 import { SessionDropdown } from "@/components/chat/session-dropdown";
+import { useSessionEvents } from "@/hooks/use-session-events";
 import { cn } from "@/lib/utils";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
 import {
@@ -42,6 +45,9 @@ import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
 
 const PROJECT_ID = "persona-sandbox";
 const PAGE_SIZE = 120;
+const LIVE_REFRESH_MS = 5_000;
+
+type FilterMode = "all" | "messages" | "work" | "errors" | "heartbeats";
 
 interface UnifiedPersonaWorkspaceProps {
   agentSlug: string;
@@ -195,6 +201,49 @@ function formatDurationLabel(durationMs: number | null): string | null {
   return `${minutes}m ${seconds}s`;
 }
 
+function highlightKeywordClass(token: string): string {
+  const normalized = token.toLowerCase();
+  if (["error", "failed", "failure", "blocked"].includes(normalized)) {
+    return "rounded-md bg-rose-100 px-1 py-0.5 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+  if (["warning", "warn", "paused"].includes(normalized)) {
+    return "rounded-md bg-amber-100 px-1 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  if (["success", "succeeded", "completed", "ok"].includes(normalized)) {
+    return "rounded-md bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (["running", "working", "active"].includes(normalized)) {
+    return "rounded-md bg-sky-100 px-1 py-0.5 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+  }
+  return "";
+}
+
+function HighlightedText({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  const parts = text.split(/(\b(?:error|failed|failure|warning|warn|success|succeeded|completed|ok|running|working|active|blocked|paused)\b)/gi);
+
+  return (
+    <span className={className}>
+      {parts.map((part, index) => {
+        const keywordClass = highlightKeywordClass(part);
+        if (!keywordClass) {
+          return <span key={`${part}-${index}`}>{part}</span>;
+        }
+        return (
+          <span key={`${part}-${index}`} className={keywordClass}>
+            {part}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function eventLabel(eventType: string): string {
   return eventType.replaceAll("_", " ");
 }
@@ -298,9 +347,10 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
               {duration && <span className="normal-case tracking-normal opacity-80">{duration}</span>}
             </div>
             {preview.content_preview && (
-              <p className="mt-2 whitespace-pre-wrap break-words text-sm">
-                {preview.content_preview}
-              </p>
+              <HighlightedText
+                text={preview.content_preview}
+                className="mt-2 block whitespace-pre-wrap break-words text-sm"
+              />
             )}
             <PreviewCodeBlock label="Input" value={preview.tool_input_preview} />
             <PreviewCodeBlock label="Output" value={preview.tool_output_preview} />
@@ -406,9 +456,10 @@ function ChildRunCard({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            {entry.summary_oneliner || entry.live_summary || "Child run activity"}
-          </p>
+          <HighlightedText
+            text={entry.summary_oneliner || entry.live_summary || "Child run activity"}
+            className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+          />
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span>task {entry.external_id}</span>}
             {entry.current_branch && <span>{entry.current_branch}</span>}
@@ -475,13 +526,15 @@ function HeartbeatCard({
               </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-            {entry.summary_oneliner || entry.live_summary || "Routine check completed"}
-          </p>
+          <HighlightedText
+            text={entry.summary_oneliner || entry.live_summary || "Routine check completed"}
+            className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+          />
           {entry.live_summary && entry.summary_oneliner !== entry.live_summary && (
-            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-              {entry.live_summary}
-            </p>
+            <HighlightedText
+              text={entry.live_summary}
+              className="mt-2 block text-xs text-slate-400 dark:text-slate-500"
+            />
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             <Link
@@ -516,8 +569,11 @@ export function UnifiedPersonaWorkspace({
   onSessionCreated,
   onNewSession,
 }: UnifiedPersonaWorkspaceProps) {
+  const searchInputId = useId();
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [search, setSearch] = useState("");
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [autoFollow, setAutoFollow] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [entries, setEntries] = useState<PersonaStreamEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -528,6 +584,7 @@ export function UnifiedPersonaWorkspace({
   const [expandedEntryIds, setExpandedEntryIds] = useState<Record<string, boolean>>({});
   const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
   const [pendingSearchDirection, setPendingSearchDirection] = useState<1 | -1 | null>(null);
+  const [liveRefreshTick, setLiveRefreshTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const apiConfig = useMemo(
@@ -557,6 +614,23 @@ export function UnifiedPersonaWorkspace({
     apiConfig,
     loadInitialSession: false,
   } as any);
+
+  const activeStreamSessionIds = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.status === "active" || entry.live_status === "active")
+        .map((entry) => entry.session_id),
+    [entries],
+  );
+
+  useSessionEvents({
+    sessionIds: activeStreamSessionIds,
+    autoConnect: true,
+    autoReconnect: true,
+    onEvent: () => {
+      setLiveRefreshTick((value) => value + 1);
+    },
+  });
 
   useEffect(() => {
     if (currentSessionId) {
@@ -618,7 +692,7 @@ export function UnifiedPersonaWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [timeRange, deferredSearch, focusSessionId, page, currentSessionId, sidebarRefreshTrigger]);
+  }, [timeRange, deferredSearch, focusSessionId, page, currentSessionId, sidebarRefreshTrigger, liveRefreshTick]);
 
   useEffect(() => {
     if (!focusSessionId) {
@@ -640,11 +714,51 @@ export function UnifiedPersonaWorkspace({
     container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages.length, status]);
 
+  useEffect(() => {
+    if (!autoFollow) {
+      return;
+    }
+    const hasLiveWork = entries.some((entry) => entry.status === "active" || entry.live_status === "active");
+    if (!hasLiveWork) {
+      return;
+    }
+    const container = scrollRef.current;
+    if (!container || typeof container.scrollTo !== "function") {
+      return;
+    }
+    container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+  }, [autoFollow, entries]);
+
+  useEffect(() => {
+    const hasLiveWork = entries.some((entry) => entry.status === "active" || entry.live_status === "active");
+    if (!hasLiveWork) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setLiveRefreshTick((value) => value + 1);
+    }, LIVE_REFRESH_MS);
+    return () => window.clearInterval(interval);
+  }, [entries]);
+
   const mergedItems = useMemo(() => {
     const remote = buildRemoteFeedItems([...entries].reverse());
     const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId);
-    return [...remote, ...local].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  }, [entries, messages, currentSessionId, activeSessionId]);
+    return [...remote, ...local]
+      .filter((item) => {
+        if (filterMode === "all") return true;
+        if (filterMode === "messages") return item.kind === "message";
+        if (filterMode === "heartbeats") return item.kind === "heartbeat";
+        if (filterMode === "errors") {
+          if (item.kind === "message") return /error|failed|warning|blocked/i.test(item.message.content);
+          return item.entry.status === "failed" || item.entry.event_previews.some((preview) => preview.event_type === "error");
+        }
+        if (filterMode === "work") {
+          return item.kind === "child_run" || item.kind === "heartbeat";
+        }
+        return true;
+      })
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }, [entries, messages, currentSessionId, activeSessionId, filterMode]);
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ label: string; blocks: TimelineBlock[] }> = [];
@@ -684,6 +798,17 @@ export function UnifiedPersonaWorkspace({
       return entrySearchText(item.entry).includes(query);
     });
   }, [deferredSearch, mergedItems]);
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<FilterMode, number> = {
+      all: entries.length + messages.length,
+      messages: [...entries.filter((entry) => entry.entry_type === "message"), ...messages].length,
+      work: entries.filter((entry) => entry.entry_type === "heartbeat" || entry.entry_type === "child_run").length,
+      errors: entries.filter((entry) => entry.status === "failed" || entry.event_previews.some((preview) => preview.event_type === "error")).length,
+      heartbeats: entries.filter((entry) => entry.entry_type === "heartbeat").length,
+    };
+    return counts;
+  }, [entries, messages]);
 
   const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.id)), [searchMatches]);
   const activeSearchMatch = useMemo(
@@ -784,6 +909,7 @@ export function UnifiedPersonaWorkspace({
           <div className="relative min-w-[18rem] flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
+              id={searchInputId}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search Jenny's history, task IDs, files, agents..."
@@ -791,6 +917,43 @@ export function UnifiedPersonaWorkspace({
             />
           </div>
           <TimeRangeDropdown value={timeRange} onChange={setTimeRange} />
+          <button
+            type="button"
+            onClick={() => setAutoFollow((value) => !value)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition",
+              autoFollow
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800"
+                : "bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700",
+            )}
+          >
+            <Radio className="h-4 w-4" />
+            {autoFollow ? "Auto-follow on" : "Auto-follow off"}
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {([
+            ["all", "All"],
+            ["messages", "Messages"],
+            ["work", "Work"],
+            ["errors", "Errors"],
+            ["heartbeats", "Heartbeats"],
+          ] as Array<[FilterMode, string]>).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setFilterMode(value)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition",
+                filterMode === value
+                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
+              )}
+            >
+              {label}
+              <span className="opacity-70">{filterCounts[value]}</span>
+            </button>
+          ))}
         </div>
         {deferredSearch.trim() && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">

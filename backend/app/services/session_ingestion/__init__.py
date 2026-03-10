@@ -6,6 +6,8 @@ from .models import (
     FinalizeSessionRequest,
     FinalizeSessionResult,
     NormalizedEvent,
+    SessionHeartbeatRequest,
+    SessionHeartbeatResult,
     SessionUpsertRequest,
     SessionUpsertResult,
     TranscriptIngestRequest,
@@ -14,6 +16,7 @@ from .models import (
 from .service import (
     append_normalized_events,
     finalize_session,
+    heartbeat_session,
     ingest_transcript_events,
     upsert_session,
 )
@@ -24,12 +27,15 @@ __all__ = [
     "FinalizeSessionRequest",
     "FinalizeSessionResult",
     "NormalizedEvent",
+    "SessionHeartbeatRequest",
+    "SessionHeartbeatResult",
     "SessionUpsertRequest",
     "SessionUpsertResult",
     "TranscriptIngestRequest",
     "TranscriptIngestResult",
     "append_normalized_events",
     "finalize_session",
+    "heartbeat_session",
     "ingest_transcript_events",
     "upsert_session",
 ]
