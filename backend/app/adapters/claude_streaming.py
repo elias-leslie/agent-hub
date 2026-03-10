@@ -93,6 +93,7 @@ def _build_oauth_options(
             tools=tools,
             working_dir=working_dir,
             project_id=project_id,
+            agent_slug=None,
             tool_catalog=None,
         )
         if tools

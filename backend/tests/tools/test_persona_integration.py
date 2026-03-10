@@ -361,6 +361,49 @@ class TestAllPersonaToolsDispatch:
             )
         assert "not found" in result.lower()
 
+
+class TestPersonaBashWorkflowGuards:
+    """Verify Jenny-specific workflow restrictions in Bash execution."""
+
+    @pytest.fixture
+    def executor(self, tmp_path: Path) -> DirectToolExecutor:
+        return DirectToolExecutor(str(tmp_path), project_id="persona-sandbox")
+
+    @pytest.mark.asyncio
+    async def test_persona_bash_blocks_raw_git_commit(self, tmp_path: Path):
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+
+        result = await executor.dispatch(
+            "bash",
+            {"command": "git commit -m 'test'"},
+        )
+
+        assert "blocked for workflow policy" in result.lower()
+        assert "smart_sync" in result
+
+    @pytest.mark.asyncio
+    async def test_persona_bash_blocks_raw_git_push(self, tmp_path: Path):
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+
+        result = await executor.dispatch(
+            "bash",
+            {"command": "git push origin main"},
+        )
+
+        assert "blocked for workflow policy" in result.lower()
+        assert "commit.sh" in result
+
+    @pytest.mark.asyncio
+    async def test_non_persona_bash_does_not_block_git_commit(self, tmp_path: Path):
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
+
+        result = await executor.dispatch(
+            "bash",
+            {"command": "git commit -m 'test'", "timeout": 1},
+        )
+
+        assert "blocked for workflow policy" not in result.lower()
+
     @pytest.mark.asyncio
     async def test_manage_tasks_dispatches(self, executor: DirectToolExecutor):
         # manage_tasks requires bash_fn bound via _model_tool_registry

@@ -42,6 +42,11 @@ BLOCKED_COMMANDS = frozenset(
     }
 )
 
+_PERSONA_BLOCKED_SUBSTRINGS = (
+    "git commit",
+    "git push ",
+)
+
 
 def is_blocked_command(command: str) -> bool:
     """Check if command is blocked for safety."""
@@ -49,13 +54,33 @@ def is_blocked_command(command: str) -> bool:
     return any(blocked in command_lower for blocked in BLOCKED_COMMANDS)
 
 
+def get_persona_block_reason(command: str, agent_slug: str | None) -> str | None:
+    """Return a Jenny-specific block reason for commands we never want in Bash."""
+    if agent_slug != "persona":
+        return None
+
+    command_lower = command.lower().strip()
+    if any(blocked in command_lower for blocked in _PERSONA_BLOCKED_SUBSTRINGS):
+        return (
+            "Jenny must not use raw git commit/push from Bash. "
+            "Use manage_tasks(action='smart_sync', project_id='...') for coherent publish debt, "
+            "or the canonical commit.sh flow only when direct code intervention is operationally required."
+        )
+    return None
+
+
 async def run_bash(
     command: str,
     working_dir: Path,
     env: dict[str, str],
     timeout: int = DEFAULT_TIMEOUT,
+    agent_slug: str | None = None,
 ) -> str:
     """Execute a bash command and return combined stdout+stderr output."""
+    persona_block_reason = get_persona_block_reason(command, agent_slug)
+    if persona_block_reason:
+        return f"Error: Command blocked for workflow policy: {persona_block_reason}"
+
     try:
         process = await asyncio.create_subprocess_shell(
             command,

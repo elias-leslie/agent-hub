@@ -25,6 +25,7 @@ def build_event_stream(
     max_turns: int,
     project_id: str | None,
     session_id: str,
+    agent_slug: str | None,
 ) -> Any:
     """Select and return the appropriate async event stream for the provider."""
     if provider in _OPENAI_COMPAT_PROVIDERS:
@@ -33,6 +34,7 @@ def build_event_stream(
         return adapt_openai_stream(
             adapter, messages, model, tools or [],
             working_dir, permission_config, max_turns, project_id, session_id,
+            agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
     if provider == "claude":
@@ -42,6 +44,7 @@ def build_event_stream(
             messages=messages, model=model, tools=tools or [],
             working_dir=working_dir, permission_config=permission_config,
             project_id=project_id, max_turns=max_turns,
+            agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
         return adapt_claude_stream(raw_stream)
@@ -56,4 +59,6 @@ def build_event_stream(
         kwargs["max_turns"] = max_turns
     if provider in ("gemini", "cloudcode") and project_id:
         kwargs["project_id"] = project_id
+    if agent_slug:
+        kwargs["agent_slug"] = agent_slug
     return adapter.complete_with_tools(**kwargs)

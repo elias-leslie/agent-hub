@@ -78,6 +78,7 @@ async def _run_tool_loop(
         max_turns=max_turns,
         project_id=project_id,
         session_id=session_id,
+        agent_slug=state.agent_slug,
     )
 
     # Mapping of tool_use_id → tool_name, shared across all events in the loop

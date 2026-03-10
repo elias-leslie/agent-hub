@@ -367,6 +367,7 @@ async def cloudcode_tool_loop(
     """Run agentic tool loop via cloudcode-pa."""
     tool_handler = create_direct_handler(
         working_dir, permission_config, project_id=project_id,
+        agent_slug=kwargs.get("agent_slug"),
         tool_catalog=kwargs.get("tool_catalog"),
     )
     session_id = str(uuid.uuid4())

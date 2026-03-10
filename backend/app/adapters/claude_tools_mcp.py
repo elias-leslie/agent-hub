@@ -47,6 +47,7 @@ def build_mcp_server(
     tools: list[dict[str, Any]],
     working_dir: str | None,
     project_id: str | None,
+    agent_slug: str | None,
     tool_catalog: list[dict[str, Any]] | None = None,
 ) -> Any | None:
     """Build an in-process SDK MCP server for custom tools.
@@ -69,6 +70,7 @@ def build_mcp_server(
     tool_handler = create_direct_handler(
         working_dir=working_dir,
         project_id=project_id,
+        agent_slug=agent_slug,
         tool_catalog=tool_catalog,
     )
     mcp_tools = []

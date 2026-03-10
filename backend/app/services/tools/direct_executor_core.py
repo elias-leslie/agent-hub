@@ -128,6 +128,7 @@ class DirectToolExecutor:
         working_dir: str | None = None,
         project_id: str | None = None,
         session_id: str | None = None,
+        agent_slug: str | None = None,
         tool_catalog: list[dict[str, Any]] | None = None,
     ):
         """Initialize executor with optional working directory and project context.
@@ -144,6 +145,7 @@ class DirectToolExecutor:
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
         self._session_id = session_id
+        self._agent_slug = agent_slug
         self._tool_catalog = {
             str(tool["name"]): dict(tool) for tool in (tool_catalog or [])
         }
@@ -197,7 +199,7 @@ class DirectToolExecutor:
         if self._allowed_root and not self._is_path_allowed(self.working_dir):
             return "Error: Working directory outside allowed project root"
 
-        return await run_bash(command, self.working_dir, self._env, timeout)
+        return await run_bash(command, self.working_dir, self._env, timeout, agent_slug=self._agent_slug)
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file with optional line offset and limit."""
