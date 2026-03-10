@@ -12,7 +12,7 @@ from app.services.event_storage import (
 from app.services.event_storage import (
     store_thinking_event as _store_thinking_event,
 )
-from app.services.events import publish_message
+from app.services.events import publish_message, publish_tool_result
 
 from .helpers import normalize_content_for_storage
 
@@ -96,6 +96,13 @@ async def store_tool_result(
         agent_name=agent_id,
     )
     await db.commit()
+    await publish_tool_result(
+        session_id,
+        tool_name=tool_name,
+        tool_output=tool_output,
+        duration_ms=duration_ms,
+        is_error=is_error,
+    )
 
 
 async def store_thinking_event(

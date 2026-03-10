@@ -18,13 +18,14 @@ class SessionEventType(StrEnum):
 
     Memory System Integration:
     - MESSAGE events are most relevant for memory extraction
-    - TOOL_USE events capture agent actions for pattern learning
+    - TOOL_USE / TOOL_RESULT events capture agent actions for pattern learning
     - COMPLETE events signal session end for batch processing
     """
 
     SESSION_START = "session_start"
     MESSAGE = "message"
     TOOL_USE = "tool_use"
+    TOOL_RESULT = "tool_result"
     COMPLETE = "complete"
     ERROR = "error"
 
@@ -55,6 +56,11 @@ class SessionEvent:
         - tool_name: str - Tool identifier
         - tool_input: dict - Tool arguments (patterns for learning)
         - tool_output: Any | None - Tool result
+
+    TOOL_RESULT (memory-relevant):
+        - tool_name: str | None - Tool identifier
+        - tool_output: Any | None - Tool result payload
+        - duration_ms: int | None - Execution duration
 
     COMPLETE:
         - input_tokens: int - Total input tokens

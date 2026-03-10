@@ -28,6 +28,7 @@ async def persona_to_response(
         voice_id=persona.voice_id,
         voice_enabled=persona.voice_enabled,
         heartbeat_interval_minutes=persona.heartbeat_interval_minutes,
+        execution_state=persona.execution_state,
         avatar_url=persona.avatar_url,
         greeting=persona.greeting,
         onboarding_complete=persona.onboarding_complete,

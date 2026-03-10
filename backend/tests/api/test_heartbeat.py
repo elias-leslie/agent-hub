@@ -28,6 +28,11 @@ class TestHeartbeatStatus:
                 return_value=(60, True),
             ),
             patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
                 "app.api.heartbeat.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=None,
@@ -41,6 +46,7 @@ class TestHeartbeatStatus:
         assert data["last_run"] == "2026-03-03T10:00:00+00:00"
         assert data["elapsed_seconds"] is None
         assert data["interval_minutes"] == 60
+        assert data["execution_state"] == "active"
 
     def test_heartbeat_status_when_running_returns_running(self, api_client):
         with (
@@ -58,6 +64,11 @@ class TestHeartbeatStatus:
                 "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.api.heartbeat.get_heartbeat_runtime_info",
@@ -90,6 +101,11 @@ class TestHeartbeatStatus:
                 return_value=(60, True),
             ),
             patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
                 "app.api.heartbeat.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=None,
@@ -118,6 +134,11 @@ class TestHeartbeatStatus:
                 "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.api.heartbeat.get_heartbeat_runtime_info",
@@ -187,6 +208,11 @@ class TestHeartbeatTrigger:
                 return_value=(60, True),
             ),
             patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
                 "app.api.heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
@@ -213,6 +239,11 @@ class TestHeartbeatTrigger:
                 "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
             ),
             patch(
                 "app.api.heartbeat.check_project_permission",
@@ -280,6 +311,11 @@ class TestHeartbeatTrigger:
                 return_value=(60, True),
             ),
             patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
                 "app.api.heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=False,
@@ -289,6 +325,29 @@ class TestHeartbeatTrigger:
 
         assert response.status_code == 403
         assert "permission" in response.json()["message"]
+
+    def test_heartbeat_trigger_when_paused_returns_409(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat._get_effective_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="paused",
+            ),
+        ):
+            response = api_client.post("/api/heartbeat/trigger")
+
+        assert response.status_code == 409
+        assert "paused" in response.json()["message"].lower()
 
     def test_heartbeat_trigger_rejects_unknown_target_project(self, api_client):
         with patch(

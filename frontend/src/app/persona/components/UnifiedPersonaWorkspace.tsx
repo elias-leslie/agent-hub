@@ -103,6 +103,11 @@ interface LiveSessionPatch {
   eventPreviews: PersonaStreamEventPreview[];
 }
 
+interface PreviewBadge {
+  label: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+}
+
 function isChildRunItem(item: FeedItem): item is FeedChildRun {
   return item.kind === "child_run";
 }
@@ -233,6 +238,17 @@ function parseJsonPreview(value: string | null): Record<string, unknown> | null 
   } catch {
     return null;
   }
+}
+
+function formatPreviewBlockValue(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = parseJsonPreview(value);
+  if (parsed) {
+    return JSON.stringify(parsed, null, 2);
+  }
+  return value;
 }
 
 function shortenText(value: string, maxLength = 88): string {
@@ -391,6 +407,92 @@ function eventAccentClasses(preview: PersonaStreamEventPreview): string {
   return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
 }
 
+function badgeToneClasses(tone: PreviewBadge["tone"] = "neutral"): string {
+  if (tone === "danger") {
+    return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+  if (tone === "warning") {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  if (tone === "success") {
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (tone === "info") {
+    return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+  }
+  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+}
+
+function compactPath(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length <= 3) {
+    return path;
+  }
+  return `.../${segments.slice(-3).join("/")}`;
+}
+
+function buildPreviewBadges(preview: PersonaStreamEventPreview): PreviewBadge[] {
+  const toolInput = parseJsonPreview(preview.tool_input_preview);
+  const toolOutput = parseJsonPreview(preview.tool_output_preview);
+  const badges: PreviewBadge[] = [];
+
+  const filePath = toolInput?.file_path ?? toolInput?.path ?? toolInput?.target_file;
+  if (typeof filePath === "string" && filePath.trim()) {
+    badges.push({ label: compactPath(filePath.trim()), tone: "info" });
+  }
+
+  const taskId = toolInput?.task_id ?? toolOutput?.task_id;
+  if (typeof taskId === "string" && taskId.trim()) {
+    badges.push({ label: taskId.trim(), tone: "warning" });
+  }
+
+  const action = toolInput?.action;
+  if (typeof action === "string" && action.trim()) {
+    badges.push({ label: action.trim(), tone: "neutral" });
+  }
+
+  const exitCode = toolOutput?.exit_code;
+  if (typeof exitCode === "number") {
+    badges.push({
+      label: `exit ${exitCode}`,
+      tone: exitCode === 0 ? "success" : "danger",
+    });
+  }
+
+  const isError = toolOutput?.is_error;
+  if (typeof isError === "boolean" && isError) {
+    badges.push({ label: "error", tone: "danger" });
+  }
+
+  const status = toolOutput?.status;
+  if (typeof status === "string" && status.trim()) {
+    const normalized = status.trim().toLowerCase();
+    badges.push({
+      label: status.trim(),
+      tone: normalized === "ok" || normalized === "success" ? "success" : "neutral",
+    });
+  }
+
+  return badges.slice(0, 4);
+}
+
+function entryStatusClasses(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "failed" || normalized === "error") {
+    return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+  }
+  if (normalized === "completed") {
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+  }
+  if (normalized === "active") {
+    return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+  }
+  if (normalized === "paused") {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+  }
+  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+}
+
 function heartbeatIsImportant(entry: PersonaStreamEntry): boolean {
   const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
   const importantKeywords = [
@@ -436,11 +538,21 @@ function isRoutineHeartbeatBlock(
   if (entry.event_previews.some((preview) => preview.event_type === "error")) {
     return false;
   }
+  if (entry.event_previews.length > 4) {
+    return false;
+  }
   if (heartbeatIsImportant(entry)) {
     return false;
   }
   const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
-  return entry.tool_count <= 3 || summary.includes("waiting for model") || summary.includes("execution completed");
+  if (summary.trim().length > 140) {
+    return false;
+  }
+  return (
+    (entry.tool_count <= 2 && entry.message_count <= 0)
+    || summary.includes("waiting for model")
+    || summary.includes("execution completed")
+  );
 }
 
 function mergeEventPreviews(
@@ -509,6 +621,40 @@ function buildLivePreview(event: LiveSessionEvent): PersonaStreamEventPreview | 
       model_used: null,
     };
   }
+  if (event.event_type === "tool_result") {
+    const toolName =
+      typeof event.data === "object" && event.data && "tool_name" in event.data && typeof event.data.tool_name === "string"
+        ? event.data.tool_name
+        : null;
+    const toolOutput =
+      typeof event.data === "object" && event.data && "tool_output" in event.data
+        ? JSON.stringify(event.data.tool_output)
+        : null;
+    const durationMs =
+      typeof event.data === "object" && event.data && "duration_ms" in event.data && typeof event.data.duration_ms === "number"
+        ? event.data.duration_ms
+        : null;
+    const outputObject =
+      typeof event.data === "object" && event.data && "tool_output" in event.data && typeof event.data.tool_output === "object"
+        ? event.data.tool_output
+        : null;
+    const contentPreview =
+      outputObject && "content" in outputObject && typeof outputObject.content === "string"
+        ? outputObject.content
+        : null;
+    return {
+      id: previewId,
+      event_type: "tool_result",
+      created_at: event.timestamp,
+      role: null,
+      tool_name: toolName,
+      content_preview: contentPreview,
+      tool_input_preview: null,
+      tool_output_preview: toolOutput,
+      duration_ms: durationMs,
+      model_used: null,
+    };
+  }
   if (event.event_type === "error") {
     const errorMessage =
       typeof event.data === "object" && event.data && "error_message" in event.data && typeof event.data.error_message === "string"
@@ -552,6 +698,30 @@ function liveSummaryFromEvent(event: LiveSessionEvent): string | null {
         : "tool";
     return `Running ${toolName}`;
   }
+  if (event.event_type === "tool_result") {
+    const toolName =
+      typeof event.data === "object" && event.data && "tool_name" in event.data && typeof event.data.tool_name === "string"
+        ? event.data.tool_name
+        : "tool";
+    const toolOutput =
+      typeof event.data === "object" && event.data && "tool_output" in event.data && typeof event.data.tool_output === "object"
+        ? event.data.tool_output
+        : null;
+    const content =
+      toolOutput && "content" in toolOutput && typeof toolOutput.content === "string"
+        ? toolOutput.content
+        : null;
+    const isError =
+      typeof event.data === "object" && event.data && "is_error" in event.data && typeof event.data.is_error === "boolean"
+        ? event.data.is_error
+        : toolOutput && "is_error" in toolOutput && typeof toolOutput.is_error === "boolean"
+          ? toolOutput.is_error
+          : false;
+    if (isError) {
+      return `Tool failed: ${toolName}`;
+    }
+    return content ? shortenText(content, 96) : `Waiting for model after ${toolName}`;
+  }
   if (event.event_type === "message") {
     const content =
       typeof event.data === "object" && event.data && "content" in event.data && typeof event.data.content === "string"
@@ -582,6 +752,19 @@ function liveStatusFromEvent(event: LiveSessionEvent): string | null {
   if (event.event_type === "error") {
     return "failed";
   }
+  if (event.event_type === "tool_result") {
+    const toolOutput =
+      typeof event.data === "object" && event.data && "tool_output" in event.data && typeof event.data.tool_output === "object"
+        ? event.data.tool_output
+        : null;
+    const isError =
+      typeof event.data === "object" && event.data && "is_error" in event.data && typeof event.data.is_error === "boolean"
+        ? event.data.is_error
+        : toolOutput && "is_error" in toolOutput && typeof toolOutput.is_error === "boolean"
+          ? toolOutput.is_error
+          : false;
+    return isError ? "failed" : "active";
+  }
   return "active";
 }
 
@@ -592,17 +775,19 @@ function PreviewCodeBlock({
   label: string;
   value: string | null;
 }) {
-  if (!value) {
+  const formattedValue = formatPreviewBlockValue(value);
+
+  if (!formattedValue) {
     return null;
   }
 
   return (
-    <div className="mt-2 rounded-xl border border-slate-200 bg-white/80 p-2 dark:border-slate-800 dark:bg-slate-900/80">
+    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-950 p-2 dark:border-slate-800">
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
         {label}
       </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words text-xs text-slate-700 dark:text-slate-200">
-        {value}
+      <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-100">
+        {formattedValue}
       </pre>
     </div>
   );
@@ -614,6 +799,11 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
       {previews.map((preview) => {
         const duration = formatDurationLabel(preview.duration_ms);
         const leadText = eventLeadText(preview);
+        const badges = buildPreviewBadges(preview);
+        const secondaryContent =
+          preview.content_preview && preview.content_preview.trim() !== (leadText ?? "").trim()
+            ? preview.content_preview
+            : null;
         return (
           <div
             key={preview.id}
@@ -638,9 +828,24 @@ function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] 
                 />
               </div>
             )}
-            {preview.content_preview && (
+            {badges.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {badges.map((badge) => (
+                  <span
+                    key={`${preview.id}-${badge.label}`}
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
+                      badgeToneClasses(badge.tone),
+                    )}
+                  >
+                    {badge.label}
+                  </span>
+                ))}
+              </div>
+            )}
+            {secondaryContent && (
               <HighlightedText
-                text={preview.content_preview}
+                text={secondaryContent}
                 className="mt-2 block whitespace-pre-wrap break-words text-sm"
               />
             )}
@@ -816,7 +1021,7 @@ function ChildRunCard({
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               {entry.agent_slug || "Agent"} on {entry.project_id}
             </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px]", entryStatusClasses(entry.status))}>
               {entry.status}
             </span>
             {entry.tool_count > 0 && (
@@ -831,8 +1036,8 @@ function ChildRunCard({
             className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
           />
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
-            {entry.external_id && <span>task {entry.external_id}</span>}
-            {entry.current_branch && <span>{entry.current_branch}</span>}
+            {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">task {entry.external_id}</span>}
+            {entry.current_branch && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{entry.current_branch}</span>}
             <Link
               href={`/sessions/${entry.session_id}`}
               className="text-sky-600 transition hover:text-sky-500 dark:text-sky-300 dark:hover:text-sky-200"
@@ -886,7 +1091,7 @@ function HeartbeatCard({
             <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Heartbeat
             </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <span className={cn("rounded-full px-2 py-0.5 text-[11px]", entryStatusClasses(entry.status))}>
               {entry.status}
             </span>
             {entry.tool_count > 0 && (
@@ -907,6 +1112,7 @@ function HeartbeatCard({
             />
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+            {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{entry.external_id}</span>}
             <Link
               href={`/sessions/${entry.session_id}`}
               className="text-amber-700 transition hover:text-amber-600 dark:text-amber-300 dark:hover:text-amber-200"
@@ -959,10 +1165,14 @@ export function UnifiedPersonaWorkspace({
   const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
   const [liveRefreshTick, setLiveRefreshTick] = useState(0);
   const [liveSessionPatches, setLiveSessionPatches] = useState<Record<string, LiveSessionPatch>>({});
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [firstUnreadItemId, setFirstUnreadItemId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoFollowRef = useRef(true);
   const programmaticScrollUntilRef = useRef(0);
   const initialViewportSettledRef = useRef(false);
+  const lastReadItemIdRef = useRef<string | null>(null);
+  const olderHistoryAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
 
   const apiConfig = useMemo(
     () => ({
@@ -1028,6 +1238,37 @@ export function UnifiedPersonaWorkspace({
     [entries, liveSessionPatches],
   );
 
+  const mergedItems = useMemo(() => {
+    const remote = buildRemoteFeedItems([...hydratedEntries].reverse());
+    const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId);
+    return [...remote, ...local]
+      .filter((item) => {
+        if (filterMode === "all") return true;
+        if (filterMode === "messages") return item.kind === "message";
+        if (filterMode === "heartbeats") return item.kind === "heartbeat";
+        if (filterMode === "errors") {
+          if (item.kind === "message") return /error|failed|warning|blocked/i.test(item.message.content);
+          return item.entry.status === "failed" || item.entry.event_previews.some((preview) => preview.event_type === "error");
+        }
+        if (filterMode === "work") {
+          return item.kind === "child_run" || item.kind === "heartbeat";
+        }
+        return true;
+      })
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }, [hydratedEntries, messages, currentSessionId, activeSessionId, filterMode]);
+
+  const selectedSessionId = focusSessionId ?? activeSessionId;
+  const latestItemId = mergedItems.at(-1)?.id ?? null;
+
+  function markLatestAsRead(itemId: string | null = latestItemId) {
+    if (!itemId) {
+      return;
+    }
+    lastReadItemIdRef.current = itemId;
+    setFirstUnreadItemId(null);
+  }
+
   const activeStreamSessionIds = useMemo(() => {
     const activeIds = new Set<string>();
     for (const entry of hydratedEntries) {
@@ -1038,7 +1279,7 @@ export function UnifiedPersonaWorkspace({
     return Array.from(activeIds);
   }, [hydratedEntries]);
 
-  useSessionEvents({
+  const { status: liveEventsStatus } = useSessionEvents({
     sessionIds: activeStreamSessionIds,
     autoConnect: true,
     autoReconnect: true,
@@ -1079,16 +1320,28 @@ export function UnifiedPersonaWorkspace({
       return;
     }
     const handleScroll = () => {
+      const nearBottom = isNearBottom(container);
+      setIsAtBottom(nearBottom);
       if (Date.now() < programmaticScrollUntilRef.current) {
         return;
       }
-      if (autoFollowRef.current && !isNearBottom(container)) {
+      if (nearBottom) {
+        if (!autoFollowRef.current) {
+          setAutoFollow(true);
+        }
+        if (latestItemId) {
+          lastReadItemIdRef.current = latestItemId;
+          setFirstUnreadItemId(null);
+        }
+        return;
+      }
+      if (autoFollowRef.current && !nearBottom) {
         setAutoFollow(false);
       }
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [latestItemId]);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -1176,6 +1429,8 @@ export function UnifiedPersonaWorkspace({
       return;
     }
     scrollToBottom("smooth");
+    setIsAtBottom(true);
+    markLatestAsRead();
   }, [messages.length, status, autoFollow]);
 
   useEffect(() => {
@@ -1191,8 +1446,30 @@ export function UnifiedPersonaWorkspace({
     initialViewportSettledRef.current = true;
     window.setTimeout(() => {
       scrollToBottom("auto");
+      setIsAtBottom(true);
+      markLatestAsRead();
     }, 0);
   }, [loading, autoFollow, deferredSearch, focusSessionId, anchorEntryId, hydratedEntries.length, messages.length]);
+
+  useEffect(() => {
+    if (!latestItemId) {
+      return;
+    }
+    if (!lastReadItemIdRef.current) {
+      lastReadItemIdRef.current = latestItemId;
+      return;
+    }
+    if (latestItemId === lastReadItemIdRef.current) {
+      return;
+    }
+    if (autoFollow && isAtBottom) {
+      markLatestAsRead(latestItemId);
+      return;
+    }
+    const previousIndex = mergedItems.findIndex((item) => item.id === lastReadItemIdRef.current);
+    const nextUnreadId = mergedItems[Math.max(previousIndex + 1, 0)]?.id ?? latestItemId;
+    setFirstUnreadItemId((current) => current ?? nextUnreadId);
+  }, [latestItemId, mergedItems, autoFollow, isAtBottom]);
 
   useEffect(() => {
     if (!autoFollow) {
@@ -1207,38 +1484,31 @@ export function UnifiedPersonaWorkspace({
       return;
     }
     scrollToBottom("smooth");
+    setIsAtBottom(true);
+    markLatestAsRead();
   }, [autoFollow, hydratedEntries]);
 
   useEffect(() => {
+    const container = scrollRef.current;
+    const anchor = olderHistoryAnchorRef.current;
+    if (!container || !anchor || loading) {
+      return;
+    }
+    const heightDelta = container.scrollHeight - anchor.scrollHeight;
+    container.scrollTop = anchor.scrollTop + Math.max(heightDelta, 0);
+    olderHistoryAnchorRef.current = null;
+  }, [entries, loading]);
+
+  useEffect(() => {
     const hasLiveWork = hydratedEntries.some((entry) => entry.status === "active" || entry.live_status === "active");
-    if (!hasLiveWork) {
+    if (!hasLiveWork || liveEventsStatus === "connected") {
       return;
     }
     const interval = window.setInterval(() => {
       setLiveRefreshTick((value) => value + 1);
     }, LIVE_REFRESH_MS);
     return () => window.clearInterval(interval);
-  }, [hydratedEntries]);
-
-  const mergedItems = useMemo(() => {
-    const remote = buildRemoteFeedItems([...hydratedEntries].reverse());
-    const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId);
-    return [...remote, ...local]
-      .filter((item) => {
-        if (filterMode === "all") return true;
-        if (filterMode === "messages") return item.kind === "message";
-        if (filterMode === "heartbeats") return item.kind === "heartbeat";
-        if (filterMode === "errors") {
-          if (item.kind === "message") return /error|failed|warning|blocked/i.test(item.message.content);
-          return item.entry.status === "failed" || item.entry.event_previews.some((preview) => preview.event_type === "error");
-        }
-        if (filterMode === "work") {
-          return item.kind === "child_run" || item.kind === "heartbeat";
-        }
-        return true;
-      })
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  }, [hydratedEntries, messages, currentSessionId, activeSessionId, filterMode]);
+  }, [hydratedEntries, liveEventsStatus]);
 
   const groupedItems = useMemo(() => {
     const groups: Array<{ label: string; blocks: TimelineBlock[] }> = [];
@@ -1318,14 +1588,27 @@ export function UnifiedPersonaWorkspace({
     return counts;
   }, [hydratedEntries, messages]);
 
+  const newActivityCount = useMemo(() => {
+    if (!firstUnreadItemId) {
+      return 0;
+    }
+    const unreadIndex = mergedItems.findIndex((item) => item.id === firstUnreadItemId);
+    if (unreadIndex < 0) {
+      return 0;
+    }
+    return mergedItems.length - unreadIndex;
+  }, [firstUnreadItemId, mergedItems]);
+
   const matchedIds = useMemo(() => new Set(searchMatches.map((item) => item.entry_id)), [searchMatches]);
   const activeSearchMatch = useMemo(
     () => searchMatches.findIndex((item) => item.entry_id === activeSearchMatchId),
     [activeSearchMatchId, searchMatches],
   );
-  const activeMatchId = activeSearchMatchId && searchMatches.some((item) => item.entry_id === activeSearchMatchId)
-    ? activeSearchMatchId
-    : searchMatches[0]?.entry_id ?? null;
+  const activeMatchId = !deferredSearch.trim()
+    ? null
+    : activeSearchMatchId && searchMatches.some((item) => item.entry_id === activeSearchMatchId)
+      ? activeSearchMatchId
+      : searchMatches[0]?.entry_id ?? null;
 
   useEffect(() => {
     if (!deferredSearch.trim()) {
@@ -1344,6 +1627,16 @@ export function UnifiedPersonaWorkspace({
   useEffect(() => {
     if (!activeMatchId) {
       return;
+    }
+    if (hydratedEntries.some((entry) => entry.id === activeMatchId && entry.entry_type !== "message")) {
+      setExpandedEntryIds((current) => (
+        current[activeMatchId]
+          ? current
+          : {
+              ...current,
+              [activeMatchId]: true,
+            }
+      ));
     }
     const loaded = mergedItems.some((item) => item.id === activeMatchId);
     if (!loaded && anchorEntryId !== activeMatchId) {
@@ -1417,14 +1710,15 @@ export function UnifiedPersonaWorkspace({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <div className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <div className="flex flex-wrap items-center gap-2">
           <SessionDropdown
-            activeSessionId={activeSessionId}
+            activeSessionId={selectedSessionId}
             onSelectSession={handleSessionJump}
             onNewSession={onNewSession}
             projectId={PROJECT_ID}
+            agentSlug={agentSlug}
             refreshTrigger={sidebarRefreshTrigger}
           />
           <div className="relative min-w-[18rem] flex-1">
@@ -1449,6 +1743,8 @@ export function UnifiedPersonaWorkspace({
                 if (next) {
                   window.setTimeout(() => {
                     scrollToBottom("smooth");
+                    setIsAtBottom(true);
+                    markLatestAsRead();
                   }, 0);
                 }
                 return next;
@@ -1576,7 +1872,7 @@ export function UnifiedPersonaWorkspace({
                           block={block}
                           expanded={!!expandedRoutineGroupIds[block.id]}
                           onToggle={() => toggleRoutineGroup(block.id)}
-                          activeSessionId={activeSessionId}
+                          activeSessionId={selectedSessionId}
                           expandedEntryIds={expandedEntryIds}
                           onToggleEntry={toggleExpanded}
                         />
@@ -1584,7 +1880,7 @@ export function UnifiedPersonaWorkspace({
                     }
 
                     const item = block.anchorItem;
-                    const selected = !!item.sessionId && item.sessionId === activeSessionId;
+                    const selected = !!item.sessionId && item.sessionId === selectedSessionId;
                     const matched = matchedIds.has(item.id);
                     const activeMatched = activeMatchId === item.id;
                     if (item.kind === "message") {
@@ -1613,7 +1909,7 @@ export function UnifiedPersonaWorkspace({
                             {block.childRuns.length > 0 && (
                               <ChildRunStack
                                 childRuns={block.childRuns}
-                                activeSessionId={activeSessionId}
+                                activeSessionId={selectedSessionId}
                                 expandedEntryIds={expandedEntryIds}
                                 onToggle={toggleExpanded}
                                 matchedIds={matchedIds}
@@ -1674,7 +1970,7 @@ export function UnifiedPersonaWorkspace({
                           {block.childRuns.length > 0 && (
                             <ChildRunStack
                               childRuns={block.childRuns}
-                              activeSessionId={activeSessionId}
+                              activeSessionId={selectedSessionId}
                               expandedEntryIds={expandedEntryIds}
                               onToggle={toggleExpanded}
                               matchedIds={matchedIds}
@@ -1692,7 +1988,16 @@ export function UnifiedPersonaWorkspace({
             {total > entries.length && !deferredSearch.trim() && (
               <div className="flex justify-center pt-6">
                 <button
-                  onClick={() => setPage((value) => value + 1)}
+                  onClick={() => {
+                    const container = scrollRef.current;
+                    if (container) {
+                      olderHistoryAnchorRef.current = {
+                        scrollHeight: container.scrollHeight,
+                        scrollTop: container.scrollTop,
+                      };
+                    }
+                    setPage((value) => value + 1);
+                  }}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                 >
                   Load older entries
@@ -1702,6 +2007,24 @@ export function UnifiedPersonaWorkspace({
           </div>
         )}
       </div>
+
+      {(latestItemId && (!isAtBottom || !autoFollow || newActivityCount > 0)) && (
+        <div className="pointer-events-none absolute bottom-24 right-6 z-20">
+          <button
+            type="button"
+            onClick={() => {
+              setAutoFollow(true);
+              scrollToBottom("smooth");
+              setIsAtBottom(true);
+              markLatestAsRead();
+            }}
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+          >
+            <ArrowDown className="h-4 w-4" />
+            {newActivityCount > 0 ? `${newActivityCount} new ${newActivityCount === 1 ? "item" : "items"} · Jump to latest` : "Jump to latest"}
+          </button>
+        </div>
+      )}
 
       <div className="border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
         <div className="mx-auto max-w-4xl">

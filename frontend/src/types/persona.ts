@@ -7,6 +7,7 @@ export interface Persona {
   voice_id: string;
   voice_enabled: boolean;
   heartbeat_interval_minutes: number;
+  execution_state: "active" | "paused";
   avatar_url: string | null;
   greeting: string | null;
   onboarding_complete: boolean;
@@ -29,6 +30,7 @@ export interface PersonaUpdate {
   voice_id?: string;
   voice_enabled?: boolean;
   heartbeat_interval_minutes?: number;
+  execution_state?: "active" | "paused";
   avatar_url?: string;
   greeting?: string;
   session_reset_mode?: "off" | "daily" | "idle";

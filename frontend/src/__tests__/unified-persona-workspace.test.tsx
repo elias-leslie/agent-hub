@@ -293,8 +293,8 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("st ready-all")).toBeInTheDocument();
     expect(screen.getByText("dt -q -d")).toBeInTheDocument();
     expect(screen.getAllByText("passed").length).toBeGreaterThan(0);
-    expect(screen.getByText('{"project":"agent-hub"}')).toBeInTheDocument();
-    expect(screen.getByText('{"status":"ok"}')).toBeInTheDocument();
+    expect(screen.getByText(/"project": "agent-hub"/)).toBeInTheDocument();
+    expect(screen.getByText(/"status": "ok"/)).toBeInTheDocument();
   });
 
   it("shows search match chips and can jump through them", async () => {
@@ -389,5 +389,52 @@ describe("UnifiedPersonaWorkspace", () => {
     });
 
     expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it("hides jump-to-latest after the user manually scrolls back to the bottom", async () => {
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    render(
+      <UnifiedPersonaWorkspace
+        agentSlug="persona"
+        activeSessionId="chat-1"
+        sidebarRefreshTrigger={0}
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("pause that task")).toBeInTheDocument();
+    });
+
+    const container = screen.getByTestId("stream-scroll-container");
+    Object.defineProperty(container, "scrollHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(container, "clientHeight", { configurable: true, value: 400 });
+    Object.defineProperty(container, "scrollTop", { configurable: true, writable: true, value: 600 });
+
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      (container as HTMLDivElement).scrollTop = 120;
+      fireEvent.scroll(container);
+    });
+
+    expect(screen.getByText(/Jump to latest/)).toBeInTheDocument();
+    expect(screen.getByText("Auto-follow off")).toBeInTheDocument();
+
+    await act(async () => {
+      (container as HTMLDivElement).scrollTop = 601;
+      fireEvent.scroll(container);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Jump to latest/)).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Auto-follow on")).toBeInTheDocument();
   });
 });

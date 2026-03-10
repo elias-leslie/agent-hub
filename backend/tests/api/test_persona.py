@@ -28,6 +28,7 @@ def _make_persona(**overrides) -> MagicMock:
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
         "heartbeat_interval_minutes": 60,
+        "execution_state": "active",
         "avatar_url": None,
         "greeting": "Hey!",
         "onboarding_complete": True,
@@ -65,6 +66,7 @@ class TestGetPersonaEndpoint:
         assert data["version"] == 2
         assert data["agent_slug"] == "persona"
         assert data["onboarding_phase"] == "complete"
+        assert data["execution_state"] == "active"
         assert data["session_reset_mode"] == "off"
         assert data["session_reset_hour"] == 9
         assert data["session_reset_idle_minutes"] == 120
@@ -101,6 +103,21 @@ class TestUpdatePersonaEndpoint:
 
         assert response.status_code == 200
         assert response.json()["version"] == 6
+
+    def test_can_pause_persona_execution(self, api_client, mock_db_session):
+        persona = _make_persona(version=5, execution_state="active")
+
+        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+            mock.return_value = persona
+            response = api_client.put(
+                "/api/persona",
+                json={"execution_state": "paused"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["execution_state"] == "paused"
+        assert data["version"] == 6
 
     def test_no_op_when_empty_update(self, api_client):
         persona = _make_persona(version=2)

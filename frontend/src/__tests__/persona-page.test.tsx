@@ -42,6 +42,7 @@ vi.mock("@/app/persona/hooks/usePersona", () => ({
       name: "Jenny",
       agent_slug: "persona",
       heartbeat_interval_minutes: 60,
+      execution_state: "active",
     },
     loading: false,
     error: null,
@@ -106,14 +107,15 @@ describe("PersonaPage", () => {
     expect(screen.getByText("dt -q -d")).toBeInTheDocument();
   });
 
-  it("pauses auto-run from the main workspace header", async () => {
+  it("pauses Jenny from the main workspace header", async () => {
     render(<PersonaPage />);
 
-    fireEvent.click(await screen.findByText("Pause auto-run"));
+    fireEvent.click(await screen.findByText("Pause Jenny"));
 
     expect(mockUpdatePersona).toHaveBeenCalledWith({
-      heartbeat_interval_minutes: 0,
+      execution_state: "paused",
     });
+    expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
   });
 
   it("triggers a manual heartbeat from the main workspace header", async () => {
