@@ -1906,8 +1906,14 @@ export function UnifiedPersonaWorkspace({
     overscan: 10,
   });
 
+  const hasExpandedTimelineContent = useMemo(
+    () =>
+      Object.values(expandedEntryIds).some(Boolean)
+      || Object.values(expandedRoutineGroupIds).some(Boolean),
+    [expandedEntryIds, expandedRoutineGroupIds],
+  );
   const virtualRows = virtualizer.getVirtualItems();
-  const renderVirtualRows = virtualRows.length > 0;
+  const renderVirtualRows = !hasExpandedTimelineContent && virtualRows.length > 0;
   const renderedRows = renderVirtualRows
     ? virtualRows.map((virtualRow) => ({
         key: virtualRow.key,
