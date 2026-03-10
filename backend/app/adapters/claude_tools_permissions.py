@@ -56,7 +56,7 @@ def compose_permission_hooks(
     return hooks[0] if len(hooks) == 1 else _compose_hooks(hooks)
 
 
-def make_can_use_tool_callback(composed_hook: Any | None) -> Any:
+def make_can_use_tool_callback(composed_hook: Any | None, agent_slug: str | None = None) -> Any:
     """Return an async can_use_tool callback for the given composed hook."""
     from claude_agent_sdk.types import (
         PermissionResultAllow,
@@ -64,6 +64,7 @@ def make_can_use_tool_callback(composed_hook: Any | None) -> Any:
         ToolPermissionContext,
     )
 
+    from app.services.tools._executor_bash import get_persona_block_reason
     from app.services.tools.base import ToolCall, ToolDecision
 
     async def can_use_tool(
@@ -71,10 +72,19 @@ def make_can_use_tool_callback(composed_hook: Any | None) -> Any:
         tool_input: dict[str, Any],
         context: ToolPermissionContext,
     ) -> PermissionResultAllow | PermissionResultDeny:
+        normalized_name = normalize_tool_name(tool_name)
+        if normalized_name == "bash":
+            command = tool_input.get("command", "")
+            if isinstance(command, str):
+                persona_block_reason = get_persona_block_reason(command, agent_slug)
+                if persona_block_reason:
+                    return PermissionResultDeny(
+                        message=f"Tool '{tool_name}' denied by workflow policy: {persona_block_reason}"
+                    )
+
         if composed_hook is None:
             return PermissionResultAllow()
 
-        normalized_name = normalize_tool_name(tool_name)
         tool_call = ToolCall(id="", name=normalized_name, input=tool_input)
         decision = await composed_hook(tool_call)
 

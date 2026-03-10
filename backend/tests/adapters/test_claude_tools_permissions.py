@@ -138,6 +138,27 @@ class TestBuildCanUseTool:
         result = await callback("Bash", {"command": "ls"}, self._make_context())
         assert result.behavior == "deny"
 
+    @pytest.mark.asyncio
+    async def test_persona_raw_git_commit_denied_without_checker(self) -> None:
+        """Persona raw git publish policy applies even without other permission hooks."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        callback = _build_can_use_tool(checker=None, project_id=None, agent_slug="persona")
+
+        result = await callback("Bash", {"command": "git commit -m 'test'"}, self._make_context())
+        assert result.behavior == "deny"
+        assert "workflow policy" in result.message
+
+    @pytest.mark.asyncio
+    async def test_persona_safe_bash_allowed_without_checker(self) -> None:
+        """Persona still keeps normal Bash access when command is not blocked."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        callback = _build_can_use_tool(checker=None, project_id=None, agent_slug="persona")
+
+        result = await callback("Bash", {"command": "git status --short"}, self._make_context())
+        assert result.behavior == "allow"
+
 
 class TestToolNameNormalization:
     """Tests for _normalize_tool_name() — MCP prefix + SDK PascalCase."""
@@ -302,6 +323,50 @@ class TestSDKOptionsYoloMode:
 
         assert captured_opts.get("permission_mode") == "bypassPermissions"
         assert "can_use_tool" not in captured_opts
+
+    @pytest.mark.asyncio
+    async def test_persona_yolo_without_working_dir_sets_can_use_tool(self) -> None:
+        """Persona without working_dir still installs a permission callback for raw git policy."""
+        from app.adapters.base import Message
+
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model="sonnet",
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir=None,
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={"sonnet": "sonnet"},
+                provider_name="claude",
+                after_tool_callback=None,
+                agent_slug="persona",
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert captured_opts.get("permission_mode") == "default"
+        assert callable(captured_opts.get("can_use_tool"))
 
     @pytest.mark.asyncio
     async def test_yolo_with_working_dir_uses_settings_enforcement(self) -> None:
