@@ -11,7 +11,8 @@ from app.services.memory.scorecard_component_map import is_valid_component_id
 logger = logging.getLogger(__name__)
 
 VALID_FEEDBACK_TYPES = {"friction", "idea", "improvement", "praise"}
-VALID_STATUSES = {"open", "acknowledged", "resolved", "wont_fix"}
+VALID_STATUSES = {"open", "acknowledged", "resolved", "wont_fix", "archived"}
+VALID_FILTER_STATUSES = VALID_STATUSES | {"active"}
 VALID_SEVERITIES = {"low", "medium", "high"}
 VALID_SORT_OPTIONS = {"votes", "newest", "oldest"}
 
@@ -63,7 +64,7 @@ def validate_severity(severity: str | None) -> None:
 def validate_list_params(feedback_type: str | None, status: str | None, sort: str) -> None:
     if feedback_type and feedback_type not in VALID_FEEDBACK_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid feedback_type '{feedback_type}'")
-    if status and status not in VALID_STATUSES:
+    if status and status not in VALID_FILTER_STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid status '{status}'")
     if sort not in VALID_SORT_OPTIONS:
         raise HTTPException(status_code=422, detail=f"Invalid sort '{sort}'")

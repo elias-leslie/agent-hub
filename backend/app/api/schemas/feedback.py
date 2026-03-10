@@ -26,6 +26,10 @@ class FeedbackItemCreate(BaseModel):
     agent_slug: str | None = Field(default=None, description="Agent that reported this")
     model_used: str | None = Field(default=None, description="Model used by the agent")
     session_type: str | None = Field(default=None, description="Session type")
+    vote_if_duplicate: bool = Field(
+        default=False,
+        description="Vote on the strongest duplicate match instead of creating a new row",
+    )
 
 
 class FeedbackVoteCreate(BaseModel):
@@ -43,7 +47,7 @@ class FeedbackStatusUpdate(BaseModel):
     """Request body for updating feedback item status."""
 
     status: str | None = Field(
-        default=None, description="New status: open, acknowledged, resolved, wont_fix"
+        default=None, description="New status: open, acknowledged, resolved, wont_fix, archived"
     )
     resolution_note: str | None = Field(
         default=None, description="Note explaining the resolution"
@@ -107,6 +111,16 @@ class FeedbackCreateResponse(BaseModel):
         default_factory=list,
         description="Similar existing open items — caller should search and vote instead of creating duplicates",
     )
+    voted: bool = Field(
+        default=False,
+        description="True when the request voted on an existing duplicate instead of creating a new item",
+    )
+
+
+class FeedbackMergeRequest(BaseModel):
+    """Request body for merging a duplicate feedback item into a canonical item."""
+
+    target_item_id: str = Field(..., description="Canonical feedback item ID or prefix")
 
 
 class FeedbackListResponse(BaseModel):

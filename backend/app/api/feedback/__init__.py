@@ -22,6 +22,7 @@ from app.api.schemas.feedback import (
     FeedbackItemResponse,
     FeedbackItemWithVotes,
     FeedbackListResponse,
+    FeedbackMergeRequest,
     FeedbackStatusUpdate,
     FeedbackSummaryResponse,
     FeedbackVoteCreate,
@@ -42,7 +43,31 @@ async def create_feedback(
     validate_feedback_type(body.feedback_type)
     validate_component_id(body.component_id)
     validate_severity(body.severity)
-    candidates = await feedback_storage.find_duplicate_candidates(db, component_id=body.component_id, title=body.title)
+    candidates = await feedback_storage.find_duplicate_candidates(
+        db,
+        component_id=body.component_id,
+        feedback_type=body.feedback_type,
+        project_id=body.project_id,
+        title=body.title,
+    )
+    if body.vote_if_duplicate and body.session_id and candidates:
+        canonical = candidates[0]
+        vote = await feedback_storage.vote_on_item(
+            db,
+            item_id=str(canonical.id),
+            session_id=body.session_id,
+            comment=body.description,
+            agent_slug=body.agent_slug,
+            model_used=body.model_used,
+        )
+        await db.commit()
+        await db.refresh(canonical)
+        return FeedbackCreateResponse(
+            item=FeedbackItemResponse.model_validate(canonical),
+            created=False,
+            duplicate_candidates=[FeedbackItemResponse.model_validate(c) for c in candidates],
+            voted=vote is not None,
+        )
     item = await feedback_storage.create_feedback_item(
         db,
         component_id=body.component_id,
@@ -62,6 +87,7 @@ async def create_feedback(
         item=FeedbackItemResponse.model_validate(item),
         created=True,
         duplicate_candidates=[FeedbackItemResponse.model_validate(c) for c in candidates],
+        voted=False,
     )
 
 
@@ -175,6 +201,30 @@ async def delete_feedback(
         raise HTTPException(status_code=404, detail="Feedback item not found")
     await db.commit()
     return {"deleted": True, "id": item_id}
+
+
+@router.post("/{item_id}/merge", response_model=FeedbackItemResponse)
+async def merge_feedback(
+    item_id: str,
+    body: FeedbackMergeRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FeedbackItemResponse:
+    """Merge a duplicate feedback item into a canonical feedback item."""
+    source_item_id = await resolve_item(db, item_id)
+    target_item_id = await resolve_item(db, body.target_item_id)
+    try:
+        item = await feedback_storage.merge_feedback_items(
+            db,
+            source_item_id=source_item_id,
+            target_item_id=target_item_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    if not item:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+    await db.commit()
+    await db.refresh(item)
+    return FeedbackItemResponse.model_validate(item)
 
 
 @router.patch("/{item_id}", response_model=FeedbackItemResponse)
