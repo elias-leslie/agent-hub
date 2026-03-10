@@ -149,7 +149,7 @@ class TestUpdateEpisodeEndpoint:
         )
 
         assert response.status_code == 400
-        assert "No fields to update" in response.json()["detail"]
+        assert "No fields to update" in response.json()["message"]
 
 
 class TestBulkDeleteEndpoint:
