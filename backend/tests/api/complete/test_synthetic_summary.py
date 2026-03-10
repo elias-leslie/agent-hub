@@ -49,15 +49,19 @@ class TestEnsureSyntheticSummary:
 
     @pytest.mark.asyncio
     async def test_stores_summary(self):
+        db = AsyncMock()
+
         with patch(
             "app.services.memory.summary_generator._store_summary_on_session",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _ensure_synthetic_summary("The server is healthy.", "session-1")
+            stored = await _ensure_synthetic_summary("The server is healthy.", "session-1", db=db)
 
+            assert stored is True
             mock_store.assert_called_once()
             assert mock_store.call_args.kwargs["summary_oneliner"] == "The server is healthy."
             assert mock_store.call_args.kwargs["outcome"] == "completed"
+            assert mock_store.call_args.kwargs["db"] is db
 
     @pytest.mark.asyncio
     async def test_skips_empty_content(self):
@@ -65,7 +69,8 @@ class TestEnsureSyntheticSummary:
             "app.services.memory.summary_generator._store_summary_on_session",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _ensure_synthetic_summary("", "session-2")
+            stored = await _ensure_synthetic_summary("", "session-2")
+            assert stored is False
             mock_store.assert_not_called()
 
 
@@ -95,7 +100,7 @@ class TestTrackInlineTagsSyntheticFallback:
         ):
             await _track_inline_tags(content, db, "session-6", "coder", "claude-sonnet-4-5")
 
-            mock_synthetic.assert_called_once_with(content, "session-6")
+            mock_synthetic.assert_called_once_with(content, "session-6", db=db)
 
     @pytest.mark.asyncio
     async def test_skips_synthetic_when_inline_summary_found(self):

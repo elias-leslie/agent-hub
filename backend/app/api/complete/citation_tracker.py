@@ -77,6 +77,7 @@ async def track_inline_summaries(
         outcome=tag.outcome,
         files_touched=[],
         git_digest="",
+        db=db,
     )
     logger.info("Stored inline summary for session %s: outcome=%s", session_id, tag.outcome)
     return True
@@ -100,7 +101,8 @@ def _extract_chat_summary(content: str) -> str:
 async def _ensure_synthetic_summary(
     content: str,
     session_id: str,
-) -> None:
+    db: AsyncSession | None = None,
+) -> bool:
     """Generate a synthetic summary from content when no inline tags were found.
 
     Uses _store_summary_on_session (independent DB session) — appropriate for both
@@ -110,7 +112,7 @@ async def _ensure_synthetic_summary(
 
     summary = _extract_chat_summary(content)
     if not summary:
-        return
+        return False
 
     await _store_summary_on_session(
         session_id=session_id,
@@ -118,8 +120,10 @@ async def _ensure_synthetic_summary(
         outcome="completed",
         files_touched=[],
         git_digest="",
+        db=db,
     )
     logger.info("Stored synthetic summary for chat session %s", session_id)
+    return True
 
 
 async def _track_inline_tags(
@@ -142,7 +146,7 @@ async def _track_inline_tags(
     # Fallback: generate synthetic summary if no inline [[S:...]] tag was found
     if not summary_stored:
         try:
-            await _ensure_synthetic_summary(content, session_id)
+            await _ensure_synthetic_summary(content, session_id, db=db)
         except Exception as e:
             logger.warning("Synthetic summary generation failed (continuing): %s", e)
 

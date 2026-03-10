@@ -21,6 +21,8 @@ async def ensure_session_summary(
 
         async with async_session() as db:
             stored = await track_inline_summaries(content, db, session_id, agent_id=agent_id)
+            if stored:
+                await db.commit()
 
         if stored:
             return True

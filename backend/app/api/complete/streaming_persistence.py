@@ -145,19 +145,26 @@ async def _track_citations(session_id: str, accumulated_content: str) -> None:
     try:
         from app.db import async_session
 
-        from .citation_tracker import track_inline_feedback, track_inline_summaries
+        from .citation_tracker import (
+            _ensure_synthetic_summary,
+            track_inline_feedback,
+            track_inline_summaries,
+        )
 
         async with async_session() as db:
             await track_inline_feedback(accumulated_content, db, session_id)
             summary_stored = await track_inline_summaries(accumulated_content, db, session_id)
+            if not summary_stored:
+                summary_stored = await _ensure_synthetic_summary(
+                    accumulated_content, session_id, db=db
+                )
+            await db.commit()
     except Exception as exc:
         logger.warning("Streaming inline tag tracking failed: %s", exc)
 
     # Fallback: generate synthetic summary if no inline [[S:...]] tag was found
     if not summary_stored:
         try:
-            from .citation_tracker import _ensure_synthetic_summary
-
             await _ensure_synthetic_summary(accumulated_content, session_id)
         except Exception as exc:
             logger.warning("Streaming synthetic summary failed: %s", exc)
