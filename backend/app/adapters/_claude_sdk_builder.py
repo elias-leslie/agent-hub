@@ -24,6 +24,7 @@ def _apply_permission_opts(
     yolo_mode: bool,
     can_use_tool: Any | None,
     working_dir: str | None = None,
+    agent_slug: str | None = None,
 ) -> bool:
     """Configure permission settings; returns use_streaming_prompt flag.
 
@@ -36,7 +37,7 @@ def _apply_permission_opts(
 
         settings_path = write_boundary_settings(working_dir)
         sdk_opts["settings"] = settings_path
-        sdk_opts["hooks"] = build_boundary_hook(working_dir)
+        sdk_opts["hooks"] = build_boundary_hook(working_dir, agent_slug=agent_slug)
         sdk_opts["permission_mode"] = "acceptEdits"
         # Keep can_use_tool as fallback for non-builtin tools if provided
         if can_use_tool is not None:
@@ -124,6 +125,7 @@ def build_sdk_options(
     max_turns: int | None = None,
     allowed_tools: list[str] | None = None,
     system_prompt: str | None = None,
+    agent_slug: str | None = None,
 ) -> tuple[Any, bool]:
     """Build ClaudeAgentOptions. Returns (options, use_streaming_prompt).
 
@@ -146,7 +148,7 @@ def build_sdk_options(
     }
 
     use_streaming_prompt = _apply_permission_opts(
-        sdk_opts, yolo_mode, can_use_tool, working_dir=working_dir
+        sdk_opts, yolo_mode, can_use_tool, working_dir=working_dir, agent_slug=agent_slug
     )
     use_streaming_prompt |= _apply_optional_opts(
         sdk_opts,
