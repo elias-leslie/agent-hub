@@ -208,6 +208,46 @@ def _human_preview_text(preview: PersonaStreamEventPreview) -> str | None:
     return None
 
 
+def _human_text_from_raw(raw_value: str | None) -> str | None:
+    if not raw_value:
+        return None
+    structured = _parse_structured_preview(raw_value)
+    candidate = _first_human_text(structured if structured is not None else raw_value)
+    if not candidate:
+        return None
+    normalized = candidate.strip()
+    return normalized or None
+
+
+def _build_marker_detail(preview: PersonaStreamEventPreview, excerpt: str | None, command: str | None) -> str | None:
+    detail_lines: list[str] = []
+    seen: set[str] = set()
+
+    def append_unique(value: str | None, *, label: str | None = None) -> None:
+        if not value:
+            return
+        normalized = value.strip()
+        if not normalized:
+            return
+        dedupe_key = normalized.lower()
+        if dedupe_key in seen:
+            return
+        seen.add(dedupe_key)
+        detail_lines.append(f"{label}: {normalized}" if label else normalized)
+
+    append_unique(excerpt)
+    append_unique(command, label="Command")
+    append_unique(_human_text_from_raw(preview.content_preview))
+    append_unique(_human_text_from_raw(preview.tool_output_preview))
+    input_text = _human_text_from_raw(preview.tool_input_preview)
+    if input_text and (command is None or input_text.strip().lower() != command.strip().lower()):
+        append_unique(input_text, label="Input")
+
+    if not detail_lines:
+        return None
+    return "\n".join(detail_lines)
+
+
 def _preview_text(preview: PersonaStreamEventPreview) -> str:
     return " ".join(
         part
@@ -365,6 +405,7 @@ def _make_issue_marker(
     root_causes: set[str],
     title: str,
     summary: str,
+    detail: str | None,
     fingerprint: str | None,
 ) -> PersonaIssueMarker:
     primary_tag = _primary_value(tags, _TAG_PRIORITY) or "warning"
@@ -380,6 +421,7 @@ def _make_issue_marker(
         primary_root_cause=primary_root_cause,
         title=title,
         summary=summary,
+        detail=detail,
         fingerprint=fingerprint,
     )
 
@@ -455,6 +497,7 @@ def _append_summary_marker_if_needed(
             root_causes=root_causes,
             title=title,
             summary=summary_text,
+            detail=summary_text,
             fingerprint=fingerprint,
         )
     )
@@ -532,6 +575,7 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
         primary_root_cause = _primary_value(marker_root_causes, _ROOT_CAUSE_PRIORITY)
         title = _build_marker_title(preview, marker_tags, raw_command_rule)
         summary = _build_marker_summary(preview, marker_tags, title, excerpt)
+        detail = _build_marker_detail(preview, excerpt, command) or summary
         fingerprint = _build_fingerprint(preview, marker_tags, primary_root_cause, raw_command_rule)
         dedupe_key = fingerprint or f"{preview.id}:{_primary_value(marker_tags, _TAG_PRIORITY)}"
         if dedupe_key in seen_fingerprints:
@@ -547,6 +591,7 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
                 root_causes=marker_root_causes,
                 title=title,
                 summary=summary,
+                detail=detail,
                 fingerprint=fingerprint,
             )
         )
@@ -565,6 +610,7 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
                     root_causes={"context"},
                     title="Work stalled waiting on context or follow-up",
                     summary="The run has remained active without a recent update.",
+                    detail="The run has remained active without a recent update.",
                     fingerprint=stalled_fingerprint,
                 )
             )
@@ -589,6 +635,7 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
                     root_causes=retry_root_causes,
                     title=f"{top_failed_tool or 'The workflow'} kept repeating the same step",
                     summary="The run had to retry the same step before it could continue.",
+                    detail="The run had to retry the same step before it could continue.",
                     fingerprint=retry_fingerprint,
                 )
             )

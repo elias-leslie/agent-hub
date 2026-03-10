@@ -24,6 +24,7 @@ export interface PersonaIssueMarker {
   primary_root_cause: string | null;
   title: string;
   summary: string;
+  detail: string | null;
   fingerprint: string | null;
 }
 

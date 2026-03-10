@@ -19,6 +19,7 @@ function buildPulseFields(overrides?: Partial<{
     primary_root_cause: string | null;
     title: string;
     summary: string;
+    detail: string | null;
     fingerprint: string | null;
   }>;
   pulse_tags: string[];
@@ -118,6 +119,7 @@ function buildStreamResponse(options?: {
               primary_root_cause: "context",
               title: "Completed with warnings",
               summary: "The run finished but still needed follow-up.",
+              detail: "The run finished but still needed follow-up.",
               fingerprint: "warning:context",
             },
           ],
@@ -215,6 +217,7 @@ function buildStreamResponse(options?: {
               primary_root_cause: "tool",
               title: "dt -q -d hit tool friction",
               summary: longToolFrictionSummary,
+              detail: `dt -q -d hit tool friction\nCommand: git status --short --branch && st context task-123 && st done task-123 --message "Verified autocode completion; quality gate passed."\nVerified autocode completion; quality gate passed.`,
               fingerprint: "tool-friction:dt-q-d",
             },
           ],
