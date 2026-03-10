@@ -119,12 +119,16 @@ function PersonaContent() {
   };
 
   const handleStopCurrentStream = async () => {
-    const cancelled = await runtime.stopCurrentStream();
-    if (cancelled) {
-      toast.success("Current Jenny stream cancelled");
+    const result = await runtime.stopActiveWork();
+    if (result.cancelled > 0) {
+      toast.success(
+        result.attempted > 1
+          ? `Stopped ${result.cancelled} active Jenny sessions`
+          : "Stopped active Jenny work",
+      );
       return;
     }
-    toast.warning("No live stream was cancellable", "Jenny may be idle or already between turns.");
+    toast.warning("No active work was cancellable", "Jenny may be idle or already between turns.");
   };
 
   if (personaLoading) {
@@ -221,10 +225,10 @@ function PersonaContent() {
                   ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-600"
                   : "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
               )}
-              title="Best-effort stop for the current live Jenny stream"
+              title="Best-effort stop for Jenny and any active spawned work"
             >
               <Square className="h-3.5 w-3.5" />
-              {runtime.stoppingSessionId ? "Stopping..." : "Stop current stream"}
+              {runtime.stoppingSessionId ? "Stopping..." : "Stop active work"}
             </button>
 
             <button
@@ -295,6 +299,7 @@ function PersonaContent() {
             agentSlug={persona.agent_slug}
             activeSessionId={activeSessionId}
             sidebarRefreshTrigger={sidebarRefreshTrigger}
+            runtimeSyncKey={runtime.runtimeSyncKey}
             onSelectSession={handleSelectSession}
             onSessionCreated={handleSessionCreated}
             onNewSession={handleNewSession}

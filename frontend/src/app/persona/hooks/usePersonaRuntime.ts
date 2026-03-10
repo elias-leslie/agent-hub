@@ -138,8 +138,10 @@ export interface PersonaRuntimeState {
   loading: boolean;
   error: string | null;
   stoppingSessionId: string | null;
+  runtimeSyncKey: string;
   refresh: () => Promise<void>;
   stopCurrentStream: () => Promise<boolean>;
+  stopActiveWork: () => Promise<{ cancelled: number; attempted: number }>;
 }
 
 export function usePersonaRuntime(): PersonaRuntimeState {
@@ -235,6 +237,12 @@ export function usePersonaRuntime(): PersonaRuntimeState {
     return null;
   }, [activeChildSessions, activePersonaSessions]);
 
+  const runtimeSyncKey = useMemo(() => {
+    const personaKey = activePersonaSessions.map((session) => `${session.id}:${session.updated_at}`).join("|");
+    const childKey = activeChildSessions.map((session) => `${session.id}:${session.updated_at}`).join("|");
+    return `${personaKey}::${childKey}`;
+  }, [activeChildSessions, activePersonaSessions]);
+
   const stopCurrentStream = useCallback(async () => {
     if (!primarySession) {
       return false;
@@ -250,6 +258,40 @@ export function usePersonaRuntime(): PersonaRuntimeState {
     }
   }, [primarySession]);
 
+  const stopActiveWork = useCallback(async () => {
+    const activeSessions = [...activePersonaSessions, ...activeChildSessions].filter(
+      (session) =>
+        session.status === "active"
+        || session.live_activity?.status === "active"
+        || session.live_activity?.phase === "running_tool"
+        || session.live_activity?.phase === "waiting_for_model",
+    );
+    if (activeSessions.length === 0) {
+      return { cancelled: 0, attempted: 0 };
+    }
+
+    setStoppingSessionId(activeSessions[0]?.id ?? null);
+    try {
+      const results = await Promise.all(
+        activeSessions.map(async (session) => {
+          try {
+            const result = await cancelSessionStream(session.id);
+            return result.cancelled ? 1 : 0;
+          } catch {
+            return 0;
+          }
+        }),
+      );
+      setRefreshTick((value) => value + 1);
+      return {
+        cancelled: results.reduce<number>((sum, value) => sum + value, 0),
+        attempted: activeSessions.length,
+      };
+    } finally {
+      setStoppingSessionId(null);
+    }
+  }, [activeChildSessions, activePersonaSessions]);
+
   return {
     primarySession,
     activePersonaSessions,
@@ -257,7 +299,9 @@ export function usePersonaRuntime(): PersonaRuntimeState {
     loading,
     error,
     stoppingSessionId,
+    runtimeSyncKey,
     refresh,
     stopCurrentStream,
+    stopActiveWork,
   };
 }

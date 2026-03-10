@@ -9,6 +9,7 @@ const mockHandleSelectSession = vi.fn();
 const mockHandleNewSession = vi.fn();
 const mockHandleSessionCreated = vi.fn();
 const mockStopCurrentStream = vi.fn();
+const mockStopActiveWork = vi.fn();
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({
@@ -78,8 +79,10 @@ vi.mock("@/app/persona/hooks/usePersonaRuntime", () => ({
     loading: false,
     error: null,
     stoppingSessionId: null,
+    runtimeSyncKey: "",
     refresh: vi.fn(),
     stopCurrentStream: mockStopCurrentStream,
+    stopActiveWork: mockStopActiveWork,
   }),
 }));
 

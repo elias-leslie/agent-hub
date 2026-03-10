@@ -687,7 +687,7 @@ class TestPersonaStreamHelpers:
 
     def test_build_search_matches_returns_entry_metadata(self) -> None:
         from app.api.persona.schemas import PersonaStreamEntry
-        from app.api.persona.stream import _build_search_matches
+        from app.api.persona.stream import _build_search_matches, _parse_search
 
         base_time = datetime.now(UTC)
         entries = [
@@ -716,10 +716,20 @@ class TestPersonaStreamHelpers:
             ),
         ]
 
-        matches, match_count = _build_search_matches(entries, search="task-123")
+        matches, match_count = _build_search_matches(entries, parsed_search=_parse_search("task:task-123"))
 
         assert match_count == 1
         assert len(matches) == 1
         assert matches[0].entry_id == "msg-1"
         assert matches[0].session_id == "chat-1"
         assert "task-123" in matches[0].snippet
+
+    def test_parse_search_supports_structured_tokens(self) -> None:
+        from app.api.persona.stream import _parse_search
+
+        parsed = _parse_search("agent:git-agent status:failed task:task-123 verify bug")
+
+        assert parsed.agent_terms == ["git-agent"]
+        assert parsed.status_terms == ["failed"]
+        assert parsed.task_terms == ["task-123"]
+        assert parsed.general_terms == ["verify", "bug"]

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useId,
@@ -10,6 +10,7 @@ import {
   useState,
   startTransition,
 } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Search,
   Loader2,
@@ -24,6 +25,7 @@ import {
   ArrowUp,
   Clock3,
   Radio,
+  CircleDot,
 } from "lucide-react";
 import {
   MessageBubble,
@@ -36,13 +38,14 @@ import { SessionDropdown } from "@/components/chat/session-dropdown";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { cn } from "@/lib/utils";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
+import { fetchSessionEvents } from "@/lib/api/sessions";
 import {
   type PersonaStreamMatch,
   fetchPersonaStream,
   type PersonaStreamEventPreview,
   type PersonaStreamEntry,
 } from "@/lib/api/persona-stream";
-import type { SessionEvent as LiveSessionEvent } from "@/types/events";
+import type { SessionEvent as LiveSessionEvent, TimelineEvent } from "@/types/events";
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
 
 const PROJECT_ID = "persona-sandbox";
@@ -57,6 +60,7 @@ interface UnifiedPersonaWorkspaceProps {
   agentSlug: string;
   activeSessionId: string | null;
   sidebarRefreshTrigger: number;
+  runtimeSyncKey: string;
   onSelectSession: (sessionId: string | null) => void;
   onSessionCreated: (sessionId: string) => void;
   onNewSession: () => void;
@@ -107,6 +111,24 @@ interface PreviewBadge {
   label: string;
   tone?: "neutral" | "info" | "success" | "warning" | "danger";
 }
+
+interface SessionEventDetailsState {
+  loading: boolean;
+  error: string | null;
+  events: TimelineEvent[];
+}
+
+interface DetailField {
+  label: string;
+  value: string;
+  tone?: "neutral" | "info" | "success" | "warning" | "danger";
+}
+
+type TimelineRow =
+  | { kind: "divider"; id: string; label: string }
+  | { kind: "unread"; id: string }
+  | { kind: "routine_group"; id: string; block: RoutineHeartbeatTimelineBlock }
+  | { kind: "item"; id: string; item: FeedAnchor; childRuns: FeedChildRun[] };
 
 function isChildRunItem(item: FeedItem): item is FeedChildRun {
   return item.kind === "child_run";
@@ -228,29 +250,6 @@ function formatDurationLabel(durationMs: number | null): string | null {
   return `${minutes}m ${seconds}s`;
 }
 
-function parseJsonPreview(value: string | null): Record<string, unknown> | null {
-  if (!value) {
-    return null;
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-function formatPreviewBlockValue(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-  const parsed = parseJsonPreview(value);
-  if (parsed) {
-    return JSON.stringify(parsed, null, 2);
-  }
-  return value;
-}
-
 function shortenText(value: string, maxLength = 88): string {
   if (value.length <= maxLength) {
     return value;
@@ -326,82 +325,42 @@ function eventToneClasses(eventType: string): string {
   return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300";
 }
 
-function eventSummaryLabel(preview: PersonaStreamEventPreview): string {
-  if (preview.event_type === "assistant_message") {
+function eventSummaryLabel(eventType: string): string {
+  if (eventType === "assistant_message") {
     return "Assistant";
   }
-  if (preview.event_type === "user_message") {
+  if (eventType === "user_message") {
     return "User";
   }
-  if (preview.event_type === "system_message") {
+  if (eventType === "system_message") {
     return "System";
   }
-  if (preview.event_type === "tool_use") {
+  if (eventType === "tool_use") {
     return "Tool call";
   }
-  if (preview.event_type === "tool_result") {
+  if (eventType === "tool_result") {
     return "Tool result";
   }
-  if (preview.event_type === "error") {
+  if (eventType === "error") {
     return "Error";
   }
-  if (preview.event_type === "thinking") {
+  if (eventType === "thinking") {
     return "Reasoning";
   }
-  return eventLabel(preview.event_type);
+  return eventLabel(eventType);
 }
 
-function eventLeadText(preview: PersonaStreamEventPreview): string | null {
-  const toolInput = parseJsonPreview(preview.tool_input_preview);
-  const toolOutput = parseJsonPreview(preview.tool_output_preview);
-
-  if (preview.event_type === "tool_use" && toolInput) {
-    const command = toolInput.command;
-    if (typeof command === "string" && command.trim()) {
-      return shortenText(command.trim(), 104);
-    }
-    const filePath = toolInput.file_path ?? toolInput.path;
-    if (typeof filePath === "string" && filePath.trim()) {
-      return shortenText(filePath.trim(), 104);
-    }
-    const action = toolInput.action;
-    const taskId = toolInput.task_id;
-    if (typeof action === "string" && action.trim()) {
-      return typeof taskId === "string" && taskId.trim()
-        ? `${action} ${taskId}`
-        : action;
-    }
-    const description = toolInput.description;
-    if (typeof description === "string" && description.trim()) {
-      return shortenText(description.trim(), 104);
-    }
-  }
-
-  if (preview.event_type === "tool_result" && toolOutput) {
-    const content = toolOutput.content;
-    if (typeof content === "string" && content.trim()) {
-      return shortenText(content.trim(), 104);
-    }
-  }
-
-  if (preview.content_preview) {
-    return shortenText(preview.content_preview.trim(), 104);
-  }
-
-  return null;
-}
-
-function eventAccentClasses(preview: PersonaStreamEventPreview): string {
-  if (preview.event_type === "error") {
+function eventAccentClasses(eventType: string): string {
+  if (eventType === "error") {
     return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
   }
-  if (preview.event_type === "tool_result") {
+  if (eventType === "tool_result") {
     return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
   }
-  if (preview.event_type === "tool_use") {
+  if (eventType === "tool_use") {
     return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
   }
-  if (preview.event_type === "assistant_message") {
+  if (eventType === "assistant_message") {
     return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
   }
   return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
@@ -431,49 +390,238 @@ function compactPath(path: string): string {
   return `.../${segments.slice(-3).join("/")}`;
 }
 
-function buildPreviewBadges(preview: PersonaStreamEventPreview): PreviewBadge[] {
-  const toolInput = parseJsonPreview(preview.tool_input_preview);
-  const toolOutput = parseJsonPreview(preview.tool_output_preview);
-  const badges: PreviewBadge[] = [];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
-  const filePath = toolInput?.file_path ?? toolInput?.path ?? toolInput?.target_file;
-  if (typeof filePath === "string" && filePath.trim()) {
-    badges.push({ label: compactPath(filePath.trim()), tone: "info" });
+function humanizeFieldLabel(value: string): string {
+  return value
+    .replaceAll(".", " ")
+    .replaceAll("_", " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function addUniqueText(target: string[], seen: Set<string>, value: string | null | undefined): void {
+  if (!value) {
+    return;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return;
+  }
+  const normalized = normalizeText(trimmed);
+  if (seen.has(normalized)) {
+    return;
+  }
+  seen.add(normalized);
+  target.push(trimmed);
+}
+
+function describeValue(value: unknown): string | null {
+  if (value == null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => describeValue(item))
+      .filter((item): item is string => Boolean(item));
+    return items.length > 0 ? items.join(", ") : null;
+  }
+  return null;
+}
+
+function flattenReadableFields(
+  value: unknown,
+  parentKey = "",
+  depth = 0,
+): DetailField[] {
+  if (depth > 3 || value == null) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    if (value.every((item) => !isRecord(item) && !Array.isArray(item))) {
+      const described = describeValue(value);
+      return described && parentKey ? [{ label: humanizeFieldLabel(parentKey), value: described }] : [];
+    }
+    return value.flatMap((item, index) =>
+      flattenReadableFields(item, parentKey ? `${parentKey}.${index + 1}` : String(index + 1), depth + 1),
+    );
+  }
+  if (!isRecord(value)) {
+    const described = describeValue(value);
+    return described && parentKey ? [{ label: humanizeFieldLabel(parentKey), value: described }] : [];
   }
 
-  const taskId = toolInput?.task_id ?? toolOutput?.task_id;
-  if (typeof taskId === "string" && taskId.trim()) {
-    badges.push({ label: taskId.trim(), tone: "warning" });
-  }
+  const preferredOrder = [
+    "command",
+    "action",
+    "description",
+    "path",
+    "file_path",
+    "target_file",
+    "task_id",
+    "project",
+    "project_id",
+    "status",
+    "exit_code",
+    "current_branch",
+    "branch",
+    "files_touched",
+    "changed_files",
+  ];
+  const entries = Object.entries(value).sort(([left], [right]) => {
+    const leftIndex = preferredOrder.indexOf(left);
+    const rightIndex = preferredOrder.indexOf(right);
+    if (leftIndex === -1 && rightIndex === -1) {
+      return left.localeCompare(right);
+    }
+    if (leftIndex === -1) {
+      return 1;
+    }
+    if (rightIndex === -1) {
+      return -1;
+    }
+    return leftIndex - rightIndex;
+  });
 
-  const action = toolInput?.action;
-  if (typeof action === "string" && action.trim()) {
-    badges.push({ label: action.trim(), tone: "neutral" });
-  }
+  return entries.flatMap(([key, nestedValue]) =>
+    flattenReadableFields(nestedValue, parentKey ? `${parentKey}.${key}` : key, depth + 1),
+  );
+}
 
-  const exitCode = toolOutput?.exit_code;
-  if (typeof exitCode === "number") {
-    badges.push({
-      label: `exit ${exitCode}`,
-      tone: exitCode === 0 ? "success" : "danger",
+function fieldTone(label: string, value: string): DetailField["tone"] {
+  const normalizedValue = value.toLowerCase();
+  const normalizedLabel = label.toLowerCase();
+  if (normalizedLabel.includes("status")) {
+    if (["ok", "success", "succeeded", "completed"].includes(normalizedValue)) {
+      return "success";
+    }
+    if (["failed", "error", "blocked"].includes(normalizedValue)) {
+      return "danger";
+    }
+  }
+  if (normalizedLabel.includes("exit code")) {
+    return normalizedValue === "0" ? "success" : "danger";
+  }
+  if (normalizedValue === "true" && normalizedLabel.includes("error")) {
+    return "danger";
+  }
+  if (normalizedLabel.includes("file") || normalizedLabel.includes("path")) {
+    return "info";
+  }
+  if (normalizedLabel.includes("task")) {
+    return "warning";
+  }
+  return "neutral";
+}
+
+function buildEventDetails(event: TimelineEvent): {
+  lead: string | null;
+  textBlocks: string[];
+  fields: DetailField[];
+} {
+  const textBlocks: string[] = [];
+  const textSeen = new Set<string>();
+  const fields: DetailField[] = [];
+  const fieldSeen = new Set<string>();
+
+  const addField = (label: string, value: string | null | undefined, tone?: DetailField["tone"]) => {
+    if (!value) {
+      return;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    const fieldKey = `${label}:${normalizeText(trimmed)}`;
+    if (fieldSeen.has(fieldKey)) {
+      return;
+    }
+    fieldSeen.add(fieldKey);
+    fields.push({
+      label,
+      value: trimmed,
+      tone: tone ?? fieldTone(label, trimmed),
     });
+  };
+
+  const recordTextFields = (value: Record<string, unknown> | null, keys: string[]) => {
+    if (!value) {
+      return;
+    }
+    for (const key of keys) {
+      addUniqueText(textBlocks, textSeen, describeValue(value[key]));
+    }
+  };
+
+  const filterFields = (
+    source: Record<string, unknown> | null,
+    excludedKeys: string[],
+  ) => {
+    if (!source) {
+      return;
+    }
+    const exclusions = new Set(excludedKeys);
+    for (const field of flattenReadableFields(source)) {
+      const normalizedLabel = field.label.toLowerCase().replaceAll(" ", "_");
+      if ([...exclusions].some((key) => normalizedLabel.endsWith(key))) {
+        continue;
+      }
+      const value = field.label.toLowerCase().includes("file") || field.label.toLowerCase().includes("path")
+        ? compactPath(field.value)
+        : field.value;
+      addField(field.label, value, field.tone);
+    }
+  };
+
+  if (event.event_type === "tool_use") {
+    const toolInput = isRecord(event.tool_input) ? event.tool_input : null;
+    addField("Command", describeValue(toolInput?.command), "info");
+    addField("Action", describeValue(toolInput?.action));
+    addField("Description", describeValue(toolInput?.description));
+    addField("File", describeValue(toolInput?.file_path ?? toolInput?.path ?? toolInput?.target_file), "info");
+    addField("Task", describeValue(toolInput?.task_id), "warning");
+    addField("Project", describeValue(toolInput?.project ?? toolInput?.project_id));
+    filterFields(toolInput, ["command", "action", "description", "file_path", "path", "target_file", "task_id", "project", "project_id"]);
+  } else if (event.event_type === "tool_result") {
+    const toolOutput = isRecord(event.tool_output) ? event.tool_output : null;
+    recordTextFields(toolOutput, ["content", "summary", "stdout", "stderr", "error_message", "message"]);
+    addField("Status", describeValue(toolOutput?.status));
+    addField("Exit code", describeValue(toolOutput?.exit_code));
+    addField("Error", describeValue(toolOutput?.is_error));
+    addField("Task", describeValue(toolOutput?.task_id), "warning");
+    addField("File", describeValue(toolOutput?.file_path ?? toolOutput?.path ?? toolOutput?.target_file), "info");
+    addField("Files touched", describeValue(toolOutput?.files_touched ?? toolOutput?.changed_files), "info");
+    filterFields(toolOutput, ["content", "summary", "stdout", "stderr", "error_message", "message", "status", "exit_code", "is_error", "task_id", "file_path", "path", "target_file", "files_touched", "changed_files"]);
+  } else {
+    addUniqueText(textBlocks, textSeen, event.content);
   }
 
-  const isError = toolOutput?.is_error;
-  if (typeof isError === "boolean" && isError) {
-    badges.push({ label: "error", tone: "danger" });
+  if (event.duration_ms != null) {
+    addField("Duration", formatDurationLabel(event.duration_ms));
+  }
+  if (event.model_used) {
+    addField("Model", event.model_used);
   }
 
-  const status = toolOutput?.status;
-  if (typeof status === "string" && status.trim()) {
-    const normalized = status.trim().toLowerCase();
-    badges.push({
-      label: status.trim(),
-      tone: normalized === "ok" || normalized === "success" ? "success" : "neutral",
-    });
-  }
-
-  return badges.slice(0, 4);
+  const lead = textBlocks[0] ?? fields[0]?.value ?? null;
+  return {
+    lead,
+    textBlocks,
+    fields,
+  };
 }
 
 function entryStatusClasses(status: string): string {
@@ -768,89 +916,99 @@ function liveStatusFromEvent(event: LiveSessionEvent): string | null {
   return "active";
 }
 
-function PreviewCodeBlock({
-  label,
-  value,
+function SessionDetailsPanel({
+  details,
+  previewCount,
 }: {
-  label: string;
-  value: string | null;
+  details: SessionEventDetailsState | undefined;
+  previewCount: number;
 }) {
-  const formattedValue = formatPreviewBlockValue(value);
+  if (!details || details.loading) {
+    return (
+      <div className="mt-3 flex items-center gap-2 border-t border-slate-200 pt-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading full session detail…
+      </div>
+    );
+  }
 
-  if (!formattedValue) {
-    return null;
+  if (details.error) {
+    return (
+      <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+        {details.error}
+      </div>
+    );
+  }
+
+  if (details.events.length === 0) {
+    return (
+      <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-400">
+        No additional detail was recorded for this session.
+      </div>
+    );
   }
 
   return (
-    <div className="mt-2 rounded-xl border border-slate-200 bg-slate-950 p-2 dark:border-slate-800">
-      <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-        {label}
-      </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-5 text-slate-100">
-        {formattedValue}
-      </pre>
-    </div>
-  );
-}
-
-function EventPreviewList({ previews }: { previews: PersonaStreamEventPreview[] }) {
-  return (
     <div className="mt-3 space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
-      {previews.map((preview) => {
-        const duration = formatDurationLabel(preview.duration_ms);
-        const leadText = eventLeadText(preview);
-        const badges = buildPreviewBadges(preview);
-        const secondaryContent =
-          preview.content_preview && preview.content_preview.trim() !== (leadText ?? "").trim()
-            ? preview.content_preview
-            : null;
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+        Full session detail · {details.events.length} events{previewCount > 0 ? ` · ${previewCount} summary markers` : ""}
+      </div>
+      {details.events.map((event) => {
+        const { lead, textBlocks, fields } = buildEventDetails(event);
+        const headerTime = formatTimeLabel(new Date(event.created_at));
         return (
-          <div
-            key={preview.id}
-            className={cn("rounded-xl border px-3 py-2 text-sm", eventToneClasses(preview.event_type))}
-          >
+          <div key={event.id} className={cn("rounded-xl border px-3 py-3 text-sm", eventToneClasses(event.event_type))}>
             <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.14em]">
-              <span className={cn("rounded-full px-2 py-0.5", eventAccentClasses(preview))}>
-                {eventSummaryLabel(preview)}
+              <span className={cn("rounded-full px-2 py-0.5", eventAccentClasses(event.event_type))}>
+                {eventSummaryLabel(event.event_type)}
               </span>
-              <time dateTime={preview.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
+              <time dateTime={event.created_at} className="inline-flex items-center gap-1 normal-case tracking-normal opacity-80">
                 <Clock3 className="h-3 w-3" />
-                {formatTimeLabel(new Date(preview.created_at))}
+                {headerTime}
               </time>
-              {preview.tool_name && <span className="normal-case tracking-normal font-medium">{preview.tool_name}</span>}
-              {duration && <span className="normal-case tracking-normal opacity-80">{duration}</span>}
+              {event.tool_name && <span className="normal-case tracking-normal font-medium">{event.tool_name}</span>}
+              {event.role && <span className="normal-case tracking-normal opacity-80">{event.role}</span>}
             </div>
-            {leadText && (
+            {lead && (
               <div className="mt-2 rounded-xl border border-black/5 bg-white/70 px-2.5 py-2 dark:border-white/5 dark:bg-slate-950/60">
                 <HighlightedText
-                  text={leadText}
-                  className="block whitespace-pre-wrap break-words text-xs font-medium"
+                  text={lead}
+                  className="block whitespace-pre-wrap break-words text-sm font-medium"
                 />
               </div>
             )}
-            {badges.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {badges.map((badge) => (
-                  <span
-                    key={`${preview.id}-${badge.label}`}
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]",
-                      badgeToneClasses(badge.tone),
-                    )}
+            {textBlocks.slice(1).map((text, index) => (
+              <HighlightedText
+                key={`${event.id}-text-${index}`}
+                text={text}
+                className="mt-2 block whitespace-pre-wrap break-words text-sm"
+              />
+            ))}
+            {fields.length > 0 && (
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {fields.map((field) => (
+                  <div
+                    key={`${event.id}-${field.label}-${field.value}`}
+                    className="rounded-xl border border-black/5 bg-white/70 px-3 py-2 dark:border-white/5 dark:bg-slate-950/60"
                   >
-                    {badge.label}
-                  </span>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+                      {field.label}
+                    </div>
+                    <div
+                      className={cn(
+                        "mt-1 rounded-lg px-2 py-1",
+                        field.tone ? badgeToneClasses(field.tone) : "bg-slate-100/80 dark:bg-slate-900/70",
+                      )}
+                    >
+                      <HighlightedText
+                        text={field.value}
+                        className="block whitespace-pre-wrap break-words text-sm"
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
-            {secondaryContent && (
-              <HighlightedText
-                text={secondaryContent}
-                className="mt-2 block whitespace-pre-wrap break-words text-sm"
-              />
-            )}
-            <PreviewCodeBlock label="Input" value={preview.tool_input_preview} />
-            <PreviewCodeBlock label="Output" value={preview.tool_output_preview} />
           </div>
         );
       })}
@@ -865,13 +1023,15 @@ function RoutineHeartbeatGroup({
   activeSessionId,
   expandedEntryIds,
   onToggleEntry,
+  sessionEventDetails,
 }: {
   block: RoutineHeartbeatTimelineBlock;
   expanded: boolean;
   onToggle: () => void;
   activeSessionId: string | null;
   expandedEntryIds: Record<string, boolean>;
-  onToggleEntry: (entryId: string) => void;
+  onToggleEntry: (entryId: string, sessionId: string) => void;
+  sessionEventDetails: Record<string, SessionEventDetailsState>;
 }) {
   const first = block.items[0]?.anchorItem;
   const last = block.items.at(-1)?.anchorItem;
@@ -925,7 +1085,8 @@ function RoutineHeartbeatGroup({
                   entry={anchorItem.entry}
                   selected={anchorItem.sessionId === activeSessionId}
                   expanded={!!expandedEntryIds[anchorItem.id]}
-                  onToggle={() => onToggleEntry(anchorItem.id)}
+                  onToggle={() => onToggleEntry(anchorItem.id, anchorItem.sessionId)}
+                  details={sessionEventDetails[anchorItem.sessionId]}
                 />
               </div>
             </div>
@@ -943,13 +1104,15 @@ function ChildRunStack({
   onToggle,
   matchedIds,
   activeMatchId,
+  sessionEventDetails,
 }: {
   childRuns: FeedChildRun[];
   activeSessionId: string | null;
   expandedEntryIds: Record<string, boolean>;
-  onToggle: (entryId: string) => void;
+  onToggle: (entryId: string, sessionId: string) => void;
   matchedIds: Set<string>;
   activeMatchId: string | null;
+  sessionEventDetails: Record<string, SessionEventDetailsState>;
 }) {
   return (
     <div className="ml-5 mt-3 border-l border-dashed border-sky-200 pl-4 dark:border-sky-900">
@@ -981,7 +1144,8 @@ function ChildRunStack({
                   entry={childRun.entry}
                   selected={selected}
                   expanded={!!expandedEntryIds[childRun.id]}
-                  onToggle={() => onToggle(childRun.id)}
+                  onToggle={() => onToggle(childRun.id, childRun.sessionId)}
+                  details={sessionEventDetails[childRun.sessionId]}
                 />
               </div>
             </div>
@@ -997,11 +1161,13 @@ function ChildRunCard({
   selected,
   expanded,
   onToggle,
+  details,
 }: {
   entry: PersonaStreamEntry;
   selected: boolean;
   expanded: boolean;
   onToggle: () => void;
+  details?: SessionEventDetailsState;
 }) {
   return (
     <div
@@ -1038,24 +1204,18 @@ function ChildRunCard({
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">task {entry.external_id}</span>}
             {entry.current_branch && <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">{entry.current_branch}</span>}
-            <Link
-              href={`/sessions/${entry.session_id}`}
-              className="text-sky-600 transition hover:text-sky-500 dark:text-sky-300 dark:hover:text-sky-200"
-            >
-              open session
-            </Link>
           </div>
-          {entry.event_previews.length > 0 && (
+          {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
               onClick={onToggle}
               className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {expanded ? "Hide run details" : `Show run details (${entry.event_previews.length})`}
+              {expanded ? "Hide run details" : "Show run details"}
             </button>
           )}
-          {expanded && <EventPreviewList previews={entry.event_previews} />}
+          {expanded && <SessionDetailsPanel details={details} previewCount={entry.event_previews.length} />}
         </div>
       </div>
     </div>
@@ -1067,11 +1227,13 @@ function HeartbeatCard({
   selected,
   expanded,
   onToggle,
+  details,
 }: {
   entry: PersonaStreamEntry;
   selected: boolean;
   expanded: boolean;
   onToggle: () => void;
+  details?: SessionEventDetailsState;
 }) {
   return (
     <div
@@ -1113,24 +1275,18 @@ function HeartbeatCard({
           )}
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-400 dark:text-slate-500">
             {entry.external_id && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{entry.external_id}</span>}
-            <Link
-              href={`/sessions/${entry.session_id}`}
-              className="text-amber-700 transition hover:text-amber-600 dark:text-amber-300 dark:hover:text-amber-200"
-            >
-              open session
-            </Link>
           </div>
-          {entry.event_previews.length > 0 && (
+          {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
               onClick={onToggle}
               className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
             >
               {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-              {expanded ? "Hide heartbeat details" : `Show heartbeat details (${entry.event_previews.length})`}
+              {expanded ? "Hide heartbeat details" : "Show heartbeat details"}
             </button>
           )}
-          {expanded && <EventPreviewList previews={entry.event_previews} />}
+          {expanded && <SessionDetailsPanel details={details} previewCount={entry.event_previews.length} />}
         </div>
       </div>
     </div>
@@ -1141,6 +1297,7 @@ export function UnifiedPersonaWorkspace({
   agentSlug,
   activeSessionId,
   sidebarRefreshTrigger,
+  runtimeSyncKey,
   onSelectSession,
   onSessionCreated,
   onNewSession,
@@ -1165,6 +1322,7 @@ export function UnifiedPersonaWorkspace({
   const [activeSearchMatchId, setActiveSearchMatchId] = useState<string | null>(null);
   const [liveRefreshTick, setLiveRefreshTick] = useState(0);
   const [liveSessionPatches, setLiveSessionPatches] = useState<Record<string, LiveSessionPatch>>({});
+  const [sessionEventDetails, setSessionEventDetails] = useState<Record<string, SessionEventDetailsState>>({});
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [firstUnreadItemId, setFirstUnreadItemId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1173,6 +1331,7 @@ export function UnifiedPersonaWorkspace({
   const initialViewportSettledRef = useRef(false);
   const lastReadItemIdRef = useRef<string | null>(null);
   const olderHistoryAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const sessionEventDetailsRef = useRef<Record<string, SessionEventDetailsState>>({});
 
   const apiConfig = useMemo(
     () => ({
@@ -1214,6 +1373,73 @@ export function UnifiedPersonaWorkspace({
     programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_GRACE_MS;
     container.scrollTo({ top: container.scrollHeight, behavior });
   };
+
+  useEffect(() => {
+    sessionEventDetailsRef.current = sessionEventDetails;
+  }, [sessionEventDetails]);
+
+  const loadSessionEventDetails = useCallback(async (sessionId: string, force = false) => {
+    const existing = sessionEventDetailsRef.current[sessionId];
+    if (!force) {
+      if (existing?.loading) {
+        return;
+      }
+      if (existing && existing.events.length > 0 && !existing.error) {
+        return;
+      }
+    }
+
+    setSessionEventDetails((current) => ({
+      ...current,
+      [sessionId]: {
+        loading: true,
+        error: null,
+        events: current[sessionId]?.events ?? [],
+      },
+    }));
+
+    try {
+      const allEvents: TimelineEvent[] = [];
+      let pageNumber = 1;
+      let total = 0;
+      do {
+        const response = await fetchSessionEvents(sessionId, { page: pageNumber, page_size: 500 });
+        total = response.total;
+        allEvents.push(...response.events);
+        pageNumber += 1;
+      } while (allEvents.length < total);
+
+      allEvents.sort((left, right) => {
+        const turnDifference = left.turn - right.turn;
+        if (turnDifference !== 0) {
+          return turnDifference;
+        }
+        const sequenceDifference = left.sequence - right.sequence;
+        if (sequenceDifference !== 0) {
+          return sequenceDifference;
+        }
+        return +new Date(left.created_at) - +new Date(right.created_at);
+      });
+
+      setSessionEventDetails((current) => ({
+        ...current,
+        [sessionId]: {
+          loading: false,
+          error: null,
+          events: allEvents,
+        },
+      }));
+    } catch (err) {
+      setSessionEventDetails((current) => ({
+        ...current,
+        [sessionId]: {
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed to load full session detail",
+          events: current[sessionId]?.events ?? [],
+        },
+      }));
+    }
+  }, []);
 
   const hydratedEntries = useMemo(
     () =>
@@ -1315,6 +1541,23 @@ export function UnifiedPersonaWorkspace({
   });
 
   useEffect(() => {
+    if (!runtimeSyncKey) {
+      return;
+    }
+    const expandedActiveSessionIds = Array.from(
+      new Set(
+        mergedItems
+          .filter((item): item is FeedHeartbeat | FeedChildRun => item.kind !== "message")
+          .filter((item) => expandedEntryIds[item.id] && activeStreamSessionIds.includes(item.sessionId))
+          .map((item) => item.sessionId),
+      ),
+    );
+    expandedActiveSessionIds.forEach((sessionId) => {
+      void loadSessionEventDetails(sessionId, true);
+    });
+  }, [runtimeSyncKey, mergedItems, expandedEntryIds, activeStreamSessionIds, loadSessionEventDetails]);
+
+  useEffect(() => {
     const container = scrollRef.current;
     if (!container) {
       return;
@@ -1409,19 +1652,7 @@ export function UnifiedPersonaWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, page, currentSessionId, sidebarRefreshTrigger, liveRefreshTick]);
-
-  useEffect(() => {
-    if (!focusSessionId) {
-      return;
-    }
-    const timeout = window.setTimeout(() => {
-      const nodes = document.querySelectorAll<HTMLElement>(`[data-session-anchor="${focusSessionId}"]`);
-      const target = nodes.length > 0 ? nodes[nodes.length - 1] : null;
-      target?.scrollIntoView({ block: "center", behavior: "smooth" });
-    }, 120);
-    return () => window.clearTimeout(timeout);
-  }, [entries, focusSessionId]);
+  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, page, currentSessionId, sidebarRefreshTrigger, liveRefreshTick, runtimeSyncKey]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -1577,6 +1808,136 @@ export function UnifiedPersonaWorkspace({
     });
   }, [mergedItems, deferredSearch, filterMode]);
 
+  const timelineRows = useMemo(() => {
+    const rows: TimelineRow[] = [];
+    for (const group of groupedItems) {
+      rows.push({ kind: "divider", id: `divider:${group.label}`, label: group.label });
+      for (const block of group.blocks) {
+        if (block.kind === "routine_group") {
+          const containsUnread = Boolean(
+            firstUnreadItemId
+            && block.items.some(
+              ({ anchorItem, childRuns }) =>
+                anchorItem.id === firstUnreadItemId || childRuns.some((childRun) => childRun.id === firstUnreadItemId),
+            ),
+          );
+          if (containsUnread) {
+            rows.push({ kind: "unread", id: `unread:${block.id}` });
+          }
+          rows.push({ kind: "routine_group", id: block.id, block });
+          continue;
+        }
+        if (
+          firstUnreadItemId
+          && (block.anchorItem.id === firstUnreadItemId || block.childRuns.some((childRun) => childRun.id === firstUnreadItemId))
+        ) {
+          rows.push({ kind: "unread", id: `unread:${block.anchorItem.id}` });
+        }
+        rows.push({
+          kind: "item",
+          id: `item:${block.anchorItem.id}`,
+          item: block.anchorItem,
+          childRuns: block.childRuns,
+        });
+      }
+    }
+    return rows;
+  }, [groupedItems, firstUnreadItemId]);
+
+  const rowIndexByStreamItemId = useMemo(() => {
+    const indexMap = new Map<string, number>();
+    timelineRows.forEach((row, index) => {
+      if (row.kind === "item") {
+        indexMap.set(row.item.id, index);
+        row.childRuns.forEach((childRun) => indexMap.set(childRun.id, index));
+        return;
+      }
+      if (row.kind === "routine_group") {
+        row.block.items.forEach(({ anchorItem, childRuns }) => {
+          indexMap.set(anchorItem.id, index);
+          childRuns.forEach((childRun) => indexMap.set(childRun.id, index));
+        });
+      }
+    });
+    return indexMap;
+  }, [timelineRows]);
+
+  const rowIndexBySessionId = useMemo(() => {
+    const indexMap = new Map<string, number>();
+    timelineRows.forEach((row, index) => {
+      if (row.kind === "item") {
+        if (row.item.sessionId) {
+          indexMap.set(row.item.sessionId, index);
+        }
+        row.childRuns.forEach((childRun) => indexMap.set(childRun.sessionId, index));
+        return;
+      }
+      if (row.kind === "routine_group") {
+        row.block.items.forEach(({ anchorItem, childRuns }) => {
+          indexMap.set(anchorItem.sessionId, index);
+          childRuns.forEach((childRun) => indexMap.set(childRun.sessionId, index));
+        });
+      }
+    });
+    return indexMap;
+  }, [timelineRows]);
+
+  const virtualizer = useVirtualizer({
+    count: timelineRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => {
+      const row = timelineRows[index];
+      if (!row) {
+        return 80;
+      }
+      if (row.kind === "divider") {
+        return 56;
+      }
+      if (row.kind === "unread") {
+        return 40;
+      }
+      if (row.kind === "routine_group") {
+        return expandedRoutineGroupIds[row.block.id] ? 360 : 120;
+      }
+      const expanded = row.item.kind !== "message" && expandedEntryIds[row.item.id];
+      const childRunCount = row.childRuns.length;
+      return expanded ? 420 + childRunCount * 140 : 160 + childRunCount * 140;
+    },
+    overscan: 10,
+  });
+
+  const virtualRows = virtualizer.getVirtualItems();
+  const renderVirtualRows = virtualRows.length > 0;
+  const renderedRows = renderVirtualRows
+    ? virtualRows.map((virtualRow) => ({
+        key: virtualRow.key,
+        row: timelineRows[virtualRow.index],
+        start: virtualRow.start,
+        measure: true,
+      }))
+    : timelineRows.map((row, index) => ({
+        key: `${row.id}:${index}`,
+        row,
+        start: 0,
+        measure: false,
+      }));
+
+  useEffect(() => {
+    if (!focusSessionId) {
+      return;
+    }
+    const rowIndex = rowIndexBySessionId.get(focusSessionId);
+    if (rowIndex != null) {
+      virtualizer.scrollToIndex(rowIndex, { align: "center" });
+    }
+    const timeout = window.setTimeout(() => {
+      const nodes = document.querySelectorAll<HTMLElement>(`[data-session-anchor="${focusSessionId}"]`);
+      const target = nodes.length > 0 ? nodes[nodes.length - 1] : null;
+      target?.scrollIntoView({ block: "center", behavior: "smooth" });
+    }, 120);
+    return () => window.clearTimeout(timeout);
+  }, [entries, focusSessionId, rowIndexBySessionId, virtualizer]);
+
   const filterCounts = useMemo(() => {
     const counts: Record<FilterMode, number> = {
       all: hydratedEntries.length + messages.length,
@@ -1643,12 +2004,16 @@ export function UnifiedPersonaWorkspace({
       setAnchorEntryId(activeMatchId);
       return;
     }
+    const rowIndex = rowIndexByStreamItemId.get(activeMatchId);
+    if (rowIndex != null) {
+      virtualizer.scrollToIndex(rowIndex, { align: "center" });
+    }
     const timeout = window.setTimeout(() => {
       const node = document.querySelector<HTMLElement>(`[data-stream-item-id="${activeMatchId}"]`);
       node?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 120);
     return () => window.clearTimeout(timeout);
-  }, [activeMatchId, mergedItems, anchorEntryId]);
+  }, [activeMatchId, mergedItems, anchorEntryId, rowIndexByStreamItemId, virtualizer]);
 
   const handleSessionJump = (sessionId: string | null) => {
     onSelectSession(sessionId);
@@ -1657,7 +2022,11 @@ export function UnifiedPersonaWorkspace({
     setAutoFollow(false);
   };
 
-  const toggleExpanded = (entryId: string) => {
+  const toggleExpanded = (entryId: string, sessionId?: string) => {
+    const willExpand = !expandedEntryIds[entryId];
+    if (willExpand && sessionId) {
+      void loadSessionEventDetails(sessionId);
+    }
     setExpandedEntryIds((current) => ({
       ...current,
       [entryId]: !current[entryId],
@@ -1761,6 +2130,9 @@ export function UnifiedPersonaWorkspace({
             {autoFollow ? "Auto-follow on" : "Auto-follow off"}
           </button>
         </div>
+        <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+          Search everything, or use prefixes like <span className="font-semibold">task:</span>, <span className="font-semibold">file:</span>, <span className="font-semibold">agent:</span>, <span className="font-semibold">status:</span>, and <span className="font-semibold">project:</span>.
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {([
             ["all", "All"],
@@ -1860,104 +2232,146 @@ export function UnifiedPersonaWorkspace({
           </div>
         ) : (
           <div className="mx-auto max-w-4xl">
-            {groupedItems.map((group) => (
-              <div key={group.label}>
-                <DateDivider label={group.label} />
-                <div className="space-y-3">
-                  {group.blocks.map((block) => {
-                    if (block.kind === "routine_group") {
-                      return (
-                        <RoutineHeartbeatGroup
-                          key={block.id}
-                          block={block}
-                          expanded={!!expandedRoutineGroupIds[block.id]}
-                          onToggle={() => toggleRoutineGroup(block.id)}
-                          activeSessionId={selectedSessionId}
-                          expandedEntryIds={expandedEntryIds}
-                          onToggleEntry={toggleExpanded}
-                        />
-                      );
-                    }
-
-                    const item = block.anchorItem;
-                    const selected = !!item.sessionId && item.sessionId === selectedSessionId;
-                    const matched = matchedIds.has(item.id);
-                    const activeMatched = activeMatchId === item.id;
-                    if (item.kind === "message") {
-                      return (
-                        <div
-                          key={item.id}
-                          data-session-anchor={item.sessionId ?? undefined}
-                          data-testid="stream-item"
-                          data-stream-item-id={item.id}
-                          data-timestamp={item.timestamp.toISOString()}
-                          className={cn(
-                            "flex items-start gap-3",
-                            selected && "rounded-2xl bg-sky-50/40 px-2 py-1 dark:bg-sky-950/10",
-                            matched && "rounded-2xl px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
-                            activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
-                          )}
-                        >
-                          <TimelineTimestamp timestamp={item.timestamp} />
-                          <div className="min-w-0 flex-1">
-                            <MessageBubble
-                              message={item.message}
-                              isStreaming={status !== "idle" && status !== "error"}
-                              canEdit={false}
-                              canRegenerate={false}
-                            />
-                            {block.childRuns.length > 0 && (
-                              <ChildRunStack
-                                childRuns={block.childRuns}
-                                activeSessionId={selectedSessionId}
-                                expandedEntryIds={expandedEntryIds}
-                                onToggle={toggleExpanded}
-                                matchedIds={matchedIds}
-                                activeMatchId={activeMatchId}
-                              />
-                            )}
-                          </div>
-                        </div>
-                      );
-                    }
-                    if (item.kind === "child_run") {
-                      return (
-                        <div
-                          key={item.id}
-                          data-session-anchor={item.sessionId}
-                          data-testid="stream-item"
-                          data-stream-item-id={item.id}
-                          data-timestamp={item.timestamp.toISOString()}
-                          className={cn(
-                            "flex items-start gap-3 rounded-2xl",
-                            matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
-                            activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
-                          )}
-                        >
-                          <TimelineTimestamp timestamp={item.timestamp} />
-                          <div className="min-w-0 flex-1">
-                            <ChildRunCard
-                              entry={item.entry}
-                              selected={selected}
-                              expanded={!!expandedEntryIds[item.id]}
-                              onToggle={() => toggleExpanded(item.id)}
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-                    return (
+            <div
+              className="relative w-full"
+              style={renderVirtualRows ? { height: `${virtualizer.getTotalSize()}px` } : undefined}
+            >
+              {renderedRows.map(({ key, row, start, measure }) => {
+                if (!row) {
+                  return null;
+                }
+                if (row.kind === "divider") {
+                  return (
+                    <div
+                      key={key}
+                      ref={measure ? virtualizer.measureElement : undefined}
+                      className={cn(renderVirtualRows && "absolute left-0 top-0 w-full")}
+                      style={renderVirtualRows ? { transform: `translateY(${start}px)` } : undefined}
+                    >
+                      <DateDivider label={row.label} />
+                    </div>
+                  );
+                }
+                if (row.kind === "unread") {
+                  return (
+                    <div
+                      key={key}
+                      ref={measure ? virtualizer.measureElement : undefined}
+                      className={cn(renderVirtualRows && "absolute left-0 top-0 w-full")}
+                      style={renderVirtualRows ? { transform: `translateY(${start}px)` } : undefined}
+                    >
                       <div
-                        key={item.id}
-                        data-session-anchor={item.sessionId}
+                        data-testid="new-activity-separator"
+                        className="flex items-center gap-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-300"
+                      >
+                        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-900" />
+                        <span className="inline-flex items-center gap-1">
+                          <CircleDot className="h-3.5 w-3.5" />
+                          New since you scrolled away
+                        </span>
+                        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-900" />
+                      </div>
+                    </div>
+                  );
+                }
+                if (row.kind === "routine_group") {
+                  return (
+                    <div
+                      key={key}
+                      ref={measure ? virtualizer.measureElement : undefined}
+                      className={cn(renderVirtualRows && "absolute left-0 top-0 w-full")}
+                      style={renderVirtualRows ? { transform: `translateY(${start}px)` } : undefined}
+                    >
+                      <RoutineHeartbeatGroup
+                        block={row.block}
+                        expanded={!!expandedRoutineGroupIds[row.block.id]}
+                        onToggle={() => toggleRoutineGroup(row.block.id)}
+                        activeSessionId={selectedSessionId}
+                        expandedEntryIds={expandedEntryIds}
+                        onToggleEntry={toggleExpanded}
+                        sessionEventDetails={sessionEventDetails}
+                      />
+                    </div>
+                  );
+                }
+
+                const item = row.item;
+                const selected = !!item.sessionId && item.sessionId === selectedSessionId;
+                const matched = matchedIds.has(item.id);
+                const activeMatched = activeMatchId === item.id;
+                const baseClasses = cn(
+                  "flex items-start gap-3 rounded-2xl",
+                  matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                  activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                );
+
+                return (
+                  <div
+                    key={key}
+                    ref={measure ? virtualizer.measureElement : undefined}
+                    className={cn(renderVirtualRows && "absolute left-0 top-0 w-full")}
+                    style={renderVirtualRows ? { transform: `translateY(${start}px)` } : undefined}
+                  >
+                    {item.kind === "message" ? (
+                      <div
+                        data-session-anchor={item.sessionId ?? undefined}
                         data-testid="stream-item"
                         data-stream-item-id={item.id}
                         data-timestamp={item.timestamp.toISOString()}
                         className={cn(
-                          "flex items-start gap-3 rounded-2xl",
-                          matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
+                          "flex items-start gap-3",
+                          selected && "rounded-2xl bg-sky-50/40 px-2 py-1 dark:bg-sky-950/10",
+                          matched && "rounded-2xl px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
                           activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
                         )}
+                      >
+                        <TimelineTimestamp timestamp={item.timestamp} />
+                        <div className="min-w-0 flex-1">
+                          <MessageBubble
+                            message={item.message}
+                            isStreaming={status !== "idle" && status !== "error"}
+                            canEdit={false}
+                            canRegenerate={false}
+                          />
+                          {row.childRuns.length > 0 && (
+                            <ChildRunStack
+                              childRuns={row.childRuns}
+                              activeSessionId={selectedSessionId}
+                              expandedEntryIds={expandedEntryIds}
+                              onToggle={toggleExpanded}
+                              matchedIds={matchedIds}
+                              activeMatchId={activeMatchId}
+                              sessionEventDetails={sessionEventDetails}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    ) : item.kind === "child_run" ? (
+                      <div
+                        data-session-anchor={item.sessionId}
+                        data-testid="stream-item"
+                        data-stream-item-id={item.id}
+                        data-timestamp={item.timestamp.toISOString()}
+                        className={baseClasses}
+                      >
+                        <TimelineTimestamp timestamp={item.timestamp} />
+                        <div className="min-w-0 flex-1">
+                          <ChildRunCard
+                            entry={item.entry}
+                            selected={selected}
+                            expanded={!!expandedEntryIds[item.id]}
+                            onToggle={() => toggleExpanded(item.id, item.sessionId)}
+                            details={sessionEventDetails[item.sessionId]}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        data-session-anchor={item.sessionId}
+                        data-testid="stream-item"
+                        data-stream-item-id={item.id}
+                        data-timestamp={item.timestamp.toISOString()}
+                        className={baseClasses}
                       >
                         <TimelineTimestamp timestamp={item.timestamp} />
                         <div className="min-w-0 flex-1">
@@ -1965,25 +2379,27 @@ export function UnifiedPersonaWorkspace({
                             entry={item.entry}
                             selected={selected}
                             expanded={!!expandedEntryIds[item.id]}
-                            onToggle={() => toggleExpanded(item.id)}
+                            onToggle={() => toggleExpanded(item.id, item.sessionId)}
+                            details={sessionEventDetails[item.sessionId]}
                           />
-                          {block.childRuns.length > 0 && (
+                          {row.childRuns.length > 0 && (
                             <ChildRunStack
-                              childRuns={block.childRuns}
+                              childRuns={row.childRuns}
                               activeSessionId={selectedSessionId}
                               expandedEntryIds={expandedEntryIds}
                               onToggle={toggleExpanded}
                               matchedIds={matchedIds}
                               activeMatchId={activeMatchId}
+                              sessionEventDetails={sessionEventDetails}
                             />
                           )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
             {total > entries.length && !deferredSearch.trim() && (
               <div className="flex justify-center pt-6">
