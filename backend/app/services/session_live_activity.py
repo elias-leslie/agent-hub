@@ -22,6 +22,7 @@ _QUIET_AFTER_SECONDS = 60
 _STALL_AFTER_SECONDS = 180
 _POST_TOOL_STALL_AFTER_SECONDS = 120
 _TOUCHED_FILES_LIMIT = 10
+_RECENT_PATHS_LIMIT = 20
 
 
 def _now_iso() -> str:
@@ -90,6 +91,21 @@ def _append_touched_file(live_activity: dict[str, Any], path: str | None) -> Non
         touched = [p for p in touched if p != path]
     touched.append(path)
     live_activity["files_touched"] = touched[-_TOUCHED_FILES_LIMIT:]
+
+
+def _append_recent_paths(
+    live_activity: dict[str, Any],
+    key: str,
+    paths: list[str] | None,
+) -> None:
+    recent = live_activity.get(key)
+    if not isinstance(recent, list):
+        recent = []
+    for path in paths or []:
+        if path in recent:
+            recent = [existing for existing in recent if existing != path]
+        recent.append(path)
+    live_activity[key] = recent[-_RECENT_PATHS_LIMIT:]
 
 
 def _mark_non_terminal_state(
@@ -258,6 +274,51 @@ def mark_session_terminal_state(
     session.provider_metadata = metadata
 
 
+def apply_live_activity_heartbeat(
+    session: Session,
+    *,
+    heartbeat_at: str,
+    phase: str | None = None,
+    status: str | None = None,
+    summary: str | None = None,
+    current_tool_name: str | None = None,
+    current_command: str | None = None,
+    last_event_type: str | None = None,
+    active_read_paths: list[str] | None = None,
+    active_write_paths: list[str] | None = None,
+) -> None:
+    """Update live activity directly from an external session heartbeat."""
+    metadata = _metadata_dict(session)
+    live_activity = _live_activity(metadata)
+
+    live_activity["last_heartbeat_at"] = heartbeat_at
+    live_activity["last_event_at"] = heartbeat_at
+    live_activity["last_model_activity_at"] = heartbeat_at
+    live_activity["status"] = status or str(live_activity.get("status") or "active")
+    live_activity["phase"] = phase or str(live_activity.get("phase") or "waiting_for_model")
+    if summary is not None:
+        live_activity["summary"] = summary
+    if current_tool_name is not None:
+        live_activity["current_tool_name"] = current_tool_name
+        live_activity["last_tool_name"] = current_tool_name
+    if current_command is not None:
+        live_activity["current_command"] = current_command
+        live_activity["last_command"] = current_command
+    if last_event_type is not None:
+        live_activity["last_event_type"] = last_event_type
+    if active_read_paths:
+        live_activity["last_read_path"] = active_read_paths[-1]
+        _append_recent_paths(live_activity, "recent_read_paths", active_read_paths)
+    if active_write_paths:
+        live_activity["last_write_path"] = active_write_paths[-1]
+        _append_recent_paths(live_activity, "recent_write_paths", active_write_paths)
+        for path in active_write_paths:
+            _append_touched_file(live_activity, path)
+
+    metadata["live_activity"] = live_activity
+    session.provider_metadata = metadata
+
+
 def build_live_activity_response(session: Session) -> dict[str, Any] | None:
     """Build API-ready live activity payload with dynamic quiet/stall classification."""
     metadata = _metadata_dict(session)
@@ -316,4 +377,5 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
     response["stalled"] = stalled
     response["stall_reason"] = stall_reason or response.get("stall_reason")
     response["files_touched"] = response.get("files_touched") or []
+    response["last_heartbeat_at"] = response.get("last_heartbeat_at")
     return response

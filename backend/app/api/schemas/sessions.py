@@ -23,6 +23,14 @@ class SessionCreate(BaseModel):
         default=None,
         description="Agent slug for agent-based sessions (optional)",
     )
+    external_id: str | None = Field(default=None, description="Linked external work item ID")
+    current_branch: str | None = Field(default=None, description="Git branch at session start")
+    cwd: str | None = Field(default=None, description="Working directory at session start")
+    declared_scope_paths: list[str] = Field(default_factory=list)
+    observed_read_paths: list[str] = Field(default_factory=list)
+    observed_write_paths: list[str] = Field(default_factory=list)
+    scope_confidence: str | None = Field(default=None)
+    provider_metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class ToolExecutionResponse(BaseModel):
@@ -116,6 +124,7 @@ class LiveActivityResponse(BaseModel):
     tool_calls_count: int = 0
     termination_reason: str | None = None
     files_touched: list[str] = Field(default_factory=list)
+    last_heartbeat_at: str | None = None
 
 
 class SessionResponse(BaseModel):
@@ -136,6 +145,18 @@ class SessionResponse(BaseModel):
     status: str
     agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
+    external_id: str | None = Field(default=None, description="Linked external work item ID")
+    current_branch: str | None = Field(default=None, description="Git branch associated with the session")
+    working_dir: str | None = Field(default=None, description="Working directory captured for the session")
+    repo_root: str | None = Field(default=None, description="Detected repo root for the session")
+    worktree_path: str | None = Field(default=None, description="Detected worktree path for the session")
+    host: str | None = Field(default=None, description="Origin host for the session")
+    tmux_session_name: str | None = Field(default=None, description="tmux session name when applicable")
+    tmux_pane_id: str | None = Field(default=None, description="tmux pane id when applicable")
+    declared_scope_paths: list[str] = Field(default_factory=list)
+    observed_read_paths: list[str] = Field(default_factory=list)
+    observed_write_paths: list[str] = Field(default_factory=list)
+    scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
     created_at: datetime
     updated_at: datetime
     live_activity: LiveActivityResponse | None = Field(
@@ -174,9 +195,18 @@ class SessionListItem(BaseModel):
     external_id: str | None = Field(default=None, description="Linked external work item ID")
     current_branch: str | None = Field(default=None, description="Git branch associated with the session")
     working_dir: str | None = Field(default=None, description="Working directory captured for the session")
+    repo_root: str | None = Field(default=None, description="Detected repo root for the session")
+    worktree_path: str | None = Field(default=None, description="Detected worktree path for the session")
+    host: str | None = Field(default=None, description="Origin host for the session")
+    tmux_session_name: str | None = Field(default=None, description="tmux session name when applicable")
+    tmux_pane_id: str | None = Field(default=None, description="tmux pane id when applicable")
     is_worktree: bool = Field(default=False, description="Whether the working directory is a git worktree")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
+    declared_scope_paths: list[str] = Field(default_factory=list)
+    observed_read_paths: list[str] = Field(default_factory=list)
+    observed_write_paths: list[str] = Field(default_factory=list)
+    scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
     live_activity: LiveActivityResponse | None = Field(
         default=None, description="Current live execution state"
     )

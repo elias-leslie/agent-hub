@@ -44,20 +44,26 @@ def _metadata_value(session: Session, key: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _list_first(values: list[str] | None) -> str | None:
-    return values[0] if values else None
+def _list_first(values: object) -> str | None:
+    if not isinstance(values, list) or not values:
+        return None
+    first = values[0]
+    return first if isinstance(first, str) else None
 
 
-def _list_last(values: list[str] | None) -> str | None:
-    return values[-1] if values else None
+def _list_last(values: object) -> str | None:
+    if not isinstance(values, list) or not values:
+        return None
+    last = values[-1]
+    return last if isinstance(last, str) else None
 
 
 def _requested_model(session: Session) -> str:
-    return _metadata_value(session, "requested_model") or _list_first(session.models_used) or session.model
+    return _metadata_value(session, "requested_model") or _list_first(session.models_used) or str(session.model)
 
 
 def _effective_model(session: Session) -> str:
-    return _metadata_value(session, "effective_model") or _list_last(session.models_used) or session.model
+    return _metadata_value(session, "effective_model") or _list_last(session.models_used) or str(session.model)
 
 
 def _requested_provider(session: Session, requested_model: str) -> str:
@@ -89,8 +95,22 @@ def _optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _scope_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
 def _working_dir(session: Session) -> str | None:
-    return _metadata_value(session, "cwd")
+    return _metadata_value(session, "worktree_path") or _metadata_value(session, "cwd")
+
+
+def _repo_root(session: Session) -> str | None:
+    return _metadata_value(session, "repo_root")
+
+
+def _worktree_path(session: Session) -> str | None:
+    return _metadata_value(session, "worktree_path") or _metadata_value(session, "cwd")
 
 
 def _is_worktree(working_dir: str | None) -> bool:
@@ -257,9 +277,18 @@ def _session_list_item(
         external_id=_optional_str(session.external_id),
         current_branch=_optional_str(session.current_branch),
         working_dir=working_dir,
+        repo_root=_repo_root(session),
+        worktree_path=_worktree_path(session),
+        host=_metadata_value(session, "host"),
+        tmux_session_name=_metadata_value(session, "tmux_session_name"),
+        tmux_pane_id=_metadata_value(session, "tmux_pane_id"),
         is_worktree=_is_worktree(working_dir),
         workstream_status=_optional_str(session.workstream_status),
         summary_oneliner=_optional_str(session.summary_oneliner),
+        declared_scope_paths=_scope_list(session.declared_scope_paths),
+        observed_read_paths=_scope_list(session.observed_read_paths),
+        observed_write_paths=_scope_list(session.observed_write_paths),
+        scope_confidence=_optional_str(session.scope_confidence),
         live_activity=build_live_activity_response(session),
         message_count=msg_counts.get(session.id, 0),
         total_input_tokens=session_tokens.get("input", 0),
@@ -302,6 +331,18 @@ def build_session_response(
         status=session.status,
         agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",
+        external_id=_optional_str(session.external_id),
+        current_branch=_optional_str(session.current_branch),
+        working_dir=_working_dir(session),
+        repo_root=_repo_root(session),
+        worktree_path=_worktree_path(session),
+        host=_metadata_value(session, "host"),
+        tmux_session_name=_metadata_value(session, "tmux_session_name"),
+        tmux_pane_id=_metadata_value(session, "tmux_pane_id"),
+        declared_scope_paths=_scope_list(session.declared_scope_paths),
+        observed_read_paths=_scope_list(session.observed_read_paths),
+        observed_write_paths=_scope_list(session.observed_write_paths),
+        scope_confidence=_optional_str(session.scope_confidence),
         created_at=session.created_at,
         updated_at=session.updated_at,
         live_activity=build_live_activity_response(session),

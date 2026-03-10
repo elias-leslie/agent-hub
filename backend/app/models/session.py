@@ -123,6 +123,11 @@ class Session(Base):
     )  # Array of providers used
     # Git branch at session creation time (for continuity scoping on close)
     current_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    declared_scope_paths: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
+    observed_read_paths: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
+    observed_write_paths: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
+    scope_confidence: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Session summary (populated by summary generator after session close)
     summary_oneliner: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_outcome: Mapped[str | None] = mapped_column(
@@ -166,6 +171,7 @@ class Session(Base):
     __table_args__ = (
         Index("ix_sessions_project_created", "project_id", "created_at"),
         Index("ix_sessions_parent", "parent_session_id"),
+        Index("ix_sessions_project_heartbeat", "project_id", "last_heartbeat_at"),
     )
 
 

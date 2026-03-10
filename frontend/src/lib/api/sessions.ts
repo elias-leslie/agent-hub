@@ -106,6 +106,9 @@ export interface SessionListItem {
   status: string;
   agent_slug: string | null;
   session_type: string;
+  parent_session_id?: string | null;
+  external_id?: string | null;
+  current_branch?: string | null;
   live_activity?: LiveActivity | null;
   message_count: number;
   total_input_tokens: number;
@@ -154,6 +157,18 @@ export async function fetchSession(id: string): Promise<Session> {
   const response = await fetchApi(`${API_BASE}/sessions/${id}`);
   if (!response.ok) {
     throw new Error(`Session fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function cancelSessionStream(sessionId: string): Promise<{ cancelled: boolean; session_id: string }> {
+  const response = await fetchApi(`${API_BASE}/complete/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!response.ok) {
+    throw new Error(`Session stream cancel failed: ${response.status}`);
   }
   return response.json();
 }

@@ -24,6 +24,10 @@ class OwnershipOwnerResponse(BaseModel):
         description="Derived ownership kind: scoped, unscoped, stale, retired, or superseded",
     )
     scope_paths: list[str] = Field(default_factory=list, description="Normalized touched/scope file paths")
+    declared_scope_paths: list[str] = Field(default_factory=list, description="Explicit declared scope paths")
+    observed_read_paths: list[str] = Field(default_factory=list, description="Observed recent read paths")
+    observed_write_paths: list[str] = Field(default_factory=list, description="Observed recent write paths")
+    scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
     updated_at: datetime | None = Field(default=None, description="Most recent activity timestamp")
     created_at: datetime = Field(..., description="Session creation timestamp")
     age_minutes: int = Field(..., description="Age in minutes from creation/update")
