@@ -1,5 +1,8 @@
 """Episode validation utilities."""
 
+from __future__ import annotations
+
+import re
 from typing import ClassVar
 
 
@@ -15,13 +18,22 @@ class EpisodeValidationError(Exception):
 class EpisodeValidator:
     """Validates episode content for quality and conciseness."""
 
-    # Verbose patterns that indicate conversational/verbose content
-    # Validation patterns
-    import re
-
-    HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*]+\*\*:")
+    HEADER_LABELS: ClassVar[dict[str, str]] = {
+        "mandate": "Mandate",
+        "guardrail": "Guardrail",
+        "reference": "Reference",
+    }
+    ANY_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*]+\*\*:")
+    TIER_HEADER_PATTERNS: ClassVar[dict[str, re.Pattern[str]]] = {
+        tier: re.compile(rf"^\*\*{label}\*\*:")
+        for tier, label in HEADER_LABELS.items()
+    }
     CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?<![\|])\s*::\s*|(?<!\|)\s*->\s*(?!\|)"
+    )
+    LIST_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?m)^\s*(?:[-*]|\d+\.)\s+")
+    MULTI_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"(?m)^\*\*(?:Mandate|Guardrail|Reference)\*\*:"
     )
     HEARTBEAT_JOURNAL_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
@@ -54,14 +66,19 @@ class EpisodeValidator:
         "note:",
         "important:",
     ]
+    IMPERATIVE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
+        r"^\*\*(?:Mandate|Guardrail|Reference)\*\*:\s*"
+        r"(?:Use|Never|Always|Check|Follow|Avoid|Run|Keep|Prefer|Treat|Record|Verify|Fix|Delete|Remove|Commit|Push|Restart|Rebuild)\b"
+    )
 
     @classmethod
-    def validate_content(cls, content: str) -> None:
+    def validate_content(cls, content: str, tier: str | None = None) -> None:
         """
         Validate episode content for conciseness and declarative style.
 
         Args:
             content: Episode content to validate
+            tier: Optional tier for exact header enforcement
 
         Raises:
             EpisodeValidationError: If content fails validation (header, conversational, delimiters)
@@ -69,13 +86,43 @@ class EpisodeValidator:
         detected = []
         content_lower = content.lower()
 
-        # Rule 1: Header format (**Topic**: ...)
-        if not cls.HEADER_PATTERN.match(content):
+        # Rule 1: Header format
+        header_pattern = cls.TIER_HEADER_PATTERNS.get(tier) if tier else cls.ANY_HEADER_PATTERN
+        if header_pattern is None:
             raise EpisodeValidationError(
-                message="Episode must start with a bold topic header. "
-                "Format: '**Topic**: Content...'. "
-                "Example: '**Service Scripts**: Use ./scripts/rebuild.sh...'",
-                detected_patterns=["Missing Header"],
+                message=f"Unsupported memory tier {tier!r}.",
+                detected_patterns=["Unsupported Tier"],
+            )
+        if not header_pattern.match(content):
+            if tier:
+                expected = f"**{cls.HEADER_LABELS[tier]}**:"
+                message = (
+                    f"Episode must start with the exact tier header {expected}. "
+                    "Use tier-matched headers so authority is unambiguous."
+                )
+                detected_patterns = ["Wrong Tier Header"]
+            else:
+                message = (
+                    "Episode must start with a bold topic header. "
+                    "Format: '**Topic**: Content...'. "
+                    "Example: '**Service Scripts**: Use ./scripts/rebuild.sh...'"
+                )
+                detected_patterns = ["Missing Header"]
+            raise EpisodeValidationError(
+                message=message,
+                detected_patterns=detected_patterns,
+            )
+
+        if tier and not cls.IMPERATIVE_PATTERN.match(content):
+            raise EpisodeValidationError(
+                message="Episode must start with a direct imperative after the tier header.",
+                detected_patterns=["Weak Imperative"],
+            )
+
+        if cls.LIST_PATTERN.search(content) or len(cls.MULTI_HEADER_PATTERN.findall(content)) > 1:
+            raise EpisodeValidationError(
+                message="Episode must express one atomic rule, not a list or multi-header block.",
+                detected_patterns=["Non-Atomic Structure"],
             )
 
         # Rule 6: Conversational patterns
@@ -102,7 +149,7 @@ class EpisodeValidator:
     @classmethod
     def validate_content_simple(cls, content: str) -> str | None:
         """
-        Validate episode content for conciseness and declarative style.
+        Lightweight validation for generated learnings.
 
         Returns error message if invalid, None if valid.
         Used by episode_creator_core for lightweight validation.
@@ -110,16 +157,18 @@ class EpisodeValidator:
         content_lower = content.lower()
         detected = []
 
+        if cls.CUSTOM_DELIMITER_PATTERN.search(content):
+            return "Do not use custom delimiters like '::' or '->'. Use standard punctuation or tables."
+
         for pattern in cls.VERBOSE_PATTERNS:
             if pattern in content_lower:
                 detected.append(pattern)
 
         if detected:
             return (
-                f"Content is too verbose. Write declarative facts, not conversational advice. "
+                "Content is too verbose. Write declarative facts, not conversational advice. "
                 f"Detected patterns: {', '.join(repr(p) for p in detected)}"
             )
-
         return None
 
     @classmethod
@@ -186,9 +235,9 @@ class EpisodeValidator:
                 detected_patterns=["Summary Too Short"],
             )
 
-        if len(summary) > 50:
+        if len(summary) > 40:
             raise EpisodeValidationError(
                 message=f"Summary is too long ({len(summary)} chars). "
-                "Keep it under 50 characters for the index.",
+                "Keep it under 40 characters for the index.",
                 detected_patterns=["Summary Too Long"],
             )
