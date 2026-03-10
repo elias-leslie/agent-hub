@@ -7,6 +7,8 @@ export interface PersonaStreamEventPreview {
   role: string | null;
   tool_name: string | null;
   content_preview: string | null;
+  tool_input_preview: string | null;
+  tool_output_preview: string | null;
   duration_ms: number | null;
   model_used: string | null;
 }
