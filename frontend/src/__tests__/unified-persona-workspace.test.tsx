@@ -8,6 +8,19 @@ const mockUseChatStream = vi.fn();
 const mockFetchSessionEvents = vi.fn();
 
 function buildPulseFields(overrides?: Partial<{
+  issue_markers: Array<{
+    event_id: string;
+    event_type: string;
+    created_at: string;
+    tool_name: string | null;
+    tags: string[];
+    primary_tag: string;
+    root_causes: string[];
+    primary_root_cause: string | null;
+    title: string;
+    summary: string;
+    fingerprint: string | null;
+  }>;
   pulse_tags: string[];
   primary_pulse_tag: string | null;
   root_causes: string[];
@@ -15,6 +28,7 @@ function buildPulseFields(overrides?: Partial<{
   pulse_summary: string | null;
 }>) {
   return {
+    issue_markers: [],
     pulse_tags: [],
     primary_pulse_tag: null,
     root_causes: [],
@@ -90,6 +104,21 @@ function buildStreamResponse(options?: {
           },
         ],
         ...buildPulseFields({
+          issue_markers: [
+            {
+              event_id: "preview-h-issue",
+              event_type: "assistant_message",
+              created_at: "2026-03-09T10:01:20Z",
+              tool_name: null,
+              tags: ["warning"],
+              primary_tag: "warning",
+              root_causes: ["context"],
+              primary_root_cause: "context",
+              title: "Completed with warnings",
+              summary: "The run finished but still needed follow-up.",
+              fingerprint: "warning:context",
+            },
+          ],
           pulse_tags: ["friction", "warning", "recovered"],
           primary_pulse_tag: "warning",
           root_causes: ["context"],
@@ -172,6 +201,21 @@ function buildStreamResponse(options?: {
           },
         ],
         ...buildPulseFields({
+          issue_markers: [
+            {
+              event_id: "preview-c-issue",
+              event_type: "tool_result",
+              created_at: "2026-03-09T10:02:10Z",
+              tool_name: "dt -q -d",
+              tags: ["tool_friction", "retries"],
+              primary_tag: "tool_friction",
+              root_causes: ["tool"],
+              primary_root_cause: "tool",
+              title: "dt -q -d hit tool friction",
+              summary: "The tool path wasted turns before progress resumed.",
+              fingerprint: "tool-friction:dt-q-d",
+            },
+          ],
           pulse_tags: ["friction", "tool_friction", "retries"],
           primary_pulse_tag: "tool_friction",
           root_causes: ["tool"],
@@ -492,6 +536,7 @@ describe("UnifiedPersonaWorkspace", () => {
 
     expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
     expect(screen.queryByText("Checked active work")).not.toBeInTheDocument();
+    expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
   });
 
   it("renders stream items in chronological order with newest at the bottom", async () => {
@@ -605,11 +650,14 @@ describe("UnifiedPersonaWorkspace", () => {
     });
 
     expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
-    expect(screen.getByText("Checks passed")).toBeInTheDocument();
+    expect(screen.getAllByText("Checks passed").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Overview").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("Issues").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Important events").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole("button", { name: /Show full trace/i })).toBeInTheDocument();
     expect(screen.queryByText(/PERSONA SAFETY BOUNDARIES/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Completed with warnings").length).toBeGreaterThan(0);
+    expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
     expect(screen.getAllByText("Warning").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recovered").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Tool Friction").length).toBeGreaterThan(0);

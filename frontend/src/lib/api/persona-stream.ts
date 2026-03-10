@@ -13,6 +13,20 @@ export interface PersonaStreamEventPreview {
   model_used: string | null;
 }
 
+export interface PersonaIssueMarker {
+  event_id: string;
+  event_type: string;
+  created_at: string;
+  tool_name: string | null;
+  tags: string[];
+  primary_tag: string;
+  root_causes: string[];
+  primary_root_cause: string | null;
+  title: string;
+  summary: string;
+  fingerprint: string | null;
+}
+
 export interface PersonaStreamEntry {
   id: string;
   entry_type: "message" | "heartbeat" | "child_run";
@@ -34,6 +48,7 @@ export interface PersonaStreamEntry {
   message_count: number;
   tool_count: number;
   event_previews: PersonaStreamEventPreview[];
+  issue_markers: PersonaIssueMarker[];
   pulse_tags: string[];
   primary_pulse_tag: string | null;
   root_causes: string[];

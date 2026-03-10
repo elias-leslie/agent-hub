@@ -41,6 +41,7 @@ import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } fr
 import { fetchSessionEvents } from "@/lib/api/sessions";
 import {
   type PersonaStreamMatch,
+  type PersonaIssueMarker,
   type PersonaPulseSummary,
   fetchPersonaStream,
   type PersonaStreamEventPreview,
@@ -50,8 +51,10 @@ import type { SessionEvent as LiveSessionEvent, TimelineEvent } from "@/types/ev
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
 import {
   entryHasPulseTag,
+  filterIssueMarkers,
   filterModeToPulseTag,
   type FilterMode,
+  visibleIssueMarkers,
   pulseTagToFilterMode,
   pulseTagClasses,
   pulseTagLabel,
@@ -819,6 +822,37 @@ function buildSessionDetailBlocks(events: TimelineEvent[]): SessionDetailBlock[]
   return blocks;
 }
 
+function blockMatchesIssueMarker(block: SessionDetailBlock, marker: PersonaIssueMarker): boolean {
+  if (block.id === marker.event_id || block.id.split(":").includes(marker.event_id)) {
+    return true;
+  }
+  const haystack = `${block.title ?? ""} ${block.lead ?? ""} ${block.textBlocks.join(" ")}`.toLowerCase();
+  if (marker.tool_name && haystack.includes(marker.tool_name.toLowerCase())) {
+    return true;
+  }
+  const markerWords = `${marker.title} ${marker.summary}`
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length > 4);
+  return markerWords.some((token) => haystack.includes(token));
+}
+
+function buildIssueDetailBlocks(
+  blocks: SessionDetailBlock[],
+  markers: PersonaIssueMarker[],
+): SessionDetailBlock[] {
+  const selected: SessionDetailBlock[] = [];
+  const seen = new Set<string>();
+  for (const marker of markers) {
+    const match = blocks.find((block) => blockMatchesIssueMarker(block, marker));
+    if (match && !seen.has(match.id)) {
+      seen.add(match.id);
+      selected.push(match);
+    }
+  }
+  return selected;
+}
+
 function outcomeToneClasses(hasErrors: boolean): string {
   return hasErrors
     ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
@@ -853,6 +887,52 @@ function formatRuntimeLabel(seconds: number | null): string | null {
     return `${Math.round(seconds / 60)}m median`;
   }
   return `${(seconds / 3600).toFixed(1)}h median`;
+}
+
+function EntryIssueSummary({
+  issueMarkers,
+}: {
+  issueMarkers: PersonaIssueMarker[];
+}) {
+  const markers = useMemo(() => {
+    return issueMarkers.slice(0, issueMarkers.length > 2 ? 3 : 2);
+  }, [issueMarkers]);
+
+  if (markers.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="mt-3 space-y-2">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+        Issues
+      </div>
+      <div className="space-y-2">
+        {markers.map((marker) => (
+          <div
+            key={`${marker.event_id}-${marker.primary_tag}`}
+            className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/50"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(marker.primary_tag))}>
+                {pulseTagLabel(marker.primary_tag)}
+              </span>
+              {marker.primary_root_cause && (
+                <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(marker.primary_root_cause))}>
+                  {rootCauseLabel(marker.primary_root_cause)}
+                </span>
+              )}
+            </div>
+            <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{marker.title}</div>
+            <HighlightedText
+              text={marker.summary}
+              className="mt-1 block text-sm text-slate-600 dark:text-slate-300"
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function SessionDetailBlockCard({
@@ -1213,9 +1293,13 @@ function liveStatusFromEvent(event: LiveSessionEvent): string | null {
 function SessionDetailsPanel({
   details,
   previewCount,
+  issueMarkers,
+  activeIssueTag,
 }: {
   details: SessionEventDetailsState | undefined;
   previewCount: number;
+  issueMarkers: PersonaIssueMarker[];
+  activeIssueTag: string | null;
 }) {
   const [showFullTrace, setShowFullTrace] = useState(false);
   const detailEvents = details?.events ?? [];
@@ -1224,9 +1308,14 @@ function SessionDetailsPanel({
     [detailEvents],
   );
   const blocks = useMemo(() => buildSessionDetailBlocks(detailEvents), [detailEvents]);
+  const filteredIssueMarkers = useMemo(() => filterIssueMarkers(issueMarkers, activeIssueTag), [activeIssueTag, issueMarkers]);
+  const issueBlocks = useMemo(
+    () => buildIssueDetailBlocks(blocks, filteredIssueMarkers),
+    [blocks, filteredIssueMarkers],
+  );
   const importantBlocks = useMemo(
-    () => blocks.filter((block) => block.defaultVisible),
-    [blocks],
+    () => blocks.filter((block) => block.defaultVisible && !issueBlocks.some((issueBlock) => issueBlock.id === block.id)),
+    [blocks, issueBlocks],
   );
   const visibleImportantBlocks = useMemo(
     () => {
@@ -1272,6 +1361,7 @@ function SessionDetailsPanel({
   const toolActivityCount = blocks.filter(
     (block) => block.eventType === "tool_use" || block.eventType === "tool_result",
   ).length;
+  const issueCount = filteredIssueMarkers.length;
   const visibleSectionTitle = showFullTrace ? "Full trace" : "Important events";
   const visibleSectionDescription = showFullTrace
     ? "Every recorded step is shown below in chronological order."
@@ -1281,6 +1371,7 @@ function SessionDetailsPanel({
   const overviewBadges = [
     `${blocks.length} event${blocks.length === 1 ? "" : "s"} recorded`,
     `${visibleImportantBlocks.length} key event${visibleImportantBlocks.length === 1 ? "" : "s"} surfaced`,
+    issueCount > 0 ? `${issueCount} issue${issueCount === 1 ? "" : "s"} highlighted` : "No issue markers",
     totalHiddenCount > 0 ? `${totalHiddenCount} routine item${totalHiddenCount === 1 ? "" : "s"} hidden` : "No routine items hidden",
     toolActivityCount > 0 ? `${toolActivityCount} tool step${toolActivityCount === 1 ? "" : "s"}` : null,
     errorCount > 0 ? `${errorCount} error${errorCount === 1 ? "" : "s"}` : "No errors recorded",
@@ -1311,6 +1402,47 @@ function SessionDetailsPanel({
           </div>
         </div>
       </section>
+
+      {filteredIssueMarkers.length > 0 && (
+        <section className="space-y-2">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              Issues
+            </div>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              The events below are the most likely sources of friction or failure in this run.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {issueBlocks.length > 0 ? (
+              issueBlocks.slice(0, 4).map((block) => <SessionDetailBlockCard key={`issue-${block.id}`} block={block} />)
+            ) : (
+              filteredIssueMarkers.slice(0, 4).map((marker) => (
+                <div
+                  key={`issue-marker-${marker.event_id}-${marker.primary_tag}`}
+                  className="rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-3 dark:border-slate-800 dark:bg-slate-950/50"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", pulseTagClasses(marker.primary_tag))}>
+                      {pulseTagLabel(marker.primary_tag)}
+                    </span>
+                    {marker.primary_root_cause && (
+                      <span className={cn("rounded-full px-2 py-0.5 text-[11px]", rootCauseClasses(marker.primary_root_cause))}>
+                        {rootCauseLabel(marker.primary_root_cause)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{marker.title}</div>
+                  <HighlightedText
+                    text={marker.summary}
+                    className="mt-1 block whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300"
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1357,6 +1489,7 @@ function RoutineHeartbeatGroup({
   expanded,
   onToggle,
   activeSessionId,
+  activeIssueTag,
   expandedEntryIds,
   onToggleEntry,
   sessionEventDetails,
@@ -1365,6 +1498,7 @@ function RoutineHeartbeatGroup({
   expanded: boolean;
   onToggle: () => void;
   activeSessionId: string | null;
+  activeIssueTag: string | null;
   expandedEntryIds: Record<string, boolean>;
   onToggleEntry: (entryId: string, sessionId: string) => void;
   sessionEventDetails: Record<string, SessionEventDetailsState>;
@@ -1419,6 +1553,7 @@ function RoutineHeartbeatGroup({
               <div className="min-w-0 flex-1">
                 <HeartbeatCard
                   entry={anchorItem.entry}
+                  activeIssueTag={activeIssueTag}
                   selected={anchorItem.sessionId === activeSessionId}
                   expanded={!!expandedEntryIds[anchorItem.id]}
                   onToggle={() => onToggleEntry(anchorItem.id, anchorItem.sessionId)}
@@ -1436,6 +1571,7 @@ function RoutineHeartbeatGroup({
 function ChildRunStack({
   childRuns,
   activeSessionId,
+  activeIssueTag,
   expandedEntryIds,
   onToggle,
   matchedIds,
@@ -1444,6 +1580,7 @@ function ChildRunStack({
 }: {
   childRuns: FeedChildRun[];
   activeSessionId: string | null;
+  activeIssueTag: string | null;
   expandedEntryIds: Record<string, boolean>;
   onToggle: (entryId: string, sessionId: string) => void;
   matchedIds: Set<string>;
@@ -1478,6 +1615,7 @@ function ChildRunStack({
               <div className="min-w-0 flex-1">
                 <ChildRunCard
                   entry={childRun.entry}
+                  activeIssueTag={activeIssueTag}
                   selected={selected}
                   expanded={!!expandedEntryIds[childRun.id]}
                   onToggle={() => onToggle(childRun.id, childRun.sessionId)}
@@ -1494,17 +1632,21 @@ function ChildRunStack({
 
 function ChildRunCard({
   entry,
+  activeIssueTag,
   selected,
   expanded,
   onToggle,
   details,
 }: {
   entry: PersonaStreamEntry;
+  activeIssueTag: string | null;
   selected: boolean;
   expanded: boolean;
   onToggle: () => void;
   details?: SessionEventDetailsState;
 }) {
+  const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
+
   return (
     <div
       className={cn(
@@ -1560,6 +1702,7 @@ function ChildRunCard({
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
             />
           )}
+          <EntryIssueSummary issueMarkers={issueMarkers} />
           {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
@@ -1570,7 +1713,14 @@ function ChildRunCard({
               {expanded ? "Hide run details" : "Show run details"}
             </button>
           )}
-          {expanded && <SessionDetailsPanel details={details} previewCount={entry.event_previews.length} />}
+          {expanded && (
+            <SessionDetailsPanel
+              details={details}
+              previewCount={entry.event_previews.length}
+              issueMarkers={issueMarkers}
+              activeIssueTag={activeIssueTag}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1579,17 +1729,21 @@ function ChildRunCard({
 
 function HeartbeatCard({
   entry,
+  activeIssueTag,
   selected,
   expanded,
   onToggle,
   details,
 }: {
   entry: PersonaStreamEntry;
+  activeIssueTag: string | null;
   selected: boolean;
   expanded: boolean;
   onToggle: () => void;
   details?: SessionEventDetailsState;
 }) {
+  const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
+
   return (
     <div
       className={cn(
@@ -1650,6 +1804,7 @@ function HeartbeatCard({
               className="mt-2 block text-xs text-slate-500 dark:text-slate-400"
             />
           )}
+          <EntryIssueSummary issueMarkers={issueMarkers} />
           {(entry.event_previews.length > 0 || details) && (
             <button
               type="button"
@@ -1660,7 +1815,14 @@ function HeartbeatCard({
               {expanded ? "Hide heartbeat details" : "Show heartbeat details"}
             </button>
           )}
-          {expanded && <SessionDetailsPanel details={details} previewCount={entry.event_previews.length} />}
+          {expanded && (
+            <SessionDetailsPanel
+              details={details}
+              previewCount={entry.event_previews.length}
+              issueMarkers={issueMarkers}
+              activeIssueTag={activeIssueTag}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -1702,6 +1864,7 @@ export function UnifiedPersonaWorkspace({
   const [firstUnreadItemId, setFirstUnreadItemId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoFollowRef = useRef(true);
+  const initialViewportTimeoutRef = useRef<number | null>(null);
   const programmaticScrollUntilRef = useRef(0);
   const initialViewportSettledRef = useRef(false);
   const lastReadItemIdRef = useRef<string | null>(null);
@@ -1748,6 +1911,13 @@ export function UnifiedPersonaWorkspace({
     programmaticScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_GRACE_MS;
     container.scrollTo({ top: container.scrollHeight, behavior });
   };
+
+  const clearInitialViewportTimeout = useCallback(() => {
+    if (initialViewportTimeoutRef.current != null) {
+      window.clearTimeout(initialViewportTimeoutRef.current);
+      initialViewportTimeoutRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     sessionEventDetailsRef.current = sessionEventDetails;
@@ -1957,12 +2127,13 @@ export function UnifiedPersonaWorkspace({
         return;
       }
       if (autoFollowRef.current && !nearBottom) {
+        clearInitialViewportTimeout();
         setAutoFollow(false);
       }
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [latestItemId]);
+  }, [clearInitialViewportTimeout, latestItemId]);
 
   useEffect(() => {
     if (currentSessionId) {
@@ -1979,7 +2150,8 @@ export function UnifiedPersonaWorkspace({
 
   useEffect(() => {
     initialViewportSettledRef.current = false;
-  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, activeSessionId]);
+    clearInitialViewportTimeout();
+  }, [timeRange, deferredSearch, focusSessionId, anchorEntryId, activeSessionId, clearInitialViewportTimeout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2055,12 +2227,15 @@ export function UnifiedPersonaWorkspace({
       return;
     }
     initialViewportSettledRef.current = true;
-    window.setTimeout(() => {
+    clearInitialViewportTimeout();
+    initialViewportTimeoutRef.current = window.setTimeout(() => {
       scrollToBottom("auto");
       setIsAtBottom(true);
       markLatestAsRead();
+      initialViewportTimeoutRef.current = null;
     }, 0);
-  }, [loading, autoFollow, deferredSearch, focusSessionId, anchorEntryId, hydratedEntries.length, messages.length]);
+    return () => clearInitialViewportTimeout();
+  }, [anchorEntryId, autoFollow, clearInitialViewportTimeout, deferredSearch, focusSessionId, hydratedEntries.length, loading, messages.length]);
 
   useEffect(() => {
     if (!latestItemId) {
@@ -2476,11 +2651,13 @@ export function UnifiedPersonaWorkspace({
     () => pulse.metrics.filter((metric) => metric.count > 0 || metric.key === "friction"),
     [pulse.metrics],
   );
+  const activeIssueTag = filterMode === "friction" ? "friction" : filterModeToPulseTag(filterMode);
 
   const applyPulseFilter = (nextMode: FilterMode, nextAnchorEntryId?: string | null) => {
     setFilterMode(nextMode);
     if (nextAnchorEntryId) {
       setAnchorEntryId(nextAnchorEntryId);
+      setExpandedEntryIds((current) => ({ ...current, [nextAnchorEntryId]: true }));
       setAutoFollow(false);
     }
   };
@@ -2832,6 +3009,7 @@ export function UnifiedPersonaWorkspace({
                         expanded={!!expandedRoutineGroupIds[row.block.id]}
                         onToggle={() => toggleRoutineGroup(row.block.id)}
                         activeSessionId={selectedSessionId}
+                        activeIssueTag={activeIssueTag}
                         expandedEntryIds={expandedEntryIds}
                         onToggleEntry={toggleExpanded}
                         sessionEventDetails={sessionEventDetails}
@@ -2882,6 +3060,7 @@ export function UnifiedPersonaWorkspace({
                             <ChildRunStack
                               childRuns={row.childRuns}
                               activeSessionId={selectedSessionId}
+                              activeIssueTag={activeIssueTag}
                               expandedEntryIds={expandedEntryIds}
                               onToggle={toggleExpanded}
                               matchedIds={matchedIds}
@@ -2903,6 +3082,7 @@ export function UnifiedPersonaWorkspace({
                         <div className="min-w-0 flex-1">
                           <ChildRunCard
                             entry={item.entry}
+                            activeIssueTag={activeIssueTag}
                             selected={selected}
                             expanded={!!expandedEntryIds[item.id]}
                             onToggle={() => toggleExpanded(item.id, item.sessionId)}
@@ -2922,6 +3102,7 @@ export function UnifiedPersonaWorkspace({
                         <div className="min-w-0 flex-1">
                           <HeartbeatCard
                             entry={item.entry}
+                            activeIssueTag={activeIssueTag}
                             selected={selected}
                             expanded={!!expandedEntryIds[item.id]}
                             onToggle={() => toggleExpanded(item.id, item.sessionId)}
@@ -2931,6 +3112,7 @@ export function UnifiedPersonaWorkspace({
                             <ChildRunStack
                               childRuns={row.childRuns}
                               activeSessionId={selectedSessionId}
+                              activeIssueTag={activeIssueTag}
                               expandedEntryIds={expandedEntryIds}
                               onToggle={toggleExpanded}
                               matchedIds={matchedIds}

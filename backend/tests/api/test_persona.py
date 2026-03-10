@@ -540,6 +540,7 @@ class TestPersonaStreamHelpers:
 
     def test_build_stream_entries_includes_messages_heartbeats_and_child_runs(self) -> None:
         from app.api.persona.pulse import SessionPulse
+        from app.api.persona.schemas import PersonaIssueMarker, PersonaStreamEventPreview
         from app.api.persona.stream import _build_stream_entries
 
         base_time = datetime.now(UTC)
@@ -583,34 +584,49 @@ class TestPersonaStreamHelpers:
             tool_counts={"chat-1": 0, "hb-1": 4, "child-1": 2},
             event_previews={
                 "hb-1": [
-                    {
-                        "id": "preview-1",
-                        "event_type": "tool_use",
-                        "created_at": base_time - timedelta(minutes=2),
-                        "tool_name": "st ready-all",
-                        "content_preview": None,
-                        "tool_input_preview": '{"project":"agent-hub"}',
-                        "tool_output_preview": None,
-                        "duration_ms": None,
-                        "model_used": "claude-sonnet",
-                    }
+                    PersonaStreamEventPreview(
+                        id="preview-1",
+                        event_type="tool_use",
+                        created_at=base_time - timedelta(minutes=2),
+                        tool_name="st ready-all",
+                        content_preview=None,
+                        tool_input_preview='{"project":"agent-hub"}',
+                        tool_output_preview=None,
+                        duration_ms=None,
+                        model_used="claude-sonnet",
+                    )
                 ],
                 "child-1": [
-                    {
-                        "id": "preview-2",
-                        "event_type": "tool_result",
-                        "created_at": base_time - timedelta(minutes=1),
-                        "tool_name": "dt -q -d",
-                        "content_preview": "passed",
-                        "tool_input_preview": None,
-                        "tool_output_preview": '{"status":"ok"}',
-                        "duration_ms": 1200,
-                        "model_used": "claude-sonnet",
-                    }
+                    PersonaStreamEventPreview(
+                        id="preview-2",
+                        event_type="tool_result",
+                        created_at=base_time - timedelta(minutes=1),
+                        tool_name="dt -q -d",
+                        content_preview="passed",
+                        tool_input_preview=None,
+                        tool_output_preview='{"status":"ok"}',
+                        duration_ms=1200,
+                        model_used="claude-sonnet",
+                    )
                 ],
             },
             session_pulses={
                 "hb-1": SessionPulse(
+                    issue_markers=[
+                        PersonaIssueMarker(
+                            event_id="preview-1",
+                            event_type="tool_use",
+                            created_at=base_time - timedelta(minutes=2),
+                            tool_name="st ready-all",
+                            tags=["warning"],
+                            primary_tag="warning",
+                            root_causes=["context"],
+                            primary_root_cause="context",
+                            title="Work stalled waiting on context or follow-up",
+                            summary="The run waited on follow-up.",
+                            fingerprint="warning:context",
+                        )
+                    ],
                     tags=["friction", "warning"],
                     primary_tag="warning",
                     root_causes=["context"],
@@ -618,6 +634,21 @@ class TestPersonaStreamHelpers:
                     summary="completed with warnings",
                 ),
                 "child-1": SessionPulse(
+                    issue_markers=[
+                        PersonaIssueMarker(
+                            event_id="preview-2",
+                            event_type="tool_result",
+                            created_at=base_time - timedelta(minutes=1),
+                            tool_name="dt -q -d",
+                            tags=["tool_friction"],
+                            primary_tag="tool_friction",
+                            root_causes=["tool"],
+                            primary_root_cause="tool",
+                            title="dt -q -d hit tool friction",
+                            summary="The tool path wasted turns before progress resumed.",
+                            fingerprint="tool-friction:dt-q-d",
+                        )
+                    ],
                     tags=["friction", "tool_friction", "retries"],
                     primary_tag="tool_friction",
                     root_causes=["tool"],
@@ -637,17 +668,20 @@ class TestPersonaStreamHelpers:
         assert heartbeat_entry.live_summary == "Checking tasks"
         assert heartbeat_entry.event_previews[0].tool_name == "st ready-all"
         assert heartbeat_entry.event_previews[0].tool_input_preview == '{"project":"agent-hub"}'
+        assert heartbeat_entry.issue_markers[0].title == "Work stalled waiting on context or follow-up"
         assert heartbeat_entry.pulse_tags == ["friction", "warning"]
         assert heartbeat_entry.primary_root_cause == "context"
         assert child_entry.agent_slug == "git-agent"
         assert child_entry.current_branch == "task-branch"
         assert child_entry.event_previews[0].content_preview == "passed"
         assert child_entry.event_previews[0].tool_output_preview == '{"status":"ok"}'
+        assert child_entry.issue_markers[0].fingerprint == "tool-friction:dt-q-d"
         assert child_entry.primary_pulse_tag == "tool_friction"
         assert child_entry.pulse_summary == "tool friction detected"
 
-    def test_classify_session_pulse_detects_tool_friction_instruction_drift_and_recovery(self) -> None:
+    def test_classify_session_pulse_builds_issue_markers_from_previews(self) -> None:
         from app.api.persona.pulse import classify_session_pulse
+        from app.api.persona.schemas import PersonaStreamEventPreview
 
         session = _make_mock_session(
             "child-1",
@@ -657,34 +691,43 @@ class TestPersonaStreamHelpers:
             created_at=datetime.now(UTC) - timedelta(minutes=3),
             updated_at=datetime.now(UTC),
         )
-        events = [
-            _make_mock_event(
-                "child-1",
+        previews = [
+            PersonaStreamEventPreview(
+                id="preview-1",
                 event_type=SessionEventType.TOOL_USE,
+                created_at=datetime.now(UTC) - timedelta(minutes=3),
                 tool_name="shell",
-                tool_input={"command": "pytest tests/api/test_persona.py"},
+                content_preview=None,
+                tool_input_preview='{"command": "pytest tests/api/test_persona.py"}',
+                tool_output_preview=None,
+                duration_ms=None,
+                model_used="claude-sonnet",
             ),
-            _make_mock_event(
-                "child-1",
+            PersonaStreamEventPreview(
+                id="preview-2",
                 event_type=SessionEventType.TOOL_RESULT,
+                created_at=datetime.now(UTC) - timedelta(minutes=2),
                 tool_name="shell",
-                tool_output={"status": "failed", "stderr": "dt not found", "exit_code": 1, "is_error": True},
+                content_preview=None,
+                tool_input_preview=None,
+                tool_output_preview='{"status": "failed", "stderr": "dt not found", "exit_code": 1, "is_error": true}',
+                duration_ms=300,
+                model_used="claude-sonnet",
             ),
-            _make_mock_event(
-                "child-1",
-                event_type=SessionEventType.TOOL_USE,
-                tool_name="dt -q -d",
-                tool_input={"command": "dt -q -d"},
-            ),
-            _make_mock_event(
-                "child-1",
+            PersonaStreamEventPreview(
+                id="preview-3",
                 event_type=SessionEventType.TOOL_RESULT,
+                created_at=datetime.now(UTC) - timedelta(minutes=1),
                 tool_name="dt -q -d",
-                tool_output={"status": "ok", "content": "Checks passed", "exit_code": 0},
+                content_preview="Checks passed",
+                tool_input_preview=None,
+                tool_output_preview='{"status": "ok", "content": "Checks passed", "exit_code": 0}',
+                duration_ms=500,
+                model_used="claude-sonnet",
             ),
         ]
 
-        pulse = classify_session_pulse(session, events)
+        pulse = classify_session_pulse(session, previews)
 
         assert "friction" in pulse.tags
         assert "instruction_drift" in pulse.tags
@@ -693,11 +736,13 @@ class TestPersonaStreamHelpers:
         assert pulse.primary_tag == "instruction_drift"
         assert pulse.primary_root_cause == "workflow"
         assert pulse.summary is not None
-        assert "raw pytest" in pulse.summary.lower()
+        assert "recovered before completion" in pulse.summary.lower()
+        assert any(marker.primary_tag == "instruction_drift" for marker in pulse.issue_markers)
+        assert any(marker.title == "shell failed" for marker in pulse.issue_markers)
 
     def test_build_pulse_summary_groups_repeated_issue_fingerprints(self) -> None:
         from app.api.persona.pulse import SessionPulse, build_pulse_summary
-        from app.api.persona.schemas import PersonaStreamEntry
+        from app.api.persona.schemas import PersonaIssueMarker, PersonaStreamEntry
 
         base_time = datetime.now(UTC)
         sessions = [
@@ -729,6 +774,21 @@ class TestPersonaStreamHelpers:
                 agent_slug="git-agent",
                 session_type="completion",
                 status="completed",
+                issue_markers=[
+                    PersonaIssueMarker(
+                        event_id="preview-1",
+                        event_type="tool_result",
+                        created_at=base_time - timedelta(minutes=5),
+                        tool_name="dt -q -d",
+                        tags=["tool_friction"],
+                        primary_tag="tool_friction",
+                        root_causes=["tool"],
+                        primary_root_cause="tool",
+                        title="dt -q -d hit tool friction",
+                        summary="The tool path wasted turns before progress resumed.",
+                        fingerprint="tool-friction:dt-q-d",
+                    )
+                ],
                 pulse_tags=["friction", "tool_friction"],
                 primary_pulse_tag="tool_friction",
                 root_causes=["tool"],
@@ -745,6 +805,21 @@ class TestPersonaStreamHelpers:
                 agent_slug="git-agent",
                 session_type="completion",
                 status="completed",
+                issue_markers=[
+                    PersonaIssueMarker(
+                        event_id="preview-2",
+                        event_type="tool_result",
+                        created_at=base_time - timedelta(minutes=3),
+                        tool_name="dt -q -d",
+                        tags=["tool_friction"],
+                        primary_tag="tool_friction",
+                        root_causes=["tool"],
+                        primary_root_cause="tool",
+                        title="dt -q -d hit tool friction",
+                        summary="The tool path wasted turns before progress resumed.",
+                        fingerprint="tool-friction:dt-q-d",
+                    )
+                ],
                 pulse_tags=["friction", "tool_friction"],
                 primary_pulse_tag="tool_friction",
                 root_causes=["tool"],
@@ -754,22 +829,48 @@ class TestPersonaStreamHelpers:
         ]
         session_pulses = {
             "child-1": SessionPulse(
+                issue_markers=[
+                    PersonaIssueMarker(
+                        event_id="preview-1",
+                        event_type="tool_result",
+                        created_at=base_time - timedelta(minutes=5),
+                        tool_name="dt -q -d",
+                        tags=["tool_friction"],
+                        primary_tag="tool_friction",
+                        root_causes=["tool"],
+                        primary_root_cause="tool",
+                        title="dt -q -d hit tool friction",
+                        summary="The tool path wasted turns before progress resumed.",
+                        fingerprint="tool-friction:dt-q-d",
+                    )
+                ],
                 tags=["friction", "tool_friction"],
                 primary_tag="tool_friction",
                 root_causes=["tool"],
                 primary_root_cause="tool",
                 summary="dt -q -d hit repeated tool friction",
-                fingerprint="tool-friction:dt-q-d",
-                issue_title="dt -q -d kept failing or wasting turns",
             ),
             "child-2": SessionPulse(
+                issue_markers=[
+                    PersonaIssueMarker(
+                        event_id="preview-2",
+                        event_type="tool_result",
+                        created_at=base_time - timedelta(minutes=3),
+                        tool_name="dt -q -d",
+                        tags=["tool_friction"],
+                        primary_tag="tool_friction",
+                        root_causes=["tool"],
+                        primary_root_cause="tool",
+                        title="dt -q -d hit tool friction",
+                        summary="The tool path wasted turns before progress resumed.",
+                        fingerprint="tool-friction:dt-q-d",
+                    )
+                ],
                 tags=["friction", "tool_friction"],
                 primary_tag="tool_friction",
                 root_causes=["tool"],
                 primary_root_cause="tool",
                 summary="dt -q -d hit repeated tool friction",
-                fingerprint="tool-friction:dt-q-d",
-                issue_title="dt -q -d kept failing or wasting turns",
             ),
         }
 
@@ -779,6 +880,7 @@ class TestPersonaStreamHelpers:
         assert pulse.metrics[0].count == 2
         assert pulse.issue_groups[0].fingerprint == "tool-friction:dt-q-d"
         assert pulse.issue_groups[0].count == 2
+        assert pulse.issue_groups[0].title == "dt -q -d hit tool friction"
         assert pulse.agent_scorecards[0].agent_slug == "git-agent"
         assert pulse.agent_scorecards[0].tool_friction_count == 2
 
