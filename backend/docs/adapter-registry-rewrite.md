@@ -20,10 +20,10 @@ The adapter layer had grown organically and suffered from:
 
 ### Phase 0: Unified Adapter Registry (`3c786fd`)
 
-Created `backend/app/adapters/registry.py` — a single registry for all 9 providers:
+Created `backend/app/adapters/registry.py` — a single registry for all 11 providers:
 
 ```
-claude, gemini, cloudcode, codex, openai, openrouter, xai, zhipu, minimax
+claude, gemini, cloudcode, codex, openai, openrouter, xai, zhipu, minimax, nvidia, cloudflare
 ```
 
 **Key design decisions:**
@@ -138,7 +138,7 @@ Supports both async iteration (streaming events) and `.result()` awaiting (get f
 ```
                     ┌─────────────────────┐
                     │   registry.py       │
-                    │   (9 providers)     │
+                    │   (11 providers)    │
                     │   get_adapter()     │
                     │   supports_tools()  │
                     └────────┬────────────┘
