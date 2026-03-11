@@ -185,7 +185,8 @@ class AsyncAgentHubClient(
             skip_cache=skip_cache,
         )
 
-        headers = self._inject_tracking_headers("sdk.complete")
+        extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
+        headers = self._inject_tracking_headers("sdk.complete", extra_headers=extra_headers)
         # HTTP timeout must cover all turns. The server enforces per-turn inactivity
         # timeout internally — the SDK just needs a generous ceiling.
         if timeout_seconds and max_turns > 1:
