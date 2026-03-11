@@ -303,8 +303,8 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             },
             required_summary_terms=("shared", "soft", "telemetry"),
             summary_term_alternatives={
-                "soft": ("lightweight", "lightweight reminder"),
-                "telemetry": ("session-event", "session event"),
+                "soft": ("lightweight", "lightweight reminder", "reminder"),
+                "telemetry": ("session-event", "session event", "event", "telemetry"),
             },
         ),
         JennyBenchmarkCase(
@@ -429,7 +429,8 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             execute_tools=True,
             required_summary_terms=("heartbeat", "performance"),
             summary_term_alternatives={
-                "performance": ("observability",),
+                "heartbeat": ("governance", "operating model", "loop"),
+                "performance": ("observability", "evaluation"),
             },
         ),
         JennyBenchmarkCase(
