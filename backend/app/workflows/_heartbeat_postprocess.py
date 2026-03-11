@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from app.workflows._completion_review import CompletionReviewOutcome, review_persona_completion
 from app.workflows._session_postprocess import (
     ensure_session_summary as _shared_ensure_session_summary,
 )
@@ -56,10 +57,32 @@ async def postprocess_heartbeat(
 
     # 4. Retry MCP tools that failed with "Stream closed"
     mcp_retried = await _retry_failed_mcp_tools(session_id)
-    followup_reason = await _maybe_get_followup_reason(content)
+    cleanup_status = await _get_cleanup_status_summary()
+    workstream_inventory = await _get_workstream_inventory()
+    completion_review = await _maybe_review_completion(
+        content=content,
+        session_id=session_id,
+        target_project_id=target_project_id,
+        cleanup_status=cleanup_status,
+        workstream_inventory=workstream_inventory,
+    )
+    followup_reason = _detect_followup_reason(content, cleanup_status, workstream_inventory)
+    followup_note = None
+    if followup_reason is None and completion_review and completion_review.used:
+        if completion_review.decision == "continue":
+            followup_reason = "completion_review_continue"
+            followup_note = completion_review.reason
+        elif completion_review.decision == "escalate":
+            followup_reason = "completion_review_escalate"
+            followup_note = completion_review.reason
     followup_dispatched = False
     if followup_reason:
-        followup_dispatched = await _dispatch_followup_wake(followup_reason, target_project_id)
+        followup_dispatched = await _dispatch_followup_wake(
+            followup_reason,
+            target_project_id,
+            note=followup_note,
+            parent_session_id=session_id,
+        )
 
     return HeartbeatResult(
         status=status,
@@ -72,6 +95,12 @@ async def postprocess_heartbeat(
         mcp_retried=mcp_retried,
         followup_dispatched=followup_dispatched,
         followup_reason=followup_reason,
+        completion_review_used=bool(completion_review and completion_review.used),
+        completion_review_decision=completion_review.decision if completion_review else None,
+        completion_review_reason=completion_review.reason if completion_review else None,
+        completion_review_session_id=completion_review.session_id if completion_review else None,
+        completion_review_agent_slug=completion_review.reviewer_agent_slug if completion_review else None,
+        completion_review_model_id=completion_review.reviewer_model_id if completion_review else None,
     )
 
 
@@ -147,25 +176,45 @@ def _detect_followup_reason(
     return None
 
 
-async def _maybe_get_followup_reason(content: str) -> str | None:
+async def _maybe_review_completion(
+    *,
+    content: str,
+    session_id: str,
+    target_project_id: str | None,
+    cleanup_status: str,
+    workstream_inventory: str,
+) -> CompletionReviewOutcome | None:
     if "HEARTBEAT_OK" not in (content or ""):
         return None
-    cleanup_status = await _get_cleanup_status_summary()
-    workstream_inventory = await _get_workstream_inventory()
-    return _detect_followup_reason(content, cleanup_status, workstream_inventory)
+    if _detect_followup_reason(content, cleanup_status, workstream_inventory):
+        return None
+    return await review_persona_completion(
+        project_id=target_project_id or "persona-sandbox",
+        completion_content=content,
+        cleanup_status=cleanup_status,
+        workstream_inventory=workstream_inventory,
+        parent_session_id=session_id,
+    )
 
 
-def _build_followup_prompt(reason: str) -> str:
+def _build_followup_prompt(reason: str, note: str | None = None) -> str:
+    detail = f"\nReviewer note: {note}\n" if note else "\n"
     return (
         "The previous heartbeat ended with HEARTBEAT_OK, but a post-run check still showed "
-        f"obvious unresolved canonical residue: {reason}.\n\n"
+        f"obvious unresolved canonical residue: {reason}.{detail}\n"
         "Re-check only that residue chain and do the concrete next step if it is still valid. "
         "If it is no longer actionable, say why. Do not start speculative new work, model review, "
         "or broad exploration."
     )
 
 
-async def _dispatch_followup_wake(reason: str, target_project_id: str | None = None) -> bool:
+async def _dispatch_followup_wake(
+    reason: str,
+    target_project_id: str | None = None,
+    *,
+    note: str | None = None,
+    parent_session_id: str | None = None,
+) -> bool:
     from app.db import async_session
     from app.workflows.persona_heartbeat import HEARTBEAT_PROJECT, _resolve_persona
     from app.workflows.persona_wake import dispatch_wake
@@ -181,10 +230,11 @@ async def _dispatch_followup_wake(reason: str, target_project_id: str | None = N
         model=model,
         provider=provider,
         temperature=temperature,
-        prompt=_build_followup_prompt(reason),
+        prompt=_build_followup_prompt(reason, note=note),
         project_id=target_project_id or HEARTBEAT_PROJECT,
-        event_type="heartbeat_followup",
+        event_type="heartbeat_completion_review" if reason.startswith("completion_review_") else "heartbeat_followup",
         thinking_level=thinking_level,
+        parent_session_id=parent_session_id,
     )
     return True
 

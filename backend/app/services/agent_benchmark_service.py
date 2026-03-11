@@ -342,6 +342,17 @@ async def capture_benchmark_config_snapshot(agent_slug: str) -> dict[str, Any]:
                     "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest()[:8],
                     "content_length": len(content),
                 }
+            reviewer_agent = await db.scalar(select(Agent).where(Agent.slug == "supervisor"))
+            if reviewer_agent is not None:
+                snapshot["completion_reviewer"] = {
+                    "agent_slug": reviewer_agent.slug,
+                    "agent_version": reviewer_agent.version,
+                    "primary_model_id": reviewer_agent.primary_model_id,
+                    "fallback_models": list(reviewer_agent.fallback_models or []),
+                    "escalation_model_id": reviewer_agent.escalation_model_id,
+                    "thinking_level": reviewer_agent.thinking_level,
+                    "temperature": reviewer_agent.temperature,
+                }
         return snapshot
 
 
