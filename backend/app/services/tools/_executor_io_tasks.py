@@ -7,10 +7,16 @@ import logging
 import shlex
 import tempfile
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from app.services.cleanup_summary import build_actionable_cleanup_summary
+from app.services.ownership_lanes import (
+    STALE_WORKSTREAM_IDLE_MINUTES,
+    idle_minutes_from_timestamps,
+)
 
 logger = logging.getLogger(__name__)
+_CANONICAL_TASK_ID_PREFIX = "task-"
 
 
 def _st_cmd(subcommand: str, project_id: str | None = None) -> str:
@@ -143,6 +149,63 @@ async def _cleanup_dispatch_block_reason(
     return None, cleanup_status
 
 
+async def _live_dispatch_block_reason(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str | None:
+    """Return a blocking reason when same-task live state says to wait or reconcile."""
+    if not project_id or not task_id.startswith(_CANONICAL_TASK_ID_PREFIX):
+        return None
+
+    from ._executor_io_lanes import (
+        _get_task_status,
+        _has_recent_execution_activity,
+        _load_task_lane_sessions,
+    )
+
+    task_status = await _get_task_status(bash_fn, task_id, project_id)
+    sessions = await _load_task_lane_sessions(task_id)
+    active_sessions = [session for session in sessions if getattr(session, "status", None) == "active"]
+    task_detail = f" (task={task_status})" if task_status else ""
+
+    if active_sessions:
+        now = datetime.now(UTC)
+        freshest_idle = min(
+            idle_minutes_from_timestamps(
+                created_at=getattr(session, "created_at", None),
+                updated_at=getattr(session, "updated_at", None),
+                workstream_updated_at=getattr(session, "workstream_updated_at", None),
+                now=now,
+            )
+            for session in active_sessions
+        )
+        if freshest_idle < STALE_WORKSTREAM_IDLE_MINUTES:
+            return (
+                f"Dispatch blocked for {task_id}: same task already has {len(active_sessions)} "
+                f"active session(s){task_detail} with fresh progress ({freshest_idle}m idle). "
+                "Wait or monitor the current lane instead of redispatching."
+            )
+        return (
+            f"Dispatch blocked for {task_id}: same task still has {len(active_sessions)} "
+            f"stale active session(s){task_detail} ({freshest_idle}m idle). "
+            "Inspect or reconcile the current lane before dispatching again."
+        )
+
+    if task_status == "running":
+        if await _has_recent_execution_activity(bash_fn, task_id, project_id):
+            return (
+                f"Dispatch blocked for {task_id}: task is already running and shows recent "
+                "autonomous activity. Wait or inspect the current lane instead of redispatching."
+            )
+        return (
+            f"Dispatch blocked for {task_id}: task is already running{task_detail} without fresh "
+            "session evidence. Inspect or reconcile the current lane before dispatching again."
+        )
+
+    return None
+
+
 async def _handle_dispatch(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
@@ -152,6 +215,9 @@ async def _handle_dispatch(
     block_reason, cleanup_status = await _cleanup_dispatch_block_reason(bash_fn, project_id)
     if block_reason:
         return block_reason
+    live_block = await _live_dispatch_block_reason(bash_fn, task_id, project_id)
+    if live_block:
+        return live_block
     warning = await _build_dispatch_warning(bash_fn, project_id, cleanup_status=cleanup_status)
     result = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
     return warning + result

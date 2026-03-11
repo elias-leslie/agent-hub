@@ -811,6 +811,117 @@ class TestManageTasks:
         assert mock_bash.await_count == 3
 
     @pytest.mark.asyncio
+    async def test_dispatch_blocks_when_same_task_has_fresh_active_session(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "TASK:task-42|running|P2|task|SIMPLE",
+            ]
+        )
+        mock_db = AsyncMock()
+        active_session = MagicMock(
+            status="active",
+            created_at=datetime.now(UTC) - timedelta(minutes=2),
+            updated_at=datetime.now(UTC) - timedelta(minutes=2),
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [active_session]
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="task-42",
+                project_id="agent-hub",
+            )
+
+        assert "Dispatch blocked for task-42" in result
+        assert "same task already has 1 active session" in result
+        assert "fresh progress" in result
+        assert "Wait or monitor" in result
+        assert mock_bash.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_dispatch_blocks_when_running_task_has_recent_execution_activity(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        recent_line = (
+            f"{datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}|INFO|Starting autonomous execution"
+        )
+        mock_bash = AsyncMock(
+            side_effect=[
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "TASK:task-42|running|P2|task|SIMPLE",
+                f"{recent_line}\n",
+            ]
+        )
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="task-42",
+                project_id="agent-hub",
+            )
+
+        assert "Dispatch blocked for task-42" in result
+        assert "recent autonomous activity" in result
+        assert "Wait or inspect" in result
+        assert mock_bash.await_count == 3
+
+    @pytest.mark.asyncio
+    async def test_dispatch_blocks_running_task_without_fresh_session_evidence(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "TASK:task-42|running|P2|task|SIMPLE",
+                "",
+            ]
+        )
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="task-42",
+                project_id="agent-hub",
+            )
+
+        assert "Dispatch blocked for task-42" in result
+        assert "already running" in result
+        assert "Inspect or reconcile" in result
+        assert mock_bash.await_count == 3
+
+    @pytest.mark.asyncio
     async def test_cleanup_status_requires_project_id(self):
         from app.services.tools._executor_io import manage_tasks
 
