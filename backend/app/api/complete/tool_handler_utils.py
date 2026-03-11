@@ -86,18 +86,22 @@ async def _run_tool_loop(
 
     terminal_error_message: str | None = None
 
-    async for event, _session_id in event_stream:
-        state.turn, tools_delta, error_message = await process_tool_event(
-            event, state.turn, session_id, db, state.content_parts,
-            state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
-            tool_use_id_to_name=tool_use_id_to_name,
-        )
-        state.tool_calls_count += tools_delta
+    try:
+        async for event, _session_id in event_stream:
+            state.turn, tools_delta, error_message = await process_tool_event(
+                event, state.turn, session_id, db, state.content_parts,
+                state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
+                tool_use_id_to_name=tool_use_id_to_name,
+            )
+            state.tool_calls_count += tools_delta
 
-        if error_message and terminal_error_message is None:
-            # Record the terminal error, but keep draining the provider stream so
-            # SDK-backed generators can unwind cleanly on their own task boundary.
-            terminal_error_message = error_message
+            if error_message and terminal_error_message is None:
+                # Record the terminal error, but keep draining the provider stream so
+                # SDK-backed generators can unwind cleanly on their own task boundary.
+                terminal_error_message = error_message
+    finally:
+        if hasattr(event_stream, "aclose"):
+            await event_stream.aclose()
 
     if terminal_error_message:
         return build_error_result(

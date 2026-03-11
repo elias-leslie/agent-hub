@@ -410,7 +410,7 @@ class TestSDKOptionsYoloMode:
 
         assert captured_opts.get("permission_mode") == "acceptEdits"
         assert "settings" in captured_opts
-        assert "hooks" in captured_opts
+        assert "hooks" not in captured_opts
 
     @pytest.mark.asyncio
     async def test_granular_without_working_dir_sets_can_use_tool(self) -> None:
@@ -459,8 +459,8 @@ class TestSDKOptionsYoloMode:
         assert callable(captured_opts.get("can_use_tool"))
 
     @pytest.mark.asyncio
-    async def test_granular_with_working_dir_uses_both(self) -> None:
-        """Non-yolo with working_dir uses settings enforcement + can_use_tool fallback."""
+    async def test_granular_with_working_dir_uses_settings_only(self) -> None:
+        """Non-yolo with working_dir uses settings enforcement only."""
         from app.adapters.base import Message
 
         captured_opts: dict[str, Any] = {}
@@ -504,9 +504,8 @@ class TestSDKOptionsYoloMode:
         # Settings-based enforcement is primary
         assert captured_opts.get("permission_mode") == "acceptEdits"
         assert "settings" in captured_opts
-        assert "hooks" in captured_opts
-        # can_use_tool kept as fallback for non-builtin tools
-        assert callable(captured_opts.get("can_use_tool"))
+        assert "hooks" not in captured_opts
+        assert "can_use_tool" not in captured_opts
 
 
 class TestAdapterPermissionConfig:

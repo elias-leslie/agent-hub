@@ -42,16 +42,15 @@ def _apply_permission_opts(
     which the subprocess ignores for built-in tools.
     """
     if working_dir:
-        from app.adapters._claude_settings import build_boundary_hook, write_boundary_settings
+        from app.adapters._claude_settings import write_boundary_settings
 
         settings_path = write_boundary_settings(working_dir)
         sdk_opts["settings"] = settings_path
-        sdk_opts["hooks"] = build_boundary_hook(working_dir, agent_slug=agent_slug)
         sdk_opts["permission_mode"] = "acceptEdits"
-        # Keep can_use_tool as fallback for non-builtin tools if provided
-        if can_use_tool is not None:
-            sdk_opts["can_use_tool"] = can_use_tool
-        return True  # use_streaming_prompt needed for hooks
+        # In working_dir mode, enforce permissions through settings only.
+        # Passing can_use_tool or PreToolUse hooks forces the SDK onto control
+        # paths that have produced live "Stream closed" failures in tool runs.
+        return False
 
     if yolo_mode and can_use_tool is None:
         sdk_opts["permission_mode"] = "bypassPermissions"
