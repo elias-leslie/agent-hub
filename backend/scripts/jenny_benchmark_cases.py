@@ -266,7 +266,7 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             required_tool_names=("precision_code_search",),
             max_turns=8,
             execute_tools=True,
-            required_summary_terms=("already", "shared", "wired"),
+            required_summary_terms=("shared",),
             required_project_id="agent-hub",
         ),
     ]

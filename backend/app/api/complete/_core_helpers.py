@@ -185,8 +185,6 @@ async def execute_and_build_result(
     agent_slug: str | None,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
-    from .tool_router import supports_tools
-
     provisioned = provision_standard_tools(
         execute_tools,
         tools,
