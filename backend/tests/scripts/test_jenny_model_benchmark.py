@@ -111,6 +111,83 @@ def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
     assert attempt.failure_detail is None
 
 
+def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
+    from scripts.jenny_benchmark_eval import JennyBenchmarkRun
+    from scripts.run_jenny_model_benchmark import build_persistence_payload
+
+    attempt = JennyBenchmarkAttempt(
+        model_id="codex/gpt-5.4",
+        case_id="session_patience_quiet",
+        run_number=1,
+        latency_ms=1200,
+        session_id="sess-1",
+        provider="openai",
+        effective_model="codex/gpt-5.4",
+        requested_model="codex/gpt-5.4",
+        content='{"case_id":"session_patience_quiet"}',
+        parsed={
+            "case_id": "session_patience_quiet",
+            "primary_action": "wait",
+            "should_dispatch": False,
+            "should_close": False,
+            "confidence": "high",
+            "summary": "Active session is quiet but healthy.",
+        },
+        schema_valid=True,
+        correctness_score=1.0,
+        tool_requirement_met=True,
+        composite_score=100.0,
+        passed=True,
+        fallback_used=False,
+        turns=2,
+        tool_calls_count=1,
+        used_tool_names=["query_sessions"],
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+    )
+    run = JennyBenchmarkRun(
+        benchmark_id="jenny-benchmark-aaaa1111",
+        project_id="agent-hub",
+        models=["codex/gpt-5.4"],
+        case_ids=["session_patience_quiet"],
+        runs_per_case=1,
+        started_at="2026-03-11T12:00:00Z",
+        completed_at="2026-03-11T12:05:00Z",
+        attempts=[attempt],
+        summaries=summarize_attempts([attempt]),
+    )
+
+    payload = build_persistence_payload(
+        run,
+        agent_slug="persona",
+        suite_id="jenny-patience",
+        run_kind="benchmark",
+        use_memory=True,
+        seed=42,
+        config_snapshot={
+            "primary_model_id": "codex/gpt-5.4",
+            "thinking_level": "medium",
+            "heartbeat_prompt": {
+                "slug": "persona-heartbeat-instructions",
+                "updated_at": "2026-03-11T11:16:06Z",
+                "content_hash": "abcd1234",
+            },
+        },
+    )
+
+    assert payload["benchmark_id"] == "jenny-benchmark-aaaa1111"
+    assert payload["suite_id"] == "jenny-patience"
+    assert payload["run_kind"] == "benchmark"
+    assert payload["attempt_count"] == 1
+    assert payload["passed_attempt_count"] == 1
+    assert payload["avg_score"] == 100.0
+    assert payload["pass_rate"] == 100.0
+    assert payload["config_snapshot"]["thinking_level"] == "medium"
+    assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
+    assert payload["attempts"][0]["primary_action"] == "wait"
+
+
 def test_score_attempt_fails_when_tool_requirement_missing() -> None:
     case = get_case_by_id("workspace_inspection_gate")
 

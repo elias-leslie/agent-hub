@@ -181,3 +181,85 @@ class AgentMetricsListResponse(BaseModel):
     """Response for agent metrics list."""
 
     metrics: dict[str, AgentMetrics]
+
+
+class AgentBenchmarkOverview(BaseModel):
+    """Top-level benchmark health summary for one agent."""
+
+    total_runs: int = 0
+    avg_score: float = 0.0
+    pass_rate: float = 0.0
+    open_regressions: int = 0
+    latest_completed_at: str | None = None
+    tracked_models: list[str] = Field(default_factory=list)
+
+
+class AgentBenchmarkTrendPoint(BaseModel):
+    """One benchmark trendline point."""
+
+    run_id: str
+    completed_at: str | None = None
+    suite_id: str
+    run_kind: str
+    avg_score: float | None = None
+    pass_rate: float | None = None
+    attempts: int = 0
+    prompt_version: str | None = None
+
+
+class AgentBenchmarkRunSummary(BaseModel):
+    """Recent benchmark run summary row."""
+
+    run_id: str
+    benchmark_id: str
+    suite_id: str
+    run_kind: str
+    started_at: str
+    completed_at: str | None = None
+    avg_score: float | None = None
+    pass_rate: float | None = None
+    attempt_count: int = 0
+    passed_attempt_count: int = 0
+    infra_failure_count: int = 0
+    models: list[str] = Field(default_factory=list)
+    case_ids: list[str] = Field(default_factory=list)
+    config_snapshot: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentRegressionClusterSummary(BaseModel):
+    """Open or resolved regression cluster summary."""
+
+    regression_key: str
+    suite_id: str
+    case_id: str
+    failure_detail: str
+    status: str
+    occurrence_count: int = 0
+    latest_avg_score: float | None = None
+    affected_models: list[str] = Field(default_factory=list)
+    opened_at: str | None = None
+    last_seen_at: str | None = None
+    resolved_at: str | None = None
+
+
+class AgentBenchmarkModelSummary(BaseModel):
+    """Aggregated model performance across persisted benchmark attempts."""
+
+    model_id: str
+    attempts: int = 0
+    avg_score: float | None = None
+    pass_rate: float = 0.0
+    avg_latency_ms: float | None = None
+    latest_completed_at: str | None = None
+
+
+class AgentBenchmarkDashboard(BaseModel):
+    """Repeatable benchmark, regression, and model tracking for one agent."""
+
+    agent_slug: str
+    overview: AgentBenchmarkOverview
+    trend: list[AgentBenchmarkTrendPoint] = Field(default_factory=list)
+    recent_runs: list[AgentBenchmarkRunSummary] = Field(default_factory=list)
+    open_regressions: list[AgentRegressionClusterSummary] = Field(default_factory=list)
+    model_performance: list[AgentBenchmarkModelSummary] = Field(default_factory=list)

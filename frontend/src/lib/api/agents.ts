@@ -8,6 +8,7 @@ import type {
   AgentMetrics,
   AgentMetricsResponse,
 } from "@/app/agents/lib/types";
+import type { AgentBenchmarkDashboard } from "@/app/agents/[slug]/analytics/types";
 
 export async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   const params = new URLSearchParams();
@@ -33,6 +34,22 @@ export async function fetchAgentMetrics(
 
     // Return empty metrics on error - don't fail the whole page
     return { metrics: {} };
+  }
+  return res.json();
+}
+
+export async function fetchAgentBenchmarkDashboard(
+  slug: string,
+  days = 30,
+  limit = 20,
+): Promise<AgentBenchmarkDashboard> {
+  const params = new URLSearchParams();
+  params.set("days", String(days));
+  params.set("limit", String(limit));
+
+  const res = await fetchApi(`/api/agents/${slug}/benchmarks?${params}`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch benchmark dashboard");
   }
   return res.json();
 }

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 # Import all models for easy access
 from .agent import Agent, AgentVersion
+from .agent_benchmark import AgentBenchmarkAttempt, AgentBenchmarkRun, AgentRegressionCluster
 from .agent_performance_log import AgentPerformanceLog
 
 # Import Base first
@@ -41,8 +42,11 @@ from .telemetry import RequestLog, TruncationEvent
 __all__ = [
     "APIKey",
     "Agent",
+    "AgentBenchmarkAttempt",
+    "AgentBenchmarkRun",
     "AgentPerformanceLog",
     "AgentPrompt",
+    "AgentRegressionCluster",
     "AgentVersion",
     "Base",
     "Client",

@@ -1,4 +1,9 @@
-import type { Agent, AgentMetrics, AnalyticsData } from "./types";
+import type {
+  Agent,
+  AgentBenchmarkTrendPoint,
+  AgentMetrics,
+  AnalyticsData,
+} from "./types";
 
 export function metricsToAnalytics(
   metrics: AgentMetrics,
@@ -26,4 +31,18 @@ export function metricsToAnalytics(
 
 export function sliceTrendWindow(trend: AnalyticsData["trend"], hours: number) {
   return trend.slice(Math.max(0, trend.length - hours));
+}
+
+export function filterBenchmarkTrendWindow(
+  trend: AgentBenchmarkTrendPoint[],
+  hours: number,
+) {
+  const cutoff = Date.now() - hours * 60 * 60 * 1000;
+  const filtered = trend.filter((point) => {
+    if (!point.completed_at) {
+      return false;
+    }
+    return new Date(point.completed_at).getTime() >= cutoff;
+  });
+  return filtered.length > 0 ? filtered : trend.slice(Math.max(0, trend.length - 8));
 }

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -37,6 +38,10 @@ from sqlalchemy import select, text
 
 from app.db import async_session
 from app.models.session import SessionEvent
+from app.services.agent_benchmark_service import (
+    capture_benchmark_config_snapshot,
+    persist_benchmark_payload,
+)
 from scripts.jenny_benchmark_cases import (
     DEFAULT_JENNY_BENCHMARK_MODELS,
     get_case_by_id,
@@ -87,6 +92,15 @@ def _parse_csv(value: str | None, default: list[str]) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def derive_suite_id(case_ids: list[str]) -> str:
+    """Build a stable suite identifier for a benchmark battery."""
+    normalized = sorted(set(case_ids))
+    if len(normalized) == 1:
+        return normalized[0]
+    digest = hashlib.sha256(",".join(normalized).encode("utf-8")).hexdigest()[:8]
+    return f"benchmark-suite-{digest}"
+
+
 def _build_attempt_order(
     models: list[str],
     case_ids: list[str],
@@ -115,6 +129,67 @@ def _validate_case_project_requirements(case_ids: list[str], project_id: str) ->
             "Selected cases require a different --project-id. "
             f"project_id={project_id!r}, incompatible_cases={incompatible_cases}"
         )
+
+
+def build_persistence_payload(
+    run: JennyBenchmarkRun,
+    *,
+    agent_slug: str,
+    suite_id: str,
+    run_kind: str,
+    use_memory: bool,
+    seed: int | None,
+    config_snapshot: dict[str, object] | None = None,
+    metadata: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """Normalize a benchmark run into the persisted DB payload shape."""
+    attempts = [attempt.to_dict() for attempt in run.attempts]
+    attempt_count = len(attempts)
+    passed_attempt_count = sum(1 for attempt in run.attempts if attempt.passed)
+    infra_failure_count = sum(1 for attempt in run.attempts if attempt.infra_failure)
+    avg_score = round(
+        sum(float(attempt.composite_score) for attempt in run.attempts) / attempt_count,
+        1,
+    ) if attempt_count else 0.0
+    pass_rate = round((passed_attempt_count / attempt_count) * 100, 1) if attempt_count else 0.0
+
+    normalized_attempts: list[dict[str, object]] = []
+    for attempt in attempts:
+        parsed = attempt.get("parsed") if isinstance(attempt.get("parsed"), dict) else {}
+        normalized_attempts.append(
+            {
+                **attempt,
+                "primary_action": parsed.get("primary_action"),
+                "should_dispatch": parsed.get("should_dispatch"),
+                "should_close": parsed.get("should_close"),
+                "confidence": parsed.get("confidence"),
+                "summary": parsed.get("summary"),
+            }
+        )
+
+    return {
+        "benchmark_id": run.benchmark_id,
+        "agent_slug": agent_slug,
+        "project_id": run.project_id,
+        "suite_id": suite_id,
+        "run_kind": run_kind,
+        "status": "completed",
+        "models": list(run.models),
+        "case_ids": list(run.case_ids),
+        "runs_per_case": run.runs_per_case,
+        "use_memory": use_memory,
+        "seed": seed,
+        "avg_score": avg_score,
+        "pass_rate": pass_rate,
+        "attempt_count": attempt_count,
+        "passed_attempt_count": passed_attempt_count,
+        "infra_failure_count": infra_failure_count,
+        "config_snapshot": dict(config_snapshot or {}),
+        "metadata": dict(metadata or {}),
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+        "attempts": normalized_attempts,
+    }
 
 
 async def _fetch_used_tool_names(session_id: str | None) -> list[str]:
@@ -369,8 +444,10 @@ def _print_dry_run(models: list[str], case_ids: list[str], runs_per_case: int, s
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Run Jenny benchmark cases across model candidates")
+    parser.add_argument("--agent-slug", default="persona", help="Agent slug to attribute benchmark history to")
     parser.add_argument("--models", help="Comma-separated model ids to test")
     parser.add_argument("--cases", help="Comma-separated benchmark case ids to run")
+    parser.add_argument("--suite-id", help="Stable suite identifier for trend/history grouping")
     parser.add_argument("--runs-per-case", type=int, default=3, help="Runs per model per case")
     parser.add_argument("--project-id", default="agent-hub", help="Project id for benchmark sessions")
     parser.add_argument(
@@ -387,6 +464,7 @@ async def main() -> None:
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
     parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
+    parser.add_argument("--no-persist", action="store_true", help="Skip saving results to the benchmark history tables")
     parser.add_argument("--dry-run", action="store_true", help="Print roster and exit")
     args = parser.parse_args()
 
@@ -414,10 +492,34 @@ async def main() -> None:
     )
 
     report = generate_markdown_report(run)
+    persisted_run_id: str | None = None
+    if not args.no_persist:
+        config_snapshot = await capture_benchmark_config_snapshot(args.agent_slug)
+        payload = build_persistence_payload(
+            run,
+            agent_slug=args.agent_slug,
+            suite_id=args.suite_id or derive_suite_id(case_ids),
+            run_kind="benchmark",
+            use_memory=args.use_memory,
+            seed=args.seed,
+            config_snapshot=config_snapshot,
+            metadata={"report_generated": True},
+        )
+        persisted_run_id = await persist_benchmark_payload(payload)
+        logger.info("Persisted benchmark run as %s", persisted_run_id)
     if args.output_json:
         output_json = Path(args.output_json)
         output_json.parent.mkdir(parents=True, exist_ok=True)
-        output_json.write_text(json.dumps(run.to_dict(), indent=2))
+        output_json.write_text(
+            json.dumps(
+                {
+                    **run.to_dict(),
+                    "persisted_run_id": persisted_run_id,
+                    "suite_id": args.suite_id or derive_suite_id(case_ids),
+                },
+                indent=2,
+            )
+        )
         logger.info("JSON results written to %s", args.output_json)
     if args.output_md:
         output_md = Path(args.output_md)
