@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { metricsToAnalytics, sliceTrendWindow } from "@/app/agents/[slug]/analytics/utils";
+import {
+  filterBenchmarkTrendWindow,
+  metricsToAnalytics,
+  sliceTrendWindow,
+} from "@/app/agents/[slug]/analytics/utils";
 import type {
   Agent,
+  AgentBenchmarkTrendPoint,
   AgentMetrics,
 } from "@/app/agents/[slug]/analytics/types";
 
@@ -47,5 +52,36 @@ describe("agent analytics utils", () => {
     expect(window).toHaveLength(6);
     expect(window[0]?.hour).toBe("18:00");
     expect(window[5]?.hour).toBe("23:00");
+  });
+
+  it("filters benchmark trend points to the requested time window", () => {
+    const now = Date.now();
+    const trend: AgentBenchmarkTrendPoint[] = [
+      {
+        run_id: "run-old",
+        completed_at: new Date(now - 30 * 60 * 60 * 1000).toISOString(),
+        suite_id: "suite",
+        run_kind: "benchmark",
+        avg_score: 90,
+        pass_rate: 70,
+        attempts: 12,
+        prompt_version: null,
+      },
+      {
+        run_id: "run-new",
+        completed_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+        suite_id: "suite",
+        run_kind: "benchmark",
+        avg_score: 96,
+        pass_rate: 83,
+        attempts: 12,
+        prompt_version: null,
+      },
+    ];
+
+    const filtered = filterBenchmarkTrendWindow(trend, 6);
+
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.run_id).toBe("run-new");
   });
 });

@@ -9,9 +9,11 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard
 from app.api.helpers.agent_metrics import compute_agent_metrics
 from app.api.helpers.agent_preview import build_agent_preview
 from app.api.schemas.agent_schemas import (
+    AgentBenchmarkDashboard,
     AgentCreateRequest,
     AgentListResponse,
     AgentMetrics,
@@ -279,6 +281,24 @@ async def get_agent_metrics(
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
     return await compute_agent_metrics(db, agent.slug)
+
+
+@router.get("/{slug}/benchmarks", response_model=AgentBenchmarkDashboard)
+async def get_agent_benchmarks(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    days: int = 30,
+    limit: int = 20,
+    suite_id: str | None = None,
+) -> AgentBenchmarkDashboard:
+    """Get persisted benchmark history and regression dashboard for one agent."""
+    service = get_agent_service()
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    return await get_agent_benchmark_dashboard(db, agent.slug, days=days, limit=limit, suite_id=suite_id)
 
 
 @router.get("/{slug}/versions")

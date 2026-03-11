@@ -31,6 +31,10 @@ sys.path.insert(0, str(ROOT / "packages" / "agent-hub-client"))
 
 from agent_hub import AsyncAgentHubClient
 
+from app.services.agent_benchmark_service import (
+    capture_benchmark_config_snapshot,
+    persist_benchmark_payload,
+)
 from scripts.jenny_benchmark_cases import DEFAULT_JENNY_BENCHMARK_MODELS, get_jenny_benchmark_cases
 from scripts.jenny_benchmark_eval import JennyBenchmarkAttempt, JennyBenchmarkRun
 from scripts.jenny_benchmark_report import generate_markdown_report
@@ -38,6 +42,8 @@ from scripts.run_jenny_model_benchmark import (
     _fetch_used_tool_names,
     _parse_csv,
     _resolve_client_id,
+    build_persistence_payload,
+    derive_suite_id,
     run_benchmark,
 )
 
@@ -83,6 +89,7 @@ class JennyHoningIteration:
     benchmark_report_path: str | None
     failure_clusters: list[dict[str, Any]] | None = None
     persistent_failure_clusters: list[dict[str, Any]] | None = None
+    persisted_run_id: str | None = None
     improvement_session_id: str | None = None
     improvement_tools: list[str] | None = None
     improvement_content: str | None = None
@@ -289,6 +296,9 @@ async def run_honing_loop(
     max_iterations: int,
     base_url: str,
     output_json_path: Path | None = None,
+    suite_id: str | None = None,
+    agent_slug: str = "persona",
+    persist_results: bool = True,
 ) -> dict[str, Any]:
     """Run benchmark/improve cycles until honed or the iteration cap is hit."""
     resolved_client_id = await _resolve_client_id(client_id, project_id)
@@ -320,6 +330,7 @@ async def run_honing_loop(
                 memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}",
             )
             report_path = _write_iteration_report(output_dir, benchmark_run, iteration)
+            config_snapshot = await capture_benchmark_config_snapshot(agent_slug)
             top_summary = benchmark_run.summaries[0] if benchmark_run.summaries else None
             failing_attempts = sum(1 for attempt in benchmark_run.attempts if not attempt.passed)
             failure_clusters = _group_failures(benchmark_run.attempts)
@@ -336,6 +347,24 @@ async def run_honing_loop(
             )
 
             if failing_attempts == 0:
+                if persist_results:
+                    payload = build_persistence_payload(
+                        benchmark_run,
+                        agent_slug=agent_slug,
+                        suite_id=suite_id or derive_suite_id(case_ids),
+                        run_kind="honing_iteration",
+                        use_memory=use_memory,
+                        seed=seed + iteration - 1,
+                        config_snapshot=config_snapshot,
+                        metadata={
+                            "iteration": iteration,
+                            "benchmark_report_path": report_path,
+                            "failure_clusters": failure_clusters,
+                            "persistent_failure_clusters": persistent_clusters,
+                            "improvement": None,
+                        },
+                    )
+                    record.persisted_run_id = await persist_benchmark_payload(payload)
                 iterations.append(record)
                 if output_json_path:
                     output_json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -352,6 +381,25 @@ async def run_honing_loop(
                 and record.top_score <= previous_best_score
                 and failing_attempts >= previous_failing_attempts
             ):
+                if persist_results:
+                    payload = build_persistence_payload(
+                        benchmark_run,
+                        agent_slug=agent_slug,
+                        suite_id=suite_id or derive_suite_id(case_ids),
+                        run_kind="honing_iteration",
+                        use_memory=use_memory,
+                        seed=seed + iteration - 1,
+                        config_snapshot=config_snapshot,
+                        metadata={
+                            "iteration": iteration,
+                            "benchmark_report_path": report_path,
+                            "failure_clusters": failure_clusters,
+                            "persistent_failure_clusters": persistent_clusters,
+                            "stop_reason": "no_improvement",
+                            "improvement": None,
+                        },
+                    )
+                    record.persisted_run_id = await persist_benchmark_payload(payload)
                 iterations.append(record)
                 if output_json_path:
                     output_json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -374,6 +422,29 @@ async def run_honing_loop(
             record.improvement_content = content
             record.improvement_tools = tools
             record.improvement_parsed = parsed
+            if persist_results:
+                payload = build_persistence_payload(
+                    benchmark_run,
+                    agent_slug=agent_slug,
+                    suite_id=suite_id or derive_suite_id(case_ids),
+                    run_kind="honing_iteration",
+                    use_memory=use_memory,
+                    seed=seed + iteration - 1,
+                    config_snapshot=config_snapshot,
+                    metadata={
+                        "iteration": iteration,
+                        "benchmark_report_path": report_path,
+                        "failure_clusters": failure_clusters,
+                        "persistent_failure_clusters": persistent_clusters,
+                        "improvement": {
+                            "session_id": session_id,
+                            "tools": tools,
+                            "parsed": parsed,
+                            "raw_content": content,
+                        },
+                    },
+                )
+                record.persisted_run_id = await persist_benchmark_payload(payload)
             iterations.append(record)
             previous_best_score = record.top_score
             previous_failing_attempts = failing_attempts
@@ -417,6 +488,9 @@ async def main() -> None:
     parser.add_argument("--max-iterations", type=int, default=2, help="Maximum benchmark/improve cycles")
     parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection")
     parser.add_argument("--output-json", help="Write final loop result to this path")
+    parser.add_argument("--suite-id", help="Stable suite identifier for trend/history grouping")
+    parser.add_argument("--agent-slug", default="persona", help="Agent slug to attribute benchmark history to")
+    parser.add_argument("--no-persist", action="store_true", help="Skip saving iterations to the benchmark history tables")
     args = parser.parse_args()
 
     models = _parse_csv(args.models, DEFAULT_JENNY_BENCHMARK_MODELS)
@@ -437,6 +511,9 @@ async def main() -> None:
         max_iterations=args.max_iterations,
         base_url=args.base_url,
         output_json_path=Path(args.output_json) if args.output_json else None,
+        suite_id=args.suite_id,
+        agent_slug=args.agent_slug,
+        persist_results=not args.no_persist,
     )
 
     rendered = json.dumps(result, indent=2)

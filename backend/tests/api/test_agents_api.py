@@ -376,6 +376,112 @@ class TestAgentMetricsEndpoint:
             assert response.status_code == 404
 
 
+class TestAgentBenchmarkDashboardEndpoint:
+    """Tests for agent benchmark dashboard endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_agent_benchmarks_returns_dashboard(self, api_client):
+        """Test fetching persisted benchmark dashboard data."""
+        mock_dto = make_mock_dto()
+        dashboard = {
+            "agent_slug": "coder",
+            "overview": {
+                "total_runs": 3,
+                "avg_score": 94.2,
+                "pass_rate": 75.0,
+                "open_regressions": 2,
+                "latest_completed_at": "2026-03-11T12:00:00Z",
+                "tracked_models": ["codex/gpt-5.4", "claude-sonnet-4-6"],
+            },
+            "trend": [
+                {
+                    "run_id": "run-1",
+                    "completed_at": "2026-03-11T12:00:00Z",
+                    "suite_id": "jenny-patience",
+                    "run_kind": "benchmark",
+                    "avg_score": 94.2,
+                    "pass_rate": 75.0,
+                    "attempts": 12,
+                    "prompt_version": "2026-03-11T11:16:06Z:abcd1234",
+                }
+            ],
+            "recent_runs": [
+                {
+                    "run_id": "run-1",
+                    "benchmark_id": "jenny-benchmark-aaaa1111",
+                    "suite_id": "jenny-patience",
+                    "run_kind": "benchmark",
+                    "started_at": "2026-03-11T11:40:00Z",
+                    "completed_at": "2026-03-11T12:00:00Z",
+                    "avg_score": 94.2,
+                    "pass_rate": 75.0,
+                    "attempt_count": 12,
+                    "passed_attempt_count": 9,
+                    "infra_failure_count": 0,
+                    "models": ["codex/gpt-5.4"],
+                    "case_ids": ["session_patience_quiet"],
+                    "config_snapshot": {"thinking_level": "medium"},
+                    "metadata": {},
+                }
+            ],
+            "open_regressions": [
+                {
+                    "regression_key": "session_patience_quiet::wrong_fields: should_dispatch",
+                    "suite_id": "jenny-patience",
+                    "case_id": "session_patience_quiet",
+                    "failure_detail": "wrong_fields: should_dispatch",
+                    "status": "open",
+                    "occurrence_count": 2,
+                    "latest_avg_score": 78.8,
+                    "affected_models": ["codex/gpt-5.4"],
+                    "opened_at": "2026-03-11T11:00:00Z",
+                    "last_seen_at": "2026-03-11T12:00:00Z",
+                    "resolved_at": None,
+                }
+            ],
+            "model_performance": [
+                {
+                    "model_id": "codex/gpt-5.4",
+                    "attempts": 12,
+                    "avg_score": 94.2,
+                    "pass_rate": 75.0,
+                    "avg_latency_ms": 1200.0,
+                    "latest_completed_at": "2026-03-11T12:00:00Z",
+                }
+            ],
+        }
+
+        with (
+            patch("app.api.agents.get_agent_service") as mock_get_service,
+            patch("app.api.agents.get_agent_benchmark_dashboard") as mock_get_dashboard,
+        ):
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+            mock_get_dashboard.return_value = dashboard
+
+            response = api_client.get("/api/agents/coder/benchmarks?days=14&limit=10")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["agent_slug"] == "coder"
+            assert data["overview"]["total_runs"] == 3
+            assert data["open_regressions"][0]["case_id"] == "session_patience_quiet"
+            mock_get_dashboard.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_agent_benchmarks_returns_404_for_missing(self, api_client):
+        """Test fetching benchmark dashboard for missing agent."""
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=None)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.get("/api/agents/nonexistent/benchmarks")
+
+            assert response.status_code == 404
+
+
 class TestAgentVersionsEndpoint:
     """Tests for agent version history endpoint."""
 
