@@ -50,8 +50,21 @@ def _cluster_regression_key(case_id: str, failure_detail: str) -> str:
     return f"{case_id}::{failure_detail}"
 
 
+def _normalize_config_snapshot_for_fingerprint(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _normalize_config_snapshot_for_fingerprint(item)
+            for key, item in value.items()
+            if key != "captured_at"
+        }
+    if isinstance(value, list):
+        return [_normalize_config_snapshot_for_fingerprint(item) for item in value]
+    return value
+
+
 def _config_fingerprint(config_snapshot: dict[str, Any]) -> str:
-    serialized = json.dumps(config_snapshot or {}, sort_keys=True, separators=(",", ":"))
+    normalized = _normalize_config_snapshot_for_fingerprint(config_snapshot or {})
+    serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
 
 
