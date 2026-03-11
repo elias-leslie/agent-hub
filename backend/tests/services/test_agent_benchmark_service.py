@@ -125,3 +125,75 @@ def test_summarize_benchmark_experiment_rolls_back_clear_candidate_loss() -> Non
     assert summary["decision"] == "rollback"
     assert summary["decision_reason"] == "candidate_underperforms_baseline"
     assert summary["score_delta"]["mean_delta"] and summary["score_delta"]["mean_delta"] < 0
+
+
+def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> None:
+    experiment = _make_experiment()
+    runs = [
+        _make_run(
+            cohort="baseline",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "codex/gpt-5.4",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:00:00Z",
+            },
+        ),
+        _make_run(
+            cohort="baseline",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "codex/gpt-5.4",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:10:00Z",
+            },
+        ),
+        _make_run(
+            cohort="baseline",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "codex/gpt-5.4",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:20:00Z",
+            },
+        ),
+        _make_run(
+            cohort="candidate",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "claude-opus-4-6",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:30:00Z",
+            },
+        ),
+        _make_run(
+            cohort="candidate",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "claude-opus-4-6",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:40:00Z",
+            },
+        ),
+        _make_run(
+            cohort="candidate",
+            avg_score=100.0,
+            pass_rate=100.0,
+            config_snapshot={
+                "primary_model_id": "claude-opus-4-6",
+                "thinking_level": "medium",
+                "captured_at": "2026-03-11T12:50:00Z",
+            },
+        ),
+    ]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["baseline"]["config_stable"] is True
+    assert summary["candidate"]["config_stable"] is True
+    assert summary["decision_reason"] == "no_clear_winner"
