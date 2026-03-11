@@ -25,6 +25,7 @@ class PromptUpdateRequest(BaseModel):
     is_global: bool | None = None
     enabled: bool | None = None
     exclude_agents: list[str] | None = None
+    change_reason: str | None = None
 
 
 class PromptResponse(BaseModel):
@@ -43,6 +44,32 @@ class PromptResponse(BaseModel):
 class PromptListResponse(BaseModel):
     prompts: list[PromptResponse]
     total: int
+
+
+class PromptRevisionResponse(BaseModel):
+    id: str
+    prompt_id: int | None
+    prompt_slug: str
+    prompt_name: str
+    action: str
+    content: str
+    description: str | None
+    is_global: bool
+    enabled: bool
+    exclude_agents: list[str]
+    content_hash: str
+    changed_by: str | None
+    change_reason: str | None
+    created_at: datetime
+
+
+class PromptRevisionListResponse(BaseModel):
+    revisions: list[PromptRevisionResponse]
+    total: int
+
+
+class PromptRestoreRequest(BaseModel):
+    change_reason: str | None = None
 
 
 class AgentPromptAssignRequest(BaseModel):

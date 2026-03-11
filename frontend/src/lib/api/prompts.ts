@@ -15,8 +15,30 @@ export interface Prompt {
   updated_at: string;
 }
 
+export interface PromptRevision {
+  id: string;
+  prompt_id: number | null;
+  prompt_slug: string;
+  prompt_name: string;
+  action: string;
+  content: string;
+  description: string | null;
+  is_global: boolean;
+  enabled: boolean;
+  exclude_agents: string[];
+  content_hash: string;
+  changed_by: string | null;
+  change_reason: string | null;
+  created_at: string;
+}
+
 export interface PromptListResponse {
   prompts: Prompt[];
+  total: number;
+}
+
+export interface PromptRevisionListResponse {
+  revisions: PromptRevision[];
   total: number;
 }
 
@@ -70,7 +92,9 @@ export async function createPrompt(data: {
 
 export async function updatePrompt(
   slug: string,
-  data: Partial<Omit<Prompt, "id" | "created_at" | "updated_at">>
+  data: Partial<Omit<Prompt, "id" | "created_at" | "updated_at">> & {
+    change_reason?: string;
+  }
 ): Promise<Prompt> {
   const res = await fetchApi(`/api/prompts/${slug}`, {
     method: "PUT",
@@ -78,6 +102,32 @@ export async function updatePrompt(
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("Failed to update prompt");
+  return res.json();
+}
+
+export async function fetchPromptRevisions(
+  slug: string,
+  limit = 20,
+): Promise<PromptRevision[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  const res = await fetchApi(`/api/prompts/${slug}/revisions?${params}`);
+  if (!res.ok) throw new Error("Failed to fetch prompt revisions");
+  const data: PromptRevisionListResponse = await res.json();
+  return data.revisions;
+}
+
+export async function restorePromptRevision(
+  slug: string,
+  revisionId: string,
+  changeReason?: string,
+): Promise<Prompt> {
+  const res = await fetchApi(`/api/prompts/${slug}/revisions/${revisionId}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ change_reason: changeReason }),
+  });
+  if (!res.ok) throw new Error("Failed to restore prompt revision");
   return res.json();
 }
 

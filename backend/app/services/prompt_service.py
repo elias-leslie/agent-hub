@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Any
 
@@ -9,9 +10,41 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.prompt import AgentPrompt, Prompt
+from app.models.prompt import AgentPrompt, Prompt, PromptRevision
 
 logger = logging.getLogger(__name__)
+
+
+def _prompt_content_hash(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+async def record_prompt_revision(
+    db: AsyncSession,
+    prompt: Prompt,
+    *,
+    action: str,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
+) -> PromptRevision:
+    """Persist an immutable revision snapshot for one prompt state."""
+    revision = PromptRevision(
+        prompt_id=prompt.id,
+        prompt_slug=prompt.slug,
+        prompt_name=prompt.name,
+        action=action,
+        content=prompt.content,
+        description=prompt.description,
+        is_global=prompt.is_global,
+        enabled=prompt.enabled,
+        exclude_agents=list(prompt.exclude_agents or []),
+        content_hash=_prompt_content_hash(prompt.content),
+        changed_by=changed_by,
+        change_reason=change_reason,
+    )
+    db.add(revision)
+    await db.flush()
+    return revision
 
 
 async def get_all_prompts(
@@ -46,6 +79,8 @@ async def create_prompt(
     is_global: bool = False,
     enabled: bool = True,
     exclude_agents: list[str] | None = None,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
 ) -> Prompt:
     """Create a new prompt."""
     prompt = Prompt(
@@ -58,6 +93,14 @@ async def create_prompt(
         exclude_agents=exclude_agents or [],
     )
     db.add(prompt)
+    await db.flush()
+    await record_prompt_revision(
+        db,
+        prompt,
+        action="create",
+        changed_by=changed_by,
+        change_reason=change_reason or "Prompt created",
+    )
     await db.commit()
     await db.refresh(prompt)
     logger.info("Created prompt: %s (global=%s)", slug, is_global)
@@ -67,6 +110,8 @@ async def create_prompt(
 async def update_prompt(
     db: AsyncSession,
     slug: str,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
     **kwargs: Any,
 ) -> Prompt | None:
     """Update an existing prompt by slug. Only provided kwargs are updated."""
@@ -79,6 +124,14 @@ async def update_prompt(
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
 
+    await db.flush()
+    await record_prompt_revision(
+        db,
+        prompt,
+        action="update",
+        changed_by=changed_by,
+        change_reason=change_reason or "Prompt updated",
+    )
     await db.commit()
     await db.refresh(prompt)
     logger.info("Updated prompt: %s", slug)
@@ -91,10 +144,82 @@ async def delete_prompt(db: AsyncSession, slug: str) -> bool:
     if not prompt:
         return False
 
+    await record_prompt_revision(
+        db,
+        prompt,
+        action="delete",
+        changed_by="api",
+        change_reason="Prompt deleted",
+    )
     await db.delete(prompt)
     await db.commit()
     logger.info("Deleted prompt: %s", slug)
     return True
+
+
+async def list_prompt_revisions(
+    db: AsyncSession,
+    slug: str,
+    *,
+    limit: int = 20,
+) -> list[PromptRevision]:
+    """List recent immutable revisions for one prompt slug."""
+    stmt = (
+        select(PromptRevision)
+        .where(PromptRevision.prompt_slug == slug)
+        .order_by(PromptRevision.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_prompt_revision(
+    db: AsyncSession,
+    slug: str,
+    revision_id: str,
+) -> PromptRevision | None:
+    """Fetch a specific revision for one prompt slug."""
+    stmt = select(PromptRevision).where(
+        PromptRevision.prompt_slug == slug,
+        PromptRevision.id == revision_id,
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def restore_prompt_revision(
+    db: AsyncSession,
+    slug: str,
+    revision_id: str,
+    *,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
+) -> Prompt | None:
+    """Restore a prompt to a previous revision and record the restore."""
+    prompt = await get_prompt_by_slug(db, slug)
+    revision = await get_prompt_revision(db, slug, revision_id)
+    if not prompt or not revision:
+        return None
+
+    prompt.name = revision.prompt_name
+    prompt.content = revision.content
+    prompt.description = revision.description
+    prompt.is_global = revision.is_global
+    prompt.enabled = revision.enabled
+    prompt.exclude_agents = list(revision.exclude_agents or [])
+
+    await db.flush()
+    await record_prompt_revision(
+        db,
+        prompt,
+        action="restore",
+        changed_by=changed_by,
+        change_reason=change_reason or f"Restored revision {revision_id}",
+    )
+    await db.commit()
+    await db.refresh(prompt)
+    return prompt
 
 
 async def get_agent_prompts(
