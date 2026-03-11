@@ -151,6 +151,21 @@ class AgentListResponse(BaseModel):
     total: int
 
 
+class AgentPreviewSection(BaseModel):
+    """One ordered section in the assembled runtime preview."""
+
+    label: str
+    source_kind: str
+    source_id: str
+    role: str | None = None
+    priority: int | None = None
+    updated_at: str | None = None
+    content_hash: str
+    chars: int
+    estimated_tokens: int
+    content: str
+
+
 class AgentPreviewResponse(BaseModel):
     """Response schema for agent preview (combined prompt + memory)."""
 
@@ -161,6 +176,11 @@ class AgentPreviewResponse(BaseModel):
     guardrail_count: int
     mandate_uuids: list[str]
     guardrail_uuids: list[str]
+    task_type: str | None = None
+    phase: str | None = None
+    project_id: str | None = None
+    task_prompt: str | None = None
+    sections: list[AgentPreviewSection] = Field(default_factory=list)
 
 
 class AgentMetrics(BaseModel):

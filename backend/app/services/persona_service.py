@@ -4,7 +4,7 @@ Business logic is split across focused sub-modules:
   _persona_crud.py       — query helpers and session-reset logic
   _persona_context.py    — prompt-injection / context building
   _persona_onboarding.py — dual-model onboarding review
-  _persona_templates.py  — string templates and review runner
+  _persona_templates.py  — fallback defaults and onboarding review runner
 
 Everything importable from this module before refactoring remains
 importable from this same path.
@@ -27,27 +27,11 @@ from app.services._persona_crud import (
     should_reset_persona_session,
 )
 from app.services._persona_onboarding import submit_and_review_onboarding
-from app.services._persona_templates import (
-    DEFAULT_PERSONA_PERSONALITY,
-    EVOLUTION_TRIGGERS,
-    ONBOARDING_PENDING_APPROVAL,
-    build_onboarding_bootstrap,
-    build_onboarding_continuation,
-)
-
-# Private aliases re-exported so existing test imports keep working
-_build_onboarding_bootstrap = build_onboarding_bootstrap
-_build_onboarding_continuation = build_onboarding_continuation
-_ONBOARDING_PENDING_APPROVAL = ONBOARDING_PENDING_APPROVAL
-_EVOLUTION_TRIGGERS = EVOLUTION_TRIGGERS
+from app.services._persona_templates import DEFAULT_PERSONA_PERSONALITY
 
 __all__ = [
     "DEFAULT_LIMITS",
     "DEFAULT_PERSONA_PERSONALITY",
-    "_EVOLUTION_TRIGGERS",
-    "_ONBOARDING_PENDING_APPROVAL",
-    "_build_onboarding_bootstrap",
-    "_build_onboarding_continuation",
     "get_or_create_persona",
     "get_persona",
     "get_persona_context_for_agent",

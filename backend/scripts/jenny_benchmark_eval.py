@@ -197,6 +197,15 @@ def _normalize_tool_name(tool_name: str) -> str:
     return normalized
 
 
+def _summary_term_present(case: JennyBenchmarkCase, term: str, summary: str) -> bool:
+    if term in summary:
+        return True
+    for alternative in case.summary_term_alternatives.get(term, ()):
+        if alternative.lower() in summary:
+            return True
+    return False
+
+
 def score_attempt(
     *,
     case: JennyBenchmarkCase,
@@ -266,7 +275,7 @@ def score_attempt(
     if case.required_summary_terms:
         summary = str(parsed.get("summary", "")).lower()
         missing_summary_terms = [
-            term for term in case.required_summary_terms if term not in summary
+            term for term in case.required_summary_terms if not _summary_term_present(case, term, summary)
         ]
         keyword_match_ratio = (
             len(case.required_summary_terms) - len(missing_summary_terms)

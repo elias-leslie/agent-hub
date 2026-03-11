@@ -48,6 +48,26 @@ export interface AgentPreview {
   guardrail_count: number;
   mandate_uuids: string[];
   guardrail_uuids: string[];
+  task_type?: PreviewTaskType | null;
+  phase?: string | null;
+  project_id?: string | null;
+  task_prompt?: string | null;
+  sections: AgentPreviewSection[];
+}
+
+export type PreviewTaskType = "chat" | "heartbeat" | "wake" | "review";
+
+export interface AgentPreviewSection {
+  label: string;
+  source_kind: string;
+  source_id: string;
+  role?: string | null;
+  priority?: number | null;
+  updated_at?: string | null;
+  content_hash: string;
+  chars: number;
+  estimated_tokens: number;
+  content: string;
 }
 
 export type ModelInfo = CatalogModel;

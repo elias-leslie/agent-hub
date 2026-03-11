@@ -1,5 +1,5 @@
 import { fetchApi } from "@/lib/api-config";
-import { Agent, AgentPreview, ModelInfo } from "@/app/agents/[slug]/types";
+import { Agent, AgentPreview, ModelInfo, PreviewTaskType } from "@/app/agents/[slug]/types";
 
 export async function fetchAgent(slug: string): Promise<Agent> {
   const res = await fetchApi(`/api/agents/${slug}`);
@@ -20,8 +20,24 @@ export async function updateAgent(
   return res.json();
 }
 
-export async function fetchPreview(slug: string): Promise<AgentPreview> {
-  const res = await fetchApi(`/api/agents/${slug}/preview`);
+export interface PreviewRequestOptions {
+  taskType?: PreviewTaskType;
+  projectId?: string;
+  phase?: string;
+  promptInput?: string;
+}
+
+export async function fetchPreview(
+  slug: string,
+  options: PreviewRequestOptions = {}
+): Promise<AgentPreview> {
+  const params = new URLSearchParams();
+  if (options.taskType) params.set("task_type", options.taskType);
+  if (options.projectId) params.set("project_id", options.projectId);
+  if (options.phase) params.set("phase", options.phase);
+  if (options.promptInput) params.set("prompt_input", options.promptInput);
+  const query = params.toString();
+  const res = await fetchApi(`/api/agents/${slug}/preview${query ? `?${query}` : ""}`);
   if (!res.ok) throw new Error("Failed to fetch preview");
   return res.json();
 }

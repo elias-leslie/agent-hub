@@ -45,39 +45,13 @@ class WakeResult(BaseModel):
     summary_stored: bool = False
 
 
-_WAKE_TOOLING_HINTS = """Operational notes:
-- Use current `st` syntax when inspecting tasks/sessions: `st ready-all`, `st ready --limit N`, `st sessions list --status <status> --limit N`.
-- For observability: use `st session-events <session_id>` for a direct session id, or `st session-events -T task-123 --page-size 100` for a task-linked session trace.
-- Do not add stale flags like `-P`, `--project`, `--human`, or `--compact` to `st ready` / `st ready-all`.
-- Do not use `--session` with `st session-events`; pass the session id as the positional argument instead.
-- Never pass `st sessions list` output `session_id` values to `st session-events`; they are ST session ids, not Agent Hub session ids.
-- Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID from Agent Hub context or heartbeat results.
-- If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on; do not probe ST internal worktree paths trying to force more context.
-- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect `/home/kasadis/.local/share/st/worktrees/...` or other external ST internals unless the prompt explicitly requires it.
-- If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only; do not `cd`, `git -C`, or run validation commands against that external path.
-- Treat task ids as opaque: if you are given `task-e0e03239`, use exactly `task-e0e03239` in `st context` / `st session-events -T`; do not strip the `task-` prefix.
-- Use `st context <task-id>` only when you have a real task id.
-- Use exact `st` command shapes from the known-good examples here; do not invent extra flags for task-closing commands. Example: `st done <task-id>` has no `--note` flag.
-- For task repair/follow-through, start with the concrete task context, current diff/status, and the files or commands named in the task/prompt before doing broad repo searches.
-- If the prompt already names the task, failing command, changed files, or likely subsystem, inspect those first and only widen the search if that targeted path is insufficient.
-- Prefer the smallest proof path that can unblock the task: confirm the specific failure, patch the likely file, then validate.
-- For `read_file`, use repo-relative paths or fully expanded absolute paths rooted under the current project. Do not use shell shortcuts like `~` inside `read_file` paths because they are not expanded there.
-- If a direct path inspection is denied by tool policy, treat that denial as a real boundary and pick an in-bounds source of evidence instead of retrying the same path shape.
-- If `git branch` or snapshot metadata shows a task branch already attached to another worktree, treat that as an inspection-only branch from the current repo. Do not `git checkout` that branch in the current worktree just to inspect it.
-- Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead of trying to switch to an already-attached task branch.
-- When completing a task with a note, use `st done <task-id> --message "..."`; do not guess alternate flag names like `--note`.
-- Prefer the known-good commands above over probing multiple invalid `st` variants.
-- Avoid exploratory `--help` calls unless a known-good command above still fails.
-- Prefer `dt -q -d` as the first validation pass from the repo root when you changed code; only escalate to broader checks when that targeted validation fails or the task explicitly requires more.
-- When running frontend-local tests from a `frontend/` directory, use paths relative to that directory; do not prefix them with `frontend/` again.
-- Prefer investigation over feature work unless the prompt explicitly asks for implementation.
-"""
-
-
-def _build_wake_prompt(prompt: str) -> str:
+async def _build_wake_prompt(prompt: str) -> str:
     """Prefix wake prompts with concise operational hints to reduce CLI thrash."""
+    from app.services.persona_prompt_service import get_persona_wake_guidance
+
     prompt = prompt.strip()
-    return f"{_WAKE_TOOLING_HINTS}\nTask:\n{prompt}" if prompt else _WAKE_TOOLING_HINTS.strip()
+    wake_guidance = await get_persona_wake_guidance()
+    return f"{wake_guidance}\nTask:\n{prompt}" if prompt else wake_guidance.strip()
 
 
 def _wake_external_id(ctx: Context) -> str | None:
@@ -165,7 +139,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
 
         try:
             result = await complete_internal(
-                messages=[{"role": "user", "content": _build_wake_prompt(input.prompt)}],
+                messages=[{"role": "user", "content": await _build_wake_prompt(input.prompt)}],
                 model=input.model,
                 provider=input.provider,
                 temperature=input.temperature,

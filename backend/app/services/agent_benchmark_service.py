@@ -18,8 +18,18 @@ from app.models import (
     AgentBenchmarkExperiment,
     AgentBenchmarkRun,
     AgentRegressionCluster,
+    Persona,
     Prompt,
 )
+from app.services.prompt_catalog import (
+    COMPLETION_REVIEW_PROMPT_SLUG,
+    COMPLETION_REVIEW_RULES_PROMPT_SLUG,
+    PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
+    PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
+    PERSONA_HEARTBEAT_PROMPT_SLUG,
+    PERSONA_WAKE_GUIDANCE_PROMPT_SLUG,
+)
+from app.services.runtime_prompt_stack import collect_runtime_prompt_sections
 
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -46,6 +56,28 @@ def _heartbeat_prompt_descriptor(config_snapshot: dict[str, Any]) -> str | None:
     return f"{updated_at}:{content_hash}"
 
 
+def _prompt_stack_descriptors(config_snapshot: dict[str, Any]) -> list[str]:
+    prompt_stack = config_snapshot.get("prompt_stack")
+    if isinstance(prompt_stack, dict):
+        descriptors = prompt_stack.get("descriptors")
+        if isinstance(descriptors, list):
+            return sorted({str(item) for item in descriptors if item})
+    heartbeat_descriptor = _heartbeat_prompt_descriptor(config_snapshot)
+    return [heartbeat_descriptor] if heartbeat_descriptor else []
+
+
+def _describe_prompt_row(prompt: Prompt | None) -> dict[str, Any] | None:
+    if prompt is None:
+        return None
+    content = prompt.content or ""
+    return {
+        "slug": prompt.slug,
+        "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
+        "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest()[:8],
+        "content_length": len(content),
+    }
+
+
 def _cluster_regression_key(case_id: str, failure_detail: str) -> str:
     return f"{case_id}::{failure_detail}"
 
@@ -65,6 +97,19 @@ def _normalize_config_snapshot_for_fingerprint(value: Any) -> Any:
 def _config_fingerprint(config_snapshot: dict[str, Any]) -> str:
     normalized = _normalize_config_snapshot_for_fingerprint(config_snapshot or {})
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
+
+
+def _run_config_fingerprint(run: AgentBenchmarkRun) -> str:
+    payload = {
+        "config_snapshot": _normalize_config_snapshot_for_fingerprint(dict(run.config_snapshot or {})),
+        "models": list(getattr(run, "models", []) or []),
+        "case_ids": list(getattr(run, "case_ids", []) or []),
+        "runs_per_case": int(getattr(run, "runs_per_case", 1) or 1),
+        "use_memory": bool(getattr(run, "use_memory", False)),
+        "run_kind": str(getattr(run, "run_kind", "") or ""),
+    }
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
 
 
@@ -112,17 +157,15 @@ def _summarize_experiment_arm(
     pass_rates = [float(run.pass_rate or 0.0) for run in runs]
     fingerprints = sorted(
         {
-            _config_fingerprint(dict(run.config_snapshot or {}))
+            _run_config_fingerprint(run)
             for run in runs
         }
     )
     prompt_versions = sorted(
         {
             descriptor
-            for descriptor in (
-                _heartbeat_prompt_descriptor(dict(run.config_snapshot or {}))
-                for run in runs
-            )
+            for run in runs
+            for descriptor in _prompt_stack_descriptors(dict(run.config_snapshot or {}))
             if descriptor
         }
     )
@@ -185,8 +228,14 @@ def summarize_benchmark_experiment(
         score_delta["ci_high"] is not None
         and pass_rate_delta["ci_high"] is not None
         and (
-            float(score_delta["ci_high"]) < -0.5
-            or float(pass_rate_delta["ci_high"]) < -1.0
+            (
+                float(score_delta["ci_high"]) <= 0.0
+                and float(score_delta["mean_delta"] or 0.0) <= -0.5
+            )
+            or (
+                float(pass_rate_delta["ci_high"]) <= 0.0
+                and float(pass_rate_delta["mean_delta"] or 0.0) <= -1.0
+            )
         )
     ):
         decision = "rollback"
@@ -242,6 +291,17 @@ def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, s
         if model_id:
             bucket["models"].add(model_id)
     return grouped
+
+
+def _should_update_regression_clusters(
+    *,
+    experiment_cohort: str | None,
+    metadata: dict[str, Any],
+) -> bool:
+    override = metadata.get("update_regression_clusters")
+    if override is not None:
+        return bool(override)
+    return experiment_cohort != "candidate"
 
 
 async def _ensure_benchmark_experiment(
@@ -313,7 +373,31 @@ async def _refresh_benchmark_experiment(
     return summary
 
 
-async def capture_benchmark_config_snapshot(agent_slug: str) -> dict[str, Any]:
+def _task_prompt_slugs(task_type: str | None) -> list[str]:
+    if task_type == "heartbeat":
+        return [
+            PERSONA_HEARTBEAT_PROMPT_SLUG,
+            PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
+            PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
+        ]
+    if task_type == "wake":
+        return [
+            PERSONA_WAKE_GUIDANCE_PROMPT_SLUG,
+            PERSONA_FOCUS_HARNESS_PROMPT_SLUG,
+        ]
+    if task_type == "review":
+        return [
+            COMPLETION_REVIEW_PROMPT_SLUG,
+            COMPLETION_REVIEW_RULES_PROMPT_SLUG,
+        ]
+    return []
+
+
+async def capture_benchmark_config_snapshot(
+    agent_slug: str,
+    *,
+    task_type: str | None = None,
+) -> dict[str, Any]:
     """Capture the live agent/model/prompt state for a benchmark run."""
     async with async_session() as db:
         agent = await db.scalar(select(Agent).where(Agent.slug == agent_slug))
@@ -330,18 +414,56 @@ async def capture_benchmark_config_snapshot(agent_slug: str) -> dict[str, Any]:
             "captured_at": datetime.now(UTC).isoformat(),
         }
 
+        prompt_sections = await collect_runtime_prompt_sections(
+            db,
+            agent,
+            task_type=task_type,
+        )
+        snapshot["prompt_stack"] = {
+            "task_type": task_type,
+            "system_sections": [section.to_snapshot_dict() for section in prompt_sections],
+            "descriptors": [
+                f"{section.source_kind}:{section.source_id}:{section.content_hash}"
+                for section in prompt_sections
+            ],
+        }
+
+        task_prompt_sources: list[dict[str, Any]] = []
+        for prompt_slug in _task_prompt_slugs(task_type):
+            prompt = await db.scalar(select(Prompt).where(Prompt.slug == prompt_slug))
+            descriptor = _describe_prompt_row(prompt)
+            if descriptor:
+                task_prompt_sources.append(descriptor)
+        if task_prompt_sources:
+            snapshot["prompt_stack"]["task_prompt_sources"] = task_prompt_sources
+
         if agent_slug == "persona":
-            prompt = await db.scalar(
-                select(Prompt).where(Prompt.slug == "persona-heartbeat-instructions")
-            )
-            if prompt is not None:
-                content = prompt.content or ""
-                snapshot["heartbeat_prompt"] = {
-                    "slug": prompt.slug,
-                    "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-                    "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest()[:8],
-                    "content_length": len(content),
+            persona = await db.scalar(select(Persona).where(Persona.agent_id == agent.id))
+            if persona is not None:
+                snapshot["persona_documents"] = {
+                    "personality": {
+                        "content_hash": hashlib.sha256((persona.personality or "").encode("utf-8")).hexdigest()[:8],
+                        "content_length": len(persona.personality or ""),
+                    },
+                    "user_context": {
+                        "content_hash": hashlib.sha256((persona.user_context or "").encode("utf-8")).hexdigest()[:8],
+                        "content_length": len(persona.user_context or ""),
+                    },
+                    "user_profile": {
+                        "content_hash": hashlib.sha256(
+                            json.dumps(persona.user_profile or {}, sort_keys=True).encode("utf-8")
+                        ).hexdigest()[:8],
+                        "field_count": len(persona.user_profile or {}),
+                    },
+                    "onboarding_phase": persona.onboarding_phase,
                 }
+
+            prompt = await db.scalar(
+                select(Prompt).where(Prompt.slug == PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
+            )
+            descriptor = _describe_prompt_row(prompt)
+            if descriptor is not None:
+                snapshot["heartbeat_prompt"] = descriptor
             reviewer_agent = await db.scalar(select(Agent).where(Agent.slug == "supervisor"))
             if reviewer_agent is not None:
                 snapshot["completion_reviewer"] = {
@@ -368,6 +490,7 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
     experiment_payload = payload.get("experiment")
     experiment: AgentBenchmarkExperiment | None = None
     experiment_cohort: str | None = None
+    metadata = dict(payload.get("metadata") or {})
     if isinstance(experiment_payload, dict):
         experiment = await _ensure_benchmark_experiment(
             db,
@@ -398,7 +521,7 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
         passed_attempt_count=int(payload.get("passed_attempt_count") or 0),
         infra_failure_count=int(payload.get("infra_failure_count") or 0),
         config_snapshot=dict(payload.get("config_snapshot") or {}),
-        run_metadata=dict(payload.get("metadata") or {}),
+        run_metadata=metadata,
         started_at=_parse_dt(payload.get("started_at")) or datetime.now(UTC),
         completed_at=_parse_dt(payload.get("completed_at")),
     )
@@ -443,70 +566,74 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
             )
         )
 
-    grouped_failures = _group_attempt_failures(attempts)
-    current_keys = {_cluster_regression_key(case_id, detail) for case_id, detail in grouped_failures}
+    if _should_update_regression_clusters(
+        experiment_cohort=experiment_cohort,
+        metadata=metadata,
+    ):
+        grouped_failures = _group_attempt_failures(attempts)
+        current_keys = {_cluster_regression_key(case_id, detail) for case_id, detail in grouped_failures}
 
-    open_clusters = (
-        await db.execute(
-            select(AgentRegressionCluster).where(
-                AgentRegressionCluster.agent_slug == run.agent_slug,
-                AgentRegressionCluster.suite_id == run.suite_id,
-                AgentRegressionCluster.status == "open",
-            )
-        )
-    ).scalars().all()
-
-    open_cluster_map = {cluster.regression_key: cluster for cluster in open_clusters}
-    completed_at = run.completed_at or datetime.now(UTC)
-
-    for (case_id, failure_detail), bucket in grouped_failures.items():
-        regression_key = _cluster_regression_key(case_id, failure_detail)
-        cluster = open_cluster_map.get(regression_key)
-        if cluster is None:
-            cluster = await db.scalar(
+        open_clusters = (
+            await db.execute(
                 select(AgentRegressionCluster).where(
                     AgentRegressionCluster.agent_slug == run.agent_slug,
                     AgentRegressionCluster.suite_id == run.suite_id,
-                    AgentRegressionCluster.regression_key == regression_key,
+                    AgentRegressionCluster.status == "open",
                 )
             )
-        latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
-        if cluster is None:
-            cluster = AgentRegressionCluster(
-                agent_slug=run.agent_slug,
-                suite_id=run.suite_id,
-                regression_key=regression_key,
-                case_id=case_id,
-                failure_detail=failure_detail,
-                status="open",
-                first_seen_run_id=run.id,
-                last_seen_run_id=run.id,
-                occurrence_count=bucket["occurrence_count"],
-                latest_avg_score=latest_avg_score,
-                affected_models=sorted(bucket["models"]),
-                opened_at=completed_at,
-                last_seen_at=completed_at,
-            )
-            db.add(cluster)
-            continue
+        ).scalars().all()
 
-        cluster.status = "open"
-        cluster.resolved_at = None
-        cluster.last_seen_run_id = run.id
-        cluster.last_seen_at = completed_at
-        cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
-        cluster.latest_avg_score = latest_avg_score
-        cluster.affected_models = sorted(bucket["models"])
-        if not cluster.first_seen_run_id:
-            cluster.first_seen_run_id = run.id
-        if not cluster.opened_at:
-            cluster.opened_at = completed_at
+        open_cluster_map = {cluster.regression_key: cluster for cluster in open_clusters}
+        completed_at = run.completed_at or datetime.now(UTC)
 
-    for cluster in open_clusters:
-        if cluster.regression_key in current_keys:
-            continue
-        cluster.status = "resolved"
-        cluster.resolved_at = completed_at
+        for (case_id, failure_detail), bucket in grouped_failures.items():
+            regression_key = _cluster_regression_key(case_id, failure_detail)
+            cluster = open_cluster_map.get(regression_key)
+            if cluster is None:
+                cluster = await db.scalar(
+                    select(AgentRegressionCluster).where(
+                        AgentRegressionCluster.agent_slug == run.agent_slug,
+                        AgentRegressionCluster.suite_id == run.suite_id,
+                        AgentRegressionCluster.regression_key == regression_key,
+                    )
+                )
+            latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
+            if cluster is None:
+                cluster = AgentRegressionCluster(
+                    agent_slug=run.agent_slug,
+                    suite_id=run.suite_id,
+                    regression_key=regression_key,
+                    case_id=case_id,
+                    failure_detail=failure_detail,
+                    status="open",
+                    first_seen_run_id=run.id,
+                    last_seen_run_id=run.id,
+                    occurrence_count=bucket["occurrence_count"],
+                    latest_avg_score=latest_avg_score,
+                    affected_models=sorted(bucket["models"]),
+                    opened_at=completed_at,
+                    last_seen_at=completed_at,
+                )
+                db.add(cluster)
+                continue
+
+            cluster.status = "open"
+            cluster.resolved_at = None
+            cluster.last_seen_run_id = run.id
+            cluster.last_seen_at = completed_at
+            cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
+            cluster.latest_avg_score = latest_avg_score
+            cluster.affected_models = sorted(bucket["models"])
+            if not cluster.first_seen_run_id:
+                cluster.first_seen_run_id = run.id
+            if not cluster.opened_at:
+                cluster.opened_at = completed_at
+
+        for cluster in open_clusters:
+            if cluster.regression_key in current_keys:
+                continue
+            cluster.status = "resolved"
+            cluster.resolved_at = completed_at
 
     if experiment is not None:
         await _refresh_benchmark_experiment(db, experiment)

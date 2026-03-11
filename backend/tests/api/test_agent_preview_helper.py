@@ -49,9 +49,33 @@ async def test_build_agent_preview_uses_runtime_mandate_composition() -> None:
 
     with (
         patch(
-            "app.api.helpers.agent_preview.inject_agent_mandates",
+            "app.api.helpers.agent_preview.collect_runtime_prompt_sections",
             new_callable=AsyncMock,
-            return_value=type("Mandate", (), {"system_content": "<platform_context>db prompt</platform_context>"})(),
+            return_value=[
+                type(
+                    "Section",
+                    (),
+                    {
+                        "content": "<platform_context>db prompt</platform_context>",
+                        "to_preview_dict": lambda self: {
+                            "label": "Platform Context",
+                            "source_kind": "global_prompt",
+                            "source_id": "platform-context",
+                            "role": None,
+                            "priority": None,
+                            "updated_at": None,
+                            "content_hash": "abcd1234",
+                            "chars": 44,
+                            "estimated_tokens": 11,
+                            "content": "<platform_context>db prompt</platform_context>",
+                        },
+                    },
+                )(),
+            ],
+        ),
+        patch(
+            "app.api.helpers.agent_preview.join_runtime_prompt_sections",
+            return_value="<platform_context>db prompt</platform_context>",
         ),
         patch(
             "app.api.helpers.agent_preview.build_progressive_context",
@@ -63,14 +87,15 @@ async def test_build_agent_preview_uses_runtime_mandate_composition() -> None:
             return_value="## Mandates\n- [M:12345678] keep prompts in db",
         ),
     ):
-        combined, mandate_count, guardrail_count, mandate_ids, guardrail_ids = await build_agent_preview(
+        preview = await build_agent_preview(
             AsyncMock(),
             agent,
         )
 
-    assert "<platform_context>db prompt</platform_context>" in combined
-    assert "## Mandates" in combined
-    assert mandate_count == 1
-    assert guardrail_count == 1
-    assert mandate_ids == ["12345678"]
-    assert guardrail_ids == ["87654321"]
+    assert "<platform_context>db prompt</platform_context>" in preview["combined_prompt"]
+    assert "## Mandates" in preview["combined_prompt"]
+    assert preview["mandate_count"] == 1
+    assert preview["guardrail_count"] == 1
+    assert preview["mandate_uuids"] == ["12345678"]
+    assert preview["guardrail_uuids"] == ["87654321"]
+    assert preview["sections"][0]["source_id"] == "platform-context"

@@ -1,45 +1,132 @@
 """Agent preview helper functions."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.agent_dto import AgentDTO
-from app.services.agent_routing_utils import inject_agent_mandates
 from app.services.memory.context_injector import (
     build_progressive_context,
     format_progressive_context,
 )
 from app.services.memory.service import MemoryScope
+from app.services.runtime_prompt_stack import (
+    RuntimePromptSection,
+    collect_runtime_prompt_sections,
+    join_runtime_prompt_sections,
+)
+
+
+async def _build_task_prompt_preview(
+    agent: AgentDTO,
+    *,
+    task_type: str | None,
+    project_id: str | None,
+    phase: str | None,
+    prompt_input: str | None,
+) -> str | None:
+    if task_type in (None, "", "chat"):
+        return None
+
+    if task_type == "heartbeat":
+        from app.adapters.registry import get_provider_for_model
+        from app.workflows._heartbeat_prompt import build_heartbeat_prompt
+        from app.workflows.persona_heartbeat import get_model_review_status
+
+        model_review_due, model_review_label = await get_model_review_status()
+        provider = get_provider_for_model(agent.primary_model_id)
+        return await build_heartbeat_prompt(
+            model_review_due,
+            model_review_label,
+            target_project_id=project_id,
+            provider=provider,
+        )
+
+    if task_type == "wake":
+        from app.workflows.persona_wake import _build_wake_prompt
+
+        return await _build_wake_prompt(prompt_input or "(preview placeholder task)")
+
+    if task_type == "review":
+        from app.workflows._completion_review import _build_review_prompt
+
+        return await _build_review_prompt(
+            completion_content=prompt_input or "HEARTBEAT_OK — Preview placeholder.",
+            cleanup_status="(preview placeholder cleanup status)",
+            workstream_inventory=phase or "(preview placeholder workstream inventory)",
+        )
+
+    return prompt_input
+
+
+def _memory_scope_for_project(project_id: str | None) -> tuple[MemoryScope, str | None]:
+    if project_id:
+        return MemoryScope.PROJECT, project_id
+    return MemoryScope.GLOBAL, None
 
 
 async def build_agent_preview(
-    db: AsyncSession, agent: AgentDTO
-) -> tuple[str, int, int, list[str], list[str]]:
-    """Build agent preview with the same prompt composition used at runtime."""
-    sections = []
+    db: AsyncSession,
+    agent: AgentDTO,
+    *,
+    task_type: str | None = None,
+    project_id: str | None = None,
+    phase: str | None = None,
+    prompt_input: str | None = None,
+) -> dict[str, Any]:
+    """Build agent preview with runtime system sections, task prompt, and memory injection."""
+    runtime_sections = await collect_runtime_prompt_sections(
+        db,
+        agent,
+        task_type=None if task_type == "chat" else task_type,
+        project_id=project_id,
+    )
+    combined = join_runtime_prompt_sections(runtime_sections)
 
-    mandate = await inject_agent_mandates(agent, db, prompt_mode="full")
-    if mandate.system_content:
-        sections.append(mandate.system_content)
+    task_prompt = await _build_task_prompt_preview(
+        agent,
+        task_type=task_type,
+        project_id=project_id,
+        phase=phase,
+        prompt_input=prompt_input,
+    )
 
+    scope, scope_id = _memory_scope_for_project(project_id)
+    memory_query = task_prompt or prompt_input or ""
     context = await build_progressive_context(
-        query="",
-        scope=MemoryScope.GLOBAL,
-        scope_id=None,
+        query=memory_query,
+        scope=scope,
+        scope_id=scope_id,
+        task_type=None if task_type == "chat" else task_type,
+        phase=phase,
     )
 
     formatted_memory = format_progressive_context(context, include_citations=True)
     if formatted_memory:
-        sections.append(formatted_memory)
-
-    combined = "\n\n".join(sections)
+        combined = f"{combined}\n\n{formatted_memory}" if combined else formatted_memory
+        runtime_sections.append(
+            RuntimePromptSection(
+                label="Memory Context",
+                source_kind="memory_context",
+                source_id=scope_id or "global",
+                content=formatted_memory,
+            )
+        )
 
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
 
-    return (
-        combined,
-        len(context.mandates),
-        len(context.guardrails),
-        [u for u in mandate_uuids if u],
-        [u for u in guardrail_uuids if u],
-    )
+    return {
+        "combined_prompt": combined,
+        "mandate_count": len(context.mandates),
+        "guardrail_count": len(context.guardrails),
+        "mandate_uuids": [u for u in mandate_uuids if u],
+        "guardrail_uuids": [u for u in guardrail_uuids if u],
+        "task_type": task_type,
+        "phase": phase,
+        "project_id": project_id,
+        "task_prompt": task_prompt,
+        "sections": [section.to_preview_dict() for section in runtime_sections],
+    }

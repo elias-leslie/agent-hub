@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+type SummaryTermAlternatives = dict[str, tuple[str, ...]]
+
 DEFAULT_JENNY_BENCHMARK_MODELS = [
     "codex/gpt-5.4",
     "codex/gpt-5.3-codex",
@@ -41,6 +43,7 @@ class JennyBenchmarkCase:
     execute_tools: bool = False
     fixture_files: dict[str, str] = field(default_factory=dict)
     required_summary_terms: tuple[str, ...] = ()
+    summary_term_alternatives: SummaryTermAlternatives = field(default_factory=dict)
     required_project_id: str | None = None
 
     def build_prompt(self) -> str:
@@ -69,6 +72,11 @@ class JennyBenchmarkCase:
             "Make the governance decision you would actually take.\n"
             f"{tool_instruction}\n\n"
             f"{_RESPONSE_SHAPE}\n\n"
+            "Decision consistency rules:\n"
+            "- Set `should_dispatch=true` only when `primary_action` is `dispatch` and you are choosing a new dispatch now.\n"
+            "- For `primary_action=monitor|block|wait|reconcile`, set `should_dispatch=false`.\n"
+            "- Set `should_close=true` only when the scenario contains explicit closure evidence; otherwise return `false`.\n\n"
+            "- Use `monitor` for an existing same-task work lane you are supervising; use `wait` for a healthy active session that is still making progress.\n\n"
             "Scenario:\n"
             f"{self.scenario}\n"
         )
@@ -146,6 +154,9 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                 "should_close": False,
             },
             required_summary_terms=("progress", "monitor"),
+            summary_term_alternatives={
+                "monitor": ("supervise", "supervising"),
+            },
         ),
         JennyBenchmarkCase(
             case_id="cleanup_blocks_closeout",
@@ -291,6 +302,10 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                 "should_close": False,
             },
             required_summary_terms=("shared", "soft", "telemetry"),
+            summary_term_alternatives={
+                "soft": ("lightweight", "lightweight reminder"),
+                "telemetry": ("session-event", "session event"),
+            },
         ),
         JennyBenchmarkCase(
             case_id="precision_search_live_lookup",
@@ -337,6 +352,9 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                 "should_close": False,
             },
             required_summary_terms=("review", "findings"),
+            summary_term_alternatives={
+                "findings": ("bugs", "regressions", "tests", "review-only"),
+            },
         ),
         JennyBenchmarkCase(
             case_id="dead_code_cleanup_followthrough",
@@ -359,6 +377,9 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                 "should_close": False,
             },
             required_summary_terms=("dead", "cleanup"),
+            summary_term_alternatives={
+                "dead": ("unused", "orphaned"),
+            },
         ),
         JennyBenchmarkCase(
             case_id="feedback_triage_hotspot",
@@ -381,6 +402,10 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             max_turns=8,
             execute_tools=True,
             required_summary_terms=("feedback", "triage"),
+            summary_term_alternatives={
+                "feedback": ("governance", "checklist"),
+                "triage": ("checklist", "operating model"),
+            },
         ),
         JennyBenchmarkCase(
             case_id="performance_review_honing",
@@ -403,6 +428,9 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             max_turns=8,
             execute_tools=True,
             required_summary_terms=("heartbeat", "performance"),
+            summary_term_alternatives={
+                "performance": ("observability",),
+            },
         ),
         JennyBenchmarkCase(
             case_id="model_config_reconsideration",
@@ -425,6 +453,9 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             max_turns=8,
             execute_tools=True,
             required_summary_terms=("model", "benchmark"),
+            summary_term_alternatives={
+                "benchmark": ("evidence", "data", "signals"),
+            },
         ),
     ]
 

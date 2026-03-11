@@ -6,9 +6,13 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
+from app.services.persona_documents import (
+    PersonaDocumentShrinkageError,
+    apply_persona_text_update,
+    normalize_user_profile,
+)
 from app.services.persona_instruction_service import get_persona_heartbeat_instructions
 
-from .constants import SHRINKAGE_MIN_LEN, SHRINKAGE_RATIO
 from .schemas import PersonaResponse
 
 
@@ -23,6 +27,7 @@ async def persona_to_response(
         id=persona.id,
         name=persona.name,
         personality=persona.personality,
+        user_profile=normalize_user_profile(persona.user_profile),
         heartbeat_instructions=heartbeat_instructions,
         user_context=persona.user_context,
         voice_id=persona.voice_id,
@@ -54,25 +59,14 @@ def apply_shrinkage_protection(
     Also saves a backup of the old value if the model has a ``<field>_previous``
     attribute, then writes the stripped new value into *update_data*.
     """
-    old_text = getattr(persona, field) or ""
-    stripped = new_text.strip()
-    old_len = len(old_text)
-    new_len = len(stripped)
-
-    if old_len > SHRINKAGE_MIN_LEN and new_len < (old_len * SHRINKAGE_RATIO):
+    try:
+        apply_persona_text_update(persona, field, new_text)
+    except PersonaDocumentShrinkageError as exc:
         raise HTTPException(
             status_code=422,
-            detail=(
-                f"REJECTED: New {field} ({new_len} chars) is dramatically shorter "
-                f"than existing ({old_len} chars). This looks like accidental data loss."
-            ),
-        )
-
-    backup_field = f"{field}_previous"
-    if hasattr(persona, backup_field):
-        setattr(persona, backup_field, old_text)
-
-    update_data[field] = stripped
+            detail=str(exc),
+        ) from exc
+    update_data[field] = getattr(persona, field)
 
 
 async def commit_and_refresh(db: AsyncSession, persona: Persona) -> Persona:

@@ -24,12 +24,6 @@ from app.workflows._heartbeat_data import (
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEZONE = "America/New_York"
-MODEL_REVIEW_DO = (
-    "Due — run `review_agent_performance` + `manage_model_config(action=get_benchmarks)` + "
-    "`manage_model_config(action=list_agents)`. Check `synced_at` — if benchmark data >60 days old, "
-    "`send_push` to flag stale benchmarks. Evaluate model assignments. Log via `log_agent_performance`."
-)
-MODEL_REVIEW_SKIP = "Not due — skip model review this heartbeat."
 _IANA_TZ_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b")
 
 
@@ -65,6 +59,12 @@ async def _get_persona_timezone() -> str:
     if not persona:
         return _DEFAULT_TIMEZONE
 
+    from app.services.persona_documents import get_user_profile_timezone
+
+    profile_timezone = get_user_profile_timezone(persona.user_profile)
+    if profile_timezone and _validate_iana_timezone(profile_timezone):
+        return profile_timezone
+
     # 1. Check explicit timezone in limits
     if persona.limits and isinstance(persona.limits, dict):
         tz_value = persona.limits.get("timezone")
@@ -97,7 +97,6 @@ async def _build_core_prompt(
     local_time = now_utc.astimezone(ZoneInfo(tz_name)).strftime("%H:%M %Z")
 
     review_status = "DUE" if model_review_due else f"not due — {model_review_label}"
-    review_instructions = MODEL_REVIEW_DO if model_review_due else MODEL_REVIEW_SKIP
     tool_count, persona_tool_list = _get_persona_tool_summary(provider)
     template = await require_prompt_content(PERSONA_HEARTBEAT_PROMPT_SLUG)
 
@@ -106,7 +105,6 @@ async def _build_core_prompt(
         local_time=local_time,
         project_access_summary=project_access,
         model_review_status=review_status,
-        model_review_instructions=review_instructions,
         tool_count=tool_count,
         persona_tool_list=persona_tool_list,
     )
@@ -158,7 +156,5 @@ async def build_heartbeat_prompt(
 
 
 __all__ = [
-    "MODEL_REVIEW_DO",
-    "MODEL_REVIEW_SKIP",
     "build_heartbeat_prompt",
 ]

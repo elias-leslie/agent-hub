@@ -6,7 +6,7 @@ CRUD operations for managing agent configurations.
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard
@@ -215,6 +215,10 @@ async def preview_agent(
     slug: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    task_type: Annotated[str | None, Query(description="Preview mode: chat, heartbeat, wake, or review")] = None,
+    project_id: Annotated[str | None, Query(description="Optional project scope for permission and memory preview")] = None,
+    phase: Annotated[str | None, Query(description="Optional phase/event hint for memory and task prompt preview")] = None,
+    prompt_input: Annotated[str | None, Query(description="Optional task input placeholder for wake/review preview")] = None,
 ) -> AgentPreviewResponse:
     """Preview agent's combined system prompt with memory injection.
 
@@ -226,22 +230,28 @@ async def preview_agent(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    (
-        combined,
-        mandate_count,
-        guardrail_count,
-        mandate_uuids,
-        guardrail_uuids,
-    ) = await build_agent_preview(db, agent)
+    preview = await build_agent_preview(
+        db,
+        agent,
+        task_type=task_type,
+        project_id=project_id,
+        phase=phase,
+        prompt_input=prompt_input,
+    )
 
     return AgentPreviewResponse(
         slug=agent.slug,
         name=agent.name,
-        combined_prompt=combined,
-        mandate_count=mandate_count,
-        guardrail_count=guardrail_count,
-        mandate_uuids=mandate_uuids,
-        guardrail_uuids=guardrail_uuids,
+        combined_prompt=preview["combined_prompt"],
+        mandate_count=preview["mandate_count"],
+        guardrail_count=preview["guardrail_count"],
+        mandate_uuids=preview["mandate_uuids"],
+        guardrail_uuids=preview["guardrail_uuids"],
+        task_type=preview["task_type"],
+        phase=preview["phase"],
+        project_id=preview["project_id"],
+        task_prompt=preview["task_prompt"],
+        sections=preview["sections"],
     )
 
 

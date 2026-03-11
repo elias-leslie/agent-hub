@@ -8,9 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.persona import Persona
+from app.services.persona_prompt_service import (
+    render_persona_onboarding_bootstrap,
+    render_persona_onboarding_continuation,
+)
 from app.services.persona_service import (
-    _build_onboarding_bootstrap,
-    _build_onboarding_continuation,
     get_or_create_persona,
     get_persona,
     get_persona_context_for_agent,
@@ -30,6 +32,7 @@ def _make_persona(**overrides) -> MagicMock:
         "agent_id": 10,
         "name": "Jenny",
         "personality": "I am a helpful assistant.",
+        "user_profile": None,
         "heartbeat_instructions": "Check system health.",
         "user_context": "User prefers concise answers.",
         "voice_id": "en-US-AriaNeural",
@@ -174,47 +177,98 @@ class TestGetPersonaPersonalityForAgent:
 class TestOnboardingBootstrapTemplates:
     """Tests for the onboarding bootstrap template functions."""
 
-    def test_bootstrap_includes_persona_name(self):
-        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+    @pytest.fixture(autouse=True)
+    def _mock_onboarding_prompt_docs(self):
+        async def _require_prompt_content(slug: str) -> str:
+            if slug == "persona-onboarding-bootstrap":
+                return "## Structured Onboarding\n\nName: {persona_name}{prior_context_note}\n\nCall submit_onboarding."
+            if slug == "persona-onboarding-continuation":
+                return "## Onboarding - Continuation\n\nYour name is {persona_name}. Call read_user_context, then submit_onboarding."
+            raise AssertionError(f"Unexpected prompt slug: {slug}")
+
+        with patch(
+            "app.services.persona_prompt_service.require_prompt_content",
+            new=_require_prompt_content,
+        ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_includes_persona_name(self):
+        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
         assert "Jenny" in result
         assert "Structured Onboarding" in result
 
-    def test_bootstrap_includes_all_10_topics(self):
-        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
-        for i in range(1, 11):
-            assert f"{i}." in result
-
-    def test_bootstrap_with_prior_context_adds_note(self):
-        result = _build_onboarding_bootstrap("Jenny", has_prior_context=True)
+    @pytest.mark.asyncio
+    async def test_bootstrap_with_prior_context_adds_note(self):
+        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=True)
         assert "Previous user context exists" in result
         assert "read_user_context" in result
 
-    def test_bootstrap_without_prior_context_no_note(self):
-        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+    @pytest.mark.asyncio
+    async def test_bootstrap_without_prior_context_no_note(self):
+        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
         assert "Previous user context exists" not in result
 
-    def test_bootstrap_mentions_submit_onboarding(self):
-        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+    @pytest.mark.asyncio
+    async def test_bootstrap_mentions_submit_onboarding(self):
+        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
         assert "submit_onboarding" in result
 
-    def test_continuation_includes_persona_name(self):
-        result = _build_onboarding_continuation("Jenny")
+    @pytest.mark.asyncio
+    async def test_continuation_includes_persona_name(self):
+        result = await render_persona_onboarding_continuation("Jenny")
         assert "Jenny" in result
         assert "Continuation" in result
         assert "read_user_context" in result
 
-    def test_continuation_mentions_submit_onboarding(self):
-        result = _build_onboarding_continuation("Jenny")
+    @pytest.mark.asyncio
+    async def test_continuation_mentions_submit_onboarding(self):
+        result = await render_persona_onboarding_continuation("Jenny")
         assert "submit_onboarding" in result
 
-    def test_custom_name_injected(self):
-        result = _build_onboarding_bootstrap("Aria", has_prior_context=False)
+    @pytest.mark.asyncio
+    async def test_custom_name_injected(self):
+        result = await render_persona_onboarding_bootstrap("Aria", has_prior_context=False)
         assert "Aria" in result
         assert "Jenny" not in result
 
 
 class TestGetPersonaContextForAgent:
     """Tests for get_persona_context_for_agent() — core context injection."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_runtime_prompt_docs(self):
+        async def _focus_harness() -> str:
+            return (
+                "## Focus Harness\n\n"
+                "- quiet + active session => wait\n"
+                "- same-task lane with recent progress => monitor; do not redispatch\n"
+                "- active session with recent progress => wait; do not redispatch\n"
+                "- cleanup/workspace gate unresolved => primary_action=block and should_dispatch=false\n"
+                "- explicit stalled/failed/terminated session => reconcile and should_dispatch=false until inspection proves a new dispatch is needed\n"
+            )
+
+        async def _evolution() -> str:
+            return "## Self-Evolution Guidelines\n\nUpdate personality and memory carefully."
+
+        async def _pending() -> str:
+            return "## Onboarding — Under Review\n\nAwait approval."
+
+        async def _bootstrap(persona_name: str, *, has_prior_context: bool) -> str:
+            prior = "\n\nPrevious user context exists." if has_prior_context else ""
+            return f"## Structured Onboarding\n\nName: {persona_name}{prior}"
+
+        async def _continuation(persona_name: str) -> str:
+            return f"## Onboarding — Continuation\n\nName: {persona_name}"
+
+        with (
+            patch("app.services._persona_context.get_persona_focus_harness", new=_focus_harness),
+            patch("app.services._persona_context.get_persona_evolution_guidelines", new=_evolution),
+            patch("app.services._persona_context.get_persona_onboarding_pending_approval", new=_pending),
+            patch("app.services._persona_context.render_persona_onboarding_bootstrap", new=_bootstrap),
+            patch("app.services._persona_context.render_persona_onboarding_continuation", new=_continuation),
+        ):
+            yield
 
     @pytest.mark.asyncio
     async def test_identity_tag_always_present(self):
@@ -320,8 +374,27 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
-        assert "<user_context>" in result
+        assert "<user_context_notes>" in result
         assert "Prefers dark mode." in result
+
+    @pytest.mark.asyncio
+    async def test_user_profile_present_when_set(self):
+        persona = _make_persona(
+            user_profile={
+                "timezone": "America/New_York",
+                "communication_style": "Concise and direct.",
+            }
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result_persona
+
+        result = await get_persona_context_for_agent(db, agent_id=10)
+
+        assert "<user_profile>" in result
+        assert "Timezone: America/New_York" in result
+        assert "Communication Style: Concise and direct." in result
 
     @pytest.mark.asyncio
     async def test_evolution_guidelines_always_present(self):
@@ -436,6 +509,18 @@ class TestGetPersonaContextForAgent:
 
 class TestSubmitAndReviewOnboarding:
     """Tests for submit_and_review_onboarding() — dual-model approval gate."""
+
+    @pytest.fixture(autouse=True)
+    def _mock_onboarding_review_prompt(self):
+        async def _require_prompt_content(slug: str) -> str:
+            assert slug == "persona-onboarding-review"
+            return (
+                "You are reviewing an onboarding profile for a personal AI assistant named '{persona_name}'.\n\n"
+                "{profile_text}"
+            )
+
+        with patch("app.services.persona_prompt_service.require_prompt_content", new=_require_prompt_content):
+            yield
 
     @pytest.mark.asyncio
     async def test_both_approve_completes_onboarding(self):

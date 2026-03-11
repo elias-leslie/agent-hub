@@ -75,6 +75,7 @@ const basePersona: Persona = {
   id: 1,
   name: "Jenny",
   personality: "Helpful",
+  user_profile: null,
   heartbeat_instructions: "Check systems",
   user_context: "Prefers brevity",
   voice_id: "voice-1",

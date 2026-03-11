@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight, Copy, CheckCircle2, RefreshCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { InheritedPlatformContextPreview } from "@/components/InheritedPlatformContextPreview";
-import { Agent, AgentPreview } from "../types";
+import { Agent, AgentPreview, PreviewTaskType } from "../types";
 import { PromptEditor } from "./PromptEditor";
 
 interface PromptTabProps {
@@ -11,11 +11,30 @@ interface PromptTabProps {
   previewFetching: boolean;
   showInlinePreview: boolean;
   setShowInlinePreview: (show: boolean) => void;
+  previewMode: PreviewTaskType;
+  setPreviewMode: (mode: PreviewTaskType) => void;
   updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
   refetchPreview: () => void;
 }
 
-export function PromptTab({ formData, preview, previewFetching, showInlinePreview, setShowInlinePreview, updateField, refetchPreview }: PromptTabProps) {
+const PREVIEW_MODES: Array<{ value: PreviewTaskType; label: string }> = [
+  { value: "chat", label: "Chat" },
+  { value: "heartbeat", label: "Heartbeat" },
+  { value: "wake", label: "Wake" },
+  { value: "review", label: "Review" },
+];
+
+export function PromptTab({
+  formData,
+  preview,
+  previewFetching,
+  showInlinePreview,
+  setShowInlinePreview,
+  previewMode,
+  setPreviewMode,
+  updateField,
+  refetchPreview,
+}: PromptTabProps) {
   const [copied, setCopied] = useState(false);
 
   return (
@@ -33,6 +52,29 @@ export function PromptTab({ formData, preview, previewFetching, showInlinePrevie
         onChange={(v) => updateField("system_prompt", v)}
       />
 
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Runtime Preview Mode
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {PREVIEW_MODES.map((mode) => (
+            <button
+              key={mode.value}
+              type="button"
+              onClick={() => setPreviewMode(mode.value)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-sm transition-colors",
+                previewMode === mode.value
+                  ? "border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900"
+                  : "border-slate-200 text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:text-slate-300"
+              )}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
         <button
           onClick={() => {
@@ -48,7 +90,7 @@ export function PromptTab({ formData, preview, previewFetching, showInlinePrevie
               <ChevronRight className="h-4 w-4 text-slate-500" />
             )}
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Combined Preview (with Memory)
+              Combined Preview ({previewMode})
             </span>
             {preview && showInlinePreview && (
               <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
@@ -96,20 +138,34 @@ export function PromptTab({ formData, preview, previewFetching, showInlinePrevie
                 <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
               </div>
             ) : preview ? (
-              <pre className="whitespace-pre-wrap text-xs font-mono text-slate-300 leading-relaxed">
-                {preview.combined_prompt.split('\n').map((line, i) => {
-                  if (line.startsWith('- [M:')) {
-                    return <span key={i} className="text-blue-400">{line}{'\n'}</span>;
-                  } else if (line.startsWith('- [G:')) {
-                    return <span key={i} className="text-amber-400">{line}{'\n'}</span>;
-                  } else if (line.startsWith('## Mandates')) {
-                    return <span key={i} className="text-blue-500 font-semibold">{line}{'\n'}</span>;
-                  } else if (line.startsWith('## Guardrails')) {
-                    return <span key={i} className="text-amber-500 font-semibold">{line}{'\n'}</span>;
-                  }
-                  return <span key={i}>{line}{'\n'}</span>;
-                })}
-              </pre>
+              <div className="space-y-4">
+                {preview.task_prompt && (
+                  <div className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Task Prompt
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs font-mono text-slate-300 leading-relaxed">
+                      {preview.task_prompt}
+                    </pre>
+                  </div>
+                )}
+                {preview.sections.map((section) => (
+                  <div key={`${section.source_kind}:${section.source_id}:${section.content_hash}`} className="rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                      <span className="font-semibold uppercase tracking-[0.18em] text-slate-400">
+                        {section.label}
+                      </span>
+                      <span>{section.source_kind}</span>
+                      <span>{section.source_id}</span>
+                      <span>{section.estimated_tokens} tok</span>
+                      <span>{section.chars} ch</span>
+                    </div>
+                    <pre className="whitespace-pre-wrap text-xs font-mono text-slate-300 leading-relaxed">
+                      {section.content}
+                    </pre>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="text-sm text-slate-500 text-center py-4">
                 Failed to load preview

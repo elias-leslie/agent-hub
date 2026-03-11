@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
 from app.services._persona_crud import get_persona
-from app.services._persona_templates import build_review_prompt, run_single_review
+from app.services._persona_templates import run_single_review
+from app.services.persona_prompt_service import render_persona_onboarding_review_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -93,8 +94,9 @@ async def submit_and_review_onboarding(
     if auto_result:
         return auto_result
 
-    review_prompt = build_review_prompt(
-        persona.name, _build_profile_text(summary, user_context_snapshot)
+    review_prompt = await render_persona_onboarding_review_prompt(
+        persona.name,
+        _build_profile_text(summary, user_context_snapshot),
     )
     try:
         reviews = list(
