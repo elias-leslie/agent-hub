@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from scripts.jenny_benchmark_cases import (
     DEFAULT_JENNY_BENCHMARK_MODELS,
@@ -194,3 +195,46 @@ def test_benchmark_case_battery_is_stable() -> None:
         "stalled_session_reconcile",
         "workspace_inspection_gate",
     ]
+
+
+async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
+    from scripts.run_jenny_model_benchmark import _run_one_attempt
+
+    captured_kwargs: dict[str, object] = {}
+
+    class FakeClient:
+        async def complete(self, **kwargs):
+            captured_kwargs.update(kwargs)
+            return SimpleNamespace(
+                content=(
+                    '{"case_id":"ready_task_dispatch","primary_action":"dispatch",'
+                    '"should_dispatch":true,"should_close":false,'
+                    '"confidence":"high","summary":"Task is ready to dispatch."}'
+                ),
+                session_id="sess-1",
+                provider="claude",
+                model="claude-sonnet-4-6",
+                turns=1,
+                tool_calls_count=0,
+                usage=SimpleNamespace(
+                    input_tokens=100,
+                    output_tokens=20,
+                    total_tokens=120,
+                ),
+            )
+
+    attempt = await _run_one_attempt(
+        client=FakeClient(),
+        benchmark_id="bench-1",
+        project_id="persona-sandbox",
+        model_id="claude-sonnet-4-6",
+        case_id="ready_task_dispatch",
+        run_number=1,
+        working_root=tmp_path,
+        timeout_seconds=30.0,
+        keep_workdirs=False,
+    )
+
+    assert attempt.passed is True
+    assert captured_kwargs["enable_caching"] is False
+    assert captured_kwargs["skip_cache"] is True

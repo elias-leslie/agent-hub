@@ -148,6 +148,7 @@ async def _run_one_attempt(
             agent_slug="persona",
             external_id=f"jenny-benchmark:{benchmark_id}:{case.case_id}:run-{run_number}",
             enable_caching=False,
+            skip_cache=True,
             use_memory=False,
             memory_group_id=f"benchmark:{benchmark_id}",
             max_turns=case.max_turns,
