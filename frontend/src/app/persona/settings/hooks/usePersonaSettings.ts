@@ -5,12 +5,12 @@ import {
   buildAgentUpdatePayload,
   createAgentFormData,
 } from "@/app/agents/[slug]/agent-form";
-import type { Agent } from "@/app/agents/[slug]/types";
+import type { Agent, PreviewTaskType } from "@/app/agents/[slug]/types";
 import { usePersona } from "@/app/persona/hooks/usePersona";
 
 const PERSONA_SLUG = "persona";
 
-export function usePersonaSettings() {
+export function usePersonaSettings(previewMode: PreviewTaskType = "heartbeat") {
   const queryClient = useQueryClient();
   const {
     persona,
@@ -37,8 +37,8 @@ export function usePersonaSettings() {
   });
 
   const { data: preview, refetch: refetchPreview, isFetching: previewFetching } = useQuery({
-    queryKey: ["agent-preview", PERSONA_SLUG],
-    queryFn: () => fetchPreview(PERSONA_SLUG),
+    queryKey: ["agent-preview", PERSONA_SLUG, previewMode],
+    queryFn: () => fetchPreview(PERSONA_SLUG, { taskType: previewMode }),
     enabled: false,
   });
 

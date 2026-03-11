@@ -34,24 +34,25 @@ async def write_personality(personality: str, reason: str) -> str:
 
     try:
         from app.db import async_session
+        from app.services.persona_documents import (
+            PersonaDocumentShrinkageError,
+            apply_persona_text_update,
+        )
         from app.services.persona_service import get_or_create_persona
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
-            old_text = persona.personality or ""
-            old_len = len(old_text)
-            new_len = len(personality.strip())
-
-            if old_len > 200 and new_len < (old_len * 0.5):
+            try:
+                old_len, new_len = apply_persona_text_update(
+                    persona,
+                    "personality",
+                    personality,
+                )
+            except PersonaDocumentShrinkageError as exc:
                 return (
-                    f"REJECTED: New personality ({new_len} chars) is dramatically shorter "
-                    f"than existing ({old_len} chars). This looks like accidental data loss. "
-                    "Call read_personality first, then include ALL existing sections in your update. "
+                    f"{exc} Call read_personality first, then include ALL existing sections in your update. "
                     "If you genuinely need to shorten it, explain why in the reason."
                 )
-
-            persona.personality_previous = old_text
-            persona.personality = personality.strip()
             persona.version += 1
             await db.commit()
 
@@ -69,24 +70,25 @@ async def write_user_context(user_context: str) -> str:
 
     try:
         from app.db import async_session
+        from app.services.persona_documents import (
+            PersonaDocumentShrinkageError,
+            apply_persona_text_update,
+        )
         from app.services.persona_service import get_or_create_persona
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
-            old_context = persona.user_context or ""
-            old_len = len(old_context)
-            new_len = len(user_context.strip())
-
-            if old_len > 200 and new_len < (old_len * 0.5):
+            try:
+                old_len, new_len = apply_persona_text_update(
+                    persona,
+                    "user_context",
+                    user_context,
+                )
+            except PersonaDocumentShrinkageError as exc:
                 return (
-                    f"REJECTED: New user_context ({new_len} chars) is dramatically shorter "
-                    f"than existing ({old_len} chars). This looks like accidental data loss. "
-                    "Call read_user_context first, then include ALL existing sections in your update. "
+                    f"{exc} Call read_user_context first, then include ALL existing sections in your update. "
                     "If you genuinely need to shorten it, explain why in the content."
                 )
-
-            persona.user_context_previous = old_context
-            persona.user_context = user_context.strip()
             persona.version += 1
             await db.commit()
 
@@ -138,6 +140,10 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
 
     try:
         from app.db import async_session
+        from app.services.persona_documents import (
+            PersonaDocumentShrinkageError,
+            validate_text_document_update,
+        )
         from app.services.persona_instruction_service import (
             get_persona_heartbeat_instructions,
             set_persona_heartbeat_instructions,
@@ -151,16 +157,19 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
                 old_text = await old_text
             if not isinstance(old_text, str):
                 old_text = ""
-            old_len = len(old_text)
-            new_len = len(heartbeat_instructions.strip())
-
-            if old_len > 200 and new_len < (old_len * 0.5):
+            try:
+                old_value, new_value = validate_text_document_update(
+                    old_text,
+                    heartbeat_instructions,
+                    field_label="heartbeat_instructions",
+                )
+            except PersonaDocumentShrinkageError as exc:
                 return (
-                    f"REJECTED: New heartbeat_instructions ({new_len} chars) is dramatically shorter "
-                    f"than existing ({old_len} chars). This looks like accidental data loss. "
-                    "Call read_heartbeat_instructions first, then include ALL existing sections. "
+                    f"{exc} Call read_heartbeat_instructions first, then include ALL existing sections. "
                     "If you genuinely need to shorten it, explain why in the reason."
                 )
+            old_len = len(old_value)
+            new_len = len(new_value)
 
             await set_persona_heartbeat_instructions(db, heartbeat_instructions)
             persona.version += 1

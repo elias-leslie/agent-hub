@@ -52,6 +52,8 @@ def test_workspace_case_prompt_limits_search_scope() -> None:
 
     assert "Only inspect task.txt, cleanup.txt, and sessions.txt" in prompt
     assert "Do not search outside the current working directory" in prompt
+    assert "Set `should_dispatch=true` only when `primary_action` is `dispatch`" in prompt
+    assert "Use `monitor` for an existing same-task work lane" in prompt
 
 
 def test_parse_benchmark_json_strips_code_fences() -> None:
@@ -167,6 +169,7 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
         seed=42,
         config_snapshot={
             "primary_model_id": "codex/gpt-5.4",
+            "benchmark_task_type": "heartbeat",
             "thinking_level": "medium",
             "heartbeat_prompt": {
                 "slug": "persona-heartbeat-instructions",
@@ -190,6 +193,7 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     assert payload["avg_score"] == 100.0
     assert payload["pass_rate"] == 100.0
     assert payload["config_snapshot"]["thinking_level"] == "medium"
+    assert payload["config_snapshot"]["benchmark_task_type"] == "heartbeat"
     assert payload["experiment"]["experiment_key"] == "jenny-patience-ab"
     assert payload["experiment"]["cohort"] == "candidate"
     assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
@@ -253,6 +257,62 @@ def test_score_attempt_checks_required_summary_terms() -> None:
 
     assert attempt.passed is True
     assert attempt.correctness_score == 1.0
+
+
+def test_score_attempt_accepts_summary_term_alternatives() -> None:
+    case = get_case_by_id("dead_code_cleanup_followthrough")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=700,
+        content=(
+            '{"case_id":"dead_code_cleanup_followthrough","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"Dispatch follow-through cleanup now to remove the unused compatibility shim and orphaned fields."}'
+        ),
+        session_id="sess-dead",
+        provider="codex",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=50,
+        output_tokens=20,
+        total_tokens=70,
+    )
+
+    assert attempt.passed is True
+
+
+def test_score_attempt_accepts_benchmark_summary_alternative() -> None:
+    case = get_case_by_id("model_config_reconsideration")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=800,
+        content=(
+            '{"case_id":"model_config_reconsideration","primary_action":"reconcile",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"Reconcile model selection now because fresh evidence shows the current primary is underperforming on governance-heavy work."}'
+        ),
+        session_id="sess-model",
+        provider="codex",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=2,
+        used_tool_names=["manage_model_config", "review_agent_performance"],
+        input_tokens=55,
+        output_tokens=22,
+        total_tokens=77,
+    )
+
+    assert attempt.passed is True
 
 
 def test_score_attempt_requires_specific_tool_name() -> None:
@@ -337,6 +397,36 @@ def test_precision_live_lookup_accepts_bound_shared_summary_language() -> None:
         input_tokens=80,
         output_tokens=18,
         total_tokens=98,
+    )
+
+    assert attempt.passed is True
+    assert attempt.failure_detail is None
+
+
+def test_score_attempt_accepts_signal_summary_alternative() -> None:
+    case = get_case_by_id("model_config_reconsideration")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=900,
+        content=(
+            '{"case_id":"model_config_reconsideration","primary_action":"reconcile",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"Reconcile model selection now because the current primary '
+            'keeps missing tool-heavy governance work while another configured model shows stronger success signals."}'
+        ),
+        session_id="sess-11",
+        provider="openai",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=3,
+        tool_calls_count=2,
+        used_tool_names=["manage_model_config", "review_agent_performance"],
+        input_tokens=100,
+        output_tokens=35,
+        total_tokens=135,
     )
 
     assert attempt.passed is True
@@ -480,12 +570,13 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             keep_workdirs=False,
             use_memory=False,
             memory_group_id="benchmark:bench-1",
+            task_type="heartbeat",
         )
 
     assert attempt.passed is True
     assert captured_kwargs["enable_caching"] is False
     assert captured_kwargs["skip_cache"] is True
-    assert captured_kwargs["task_type"] == "wake"
+    assert captured_kwargs["task_type"] == "heartbeat"
     assert captured_kwargs["disable_agent_fallbacks"] is True
     assert captured_kwargs["response_format"]["type"] == "json_object"
 
@@ -598,6 +689,35 @@ def test_same_task_recent_progress_case_requires_monitor_language() -> None:
     assert attempt.passed is True
 
 
+def test_same_task_recent_progress_accepts_supervise_language() -> None:
+    case = get_case_by_id("same_task_recent_progress")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=700,
+        content=(
+            '{"case_id":"same_task_recent_progress","primary_action":"monitor",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"The same-task lane shows recent progress, so I would supervise the existing work rather than redispatch it."}'
+        ),
+        session_id="sess-progress-supervise",
+        provider="openai",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=44,
+        output_tokens=18,
+        total_tokens=62,
+    )
+
+    assert attempt.passed is True
+    assert attempt.failure_detail is None
+
+
 def test_review_request_case_requires_review_language_in_summary() -> None:
     case = get_case_by_id("review_request_routes_to_reviewer")
 
@@ -624,6 +744,35 @@ def test_review_request_case_requires_review_language_in_summary() -> None:
     )
 
     assert attempt.passed is True
+
+
+def test_review_request_accepts_review_only_summary_language() -> None:
+    case = get_case_by_id("review_request_routes_to_reviewer")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=600,
+        content=(
+            '{"case_id":"review_request_routes_to_reviewer","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"Dispatch a review specialist now because the task is review-only and should not go to a coding lane."}'
+        ),
+        session_id="sess-review-only",
+        provider="openai",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=40,
+        output_tokens=16,
+        total_tokens=56,
+    )
+
+    assert attempt.passed is True
+    assert attempt.failure_detail is None
 
 
 def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:

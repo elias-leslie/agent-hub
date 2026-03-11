@@ -9,6 +9,7 @@ from typing import Any
 
 from app.api.complete.core import complete_internal
 from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
+from app.services.persona_prompt_service import render_completion_review_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +40,16 @@ class CompletionReviewOutcome:
     raw_content: str | None = None
 
 
-def _build_review_prompt(
+async def _build_review_prompt(
     *,
     completion_content: str,
     cleanup_status: str,
     workstream_inventory: str,
 ) -> str:
-    return (
-        "You are performing a bounded completion review for a finished Jenny persona session.\n\n"
-        "Decide only whether the finished session should be accepted as complete, continued with "
-        "one focused follow-up, or escalated for ambiguity/risk.\n\n"
-        "Rules:\n"
-        "- `complete` only if the session output and live residue state both indicate no obvious unfinished canonical work.\n"
-        "- `continue` if there is one concrete unresolved residue chain or next action Jenny should still handle now.\n"
-        "- `escalate` only if the evidence is contradictory, unsafe, or too ambiguous for a normal follow-up.\n"
-        "- Do not suggest speculative new work.\n"
-        "- Do not propose broad exploration, model tuning, or governance review.\n"
-        "- Focus on cleanup, workspace inspection, and session-patience residue first.\n\n"
-        "<heartbeat_output>\n"
-        f"{completion_content.strip() or '(empty)'}\n"
-        "</heartbeat_output>\n\n"
-        "<cleanup_status>\n"
-        f"{cleanup_status.strip() or '(none)'}\n"
-        "</cleanup_status>\n\n"
-        "<workstream_inventory>\n"
-        f"{workstream_inventory.strip() or '(none)'}\n"
-        "</workstream_inventory>\n\n"
-        "Return JSON only with fields `decision`, `reason`, and `focus`."
+    return await render_completion_review_prompt(
+        completion_content=completion_content,
+        cleanup_status=cleanup_status,
+        workstream_inventory=workstream_inventory,
     )
 
 
@@ -106,7 +90,7 @@ async def review_persona_completion(
     """Run one bounded supervisor review over a finished Jenny session."""
     from app.db import async_session
 
-    prompt = _build_review_prompt(
+    prompt = await _build_review_prompt(
         completion_content=completion_content,
         cleanup_status=cleanup_status,
         workstream_inventory=workstream_inventory,

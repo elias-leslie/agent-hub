@@ -277,6 +277,7 @@ async def _run_one_attempt(
     keep_workdirs: bool,
     use_memory: bool,
     memory_group_id: str,
+    task_type: str,
 ) -> JennyBenchmarkAttempt:
     case = get_case_by_id(case_id)
     workdir = working_root / benchmark_id / model_id.replace("/", "__") / case.case_id / f"run-{run_number}"
@@ -290,7 +291,6 @@ async def _run_one_attempt(
             messages=[{"role": "user", "content": message_content}],
             project_id=project_id,
             agent_slug="persona",
-            task_type="wake",
             external_id=f"jenny-benchmark:{benchmark_id}:{case.case_id}:run-{run_number}",
             enable_caching=False,
             skip_cache=True,
@@ -300,6 +300,7 @@ async def _run_one_attempt(
             working_dir=str(workdir) if case.fixture_files else None,
             execute_tools=case.execute_tools,
             timeout_seconds=timeout_seconds,
+            task_type=task_type,
             disable_agent_fallbacks=True,
             response_format={
                 "type": "json_object",
@@ -365,6 +366,7 @@ async def run_benchmark(
     client_id: str | None,
     use_memory: bool,
     memory_group_id: str | None,
+    task_type: str = "wake",
 ) -> JennyBenchmarkRun:
     benchmark_id = f"jenny-benchmark-{uuid.uuid4().hex[:8]}"
     started_at = datetime.now(UTC).isoformat()
@@ -402,6 +404,7 @@ async def run_benchmark(
                 keep_workdirs=keep_workdirs,
                 use_memory=use_memory,
                 memory_group_id=resolved_memory_group_id,
+                task_type=task_type,
             )
             attempts.append(attempt)
             logger.info(
@@ -467,6 +470,12 @@ async def main() -> None:
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
     parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
+    parser.add_argument(
+        "--task-type",
+        default="wake",
+        choices=("wake", "heartbeat"),
+        help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context",
+    )
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
     parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
     parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")
@@ -497,12 +506,21 @@ async def main() -> None:
         client_id=args.client_id,
         use_memory=args.use_memory,
         memory_group_id=args.memory_group_id,
+        task_type=args.task_type,
     )
 
     report = generate_markdown_report(run)
     persisted_run_id: str | None = None
     if not args.no_persist:
-        config_snapshot = await capture_benchmark_config_snapshot(args.agent_slug)
+        config_snapshot = await capture_benchmark_config_snapshot(
+            args.agent_slug,
+            task_type=args.task_type,
+        )
+        if config_snapshot is not None:
+            config_snapshot = {
+                **config_snapshot,
+                "benchmark_task_type": args.task_type,
+            }
         experiment_payload = None
         if args.experiment_key:
             if not args.experiment_cohort:

@@ -90,7 +90,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
             "Run your regular heartbeat check. Current time: {timestamp} ({local_time})\n\n"
             "{project_access_summary}\n\n"
             "## Model Review ({model_review_status})\n"
-            "{model_review_instructions}\n\n"
+            "- If status is `DUE`, run `review_agent_performance`.\n"
+            "- If status is not due, skip model review this heartbeat.\n\n"
             "## Available Tools ({tool_count} total)\n"
             "Beyond bash/read_file/write_file, you have: {persona_tool_list}\n\n"
             "Follow your <heartbeat_instructions> from your system context."
@@ -112,7 +113,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "[summitflow] test data" in prompt
         assert "Run your regular heartbeat check." in prompt
         assert "## Model Review (not due — skip)" in prompt
-        assert "Not due — skip model review this heartbeat." in prompt
+        assert "If status is not due, skip model review this heartbeat." in prompt
         assert "## Available Tools (5 total)" in prompt
         assert "tool1, tool2" in prompt
         assert "Follow your <heartbeat_instructions> from your system context." in prompt

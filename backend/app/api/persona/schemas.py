@@ -11,12 +11,28 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 
+class PersonaUserProfile(BaseModel):
+    """Structured user-profile fields Jenny can rely on at runtime."""
+
+    user_identity: str | None = None
+    work_context: str | None = None
+    communication_style: str | None = None
+    autonomy_level: str | None = None
+    notification_preferences: str | None = None
+    timezone: str | None = Field(default=None, max_length=100)
+    working_schedule: str | None = None
+    priorities_values: str | None = None
+    tools_and_integrations: str | None = None
+    boundaries_and_escalation: str | None = None
+
+
 class PersonaResponse(BaseModel):
     """Full persona representation."""
 
     id: int
     name: str
     personality: str | None = None
+    user_profile: PersonaUserProfile | None = None
     heartbeat_instructions: str | None = None
     user_context: str | None = None
     voice_id: str = "en-US-AriaNeural"
@@ -41,6 +57,7 @@ class PersonaUpdate(BaseModel):
 
     name: str | None = Field(default=None, max_length=100)
     personality: str | None = None
+    user_profile: PersonaUserProfile | None = None
     heartbeat_instructions: str | None = None
     user_context: str | None = None
     voice_id: str | None = Field(default=None, max_length=200)

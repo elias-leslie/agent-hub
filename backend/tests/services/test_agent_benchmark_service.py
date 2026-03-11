@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.agent_benchmark_service import (
+    _should_update_regression_clusters,
     capture_benchmark_config_snapshot,
     summarize_benchmark_experiment,
 )
@@ -28,6 +29,11 @@ def _make_run(
         pass_rate=pass_rate,
         config_snapshot=config_snapshot or {"primary_model_id": "codex/gpt-5.4", "thinking_level": "medium"},
         completed_at=datetime.fromisoformat(completed_at),
+        models=["codex/gpt-5.4"],
+        case_ids=["jenny-patience"],
+        runs_per_case=1,
+        use_memory=False,
+        run_kind="benchmark",
     )
 
 
@@ -133,6 +139,24 @@ def test_summarize_benchmark_experiment_rolls_back_clear_candidate_loss() -> Non
     assert summary["score_delta"]["mean_delta"] and summary["score_delta"]["mean_delta"] < 0
 
 
+def test_summarize_benchmark_experiment_rolls_back_when_candidate_never_catches_up() -> None:
+    experiment = _make_experiment()
+    runs = [
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0),
+        _make_run(cohort="candidate", avg_score=88.9, pass_rate=83.3),
+        _make_run(cohort="candidate", avg_score=88.9, pass_rate=83.3),
+    ]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["decision"] == "rollback"
+    assert summary["decision_reason"] == "candidate_underperforms_baseline"
+    assert summary["score_delta"]["ci_high"] == 0.0
+
+
 def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> None:
     experiment = _make_experiment()
     runs = [
@@ -205,9 +229,53 @@ def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> 
     assert summary["decision_reason"] == "no_clear_winner"
 
 
+def test_summarize_benchmark_experiment_holds_when_candidate_model_roster_drifts() -> None:
+    experiment = _make_experiment()
+    runs = [
+        _make_run(cohort="baseline", avg_score=90.0, pass_rate=60.0),
+        _make_run(cohort="baseline", avg_score=90.5, pass_rate=66.7),
+        _make_run(cohort="baseline", avg_score=91.0, pass_rate=66.7),
+        _make_run(cohort="candidate", avg_score=95.0, pass_rate=83.3),
+        _make_run(
+            cohort="candidate",
+            avg_score=95.5,
+            pass_rate=83.3,
+            config_snapshot={"primary_model_id": "codex/gpt-5.4", "thinking_level": "medium"},
+        ),
+        _make_run(
+            cohort="candidate",
+            avg_score=95.0,
+            pass_rate=83.3,
+            config_snapshot={"primary_model_id": "codex/gpt-5.4", "thinking_level": "medium"},
+        ),
+    ]
+    runs[3].models = ["codex/gpt-5.4"]
+    runs[4].models = ["claude-opus-4-6"]
+    runs[5].models = ["codex/gpt-5.4"]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["decision"] == "hold"
+    assert summary["decision_reason"] == "mixed_config"
+    assert summary["candidate"]["config_stable"] is False
+
+
+def test_should_update_regression_clusters_skips_candidate_experiment_runs_by_default() -> None:
+    assert _should_update_regression_clusters(experiment_cohort="candidate", metadata={}) is False
+    assert _should_update_regression_clusters(experiment_cohort="baseline", metadata={}) is True
+
+
+def test_should_update_regression_clusters_honors_explicit_override() -> None:
+    assert _should_update_regression_clusters(
+        experiment_cohort="candidate",
+        metadata={"update_regression_clusters": True},
+    ) is True
+
+
 @pytest.mark.asyncio
 async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_for_persona() -> None:
     persona_agent = SimpleNamespace(
+        id=17,
         slug="persona",
         version=7,
         primary_model_id="codex/gpt-5.4",
@@ -231,8 +299,16 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         temperature=0.2,
     )
 
+    persona = SimpleNamespace(
+        personality="Warm, direct, adaptive.",
+        user_context="Prefers concise release updates.",
+        user_profile={"timezone": "America/New_York", "autonomy_level": "high"},
+        onboarding_phase="complete",
+    )
     mock_db = AsyncMock()
-    mock_db.scalar = AsyncMock(side_effect=[persona_agent, heartbeat_prompt, supervisor_agent])
+    mock_db.scalar = AsyncMock(
+        side_effect=[persona_agent, persona, heartbeat_prompt, supervisor_agent]
+    )
 
     from contextlib import asynccontextmanager
 
@@ -240,10 +316,36 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
     async def _session():
         yield mock_db
 
-    with patch("app.services.agent_benchmark_service.async_session", _session):
-        snapshot = await capture_benchmark_config_snapshot("persona")
+    with (
+        patch("app.services.agent_benchmark_service.async_session", _session),
+        patch(
+            "app.services.agent_benchmark_service.collect_runtime_prompt_sections",
+            new=AsyncMock(
+                return_value=[
+                    SimpleNamespace(
+                        source_kind="agent_system_prompt",
+                        source_id="persona",
+                        content_hash="abcd1234",
+                        to_snapshot_dict=lambda: {
+                            "label": "Agent System Prompt",
+                            "source_kind": "agent_system_prompt",
+                            "source_id": "persona",
+                            "content_hash": "abcd1234",
+                            "chars": 32,
+                            "estimated_tokens": 8,
+                        },
+                    )
+                ]
+            ),
+        ),
+        patch("app.services.agent_benchmark_service._task_prompt_slugs", return_value=[]),
+    ):
+        snapshot = await capture_benchmark_config_snapshot("persona", task_type="heartbeat")
 
     assert snapshot["primary_model_id"] == "codex/gpt-5.4"
+    assert snapshot["prompt_stack"]["task_type"] == "heartbeat"
+    assert snapshot["prompt_stack"]["descriptors"] == ["agent_system_prompt:persona:abcd1234"]
     assert snapshot["heartbeat_prompt"]["slug"] == "persona-heartbeat-instructions"
     assert snapshot["completion_reviewer"]["agent_slug"] == "supervisor"
     assert snapshot["completion_reviewer"]["primary_model_id"] == "claude-opus-4-6"
+    assert snapshot["persona_documents"]["user_profile"]["field_count"] == 2

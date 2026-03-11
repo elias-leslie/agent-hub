@@ -16,5 +16,23 @@ export interface AgentPreview {
     name: string;
     combined_prompt: string;
     mandate_count: number;
+    guardrail_count?: number;
     mandate_uuids: string[];
+    guardrail_uuids?: string[];
+    task_type?: "chat" | "heartbeat" | "wake" | "review" | null;
+    phase?: string | null;
+    project_id?: string | null;
+    task_prompt?: string | null;
+    sections?: Array<{
+        label: string;
+        source_kind: string;
+        source_id: string;
+        content_hash: string;
+        chars: number;
+        estimated_tokens: number;
+        content: string;
+        role?: string | null;
+        priority?: number | null;
+        updated_at?: string | null;
+    }>;
 }

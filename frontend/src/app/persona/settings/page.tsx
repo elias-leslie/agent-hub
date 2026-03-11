@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Menu } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -23,12 +23,14 @@ import { PromptTab } from "@/app/agents/[slug]/components/PromptTab";
 import { PromptsTab } from "@/app/agents/[slug]/components/PromptsTab";
 import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
+import type { PreviewTaskType } from "@/app/agents/[slug]/types";
 
 export default function PersonaSettingsPage() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
   const [activeTab, setActiveTab] = useState<PersonaTabId>("identity");
   const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewTaskType>("heartbeat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
@@ -52,7 +54,13 @@ export default function PersonaSettingsPage() {
     previewFetching,
     refetchPreview,
     refreshPersona,
-  } = usePersonaSettings();
+  } = usePersonaSettings(previewMode);
+
+  useEffect(() => {
+    if (showInlinePreview) {
+      refetchPreview();
+    }
+  }, [previewMode, showInlinePreview, refetchPreview]);
 
   if (personaLoading || agentLoading) {
     return (
@@ -164,6 +172,8 @@ export default function PersonaSettingsPage() {
                     previewFetching={previewFetching}
                     showInlinePreview={showInlinePreview}
                     setShowInlinePreview={setShowInlinePreview}
+                    previewMode={previewMode}
+                    setPreviewMode={setPreviewMode}
                     updateField={updateAgentField}
                     refetchPreview={refetchPreview}
                   />

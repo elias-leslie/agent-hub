@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.persona_documents import normalize_user_profile
 from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
@@ -47,6 +48,7 @@ async def update_persona(
         return await persona_to_response(db, persona)
 
     heartbeat_instructions = update_data.pop("heartbeat_instructions", None)
+    user_profile = update_data.pop("user_profile", None)
 
     for field in PROTECTED_TEXT_FIELDS:
         if field in update_data and update_data[field] is not None:
@@ -68,6 +70,9 @@ async def update_persona(
                 ),
             )
         await set_persona_heartbeat_instructions(db, new_text)
+
+    if user_profile is not None:
+        persona.user_profile = normalize_user_profile(user_profile)
 
     for field, value in update_data.items():
         setattr(persona, field, value)

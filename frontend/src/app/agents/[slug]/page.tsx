@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { Agent, TabId } from "./types";
+import { Agent, PreviewTaskType, TabId } from "./types";
 import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
 import { AgentEditorHeader } from "./components/AgentEditorHeader";
 import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
@@ -36,6 +36,7 @@ export default function AgentEditorPage() {
   const [hasChanges, setHasChanges] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [previewMode, setPreviewMode] = useState<PreviewTaskType>("chat");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: agent, isLoading, error } = useQuery({
@@ -50,8 +51,8 @@ export default function AgentEditorPage() {
   });
 
   const { data: preview, refetch: refetchPreview, isFetching: previewFetching } = useQuery({
-    queryKey: ["agent-preview", slug],
-    queryFn: () => fetchPreview(slug),
+    queryKey: ["agent-preview", slug, previewMode],
+    queryFn: () => fetchPreview(slug, { taskType: previewMode }),
     enabled: (showPreview || showInlinePreview) && !!slug,
   });
 
@@ -179,6 +180,8 @@ export default function AgentEditorPage() {
                 previewFetching={previewFetching}
                 showInlinePreview={showInlinePreview}
                 setShowInlinePreview={setShowInlinePreview}
+                previewMode={previewMode}
+                setPreviewMode={setPreviewMode}
                 updateField={updateField}
                 refetchPreview={refetchPreview}
               />
@@ -206,6 +209,7 @@ export default function AgentEditorPage() {
       {showPreview && (
         <PreviewModal
           preview={preview}
+          previewMode={previewMode}
           onClose={() => setShowPreview(false)}
         />
       )}

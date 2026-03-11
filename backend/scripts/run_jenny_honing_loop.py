@@ -11,7 +11,9 @@ import os
 import sys
 import uuid
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,12 +33,25 @@ sys.path.insert(0, str(ROOT / "packages" / "agent-hub-client"))
 
 from agent_hub import AsyncAgentHubClient
 
+from app.db import async_session
 from app.services.agent_benchmark_service import (
     capture_benchmark_config_snapshot,
+    get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
+    summarize_benchmark_experiment,
 )
+from app.services.agent_service import get_agent_service
+from app.services.persona_instruction_service import (
+    get_persona_heartbeat_instructions,
+    set_persona_heartbeat_instructions,
+)
+from app.services.prompt_service import list_prompt_revisions, restore_prompt_revision
 from scripts.jenny_benchmark_cases import DEFAULT_JENNY_BENCHMARK_MODELS, get_jenny_benchmark_cases
-from scripts.jenny_benchmark_eval import JennyBenchmarkAttempt, JennyBenchmarkRun
+from scripts.jenny_benchmark_eval import (
+    JennyBenchmarkAttempt,
+    JennyBenchmarkRun,
+    summarize_attempts,
+)
 from scripts.jenny_benchmark_report import generate_markdown_report
 from scripts.run_jenny_model_benchmark import (
     _fetch_used_tool_names,
@@ -90,6 +105,11 @@ class JennyHoningIteration:
     failure_clusters: list[dict[str, Any]] | None = None
     persistent_failure_clusters: list[dict[str, Any]] | None = None
     persisted_run_id: str | None = None
+    baseline_run_ids: list[str] | None = None
+    candidate_run_ids: list[str] | None = None
+    experiment_key: str | None = None
+    experiment_summary: dict[str, Any] | None = None
+    rollback_applied: bool = False
     improvement_session_id: str | None = None
     improvement_tools: list[str] | None = None
     improvement_content: str | None = None
@@ -132,6 +152,175 @@ def _group_failures(attempts: list[JennyBenchmarkAttempt]) -> list[dict[str, Any
         )
     ranked.sort(key=lambda item: (-item["count"], item["avg_score"], item["case_id"]))
     return ranked
+
+
+@dataclass
+class JennyMutableState:
+    heartbeat_instructions: str
+    heartbeat_revision_id: str | None
+    primary_model_id: str
+    fallback_models: list[str]
+    escalation_model_id: str | None
+    temperature: float
+    thinking_level: str | None
+
+
+async def _capture_jenny_mutable_state(agent_slug: str) -> JennyMutableState:
+    async with async_session() as db:
+        heartbeat_instructions = await get_persona_heartbeat_instructions(db) or ""
+        revisions = await list_prompt_revisions(db, "persona-heartbeat-instructions", limit=1)
+        heartbeat_revision_id = revisions[0].id if revisions else None
+        agent_service = get_agent_service()
+        agent = await agent_service.get_by_slug(db, agent_slug)
+        if agent is None:
+            raise RuntimeError(f"Agent '{agent_slug}' not found")
+        return JennyMutableState(
+            heartbeat_instructions=heartbeat_instructions,
+            heartbeat_revision_id=heartbeat_revision_id,
+            primary_model_id=agent.primary_model_id,
+            fallback_models=list(agent.fallback_models or []),
+            escalation_model_id=agent.escalation_model_id,
+            temperature=float(agent.temperature),
+            thinking_level=agent.thinking_level,
+        )
+
+
+async def _restore_jenny_mutable_state(
+    agent_slug: str,
+    state: JennyMutableState,
+    *,
+    reason: str,
+) -> None:
+    async with async_session() as db:
+        if state.heartbeat_revision_id:
+            await restore_prompt_revision(
+                db,
+                "persona-heartbeat-instructions",
+                state.heartbeat_revision_id,
+                changed_by="persona-benchmark-honing",
+                change_reason=reason,
+            )
+        else:
+            await set_persona_heartbeat_instructions(
+                db,
+                state.heartbeat_instructions,
+                changed_by="persona-benchmark-honing",
+                change_reason=reason,
+            )
+            await db.commit()
+
+        agent_service = get_agent_service()
+        agent = await agent_service.get_by_slug(db, agent_slug)
+        if agent is None:
+            raise RuntimeError(f"Agent '{agent_slug}' not found for restore")
+        await agent_service.update(
+            db,
+            agent.id,
+            primary_model_id=state.primary_model_id,
+            fallback_models=list(state.fallback_models),
+            escalation_model_id=state.escalation_model_id,
+            temperature=state.temperature,
+            thinking_level=state.thinking_level,
+            changed_by="persona-benchmark-honing",
+            change_reason=reason,
+        )
+
+
+def _merge_runs(
+    runs: list[JennyBenchmarkRun],
+    *,
+    benchmark_id: str,
+) -> JennyBenchmarkRun:
+    if not runs:
+        raise ValueError("Cannot merge empty benchmark run list")
+
+    attempts: list[JennyBenchmarkAttempt] = []
+    models: list[str] = []
+    case_ids: list[str] = []
+    for run in runs:
+        attempts.extend(run.attempts)
+        for model_id in run.models:
+            if model_id not in models:
+                models.append(model_id)
+        for case_id in run.case_ids:
+            if case_id not in case_ids:
+                case_ids.append(case_id)
+
+    return JennyBenchmarkRun(
+        benchmark_id=benchmark_id,
+        project_id=runs[0].project_id,
+        models=models,
+        case_ids=case_ids,
+        runs_per_case=sum(run.runs_per_case for run in runs),
+        started_at=runs[0].started_at,
+        completed_at=runs[-1].completed_at,
+        attempts=attempts,
+        summaries=summarize_attempts(attempts),
+    )
+
+
+def _cohort_run_summary(
+    run: JennyBenchmarkRun,
+    *,
+    cohort: str,
+    config_snapshot: dict[str, Any],
+) -> SimpleNamespace:
+    attempt_count = len(run.attempts)
+    passed_attempt_count = sum(1 for attempt in run.attempts if attempt.passed)
+    avg_score = (
+        sum(float(attempt.composite_score) for attempt in run.attempts) / attempt_count
+        if attempt_count
+        else 0.0
+    )
+    pass_rate = ((passed_attempt_count / attempt_count) * 100) if attempt_count else 0.0
+    return SimpleNamespace(
+        experiment_cohort=cohort,
+        avg_score=avg_score,
+        pass_rate=pass_rate,
+        config_snapshot=config_snapshot,
+        completed_at=datetime.fromisoformat(run.completed_at.replace("Z", "+00:00")),
+    )
+
+
+async def _persist_cohort_runs(
+    *,
+    runs: list[JennyBenchmarkRun],
+    cohort: str,
+    experiment_key: str,
+    experiment_name: str,
+    hypothesis: str,
+    suite_id: str,
+    project_id: str,
+    agent_slug: str,
+    use_memory: bool,
+    seed_start: int,
+    run_kind: str,
+    min_runs_per_cohort: int,
+    config_snapshot: dict[str, Any],
+) -> list[str]:
+    run_ids: list[str] = []
+    for offset, run in enumerate(runs):
+        payload = build_persistence_payload(
+            run,
+            agent_slug=agent_slug,
+            suite_id=suite_id,
+            run_kind=run_kind,
+            use_memory=use_memory,
+            seed=seed_start + offset,
+            config_snapshot=dict(config_snapshot),
+            metadata={"honing_cohort": cohort},
+            experiment={
+                "experiment_key": experiment_key,
+                "name": experiment_name,
+                "cohort": cohort,
+                "hypothesis": hypothesis,
+                "suite_id": suite_id,
+                "project_id": project_id,
+                "min_runs_per_cohort": min_runs_per_cohort,
+            },
+        )
+        run_ids.append(await persist_benchmark_payload(payload))
+    return run_ids
 
 
 def _cluster_key(cluster: dict[str, Any]) -> tuple[str, str]:
@@ -263,7 +452,7 @@ async def _run_improvement_pass(
         external_id=f"jenny-honing:{run.benchmark_id}:iteration-{iteration}",
         enable_caching=False,
         skip_cache=True,
-        use_memory=True,
+        use_memory=False,
         max_turns=12,
         working_dir=str(ROOT),
         execute_tools=True,
@@ -293,7 +482,9 @@ async def run_honing_loop(
     timeout_seconds: float,
     client_id: str | None,
     use_memory: bool,
+    benchmark_task_type: str,
     max_iterations: int,
+    cohort_repetitions: int,
     base_url: str,
     output_json_path: Path | None = None,
     suite_id: str | None = None,
@@ -303,6 +494,7 @@ async def run_honing_loop(
     """Run benchmark/improve cycles until honed or the iteration cap is hit."""
     resolved_client_id = await _resolve_client_id(client_id, project_id)
     iterations: list[JennyHoningIteration] = []
+    honed = False
     previous_best_score: float | None = None
     previous_failing_attempts: int | None = None
     previous_clusters: list[dict[str, Any]] | None = None
@@ -315,6 +507,7 @@ async def run_honing_loop(
         cli_command="run_jenny_honing_loop",
     ) as client:
         for iteration in range(1, max_iterations + 1):
+            baseline_state = await _capture_jenny_mutable_state(agent_slug)
             benchmark_run = await run_benchmark(
                 models=models,
                 case_ids=case_ids,
@@ -328,9 +521,17 @@ async def run_honing_loop(
                 client_id=resolved_client_id,
                 use_memory=use_memory,
                 memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}",
+                task_type=benchmark_task_type,
             )
             report_path = _write_iteration_report(output_dir, benchmark_run, iteration)
-            config_snapshot = await capture_benchmark_config_snapshot(agent_slug)
+            baseline_config_snapshot = await capture_benchmark_config_snapshot(
+                agent_slug,
+                task_type=benchmark_task_type,
+            )
+            baseline_config_snapshot = {
+                **baseline_config_snapshot,
+                "benchmark_task_type": benchmark_task_type,
+            }
             top_summary = benchmark_run.summaries[0] if benchmark_run.summaries else None
             failing_attempts = sum(1 for attempt in benchmark_run.attempts if not attempt.passed)
             failure_clusters = _group_failures(benchmark_run.attempts)
@@ -345,6 +546,7 @@ async def run_honing_loop(
                 failure_clusters=failure_clusters,
                 persistent_failure_clusters=persistent_clusters,
             )
+            suite_name = suite_id or derive_suite_id(case_ids)
 
             if failing_attempts == 0:
                 if persist_results:
@@ -355,7 +557,7 @@ async def run_honing_loop(
                         run_kind="honing_iteration",
                         use_memory=use_memory,
                         seed=seed + iteration - 1,
-                        config_snapshot=config_snapshot,
+                        config_snapshot=baseline_config_snapshot,
                         metadata={
                             "iteration": iteration,
                             "benchmark_report_path": report_path,
@@ -366,12 +568,13 @@ async def run_honing_loop(
                     )
                     record.persisted_run_id = await persist_benchmark_payload(payload)
                 iterations.append(record)
+                honed = True
                 if output_json_path:
                     output_json_path.parent.mkdir(parents=True, exist_ok=True)
                     output_json_path.write_text(json.dumps({
                         "iterations": [item.to_dict() for item in iterations],
                         "completed_iterations": len(iterations),
-                        "honed": True,
+                        "honed": honed,
                     }, indent=2))
                 break
 
@@ -389,7 +592,7 @@ async def run_honing_loop(
                         run_kind="honing_iteration",
                         use_memory=use_memory,
                         seed=seed + iteration - 1,
-                        config_snapshot=config_snapshot,
+                        config_snapshot=baseline_config_snapshot,
                         metadata={
                             "iteration": iteration,
                             "benchmark_report_path": report_path,
@@ -422,33 +625,162 @@ async def run_honing_loop(
             record.improvement_content = content
             record.improvement_tools = tools
             record.improvement_parsed = parsed
-            if persist_results:
-                payload = build_persistence_payload(
-                    benchmark_run,
-                    agent_slug=agent_slug,
-                    suite_id=suite_id or derive_suite_id(case_ids),
-                    run_kind="honing_iteration",
-                    use_memory=use_memory,
-                    seed=seed + iteration - 1,
-                    config_snapshot=config_snapshot,
-                    metadata={
-                        "iteration": iteration,
-                        "benchmark_report_path": report_path,
-                        "failure_clusters": failure_clusters,
-                        "persistent_failure_clusters": persistent_clusters,
-                        "improvement": {
-                            "session_id": session_id,
-                            "tools": tools,
-                            "parsed": parsed,
-                            "raw_content": content,
-                        },
-                    },
+
+            baseline_runs = [benchmark_run]
+            for extra_index in range(1, cohort_repetitions):
+                baseline_runs.append(
+                    await run_benchmark(
+                        models=models,
+                        case_ids=case_ids,
+                        runs_per_case=runs_per_case,
+                        project_id=project_id,
+                        working_root=working_root,
+                        seed=seed + iteration * 100 + extra_index,
+                        timeout_seconds=timeout_seconds,
+                        keep_workdirs=False,
+                        base_url=base_url,
+                        client_id=resolved_client_id,
+                        use_memory=use_memory,
+                        memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}",
+                        task_type=benchmark_task_type,
+                    )
                 )
-                record.persisted_run_id = await persist_benchmark_payload(payload)
+
+            candidate_runs: list[JennyBenchmarkRun] = []
+            for candidate_index in range(cohort_repetitions):
+                candidate_runs.append(
+                    await run_benchmark(
+                        models=models,
+                        case_ids=case_ids,
+                        runs_per_case=runs_per_case,
+                        project_id=project_id,
+                        working_root=working_root,
+                        seed=seed + iteration * 1000 + candidate_index,
+                        timeout_seconds=timeout_seconds,
+                        keep_workdirs=False,
+                        base_url=base_url,
+                        client_id=resolved_client_id,
+                        use_memory=use_memory,
+                        memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}",
+                        task_type=benchmark_task_type,
+                    )
+                )
+
+            experiment_key = f"jenny-honing-{suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
+            record.experiment_key = experiment_key
+
+            candidate_config_snapshot = await capture_benchmark_config_snapshot(
+                agent_slug,
+                task_type=benchmark_task_type,
+            )
+            candidate_config_snapshot = {
+                **candidate_config_snapshot,
+                "benchmark_task_type": benchmark_task_type,
+            }
+            baseline_run_ids: list[str] = []
+            candidate_run_ids: list[str] = []
+            if persist_results:
+                baseline_run_ids = await _persist_cohort_runs(
+                    runs=baseline_runs,
+                    cohort="baseline",
+                    experiment_key=experiment_key,
+                    experiment_name=f"Jenny honing iteration {iteration}",
+                    hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
+                    suite_id=suite_name,
+                    project_id=project_id,
+                    agent_slug=agent_slug,
+                    use_memory=use_memory,
+                    seed_start=seed + iteration * 100,
+                    run_kind="honing_baseline",
+                    min_runs_per_cohort=cohort_repetitions,
+                    config_snapshot=baseline_config_snapshot,
+                )
+                candidate_run_ids = await _persist_cohort_runs(
+                    runs=candidate_runs,
+                    cohort="candidate",
+                    experiment_key=experiment_key,
+                    experiment_name=f"Jenny honing iteration {iteration}",
+                    hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
+                    suite_id=suite_name,
+                    project_id=project_id,
+                    agent_slug=agent_slug,
+                    use_memory=use_memory,
+                    seed_start=seed + iteration * 1000,
+                    run_kind="honing_candidate",
+                    min_runs_per_cohort=cohort_repetitions,
+                    config_snapshot=candidate_config_snapshot,
+                )
+            record.baseline_run_ids = baseline_run_ids or None
+            record.candidate_run_ids = candidate_run_ids or None
+
+            baseline_snapshots = [dict(baseline_config_snapshot) for _ in baseline_runs]
+            candidate_snapshots = [dict(candidate_config_snapshot) for _ in candidate_runs]
+            experiment = SimpleNamespace(
+                experiment_key=experiment_key,
+                name=f"Jenny honing iteration {iteration}",
+                suite_id=suite_name,
+                status="open",
+                hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
+                baseline_label="baseline",
+                candidate_label="candidate",
+                min_runs_per_cohort=cohort_repetitions,
+                updated_at=datetime.now(UTC),
+                created_at=datetime.now(UTC),
+            )
+            local_experiment_runs = [
+                *[
+                    _cohort_run_summary(run, cohort="baseline", config_snapshot=snapshot)
+                    for run, snapshot in zip(baseline_runs, baseline_snapshots, strict=True)
+                ],
+                *[
+                    _cohort_run_summary(run, cohort="candidate", config_snapshot=snapshot)
+                    for run, snapshot in zip(candidate_runs, candidate_snapshots, strict=True)
+                ],
+            ]
+            experiment_summary = summarize_benchmark_experiment(experiment, local_experiment_runs)
+            if persist_results:
+                async with async_session() as db:
+                    persisted_summary = await get_benchmark_experiment_summary_by_key(db, experiment_key)
+                if persisted_summary:
+                    experiment_summary = persisted_summary
+            record.experiment_summary = experiment_summary
+
+            decision = experiment_summary["decision"]
+            if decision != "promote":
+                await _restore_jenny_mutable_state(
+                    agent_slug,
+                    baseline_state,
+                    reason=f"Reverted non-promoted honing candidate iteration {iteration}",
+                )
+                record.rollback_applied = True
+                merged_baseline_run = _merge_runs(
+                    baseline_runs,
+                    benchmark_id=f"{experiment_key}-baseline-merged",
+                )
+                previous_best_score = merged_baseline_run.summaries[0].avg_composite_score if merged_baseline_run.summaries else record.top_score
+                previous_failing_attempts = sum(1 for attempt in merged_baseline_run.attempts if not attempt.passed)
+                previous_clusters = _group_failures(merged_baseline_run.attempts)
+            else:
+                merged_candidate_run = _merge_runs(
+                    candidate_runs,
+                    benchmark_id=f"{experiment_key}-candidate-merged",
+                )
+                previous_best_score = merged_candidate_run.summaries[0].avg_composite_score if merged_candidate_run.summaries else record.top_score
+                previous_failing_attempts = sum(1 for attempt in merged_candidate_run.attempts if not attempt.passed)
+                previous_clusters = _group_failures(merged_candidate_run.attempts)
+
             iterations.append(record)
-            previous_best_score = record.top_score
-            previous_failing_attempts = failing_attempts
-            previous_clusters = failure_clusters
+
+            if decision == "promote" and previous_failing_attempts == 0:
+                honed = True
+                if output_json_path:
+                    output_json_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_json_path.write_text(json.dumps({
+                        "iterations": [item.to_dict() for item in iterations],
+                        "completed_iterations": len(iterations),
+                        "honed": honed,
+                    }, indent=2))
+                break
 
             if output_json_path:
                 output_json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -461,7 +793,7 @@ async def run_honing_loop(
     return {
         "iterations": [record.to_dict() for record in iterations],
         "completed_iterations": len(iterations),
-        "honed": bool(iterations and iterations[-1].failing_attempts == 0),
+        "honed": honed,
     }
 
 
@@ -486,7 +818,19 @@ async def main() -> None:
     parser.add_argument("--base-url", default="http://localhost:8003", help="Agent Hub base URL")
     parser.add_argument("--client-id", help="Registered Agent Hub client id")
     parser.add_argument("--max-iterations", type=int, default=2, help="Maximum benchmark/improve cycles")
+    parser.add_argument(
+        "--cohort-repetitions",
+        type=int,
+        default=3,
+        help="Repeated baseline/candidate suite runs per honing iteration",
+    )
     parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection")
+    parser.add_argument(
+        "--benchmark-task-type",
+        default="wake",
+        choices=("wake", "heartbeat"),
+        help="Agent task type to benchmark during the honing loop",
+    )
     parser.add_argument("--output-json", help="Write final loop result to this path")
     parser.add_argument("--suite-id", help="Stable suite identifier for trend/history grouping")
     parser.add_argument("--agent-slug", default="persona", help="Agent slug to attribute benchmark history to")
@@ -508,7 +852,9 @@ async def main() -> None:
         timeout_seconds=args.timeout_seconds,
         client_id=args.client_id,
         use_memory=args.use_memory,
+        benchmark_task_type=args.benchmark_task_type,
         max_iterations=args.max_iterations,
+        cohort_repetitions=args.cohort_repetitions,
         base_url=args.base_url,
         output_json_path=Path(args.output_json) if args.output_json else None,
         suite_id=args.suite_id,

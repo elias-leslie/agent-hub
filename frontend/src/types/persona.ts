@@ -1,7 +1,21 @@
+export interface PersonaUserProfile {
+  user_identity?: string | null;
+  work_context?: string | null;
+  communication_style?: string | null;
+  autonomy_level?: string | null;
+  notification_preferences?: string | null;
+  timezone?: string | null;
+  working_schedule?: string | null;
+  priorities_values?: string | null;
+  tools_and_integrations?: string | null;
+  boundaries_and_escalation?: string | null;
+}
+
 export interface Persona {
   id: number;
   name: string;
   personality: string | null;
+  user_profile: PersonaUserProfile | null;
   heartbeat_instructions: string | null;
   user_context: string | null;
   voice_id: string;
@@ -25,6 +39,7 @@ export interface Persona {
 export interface PersonaUpdate {
   name?: string;
   personality?: string;
+  user_profile?: PersonaUserProfile | null;
   heartbeat_instructions?: string;
   user_context?: string;
   voice_id?: string;
