@@ -49,6 +49,8 @@ class HeartbeatResult(BaseModel):
     format_compliant: bool = True
     summary_stored: bool = False
     mcp_retried: int = 0
+    followup_dispatched: bool = False
+    followup_reason: str | None = None
 
 
 class HeartbeatRuntimeInfo(BaseModel):
@@ -202,7 +204,7 @@ async def _execute_heartbeat(interval_minutes: int, target_project_id: str | Non
         return HeartbeatResult(
             status="error", error=str(e), interval_minutes=interval_minutes
         )
-    return await postprocess_heartbeat(result, interval_minutes)
+    return await postprocess_heartbeat(result, interval_minutes, target_project_id=target_project_id)
 
 
 async def _do_completion(interval_minutes: int, target_project_id: str | None = None):

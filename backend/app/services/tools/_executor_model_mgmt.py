@@ -10,6 +10,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _resolve_catalog_model_id(model_id: str | None) -> str | None:
+    """Resolve aliases to canonical catalog IDs for model-management actions."""
+    if not model_id:
+        return None
+
+    from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
+
+    resolved = resolve_model(model_id)
+    if resolved in MODEL_CATALOG_BY_ID:
+        return resolved
+    return model_id
+
+
 async def list_models() -> str:
     """List all catalog models with merged benchmark scores."""
     try:
@@ -82,13 +95,14 @@ async def get_model_details(model_id: str | None) -> str:
         from app.db import async_session
         from app.services.model_enrichment_service import get_all_enrichments
 
-        entry = next((m for m in MODEL_CATALOG if m.id == model_id), None)
+        resolved_model_id = _resolve_catalog_model_id(model_id)
+        entry = next((m for m in MODEL_CATALOG if m.id == resolved_model_id), None)
         if not entry:
             return f"Error: Model '{model_id}' not found in catalog"
 
         async with async_session() as db:
             enrichments = await get_all_enrichments(db)
-        enr = enrichments.get(model_id)
+        enr = enrichments.get(entry.id)
 
         lines = [
             f"# {entry.name} ({entry.id})",
@@ -153,6 +167,13 @@ async def update_agent_model(
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
+        resolved_primary_model_id = _resolve_catalog_model_id(primary_model_id)
+        resolved_fallback_models = (
+            [_resolve_catalog_model_id(model_id) or model_id for model_id in fallback_models]
+            if fallback_models
+            else None
+        )
+        resolved_escalation_model_id = _resolve_catalog_model_id(escalation_model_id)
 
         async with async_session() as db:
             agent = await agent_service.get_by_slug(db, agent_slug)
@@ -162,9 +183,9 @@ async def update_agent_model(
             updated = await agent_service.update(
                 db,
                 agent.id,
-                primary_model_id=primary_model_id,
-                fallback_models=fallback_models,
-                escalation_model_id=escalation_model_id,
+                primary_model_id=resolved_primary_model_id,
+                fallback_models=resolved_fallback_models,
+                escalation_model_id=resolved_escalation_model_id,
                 temperature=temperature,
                 thinking_level=thinking_level,
                 changed_by="persona",
@@ -175,12 +196,12 @@ async def update_agent_model(
             return f"Error: Failed to update agent '{agent_slug}'"
 
         changes = []
-        if primary_model_id:
-            changes.append(f"primary_model={primary_model_id}")
-        if fallback_models:
-            changes.append(f"fallback_models={fallback_models}")
-        if escalation_model_id:
-            changes.append(f"escalation_model={escalation_model_id}")
+        if resolved_primary_model_id:
+            changes.append(f"primary_model={resolved_primary_model_id}")
+        if resolved_fallback_models:
+            changes.append(f"fallback_models={resolved_fallback_models}")
+        if resolved_escalation_model_id:
+            changes.append(f"escalation_model={resolved_escalation_model_id}")
         if temperature is not None:
             changes.append(f"temperature={temperature}")
         if thinking_level:

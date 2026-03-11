@@ -99,6 +99,36 @@ class TestAgentHubClient:
 
         assert response.content == "Response"
 
+    def test_complete_includes_task_type_in_request_payload(self, httpx_mock: HTTPXMock) -> None:
+        """Task type should pass through to the completion payload."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "Response",
+                "model": "claude-sonnet-4-6-20250514",
+                "provider": "claude",
+                "usage": {"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
+                "session_id": "test",
+                "from_cache": False,
+            },
+        )
+
+        with AgentHubClient() as client:
+            client.complete(
+                model="claude-sonnet-4-6",
+                messages=[{"role": "user", "content": "Test"}],
+                project_id="test-project",
+                task_type="wake",
+            )
+
+        request = httpx_mock.get_request()
+        assert request is not None
+        import json
+
+        body = json.loads(request.content)
+        assert body["task_type"] == "wake"
+
     def test_complete_401_error(self, httpx_mock: HTTPXMock) -> None:
         """Test 401 authentication error."""
         httpx_mock.add_response(

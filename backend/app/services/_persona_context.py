@@ -17,6 +17,15 @@ from app.services._persona_templates import (
 
 logger = logging.getLogger(__name__)
 
+HEARTBEAT_FOCUS_HARNESS = """\
+## Focus Harness
+
+- quiet + active => wait
+- recent progress => monitor or wait; do not redispatch
+- cleanup/workspace gate unresolved => should_dispatch=false
+- explicit stalled/failed/terminated evidence => reconcile
+- Before ending, run one final completion audit: unresolved gate, fresh progress, or explicit stall evidence. If none apply, stop."""
+
 
 def _build_onboarding_section(persona: Persona) -> str | None:
     """Return the onboarding XML section for the current phase, or None."""
@@ -98,6 +107,8 @@ async def get_persona_context_for_agent(
         heartbeat_instructions = None
 
     sections.extend(_build_persona_sections(persona, task_type=task_type))
+    if task_type in {"heartbeat", "wake"}:
+        sections.append(f"<focus_harness>\n{HEARTBEAT_FOCUS_HARNESS}\n</focus_harness>")
     if heartbeat_instructions:
         sections.append(
             f"<heartbeat_instructions>\n{heartbeat_instructions}\n</heartbeat_instructions>"

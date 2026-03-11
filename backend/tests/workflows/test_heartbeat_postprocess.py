@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.workflows._heartbeat_postprocess import (
+    _detect_followup_reason,
     _ensure_session_summary,
     _extract_synthetic_summary,
     _validate_heartbeat_format,
@@ -93,6 +94,35 @@ class TestValidateHeartbeatFormat:
         status, compliant = _validate_heartbeat_format(None)
         assert status == "success"
         assert compliant is False
+
+
+class TestDetectFollowupReason:
+    def test_detects_actionable_cleanup_after_heartbeat_ok(self) -> None:
+        reason = _detect_followup_reason(
+            "HEARTBEAT_OK — Routine sweep complete.",
+            "\n<cleanup_status>\nACTIONABLE-CLEANUP[1]\n- agent-hub | finalize | task-123\n</cleanup_status>",
+            "",
+        )
+
+        assert reason == "cleanup_actionable"
+
+    def test_detects_stale_running_task_after_heartbeat_ok(self) -> None:
+        reason = _detect_followup_reason(
+            "HEARTBEAT_OK — Routine sweep complete.",
+            "",
+            '\n<workstream_inventory>\n- task-1 | state=stale_running_task | next=manage_tasks(action="reconcile")\n</workstream_inventory>',
+        )
+
+        assert reason == "stale_running_task"
+
+    def test_skips_followup_when_heartbeat_already_reported_action(self) -> None:
+        reason = _detect_followup_reason(
+            "HEARTBEAT_ACTION — Reconciled stale lane.",
+            "\n<cleanup_status>\nACTIONABLE-CLEANUP[1]\n</cleanup_status>",
+            "",
+        )
+
+        assert reason is None
 
 
 class TestEnsureSessionSummary:
@@ -246,9 +276,24 @@ class TestPostprocessHeartbeat:
                 return_value=True,
             ),
             patch(
+                "app.workflows._heartbeat_postprocess._retry_failed_mcp_tools",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "app.workflows._heartbeat_redis.record_heartbeat_metrics",
                 new_callable=AsyncMock,
             ) as mock_metrics,
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -258,6 +303,8 @@ class TestPostprocessHeartbeat:
         assert hb_result.turns == 3
         assert hb_result.tool_calls == 5
         assert hb_result.interval_minutes == 60
+        assert hb_result.followup_dispatched is False
+        assert hb_result.followup_reason is None
         mock_metrics.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -274,10 +321,66 @@ class TestPostprocessHeartbeat:
                 return_value=False,
             ),
             patch(
+                "app.workflows._heartbeat_postprocess._retry_failed_mcp_tools",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
                 "app.workflows._heartbeat_redis.record_heartbeat_metrics",
                 new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
             ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
         assert hb_result.error == "Provider timeout"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_dispatches_followup_for_obvious_unresolved_cleanup(self) -> None:
+        result = _make_result(content="HEARTBEAT_OK — Routine sweep complete.")
+
+        with (
+            patch(
+                "app.workflows._heartbeat_postprocess._ensure_session_summary",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._retry_failed_mcp_tools",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "app.workflows._heartbeat_redis.record_heartbeat_metrics",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="\n<cleanup_status>\nACTIONABLE-CLEANUP[1]\n- agent-hub | finalize | task-123\n</cleanup_status>",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._dispatch_followup_wake",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_dispatch,
+        ):
+            hb_result = await postprocess_heartbeat(result, 60)
+
+        assert hb_result.followup_dispatched is True
+        assert hb_result.followup_reason == "cleanup_actionable"
+        mock_dispatch.assert_awaited_once_with("cleanup_actionable", None)

@@ -19,14 +19,38 @@ async def handle_finish_reason(
     max_turns: int,
     result: Any,
     messages_for_adapter: list[Message],
+    messages_dict: list[dict[str, Any]],
     progress_log: list[AgentProgress],
     progress_callback: Callable[[AgentProgress], Any] | None,
+    state: dict[str, Any],
+    agent_slug: str | None,
+    task_type: str | None,
+    hard_cap: int | None = None,
 ) -> tuple[bool, str, str | None]:
     """Handle finish reason and determine if loop should continue.
 
     Returns:
         Tuple of (should_break, execution_status, execution_error)
     """
+    if (
+        finish_reason == "end_turn"
+        and agent_slug == "persona"
+        and task_type in {"heartbeat", "wake"}
+        and not state.get("closeout_audit_used")
+        and turn < max_turns
+    ):
+        progress = create_progress(
+            turn,
+            "closeout_audit",
+            "Triggered one-shot final completion audit before ending session",
+        )
+        progress_log.append(progress)
+        await report_progress(progress, progress_callback)
+        _append_message(messages_for_adapter, messages_dict, "assistant", result.content)
+        _append_message(messages_for_adapter, messages_dict, "user", _CLOSEOUT_AUDIT_MSG)
+        state["closeout_audit_used"] = True
+        return False, "success", None
+
     if finish_reason == "end_turn":
         progress = create_progress(turn, "complete", "Agent completed task")
         progress_log.append(progress)
@@ -50,13 +74,35 @@ async def handle_finish_reason(
 
     else:
         # Unknown finish reason or None - continue if more turns available
-        if turn == max_turns:
-            return True, "max_turns", f"Reached maximum turns ({max_turns})"
+        cap = hard_cap or max_turns
+        if turn == cap:
+            return True, "max_turns", f"Reached maximum turns ({cap})"
         else:
-            messages_for_adapter.extend(
-                [
-                    Message(role="assistant", content=result.content),
-                    Message(role="user", content="Please continue."),
-                ]
-            )
+            _append_message(messages_for_adapter, messages_dict, "assistant", result.content)
+            _append_message(messages_for_adapter, messages_dict, "user", "Please continue.")
             return False, "success", None
+
+
+_CLOSEOUT_AUDIT_MSG = (
+    "<system-closeout-audit>"
+    "Run a final completion audit before ending. "
+    "Check only these questions: "
+    "(1) Is any unresolved canonical gate still visible (cleanup, workspace inspection, stale/recent-progress session state)? "
+    "(2) Is there one concrete next action you already know and have not taken? "
+    "(3) Would continuing now create real forward progress rather than commentary? "
+    "If all answers indicate completion, end now. "
+    "If one answer shows unfinished concrete work, do that work now. "
+    "Do not start speculative new work. Do not loop on this audit."
+    "</system-closeout-audit>"
+)
+
+
+def _append_message(
+    messages_for_adapter: list[Message],
+    messages_dict: list[dict[str, Any]],
+    role: str,
+    content: str | None,
+) -> None:
+    text = content or ""
+    messages_for_adapter.append(Message(role=role, content=text))
+    messages_dict.append({"role": role, "content": text})

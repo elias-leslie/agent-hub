@@ -90,6 +90,7 @@ def _apply_execution_fields(
     max_turns: int,
     working_dir: str | None,
     execute_tools: bool,
+    task_type: str | None,
     trace_id: str | None,
     timeout_seconds: float | None,
     thinking_level: str | None,
@@ -109,6 +110,8 @@ def _apply_execution_fields(
         payload["working_dir"] = working_dir
     if execute_tools:
         payload["execute_tools"] = True
+    if task_type:
+        payload["task_type"] = task_type
     if trace_id:
         payload["trace_id"] = trace_id
     if timeout_seconds is not None:
@@ -142,6 +145,7 @@ def build_completion_payload(
     enable_programmatic_tools: bool = False,
     container_id: str | None = None, max_turns: int = 1,
     working_dir: str | None = None, execute_tools: bool = False,
+    task_type: str | None = None,
     trace_id: str | None = None, timeout_seconds: float | None = None,
     thinking_level: str | None = None, system_prompt: str | None = None,
     resume_session_id: str | None = None,
@@ -168,7 +172,7 @@ def build_completion_payload(
         enable_programmatic_tools, disable_agent_fallbacks,
     )
     _apply_execution_fields(
-        payload, container_id, max_turns, working_dir, execute_tools,
+        payload, container_id, max_turns, working_dir, execute_tools, task_type,
         trace_id, timeout_seconds, thinking_level, system_prompt,
         resume_session_id, include_roles, current_branch, skip_cache,
         response_format,

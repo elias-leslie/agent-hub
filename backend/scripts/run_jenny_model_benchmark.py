@@ -212,6 +212,7 @@ async def _run_one_attempt(
             messages=[{"role": "user", "content": message_content}],
             project_id=project_id,
             agent_slug="persona",
+            task_type="wake",
             external_id=f"jenny-benchmark:{benchmark_id}:{case.case_id}:run-{run_number}",
             enable_caching=False,
             skip_cache=True,

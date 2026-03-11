@@ -50,7 +50,10 @@ _HONING_RESPONSE_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
         },
-        "next_focus": {"type": "string"},
+        "next_focus": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
         "durable_learning_saved": {"type": "boolean"},
     },
     "required": ["summary", "changes_applied", "next_focus", "durable_learning_saved"],
@@ -78,9 +81,12 @@ class JennyHoningIteration:
     top_score: float
     failing_attempts: int
     benchmark_report_path: str | None
+    failure_clusters: list[dict[str, Any]] | None = None
+    persistent_failure_clusters: list[dict[str, Any]] | None = None
     improvement_session_id: str | None = None
     improvement_tools: list[str] | None = None
     improvement_content: str | None = None
+    improvement_parsed: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -121,16 +127,73 @@ def _group_failures(attempts: list[JennyBenchmarkAttempt]) -> list[dict[str, Any
     return ranked
 
 
-def build_honing_prompt(run: JennyBenchmarkRun, iteration: int, max_failures: int = 6) -> str:
-    """Build the persona self-improvement prompt for one benchmark run."""
-    failure_lines = []
-    for failure in _group_failures(run.attempts)[:max_failures]:
-        models = ", ".join(failure["models"])
-        failure_lines.append(
-            f"- case={failure['case_id']} count={failure['count']} avg_score={failure['avg_score']} "
-            f"models={models} detail={failure['failure_detail']}"
-        )
+def _cluster_key(cluster: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(cluster.get("case_id", "")),
+        str(cluster.get("failure_detail", "")),
+    )
 
+
+def _diff_failure_clusters(
+    previous: list[dict[str, Any]] | None,
+    current: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return (persistent, new, resolved) clusters across iterations."""
+    previous_map = {_cluster_key(cluster): cluster for cluster in previous or []}
+    current_map = {_cluster_key(cluster): cluster for cluster in current}
+
+    persistent = [
+        current_map[key]
+        for key in current_map
+        if key in previous_map
+    ]
+    new = [
+        current_map[key]
+        for key in current_map
+        if key not in previous_map
+    ]
+    resolved = [
+        previous_map[key]
+        for key in previous_map
+        if key not in current_map
+    ]
+    return persistent, new, resolved
+
+
+def _render_cluster_block(clusters: list[dict[str, Any]], label: str) -> str:
+    if not clusters:
+        return f"{label}:\n- none"
+
+    lines = [f"{label}:"]
+    for cluster in clusters:
+        models = ", ".join(cluster.get("models", []))
+        lines.append(
+            f"- case={cluster['case_id']} count={cluster['count']} avg_score={cluster['avg_score']} "
+            f"models={models} detail={cluster['failure_detail']}"
+        )
+    return "\n".join(lines)
+
+
+def _parse_improvement_content(content: str) -> dict[str, Any] | None:
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def build_honing_prompt(
+    run: JennyBenchmarkRun,
+    iteration: int,
+    previous_clusters: list[dict[str, Any]] | None = None,
+    max_failures: int = 6,
+) -> str:
+    """Build the persona self-improvement prompt for one benchmark run."""
+    current_clusters = _group_failures(run.attempts)
+    persistent_clusters, new_clusters, resolved_clusters = _diff_failure_clusters(
+        previous_clusters,
+        current_clusters,
+    )
     ranking_lines = []
     for index, summary in enumerate(run.summaries[:3], start=1):
         ranking_lines.append(
@@ -138,9 +201,18 @@ def build_honing_prompt(run: JennyBenchmarkRun, iteration: int, max_failures: in
             f"pass_rate={summary.pass_rate:.3f} avg_tools={summary.avg_tool_calls:.1f}"
         )
 
-    failure_block = "\n".join(failure_lines) if failure_lines else "- none"
     ranking_block = "\n".join(ranking_lines) if ranking_lines else "- none"
     reference_block = "\n".join(f"- {note}" for note in _REFERENCE_NOTES)
+    failure_block = _render_cluster_block(current_clusters[:max_failures], "Top failure clusters")
+    persistent_block = _render_cluster_block(
+        persistent_clusters[:max_failures],
+        "Persistent unresolved clusters from the previous iteration",
+    )
+    new_block = _render_cluster_block(new_clusters[:max_failures], "New clusters this iteration")
+    resolved_block = _render_cluster_block(
+        resolved_clusters[:max_failures],
+        "Resolved clusters since the previous iteration",
+    )
 
     return (
         f"You are Jenny reviewing your own benchmark results for honing iteration {iteration}.\n\n"
@@ -149,12 +221,15 @@ def build_honing_prompt(run: JennyBenchmarkRun, iteration: int, max_failures: in
         "performance logging, and durable memory. Do not create or dispatch project tasks.\n\n"
         "Benchmark ranking:\n"
         f"{ranking_block}\n\n"
-        "Top failure clusters:\n"
         f"{failure_block}\n\n"
+        f"{persistent_block}\n\n"
+        f"{new_block}\n\n"
+        f"{resolved_block}\n\n"
         "Reference heuristics to borrow when relevant:\n"
         f"{reference_block}\n\n"
         "Required behavior:\n"
         "- Diagnose the canonical layer first: heartbeat instructions, memory retrieval, observability, or model config.\n"
+        "- When reviewing your own performance history, use agent_slug=\"persona\" rather than the display name Jenny.\n"
         "- If you change heartbeat instructions, read them first and make a small targeted edit.\n"
         "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
         "- Log a performance observation if the benchmark exposed a real recurring issue or confirmed an improvement.\n"
@@ -170,11 +245,12 @@ async def _run_improvement_pass(
     project_id: str,
     iteration: int,
     run: JennyBenchmarkRun,
+    previous_clusters: list[dict[str, Any]] | None,
     timeout_seconds: float,
-) -> tuple[str | None, str, list[str]]:
+) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
     """Prompt Jenny to improve herself based on benchmark failures."""
     response = await client.complete(
-        messages=[{"role": "user", "content": build_honing_prompt(run, iteration)}],
+        messages=[{"role": "user", "content": build_honing_prompt(run, iteration, previous_clusters)}],
         project_id=project_id,
         agent_slug="persona",
         external_id=f"jenny-honing:{run.benchmark_id}:iteration-{iteration}",
@@ -188,7 +264,7 @@ async def _run_improvement_pass(
         response_format={"type": "json_object", "schema": _HONING_RESPONSE_SCHEMA},
     )
     used_tools = await _fetch_used_tool_names(response.session_id)
-    return response.session_id, response.content, used_tools
+    return response.session_id, response.content, used_tools, _parse_improvement_content(response.content)
 
 
 def _write_iteration_report(output_dir: Path, run: JennyBenchmarkRun, iteration: int) -> str:
@@ -212,11 +288,14 @@ async def run_honing_loop(
     use_memory: bool,
     max_iterations: int,
     base_url: str,
+    output_json_path: Path | None = None,
 ) -> dict[str, Any]:
     """Run benchmark/improve cycles until honed or the iteration cap is hit."""
     resolved_client_id = await _resolve_client_id(client_id, project_id)
     iterations: list[JennyHoningIteration] = []
     previous_best_score: float | None = None
+    previous_failing_attempts: int | None = None
+    previous_clusters: list[dict[str, Any]] | None = None
 
     async with AsyncAgentHubClient(
         base_url=base_url,
@@ -243,6 +322,8 @@ async def run_honing_loop(
             report_path = _write_iteration_report(output_dir, benchmark_run, iteration)
             top_summary = benchmark_run.summaries[0] if benchmark_run.summaries else None
             failing_attempts = sum(1 for attempt in benchmark_run.attempts if not attempt.passed)
+            failure_clusters = _group_failures(benchmark_run.attempts)
+            persistent_clusters, _, _ = _diff_failure_clusters(previous_clusters, failure_clusters)
             record = JennyHoningIteration(
                 iteration=iteration,
                 benchmark_id=benchmark_run.benchmark_id,
@@ -250,28 +331,61 @@ async def run_honing_loop(
                 top_score=top_summary.avg_composite_score if top_summary else 0.0,
                 failing_attempts=failing_attempts,
                 benchmark_report_path=report_path,
+                failure_clusters=failure_clusters,
+                persistent_failure_clusters=persistent_clusters,
             )
 
             if failing_attempts == 0:
                 iterations.append(record)
+                if output_json_path:
+                    output_json_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_json_path.write_text(json.dumps({
+                        "iterations": [item.to_dict() for item in iterations],
+                        "completed_iterations": len(iterations),
+                        "honed": True,
+                    }, indent=2))
                 break
 
-            if previous_best_score is not None and record.top_score <= previous_best_score:
+            if (
+                previous_best_score is not None
+                and previous_failing_attempts is not None
+                and record.top_score <= previous_best_score
+                and failing_attempts >= previous_failing_attempts
+            ):
                 iterations.append(record)
+                if output_json_path:
+                    output_json_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_json_path.write_text(json.dumps({
+                        "iterations": [item.to_dict() for item in iterations],
+                        "completed_iterations": len(iterations),
+                        "honed": False,
+                    }, indent=2))
                 break
 
-            session_id, content, tools = await _run_improvement_pass(
+            session_id, content, tools, parsed = await _run_improvement_pass(
                 client=client,
                 project_id=project_id,
                 iteration=iteration,
                 run=benchmark_run,
+                previous_clusters=previous_clusters,
                 timeout_seconds=timeout_seconds,
             )
             record.improvement_session_id = session_id
             record.improvement_content = content
             record.improvement_tools = tools
+            record.improvement_parsed = parsed
             iterations.append(record)
             previous_best_score = record.top_score
+            previous_failing_attempts = failing_attempts
+            previous_clusters = failure_clusters
+
+            if output_json_path:
+                output_json_path.parent.mkdir(parents=True, exist_ok=True)
+                output_json_path.write_text(json.dumps({
+                    "iterations": [item.to_dict() for item in iterations],
+                    "completed_iterations": len(iterations),
+                    "honed": False,
+                }, indent=2))
 
     return {
         "iterations": [record.to_dict() for record in iterations],
@@ -322,6 +436,7 @@ async def main() -> None:
         use_memory=args.use_memory,
         max_iterations=args.max_iterations,
         base_url=args.base_url,
+        output_json_path=Path(args.output_json) if args.output_json else None,
     )
 
     rendered = json.dumps(result, indent=2)
