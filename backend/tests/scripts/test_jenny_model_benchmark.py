@@ -66,6 +66,20 @@ def test_parse_benchmark_json_strips_code_fences() -> None:
     assert parsed["primary_action"] == "dispatch"
 
 
+def test_parse_benchmark_json_extracts_fenced_json_after_preamble() -> None:
+    parsed, error = parse_benchmark_json(
+        """The evidence is unambiguous.
+
+```json
+{"case_id":"ready_task_dispatch","primary_action":"dispatch","should_dispatch":true,"should_close":false,"confidence":"high","summary":"ready"}
+```"""
+    )
+
+    assert error is None
+    assert parsed is not None
+    assert parsed["case_id"] == "ready_task_dispatch"
+
+
 def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
     case = get_case_by_id("ready_task_dispatch")
 
@@ -213,6 +227,35 @@ def test_score_attempt_accepts_normalized_specific_tool_name() -> None:
 
     assert attempt.passed is True
     assert attempt.tool_requirement_met is True
+
+
+def test_precision_live_lookup_accepts_bound_shared_summary_language() -> None:
+    case = get_case_by_id("precision_search_live_lookup")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=700,
+        content=(
+            '{"case_id":"precision_search_live_lookup","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"precision_code_search already exists and is bound in Agent Hub\'s shared executor registry for project-scoped/persona use, so Jenny should dispatch follow-on adoption work rather than block on core tool implementation."}'
+        ),
+        session_id="sess-6",
+        provider="codex",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=1,
+        used_tool_names=["precision_code_search"],
+        input_tokens=80,
+        output_tokens=18,
+        total_tokens=98,
+    )
+
+    assert attempt.passed is True
+    assert attempt.failure_detail is None
 
 
 def test_classify_failure_marks_internal_server_errors_as_infra() -> None:

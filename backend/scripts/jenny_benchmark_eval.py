@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import statistics
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -129,13 +130,27 @@ def strip_markdown_fences(content: str) -> str:
     return stripped
 
 
+def _extract_fenced_json_block(content: str) -> str | None:
+    """Extract the first fenced JSON block from a provider response."""
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, flags=re.DOTALL)
+    if not match:
+        return None
+    return match.group(1).strip()
+
+
 def parse_benchmark_json(content: str) -> tuple[dict[str, Any] | None, str | None]:
     """Parse the model output as JSON."""
     cleaned = strip_markdown_fences(content)
     try:
         parsed = json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        return None, f"invalid_json: {exc}"
+        fenced_json = _extract_fenced_json_block(content)
+        if fenced_json is None:
+            return None, f"invalid_json: {exc}"
+        try:
+            parsed = json.loads(fenced_json)
+        except json.JSONDecodeError as fenced_exc:
+            return None, f"invalid_json: {fenced_exc}"
     if not isinstance(parsed, dict):
         return None, "invalid_json: top-level value must be an object"
     return parsed, None
@@ -241,14 +256,20 @@ def score_attempt(
         attempt.failure_kind = "model"
         return attempt
 
-    matches = [
-        1.0 if parsed.get(field_name) == expected_value else 0.0
+    field_mismatches = [
+        field_name
         for field_name, expected_value in case.expected.items()
+        if parsed.get(field_name) != expected_value
     ]
+    matches = [1.0 if field_name not in field_mismatches else 0.0 for field_name in case.expected]
+    missing_summary_terms: list[str] = []
     if case.required_summary_terms:
         summary = str(parsed.get("summary", "")).lower()
-        keyword_match_ratio = sum(
-            1.0 for term in case.required_summary_terms if term in summary
+        missing_summary_terms = [
+            term for term in case.required_summary_terms if term not in summary
+        ]
+        keyword_match_ratio = (
+            len(case.required_summary_terms) - len(missing_summary_terms)
         ) / len(case.required_summary_terms)
         matches.append(keyword_match_ratio)
     attempt.correctness_score = sum(matches) / len(matches)
@@ -271,6 +292,10 @@ def score_attempt(
         elif not specific_tool_requirement_met:
             missing_tools = sorted(required_tool_name_set - used_tool_name_set)
             attempt.failure_detail = f"required_tools_missing: {', '.join(missing_tools)}"
+        elif field_mismatches:
+            attempt.failure_detail = f"wrong_fields: {', '.join(field_mismatches)}"
+        elif missing_summary_terms:
+            attempt.failure_detail = f"summary_terms_missing: {', '.join(missing_summary_terms)}"
         else:
             attempt.failure_detail = "wrong_decision"
     return attempt
