@@ -134,7 +134,7 @@ async def read_heartbeat_instructions() -> str:
 
 
 async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str) -> str:
-    """Update the persona's heartbeat instructions with shrinkage protection."""
+    """Update the persona's heartbeat instructions with shrinkage protection and supervisor review."""
     if not heartbeat_instructions or not heartbeat_instructions.strip():
         return "Error: heartbeat_instructions cannot be empty. Call read_heartbeat_instructions first."
 
@@ -149,6 +149,7 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
             set_persona_heartbeat_instructions,
         )
         from app.services.persona_service import get_or_create_persona
+        from app.workflows._instruction_review import review_instruction_edit
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
@@ -168,6 +169,34 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
                     f"{exc} Call read_heartbeat_instructions first, then include ALL existing sections. "
                     "If you genuinely need to shorten it, explain why in the reason."
                 )
+
+            # Supervisor review gate: check semantic safety before applying
+            review = await review_instruction_edit(
+                old_instructions=old_value,
+                new_instructions=new_value,
+                change_reason=reason,
+            )
+            if review.used and review.decision == "reject":
+                logger.warning(
+                    "Instruction edit rejected by supervisor: %s", review.reason,
+                )
+                return (
+                    f"Edit REJECTED by supervisor review: {review.reason}\n\n"
+                    "Revise your proposed changes to address the concern, then try again."
+                )
+            if review.used and review.decision == "revise":
+                logger.info(
+                    "Instruction edit needs revision per supervisor: %s", review.reason,
+                )
+                return (
+                    f"Edit needs REVISION per supervisor review: {review.reason}\n\n"
+                    "Adjust your proposed changes to address the feedback, then resubmit."
+                )
+            if review.used:
+                logger.info("Instruction edit approved by supervisor")
+            else:
+                logger.warning("Instruction review unavailable — proceeding with write")
+
             old_len = len(old_value)
             new_len = len(new_value)
 
@@ -176,7 +205,8 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
             await db.commit()
 
         logger.info("heartbeat_instructions updated: %d → %d chars", old_len, new_len)
-        return f"Heartbeat instructions updated ({old_len} → {new_len} chars). Reason: {reason}"
+        reviewed = " (supervisor-approved)" if review.used else ""
+        return f"Heartbeat instructions updated ({old_len} → {new_len} chars){reviewed}. Reason: {reason}"
     except Exception as e:
         logger.exception("write_heartbeat_instructions failed")
         return f"Error writing heartbeat instructions: {e}"
