@@ -126,8 +126,7 @@ async def _complete_with_tools(
 ) -> ToolExecutionResult:
     """Execute completion with tool support for any provider.
 
-    Handles Claude, Gemini, CloudCode, and all OpenAI-compatible providers
-    through a unified pipeline.
+    Handles any tool-capable provider through a unified pipeline.
     """
     state = _init_execution_state(session, messages)
     tracker = ProgressTracker(progress_callback)
