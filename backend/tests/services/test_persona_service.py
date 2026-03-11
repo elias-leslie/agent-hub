@@ -295,7 +295,7 @@ class TestGetPersonaContextForAgent:
         assert "quiet + active session => wait" in result
         assert "same-task lane with recent progress => monitor" in result
         assert "active session with recent progress => wait" in result
-        assert "cleanup/workspace gate unresolved => should_dispatch=false" in result
+        assert "cleanup/workspace gate unresolved => primary_action=block and should_dispatch=false" in result
         assert "explicit stalled/failed/terminated session => reconcile" in result
 
     @pytest.mark.asyncio
