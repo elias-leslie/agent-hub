@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, NoReturn
 
@@ -152,8 +153,22 @@ async def _handle_timeout_error(
     raise HTTPException(status_code=504, detail=str(error)) from error
 
 
+async def _handle_cancelled_error(
+    error: asyncio.CancelledError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle unexpected cancellation in non-streaming completion flow."""
+    message = str(error) or "Completion cancelled unexpectedly."
+    logger.error("Completion cancelled unexpectedly: %s", message)
+    await _notify_error(session_id, db, "CancelledError", message, agent_id, model_used)
+    raise HTTPException(status_code=500, detail="Completion cancelled unexpectedly.") from error
+
+
 async def handle_completion_error(
-    error: Exception,
+    error: BaseException,
     session_id: str | None = None,
     db: AsyncSession | None = None,
     agent_id: str | None = None,
@@ -182,6 +197,9 @@ async def handle_completion_error(
 
     if isinstance(error, TimeoutError):
         await _handle_timeout_error(error, session_id, db, agent_id, model_used)
+
+    if isinstance(error, asyncio.CancelledError):
+        await _handle_cancelled_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, HTTPException):
         raise error

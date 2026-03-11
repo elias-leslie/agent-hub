@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -65,6 +66,14 @@ async def _store_partial_response(
             pass
 
 
+async def _rollback_after_cancellation(db: AsyncSession) -> None:
+    """Best-effort rollback for cancellation paths that must avoid extra awaits."""
+    try:
+        await db.rollback()
+    except Exception:
+        logger.warning("Rollback failed during cancelled tool execution", exc_info=True)
+
+
 async def _execute_and_handle_errors(
     adapter: Any,
     state: _ExecutionState,
@@ -93,6 +102,18 @@ async def _execute_and_handle_errors(
             return error_result
         await db.commit()
         return None
+    except asyncio.CancelledError as e:
+        logger.exception("%s complete_with_tools cancelled: %s", provider, e)
+        await _rollback_after_cancellation(db)
+        return build_error_result(
+            Exception(str(e) or "Completion cancelled unexpectedly."),
+            model,
+            provider,
+            session_id,
+            loaded_memory_uuids,
+            turns=state.turn,
+            tool_calls_count=state.tool_calls_count,
+        )
     except Exception as e:
         logger.exception(f"{provider} complete_with_tools error: {e}")
         await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
@@ -139,8 +160,28 @@ async def _complete_with_tools(
     if error_result is not None:
         return error_result
 
-    return await finalize_response(
-        db, session, session_id, is_new_session, model, provider,
-        state.content_parts, state.thinking_parts, loaded_memory_uuids,
-        memory_group_id, state.turn, state.tool_calls_count, tracker,
-    )
+    try:
+        return await finalize_response(
+            db, session, session_id, is_new_session, model, provider,
+            state.content_parts, state.thinking_parts, loaded_memory_uuids,
+            memory_group_id, state.turn, state.tool_calls_count, tracker,
+        )
+    except asyncio.CancelledError as e:
+        logger.exception("%s finalize_response cancelled: %s", provider, e)
+        await _rollback_after_cancellation(db)
+        return build_error_result(
+            Exception(str(e) or "Completion cancelled unexpectedly."),
+            model,
+            provider,
+            session_id,
+            loaded_memory_uuids,
+            turns=state.turn,
+            tool_calls_count=state.tool_calls_count,
+        )
+    except Exception as e:
+        logger.exception("%s finalize_response error: %s", provider, e)
+        await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
+        return build_error_result(
+            e, model, provider, session_id, loaded_memory_uuids,
+            turns=state.turn, tool_calls_count=state.tool_calls_count,
+        )

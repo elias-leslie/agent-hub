@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
@@ -133,11 +135,23 @@ async def execute_and_respond(
             messages_dict, ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, duration_ms,
             effective_thinking_level=effective_thinking_level,
         )
+    except asyncio.CancelledError as e:
+        if db is not None:
+            with suppress(Exception):
+                await db.rollback()
+        await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
+        raise
     except TimeoutError as e:
+        if db is not None:
+            with suppress(Exception):
+                await db.rollback()
         if http_request is not None:
             http_request.state.timed_out = True
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise  # handle_completion_error is NoReturn but ty needs explicit raise
     except Exception as e:
+        if db is not None:
+            with suppress(Exception):
+                await db.rollback()
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise  # handle_completion_error is NoReturn but ty needs explicit raise

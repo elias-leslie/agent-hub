@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.api.complete.tool_handler_utils import _ExecutionState, _run_tool_loop
-from app.api.complete.tool_handlers import _store_partial_response
+from app.api.complete.tool_handlers import _execute_and_handle_errors, _store_partial_response
 
 
 def _mock_session() -> MagicMock:
@@ -103,18 +104,30 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
     db = AsyncMock()
     stream_state = {"natural_end": False, "closed_early": False}
 
-    async def fake_event_stream():
-        try:
-            yield types.SimpleNamespace(type="error", error="claude tool failed"), None
-            yield types.SimpleNamespace(type="result", result="ignored"), None
-            stream_state["natural_end"] = True
-        finally:
-            if not stream_state["natural_end"]:
-                stream_state["closed_early"] = True
+    class FakeEventStream:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            try:
+                yield types.SimpleNamespace(type="error", error="claude tool failed"), None
+                yield types.SimpleNamespace(type="result", result="ignored"), None
+                stream_state["natural_end"] = True
+            finally:
+                if not stream_state["natural_end"]:
+                    stream_state["closed_early"] = True
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    fake_stream = FakeEventStream()
 
     with patch(
         "app.api.complete.tool_handler_utils.build_event_stream",
-        return_value=fake_event_stream(),
+        return_value=fake_stream,
     ):
         result = await _run_tool_loop(
             adapter=MagicMock(),
@@ -138,3 +151,165 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
     assert result.error == "claude tool failed"
     assert stream_state["natural_end"] is True
     assert stream_state["closed_early"] is False
+    assert fake_stream.closed is True
+
+
+@pytest.mark.asyncio
+async def test_complete_with_tools_returns_error_result_when_finalize_response_is_cancelled() -> None:
+    session = _mock_session()
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.api.complete.tool_handlers.store_user_messages",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "app.api.complete.tool_handlers.finalize_response",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError("finalize cancelled"),
+        ),
+        patch(
+            "app.api.complete.tool_handlers._store_partial_response",
+            new_callable=AsyncMock,
+        ) as store_partial,
+    ):
+        from app.api.complete.tool_handlers import _complete_with_tools
+
+        result = await _complete_with_tools(
+            adapter=MagicMock(),
+            messages=[{"role": "user", "content": "hello"}],
+            messages_for_db=[],
+            model="claude-sonnet-4-6",
+            provider="claude",
+            temperature=0.0,
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            db=db,
+            session=session,
+            session_id="session-123",
+            is_new_session=True,
+            loaded_memory_uuids=[],
+            memory_group_id=None,
+            skip_cache=False,
+            progress_callback=None,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result.status == "error"
+    assert result.error == "finalize cancelled"
+    store_partial.assert_not_awaited()
+    db.rollback.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_complete_with_tools_returns_error_result_when_partial_store_is_cancelled() -> None:
+    session = _mock_session()
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.api.complete.tool_handlers.store_user_messages",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "app.api.complete.tool_handlers.finalize_response",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError("finalize cancelled"),
+        ),
+        patch(
+            "app.api.complete.tool_handlers._store_partial_response",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError("partial store cancelled"),
+        ) as store_partial,
+    ):
+        from app.api.complete.tool_handlers import _complete_with_tools
+
+        result = await _complete_with_tools(
+            adapter=MagicMock(),
+            messages=[{"role": "user", "content": "hello"}],
+            messages_for_db=[],
+            model="claude-sonnet-4-6",
+            provider="claude",
+            temperature=0.0,
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            db=db,
+            session=session,
+            session_id="session-123",
+            is_new_session=True,
+            loaded_memory_uuids=[],
+            memory_group_id=None,
+            skip_cache=False,
+            progress_callback=None,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result.status == "error"
+    assert result.error == "finalize cancelled"
+    store_partial.assert_not_awaited()
+    db.rollback.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_and_handle_errors_handles_cancelled_tool_loop() -> None:
+    session = _mock_session()
+    db = AsyncMock()
+    state = _ExecutionState(
+        agent_slug="persona",
+        messages_for_adapter=[],
+        content_parts=["partial result"],
+        thinking_parts=[],
+    )
+    tracker = MagicMock()
+
+    with (
+        patch(
+            "app.api.complete.tool_handlers._run_tool_loop",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError("tool loop cancelled"),
+        ),
+        patch(
+            "app.api.complete.tool_handlers._store_partial_response",
+            new_callable=AsyncMock,
+        ) as store_partial,
+    ):
+        result = await _execute_and_handle_errors(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-123",
+            loaded_memory_uuids=[],
+            db=db,
+            session=session,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is not None
+    assert result.status == "error"
+    assert result.error == "tool loop cancelled"
+    store_partial.assert_not_awaited()
+    db.rollback.assert_awaited()

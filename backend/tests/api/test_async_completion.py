@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -172,6 +173,69 @@ class TestAsyncDispatch:
         )
 
         assert response.status_code == 400
+
+    def test_agentic_cancelled_error_returns_500(
+        self, api_client: APITestClient, mock_db_session: MagicMock
+    ) -> None:
+        agent = _mock_agent()
+        mock_db_session_obj = MagicMock()
+        mock_db_session_obj.id = "sess-test-123"
+        mock_db_session_obj.status = "active"
+
+        with (
+            patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
+            patch(f"{_ORCH}.validate_project_access"),
+            patch(
+                f"{_ORCH}.resolve_agent_and_model",
+                new_callable=AsyncMock,
+                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
+            ),
+            patch(
+                f"{_ORCH}.apply_mention_override",
+                return_value=(CLAUDE_SONNET, "claude"),
+            ),
+            patch(
+                f"{_ORCH}.build_session_and_messages",
+                new_callable=AsyncMock,
+                return_value=(
+                    True,
+                    "sess-test-123",
+                    mock_db_session_obj,
+                    True,
+                    [{"role": "user", "content": "Build a feature"}],
+                    [{"role": "user", "content": "Build a feature"}],
+                    0,
+                    [],
+                    None,
+                    None,
+                ),
+            ),
+            patch(
+                "app.services.project_budget.check_project_budget",
+                new_callable=AsyncMock,
+                return_value=_mock_budget_allowed(),
+            ),
+            patch(
+                "app.api.complete.orchestration_helpers.execute_completion",
+                new_callable=AsyncMock,
+                side_effect=asyncio.CancelledError("sdk cancelled"),
+            ),
+        ):
+            response = api_client.post(
+                "/api/complete",
+                json={
+                    "agent_slug": "coder",
+                    "project_id": "test-project",
+                    "messages": [{"role": "user", "content": "Build a feature"}],
+                    "max_turns": 5,
+                    "execute_tools": True,
+                },
+            )
+
+        assert response.status_code == 500
+        payload = response.json()
+        assert payload["error"] == "http_error"
+        assert payload["message"] == "Completion cancelled unexpectedly."
 
 
 class TestAsyncTaskStatus:

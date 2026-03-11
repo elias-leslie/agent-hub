@@ -109,16 +109,16 @@ class TestClaudeToolsEnvInjection:
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
-        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
     @pytest.mark.asyncio
     async def test_env_empty_when_no_venv(self, tmp_path: Path) -> None:
-        """No venv found still keeps the streaming prompt timeout override."""
+        """No venv found keeps env minimal when working_dir stays on string prompts."""
         captured_opts: dict[str, Any] = {}
         await self._run_complete_with_tools(str(tmp_path), captured_opts)
 
         assert "env" in captured_opts
-        assert captured_opts["env"] == {"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "900000"}
+        assert captured_opts["env"] == {}
 
     @pytest.mark.asyncio
     async def test_pythonhome_overridden(self, tmp_path: Path) -> None:
@@ -238,11 +238,11 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
 
-    def test_working_dir_streaming_prompt_sets_stream_close_timeout(self, tmp_path: Path) -> None:
-        """working_dir hook mode also gets the stream close timeout."""
+    def test_working_dir_hook_mode_does_not_set_stream_close_timeout(self, tmp_path: Path) -> None:
+        """working_dir hook mode stays on plain prompts and skips stream-close overrides."""
         captured_opts = self._build_and_capture(tmp_path)
 
-        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
     def test_mcp_servers_set_os_environ_stream_close_timeout(self, tmp_path: Path) -> None:
         """MCP sessions set CLAUDE_CODE_STREAM_CLOSE_TIMEOUT in os.environ for Query.__init__."""
@@ -262,11 +262,11 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["env"]["MCP_TOOL_TIMEOUT"] == "300000"
 
-    def test_working_dir_non_mcp_sessions_still_get_stream_timeout(self, tmp_path: Path) -> None:
-        """working_dir hook mode also gets the stream-input close timeout."""
+    def test_working_dir_non_mcp_sessions_skip_stream_timeout(self, tmp_path: Path) -> None:
+        """working_dir hook mode no longer opts into stream-input close timeout."""
         captured_opts = self._build_and_capture(tmp_path)
 
-        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
     def test_mcp_timeout_env_preserves_venv(self, tmp_path: Path) -> None:
         """MCP timeout env vars are added alongside venv env vars, not replacing them."""
