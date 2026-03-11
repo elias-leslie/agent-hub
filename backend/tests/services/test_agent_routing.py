@@ -188,7 +188,10 @@ class TestCompleteWithFallback:
         mock_result = MagicMock()
         mock_result.content = "Hello!"
 
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+        with (
+            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+            patch("app.services.agent_routing_completion.record_provider_success") as record_success,
+        ):
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
@@ -204,6 +207,7 @@ class TestCompleteWithFallback:
         assert result.result == mock_result
         assert result.model_used == CLAUDE_SONNET
         assert result.used_fallback is False
+        record_success.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_codex_primary_maps_thinking_to_reasoning_and_verbosity(self) -> None:
@@ -275,7 +279,10 @@ class TestCompleteWithFallback:
                 raise RateLimitError(provider="claude", retry_after=60)
             return mock_result
 
-        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+        with (
+            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+            patch("app.services.agent_routing_completion.record_provider_failure") as record_failure,
+        ):
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -292,6 +299,7 @@ class TestCompleteWithFallback:
         assert result.model_used == CLAUDE_HAIKU
         assert result.used_fallback is True
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"
+        assert record_failure.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_all_models_fail(self, mock_agent: AgentDTO) -> None:

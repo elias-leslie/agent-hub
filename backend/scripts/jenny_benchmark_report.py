@@ -11,10 +11,11 @@ def _format_pct(value: float) -> str:
 
 def _render_attempt_detail(attempt: JennyBenchmarkAttempt) -> str:
     outcome = "PASS" if attempt.passed else (attempt.failure_kind or "failed").upper()
+    used_tools = ", ".join(attempt.used_tool_names)
     return (
         f"| {attempt.model_id} | {attempt.case_id} | {attempt.run_number} | "
         f"{attempt.composite_score:.1f} | {attempt.latency_ms} | {attempt.total_tokens} | "
-        f"{attempt.turns} | {attempt.tool_calls_count} | {outcome} | "
+        f"{attempt.turns} | {attempt.tool_calls_count} | {used_tools} | {outcome} | "
         f"{attempt.failure_detail or ''} |"
     )
 
@@ -52,8 +53,8 @@ def generate_markdown_report(run: JennyBenchmarkRun) -> str:
             "",
             "## Attempt Details",
             "",
-            "| Model | Case | Run | Score | Latency (ms) | Tokens | Turns | Tool Calls | Outcome | Detail |",
-            "|-------|------|-----|-------|--------------|--------|-------|------------|---------|--------|",
+            "| Model | Case | Run | Score | Latency (ms) | Tokens | Turns | Tool Calls | Used Tools | Outcome | Detail |",
+            "|-------|------|-----|-------|--------------|--------|-------|------------|------------|---------|--------|",
         ]
     )
 

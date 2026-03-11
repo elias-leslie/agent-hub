@@ -151,7 +151,7 @@ async def create_session_event(
     Used by CC hooks to record Write/Edit/Bash tool executions.
     """
     try:
-        await get_session_or_404(db, session_id)
+        session = await get_session_or_404(db, session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -171,6 +171,7 @@ async def create_session_event(
                 )
             ]
         ),
+        session=session,
     )
 
     return CreateSessionEventResponse(

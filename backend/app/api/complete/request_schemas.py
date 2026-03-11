@@ -154,6 +154,10 @@ class CompletionRequest(BaseModel):
             "loads agent config from database, injects mandates, and uses fallback chains."
         ),
     )
+    disable_agent_fallbacks: bool = Field(
+        default=False,
+        description="Disable agent fallback and escalation models; require the resolved/requested model to execute directly.",
+    )
     include_roles: list[str] | None = Field(
         default=None,
         description=(

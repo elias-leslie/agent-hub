@@ -28,14 +28,15 @@ if (
     os.environ["JENNY_BENCHMARK_NO_REEXEC"] = "1"
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
 
-from sqlalchemy import text
-
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "packages" / "agent-hub-client"))
 
 from agent_hub import AsyncAgentHubClient
+from sqlalchemy import select, text
 
+from app.db import async_session
+from app.models.session import SessionEvent
 from scripts.jenny_benchmark_cases import (
     DEFAULT_JENNY_BENCHMARK_MODELS,
     get_case_by_id,
@@ -58,6 +59,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+_BENCHMARK_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "case_id": {"type": "string"},
+        "primary_action": {"enum": ["dispatch", "monitor", "block", "wait", "reconcile"]},
+        "should_dispatch": {"type": "boolean"},
+        "should_close": {"type": "boolean"},
+        "confidence": {"enum": ["low", "medium", "high"]},
+        "summary": {"type": "string"},
+    },
+    "required": [
+        "case_id",
+        "primary_action",
+        "should_dispatch",
+        "should_close",
+        "confidence",
+        "summary",
+    ],
+}
+
+
 def _parse_csv(value: str | None, default: list[str]) -> list[str]:
     if not value:
         return default
@@ -78,6 +101,47 @@ def _build_attempt_order(
     ]
     random.Random(seed).shuffle(items)
     return items
+
+
+def _validate_case_project_requirements(case_ids: list[str], project_id: str) -> None:
+    """Ensure selected cases are compatible with the requested project context."""
+    incompatible_cases = [
+        case.case_id
+        for case in (get_case_by_id(case_id) for case_id in case_ids)
+        if case.required_project_id and case.required_project_id != project_id
+    ]
+    if incompatible_cases:
+        raise ValueError(
+            "Selected cases require a different --project-id. "
+            f"project_id={project_id!r}, incompatible_cases={incompatible_cases}"
+        )
+
+
+async def _fetch_used_tool_names(session_id: str | None) -> list[str]:
+    """Return ordered unique tool names used in a benchmark session."""
+    if not session_id:
+        return []
+
+    query = (
+        select(SessionEvent.tool_name)
+        .where(
+            SessionEvent.session_id == session_id,
+            SessionEvent.event_type == "tool_use",
+            SessionEvent.tool_name.is_not(None),
+        )
+        .order_by(SessionEvent.turn, SessionEvent.sequence)
+    )
+    async with async_session() as db:
+        rows = (await db.execute(query)).scalars().all()
+
+    seen: set[str] = set()
+    tool_names: list[str] = []
+    for tool_name in rows:
+        if not tool_name or tool_name in seen:
+            continue
+        seen.add(tool_name)
+        tool_names.append(tool_name)
+    return tool_names
 
 
 async def _resolve_client_id(explicit_client_id: str | None, project_id: str) -> str:
@@ -133,6 +197,8 @@ async def _run_one_attempt(
     working_root: Path,
     timeout_seconds: float,
     keep_workdirs: bool,
+    use_memory: bool,
+    memory_group_id: str,
 ) -> JennyBenchmarkAttempt:
     case = get_case_by_id(case_id)
     workdir = working_root / benchmark_id / model_id.replace("/", "__") / case.case_id / f"run-{run_number}"
@@ -149,14 +215,20 @@ async def _run_one_attempt(
             external_id=f"jenny-benchmark:{benchmark_id}:{case.case_id}:run-{run_number}",
             enable_caching=False,
             skip_cache=True,
-            use_memory=False,
-            memory_group_id=f"benchmark:{benchmark_id}",
+            use_memory=use_memory,
+            memory_group_id=memory_group_id,
             max_turns=case.max_turns,
             working_dir=str(workdir) if case.fixture_files else None,
             execute_tools=case.execute_tools,
             timeout_seconds=timeout_seconds,
+            disable_agent_fallbacks=True,
+            response_format={
+                "type": "json_object",
+                "schema": _BENCHMARK_RESPONSE_SCHEMA,
+            },
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
+        used_tool_names = await _fetch_used_tool_names(response.session_id)
         attempt = score_attempt(
             case=case,
             model_id=model_id,
@@ -169,6 +241,7 @@ async def _run_one_attempt(
             fallback_used=response.model != model_id,
             turns=response.turns,
             tool_calls_count=response.tool_calls_count,
+            used_tool_names=used_tool_names,
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
             total_tokens=response.usage.total_tokens,
@@ -187,6 +260,7 @@ async def _run_one_attempt(
             fallback_used=False,
             turns=0,
             tool_calls_count=0,
+            used_tool_names=[],
             input_tokens=0,
             output_tokens=0,
             total_tokens=0,
@@ -210,12 +284,16 @@ async def run_benchmark(
     keep_workdirs: bool,
     base_url: str,
     client_id: str | None,
+    use_memory: bool,
+    memory_group_id: str | None,
 ) -> JennyBenchmarkRun:
     benchmark_id = f"jenny-benchmark-{uuid.uuid4().hex[:8]}"
     started_at = datetime.now(UTC).isoformat()
     attempts: list[JennyBenchmarkAttempt] = []
+    _validate_case_project_requirements(case_ids, project_id)
     order = _build_attempt_order(models, case_ids, runs_per_case, seed)
     resolved_client_id = await _resolve_client_id(client_id, project_id)
+    resolved_memory_group_id = memory_group_id or f"benchmark:{benchmark_id}"
 
     async with AsyncAgentHubClient(
         base_url=base_url,
@@ -243,6 +321,8 @@ async def run_benchmark(
                 working_root=working_root,
                 timeout_seconds=timeout_seconds,
                 keep_workdirs=keep_workdirs,
+                use_memory=use_memory,
+                memory_group_id=resolved_memory_group_id,
             )
             attempts.append(attempt)
             logger.info(
@@ -291,7 +371,7 @@ async def main() -> None:
     parser.add_argument("--models", help="Comma-separated model ids to test")
     parser.add_argument("--cases", help="Comma-separated benchmark case ids to run")
     parser.add_argument("--runs-per-case", type=int, default=3, help="Runs per model per case")
-    parser.add_argument("--project-id", default="persona-sandbox", help="Project id for benchmark sessions")
+    parser.add_argument("--project-id", default="agent-hub", help="Project id for benchmark sessions")
     parser.add_argument(
         "--working-root",
         default=str(ROOT / "backend" / ".tmp" / "jenny-model-benchmark"),
@@ -304,6 +384,8 @@ async def main() -> None:
     parser.add_argument("--output-json", help="Write full JSON result to this path")
     parser.add_argument("--output-md", help="Write markdown report to this path")
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
+    parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection for full-context benchmark runs")
+    parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
     parser.add_argument("--dry-run", action="store_true", help="Print roster and exit")
     args = parser.parse_args()
 
@@ -326,6 +408,8 @@ async def main() -> None:
         keep_workdirs=args.keep_workdirs,
         base_url=args.base_url,
         client_id=args.client_id,
+        use_memory=args.use_memory,
+        memory_group_id=args.memory_group_id,
     )
 
     report = generate_markdown_report(run)

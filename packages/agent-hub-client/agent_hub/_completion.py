@@ -55,6 +55,7 @@ def _apply_identity_fields(
     routing_config: RoutingConfig | dict[str, Any] | None,
     tool_dicts: list[dict[str, Any]] | None,
     enable_programmatic_tools: bool,
+    disable_agent_fallbacks: bool,
 ) -> None:
     """Apply identity/routing optional fields to payload in-place."""
     if agent_slug:
@@ -79,6 +80,8 @@ def _apply_identity_fields(
         payload["tools"] = tool_dicts
     if enable_programmatic_tools:
         payload["enable_programmatic_tools"] = True
+    if disable_agent_fallbacks:
+        payload["disable_agent_fallbacks"] = True
 
 
 def _apply_execution_fields(
@@ -95,6 +98,7 @@ def _apply_execution_fields(
     include_roles: list[str] | None,
     current_branch: str | None,
     skip_cache: bool,
+    response_format: dict[str, Any] | None,
 ) -> None:
     """Apply execution/runtime optional fields to payload in-place."""
     if container_id:
@@ -121,6 +125,8 @@ def _apply_execution_fields(
         payload["current_branch"] = current_branch
     if skip_cache:
         payload["skip_cache"] = True
+    if response_format:
+        payload["response_format"] = response_format
 
 
 def build_completion_payload(
@@ -142,6 +148,8 @@ def build_completion_payload(
     include_roles: list[str] | None = None,
     current_branch: str | None = None,
     skip_cache: bool = False,
+    response_format: dict[str, Any] | None = None,
+    disable_agent_fallbacks: bool = False,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -157,12 +165,13 @@ def build_completion_payload(
     _apply_identity_fields(
         payload, agent_slug, model, session_id, purpose, external_id,
         use_memory, memory_group_id, routing_config, tool_dicts,
-        enable_programmatic_tools,
+        enable_programmatic_tools, disable_agent_fallbacks,
     )
     _apply_execution_fields(
         payload, container_id, max_turns, working_dir, execute_tools,
         trace_id, timeout_seconds, thinking_level, system_prompt,
         resume_session_id, include_roles, current_branch, skip_cache,
+        response_format,
     )
     return payload
 

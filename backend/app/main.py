@@ -77,7 +77,7 @@ async def _startup() -> None:
 
     from app.services.health_prober import init_health_prober
     prober = init_health_prober()
-    logger.info("Health prober started for %d providers", len(prober._providers))
+    logger.info("Provider health tracker initialized for %d providers (passive mode)", len(prober._providers))
 
 
 async def _shutdown() -> None:

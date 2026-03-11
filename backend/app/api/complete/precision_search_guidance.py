@@ -69,8 +69,6 @@ def _extract_text(content: str | list[dict[str, Any]] | None) -> str:
             continue
         if isinstance(block.get("text"), str):
             parts.append(block["text"])
-        elif block.get("type") == "input_text" and isinstance(block.get("text"), str):
-            parts.append(block["text"])
     return "\n".join(part for part in parts if part)
 
 

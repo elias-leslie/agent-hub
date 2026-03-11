@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.complete.tool_handler_utils import _ExecutionState
+from app.api.complete.tool_handler_utils import _ExecutionState, _run_tool_loop
 from app.api.complete.tool_handlers import _store_partial_response
 
 
@@ -92,3 +93,48 @@ class TestStorePartialResponse:
         ):
             # Should not raise
             await _store_partial_response(mock_db, "session-789", session, state, "claude-sonnet-4-5")
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
+    """Terminal error events should not abort the provider stream mid-iteration."""
+    state = _ExecutionState(agent_slug="persona", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+    stream_state = {"natural_end": False, "closed_early": False}
+
+    async def fake_event_stream():
+        try:
+            yield types.SimpleNamespace(type="error", error="claude tool failed"), None
+            yield types.SimpleNamespace(type="result", result="ignored"), None
+            stream_state["natural_end"] = True
+        finally:
+            if not stream_state["natural_end"]:
+                stream_state["closed_early"] = True
+
+    with patch(
+        "app.api.complete.tool_handler_utils.build_event_stream",
+        return_value=fake_event_stream(),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-123",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="persona-sandbox",
+        )
+
+    assert result is not None
+    assert result.status == "error"
+    assert result.error == "claude tool failed"
+    assert stream_state["natural_end"] is True
+    assert stream_state["closed_early"] is False

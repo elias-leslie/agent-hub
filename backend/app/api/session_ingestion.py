@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.sessions import SessionResponse
@@ -34,19 +34,20 @@ router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
 class SessionUpsertResponse(SessionUpsertResult):
     """Upsert response with the current session snapshot."""
 
-    session: SessionResponse
+    session: SessionResponse | None = None
 
 
 class SessionHeartbeatResponse(SessionHeartbeatResult):
     """Heartbeat response with the current session snapshot."""
 
-    session: SessionResponse
+    session: SessionResponse | None = None
 
 
 @router.post("/sessions/upsert", response_model=SessionUpsertResponse)
 async def upsert_session_endpoint(
     request: SessionUpsertRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionUpsertResponse:
     """Create or update a session using the canonical ingestion contract."""
     try:
@@ -57,7 +58,7 @@ async def upsert_session_endpoint(
     return SessionUpsertResponse(
         session_id=result.session_id,
         created=result.created,
-        session=build_session_response(session),
+        session=build_session_response(session) if include_session else None,
     )
 
 
@@ -69,6 +70,7 @@ async def heartbeat_session_endpoint(
     session_id: str,
     request: SessionHeartbeatRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
+    include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionHeartbeatResponse:
     """Apply a canonical heartbeat update to an existing session."""
     try:
@@ -79,7 +81,7 @@ async def heartbeat_session_endpoint(
     return SessionHeartbeatResponse(
         session_id=result.session_id,
         updated=result.updated,
-        session=build_session_response(session),
+        session=build_session_response(session) if include_session else None,
     )
 
 
@@ -94,8 +96,8 @@ async def append_events_endpoint(
 ) -> AppendNormalizedEventsResult:
     """Append normalized events to an existing session."""
     try:
-        await get_session_or_404(db, session_id)
-        return await append_normalized_events(db, session_id, request)
+        session = await get_session_or_404(db, session_id)
+        return await append_normalized_events(db, session_id, request, session=session)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

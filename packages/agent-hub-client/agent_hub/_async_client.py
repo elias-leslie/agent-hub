@@ -145,6 +145,8 @@ class AsyncAgentHubClient(
         include_roles: list[str] | None = None,
         current_branch: str | None = None,
         skip_cache: bool = False,
+        response_format: dict[str, Any] | None = None,
+        disable_agent_fallbacks: bool = False,
     ) -> CompletionResponse:
         """Generate a completion asynchronously. Use agent_slug for routing with mandates."""
         if not agent_slug and not model:
@@ -183,6 +185,8 @@ class AsyncAgentHubClient(
             include_roles=include_roles,
             current_branch=current_branch,
             skip_cache=skip_cache,
+            response_format=response_format,
+            disable_agent_fallbacks=disable_agent_fallbacks,
         )
 
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None

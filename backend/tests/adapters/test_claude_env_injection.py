@@ -109,15 +109,16 @@ class TestClaudeToolsEnvInjection:
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
+        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
 
     @pytest.mark.asyncio
     async def test_env_empty_when_no_venv(self, tmp_path: Path) -> None:
-        """No venv found → env is empty dict (no overrides needed)."""
+        """No venv found still keeps the streaming prompt timeout override."""
         captured_opts: dict[str, Any] = {}
         await self._run_complete_with_tools(str(tmp_path), captured_opts)
 
         assert "env" in captured_opts
-        assert captured_opts["env"] == {}
+        assert captured_opts["env"] == {"CLAUDE_CODE_STREAM_CLOSE_TIMEOUT": "900000"}
 
     @pytest.mark.asyncio
     async def test_pythonhome_overridden(self, tmp_path: Path) -> None:
@@ -183,11 +184,22 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["max_turns"] == 10
 
-    def test_json_mode_overrides_max_turns(self, tmp_path: Path) -> None:
-        """json_mode forces max_turns=2 even when caller specifies a higher value."""
+    def test_json_mode_preserves_higher_max_turns(self, tmp_path: Path) -> None:
+        """json_mode requires at least 2 turns but preserves a higher caller budget."""
         captured_opts = self._build_and_capture(
             tmp_path,
             max_turns=10,
+            json_mode=True,
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+        )
+
+        assert captured_opts["max_turns"] == 10
+
+    def test_json_mode_raises_low_max_turns_to_minimum(self, tmp_path: Path) -> None:
+        """json_mode raises a low max_turns budget to the minimum viable value."""
+        captured_opts = self._build_and_capture(
+            tmp_path,
+            max_turns=1,
             json_mode=True,
             json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
         )
@@ -226,6 +238,12 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
 
+    def test_working_dir_streaming_prompt_sets_stream_close_timeout(self, tmp_path: Path) -> None:
+        """working_dir hook mode also gets the stream close timeout."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+
     def test_mcp_servers_set_os_environ_stream_close_timeout(self, tmp_path: Path) -> None:
         """MCP sessions set CLAUDE_CODE_STREAM_CLOSE_TIMEOUT in os.environ for Query.__init__."""
         import os
@@ -244,11 +262,11 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["env"]["MCP_TOOL_TIMEOUT"] == "300000"
 
-    def test_no_mcp_servers_no_timeout_env(self, tmp_path: Path) -> None:
-        """Non-MCP sessions don't get timeout env vars."""
+    def test_working_dir_non_mcp_sessions_still_get_stream_timeout(self, tmp_path: Path) -> None:
+        """working_dir hook mode also gets the stream-input close timeout."""
         captured_opts = self._build_and_capture(tmp_path)
 
-        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts.get("env", {})
+        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
 
     def test_mcp_timeout_env_preserves_venv(self, tmp_path: Path) -> None:
         """MCP timeout env vars are added alongside venv env vars, not replacing them."""

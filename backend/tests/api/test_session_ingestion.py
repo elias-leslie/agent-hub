@@ -110,6 +110,34 @@ class TestSessionIngestionAPI:
         assert data["session"]["tmux_session_name"] == "codex-agent-hub"
 
     @pytest.mark.asyncio
+    async def test_upsert_session_endpoint_can_skip_session_snapshot(self, client: AsyncClient) -> None:
+        session = MagicMock()
+        session.id = "session-123"
+        with patch(
+            "app.api.session_ingestion.upsert_session",
+            new_callable=AsyncMock,
+            return_value=(
+                session,
+                SessionUpsertResult(session_id="session-123", created=True),
+            ),
+        ):
+            response = await client.post(
+                "/api/session-ingestion/sessions/upsert?include_session=false",
+                json={
+                    "session_id": "session-123",
+                    "project_id": "agent-hub",
+                    "provider": "codex",
+                    "model": "codex/gpt-5.4",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "session-123"
+        assert data["created"] is True
+        assert data["session"] is None
+
+    @pytest.mark.asyncio
     async def test_heartbeat_session_endpoint(self, client: AsyncClient) -> None:
         """Heartbeat returns updated flag and refreshed session snapshot."""
         session = MagicMock()
@@ -185,6 +213,29 @@ class TestSessionIngestionAPI:
         assert data["session"]["observed_write_paths"] == [
             "backend/app/services/ownership_inventory.py"
         ]
+
+    @pytest.mark.asyncio
+    async def test_heartbeat_session_endpoint_can_skip_session_snapshot(self, client: AsyncClient) -> None:
+        session = MagicMock()
+        session.id = "session-123"
+        with patch(
+            "app.api.session_ingestion.heartbeat_session",
+            new_callable=AsyncMock,
+            return_value=(
+                session,
+                SessionHeartbeatResult(session_id="session-123", updated=True),
+            ),
+        ):
+            response = await client.post(
+                "/api/session-ingestion/sessions/session-123/heartbeat?include_session=false",
+                json={},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["session_id"] == "session-123"
+        assert data["updated"] is True
+        assert data["session"] is None
 
     @pytest.mark.asyncio
     async def test_append_events_endpoint(self, client: AsyncClient) -> None:

@@ -84,6 +84,8 @@ async def _run_tool_loop(
     # Mapping of tool_use_id → tool_name, shared across all events in the loop
     tool_use_id_to_name: dict[str, str] = {}
 
+    terminal_error_message: str | None = None
+
     async for event, _session_id in event_stream:
         state.turn, tools_delta, error_message = await process_tool_event(
             event, state.turn, session_id, db, state.content_parts,
@@ -92,10 +94,15 @@ async def _run_tool_loop(
         )
         state.tool_calls_count += tools_delta
 
-        if error_message:
-            return build_error_result(
-                Exception(error_message), model, provider, session_id, loaded_memory_uuids,
-                turns=state.turn, tool_calls_count=state.tool_calls_count,
-            )
+        if error_message and terminal_error_message is None:
+            # Record the terminal error, but keep draining the provider stream so
+            # SDK-backed generators can unwind cleanly on their own task boundary.
+            terminal_error_message = error_message
+
+    if terminal_error_message:
+        return build_error_result(
+            Exception(terminal_error_message), model, provider, session_id, loaded_memory_uuids,
+            turns=state.turn, tool_calls_count=state.tool_calls_count,
+        )
 
     return None

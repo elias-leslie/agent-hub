@@ -111,6 +111,52 @@ class HealthProber:
             if old_state == ProviderState.HEALTHY:
                 self._emit_event(HealthEvent.PROVIDER_DEGRADED, name)
 
+    def record_success(self, name: str, latency_ms: float) -> None:
+        """Record a successful real request for a provider."""
+        health = self._providers.get(name)
+        if not health:
+            return
+
+        old_state = health.state
+        prev_failures = health.consecutive_failures
+        now = time.time()
+        health.last_check = now
+        health.last_success = now
+        health.latency_ms = latency_ms
+        health.last_error = None
+        health.success_count += 1
+        health.consecutive_failures = 0
+        health.state = (
+            ProviderState.DEGRADED
+            if latency_ms > self.config.latency_degraded_ms
+            else ProviderState.HEALTHY
+        )
+        if (
+            old_state in (ProviderState.DOWN, ProviderState.DEGRADED)
+            and health.state == ProviderState.HEALTHY
+            and prev_failures >= self.config.recovery_threshold - 1
+        ):
+            self._emit_event(HealthEvent.PROVIDER_RECOVERED, name)
+
+    def record_failure(
+        self,
+        name: str,
+        error: str,
+        latency_ms: float = 0.0,
+    ) -> None:
+        """Record a failed real request for a provider."""
+        health = self._providers.get(name)
+        if not health:
+            return
+
+        old_state = health.state
+        health.last_check = time.time()
+        health.latency_ms = latency_ms
+        health.error_count += 1
+        health.consecutive_failures += 1
+        health.last_error = error[:200]
+        self._update_state_on_failure(name, old_state)
+
     async def _execute_probe(
         self, name: str, adapter: ProviderAdapter, health: ProviderHealth
     ) -> None:
@@ -221,18 +267,26 @@ class HealthProber:
         return dict(self._providers)
 
     def is_provider_available(self, provider: str) -> bool:
-        """Check if a provider is available (healthy or degraded)."""
+        """Check if a provider is available enough to attempt a real request."""
         health = self._providers.get(provider)
         if not health:
             return False
-        return health.state in (ProviderState.HEALTHY, ProviderState.DEGRADED)
+        return health.state in (
+            ProviderState.HEALTHY,
+            ProviderState.DEGRADED,
+            ProviderState.UNKNOWN,
+        )
 
     def get_available_providers(self) -> list[str]:
-        """Get list of available providers."""
+        """Get list of providers that are not currently known-down."""
         return [
             name
             for name, health in self._providers.items()
-            if health.state in (ProviderState.HEALTHY, ProviderState.DEGRADED)
+            if health.state in (
+                ProviderState.HEALTHY,
+                ProviderState.DEGRADED,
+                ProviderState.UNKNOWN,
+            )
         ]
 
     async def probe_now(self, provider: str | None = None) -> None:
