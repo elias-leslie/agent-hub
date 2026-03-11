@@ -97,7 +97,7 @@ class AgentHubClient(
             self._client.close()
             self._client = None
 
-    def __enter__(self) -> "AgentHubClient":
+    def __enter__(self) -> AgentHubClient:
         return self
 
     def __exit__(self, *args: Any) -> None:
@@ -131,6 +131,7 @@ class AgentHubClient(
         resume_session_id: str | None = None,
         include_roles: list[str] | None = None,
         current_branch: str | None = None,
+        skip_cache: bool = False,
     ) -> CompletionResponse:
         """Generate a completion. Use agent_slug for routing with mandates and fallbacks."""
         if not agent_slug and not model:
@@ -168,6 +169,7 @@ class AgentHubClient(
             resume_session_id=resume_session_id,
             include_roles=include_roles,
             current_branch=current_branch,
+            skip_cache=skip_cache,
         )
 
         headers = self._inject_tracking_headers("sdk.complete")

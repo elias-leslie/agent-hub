@@ -94,6 +94,7 @@ def _apply_execution_fields(
     resume_session_id: str | None,
     include_roles: list[str] | None,
     current_branch: str | None,
+    skip_cache: bool,
 ) -> None:
     """Apply execution/runtime optional fields to payload in-place."""
     if container_id:
@@ -118,9 +119,11 @@ def _apply_execution_fields(
         payload["include_roles"] = include_roles
     if current_branch:
         payload["current_branch"] = current_branch
+    if skip_cache:
+        payload["skip_cache"] = True
 
 
-def build_completion_payload(  # noqa: PLR0913
+def build_completion_payload(
     messages: list[dict[str, str] | MessageInput | ToolResultMessage],
     project_id: str,
     agent_slug: str | None = None, model: str | None = None,
@@ -138,6 +141,7 @@ def build_completion_payload(  # noqa: PLR0913
     resume_session_id: str | None = None,
     include_roles: list[str] | None = None,
     current_branch: str | None = None,
+    skip_cache: bool = False,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -158,7 +162,7 @@ def build_completion_payload(  # noqa: PLR0913
     _apply_execution_fields(
         payload, container_id, max_turns, working_dir, execute_tools,
         trace_id, timeout_seconds, thinking_level, system_prompt,
-        resume_session_id, include_roles, current_branch,
+        resume_session_id, include_roles, current_branch, skip_cache,
     )
     return payload
 

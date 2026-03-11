@@ -38,3 +38,17 @@ def test_build_completion_payload_includes_true_use_memory_flag() -> None:
     )
 
     assert payload["use_memory"] is True
+
+
+def test_build_completion_payload_includes_skip_cache_flag() -> None:
+    """SDK callers must be able to bypass response-cache reads and writes."""
+    payload = _build_completion_payload(
+        messages=[{"role": "user", "content": "Review AAPL"}],
+        project_id="portfolio-ai",
+        agent_slug="equity-analyst",
+        enable_caching=False,
+        skip_cache=True,
+    )
+
+    assert payload["enable_caching"] is False
+    assert payload["skip_cache"] is True
