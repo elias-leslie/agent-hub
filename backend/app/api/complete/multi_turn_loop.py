@@ -9,6 +9,7 @@ from typing import Any
 from app.adapters.base import Message
 from app.services.container_manager import ContainerManager
 from app.services.context_tracker import format_budget_message
+from app.services.health_prober import record_provider_failure, record_provider_success
 from app.services.token_counter import get_context_limit
 
 from .finish_reason_handler import handle_finish_reason
@@ -25,21 +26,27 @@ async def run_adapter_turn(
 ) -> tuple[Any, int]:
     """Call the adapter for one turn and return (result, duration_ms)."""
     turn_start = time.monotonic()
-    result = await cfg.adapter.complete(
-        messages=cfg.messages_for_adapter,
-        model=cfg.model,
-        max_tokens=None,
-        temperature=cfg.temperature,
-        enable_caching=cfg.enable_caching if turn == 1 else False,
-        cache_ttl=cfg.cache_ttl,
-        thinking_level=cfg.thinking_level,
-        tools=cfg.tools,
-        enable_programmatic_tools=cfg.enable_programmatic_tools,
-        container_id=current_container_id,
-        response_format=cfg.response_format,
-        working_dir=cfg.working_dir,
-    )
-    return result, int((time.monotonic() - turn_start) * 1000)
+    try:
+        result = await cfg.adapter.complete(
+            messages=cfg.messages_for_adapter,
+            model=cfg.model,
+            max_tokens=None,
+            temperature=cfg.temperature,
+            enable_caching=cfg.enable_caching if turn == 1 else False,
+            cache_ttl=cfg.cache_ttl,
+            thinking_level=cfg.thinking_level,
+            tools=cfg.tools,
+            enable_programmatic_tools=cfg.enable_programmatic_tools,
+            container_id=current_container_id,
+            response_format=cfg.response_format,
+            working_dir=cfg.working_dir,
+        )
+    except Exception as exc:
+        record_provider_failure(cfg.provider, str(exc), (time.monotonic() - turn_start) * 1000)
+        raise
+    duration_ms = int((time.monotonic() - turn_start) * 1000)
+    record_provider_success(cfg.provider, duration_ms)
+    return result, duration_ms
 
 
 async def _maybe_compact(cfg: TurnLoopConfig, turn: int) -> None:

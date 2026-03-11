@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import NoReturn
 
 from app.adapters.base import (
@@ -12,6 +13,7 @@ from app.adapters.base import (
 from app.adapters.thinking import get_thinking_config
 from app.constants.catalog import get_model_capabilities
 from app.services.agent_dto import AgentDTO
+from app.services.health_prober import record_provider_failure, record_provider_success
 
 from .agent_routing_models import CompletionResult
 from .agent_routing_utils import get_adapter, get_provider_for_model
@@ -39,6 +41,7 @@ async def _try_model(
 ) -> tuple[object | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error."""
     provider = get_provider_for_model(model)
+    start = time.monotonic()
     try:
         adapter = get_adapter(provider)
         # Convert thinking_level to provider-specific kwargs (e.g. reasoning_effort for Codex/OpenAI)
@@ -60,8 +63,10 @@ async def _try_model(
             tools=tools,
             **extra_kwargs,
         )
+        record_provider_success(provider, (time.monotonic() - start) * 1000)
         return result, None
     except _COMPLETION_ERRORS as e:
+        record_provider_failure(provider, str(e), (time.monotonic() - start) * 1000)
         logger.warning("Model %s failed: %s", model, e)
         return None, e
 

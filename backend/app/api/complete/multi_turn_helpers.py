@@ -220,14 +220,9 @@ def build_result(state: dict[str, Any]) -> dict[str, Any]:
 def record_timeout_in_health_prober(provider: str, e: TimeoutError) -> None:
     """Record a timeout as a health prober failure for the given provider."""
     try:
-        from app.services.health_prober import get_health_prober
+        from app.services.health_prober import record_provider_failure
 
-        prober = get_health_prober()
-        health = prober.get_health(provider)
-        if health:
-            health.error_count += 1
-            health.consecutive_failures += 1
-            health.last_error = f"Timeout: {e}"
+        record_provider_failure(provider, f"Timeout: {e}")
         logger.warning("Timeout recorded as health prober failure for %s", provider)
     except Exception:
         logger.debug("Failed to record timeout in health prober", exc_info=True)

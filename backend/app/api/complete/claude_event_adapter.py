@@ -12,6 +12,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters.base import ProviderError
 from app.adapters.claude_utils import extract_block_content, is_thinking_block, is_tool_use_block
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 
@@ -122,6 +123,9 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     if isinstance(msg, ResultMessage) or type(msg).__name__ == "ResultMessage":
         return _convert_result_message(msg)
 
+    if type(msg).__name__ == "ErrorMessage":
+        return [ToolEvent(type="error", error=getattr(msg, "error", "Unknown error"))]
+
     return []
 
 
@@ -136,6 +140,13 @@ async def adapt_claude_stream(
     Yields:
         (ToolEvent, session_id) tuples
     """
-    async for msg, session_id in stream:
-        for event in adapt_claude_message(msg):
-            yield event, session_id
+    last_session_id = ""
+    try:
+        async for msg, session_id in stream:
+            last_session_id = session_id or last_session_id
+            for event in adapt_claude_message(msg):
+                yield event, session_id
+    except ProviderError as exc:
+        yield ToolEvent(type="error", error=str(exc)), last_session_id
+    except Exception as exc:
+        yield ToolEvent(type="error", error=str(exc)), last_session_id

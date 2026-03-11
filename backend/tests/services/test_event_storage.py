@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models import Session
 from app.services.event_storage import (
     EventSequencer,
     _extract_tool_result_content,
@@ -198,6 +199,30 @@ class TestMemoryInjectEvent:
 
         assert db.execute.await_count == 1
         assert parent_session.updated_at is not None
+        db.get.assert_awaited_once_with(Session, "sess-1")
+
+    @pytest.mark.asyncio
+    async def test_store_event_uses_provided_session_without_reloading(self) -> None:
+        db = MagicMock()
+        db.get = AsyncMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        get_sequencer()._sessions.clear()
+
+        await store_event(
+            db=db,
+            session_id="sess-inline",
+            event_type="assistant_message",
+            role="assistant",
+            content="hello",
+            session=parent_session,
+        )
+
+        db.get.assert_not_awaited()
+        assert parent_session.updated_at is not None
+        assert parent_session.provider_metadata["live_activity"]["phase"] == "finalizing"
 
     @pytest.mark.asyncio
     async def test_store_tool_events_update_live_activity_summary(self) -> None:

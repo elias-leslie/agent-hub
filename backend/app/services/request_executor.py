@@ -1,6 +1,7 @@
 """Request execution logic for model routing."""
 
 import logging
+import time
 from typing import Any
 
 from app.adapters.base import (
@@ -16,6 +17,7 @@ from app.services.circuit_breaker import (
     CircuitBreakerManager,
 )
 from app.services.error_tracking import ErrorTracker, increment_circuit_trips
+from app.services.health_prober import record_provider_failure, record_provider_success
 from app.services.model_mapping import map_model_to_provider
 
 logger = logging.getLogger(__name__)
@@ -84,13 +86,16 @@ class RequestExecutor:
             effective_model = map_model_to_provider(model, provider)
             logger.info(f"Fallback: {primary} -> {provider}, model: {model} -> {effective_model}")
 
-        return await adapter.complete(
+        start = time.monotonic()
+        result = await adapter.complete(
             messages=messages,
             model=effective_model,
             max_tokens=max_tokens,
             temperature=temperature,
             **kwargs,
         )
+        record_provider_success(provider, (time.monotonic() - start) * 1000)
+        return result
 
     async def handle_provider_error(self, error: Exception, provider: str, model: str) -> Exception:
         """Handle provider error and update circuit state.
@@ -113,6 +118,8 @@ class RequestExecutor:
         elif isinstance(error, ValueError):
             logger.warning(f"Config error for {provider}: {error}, trying next provider")
             return error  # Don't track config errors
+
+        record_provider_failure(provider, str(error))
 
         # Record error and update circuit breaker
         consecutive = self._error_tracker.record_error(error, provider, model)

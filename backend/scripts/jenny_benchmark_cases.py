@@ -7,9 +7,9 @@ from pathlib import Path
 
 DEFAULT_JENNY_BENCHMARK_MODELS = [
     "codex/gpt-5.4",
-    "openai/gpt-5.2",
     "codex/gpt-5.3-codex",
     "codex/gpt-5.3-codex-spark",
+    "codex/gpt-5.2",
     "claude-opus-4-6",
     "claude-sonnet-4-6",
     "claude-haiku-4-5",
@@ -36,17 +36,32 @@ class JennyBenchmarkCase:
     scenario: str
     expected: dict[str, object]
     require_tool_call: bool = False
+    required_tool_names: tuple[str, ...] = ()
     max_turns: int = 1
     execute_tools: bool = False
     fixture_files: dict[str, str] = field(default_factory=dict)
+    required_summary_terms: tuple[str, ...] = ()
+    required_project_id: str | None = None
 
     def build_prompt(self) -> str:
         """Build the user prompt shown to Jenny for this benchmark case."""
         tool_instruction = ""
-        if self.require_tool_call:
+        if self.required_tool_names:
+            required_tools = ", ".join(self.required_tool_names)
+            tool_instruction = (
+                f"\nYou must use these tools before answering: {required_tools}. "
+                "A correct answer that skips them will fail this benchmark."
+            )
+            if "precision_code_search" in self.required_tool_names:
+                tool_instruction += (
+                    " Use precision_code_search as your first code-navigation step. "
+                    "Do not rely on read_file, bash, or assumptions as the primary lookup path."
+                )
+        elif self.require_tool_call:
             tool_instruction = (
                 "\nYou must inspect the files in the working directory before answering. "
-                "Do not answer from assumptions."
+                "Only inspect task.txt, cleanup.txt, and sessions.txt in the current working directory. "
+                "Do not search outside the current working directory or answer from assumptions."
             )
         return (
             f"Benchmark case id: {self.case_id}\n"
@@ -204,6 +219,55 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                     "recent_summary=Task is technically complete but cleanup still pending.\n"
                 ),
             },
+        ),
+        JennyBenchmarkCase(
+            case_id="precision_search_architecture",
+            name="Precision Search Architecture",
+            description="Choose the DRY shared-tool rollout plan for Precision Code Search.",
+            scenario=(
+                "TASK: task-7777\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "objective=Wire Precision Code Search into the shared Agent Hub completion/tooling path.\n"
+                "architecture_review=Use shared tool_router/tool_handlers/core path, existing session tool events for telemetry, "
+                "a lightweight soft reminder, and keep rg first for workflow/meta text.\n"
+                "anti_pattern=Do not create a separate service, new analytics subsystem, classifier model, or hard enforcement first.\n"
+                "validated_prework=Codex capability/docs drift already fixed in commits 764ef0ed and b123fff9.\n"
+                "recommended_order=1) shared tool 2) soft reminder 3) session-event telemetry 4) mandate text last.\n"
+                "question=What should Jenny do next?\n"
+            ),
+            expected={
+                "case_id": "precision_search_architecture",
+                "primary_action": "dispatch",
+                "should_dispatch": True,
+                "should_close": False,
+            },
+            required_summary_terms=("shared", "soft", "telemetry"),
+        ),
+        JennyBenchmarkCase(
+            case_id="precision_search_live_lookup",
+            name="Precision Search Live Lookup",
+            description="Use the real precision_code_search tool to verify shared tool wiring before deciding.",
+            scenario=(
+                "Use precision_code_search to verify whether the real `precision_code_search` tool is already wired "
+                "into Agent Hub's shared standard tool path for Jenny/persona.\n"
+                "You are deciding whether Jenny should dispatch follow-on adoption/guardrail work now, or block "
+                "because the core shared tool does not exist yet.\n"
+                "Focus your lookup on where the tool is defined and where it is registered for shared/persona use.\n"
+                "If the shared tool is already wired, Jenny should dispatch follow-on work rather than re-implementing the tool.\n"
+            ),
+            expected={
+                "case_id": "precision_search_live_lookup",
+                "primary_action": "dispatch",
+                "should_dispatch": True,
+                "should_close": False,
+            },
+            required_tool_names=("precision_code_search",),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("already", "shared", "wired"),
+            required_project_id="agent-hub",
         ),
     ]
 

@@ -190,17 +190,43 @@ class TestHealthProber:
         assert prober.is_provider_available("claude") is False
 
         health.state = ProviderState.UNKNOWN
-        assert prober.is_provider_available("claude") is False
+        assert prober.is_provider_available("claude") is True
 
     @pytest.mark.asyncio
     async def test_get_available_providers(self, prober, mock_adapters):
         """Test get_available_providers method."""
         prober.get_health("claude").state = ProviderState.HEALTHY
-        prober.get_health("gemini").state = ProviderState.DOWN
+        prober.get_health("gemini").state = ProviderState.UNKNOWN
 
         available = prober.get_available_providers()
         assert "claude" in available
-        assert "gemini" not in available
+        assert "gemini" in available
+
+    def test_record_success_updates_health(self, prober, mock_adapters):
+        """Test record_success updates passive provider health."""
+        prober.record_success("claude", 120.0)
+
+        health = prober.get_health("claude")
+        assert health is not None
+        assert health.state == ProviderState.HEALTHY
+        assert health.success_count == 1
+        assert health.error_count == 0
+        assert health.consecutive_failures == 0
+        assert health.latency_ms == 120.0
+        assert health.last_success > 0
+
+    def test_record_failure_updates_health(self, prober, mock_adapters):
+        """Test record_failure updates passive provider health."""
+        prober.record_failure("claude", "boom", 45.0)
+        prober.record_failure("claude", "boom", 50.0)
+
+        health = prober.get_health("claude")
+        assert health is not None
+        assert health.state == ProviderState.DEGRADED
+        assert health.error_count == 2
+        assert health.consecutive_failures == 2
+        assert health.last_error == "boom"
+        assert health.latency_ms == 50.0
 
     @pytest.mark.asyncio
     async def test_probe_now_single(self, prober, mock_adapters):
@@ -564,7 +590,7 @@ class TestGlobalProber:
         with patch("app.adapters.registry.get_adapter", return_value=mock_adapter):
             prober = init_health_prober()
             assert prober is not None
-            assert prober._running is True
+            assert prober._running is False
 
             await shutdown_health_prober()
 

@@ -57,6 +57,22 @@ def test_build_completion_payload_includes_skip_cache_flag() -> None:
     assert payload["skip_cache"] is True
 
 
+def test_build_completion_payload_includes_response_format_and_disable_fallbacks() -> None:
+    payload = _build_completion_payload(
+        messages=[{"role": "user", "content": "Review AAPL"}],
+        project_id="portfolio-ai",
+        agent_slug="equity-analyst",
+        response_format={
+            "type": "json_object",
+            "schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}},
+        },
+        disable_agent_fallbacks=True,
+    )
+
+    assert payload["response_format"]["type"] == "json_object"
+    assert payload["disable_agent_fallbacks"] is True
+
+
 @pytest.mark.asyncio
 async def test_async_client_complete_sends_skip_cache_header(monkeypatch) -> None:
     from agent_hub._async_client import AsyncAgentHubClient

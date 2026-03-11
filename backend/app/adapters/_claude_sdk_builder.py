@@ -9,6 +9,15 @@ from app.adapters._claude_constants import DEFAULT_ALLOWED_CLI_TOOLS, THINKING_L
 logger = logging.getLogger(__name__)
 
 
+def _set_streaming_prompt_timeouts(sdk_opts: dict[str, Any]) -> None:
+    """Set stream-input timeouts for SDK paths that send prompt data incrementally."""
+    env = sdk_opts.setdefault("env", {})
+    # Query.__init__ reads this from the parent process environment when using
+    # stream_input(); keep it aligned with the subprocess env as well.
+    os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
+    env.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
+
+
 def _get_thinking_config(thinking_level: str | None) -> Any:
     """Convert thinking_level to Claude SDK ThinkingConfig dict."""
     if not thinking_level:
@@ -80,7 +89,9 @@ def _apply_optional_opts(
 
     if json_mode and json_schema:
         sdk_opts["output_format"] = {"type": "json_schema", "schema": json_schema}
-        sdk_opts["max_turns"] = 2  # json_mode always overrides
+        # JSON mode needs at least one response turn after tool execution, but it
+        # must not silently shrink a higher caller-provided budget.
+        sdk_opts["max_turns"] = max(sdk_opts.get("max_turns", 0), 2)
 
     if resume_session_id:
         sdk_opts["resume"] = resume_session_id
@@ -88,17 +99,8 @@ def _apply_optional_opts(
 
     if mcp_servers:
         sdk_opts["mcp_servers"] = mcp_servers
+        _set_streaming_prompt_timeouts(sdk_opts)
         env = sdk_opts.setdefault("env", {})
-        # --- Main process env (read by Query.__init__ via os.environ) ---
-        # The SDK's Query class reads CLAUDE_CODE_STREAM_CLOSE_TIMEOUT from
-        # os.environ to decide when stream_input() closes stdin. The default
-        # 60s is too short for 25-turn heartbeat sessions — stdin closes
-        # mid-session, killing the MCP bidirectional control protocol.
-        # See: claude_agent_sdk/_internal/query.py line 115-117
-        os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
-        # --- Subprocess env (passed to CLI via options.env) ---
-        # Also set in subprocess env for the CLI-side timeout handling.
-        env.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
         # Allow slow MCP tools (consult_agent, etc.) to finish. Default 30s
         # is too short for cross-model consultation calls.
         env.setdefault("MCP_TOOL_TIMEOUT", "300000")
@@ -160,6 +162,9 @@ def build_sdk_options(
         mcp_servers=mcp_servers,
         system_prompt=system_prompt,
     )
+
+    if use_streaming_prompt:
+        _set_streaming_prompt_timeouts(sdk_opts)
 
     sdk_opts["allowed_tools"] = allowed_tools or list(DEFAULT_ALLOWED_CLI_TOOLS)
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt

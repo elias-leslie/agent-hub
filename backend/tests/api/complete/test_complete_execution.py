@@ -166,3 +166,127 @@ async def test_execute_with_fallback_preserves_primary_failure_reason_on_later_s
     assert result.model_used == "gemini-2.5-pro"
     assert result.fallback_used is True
     assert result.fallback_reason == "ProviderError: primary blew up"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_db_bypasses_agentic_fallback_chain_when_disabled() -> None:
+    from app.api.complete.complete_execution import _dispatch_db
+
+    req = SimpleNamespace(
+        disable_agent_fallbacks=True,
+    )
+    agent = SimpleNamespace(agent=SimpleNamespace(fallback_models=["codex/gpt-5.4"]))
+
+    direct_result = CompletionInternalResult(
+        content="done",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=1,
+        output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
+    )
+
+    with patch(
+        "app.api.complete.complete_execution._run_internal",
+        new=AsyncMock(return_value=direct_result),
+    ) as run_internal, patch(
+        "app.api.complete.complete_execution._run_with_agentic_fallback",
+        new=AsyncMock(),
+    ) as run_with_fallback:
+        result = await _dispatch_db(
+            req=req,
+            model="claude-sonnet-4-6",
+            provider="claude",
+            agent=agent,
+            msgs=[],
+            db=AsyncMock(),
+            is_agentic=True,
+            sid="sess-1",
+            client_id=None,
+            source=None,
+            thinking=None,
+            tools=None,
+            fmt=None,
+            skip_cache=False,
+        )
+
+    assert result is direct_result
+    run_internal.assert_awaited_once()
+    run_with_fallback.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_without_db_records_provider_success() -> None:
+    from app.api.complete.execution import execute_without_db
+
+    request = SimpleNamespace(
+        temperature=0.0,
+        enable_caching=False,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+    )
+    adapter_result = CompletionResult(
+        content="ok",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    adapter = SimpleNamespace(complete=AsyncMock(return_value=adapter_result))
+
+    with (
+        patch("app.api.complete.execution.get_adapter", return_value=adapter),
+        patch("app.api.complete.execution.record_provider_success") as record_success,
+        patch("app.api.complete.execution.record_provider_failure") as record_failure,
+    ):
+        result, model_used = await execute_without_db(
+            messages_for_adapter=[Message(role="user", content="hi")],
+            resolved_model="claude-sonnet-4-6",
+            provider="claude",
+            request=request,
+            thinking_level=None,
+            tools_api=None,
+            response_format_dict=None,
+        )
+
+    assert result is adapter_result
+    assert model_used == "claude-sonnet-4-6"
+    record_success.assert_called_once()
+    record_failure.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_without_db_records_provider_failure() -> None:
+    from app.api.complete.execution import execute_without_db
+
+    request = SimpleNamespace(
+        temperature=0.0,
+        enable_caching=False,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+    )
+    adapter = SimpleNamespace(complete=AsyncMock(side_effect=ProviderError(provider="claude", message="boom")))
+
+    with (
+        patch("app.api.complete.execution.get_adapter", return_value=adapter),
+        patch("app.api.complete.execution.record_provider_success") as record_success,
+        patch("app.api.complete.execution.record_provider_failure") as record_failure,
+        pytest.raises(ProviderError),
+    ):
+        await execute_without_db(
+            messages_for_adapter=[Message(role="user", content="hi")],
+            resolved_model="claude-sonnet-4-6",
+            provider="claude",
+            request=request,
+            thinking_level=None,
+            tools_api=None,
+            response_format_dict=None,
+        )
+
+    record_success.assert_not_called()
+    record_failure.assert_called_once()

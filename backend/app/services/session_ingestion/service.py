@@ -159,6 +159,7 @@ async def upsert_session(
         session = existing
         created = False
     else:
+        now = datetime.now(UTC)
         session = Session(
             id=request.session_id or str(uuid.uuid4()),
             project_id=request.project_id,
@@ -175,6 +176,8 @@ async def upsert_session(
             provider_metadata=merged_metadata,
             models_used=[model],
             providers_used=[provider],
+            created_at=now,
+            updated_at=now,
         )
         _apply_scope_state(
             session,
@@ -186,7 +189,6 @@ async def upsert_session(
         )
         db.add(session)
         await db.commit()
-        await db.refresh(session)
         created = True
         return session, SessionUpsertResult(session_id=session.id, created=created)
 
@@ -215,9 +217,9 @@ async def upsert_session(
         observed_write_paths=request.observed_write_paths,
         scope_confidence=request.scope_confidence,
     )
+    session.updated_at = datetime.now(UTC)
 
     await db.commit()
-    await db.refresh(session)
     return session, SessionUpsertResult(session_id=session.id, created=created)
 
 
@@ -264,9 +266,9 @@ async def heartbeat_session(
         active_read_paths=normalize_scope_paths(request.active_read_paths, base_path),
         active_write_paths=normalize_scope_paths(request.active_write_paths, base_path),
     )
+    session.updated_at = datetime.now(UTC)
 
     await db.commit()
-    await db.refresh(session)
     return session, SessionHeartbeatResult(session_id=session.id, updated=True)
 
 
@@ -274,6 +276,7 @@ async def append_normalized_events(
     db: AsyncSession,
     session_id: str,
     request: AppendNormalizedEventsRequest,
+    session: Session | None = None,
 ) -> AppendNormalizedEventsResult:
     """Append normalized events to a session with forward-only sequencing."""
     if not request.events:
@@ -286,6 +289,36 @@ async def append_normalized_events(
             last_turn=current_turn or 1,
             last_sequence=current_sequence,
         )
+
+    if len(request.events) == 1:
+        event = request.events[0]
+        if event.turn is None and event.sequence is None:
+            stored_event = await store_event(
+                db=db,
+                session_id=session_id,
+                event_type=event.event_type,
+                role=event.role,
+                content=event.content,
+                tool_name=event.tool_name,
+                tool_input=event.tool_input,
+                tool_output=event.tool_output,
+                tokens=event.tokens,
+                duration_ms=event.duration_ms,
+                model_used=event.model_used,
+                agent_id=event.agent_id,
+                agent_name=event.agent_name,
+                session=session,
+            )
+            await db.flush()
+            await db.commit()
+            return AppendNormalizedEventsResult(
+                session_id=session_id,
+                events_appended=1,
+                events_skipped=0,
+                last_turn=stored_event.turn,
+                last_sequence=stored_event.sequence,
+                event_ids=[str(stored_event.id)],
+            )
 
     current_turn = await get_max_turn(db, session_id) or 1
     sequence_cache: dict[int, int] = {}
@@ -340,6 +373,7 @@ async def append_normalized_events(
             model_used=normalized.model_used,
             agent_id=normalized.agent_id,
             agent_name=normalized.agent_name,
+            session=session,
         )
         await db.flush()
         event_ids.append(str(stored_event.id))

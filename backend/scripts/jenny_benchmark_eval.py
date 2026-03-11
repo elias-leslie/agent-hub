@@ -11,6 +11,12 @@ from typing import Any
 from scripts.jenny_benchmark_cases import JennyBenchmarkCase
 
 _INFRA_FAILURE_MARKERS = (
+    "authentication failed",
+    "check credentials",
+    "api key not configured",
+    "internal_server_error",
+    "unexpected error occurred",
+    "no response returned",
     "upstream connect error",
     "remote connection failure",
     "transport failure",
@@ -21,6 +27,7 @@ _INFRA_FAILURE_MARKERS = (
     "503",
     "502",
     "rate limit",
+    "claude sdk stalled after tool_result",
 )
 
 _VALID_ACTIONS = {"dispatch", "monitor", "block", "wait", "reconcile"}
@@ -52,6 +59,7 @@ class JennyBenchmarkAttempt:
     fallback_used: bool = False
     turns: int = 0
     tool_calls_count: int = 0
+    used_tool_names: list[str] = field(default_factory=list)
     input_tokens: int = 0
     output_tokens: int = 0
     total_tokens: int = 0
@@ -166,6 +174,14 @@ def classify_failure(detail: str | None) -> tuple[bool, str | None]:
     return False, "model"
 
 
+def _normalize_tool_name(tool_name: str) -> str:
+    """Normalize stored tool names so prefixed runtime variants still match."""
+    normalized = tool_name.strip().lower()
+    if normalized.startswith("mcp__") and "__" in normalized:
+        normalized = normalized.rsplit("__", 1)[-1]
+    return normalized
+
+
 def score_attempt(
     *,
     case: JennyBenchmarkCase,
@@ -179,6 +195,7 @@ def score_attempt(
     fallback_used: bool,
     turns: int,
     tool_calls_count: int,
+    used_tool_names: list[str] | None,
     input_tokens: int,
     output_tokens: int,
     total_tokens: int,
@@ -198,6 +215,7 @@ def score_attempt(
         fallback_used=fallback_used,
         turns=turns,
         tool_calls_count=tool_calls_count,
+        used_tool_names=list(used_tool_names or []),
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=total_tokens,
@@ -227,15 +245,32 @@ def score_attempt(
         1.0 if parsed.get(field_name) == expected_value else 0.0
         for field_name, expected_value in case.expected.items()
     ]
+    if case.required_summary_terms:
+        summary = str(parsed.get("summary", "")).lower()
+        keyword_match_ratio = sum(
+            1.0 for term in case.required_summary_terms if term in summary
+        ) / len(case.required_summary_terms)
+        matches.append(keyword_match_ratio)
     attempt.correctness_score = sum(matches) / len(matches)
-    attempt.tool_requirement_met = (not case.require_tool_call) or tool_calls_count > 0
+    generic_tool_requirement_met = (not case.require_tool_call) or tool_calls_count > 0
+    used_tool_name_set = {
+        _normalize_tool_name(tool_name) for tool_name in attempt.used_tool_names if tool_name
+    }
+    required_tool_name_set = {
+        _normalize_tool_name(tool_name) for tool_name in case.required_tool_names if tool_name
+    }
+    specific_tool_requirement_met = required_tool_name_set.issubset(used_tool_name_set)
+    attempt.tool_requirement_met = generic_tool_requirement_met and specific_tool_requirement_met
     tool_score = 1.0 if attempt.tool_requirement_met else 0.0
     attempt.composite_score = round((attempt.correctness_score * 0.85 + tool_score * 0.15) * 100, 1)
     attempt.passed = attempt.correctness_score == 1.0 and attempt.tool_requirement_met
     if not attempt.passed:
         attempt.failure_kind = "model"
-        if not attempt.tool_requirement_met:
+        if not generic_tool_requirement_met:
             attempt.failure_detail = "required_tool_call_missing"
+        elif not specific_tool_requirement_met:
+            missing_tools = sorted(required_tool_name_set - used_tool_name_set)
+            attempt.failure_detail = f"required_tools_missing: {', '.join(missing_tools)}"
         else:
             attempt.failure_detail = "wrong_decision"
     return attempt

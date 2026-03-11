@@ -81,6 +81,7 @@ async def store_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    session: Session | None = None,
 ) -> SessionEvent:
     """Store a single event to the database.
 
@@ -114,10 +115,12 @@ async def store_event(
         agent_name=agent_name,
     )
     db.add(event)
-    session = await db.get(Session, session_id)
-    if session is not None:
+    parent_session = session
+    if parent_session is None:
+        parent_session = await db.get(Session, session_id)
+    if parent_session is not None:
         update_live_activity_for_event(
-            session,
+            parent_session,
             event_type=str(event_type),
             tool_name=tool_name,
             tool_input=tool_input,
@@ -125,7 +128,7 @@ async def store_event(
             content=content,
             model_used=model_used,
         )
-        session.updated_at = datetime.now(UTC)
+        parent_session.updated_at = datetime.now(UTC)
     return event
 
 

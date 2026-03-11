@@ -56,6 +56,13 @@ class ResultMessage:
     structured_output: Any = None
 
 
+@dataclass
+class ErrorMessage:
+    """Terminal message carrying a tool-stream error without raising through the iterator."""
+
+    error: str
+
+
 def _normalize_tool_name(name: str) -> str:
     """Normalize SDK tool names for permission hooks."""
     return _normalize_tool_name_impl(name)
@@ -134,26 +141,15 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
     return _stream()
 
 
-async def _abort_message_iter(message_iter: Any, next_task: asyncio.Task[Any] | None) -> None:
-    logger.warning("Claude SDK aborting message iterator after post-tool stall")
-    if hasattr(message_iter, "aclose"):
-        with suppress(Exception):
-            await message_iter.aclose()
-    if next_task is not None:
-        next_task.cancel()
-        with suppress(asyncio.CancelledError, Exception):
-            await asyncio.wait_for(next_task, timeout=1.0)
-
-
 async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
     if idle_timeout is None:
         return await anext(message_iter)
-    next_task = asyncio.create_task(anext(message_iter))
-    done, _pending = await asyncio.wait({next_task}, timeout=idle_timeout)
-    if next_task in done:
-        return await next_task
-    await _abort_message_iter(message_iter, next_task)
-    raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s")
+    try:
+        async with asyncio.timeout(idle_timeout):
+            return await anext(message_iter)
+    except TimeoutError as exc:
+        logger.warning("Claude SDK timed out after post-tool stall; skipping explicit iterator close")
+        raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s") from exc
 
 
 def _message_has_tool_use(message: Any) -> bool:
@@ -198,6 +194,7 @@ async def _iterate_sdk_messages(
     saw_payload = False
     pending_tool_calls = 0
     idle_watch_armed = False
+    skip_iterator_close = False
     message_iter = query(prompt=prompt, options=options).__aiter__()
     try:
         while True:
@@ -221,7 +218,12 @@ async def _iterate_sdk_messages(
                     done_emitted,
                 )
                 idle_watch_armed = False
-            message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
+            try:
+                message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
+            except ProviderError as exc:
+                if "stalled after tool_result" in str(exc):
+                    skip_iterator_close = True
+                raise exc
             if message is _STREAM_STOP:
                 if saw_payload and not done_emitted:
                     logger.warning(
@@ -249,7 +251,7 @@ async def _iterate_sdk_messages(
     finally:
         if idle_watch_armed:
             logger.info("Claude SDK idle watchdog still armed during iterator close: session_id=%s", session_id)
-        if hasattr(message_iter, "aclose"):
+        if not skip_iterator_close and hasattr(message_iter, "aclose"):
             with suppress(Exception):
                 await message_iter.aclose()
 
@@ -260,13 +262,31 @@ async def _stream_sdk_messages(
     provider_name: str,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Yield (message, session_id) pairs from claude_agent_sdk query."""
-    async with _sdk_semaphore:
-        try:
-            async for item in _iterate_sdk_messages(prompt, options, provider_name):
-                yield item
-        except Exception as e:
-            logger.error(f"Claude tool error: {e}")
-            raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
+    queue: asyncio.Queue[tuple[Any, str | None]] = asyncio.Queue()
+
+    async def _produce() -> None:
+        async with _sdk_semaphore:
+            try:
+                async for item in _iterate_sdk_messages(prompt, options, provider_name):
+                    await queue.put(item)
+            except Exception as e:
+                logger.error(f"Claude tool error: {e}")
+                await queue.put((ErrorMessage(error=f"Claude tool error: {e}"), None))
+            finally:
+                await queue.put((_STREAM_STOP, None))
+
+    producer = asyncio.create_task(_produce())
+    try:
+        while True:
+            message, session_id = await queue.get()
+            if message is _STREAM_STOP:
+                return
+            yield (message, session_id)
+    finally:
+        if not producer.done():
+            producer.cancel()
+        with suppress(asyncio.CancelledError, Exception):
+            await producer
 
 
 async def complete_with_tools(

@@ -29,6 +29,11 @@ _FmtDict = dict[str, object] | None
 _MsgsDict = list[dict[str, object]]
 
 
+def _fallbacks_enabled(req: CompletionRequest, agent: ResolvedAgent | None) -> bool:
+    """Return whether agent fallback/escalation chain should be used for this request."""
+    return bool(agent and agent.agent.fallback_models and not req.disable_agent_fallbacks)
+
+
 def _to_messages(msgs: _MsgsDict) -> list[Message]:
     """Convert raw message dicts to Message objects."""
     return [Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"]) for m in msgs]
@@ -115,7 +120,7 @@ async def _dispatch_db(
     tools: _ToolsAPI, fmt: _FmtDict, skip_cache: bool,
 ) -> CompletionInternalResult | _NonAgenticResult:
     """Route DB execution to fallback-aware or standard handler."""
-    if is_agentic and agent and agent.agent.fallback_models:
+    if is_agentic and _fallbacks_enabled(req, agent):
         return await _run_with_agentic_fallback(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache)
     return await _run_internal(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, is_agentic)
 
@@ -142,7 +147,7 @@ async def execute_completion(
     thinking = get_thinking_level(request, all_messages, resolved_agent)
     tools = prepare_tools(request)
     fmt = prepare_response_format(request)
-    if resolved_agent and resolved_agent.agent.fallback_models and not is_agentic:
+    if _fallbacks_enabled(request, resolved_agent) and not is_agentic:
         result, model_used, fallback_used = await execute_with_fallback(
             _to_messages(messages_dict), resolved_agent, tools, thinking,
             resolved_model=resolved_model,
