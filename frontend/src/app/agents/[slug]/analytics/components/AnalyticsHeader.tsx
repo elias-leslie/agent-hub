@@ -5,6 +5,7 @@ import type { AnalyticsWindow } from "../types";
 interface AnalyticsHeaderProps {
   agentName: string;
   slug: string;
+  backHref?: string;
   timeRange: AnalyticsWindow;
   onTimeRangeChange: (value: AnalyticsWindow) => void;
   onRefresh: () => void;
@@ -14,6 +15,7 @@ interface AnalyticsHeaderProps {
 export function AnalyticsHeader({
   agentName,
   slug,
+  backHref,
   timeRange,
   onTimeRangeChange,
   onRefresh,
@@ -27,7 +29,7 @@ export function AnalyticsHeader({
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.push(`/agents/${slug}`)}
+              onClick={() => router.push(backHref || `/agents/${slug}`)}
               className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <ArrowLeft className="h-5 w-5 text-slate-600 dark:text-slate-400" />

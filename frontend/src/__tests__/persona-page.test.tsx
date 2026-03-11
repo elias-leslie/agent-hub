@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PersonaPage from "@/app/persona/page";
@@ -26,8 +27,16 @@ vi.mock("@/components/error/toast", () => ({
 }));
 
 vi.mock("next/link", () => ({
-  default: ({ children, href }: { children: unknown; href: string }) => (
-    <a href={href}>{children as string}</a>
+  default: ({
+    children,
+    href,
+    ...rest
+  }: {
+    children: ReactNode;
+    href: string;
+    [key: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>{children}</a>
   ),
 }));
 
@@ -135,5 +144,12 @@ describe("PersonaPage", () => {
     fireEvent.click(await screen.findByText("New thread"));
 
     expect(mockHandleNewSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes Jenny analytics from the workspace header", async () => {
+    render(<PersonaPage />);
+
+    const analyticsLink = await screen.findByTitle("Jenny analytics");
+    expect(analyticsLink).toHaveAttribute("href", "/persona/analytics");
   });
 });
