@@ -117,6 +117,7 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
         enable_caching=ctx.enable_caching, cache_ttl=ctx.cache_ttl,
         thinking_level=ctx.thinking_level, container_id=ctx.container_id,
         response_format=ctx.response_format, agent_slug=ctx.agent_slug,
+        task_type=ctx.task_type,
     )
 
 

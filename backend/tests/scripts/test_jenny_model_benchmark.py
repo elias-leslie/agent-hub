@@ -400,6 +400,7 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     assert attempt.passed is True
     assert captured_kwargs["enable_caching"] is False
     assert captured_kwargs["skip_cache"] is True
+    assert captured_kwargs["task_type"] == "wake"
     assert captured_kwargs["disable_agent_fallbacks"] is True
     assert captured_kwargs["response_format"]["type"] == "json_object"
 
@@ -456,6 +457,62 @@ def test_model_config_reconsideration_case_requires_model_tools() -> None:
     )
 
 
+def test_recent_progress_session_case_requires_wait_language() -> None:
+    case = get_case_by_id("session_patience_recent_progress")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=650,
+        content=(
+            '{"case_id":"session_patience_recent_progress","primary_action":"wait",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"Recent progress is still visible, so wait rather than interrupt the session."}'
+        ),
+        session_id="sess-progress",
+        provider="codex",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=42,
+        output_tokens=20,
+        total_tokens=62,
+    )
+
+    assert attempt.passed is True
+
+
+def test_same_task_recent_progress_case_requires_monitor_language() -> None:
+    case = get_case_by_id("same_task_recent_progress")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="claude-sonnet-4-6",
+        run_number=1,
+        latency_ms=700,
+        content=(
+            '{"case_id":"same_task_recent_progress","primary_action":"monitor",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"Monitor the active lane because recent progress is still coming through."}'
+        ),
+        session_id="sess-progress-task",
+        provider="claude",
+        effective_model="claude-sonnet-4-6",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=44,
+        output_tokens=18,
+        total_tokens=62,
+    )
+
+    assert attempt.passed is True
+
+
 def test_review_request_case_requires_review_language_in_summary() -> None:
     case = get_case_by_id("review_request_routes_to_reviewer")
 
@@ -490,8 +547,10 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
     assert case_ids == [
         "ready_task_dispatch",
         "same_task_overlap",
+        "same_task_recent_progress",
         "cleanup_blocks_closeout",
         "session_patience_quiet",
+        "session_patience_recent_progress",
         "stalled_session_reconcile",
         "workspace_inspection_gate",
         "precision_search_architecture",

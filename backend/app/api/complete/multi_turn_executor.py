@@ -42,6 +42,7 @@ def _make_cfg(
     skip_cache: bool, cache: Any, loaded_memory_uuids: list[str],
     memory_group_id: str | None, progress_callback: Any,
     agent_slug: str | None,
+    task_type: str | None,
 ) -> TurnLoopConfig:
     """Build a TurnLoopConfig from raw execute_multi_turn arguments.
 
@@ -58,6 +59,7 @@ def _make_cfg(
         skip_cache=skip_cache, cache=cache, loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id, progress_callback=progress_callback,
         agent_slug=agent_slug,
+        task_type=task_type,
         messages_dict=messages_dict,
         messages_for_adapter=[Message(role=m["role"], content=m["content"]) for m in messages_dict],
     )
@@ -105,6 +107,7 @@ async def execute_multi_turn(
     memory_group_id: str | None,
     progress_callback: Callable[[AgentProgress], Any] | None,
     agent_slug: str | None = None,
+    task_type: str | None = None,
 ) -> dict[str, Any]:
     """Execute multi-turn completion loop.
 
@@ -122,7 +125,7 @@ async def execute_multi_turn(
         enable_caching, cache_ttl, thinking_level, tools, enable_programmatic_tools,
         response_format, working_dir, db, session_id, user_messages_for_db,
         skip_cache, cache, loaded_memory_uuids, memory_group_id,
-        progress_callback, agent_slug,
+        progress_callback, agent_slug, task_type,
     )
     state = init_execution_state(container_id)
     await _run_with_error_handling(cfg, state, ContainerManager())

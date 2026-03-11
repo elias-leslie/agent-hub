@@ -91,3 +91,43 @@ def test_build_honing_prompt_handles_clean_run() -> None:
     prompt = build_honing_prompt(run, iteration=1)
 
     assert "Top failure clusters:\n- none" in prompt
+
+
+def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
+    run = _make_run(
+        [
+            JennyBenchmarkAttempt(
+                model_id="codex/gpt-5.4",
+                case_id="session_patience_recent_progress",
+                run_number=1,
+                latency_ms=500,
+                composite_score=57.5,
+                correctness_score=0.5,
+                passed=False,
+                failure_kind="model",
+                failure_detail="wrong_fields: primary_action, should_dispatch",
+                total_tokens=80,
+                turns=1,
+                tool_calls_count=0,
+                used_tool_names=[],
+            )
+        ]
+    )
+
+    prompt = build_honing_prompt(
+        run,
+        iteration=2,
+        previous_clusters=[
+            {
+                "case_id": "session_patience_recent_progress",
+                "failure_detail": "wrong_fields: primary_action, should_dispatch",
+                "count": 1,
+                "models": ["codex/gpt-5.4"],
+                "avg_score": 57.5,
+            }
+        ],
+    )
+
+    assert "Persistent unresolved clusters from the previous iteration" in prompt
+    assert "session_patience_recent_progress" in prompt
+    assert 'agent_slug="persona"' in prompt

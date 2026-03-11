@@ -97,8 +97,9 @@ async def execute_single_turn(
         logger.info("Budget message injected at turn %d: %s", turn, budget_msg)
 
     should_break, state["execution_status"], state["execution_error"] = await handle_finish_reason(
-        result.finish_reason, turn, cfg.hard_cap, result,
-        cfg.messages_for_adapter, state["progress_log"], cfg.progress_callback,
+        result.finish_reason, turn, cfg.max_turns, result,
+        cfg.messages_for_adapter, cfg.messages_dict, state["progress_log"], cfg.progress_callback,
+        state, cfg.agent_slug, cfg.task_type, cfg.hard_cap,
     )
     return should_break
 

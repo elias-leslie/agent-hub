@@ -124,6 +124,30 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             },
         ),
         JennyBenchmarkCase(
+            case_id="same_task_recent_progress",
+            name="Same Task Recent Progress",
+            description="Do not interrupt active same-task work that still shows fresh progress.",
+            scenario=(
+                "TASK: task-2223\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "objective=Finish a multi-file backend refactor already underway.\n"
+                "active_same_task_lane=yes\n"
+                "lane_status=running\n"
+                "lane_recent_progress=yes\n"
+                "lane_note=Specialist committed visible progress 6 minutes ago and latest summary says the work is still in flight.\n"
+                "question=Should Jenny redispatch or reconcile this long-running task now?\n"
+            ),
+            expected={
+                "case_id": "same_task_recent_progress",
+                "primary_action": "monitor",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_summary_terms=("progress", "monitor"),
+        ),
+        JennyBenchmarkCase(
             case_id="cleanup_blocks_closeout",
             name="Cleanup Blocks Closeout",
             description="Do not declare completion while repo cleanup is still pending.",
@@ -162,6 +186,29 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
                 "should_dispatch": False,
                 "should_close": False,
             },
+        ),
+        JennyBenchmarkCase(
+            case_id="session_patience_recent_progress",
+            name="Recent Progress Patience",
+            description="Maintain patience on a long-running session that still shows fresh progress.",
+            scenario=(
+                "SESSION: sess-4445\n"
+                "health=active\n"
+                "status=running_tool\n"
+                "quiet_for_seconds=150\n"
+                "last_event_type=tool_result\n"
+                "recent_progress=yes\n"
+                "progress_note=The agent finished a tool call 2.5 minutes ago and is now composing the next step.\n"
+                "explicit_termination_signal=no\n"
+                "question=Should Jenny reconcile or redispatch this long-running session right now?\n"
+            ),
+            expected={
+                "case_id": "session_patience_recent_progress",
+                "primary_action": "wait",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_summary_terms=("progress", "wait"),
         ),
         JennyBenchmarkCase(
             case_id="stalled_session_reconcile",

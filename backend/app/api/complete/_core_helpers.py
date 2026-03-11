@@ -58,6 +58,7 @@ class _ExecContext:
     container_id: str | None = None
     response_format: dict[str, Any] | None = None
     agent_slug: str | None = None
+    task_type: str | None = None
 
 
 async def check_memory_and_cache(
@@ -133,7 +134,7 @@ async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
         user_messages_for_db=ctx.user_messages_for_db, skip_cache=ctx.skip_cache,
         cache=cache, loaded_memory_uuids=ctx.loaded_memory_uuids,
         memory_group_id=ctx.memory_group_id, progress_callback=ctx.progress_callback,
-        agent_slug=ctx.agent_slug,
+        agent_slug=ctx.agent_slug, task_type=ctx.task_type,
     )
 
 
@@ -182,7 +183,7 @@ async def execute_and_build_result(
     defer_tool_loading: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
-    agent_slug: str | None,
+    agent_slug: str | None, task_type: str | None,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
     provisioned = provision_standard_tools(
@@ -222,7 +223,7 @@ async def execute_and_build_result(
         defer_tool_loading=defer_tool_loading,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
-        response_format=response_format, agent_slug=agent_slug,
+        response_format=response_format, agent_slug=agent_slug, task_type=task_type,
     )
     if should_execute_tools and supports_tools(provider, model):
         return await _route_to_tool_executor(ctx)

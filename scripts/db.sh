@@ -51,6 +51,7 @@ declare -A ALEMBIC_DIRS=(
     ["summitflow"]="$HOME/summitflow/backend"
     ["agent-hub"]="$HOME/agent-hub/backend"
     ["portfolio-ai"]="$HOME/portfolio-ai/backend"
+    ["terminal"]="$HOME/terminal"
 )
 
 # Colors
@@ -90,7 +91,7 @@ Migration Commands:
   migrate create "msg"      Create new migration with message
 
 Options:
-  -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai, hatchet)
+  -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai, terminal, hatchet)
   --help, -h                Show this help
 
 Examples:

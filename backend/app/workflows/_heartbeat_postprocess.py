@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 async def postprocess_heartbeat(
     result: CompletionInternalResult,
     interval_minutes: int,
+    target_project_id: str | None = None,
 ):
     """Post-process heartbeat: summaries, format validation, metrics.
 
@@ -55,6 +56,10 @@ async def postprocess_heartbeat(
 
     # 4. Retry MCP tools that failed with "Stream closed"
     mcp_retried = await _retry_failed_mcp_tools(session_id)
+    followup_reason = await _maybe_get_followup_reason(content)
+    followup_dispatched = False
+    if followup_reason:
+        followup_dispatched = await _dispatch_followup_wake(followup_reason, target_project_id)
 
     return HeartbeatResult(
         status=status,
@@ -65,6 +70,8 @@ async def postprocess_heartbeat(
         format_compliant=format_ok,
         summary_stored=summary_stored,
         mcp_retried=mcp_retried,
+        followup_dispatched=followup_dispatched,
+        followup_reason=followup_reason,
     )
 
 
@@ -108,6 +115,78 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
 
     logger.warning("Heartbeat output missing format prefix: %.60s...", content.strip()[:60])
     return "success", False
+
+
+async def _get_cleanup_status_summary() -> str:
+    from app.workflows._heartbeat_data import _get_cleanup_status_summary as fetch_cleanup_status
+
+    return fetch_cleanup_status()
+
+
+async def _get_workstream_inventory() -> str:
+    from app.workflows._heartbeat_data import (
+        _get_workstream_inventory as fetch_workstream_inventory,
+    )
+
+    return await fetch_workstream_inventory()
+
+
+def _detect_followup_reason(
+    content: str,
+    cleanup_status: str,
+    workstream_inventory: str,
+) -> str | None:
+    if "HEARTBEAT_OK" not in (content or ""):
+        return None
+    if "ACTIONABLE-CLEANUP[" in cleanup_status:
+        return "cleanup_actionable"
+    if "state=stale_running_task" in workstream_inventory:
+        return "stale_running_task"
+    if "state=completed_ready_for_closure" in workstream_inventory:
+        return "completed_ready_for_closure"
+    return None
+
+
+async def _maybe_get_followup_reason(content: str) -> str | None:
+    if "HEARTBEAT_OK" not in (content or ""):
+        return None
+    cleanup_status = await _get_cleanup_status_summary()
+    workstream_inventory = await _get_workstream_inventory()
+    return _detect_followup_reason(content, cleanup_status, workstream_inventory)
+
+
+def _build_followup_prompt(reason: str) -> str:
+    return (
+        "The previous heartbeat ended with HEARTBEAT_OK, but a post-run check still showed "
+        f"obvious unresolved canonical residue: {reason}.\n\n"
+        "Re-check only that residue chain and do the concrete next step if it is still valid. "
+        "If it is no longer actionable, say why. Do not start speculative new work, model review, "
+        "or broad exploration."
+    )
+
+
+async def _dispatch_followup_wake(reason: str, target_project_id: str | None = None) -> bool:
+    from app.db import async_session
+    from app.workflows.persona_heartbeat import HEARTBEAT_PROJECT, _resolve_persona
+    from app.workflows.persona_wake import dispatch_wake
+
+    async with async_session() as db:
+        model, provider, temperature, thinking_level, _, _ = await _resolve_persona(
+            db,
+            project_id=target_project_id or HEARTBEAT_PROJECT,
+        )
+
+    dispatch_wake(
+        agent_slug="persona",
+        model=model,
+        provider=provider,
+        temperature=temperature,
+        prompt=_build_followup_prompt(reason),
+        project_id=target_project_id or HEARTBEAT_PROJECT,
+        event_type="heartbeat_followup",
+        thinking_level=thinking_level,
+    )
+    return True
 
 
 # Tools that can be safely retried by calling the Python function directly.

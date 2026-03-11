@@ -60,6 +60,7 @@ class TurnLoopConfig:
     memory_group_id: str | None
     progress_callback: Callable[[AgentProgress], Any] | None
     agent_slug: str | None
+    task_type: str | None = None
     messages_dict: list[dict[str, Any]] = field(default_factory=list)
     messages_for_adapter: list[Message] = field(default_factory=list)
 
@@ -99,6 +100,7 @@ def init_execution_state(container_id: str | None) -> dict[str, Any]:
         "current_container_id": container_id,
         "execution_status": "success",
         "execution_error": None,
+        "closeout_audit_used": False,
     }
 
 
