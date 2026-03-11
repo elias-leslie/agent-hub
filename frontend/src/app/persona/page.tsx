@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import {
   Loader2,
   Settings,
+  BarChart3,
   AlertCircle,
   HeartPulse,
   PauseCircle,
@@ -160,6 +161,13 @@ function PersonaContent() {
             </div>
 
             <div className="flex items-center gap-1">
+              <Link
+                href="/persona/analytics"
+                className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Jenny analytics"
+              >
+                <BarChart3 className="h-5 w-5" />
+              </Link>
               <Link
                 href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
                 className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"

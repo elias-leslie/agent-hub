@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IdentityTab } from "@/app/persona/settings/components/IdentityTab";
+import { PersonaSettingsHeader } from "@/app/persona/settings/components/PersonaSettingsHeader";
 import { SessionLimitsTab } from "@/app/persona/settings/components/SessionLimitsTab";
 import { VoiceHeartbeatTab } from "@/app/persona/settings/components/VoiceHeartbeatTab";
 import type { Persona } from "@/types/persona";
@@ -50,6 +51,14 @@ vi.mock("@/app/persona/hooks/useHeartbeat", () => ({
     trigger: vi.fn(),
     isTriggering: false,
   }),
+}));
+
+vi.mock("next/link", () => ({
+  default: ({ href, children, ...props }: any) => (
+    <a href={typeof href === "string" ? href : href?.pathname ?? "#"} {...props}>
+      {children}
+    </a>
+  ),
 }));
 
 import { fetchApi } from "@/lib/api-config";
@@ -276,5 +285,19 @@ describe("persona settings tabs", () => {
     expect(screen.getByText("Heartbeat is currently off, so Jenny is not autonomously driving work.")).toBeInTheDocument();
     expect(screen.getByText("Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools.")).toBeInTheDocument();
     expect(screen.getByText("Tools: not supported")).toBeInTheDocument();
+  });
+
+  it("links Persona settings back to Jenny analytics", () => {
+    render(
+      <PersonaSettingsHeader
+        hasChanges={false}
+        isSaving={false}
+        saveSuccess={false}
+        saveError={false}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTitle("Open Jenny analytics")).toHaveAttribute("href", "/persona/analytics");
   });
 });
