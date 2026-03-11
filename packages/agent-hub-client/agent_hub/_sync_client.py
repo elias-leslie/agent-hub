@@ -172,7 +172,8 @@ class AgentHubClient(
             skip_cache=skip_cache,
         )
 
-        headers = self._inject_tracking_headers("sdk.complete")
+        extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
+        headers = self._inject_tracking_headers("sdk.complete", extra_headers=extra_headers)
         # HTTP timeout must cover all turns. The server enforces per-turn inactivity
         # timeout internally — the SDK just needs a generous ceiling so the HTTP
         # connection doesn't drop while the agent is still making progress.

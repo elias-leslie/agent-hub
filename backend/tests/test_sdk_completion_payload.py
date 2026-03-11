@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2] / "packages" / "agent-hub-client"
 if str(PACKAGE_ROOT) not in sys.path:
@@ -52,3 +55,41 @@ def test_build_completion_payload_includes_skip_cache_flag() -> None:
 
     assert payload["enable_caching"] is False
     assert payload["skip_cache"] is True
+
+
+@pytest.mark.asyncio
+async def test_async_client_complete_sends_skip_cache_header(monkeypatch) -> None:
+    from agent_hub._async_client import AsyncAgentHubClient
+
+    captured_headers: dict[str, str] = {}
+
+    class FakeHttpClient:
+        async def post(self, _path, json, headers, timeout):
+            del json, timeout
+            captured_headers.update(headers)
+            return object()
+
+    async def fake_get_client(self):
+        return FakeHttpClient()
+
+    def fake_handle_completion_response(_response, _client_instance):
+        return SimpleNamespace(content="ok")
+
+    monkeypatch.setattr(AsyncAgentHubClient, "_get_client", fake_get_client)
+    monkeypatch.setattr(
+        "agent_hub._async_client.handle_completion_response",
+        fake_handle_completion_response,
+    )
+
+    async with AsyncAgentHubClient(
+        base_url="http://localhost:8003",
+        client_name="sdk-test",
+    ) as client:
+        await client.complete(
+            messages=[{"role": "user", "content": "Review AAPL"}],
+            project_id="portfolio-ai",
+            agent_slug="equity-analyst",
+            skip_cache=True,
+        )
+
+    assert captured_headers["X-Skip-Cache"] == "true"
