@@ -12,7 +12,14 @@ import {
   CheckCircle2,
   Globe,
 } from "lucide-react";
-import { fetchPrompt, updatePrompt, deletePrompt } from "@/lib/api/prompts";
+import {
+  deletePrompt,
+  fetchPrompt,
+  fetchPromptRevisions,
+  restorePromptRevision,
+  updatePrompt,
+} from "@/lib/api/prompts";
+import { PromptRevisionHistory } from "@/app/prompts/[slug]/components/PromptRevisionHistory";
 import { cn } from "@/lib/utils";
 
 export default function PromptEditPage() {
@@ -28,6 +35,7 @@ export default function PromptEditPage() {
   const [enabled, setEnabled] = useState(true);
   const [excludeAgents, setExcludeAgents] = useState<string[]>([]);
   const [excludeInput, setExcludeInput] = useState("");
+  const [changeReason, setChangeReason] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const {
@@ -37,6 +45,15 @@ export default function PromptEditPage() {
   } = useQuery({
     queryKey: ["prompt", slug],
     queryFn: () => fetchPrompt(slug),
+    enabled: !!slug,
+  });
+
+  const {
+    data: revisions = [],
+    isLoading: revisionsLoading,
+  } = useQuery({
+    queryKey: ["prompt-revisions", slug],
+    queryFn: () => fetchPromptRevisions(slug),
     enabled: !!slug,
   });
 
@@ -60,10 +77,28 @@ export default function PromptEditPage() {
         is_global: isGlobal,
         enabled,
         exclude_agents: excludeAgents,
+        change_reason: changeReason || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["prompt", slug] });
+      queryClient.invalidateQueries({ queryKey: ["prompt-revisions", slug] });
       queryClient.invalidateQueries({ queryKey: ["prompts"] });
+      setChangeReason("");
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (revisionId: string) =>
+      restorePromptRevision(
+        slug,
+        revisionId,
+        changeReason || `Restore ${slug} revision`,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["prompt", slug] });
+      queryClient.invalidateQueries({ queryKey: ["prompt-revisions", slug] });
+      queryClient.invalidateQueries({ queryKey: ["prompts"] });
+      setChangeReason("");
     },
   });
 
@@ -180,7 +215,7 @@ export default function PromptEditPage() {
       </div>
 
       {/* Form */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="space-y-6">
           {/* Slug (readonly) */}
           <div className="space-y-1.5">
@@ -229,6 +264,23 @@ export default function PromptEditPage() {
               rows={3}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              Change Reason
+            </label>
+            <input
+              type="text"
+              value={changeReason}
+              onChange={(e) => setChangeReason(e.target.value)}
+              placeholder="Why are you changing this prompt?"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+            />
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Saved with every update and restore so Jenny and benchmark runs can
+              attribute regressions to prompt changes.
+            </p>
           </div>
 
           {/* Is Global toggle */}
@@ -335,6 +387,14 @@ export default function PromptEditPage() {
               </div>
             </div>
           )}
+
+          <PromptRevisionHistory
+            prompt={prompt}
+            revisions={revisions}
+            isLoading={revisionsLoading}
+            restoringRevisionId={restoreMutation.isPending ? restoreMutation.variables ?? null : null}
+            onRestore={(revisionId) => restoreMutation.mutate(revisionId)}
+          />
         </div>
       </div>
     </div>

@@ -19,6 +19,9 @@ from app.api.schemas.prompt_schemas import (
     PromptCreateRequest,
     PromptListResponse,
     PromptResponse,
+    PromptRestoreRequest,
+    PromptRevisionListResponse,
+    PromptRevisionResponse,
     PromptUpdateRequest,
     RolesResponse,
 )
@@ -33,7 +36,10 @@ from app.services.prompt_service import (
     get_all_prompts,
     get_distinct_roles,
     get_prompt_by_slug,
+    get_prompt_revision,
+    list_prompt_revisions,
     remove_assignment,
+    restore_prompt_revision,
     update_assignment,
     update_prompt,
 )
@@ -58,6 +64,28 @@ def _prompt_to_response(p: object) -> PromptResponse:
         exclude_agents=p.exclude_agents or [],
         created_at=p.created_at,
         updated_at=p.updated_at,
+    )
+
+
+def _revision_to_response(revision: object) -> PromptRevisionResponse:
+    from app.models.prompt import PromptRevision
+
+    assert isinstance(revision, PromptRevision)
+    return PromptRevisionResponse(
+        id=revision.id,
+        prompt_id=revision.prompt_id,
+        prompt_slug=revision.prompt_slug,
+        prompt_name=revision.prompt_name,
+        action=revision.action,
+        content=revision.content,
+        description=revision.description,
+        is_global=revision.is_global,
+        enabled=revision.enabled,
+        exclude_agents=revision.exclude_agents or [],
+        content_hash=revision.content_hash,
+        changed_by=revision.changed_by,
+        change_reason=revision.change_reason,
+        created_at=revision.created_at,
     )
 
 
@@ -102,6 +130,7 @@ async def create_prompt_endpoint(
         is_global=request.is_global,
         enabled=request.enabled,
         exclude_agents=request.exclude_agents,
+        changed_by="api",
     )
     return _prompt_to_response(prompt)
 
@@ -125,10 +154,56 @@ async def update_prompt_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> PromptResponse:
-    updated = await update_prompt(db, slug, **request.model_dump(exclude_unset=True))
+    update_data = request.model_dump(exclude_unset=True)
+    change_reason = update_data.pop("change_reason", None)
+    updated = await update_prompt(
+        db,
+        slug,
+        changed_by="api",
+        change_reason=change_reason,
+        **update_data,
+    )
     if not updated:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
     return _prompt_to_response(updated)
+
+
+@router.get("/{slug}/revisions", response_model=PromptRevisionListResponse)
+async def list_prompt_revisions_endpoint(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    limit: int = 20,
+) -> PromptRevisionListResponse:
+    revisions = await list_prompt_revisions(db, slug, limit=limit)
+    return PromptRevisionListResponse(
+        revisions=[_revision_to_response(revision) for revision in revisions],
+        total=len(revisions),
+    )
+
+
+@router.post("/{slug}/revisions/{revision_id}/restore", response_model=PromptResponse)
+async def restore_prompt_revision_endpoint(
+    slug: str,
+    revision_id: str,
+    request: PromptRestoreRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> PromptResponse:
+    revision = await get_prompt_revision(db, slug, revision_id)
+    if not revision:
+        raise HTTPException(status_code=404, detail="Prompt revision not found")
+
+    restored = await restore_prompt_revision(
+        db,
+        slug,
+        revision_id,
+        changed_by="api",
+        change_reason=request.change_reason,
+    )
+    if not restored:
+        raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
+    return _prompt_to_response(restored)
 
 
 @router.delete("/{slug}", status_code=204)

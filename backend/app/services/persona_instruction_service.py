@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.prompt import Prompt
 from app.services.prompt_catalog import PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG
-from app.services.prompt_service import get_prompt_by_slug
+from app.services.prompt_service import get_prompt_by_slug, record_prompt_revision
 
 
 async def get_persona_heartbeat_instructions(db: AsyncSession) -> str | None:
@@ -28,6 +28,9 @@ async def get_persona_heartbeat_instructions(db: AsyncSession) -> str | None:
 async def set_persona_heartbeat_instructions(
     db: AsyncSession,
     heartbeat_instructions: str,
+    *,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
 ) -> tuple[int, int]:
     """Upsert the canonical heartbeat-instructions prompt and return old/new lengths."""
     raw_prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
@@ -42,6 +45,7 @@ async def set_persona_heartbeat_instructions(
     old_text = old_content.strip()
     new_text = heartbeat_instructions.strip()
 
+    action = "update"
     if prompt:
         prompt.name = "Persona Heartbeat Instructions"
         prompt.description = "Jenny-specific mutable guidance for heartbeat runs."
@@ -49,16 +53,25 @@ async def set_persona_heartbeat_instructions(
         prompt.is_global = False
         prompt.enabled = True
     else:
-        db.add(
-            Prompt(
-                slug=PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-                name="Persona Heartbeat Instructions",
-                description="Jenny-specific mutable guidance for heartbeat runs.",
-                content=new_text,
-                is_global=False,
-                enabled=True,
-                exclude_agents=[],
-            )
+        prompt = Prompt(
+            slug=PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
+            name="Persona Heartbeat Instructions",
+            description="Jenny-specific mutable guidance for heartbeat runs.",
+            content=new_text,
+            is_global=False,
+            enabled=True,
+            exclude_agents=[],
         )
+        db.add(prompt)
+        action = "create"
 
+    if prompt is not None:
+        await db.flush()
+        await record_prompt_revision(
+            db,
+            prompt,
+            action=action,
+            changed_by=changed_by,
+            change_reason=change_reason or "Persona heartbeat instructions updated",
+        )
     return len(old_text), len(new_text)

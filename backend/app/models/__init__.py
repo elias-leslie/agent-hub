@@ -32,7 +32,7 @@ from .model_enrichment import ModelEnrichment
 from .persona import Persona
 from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
-from .prompt import AgentPrompt, Prompt
+from .prompt import AgentPrompt, Prompt, PromptRevision
 from .push_subscription import PushSubscription
 from .session import (
     CostLog,
@@ -69,6 +69,7 @@ __all__ = [
     "PersonaScheduledJob",
     "ProjectPermission",
     "Prompt",
+    "PromptRevision",
     "PushSubscription",
     "RequestLog",
     "Session",
