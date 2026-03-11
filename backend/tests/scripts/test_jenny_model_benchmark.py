@@ -174,6 +174,12 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
                 "content_hash": "abcd1234",
             },
         },
+        experiment={
+            "experiment_key": "jenny-patience-ab",
+            "name": "Jenny patience A/B",
+            "cohort": "candidate",
+            "min_runs_per_cohort": 4,
+        },
     )
 
     assert payload["benchmark_id"] == "jenny-benchmark-aaaa1111"
@@ -184,6 +190,8 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     assert payload["avg_score"] == 100.0
     assert payload["pass_rate"] == 100.0
     assert payload["config_snapshot"]["thinking_level"] == "medium"
+    assert payload["experiment"]["experiment_key"] == "jenny-patience-ab"
+    assert payload["experiment"]["cohort"] == "candidate"
     assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
     assert payload["attempts"][0]["primary_action"] == "wait"
 

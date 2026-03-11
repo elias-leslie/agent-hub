@@ -100,6 +100,40 @@ export interface AgentBenchmarkModelSummary {
   latest_completed_at: string | null;
 }
 
+export interface AgentBenchmarkExperimentArmSummary {
+  label: string;
+  run_count: number;
+  avg_score: number | null;
+  avg_pass_rate: number | null;
+  config_fingerprints: string[];
+  config_stable: boolean;
+  prompt_versions: string[];
+  latest_completed_at: string | null;
+}
+
+export interface AgentBenchmarkDeltaSummary {
+  mean_delta: number | null;
+  ci_low: number | null;
+  ci_high: number | null;
+}
+
+export interface AgentBenchmarkExperimentSummary {
+  experiment_key: string;
+  name: string;
+  suite_id: string;
+  status: string;
+  decision: string;
+  decision_reason: string | null;
+  hypothesis: string | null;
+  min_runs_per_cohort: number;
+  baseline: AgentBenchmarkExperimentArmSummary;
+  candidate: AgentBenchmarkExperimentArmSummary;
+  score_delta: AgentBenchmarkDeltaSummary;
+  pass_rate_delta: AgentBenchmarkDeltaSummary;
+  updated_at: string | null;
+  created_at: string | null;
+}
+
 export interface AgentBenchmarkDashboard {
   agent_slug: string;
   overview: AgentBenchmarkOverview;
@@ -107,4 +141,5 @@ export interface AgentBenchmarkDashboard {
   recent_runs: AgentBenchmarkRunSummary[];
   open_regressions: AgentRegressionClusterSummary[];
   model_performance: AgentBenchmarkModelSummary[];
+  experiments: AgentBenchmarkExperimentSummary[];
 }

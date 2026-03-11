@@ -40,6 +40,7 @@ from app.db import async_session
 from app.models.session import SessionEvent
 from app.services.agent_benchmark_service import (
     capture_benchmark_config_snapshot,
+    get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
 )
 from scripts.jenny_benchmark_cases import (
@@ -141,6 +142,7 @@ def build_persistence_payload(
     seed: int | None,
     config_snapshot: dict[str, object] | None = None,
     metadata: dict[str, object] | None = None,
+    experiment: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Normalize a benchmark run into the persisted DB payload shape."""
     attempts = [attempt.to_dict() for attempt in run.attempts]
@@ -186,6 +188,7 @@ def build_persistence_payload(
         "infra_failure_count": infra_failure_count,
         "config_snapshot": dict(config_snapshot or {}),
         "metadata": dict(metadata or {}),
+        "experiment": dict(experiment) if experiment else None,
         "started_at": run.started_at,
         "completed_at": run.completed_at,
         "attempts": normalized_attempts,
@@ -464,6 +467,11 @@ async def main() -> None:
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
     parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
+    parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
+    parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
+    parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")
+    parser.add_argument("--experiment-hypothesis", help="Short hypothesis being tested")
+    parser.add_argument("--min-runs-per-cohort", type=int, default=3, help="Minimum repeated runs required before experiment decisions can promote or rollback")
     parser.add_argument("--no-persist", action="store_true", help="Skip saving results to the benchmark history tables")
     parser.add_argument("--dry-run", action="store_true", help="Print roster and exit")
     args = parser.parse_args()
@@ -495,6 +503,19 @@ async def main() -> None:
     persisted_run_id: str | None = None
     if not args.no_persist:
         config_snapshot = await capture_benchmark_config_snapshot(args.agent_slug)
+        experiment_payload = None
+        if args.experiment_key:
+            if not args.experiment_cohort:
+                raise ValueError("--experiment-cohort is required when --experiment-key is set")
+            experiment_payload = {
+                "experiment_key": args.experiment_key,
+                "name": args.experiment_name or args.experiment_key,
+                "cohort": args.experiment_cohort,
+                "hypothesis": args.experiment_hypothesis,
+                "suite_id": args.suite_id or derive_suite_id(case_ids),
+                "project_id": args.project_id,
+                "min_runs_per_cohort": args.min_runs_per_cohort,
+            }
         payload = build_persistence_payload(
             run,
             agent_slug=args.agent_slug,
@@ -504,9 +525,46 @@ async def main() -> None:
             seed=args.seed,
             config_snapshot=config_snapshot,
             metadata={"report_generated": True},
+            experiment=experiment_payload,
         )
         persisted_run_id = await persist_benchmark_payload(payload)
         logger.info("Persisted benchmark run as %s", persisted_run_id)
+        if args.experiment_key:
+            async with async_session() as db:
+                experiment_summary = await get_benchmark_experiment_summary_by_key(
+                    db, args.experiment_key
+                )
+            if experiment_summary:
+                print("")
+                print(
+                    "Experiment status:"
+                    f" {experiment_summary['name']} -> {experiment_summary['decision']}"
+                    f" ({experiment_summary['decision_reason']})"
+                )
+                print(
+                    "  baseline:"
+                    f" {experiment_summary['baseline']['run_count']} runs,"
+                    f" avg score {experiment_summary['baseline']['avg_score']},"
+                    f" pass {experiment_summary['baseline']['avg_pass_rate']}%"
+                )
+                print(
+                    "  candidate:"
+                    f" {experiment_summary['candidate']['run_count']} runs,"
+                    f" avg score {experiment_summary['candidate']['avg_score']},"
+                    f" pass {experiment_summary['candidate']['avg_pass_rate']}%"
+                )
+                print(
+                    "  score delta:"
+                    f" {experiment_summary['score_delta']['mean_delta']}"
+                    f" [{experiment_summary['score_delta']['ci_low']},"
+                    f" {experiment_summary['score_delta']['ci_high']}]"
+                )
+                print(
+                    "  pass delta:"
+                    f" {experiment_summary['pass_rate_delta']['mean_delta']}"
+                    f" [{experiment_summary['pass_rate_delta']['ci_low']},"
+                    f" {experiment_summary['pass_rate_delta']['ci_high']}]"
+                )
     if args.output_json:
         output_json = Path(args.output_json)
         output_json.parent.mkdir(parents=True, exist_ok=True)

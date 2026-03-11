@@ -13,7 +13,12 @@ from __future__ import annotations
 
 # Import all models for easy access
 from .agent import Agent, AgentVersion
-from .agent_benchmark import AgentBenchmarkAttempt, AgentBenchmarkRun, AgentRegressionCluster
+from .agent_benchmark import (
+    AgentBenchmarkAttempt,
+    AgentBenchmarkExperiment,
+    AgentBenchmarkRun,
+    AgentRegressionCluster,
+)
 from .agent_performance_log import AgentPerformanceLog
 
 # Import Base first
@@ -43,6 +48,7 @@ __all__ = [
     "APIKey",
     "Agent",
     "AgentBenchmarkAttempt",
+    "AgentBenchmarkExperiment",
     "AgentBenchmarkRun",
     "AgentPerformanceLog",
     "AgentPrompt",

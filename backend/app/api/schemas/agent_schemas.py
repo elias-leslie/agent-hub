@@ -254,6 +254,46 @@ class AgentBenchmarkModelSummary(BaseModel):
     latest_completed_at: str | None = None
 
 
+class AgentBenchmarkExperimentArmSummary(BaseModel):
+    """One cohort inside a controlled benchmark experiment."""
+
+    label: str
+    run_count: int = 0
+    avg_score: float | None = None
+    avg_pass_rate: float | None = None
+    config_fingerprints: list[str] = Field(default_factory=list)
+    config_stable: bool = True
+    prompt_versions: list[str] = Field(default_factory=list)
+    latest_completed_at: str | None = None
+
+
+class AgentBenchmarkDeltaSummary(BaseModel):
+    """Bootstrap delta summary for an experiment metric."""
+
+    mean_delta: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
+
+
+class AgentBenchmarkExperimentSummary(BaseModel):
+    """Repeated baseline-vs-candidate experiment status."""
+
+    experiment_key: str
+    name: str
+    suite_id: str
+    status: str
+    decision: str
+    decision_reason: str | None = None
+    hypothesis: str | None = None
+    min_runs_per_cohort: int = 0
+    baseline: AgentBenchmarkExperimentArmSummary
+    candidate: AgentBenchmarkExperimentArmSummary
+    score_delta: AgentBenchmarkDeltaSummary
+    pass_rate_delta: AgentBenchmarkDeltaSummary
+    updated_at: str | None = None
+    created_at: str | None = None
+
+
 class AgentBenchmarkDashboard(BaseModel):
     """Repeatable benchmark, regression, and model tracking for one agent."""
 
@@ -263,3 +303,4 @@ class AgentBenchmarkDashboard(BaseModel):
     recent_runs: list[AgentBenchmarkRunSummary] = Field(default_factory=list)
     open_regressions: list[AgentRegressionClusterSummary] = Field(default_factory=list)
     model_performance: list[AgentBenchmarkModelSummary] = Field(default_factory=list)
+    experiments: list[AgentBenchmarkExperimentSummary] = Field(default_factory=list)

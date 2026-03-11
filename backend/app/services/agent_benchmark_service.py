@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,6 +15,7 @@ from app.db import async_session
 from app.models import (
     Agent,
     AgentBenchmarkAttempt,
+    AgentBenchmarkExperiment,
     AgentBenchmarkRun,
     AgentRegressionCluster,
     Prompt,
@@ -47,6 +50,161 @@ def _cluster_regression_key(case_id: str, failure_detail: str) -> str:
     return f"{case_id}::{failure_detail}"
 
 
+def _config_fingerprint(config_snapshot: dict[str, Any]) -> str:
+    serialized = json.dumps(config_snapshot or {}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
+
+
+def _sample_mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _bootstrap_mean_delta(
+    baseline_values: list[float],
+    candidate_values: list[float],
+    *,
+    iterations: int = 2000,
+    seed_material: str = "benchmark-experiment",
+) -> dict[str, float | None]:
+    if not baseline_values or not candidate_values:
+        return {"mean_delta": None, "ci_low": None, "ci_high": None}
+
+    rng = random.Random(seed_material)
+    deltas: list[float] = []
+    baseline_count = len(baseline_values)
+    candidate_count = len(candidate_values)
+
+    for _ in range(iterations):
+        baseline_sample = [baseline_values[rng.randrange(baseline_count)] for _ in range(baseline_count)]
+        candidate_sample = [candidate_values[rng.randrange(candidate_count)] for _ in range(candidate_count)]
+        deltas.append(_sample_mean(candidate_sample) - _sample_mean(baseline_sample))
+
+    deltas.sort()
+    low_index = max(0, int(iterations * 0.025))
+    high_index = min(iterations - 1, int(iterations * 0.975))
+    mean_delta = _sample_mean(candidate_values) - _sample_mean(baseline_values)
+    return {
+        "mean_delta": round(mean_delta, 1),
+        "ci_low": round(deltas[low_index], 1),
+        "ci_high": round(deltas[high_index], 1),
+    }
+
+
+def _summarize_experiment_arm(
+    runs: list[AgentBenchmarkRun],
+    *,
+    label: str,
+) -> dict[str, Any]:
+    scores = [float(run.avg_score or 0.0) for run in runs]
+    pass_rates = [float(run.pass_rate or 0.0) for run in runs]
+    fingerprints = sorted(
+        {
+            _config_fingerprint(dict(run.config_snapshot or {}))
+            for run in runs
+        }
+    )
+    prompt_versions = sorted(
+        {
+            descriptor
+            for descriptor in (
+                _heartbeat_prompt_descriptor(dict(run.config_snapshot or {}))
+                for run in runs
+            )
+            if descriptor
+        }
+    )
+    latest_completed = max(
+        (run.completed_at for run in runs if run.completed_at is not None),
+        default=None,
+    )
+    return {
+        "label": label,
+        "run_count": len(runs),
+        "avg_score": _round_metric(_sample_mean(scores)) if scores else None,
+        "avg_pass_rate": _round_metric(_sample_mean(pass_rates)) if pass_rates else None,
+        "config_fingerprints": fingerprints,
+        "config_stable": len(fingerprints) <= 1,
+        "prompt_versions": prompt_versions,
+        "latest_completed_at": latest_completed.isoformat() if latest_completed else None,
+        "_scores": scores,
+        "_pass_rates": pass_rates,
+    }
+
+
+def summarize_benchmark_experiment(
+    experiment: AgentBenchmarkExperiment,
+    runs: list[AgentBenchmarkRun],
+) -> dict[str, Any]:
+    baseline_runs = [run for run in runs if run.experiment_cohort == "baseline"]
+    candidate_runs = [run for run in runs if run.experiment_cohort == "candidate"]
+
+    baseline = _summarize_experiment_arm(runs=baseline_runs, label=experiment.baseline_label)
+    candidate = _summarize_experiment_arm(runs=candidate_runs, label=experiment.candidate_label)
+
+    score_delta = _bootstrap_mean_delta(
+        baseline["_scores"],
+        candidate["_scores"],
+        seed_material=f"{experiment.experiment_key}:score",
+    )
+    pass_rate_delta = _bootstrap_mean_delta(
+        baseline["_pass_rates"],
+        candidate["_pass_rates"],
+        seed_material=f"{experiment.experiment_key}:pass_rate",
+    )
+
+    reason = "no_clear_winner"
+    decision = "hold"
+    min_runs = int(experiment.min_runs_per_cohort or 3)
+
+    if min(baseline["run_count"], candidate["run_count"]) < min_runs:
+        reason = "underpowered"
+    elif not baseline["config_stable"] or not candidate["config_stable"]:
+        reason = "mixed_config"
+    elif (
+        score_delta["ci_low"] is not None
+        and pass_rate_delta["ci_low"] is not None
+        and float(score_delta["ci_low"]) > 0.5
+        and float(pass_rate_delta["ci_low"]) >= -1.0
+    ):
+        decision = "promote"
+        reason = "candidate_outperforms_baseline"
+    elif (
+        score_delta["ci_high"] is not None
+        and pass_rate_delta["ci_high"] is not None
+        and (
+            float(score_delta["ci_high"]) < -0.5
+            or float(pass_rate_delta["ci_high"]) < -1.0
+        )
+    ):
+        decision = "rollback"
+        reason = "candidate_underperforms_baseline"
+
+    return {
+        "experiment_key": experiment.experiment_key,
+        "name": experiment.name,
+        "suite_id": experiment.suite_id,
+        "status": experiment.status,
+        "decision": decision,
+        "decision_reason": reason,
+        "hypothesis": experiment.hypothesis,
+        "min_runs_per_cohort": min_runs,
+        "baseline": {
+            key: value
+            for key, value in baseline.items()
+            if not key.startswith("_")
+        },
+        "candidate": {
+            key: value
+            for key, value in candidate.items()
+            if not key.startswith("_")
+        },
+        "score_delta": score_delta,
+        "pass_rate_delta": pass_rate_delta,
+        "updated_at": experiment.updated_at.isoformat() if experiment.updated_at else None,
+        "created_at": experiment.created_at.isoformat() if experiment.created_at else None,
+    }
+
+
 def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for attempt in attempts:
@@ -71,6 +229,75 @@ def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, s
         if model_id:
             bucket["models"].add(model_id)
     return grouped
+
+
+async def _ensure_benchmark_experiment(
+    db: AsyncSession,
+    *,
+    payload: dict[str, Any],
+    run_agent_slug: str,
+    run_project_id: str,
+    run_suite_id: str,
+) -> AgentBenchmarkExperiment:
+    experiment_key = str(payload["experiment_key"])
+    experiment = await db.scalar(
+        select(AgentBenchmarkExperiment).where(
+            AgentBenchmarkExperiment.experiment_key == experiment_key
+        )
+    )
+    if experiment is None:
+        experiment = AgentBenchmarkExperiment(
+            experiment_key=experiment_key,
+            agent_slug=run_agent_slug,
+            project_id=str(payload.get("project_id") or run_project_id),
+            suite_id=str(payload.get("suite_id") or run_suite_id),
+            name=str(payload.get("name") or experiment_key),
+            hypothesis=payload.get("hypothesis"),
+            baseline_label=str(payload.get("baseline_label") or "baseline"),
+            candidate_label=str(payload.get("candidate_label") or "candidate"),
+            min_runs_per_cohort=int(payload.get("min_runs_per_cohort") or 3),
+        )
+        db.add(experiment)
+        await db.flush()
+        return experiment
+
+    if payload.get("name"):
+        experiment.name = str(payload["name"])
+    if payload.get("hypothesis"):
+        experiment.hypothesis = str(payload["hypothesis"])
+    if payload.get("baseline_label"):
+        experiment.baseline_label = str(payload["baseline_label"])
+    if payload.get("candidate_label"):
+        experiment.candidate_label = str(payload["candidate_label"])
+    if payload.get("min_runs_per_cohort"):
+        experiment.min_runs_per_cohort = int(payload["min_runs_per_cohort"])
+    return experiment
+
+
+async def _refresh_benchmark_experiment(
+    db: AsyncSession,
+    experiment: AgentBenchmarkExperiment,
+) -> dict[str, Any]:
+    runs = (
+        await db.execute(
+            select(AgentBenchmarkRun).where(
+                AgentBenchmarkRun.experiment_id == experiment.id,
+                AgentBenchmarkRun.completed_at.is_not(None),
+            )
+        )
+    ).scalars().all()
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+    experiment.decision = str(summary["decision"])
+    experiment.decision_reason = summary["decision_reason"]
+    experiment.evidence = {
+        "baseline": summary["baseline"],
+        "candidate": summary["candidate"],
+        "score_delta": summary["score_delta"],
+        "pass_rate_delta": summary["pass_rate_delta"],
+        "min_runs_per_cohort": summary["min_runs_per_cohort"],
+    }
+    return summary
 
 
 async def capture_benchmark_config_snapshot(agent_slug: str) -> dict[str, Any]:
@@ -114,6 +341,19 @@ async def persist_benchmark_payload(payload: dict[str, Any]) -> str:
 
 
 async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) -> str:
+    experiment_payload = payload.get("experiment")
+    experiment: AgentBenchmarkExperiment | None = None
+    experiment_cohort: str | None = None
+    if isinstance(experiment_payload, dict):
+        experiment = await _ensure_benchmark_experiment(
+            db,
+            payload=experiment_payload,
+            run_agent_slug=str(payload["agent_slug"]),
+            run_project_id=str(payload["project_id"]),
+            run_suite_id=str(payload["suite_id"]),
+        )
+        experiment_cohort = str(experiment_payload.get("cohort") or "").strip().lower() or None
+
     run = AgentBenchmarkRun(
         benchmark_id=str(payload["benchmark_id"]),
         agent_slug=str(payload["agent_slug"]),
@@ -121,6 +361,8 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
         suite_id=str(payload["suite_id"]),
         run_kind=str(payload["run_kind"]),
         status=str(payload.get("status") or "completed"),
+        experiment_id=experiment.id if experiment else None,
+        experiment_cohort=experiment_cohort,
         models=list(payload.get("models") or []),
         case_ids=list(payload.get("case_ids") or []),
         runs_per_case=int(payload.get("runs_per_case") or 1),
@@ -242,7 +484,35 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
         cluster.status = "resolved"
         cluster.resolved_at = completed_at
 
+    if experiment is not None:
+        await _refresh_benchmark_experiment(db, experiment)
+
     return run.id
+
+
+async def get_benchmark_experiment_summary_by_key(
+    db: AsyncSession,
+    experiment_key: str,
+) -> dict[str, Any] | None:
+    experiment = await db.scalar(
+        select(AgentBenchmarkExperiment).where(
+            AgentBenchmarkExperiment.experiment_key == experiment_key
+        )
+    )
+    if experiment is None:
+        return None
+
+    runs = (
+        await db.execute(
+            select(AgentBenchmarkRun)
+            .where(
+                AgentBenchmarkRun.experiment_id == experiment.id,
+                AgentBenchmarkRun.completed_at.is_not(None),
+            )
+            .order_by(AgentBenchmarkRun.completed_at.desc())
+        )
+    ).scalars().all()
+    return summarize_benchmark_experiment(experiment, runs)
 
 
 async def get_agent_benchmark_dashboard(
@@ -275,6 +545,14 @@ async def get_agent_benchmark_dashboard(
         cluster_stmt = cluster_stmt.where(AgentRegressionCluster.suite_id == suite_id)
     cluster_stmt = cluster_stmt.order_by(AgentRegressionCluster.last_seen_at.desc())
     open_clusters = (await db.execute(cluster_stmt)).scalars().all()
+
+    experiment_stmt = select(AgentBenchmarkExperiment).where(
+        AgentBenchmarkExperiment.agent_slug == agent_slug,
+    )
+    if suite_id:
+        experiment_stmt = experiment_stmt.where(AgentBenchmarkExperiment.suite_id == suite_id)
+    experiment_stmt = experiment_stmt.order_by(AgentBenchmarkExperiment.updated_at.desc())
+    experiments = (await db.execute(experiment_stmt)).scalars().all()
 
     attempt_stmt = (
         select(
@@ -361,6 +639,33 @@ async def get_agent_benchmark_dashboard(
         for model_id, attempts, avg_model_score, passed, avg_latency, latest_completed_at in model_rows
     ]
 
+    experiment_summaries: list[dict[str, Any]] = []
+    selected_experiments = experiments[:10]
+    experiment_runs_by_id: dict[str, list[AgentBenchmarkRun]] = {}
+    if selected_experiments:
+        experiment_run_rows = (
+            await db.execute(
+                select(AgentBenchmarkRun)
+                .where(
+                    AgentBenchmarkRun.experiment_id.in_([experiment.id for experiment in selected_experiments]),
+                    AgentBenchmarkRun.completed_at.is_not(None),
+                )
+                .order_by(AgentBenchmarkRun.completed_at.desc())
+            )
+        ).scalars().all()
+        for run in experiment_run_rows:
+            if not run.experiment_id:
+                continue
+            experiment_runs_by_id.setdefault(run.experiment_id, []).append(run)
+
+    for experiment in selected_experiments:
+        experiment_summaries.append(
+            summarize_benchmark_experiment(
+                experiment,
+                experiment_runs_by_id.get(experiment.id, []),
+            )
+        )
+
     return {
         "agent_slug": agent_slug,
         "overview": {
@@ -392,4 +697,5 @@ async def get_agent_benchmark_dashboard(
             for cluster in open_clusters[:10]
         ],
         "model_performance": model_performance,
+        "experiments": experiment_summaries,
     }

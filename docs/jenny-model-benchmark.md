@@ -91,7 +91,9 @@ Why:
 Current state:
 
 - benchmark runs, attempts, config snapshots, and open regression clusters are now persisted
+- repeated baseline-vs-candidate experiments are now tracked as first-class records
 - the Persona/Jenny analytics page renders benchmark KPIs, trendlines, recent runs, open regressions, and model performance
+- the Persona/Jenny analytics page also renders benchmark experiment status, decision, and cohort deltas
 - one-shot benchmarks and honing iterations can write into the same history model
 
 Next tasks:
@@ -102,6 +104,7 @@ Next tasks:
    - fixed `suite_id`
    - baseline vs candidate labels
    - enough repeated runs to compare changes statistically instead of reacting to a single run
+   - conservative promote/hold/rollback decisions with visible reasons such as `underpowered`, `mixed_config`, or `candidate_underperforms_baseline`
 4. Add explicit rollout/rollback rules for Jenny prompt and model changes:
    - no prompt/model adoption without benchmark comparison against the last known-good baseline
    - auto-flag regressions when a candidate underperforms baseline on the same suite
@@ -124,3 +127,24 @@ Scope rule:
 - platform: agent/model agnostic
 - benchmark content: Jenny/persona first
 - UI: Persona/Jenny first, global rollup later
+
+## Closed Loop
+
+Jenny should not "improve herself" by free-form prompt edits alone.
+
+The intended loop is:
+
+1. detect recurring failure clusters from persisted regressions and benchmark history
+2. form one small hypothesis tied to a measured gap
+3. run repeated `baseline` vs `candidate` benchmark cohorts on the same suite
+4. keep the change only when the experiment decision and evidence support promotion
+5. otherwise hold or roll back and keep the regression cluster open
+
+Second-opinion models can help, but they should be experiment cohorts or reviewers, not silent scorers.
+
+Example:
+
+- baseline supervisor model: `codex/gpt-5.4`
+- candidate supervisor model: `claude-opus-4-6`
+- same benchmark suite
+- repeated runs until the comparison is powered enough to decide

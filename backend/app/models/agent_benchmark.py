@@ -37,6 +37,13 @@ class AgentBenchmarkRun(Base):
     suite_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     run_kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="completed")
+    experiment_id: Mapped[str | None] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("agent_benchmark_experiments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    experiment_cohort: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
 
     models: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     case_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
@@ -68,6 +75,37 @@ class AgentBenchmarkRun(Base):
 
     __table_args__ = (
         Index("ix_agent_benchmark_runs_agent_suite_completed", "agent_slug", "suite_id", "completed_at"),
+    )
+
+
+class AgentBenchmarkExperiment(Base):
+    """Controlled benchmark comparison between baseline and candidate cohorts."""
+
+    __tablename__ = "agent_benchmark_experiments"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    experiment_key: Mapped[str] = mapped_column(String(120), nullable=False, unique=True, index=True)
+    agent_slug: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    suite_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    hypothesis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default="open", index=True)
+    decision: Mapped[str] = mapped_column(String(20), nullable=False, server_default="hold")
+    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    baseline_label: Mapped[str] = mapped_column(String(60), nullable=False, server_default="baseline")
+    candidate_label: Mapped[str] = mapped_column(String(60), nullable=False, server_default="candidate")
+    min_runs_per_cohort: Mapped[int] = mapped_column(Integer, nullable=False, server_default="3")
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("ix_agent_benchmark_experiments_agent_suite_created", "agent_slug", "suite_id", "created_at"),
     )
 
 
