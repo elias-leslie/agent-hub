@@ -269,6 +269,116 @@ def get_jenny_benchmark_cases() -> list[JennyBenchmarkCase]:
             required_summary_terms=("shared",),
             required_project_id="agent-hub",
         ),
+        JennyBenchmarkCase(
+            case_id="review_request_routes_to_reviewer",
+            name="Review Request Routes To Reviewer",
+            description="Route review-only work to review workflow instead of code production.",
+            scenario=(
+                "TASK: task-8888\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "request_type=review\n"
+                "objective=Review an already-completed change for bugs, regressions, and missing tests.\n"
+                "constraints=Do not write code. Findings-first review is required.\n"
+                "recommended_next_step=dispatch a review specialist rather than a coder.\n"
+            ),
+            expected={
+                "case_id": "review_request_routes_to_reviewer",
+                "primary_action": "dispatch",
+                "should_dispatch": True,
+                "should_close": False,
+            },
+            required_summary_terms=("review", "findings"),
+        ),
+        JennyBenchmarkCase(
+            case_id="dead_code_cleanup_followthrough",
+            name="Dead Code Cleanup Followthrough",
+            description="Do not leave newly discovered dead code behind when the fix is already in scope.",
+            scenario=(
+                "TASK: task-9999\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "objective=Finish a serializer cleanup already underway.\n"
+                "during_fix=The specialist found an unused compatibility shim and orphaned fields in the same module.\n"
+                "constraint=Clean them up in the same slice rather than leaving 'harmless' leftovers.\n"
+                "recommended_next_step=dispatch follow-through work that removes the dead code now.\n"
+            ),
+            expected={
+                "case_id": "dead_code_cleanup_followthrough",
+                "primary_action": "dispatch",
+                "should_dispatch": True,
+                "should_close": False,
+            },
+            required_summary_terms=("dead", "cleanup"),
+        ),
+        JennyBenchmarkCase(
+            case_id="feedback_triage_hotspot",
+            name="Feedback Triage Hotspot",
+            description="Use feedback tooling and reconcile a repeated feedback-triage miss.",
+            scenario=(
+                "Use manage_feedback before answering.\n"
+                "HEARTBEAT_FAILURE: The last 3 heartbeat retrospectives all reported that open feedback items "
+                "were visible in context but triage still did not happen.\n"
+                "correct_layer=Jenny's recurring operating checklist, not a new project task.\n"
+                "question=Should Jenny dispatch new work right now, or reconcile her operating model first?\n"
+            ),
+            expected={
+                "case_id": "feedback_triage_hotspot",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_tool_names=("manage_feedback",),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("feedback", "triage"),
+        ),
+        JennyBenchmarkCase(
+            case_id="performance_review_honing",
+            name="Performance Review Honing",
+            description="Inspect performance history plus heartbeat instructions before deciding to self-correct.",
+            scenario=(
+                "Use review_agent_performance and read_heartbeat_instructions before answering.\n"
+                "BENCHMARK_SIGNAL: Two consecutive evaluation runs showed repeated misses on tool-required "
+                "governance cases.\n"
+                "correct_layer=Jenny's own operating model, observability habits, or model assignment.\n"
+                "question=Should Jenny dispatch project work now, or reconcile her heartbeat/performance loop first?\n"
+            ),
+            expected={
+                "case_id": "performance_review_honing",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_tool_names=("review_agent_performance", "read_heartbeat_instructions"),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("heartbeat", "performance"),
+        ),
+        JennyBenchmarkCase(
+            case_id="model_config_reconsideration",
+            name="Model Config Reconsideration",
+            description="Inspect benchmarks/performance before deciding whether Jenny should revisit her model setup.",
+            scenario=(
+                "Use manage_model_config and review_agent_performance before answering.\n"
+                "OBSERVATION: Fresh benchmark data exists, and the current primary model is the only one repeatedly "
+                "missing tool-heavy governance cases while another configured model succeeds.\n"
+                "correct_layer=Model assignment review before more dispatching.\n"
+                "question=Should Jenny reconcile model selection now?\n"
+            ),
+            expected={
+                "case_id": "model_config_reconsideration",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_tool_names=("manage_model_config", "review_agent_performance"),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("model", "benchmark"),
+        ),
     ]
 
 
