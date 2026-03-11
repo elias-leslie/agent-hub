@@ -353,20 +353,6 @@ def test_generate_markdown_report_includes_ranking_table() -> None:
     assert "precision_code_search" in report
 
 
-def test_benchmark_case_battery_is_stable() -> None:
-    case_ids = [case.case_id for case in get_jenny_benchmark_cases()]
-    assert case_ids == [
-        "ready_task_dispatch",
-        "same_task_overlap",
-        "cleanup_blocks_closeout",
-        "session_patience_quiet",
-        "stalled_session_reconcile",
-        "workspace_inspection_gate",
-        "precision_search_architecture",
-        "precision_search_live_lookup",
-    ]
-
-
 async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     from scripts.run_jenny_model_benchmark import _run_one_attempt
 
@@ -433,3 +419,86 @@ def test_validate_case_project_requirements_rejects_wrong_project() -> None:
 
     with pytest.raises(ValueError, match="precision_search_live_lookup"):
         _validate_case_project_requirements(["precision_search_live_lookup"], "persona-sandbox")
+
+
+def test_feedback_triage_case_requires_manage_feedback_tool() -> None:
+    case = get_case_by_id("feedback_triage_hotspot")
+
+    prompt = case.build_prompt()
+
+    assert "manage_feedback" in prompt
+    assert case.required_tool_names == ("manage_feedback",)
+
+
+def test_performance_honing_case_requires_instruction_and_performance_tools() -> None:
+    case = get_case_by_id("performance_review_honing")
+
+    prompt = case.build_prompt()
+
+    assert "review_agent_performance" in prompt
+    assert "read_heartbeat_instructions" in prompt
+    assert case.required_tool_names == (
+        "review_agent_performance",
+        "read_heartbeat_instructions",
+    )
+
+
+def test_model_config_reconsideration_case_requires_model_tools() -> None:
+    case = get_case_by_id("model_config_reconsideration")
+
+    prompt = case.build_prompt()
+
+    assert "manage_model_config" in prompt
+    assert "review_agent_performance" in prompt
+    assert case.required_tool_names == (
+        "manage_model_config",
+        "review_agent_performance",
+    )
+
+
+def test_review_request_case_requires_review_language_in_summary() -> None:
+    case = get_case_by_id("review_request_routes_to_reviewer")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=600,
+        content=(
+            '{"case_id":"review_request_routes_to_reviewer","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"Dispatch a review specialist and return findings first."}'
+        ),
+        session_id="sess-review",
+        provider="codex",
+        effective_model="codex/gpt-5.4",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=40,
+        output_tokens=16,
+        total_tokens=56,
+    )
+
+    assert attempt.passed is True
+
+
+def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
+    case_ids = [case.case_id for case in get_jenny_benchmark_cases()]
+
+    assert case_ids == [
+        "ready_task_dispatch",
+        "same_task_overlap",
+        "cleanup_blocks_closeout",
+        "session_patience_quiet",
+        "stalled_session_reconcile",
+        "workspace_inspection_gate",
+        "precision_search_architecture",
+        "precision_search_live_lookup",
+        "review_request_routes_to_reviewer",
+        "dead_code_cleanup_followthrough",
+        "feedback_triage_hotspot",
+        "performance_review_honing",
+        "model_config_reconsideration",
+    ]
