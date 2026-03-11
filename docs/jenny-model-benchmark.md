@@ -68,3 +68,59 @@ Composite score:
 Tool-use compliance now supports specific-tool enforcement. Generic workspace cases still only require that some tool was used. Precision coverage can require the exact `precision_code_search` tool name, and a correct JSON answer still fails if that tool was not used.
 
 Infra failures are tracked separately so transport problems do not get mistaken for model-quality regressions.
+
+## Dashboard
+
+Current home:
+
+- `http://localhost:3003/agents/persona/analytics`
+
+Placement rule:
+
+- Jenny-specific observability belongs in the Persona/Jenny area, not the public Agents list.
+- The backend/storage model should stay agent/model agnostic even when the first rich UX is Jenny/persona-specific.
+
+Why:
+
+- Jenny/Persona is hidden from the normal Agents section by design.
+- Most benchmark-driven tuning decisions are currently about Jenny's prompts, model assignment, heartbeat harness, and supervisory behavior.
+- The storage and API need to be reusable for other agents later, but the first operator UX should match where Jenny is already managed.
+
+## Lean Plan
+
+Current state:
+
+- benchmark runs, attempts, config snapshots, and open regression clusters are now persisted
+- the Persona/Jenny analytics page renders benchmark KPIs, trendlines, recent runs, open regressions, and model performance
+- one-shot benchmarks and honing iterations can write into the same history model
+
+Next tasks:
+
+1. Keep the Persona analytics page as the primary Jenny benchmark dashboard.
+2. Add benchmark run drill-down from Persona analytics into per-attempt detail and failure-cluster history.
+3. Add controlled A/B workflow support:
+   - fixed `suite_id`
+   - baseline vs candidate labels
+   - enough repeated runs to compare changes statistically instead of reacting to a single run
+4. Add explicit rollout/rollback rules for Jenny prompt and model changes:
+   - no prompt/model adoption without benchmark comparison against the last known-good baseline
+   - auto-flag regressions when a candidate underperforms baseline on the same suite
+5. Extend the benchmark suite beyond current Jenny supervision cases where needed:
+   - long-running patience/focus
+   - closeout completeness
+   - self-honing quality
+   - model assignment review
+6. Add a thin operator CLI only if needed after real usage:
+   - list suites
+   - show latest runs
+   - compare baseline vs candidate
+   - print open regression clusters
+7. Add a global benchmark index later, only when cross-agent comparison becomes valuable enough:
+   - keep agent-local UX first
+   - add global rollup after multiple agents have real suites
+
+Scope rule:
+
+- platform: agent/model agnostic
+- benchmark content: Jenny/persona first
+- UI: Persona/Jenny first, global rollup later
