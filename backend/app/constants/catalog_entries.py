@@ -100,6 +100,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         context_window=200_000, speed_tier="fast",
         capabilities=ModelCapabilities(
             has_vision=True,
+            has_thinking=True,
             supports_pdf=True,
             supports_tool_execution=True,
             max_output_tokens=8192,
