@@ -48,6 +48,12 @@ vi.mock("@/app/agents/[slug]/analytics/components/BenchmarkTrendSection", () => 
   BenchmarkTrendSection: () => <div>benchmark trend section</div>,
 }));
 
+vi.mock("@/app/agents/[slug]/analytics/components/BenchmarkExperimentSection", () => ({
+  BenchmarkExperimentSection: ({ experiments }: { experiments: Array<{ experiment_key: string }> }) => (
+    <div>{experiments.length ? `benchmark experiments ${experiments[0].experiment_key}` : "benchmark experiments empty"}</div>
+  ),
+}));
+
 import { fetchAgent, fetchAgentBenchmarkDashboard, fetchAgentMetrics } from "@/lib/api";
 
 const agent: Agent = {
@@ -110,6 +116,7 @@ describe("AgentAnalyticsPage", () => {
       recent_runs: [],
       open_regressions: [],
       model_performance: [],
+      experiments: [],
     });
   });
 
@@ -230,6 +237,42 @@ describe("AgentAnalyticsPage", () => {
           latest_completed_at: "2026-03-11T12:00:00Z",
         },
       ],
+      experiments: [
+        {
+          experiment_key: "jenny-patience-ab",
+          name: "Jenny patience A/B",
+          suite_id: "jenny-patience",
+          status: "open",
+          decision: "hold",
+          decision_reason: "underpowered",
+          hypothesis: "Candidate harness should reduce false redispatches.",
+          min_runs_per_cohort: 3,
+          baseline: {
+            label: "baseline",
+            run_count: 2,
+            avg_score: 94.2,
+            avg_pass_rate: 75,
+            config_fingerprints: ["abcd1234"],
+            config_stable: true,
+            prompt_versions: [],
+            latest_completed_at: "2026-03-11T12:00:00Z",
+          },
+          candidate: {
+            label: "candidate",
+            run_count: 1,
+            avg_score: 95.1,
+            avg_pass_rate: 83.3,
+            config_fingerprints: ["efgh5678"],
+            config_stable: true,
+            prompt_versions: [],
+            latest_completed_at: "2026-03-11T12:05:00Z",
+          },
+          score_delta: { mean_delta: 0.9, ci_low: -2.0, ci_high: 3.2 },
+          pass_rate_delta: { mean_delta: 8.3, ci_low: -16.7, ci_high: 25.0 },
+          updated_at: "2026-03-11T12:05:00Z",
+          created_at: "2026-03-11T11:50:00Z",
+        },
+      ],
     });
 
     renderPage();
@@ -241,5 +284,6 @@ describe("AgentAnalyticsPage", () => {
     expect(screen.getAllByText("Open Regressions")).toHaveLength(2);
     expect(screen.getByText("session_patience_quiet")).toBeInTheDocument();
     expect(screen.getByText("Benchmark Model Performance")).toBeInTheDocument();
+    expect(screen.getByText("benchmark experiments jenny-patience-ab")).toBeInTheDocument();
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { fetchAgent, fetchAgentBenchmarkDashboard, fetchAgentMetrics } from "@/lib/api";
 import { BenchmarkTrendSection } from "./BenchmarkTrendSection";
+import { BenchmarkExperimentSection } from "./BenchmarkExperimentSection";
 import {
   filterBenchmarkTrendWindow,
   metricsToAnalytics,
@@ -238,6 +239,10 @@ export function AgentAnalyticsDashboard({
             </div>
           </ChartCard>
         )}
+
+        <BenchmarkExperimentSection
+          experiments={benchmarkDashboard?.experiments ?? []}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <ChartCard title="24h Throughput">

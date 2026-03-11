@@ -449,6 +449,42 @@ class TestAgentBenchmarkDashboardEndpoint:
                     "latest_completed_at": "2026-03-11T12:00:00Z",
                 }
             ],
+            "experiments": [
+                {
+                    "experiment_key": "jenny-patience-ab",
+                    "name": "Jenny patience A/B",
+                    "suite_id": "jenny-patience",
+                    "status": "open",
+                    "decision": "hold",
+                    "decision_reason": "underpowered",
+                    "hypothesis": "Candidate harness should reduce false redispatches.",
+                    "min_runs_per_cohort": 3,
+                    "baseline": {
+                        "label": "baseline",
+                        "run_count": 2,
+                        "avg_score": 94.0,
+                        "avg_pass_rate": 75.0,
+                        "config_fingerprints": ["abcd1234"],
+                        "config_stable": True,
+                        "prompt_versions": ["2026-03-11T11:16:06Z:abcd1234"],
+                        "latest_completed_at": "2026-03-11T12:00:00Z",
+                    },
+                    "candidate": {
+                        "label": "candidate",
+                        "run_count": 1,
+                        "avg_score": 95.0,
+                        "avg_pass_rate": 83.3,
+                        "config_fingerprints": ["efgh5678"],
+                        "config_stable": True,
+                        "prompt_versions": ["2026-03-11T11:20:00Z:efgh5678"],
+                        "latest_completed_at": "2026-03-11T12:05:00Z",
+                    },
+                    "score_delta": {"mean_delta": 1.0, "ci_low": -2.0, "ci_high": 3.8},
+                    "pass_rate_delta": {"mean_delta": 8.3, "ci_low": -16.7, "ci_high": 25.0},
+                    "updated_at": "2026-03-11T12:05:00Z",
+                    "created_at": "2026-03-11T11:50:00Z",
+                }
+            ],
         }
 
         with (
@@ -467,6 +503,7 @@ class TestAgentBenchmarkDashboardEndpoint:
             assert data["agent_slug"] == "coder"
             assert data["overview"]["total_runs"] == 3
             assert data["open_regressions"][0]["case_id"] == "session_patience_quiet"
+            assert data["experiments"][0]["experiment_key"] == "jenny-patience-ab"
             mock_get_dashboard.assert_awaited_once()
 
     @pytest.mark.asyncio
