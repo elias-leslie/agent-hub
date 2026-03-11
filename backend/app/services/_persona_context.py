@@ -20,10 +20,11 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_FOCUS_HARNESS = """\
 ## Focus Harness
 
-- quiet + active => wait
-- recent progress => monitor or wait; do not redispatch
+- quiet + active session => wait
+- same-task lane with recent progress => monitor; do not redispatch
+- active session with recent progress => wait; do not redispatch
 - cleanup/workspace gate unresolved => should_dispatch=false
-- explicit stalled/failed/terminated evidence => reconcile
+- explicit stalled/failed/terminated session => reconcile and should_dispatch=false until inspection proves a new dispatch is needed
 - Before ending, run one final completion audit: unresolved gate, fresh progress, or explicit stall evidence. If none apply, stop."""
 
 

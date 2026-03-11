@@ -292,9 +292,11 @@ class TestGetPersonaContextForAgent:
             result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
         assert "<focus_harness>" in result
-        assert "quiet + active => wait" in result
-        assert "recent progress => monitor or wait" in result
+        assert "quiet + active session => wait" in result
+        assert "same-task lane with recent progress => monitor" in result
+        assert "active session with recent progress => wait" in result
         assert "cleanup/workspace gate unresolved => should_dispatch=false" in result
+        assert "explicit stalled/failed/terminated session => reconcile" in result
 
     @pytest.mark.asyncio
     async def test_heartbeat_instructions_absent_when_null(self):
