@@ -1,7 +1,10 @@
-"""Standard tool definitions used by most agents (bash, read_file, write_file, consult_agent)."""
+"""Standard tool definitions used by most agents."""
 
 from __future__ import annotations
 
+from app.services.tools._executor_precision_code_search import (
+    DEFAULT_PRECISION_SEARCH_BUDGET,
+)
 from app.services.tools._tool_constants import DEFAULT_READ_LIMIT, DEFAULT_TIMEOUT
 from app.services.tools.base import Tool
 
@@ -113,11 +116,39 @@ CONSULT_AGENT_TOOL = Tool(
     usage_examples=["Ask the reviewer agent for risk-focused feedback."],
 )
 
+PRECISION_CODE_SEARCH_TOOL = Tool(
+    name="precision_code_search",
+    description=(
+        "Retrieve focused code context for symbol and implementation lookup. "
+        "Use this before broad file search when you need functions, classes, "
+        "components, handlers, endpoints, schemas, or where something is implemented."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Code-navigation query or symbol name to retrieve",
+            },
+            "budget": {
+                "type": "integer",
+                "description": f"Approximate token budget for returned context (default {DEFAULT_PRECISION_SEARCH_BUDGET})",
+                "default": DEFAULT_PRECISION_SEARCH_BUDGET,
+            },
+        },
+        "required": ["query"],
+    },
+    category="workspace",
+    search_keywords=["symbol search", "implementation lookup", "code navigation", "find handler"],
+    usage_examples=["Look up `get_file_tree` before reading whole files."],
+)
+
 STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,
     WRITE_FILE_TOOL,
     CONSULT_AGENT_TOOL,
+    PRECISION_CODE_SEARCH_TOOL,
 ]
 
 

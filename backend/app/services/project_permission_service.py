@@ -97,6 +97,7 @@ _PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
     "consult_agent",
+    "precision_code_search",
     "read_personality",
     "read_user_context",
     "list_scheduled_jobs",

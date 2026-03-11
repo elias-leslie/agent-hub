@@ -110,7 +110,7 @@ class DirectToolExecutor:
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
         "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
-        "tool_search",
+        "precision_code_search", "tool_search",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",

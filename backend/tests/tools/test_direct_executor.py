@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -141,13 +142,14 @@ class TestStandardTools:
     """Tests for standard tool definitions."""
 
     def test_get_standard_tools_returns_all(self) -> None:
-        """Test that standard tools include bash, read, write, consult_agent."""
+        """Test that standard tools include the shared baseline toolset."""
         tools = get_standard_tools()
         names = [t.name for t in tools]
         assert "bash" in names
         assert "read_file" in names
         assert "write_file" in names
         assert "consult_agent" in names
+        assert "precision_code_search" in names
 
     def test_create_handler_with_workdir(self, tmp_path: Path) -> None:
         """Test handler creation with working directory."""
@@ -188,6 +190,44 @@ class TestDispatch:
         (tmp_path / "test.txt").write_text("dispatch content")
         result = await executor.dispatch("read_file", {"path": "test.txt"})
         assert "dispatch content" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_precision_code_search(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        executor = DirectToolExecutor(str(tmp_path), project_id="summitflow")
+        script_path = tmp_path / "precision-code-search.py"
+        script_path.write_text("#!/usr/bin/env python3\n")
+        monkeypatch.setattr(
+            "app.services.tools._executor_precision_code_search.PRECISION_SEARCH_SCRIPT",
+            script_path,
+        )
+
+        with patch(
+            "app.services.tools._executor_precision_code_search.subprocess.run",
+            return_value=SimpleNamespace(
+                returncode=0,
+                stdout='{"prompt_context":"context","metadata":{"symbol_count":1}}',
+                stderr="",
+            ),
+        ) as mock_run:
+            result = await executor.dispatch(
+                "precision_code_search",
+                {"query": "get_file_tree", "budget": 900},
+            )
+
+        assert '"prompt_context": "context"' in result
+        cmd = mock_run.call_args.args[0]
+        assert cmd[2:7] == ["search", "--project", "summitflow", "--budget", "900"]
+
+    @pytest.mark.asyncio
+    async def test_dispatch_precision_code_search_requires_project_context(
+        self,
+        executor: DirectToolExecutor,
+    ) -> None:
+        result = await executor.dispatch(
+            "precision_code_search",
+            {"query": "get_file_tree"},
+        )
+        assert "project_id context" in result
 
 
 class TestConsultAgent:
