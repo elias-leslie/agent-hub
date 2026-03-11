@@ -41,6 +41,7 @@ from app.services.tools._persona_tools import (
 from app.services.tools._standard_tools import (
     BASH_TOOL,
     CONSULT_AGENT_TOOL,
+    PRECISION_CODE_SEARCH_TOOL,
     READ_FILE_TOOL,
     STANDARD_TOOLS,
     WRITE_FILE_TOOL,
@@ -64,6 +65,7 @@ __all__ = [
     "MANAGE_TASKS_TOOL",
     "MARK_MEMORY_IRRELEVANT_TOOL",
     "MARK_MEMORY_RELEVANT_TOOL",
+    "PRECISION_CODE_SEARCH_TOOL",
     "READ_FILE_TOOL",
     "READ_PERSONALITY_TOOL",
     "READ_USER_CONTEXT_TOOL",

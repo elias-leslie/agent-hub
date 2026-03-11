@@ -36,6 +36,7 @@ class TestTierTools:
         tools = get_tools_for_tier("read")
         assert "read_file" in tools
         assert "consult_agent" in tools
+        assert "precision_code_search" in tools
         # Should NOT have write tools
         assert "write_file" not in tools
         assert "bash" not in tools

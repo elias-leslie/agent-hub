@@ -15,6 +15,7 @@ from .cache_handler import handle_cached_response
 from .helpers import get_adapter
 from .memory_handler import inject_memory_context
 from .multi_turn_executor import execute_multi_turn
+from .precision_search_guidance import maybe_inject_precision_search_guidance
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result
 from .schemas import MessageInput
@@ -193,8 +194,24 @@ async def execute_and_build_result(
         project_id=project_id,
         defer_tool_loading=defer_tool_loading,
     )
+    from .tool_router import supports_tools
+
+    should_execute_tools = (execute_tools or enable_programmatic_tools) and bool(provisioned.loaded_tools)
+    messages_with_guidance = messages_dict
+    if should_execute_tools and supports_tools(provider, model):
+        messages_with_guidance, reminder_injected = maybe_inject_precision_search_guidance(
+            messages_dict,
+            provisioned.loaded_tools,
+        )
+        if reminder_injected:
+            logger.info(
+                "Injected precision_code_search reminder for session=%s project=%s agent=%s",
+                session_id,
+                project_id,
+                agent_slug,
+            )
     ctx = _ExecContext(
-        provider=provider, messages_dict=messages_dict,
+        provider=provider, messages_dict=messages_with_guidance,
         user_messages_for_db=user_messages_for_db, model=model,
         temperature=temperature, tools=provisioned.loaded_tools,
         tool_catalog=provisioned.catalog_tools, working_dir=working_dir,
@@ -209,8 +226,6 @@ async def execute_and_build_result(
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format, agent_slug=agent_slug,
     )
-
-    should_execute_tools = (execute_tools or enable_programmatic_tools) and bool(provisioned.loaded_tools)
     if should_execute_tools and supports_tools(provider, model):
         return await _route_to_tool_executor(ctx)
 

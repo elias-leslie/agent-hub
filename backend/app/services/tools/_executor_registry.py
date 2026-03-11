@@ -9,6 +9,25 @@ from __future__ import annotations
 from typing import Any
 
 
+def _make_precision_code_search_bound(project_id: str | None) -> Any:
+    """Return a precision_code_search callable bound to the current project."""
+    from app.services.tools._executor_precision_code_search import precision_code_search
+
+    bound_project_id = project_id
+
+    async def _precision_code_search_bound(
+        query: str,
+        budget: int = 1200,
+    ) -> str:
+        return await precision_code_search(
+            query=query,
+            project_id=bound_project_id,
+            budget=budget,
+        )
+
+    return _precision_code_search_bound
+
+
 async def _manage_model_config(
     action: str,
     model_id: str | None = None,
@@ -219,6 +238,7 @@ def build_tool_registry(
         "manage_backups": _make_manage_backups_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
         "manage_feedback": manage_feedback,
+        "precision_code_search": _make_precision_code_search_bound(project_id),
         "query_sessions": query_sessions,
         "inspect_session": inspect_session,
     }
