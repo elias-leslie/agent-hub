@@ -10,6 +10,7 @@ from app.workflows._heartbeat_postprocess import (
     _detect_followup_reason,
     _ensure_session_summary,
     _extract_synthetic_summary,
+    _maybe_review_completion,
     _validate_heartbeat_format,
     postprocess_heartbeat,
 )
@@ -294,6 +295,18 @@ class TestPostprocessHeartbeat:
                 new_callable=AsyncMock,
                 return_value="",
             ),
+            patch(
+                "app.workflows._heartbeat_postprocess.review_persona_completion",
+                new_callable=AsyncMock,
+                return_value=MagicMock(
+                    used=True,
+                    decision="complete",
+                    reason="No unfinished residue remains.",
+                    session_id="review-sess-1",
+                    reviewer_agent_slug="supervisor",
+                    reviewer_model_id="codex/gpt-5.4",
+                ),
+            ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -305,6 +318,8 @@ class TestPostprocessHeartbeat:
         assert hb_result.interval_minutes == 60
         assert hb_result.followup_dispatched is False
         assert hb_result.followup_reason is None
+        assert hb_result.completion_review_used is True
+        assert hb_result.completion_review_decision == "complete"
         mock_metrics.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -338,6 +353,18 @@ class TestPostprocessHeartbeat:
                 "app.workflows._heartbeat_postprocess._get_workstream_inventory",
                 new_callable=AsyncMock,
                 return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess.review_persona_completion",
+                new_callable=AsyncMock,
+                return_value=MagicMock(
+                    used=True,
+                    decision="complete",
+                    reason="No unfinished residue remains.",
+                    session_id="review-sess-2",
+                    reviewer_agent_slug="supervisor",
+                    reviewer_model_id="codex/gpt-5.4",
+                ),
             ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
@@ -383,4 +410,103 @@ class TestPostprocessHeartbeat:
 
         assert hb_result.followup_dispatched is True
         assert hb_result.followup_reason == "cleanup_actionable"
-        mock_dispatch.assert_awaited_once_with("cleanup_actionable", None)
+        assert hb_result.completion_review_used is False
+        mock_dispatch.assert_awaited_once_with(
+            "cleanup_actionable",
+            None,
+            note=None,
+            parent_session_id="sess-test-123",
+        )
+
+    @pytest.mark.asyncio
+    async def test_completion_review_dispatches_followup_when_supervisor_requests_continue(self) -> None:
+        result = _make_result(content="HEARTBEAT_OK — Routine sweep complete.")
+
+        with (
+            patch(
+                "app.workflows._heartbeat_postprocess._ensure_session_summary",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._retry_failed_mcp_tools",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "app.workflows._heartbeat_redis.record_heartbeat_metrics",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess.review_persona_completion",
+                new_callable=AsyncMock,
+                return_value=MagicMock(
+                    used=True,
+                    decision="continue",
+                    reason="A quiet active lane still needs one more inspect/poll step.",
+                    session_id="review-sess-3",
+                    reviewer_agent_slug="supervisor",
+                    reviewer_model_id="claude-opus-4-6",
+                ),
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._dispatch_followup_wake",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_dispatch,
+        ):
+            hb_result = await postprocess_heartbeat(result, 60)
+
+        assert hb_result.followup_dispatched is True
+        assert hb_result.followup_reason == "completion_review_continue"
+        assert hb_result.completion_review_used is True
+        assert hb_result.completion_review_decision == "continue"
+        assert hb_result.completion_review_reason == "A quiet active lane still needs one more inspect/poll step."
+        assert hb_result.completion_review_model_id == "claude-opus-4-6"
+        mock_dispatch.assert_awaited_once_with(
+            "completion_review_continue",
+            None,
+            note="A quiet active lane still needs one more inspect/poll step.",
+            parent_session_id="sess-test-123",
+        )
+
+
+class TestMaybeReviewCompletion:
+    @pytest.mark.asyncio
+    async def test_skips_model_review_when_deterministic_residue_exists(self) -> None:
+        with (
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="ACTIONABLE-CLEANUP[1]",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess.review_persona_completion",
+                new_callable=AsyncMock,
+            ) as mock_review,
+        ):
+            outcome = await _maybe_review_completion(
+                content="HEARTBEAT_OK — Routine sweep complete.",
+                session_id="sess-test-123",
+                target_project_id=None,
+                cleanup_status="ACTIONABLE-CLEANUP[1]",
+                workstream_inventory="",
+            )
+
+        assert outcome is None
+        mock_review.assert_not_awaited()

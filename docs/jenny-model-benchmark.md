@@ -95,6 +95,7 @@ Current state:
 - the Persona/Jenny analytics page renders benchmark KPIs, trendlines, recent runs, open regressions, and model performance
 - the Persona/Jenny analytics page also renders benchmark experiment status, decision, and cohort deltas
 - one-shot benchmarks and honing iterations can write into the same history model
+- Persona heartbeat now has a bounded supervisor completion-review stage after deterministic residue checks, so “false complete” behavior can be measured and corrected without a second open-ended loop
 
 Next tasks:
 
@@ -111,6 +112,7 @@ Next tasks:
 5. Extend the benchmark suite beyond current Jenny supervision cases where needed:
    - long-running patience/focus
    - closeout completeness
+   - supervisor completion-review quality (`false_complete`, `false_continue`, `residue_catch_rate`)
    - self-honing quality
    - model assignment review
 6. Add a thin operator CLI only if needed after real usage:
@@ -148,3 +150,10 @@ Example:
 - candidate supervisor model: `claude-opus-4-6`
 - same benchmark suite
 - repeated runs until the comparison is powered enough to decide
+
+Completion-review models should use the same pattern:
+
+- baseline reviewer model: current `supervisor` agent primary model
+- candidate reviewer model: alternate reviewer primary model
+- same completion-review suite
+- repeated runs until the reviewer decision is powered enough to decide

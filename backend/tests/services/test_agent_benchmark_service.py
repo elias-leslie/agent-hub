@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
-from app.services.agent_benchmark_service import summarize_benchmark_experiment
+import pytest
+
+from app.services.agent_benchmark_service import (
+    capture_benchmark_config_snapshot,
+    summarize_benchmark_experiment,
+)
 
 
 def _make_run(
@@ -197,3 +203,47 @@ def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> 
     assert summary["baseline"]["config_stable"] is True
     assert summary["candidate"]["config_stable"] is True
     assert summary["decision_reason"] == "no_clear_winner"
+
+
+@pytest.mark.asyncio
+async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_for_persona() -> None:
+    persona_agent = SimpleNamespace(
+        slug="persona",
+        version=7,
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=["claude-sonnet-4-6"],
+        escalation_model_id="claude-sonnet-4-6",
+        thinking_level="medium",
+        temperature=0.3,
+    )
+    heartbeat_prompt = SimpleNamespace(
+        slug="persona-heartbeat-instructions",
+        content="Focus on cleanup first",
+        updated_at=datetime.fromisoformat("2026-03-11T12:00:00+00:00"),
+    )
+    supervisor_agent = SimpleNamespace(
+        slug="supervisor",
+        version=3,
+        primary_model_id="claude-opus-4-6",
+        fallback_models=["codex/gpt-5.4"],
+        escalation_model_id=None,
+        thinking_level="high",
+        temperature=0.2,
+    )
+
+    mock_db = AsyncMock()
+    mock_db.scalar = AsyncMock(side_effect=[persona_agent, heartbeat_prompt, supervisor_agent])
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with patch("app.services.agent_benchmark_service.async_session", _session):
+        snapshot = await capture_benchmark_config_snapshot("persona")
+
+    assert snapshot["primary_model_id"] == "codex/gpt-5.4"
+    assert snapshot["heartbeat_prompt"]["slug"] == "persona-heartbeat-instructions"
+    assert snapshot["completion_reviewer"]["agent_slug"] == "supervisor"
+    assert snapshot["completion_reviewer"]["primary_model_id"] == "claude-opus-4-6"

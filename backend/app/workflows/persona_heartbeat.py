@@ -51,6 +51,12 @@ class HeartbeatResult(BaseModel):
     mcp_retried: int = 0
     followup_dispatched: bool = False
     followup_reason: str | None = None
+    completion_review_used: bool = False
+    completion_review_decision: str | None = None
+    completion_review_reason: str | None = None
+    completion_review_session_id: str | None = None
+    completion_review_agent_slug: str | None = None
+    completion_review_model_id: str | None = None
 
 
 class HeartbeatRuntimeInfo(BaseModel):
