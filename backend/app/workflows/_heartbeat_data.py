@@ -199,82 +199,77 @@ def _format_active_session_entry(session: dict[str, object], *, now: datetime) -
     return f"- {' | '.join(parts)}"
 
 
+async def _query_active_sessions() -> tuple[list, datetime]:
+    """Query active sessions from DB; returns (rows, now)."""
+    from sqlalchemy import and_, func, or_, select
+
+    from app.db import async_session
+    from app.models import Agent, Session, SessionEvent
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
+    ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
+    event_count = (
+        select(func.count(SessionEvent.id))
+        .where(SessionEvent.session_id == Session.id)
+        .correlate(Session)
+        .scalar_subquery()
+    )
+    turn_count = (
+        select(func.max(SessionEvent.turn))
+        .where(SessionEvent.session_id == Session.id)
+        .correlate(Session)
+        .scalar_subquery()
+    )
+    async with async_session() as db:
+        rows = (
+            await db.execute(
+                select(
+                    Session.agent_slug, Session.external_id, Session.current_branch,
+                    Session.health_detail, Session.last_activity_at, Session.created_at,
+                    Agent.is_coding_agent, turn_count.label("turn_count"),
+                )
+                .outerjoin(Agent, Agent.slug == Session.agent_slug)
+                .where(and_(
+                    Session.status == "active",
+                    Session.agent_slug.isnot(None),
+                    Session.created_at >= cutoff,
+                    or_(event_count > 0, Session.created_at >= ghost_cutoff),
+                ))
+                .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
+                .limit(5)
+            )
+        ).all()
+    return list(rows), now
+
+
+def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
+    """Map a DB row to an active-session dict with staleness metadata."""
+    last_activity_at = getattr(row, "last_activity_at", None) or getattr(row, "created_at", now)
+    threshold = _session_stale_threshold_minutes(getattr(row, "is_coding_agent", None))
+    idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
+    return {
+        "agent_slug": getattr(row, "agent_slug", None),
+        "task_ref": (
+            infer_task_id(getattr(row, "external_id", None), getattr(row, "current_branch", None))
+            or getattr(row, "external_id", None)
+            or getattr(row, "current_branch", None)
+        ),
+        "health_detail": getattr(row, "health_detail", None),
+        "last_activity_at": last_activity_at,
+        "turn_count": int(getattr(row, "turn_count", None) or 0),
+        "idle_minutes": idle_minutes,
+        "is_stale": idle_minutes >= threshold,
+    }
+
+
 async def _fetch_active_sessions_section() -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        from sqlalchemy import and_, func, or_, select
-
-        from app.db import async_session
-        from app.models import Agent, Session, SessionEvent
-
-        now = datetime.now(UTC)
-        cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
-        ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
-
-        event_count = (
-            select(func.count(SessionEvent.id))
-            .where(SessionEvent.session_id == Session.id)
-            .correlate(Session)
-            .scalar_subquery()
-        )
-        turn_count = (
-            select(func.max(SessionEvent.turn))
-            .where(SessionEvent.session_id == Session.id)
-            .correlate(Session)
-            .scalar_subquery()
-        )
-
-        async with async_session() as db:
-            rows = (
-                await db.execute(
-                    select(
-                        Session.agent_slug,
-                        Session.external_id,
-                        Session.current_branch,
-                        Session.health_detail,
-                        Session.last_activity_at,
-                        Session.created_at,
-                        Agent.is_coding_agent,
-                        turn_count.label("turn_count"),
-                    )
-                    .outerjoin(Agent, Agent.slug == Session.agent_slug)
-                    .where(
-                        and_(
-                            Session.status == "active",
-                            Session.agent_slug.isnot(None),
-                            Session.created_at >= cutoff,
-                            or_(event_count > 0, Session.created_at >= ghost_cutoff),
-                        )
-                    )
-                    .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
-                    .limit(5)
-                )
-            ).all()
-
+        rows, now = await _query_active_sessions()
         if not rows:
             return ""
-
-        sessions: list[dict[str, object]] = []
-        for row in rows:
-            last_activity_at = row.last_activity_at or row.created_at
-            threshold = _session_stale_threshold_minutes(row.is_coding_agent)
-            idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
-            sessions.append(
-                {
-                    "agent_slug": row.agent_slug,
-                    "task_ref": (
-                        infer_task_id(row.external_id, row.current_branch)
-                        or row.external_id
-                        or row.current_branch
-                    ),
-                    "health_detail": row.health_detail,
-                    "last_activity_at": last_activity_at,
-                    "turn_count": int(row.turn_count or 0),
-                    "idle_minutes": idle_minutes,
-                    "is_stale": idle_minutes >= threshold,
-                }
-            )
-
+        sessions = [_map_active_session_row(r, now=now) for r in rows]
         lines = [f"Active agent sessions: {len(sessions)}"]
         for s in sessions:
             lines.append(_format_active_session_entry(s, now=now))
@@ -337,90 +332,88 @@ async def _fetch_recently_completed_sessions_section() -> str:
         return ""
 
 
+async def _query_specialist_rows() -> list[dict[str, object]]:
+    """Query active specialist sessions and return as dicts with age_minutes."""
+    from sqlalchemy import and_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
+    async with async_session() as db:
+        raw_rows = (
+            await db.execute(
+                select(
+                    Session.id, Session.agent_slug, Session.project_id,
+                    Session.parent_session_id, Session.request_source, Session.created_at,
+                )
+                .where(and_(
+                    Session.status == "active",
+                    Session.agent_slug.isnot(None),
+                    Session.project_id != "persona-sandbox",
+                    Session.created_at >= cutoff,
+                    Session.external_id.is_(None),
+                    Session.current_branch.is_(None),
+                ))
+                .order_by(Session.created_at.desc())
+                .limit(50)
+            )
+        ).all()
+    return [
+        {
+            "session_id": row.id,
+            "agent_slug": row.agent_slug,
+            "project_id": row.project_id,
+            "parent_session_id": row.parent_session_id,
+            "request_source": row.request_source,
+            "created_at": row.created_at,
+            "age_minutes": int((now - row.created_at).total_seconds() / 60),
+        }
+        for row in raw_rows
+    ]
+
+
+def _format_specialist_group_line(
+    project_id: str,
+    agent_slug: str,
+    group_rows: list[dict[str, object]],
+) -> str:
+    """Format one specialist group as a single inventory line."""
+    session_ids = [str(r["session_id"]) for r in group_rows if r.get("session_id")]
+    parent_ids = {str(r["parent_session_id"]) for r in group_rows if r.get("parent_session_id")}
+    request_sources = {str(r["request_source"]) for r in group_rows if r.get("request_source")}
+    oldest_age = max(int(r.get("age_minutes", 0)) for r in group_rows)
+    newest_age = min(int(r.get("age_minutes", 0)) for r in group_rows)
+    duplicate = len(group_rows) > 1
+    parts = [
+        f"- {project_id} | {agent_slug}",
+        f"active={len(group_rows)}",
+        f"age={newest_age}-{oldest_age}m" if duplicate else f"age={oldest_age}m",
+        "next=dedupe_or_wait" if duplicate else "next=wait_or_complement",
+    ]
+    if request_sources:
+        parts.append(f"source={','.join(sorted(request_sources))}")
+    if parent_ids:
+        parts.append(f"parents={len(parent_ids)}")
+    if session_ids:
+        parts.append(f"sessions={','.join(session_ids[:2])}")
+    return " | ".join(parts)
+
+
 async def _get_active_specialist_inventory() -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
-        from sqlalchemy import and_, select
-
-        from app.db import async_session
-        from app.models import Session
-
-        cutoff = datetime.now(UTC) - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
-        now = datetime.now(UTC)
-
-        async with async_session() as db:
-            raw_rows = (
-                await db.execute(
-                    select(
-                        Session.id,
-                        Session.agent_slug,
-                        Session.project_id,
-                        Session.parent_session_id,
-                        Session.request_source,
-                        Session.created_at,
-                    )
-                    .where(
-                        and_(
-                            Session.status == "active",
-                            Session.agent_slug.isnot(None),
-                            Session.project_id != "persona-sandbox",
-                            Session.created_at >= cutoff,
-                            Session.external_id.is_(None),
-                            Session.current_branch.is_(None),
-                        )
-                    )
-                    .order_by(Session.created_at.desc())
-                    .limit(50)
-                )
-            ).all()
-
-        rows = [
-            {
-                "session_id": row.id,
-                "agent_slug": row.agent_slug,
-                "project_id": row.project_id,
-                "parent_session_id": row.parent_session_id,
-                "request_source": row.request_source,
-                "created_at": row.created_at,
-                "age_minutes": int((now - row.created_at).total_seconds() / 60),
-            }
-            for row in raw_rows
-        ]
-
+        rows = await _query_specialist_rows()
         if not rows:
             return ""
-
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
         for row in rows:
             key = (str(row["project_id"]), str(row["agent_slug"]))
             grouped.setdefault(key, []).append(row)
-
         lines = ["Active specialist sessions:"]
         for (project_id, agent_slug), group_rows in sorted(grouped.items()):
-            session_ids = [str(r["session_id"]) for r in group_rows if r.get("session_id")]
-            parent_ids = {
-                str(r["parent_session_id"]) for r in group_rows if r.get("parent_session_id")
-            }
-            request_sources = {
-                str(r["request_source"]) for r in group_rows if r.get("request_source")
-            }
-            oldest_age = max(int(r.get("age_minutes", 0)) for r in group_rows)
-            newest_age = min(int(r.get("age_minutes", 0)) for r in group_rows)
-            duplicate = len(group_rows) > 1
-            parts = [
-                f"- {project_id} | {agent_slug}",
-                f"active={len(group_rows)}",
-                f"age={newest_age}-{oldest_age}m" if duplicate else f"age={oldest_age}m",
-                "next=dedupe_or_wait" if duplicate else "next=wait_or_complement",
-            ]
-            if request_sources:
-                parts.append(f"source={','.join(sorted(request_sources))}")
-            if parent_ids:
-                parts.append(f"parents={len(parent_ids)}")
-            if session_ids:
-                parts.append(f"sessions={','.join(session_ids[:2])}")
-            lines.append(" | ".join(parts))
-
+            lines.append(_format_specialist_group_line(project_id, agent_slug, group_rows))
         body = "\n".join(lines)
         return f"\n<active_specialist_inventory>\n{body}\n</active_specialist_inventory>"
     except Exception:
@@ -499,6 +492,201 @@ def _build_workstream_next_action(
     return "monitor"
 
 
+def _map_workstream_row(row: object, *, now: datetime) -> dict[str, object]:
+    """Map a raw workstream DB row to a plain dict."""
+    pm = getattr(row, "provider_metadata", None)
+    created_at = getattr(row, "created_at", now)
+    updated_at = getattr(row, "updated_at", None)
+    ws_updated_at = getattr(row, "workstream_updated_at", None)
+    return {
+        "session_id": getattr(row, "id", None),
+        "agent_slug": getattr(row, "agent_slug", None),
+        "project_id": getattr(row, "project_id", None),
+        "external_id": getattr(row, "external_id", None),
+        "current_branch": getattr(row, "current_branch", None),
+        "working_dir": pm.get("cwd") if isinstance(pm, dict) else None,
+        "status": getattr(row, "status", None),
+        "workstream_status": getattr(row, "workstream_status", None),
+        "workstream_note": getattr(row, "workstream_note", None),
+        "workstream_updated_at": ws_updated_at,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "age_minutes": int((now - created_at).total_seconds() / 60),
+        "idle_minutes": idle_minutes_from_timestamps(
+            created_at=created_at, updated_at=updated_at,
+            workstream_updated_at=ws_updated_at, now=now,
+        ),
+    }
+
+
+async def _fetch_collapsed_workstream_rows() -> list[dict[str, object]]:
+    """Query workstream sessions from DB and collapse to deduplicated active rows."""
+    from sqlalchemy import and_, or_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+    async with async_session() as db:
+        raw_rows = (
+            await db.execute(
+                select(
+                    Session.id, Session.agent_slug, Session.project_id,
+                    Session.external_id, Session.current_branch, Session.provider_metadata,
+                    Session.status, Session.workstream_status, Session.workstream_note,
+                    Session.workstream_updated_at, Session.created_at, Session.updated_at,
+                )
+                .where(and_(
+                    Session.agent_slug.isnot(None),
+                    Session.created_at >= cutoff,
+                    or_(Session.external_id.isnot(None), Session.current_branch.isnot(None)),
+                ))
+                .order_by(Session.created_at.desc())
+                .limit(50)
+            )
+        ).all()
+    now = datetime.now(UTC)
+    return collapse_active_workstream_rows([_map_workstream_row(r, now=now) for r in raw_rows])
+
+
+def _parse_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
+    """Parse stale-running tasks from ready-all TOON output."""
+    stale_tasks: list[dict[str, str]] = []
+    cur_project: str | None = None
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if not line.startswith(" ") and "(" in line and line.endswith(")"):
+            cur_project = line.split(" ", 1)[0]
+            continue
+        m = _STALE_READY_ALL_LINE.match(line)
+        if m and cur_project:
+            stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
+    return stale_tasks
+
+
+def _group_rows_by_lane(
+    rows: list[dict[str, object]],
+) -> dict[tuple[str, str], list[dict[str, object]]]:
+    """Group workstream rows by (project_id, lane_key)."""
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+        br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+        tid = infer_task_id(ei, br) or ""
+        lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
+        if lane_key:
+            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+    return grouped
+
+
+def _infer_lane_task_id(lane_rows: list[dict[str, object]]) -> str | None:
+    """Return the first resolvable task_id from a set of lane rows."""
+    for lr in lane_rows:
+        ei = lr.get("external_id") if isinstance(lr.get("external_id"), str) else None
+        br = lr.get("current_branch") if isinstance(lr.get("current_branch"), str) else None
+        task_id = infer_task_id(ei, br)
+        if task_id:
+            return task_id
+    return None
+
+
+def _should_skip_lane(
+    lane_state: str,
+    task_id: str | None,
+    lane_rows: list[dict[str, object]],
+    visible_task_ids: set[str],
+    task_overview: str,
+) -> bool:
+    """Return True if a lane should be excluded from the workstream inventory."""
+    if lane_state == "completed_ready_for_closure" and task_id and task_overview:
+        return task_id not in visible_task_ids
+    if lane_state == "completed_ready_for_closure" and not task_id:
+        agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+        return agents == {"persona"}
+    return False
+
+
+def _build_lane_line(
+    project_id: str,
+    lane_key: str,
+    task_id: str | None,
+    lane_state: str,
+    lane_rows: list[dict[str, object]],
+    provider: str | None,
+) -> str:
+    """Format one workstream lane as a single inventory line."""
+    active_rows = [r for r in lane_rows if r.get("status") == "active"]
+    completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
+    idle_minutes = (
+        min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
+        if active_rows else None
+    )
+    branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
+    agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+    ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
+    working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
+    next_action = _build_workstream_next_action(
+        state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
+    )
+    label = task_id or lane_key
+    parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={len(active_rows)}"]
+    if idle_minutes is not None:
+        parts.append(f"idle={idle_minutes}m")
+    if completed_count:
+        parts.append(f"completed={completed_count}")
+    if ws_statuses:
+        parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
+    if branches:
+        parts.append(f"branches={len(branches)}")
+    if working_dirs:
+        parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
+    if agents:
+        parts.append(f"agents={','.join(sorted(agents))}")
+    parts.append(f"next={next_action}")
+    return " | ".join(parts)
+
+
+def _build_workstream_lines(
+    grouped: dict[tuple[str, str], list[dict[str, object]]],
+    stale_keys: set[tuple[str, str]],
+    visible_task_ids: set[str],
+    task_overview: str,
+    provider: str | None,
+) -> list[str]:
+    """Build per-lane inventory lines for the workstream section."""
+    lines = ["Recent workstreams:"]
+    for (project_id, lane_key), lane_rows in sorted(grouped.items()):
+        task_id = _infer_lane_task_id(lane_rows)
+        lane_state = _classify_workstream_lane(lane_rows)
+        if _should_skip_lane(lane_state, task_id, lane_rows, visible_task_ids, task_overview):
+            continue
+        if task_id and (project_id, task_id) in stale_keys:
+            next_a = _tool_call(
+                "manage_tasks",
+                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                provider=provider,
+            )
+            lines.append(
+                f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+            )
+            stale_keys.discard((project_id, task_id))
+            continue
+        lines.append(_build_lane_line(project_id, lane_key, task_id, lane_state, lane_rows, provider))
+    for project_id, task_id in sorted(stale_keys):
+        if (project_id, task_id) not in grouped:
+            next_a = _tool_call(
+                "manage_tasks",
+                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                provider=provider,
+            )
+            lines.append(
+                f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+            )
+    return lines
+
+
 async def _get_workstream_inventory(
     provider: str | None = None,
     *,
@@ -506,186 +694,18 @@ async def _get_workstream_inventory(
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
-        from sqlalchemy import and_, or_, select
-
-        from app.db import async_session
-        from app.models import Session
-
-        # Fetch recent task/worktree sessions
-        cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
-        async with async_session() as db:
-            raw_rows = (
-                await db.execute(
-                    select(
-                        Session.id, Session.agent_slug, Session.project_id,
-                        Session.external_id, Session.current_branch, Session.provider_metadata,
-                        Session.status, Session.workstream_status, Session.workstream_note,
-                        Session.workstream_updated_at, Session.created_at, Session.updated_at,
-                    )
-                    .where(
-                        and_(
-                            Session.agent_slug.isnot(None),
-                            Session.created_at >= cutoff,
-                            or_(
-                                Session.external_id.isnot(None),
-                                Session.current_branch.isnot(None),
-                            ),
-                        )
-                    )
-                    .order_by(Session.created_at.desc())
-                    .limit(50)
-                )
-            ).all()
-
-        now = datetime.now(UTC)
-        rows = collapse_active_workstream_rows([
-            {
-                "session_id": row.id,
-                "agent_slug": row.agent_slug,
-                "project_id": row.project_id,
-                "external_id": row.external_id,
-                "current_branch": row.current_branch,
-                "working_dir": (
-                    row.provider_metadata.get("cwd")
-                    if isinstance(row.provider_metadata, dict)
-                    else None
-                ),
-                "status": row.status,
-                "workstream_status": row.workstream_status,
-                "workstream_note": row.workstream_note,
-                "workstream_updated_at": row.workstream_updated_at,
-                "created_at": row.created_at,
-                "updated_at": row.updated_at,
-                "age_minutes": int((now - row.created_at).total_seconds() / 60),
-                "idle_minutes": idle_minutes_from_timestamps(
-                    created_at=row.created_at,
-                    updated_at=row.updated_at,
-                    workstream_updated_at=row.workstream_updated_at,
-                    now=now,
-                ),
-            }
-            for row in raw_rows
-        ])
-
         if task_overview is None:
             task_overview = await _fetch_task_overview()
-        visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
-
-        # Parse stale-running tasks from ready-all TOON output
-        stale_tasks: list[dict[str, str]] = []
-        cur_project: str | None = None
-        for raw_line in task_overview.splitlines():
-            line = raw_line.rstrip()
-            if not line:
-                continue
-            if not line.startswith(" ") and "(" in line and line.endswith(")"):
-                cur_project = line.split(" ", 1)[0]
-                continue
-            m = _STALE_READY_ALL_LINE.match(line)
-            if m and cur_project:
-                stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
-
+        rows = await _fetch_collapsed_workstream_rows()
+        stale_tasks = _parse_stale_running_tasks(task_overview)
         if not rows and not stale_tasks:
             return ""
-
-        # Group rows by (project_id, lane_key)
-        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
-        for row in rows:
-            ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-            br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-            tid = infer_task_id(ei, br) or ""
-            lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
-            if lane_key:
-                grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
-
+        visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
+        grouped = _group_rows_by_lane(rows)
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
-
         if not grouped and not stale_tasks:
             return ""
-
-        # Build per-lane inventory lines
-        lines = ["Recent workstreams:"]
-        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-            # Infer task_id from lane rows
-            task_id: str | None = None
-            for lr in lane_rows:
-                ei = lr.get("external_id") if isinstance(lr.get("external_id"), str) else None
-                br = lr.get("current_branch") if isinstance(lr.get("current_branch"), str) else None
-                task_id = infer_task_id(ei, br)
-                if task_id:
-                    break
-
-            lane_state = _classify_workstream_lane(lane_rows)
-
-            # Skip non-actionable lanes
-            if (
-                lane_state == "completed_ready_for_closure"
-                and task_id
-                and task_overview
-                and task_id not in visible_task_ids
-            ):
-                continue
-            if lane_state == "completed_ready_for_closure" and not task_id:
-                agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
-                if agents == {"persona"}:
-                    continue
-
-            # Reconcile stale lane
-            if task_id and (project_id, task_id) in stale_keys:
-                next_a = _tool_call(
-                    "manage_tasks",
-                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                    provider=provider,
-                )
-                lines.append(
-                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
-                )
-                stale_keys.discard((project_id, task_id))
-                continue
-
-            # Format lane line
-            branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
-            agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
-            active_rows = [r for r in lane_rows if r.get("status") == "active"]
-            completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
-            idle_minutes = (
-                min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
-                if active_rows
-                else None
-            )
-            ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
-            working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
-            next_action = _build_workstream_next_action(
-                state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
-            )
-            label = task_id or lane_key
-            parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={len(active_rows)}"]
-            if idle_minutes is not None:
-                parts.append(f"idle={idle_minutes}m")
-            if completed_count:
-                parts.append(f"completed={completed_count}")
-            if ws_statuses:
-                parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
-            if branches:
-                parts.append(f"branches={len(branches)}")
-            if working_dirs:
-                parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
-            if agents:
-                parts.append(f"agents={','.join(sorted(agents))}")
-            parts.append(f"next={next_action}")
-            lines.append(" | ".join(parts))
-
-        for project_id, task_id in sorted(stale_keys):
-            if (project_id, task_id) not in grouped:
-                next_a = _tool_call(
-                    "manage_tasks",
-                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                    provider=provider,
-                )
-                lines.append(
-                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
-                )
-
+        lines = _build_workstream_lines(grouped, stale_keys, visible_task_ids, task_overview, provider)
         if len(lines) == 1:
             return ""
         body = "\n".join(lines)
