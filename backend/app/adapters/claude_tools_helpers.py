@@ -288,6 +288,14 @@ async def _fetch_next_or_stop(
         raise ProviderError(str(exc), provider=provider_name, retriable=True) from exc
 
 
+def _result_hit_turn_budget(message: Any, max_turns: int | None) -> bool:
+    """Return True when the SDK result reports it exhausted the configured turn budget."""
+    if max_turns is None or max_turns <= 0:
+        return False
+    num_turns = getattr(message, "num_turns", None)
+    return isinstance(num_turns, int) and num_turns >= max_turns
+
+
 async def _iterate_sdk_messages(
     prompt: str | Any,
     options: Any,
@@ -298,7 +306,7 @@ async def _iterate_sdk_messages(
     done_emitted = False
     saw_payload = False
     pending_tool_calls = 0
-    saw_tool_result = False
+    configured_max_turns = getattr(options, "max_turns", None)
     idle_watch_armed = False
     skip_iterator_close = False
     iterator_closed = False
@@ -333,7 +341,7 @@ async def _iterate_sdk_messages(
                 raise exc
             if message is _STREAM_STOP:
                 if saw_payload and not done_emitted:
-                    finish_reason = "max_turns" if saw_tool_result and pending_tool_calls == 0 else "end_turn"
+                    finish_reason = "end_turn"
                     logger.warning(
                         "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
                         finish_reason,
@@ -355,7 +363,11 @@ async def _iterate_sdk_messages(
                 continue
             if type(message).__name__ == "ResultMessage":
                 if getattr(message, "finish_reason", None) is None:
-                    inferred_finish_reason = "max_turns" if saw_tool_result else "end_turn"
+                    inferred_finish_reason = (
+                        "max_turns"
+                        if _result_hit_turn_budget(message, configured_max_turns)
+                        else "end_turn"
+                    )
                     try:
                         message.finish_reason = inferred_finish_reason
                     except Exception:
@@ -382,7 +394,6 @@ async def _iterate_sdk_messages(
             if _message_has_tool_use(message):
                 pending_tool_calls += 1
             if _message_has_tool_result(message):
-                saw_tool_result = True
                 pending_tool_calls = max(0, pending_tool_calls - 1)
             yield (message, session_id)
     finally:
