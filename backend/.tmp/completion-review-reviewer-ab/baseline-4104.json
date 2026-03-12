@@ -1,0 +1,176 @@
+{
+  "benchmark_id": "completion-review-364f070f",
+  "project_id": "agent-hub",
+  "models": [
+    "claude-sonnet-4-6"
+  ],
+  "case_ids": [
+    "review_recent_progress_patience",
+    "review_quiet_healthy_true_complete",
+    "review_true_complete_clean"
+  ],
+  "runs_per_case": 1,
+  "started_at": "2026-03-11T20:25:40.713403+00:00",
+  "completed_at": "2026-03-11T20:26:10.855488+00:00",
+  "attempts": [
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_recent_progress_patience",
+      "run_number": 1,
+      "latency_ms": 11847,
+      "session_id": "61fcec72-4434-4446-a706-8533edd95fe8",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_recent_progress_patience\",\n  \"decision\": \"continue\",\n  \"confidence\": \"high\",\n  \"reason\": \"task-abc is an active_running_task with recent_progress=yes and a pending next action of inspect_existing_lane; the over-optimistic heartbeat is outweighed by the workstream state showing clear unfinished work. Cleanup is clean so no residue conflict.\",\n  \"focus\": \"inspect existing lane for task-abc\"\n}",
+      "parsed": {
+        "case_id": "review_recent_progress_patience",
+        "decision": "continue",
+        "confidence": "high",
+        "reason": "task-abc is an active_running_task with recent_progress=yes and a pending next action of inspect_existing_lane; the over-optimistic heartbeat is outweighed by the workstream state showing clear unfinished work. Cleanup is clean so no residue conflict.",
+        "focus": "inspect existing lane for task-abc"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 512,
+      "total_tokens": 516,
+      "created_at": "2026-03-11T20:25:52.688376+00:00"
+    },
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_quiet_healthy_true_complete",
+      "run_number": 1,
+      "latency_ms": 10236,
+      "session_id": "f5edda9e-5bc2-4561-89d4-dcc3db97f96e",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_quiet_healthy_true_complete\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"The sole workstream lane is in a healthy waiting_external state with no cleanup residue and no pending next action beyond awaiting an external signal; the heartbeat and cleanup status both corroborate that nothing actionable remains. Per decision rules, a healthy waiting_external lane with no cleanup residue qualifies as complete.\",\n  \"focus\": \"healthy waiting_external lane, no residue\"\n}",
+      "parsed": {
+        "case_id": "review_quiet_healthy_true_complete",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "The sole workstream lane is in a healthy waiting_external state with no cleanup residue and no pending next action beyond awaiting an external signal; the heartbeat and cleanup status both corroborate that nothing actionable remains. Per decision rules, a healthy waiting_external lane with no cleanup residue qualifies as complete.",
+        "focus": "healthy waiting_external lane, no residue"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 386,
+      "total_tokens": 390,
+      "created_at": "2026-03-11T20:26:02.928251+00:00"
+    },
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_true_complete_clean",
+      "run_number": 1,
+      "latency_ms": 7925,
+      "session_id": "8fa50330-61e1-4937-b03b-ac3de293cb10",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_true_complete_clean\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"All three evidence sources agree: cleanup shows zero residue (needs_cleanup=0, dirty=0, orphan=0), workstream inventory is empty, and the heartbeat confirms a known-good state. There is no unfinished canonical work to act on.\",\n  \"focus\": \"no residue, session closed cleanly\"\n}",
+      "parsed": {
+        "case_id": "review_true_complete_clean",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "All three evidence sources agree: cleanup shows zero residue (needs_cleanup=0, dirty=0, orphan=0), workstream inventory is empty, and the heartbeat confirms a known-good state. There is no unfinished canonical work to act on.",
+        "focus": "no residue, session closed cleanly"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 238,
+      "total_tokens": 242,
+      "created_at": "2026-03-11T20:26:10.855347+00:00"
+    }
+  ],
+  "summaries": [
+    {
+      "model_id": "claude-sonnet-4-6",
+      "attempts": 3,
+      "pass_rate": 100.0,
+      "avg_composite_score": 100.0,
+      "avg_correctness_score": 1.0,
+      "avg_latency_ms": 10002.7,
+      "avg_total_tokens": 382.7,
+      "avg_turns": 1
+    }
+  ],
+  "persisted_run_id": "6f9ea420-bd37-42e1-8759-f5628d1f84fe",
+  "suite_id": "completion-review-reviewer",
+  "experiment_summary": {
+    "experiment_key": "completion-review-reviewer-ab-20260311",
+    "name": "Completion review reviewer suite: sonnet vs codex",
+    "suite_id": "completion-review-reviewer",
+    "status": "open",
+    "decision": "hold",
+    "decision_reason": "underpowered",
+    "hypothesis": "Codex should outperform or match sonnet on reviewer-invoked completion review cases without new regression clusters.",
+    "min_runs_per_cohort": 5,
+    "baseline": {
+      "label": "baseline",
+      "run_count": 4,
+      "avg_score": 100.0,
+      "avg_pass_rate": 100.0,
+      "config_fingerprints": [
+        "2337018fe4"
+      ],
+      "config_stable": true,
+      "prompt_versions": [
+        "2026-03-11T18:07:03.730588+00:00:00a86d7b"
+      ],
+      "latest_completed_at": "2026-03-11T20:26:10.855488+00:00"
+    },
+    "candidate": {
+      "label": "candidate",
+      "run_count": 0,
+      "avg_score": null,
+      "avg_pass_rate": null,
+      "config_fingerprints": [],
+      "config_stable": true,
+      "prompt_versions": [],
+      "latest_completed_at": null
+    },
+    "score_delta": {
+      "mean_delta": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    "pass_rate_delta": {
+      "mean_delta": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    "updated_at": "2026-03-11T20:26:10.864288+00:00",
+    "created_at": "2026-03-11T20:24:21.593426+00:00"
+  }
+}

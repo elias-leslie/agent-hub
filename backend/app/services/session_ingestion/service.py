@@ -241,6 +241,8 @@ async def heartbeat_session(
     session.provider_metadata = metadata
     if request.current_branch is not None:
         session.current_branch = request.current_branch
+    if request.status is not None:
+        session.status = request.status
 
     base_path = _scope_base_path(metadata, request.cwd)
     _apply_scope_state(

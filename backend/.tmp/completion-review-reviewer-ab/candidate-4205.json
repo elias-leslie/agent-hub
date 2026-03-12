@@ -1,0 +1,180 @@
+{
+  "benchmark_id": "completion-review-91c05315",
+  "project_id": "agent-hub",
+  "models": [
+    "codex/gpt-5.4"
+  ],
+  "case_ids": [
+    "review_recent_progress_patience",
+    "review_quiet_healthy_true_complete",
+    "review_true_complete_clean"
+  ],
+  "runs_per_case": 1,
+  "started_at": "2026-03-11T20:28:21.560910+00:00",
+  "completed_at": "2026-03-11T20:28:29.993662+00:00",
+  "attempts": [
+    {
+      "model_id": "codex/gpt-5.4",
+      "case_id": "review_recent_progress_patience",
+      "run_number": 1,
+      "latency_ms": 3250,
+      "session_id": "297bacbe-a919-4c74-ba2c-988a2ca7e40c",
+      "provider": "codex",
+      "effective_model": "codex/gpt-5.4",
+      "requested_model": "codex/gpt-5.4",
+      "content": "{\n  \"case_id\": \"review_recent_progress_patience\",\n  \"decision\": \"continue\",\n  \"confidence\": \"high\",\n  \"reason\": \"There is still an active running task with recent progress and a concrete next action pending: inspect_existing_lane. Even though heartbeat and cleanup are clean, the active workstream indicates one clear unfinished residue chain.\",\n  \"focus\": \"inspect existing lane\"\n}",
+      "parsed": {
+        "case_id": "review_recent_progress_patience",
+        "decision": "continue",
+        "confidence": "high",
+        "reason": "There is still an active running task with recent progress and a concrete next action pending: inspect_existing_lane. Even though heartbeat and cleanup are clean, the active workstream indicates one clear unfinished residue chain.",
+        "focus": "inspect existing lane"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 1358,
+      "output_tokens": 86,
+      "total_tokens": 1444,
+      "created_at": "2026-03-11T20:28:24.899774+00:00"
+    },
+    {
+      "model_id": "codex/gpt-5.4",
+      "case_id": "review_quiet_healthy_true_complete",
+      "run_number": 1,
+      "latency_ms": 2758,
+      "session_id": "ff91a06d-b3f4-459b-b98c-9a03067d46b6",
+      "provider": "codex",
+      "effective_model": "codex/gpt-5.4",
+      "requested_model": "codex/gpt-5.4",
+      "content": "{\n  \"case_id\": \"review_quiet_healthy_true_complete\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"Cleanup shows no residue or pending workspace actions, and the only remaining lane is healthy waiting_external with no recent progress and no explicit follow-up required now. The heartbeat is consistent with the rest of the session state.\",\n  \"focus\": \"no further action\"\n}",
+      "parsed": {
+        "case_id": "review_quiet_healthy_true_complete",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "Cleanup shows no residue or pending workspace actions, and the only remaining lane is healthy waiting_external with no recent progress and no explicit follow-up required now. The heartbeat is consistent with the rest of the session state.",
+        "focus": "no further action"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 1367,
+      "output_tokens": 90,
+      "total_tokens": 1457,
+      "created_at": "2026-03-11T20:28:27.660124+00:00"
+    },
+    {
+      "model_id": "codex/gpt-5.4",
+      "case_id": "review_true_complete_clean",
+      "run_number": 1,
+      "latency_ms": 2330,
+      "session_id": "c2ec5981-46e7-4511-aef5-2e5e186159e3",
+      "provider": "codex",
+      "effective_model": "codex/gpt-5.4",
+      "requested_model": "codex/gpt-5.4",
+      "content": "{\n  \"case_id\": \"review_true_complete_clean\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"Heartbeat reports cleanup finished and the cleanup status shows no dirty repos, worktrees, orphan residue, or prunable state. There are no workstream items indicating any pending action or active task.\",\n  \"focus\": \"no remaining residue\"\n}",
+      "parsed": {
+        "case_id": "review_true_complete_clean",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "Heartbeat reports cleanup finished and the cleanup status shows no dirty repos, worktrees, orphan residue, or prunable state. There are no workstream items indicating any pending action or active task.",
+        "focus": "no remaining residue"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 1332,
+      "output_tokens": 83,
+      "total_tokens": 1415,
+      "created_at": "2026-03-11T20:28:29.993359+00:00"
+    }
+  ],
+  "summaries": [
+    {
+      "model_id": "codex/gpt-5.4",
+      "attempts": 3,
+      "pass_rate": 100.0,
+      "avg_composite_score": 100.0,
+      "avg_correctness_score": 1.0,
+      "avg_latency_ms": 2779.3,
+      "avg_total_tokens": 1438.7,
+      "avg_turns": 1
+    }
+  ],
+  "persisted_run_id": "b60a6ab8-3b19-4c1d-98f7-a410a28aa5ad",
+  "suite_id": "completion-review-reviewer",
+  "experiment_summary": {
+    "experiment_key": "completion-review-reviewer-ab-20260311",
+    "name": "Completion review reviewer suite: sonnet vs codex",
+    "suite_id": "completion-review-reviewer",
+    "status": "open",
+    "decision": "hold",
+    "decision_reason": "no_clear_winner",
+    "hypothesis": "Codex should outperform or match sonnet on reviewer-invoked completion review cases without new regression clusters.",
+    "min_runs_per_cohort": 5,
+    "baseline": {
+      "label": "baseline",
+      "run_count": 5,
+      "avg_score": 100.0,
+      "avg_pass_rate": 100.0,
+      "config_fingerprints": [
+        "2337018fe4"
+      ],
+      "config_stable": true,
+      "prompt_versions": [
+        "2026-03-11T18:07:03.730588+00:00:00a86d7b"
+      ],
+      "latest_completed_at": "2026-03-11T20:26:47.191379+00:00"
+    },
+    "candidate": {
+      "label": "candidate",
+      "run_count": 5,
+      "avg_score": 100.0,
+      "avg_pass_rate": 100.0,
+      "config_fingerprints": [
+        "5a3d107edc"
+      ],
+      "config_stable": true,
+      "prompt_versions": [
+        "2026-03-11T18:07:03.730588+00:00:00a86d7b"
+      ],
+      "latest_completed_at": "2026-03-11T20:28:29.993662+00:00"
+    },
+    "score_delta": {
+      "mean_delta": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0
+    },
+    "pass_rate_delta": {
+      "mean_delta": 0.0,
+      "ci_low": 0.0,
+      "ci_high": 0.0
+    },
+    "updated_at": "2026-03-11T20:28:30.010540+00:00",
+    "created_at": "2026-03-11T20:24:21.593426+00:00"
+  }
+}
