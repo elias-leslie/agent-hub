@@ -351,6 +351,22 @@ def _append_merged_text(existing: str | None, incoming: str | None) -> str | Non
     return f"{cleaned_existing}\n\nMerged duplicate note:\n{cleaned_incoming}"
 
 
+async def _apply_vote_migration(
+    db: AsyncSession,
+    source_votes: list[FeedbackVote],
+    target_item_id: str,
+    target_votes_by_session: dict[str, FeedbackVote],
+) -> None:
+    """Migrate votes from source to target, merging comments for duplicate sessions."""
+    for source_vote in source_votes:
+        if source_vote.session_id and source_vote.session_id in target_votes_by_session:
+            target_vote = target_votes_by_session[source_vote.session_id]
+            target_vote.comment = _append_merged_text(target_vote.comment, source_vote.comment)
+            await db.delete(source_vote)
+        else:
+            source_vote.feedback_item_id = target_item_id
+
+
 async def merge_feedback_items(
     db: AsyncSession,
     *,
@@ -375,14 +391,7 @@ async def merge_feedback_items(
     target_votes_by_session = {
         vote.session_id: vote for vote in target_votes if vote.session_id is not None
     }
-
-    for source_vote in source_votes:
-        if source_vote.session_id and source_vote.session_id in target_votes_by_session:
-            target_vote = target_votes_by_session[source_vote.session_id]
-            target_vote.comment = _append_merged_text(target_vote.comment, source_vote.comment)
-            await db.delete(source_vote)
-            continue
-        source_vote.feedback_item_id = target_item_id
+    await _apply_vote_migration(db, source_votes, target_item_id, target_votes_by_session)
 
     target.description = _append_merged_text(target.description, source.description)
     target.resolution_note = _append_merged_text(target.resolution_note, source.resolution_note)
@@ -476,46 +485,39 @@ async def delete_feedback_item(
     await db.flush()
     return True
 
-async def get_feedback_summary(
-    db: AsyncSession,
-    *,
-    project_id: str | None = None,
-    days: int = 30,
-) -> dict[str, Any]:
-    """Get aggregated feedback summary: counts by type/status, top items."""
-    base_filter = "WHERE created_at >= NOW() - make_interval(days => :days)"
+def _build_summary_filter(project_id: str | None, days: int) -> tuple[str, dict[str, Any]]:
+    """Build the WHERE clause fragment and params dict for summary queries."""
+    base = "WHERE created_at >= NOW() - make_interval(days => :days)"
     params: dict[str, Any] = {"days": days}
     if project_id:
-        base_filter += " AND project_id = :project_id"
+        base += " AND project_id = :project_id"
         params["project_id"] = project_id
+    return base, params
 
-    # Counts by type and status
-    counts_query = text(f"""
-        SELECT
-            feedback_type,
-            status,
-            COUNT(*) AS count
+
+async def _run_feedback_summary_queries(
+    db: AsyncSession, base_filter: str, params: dict[str, Any]
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Execute the three summary aggregation queries and return raw dicts."""
+    counts_result = await db.execute(text(f"""
+        SELECT feedback_type, status, COUNT(*) AS count
         FROM feedback_items
         {base_filter}
         GROUP BY feedback_type, status
         ORDER BY feedback_type, status
-    """)
-    counts_result = await db.execute(counts_query, params)
+    """), params)
     counts = [dict(row) for row in counts_result.mappings().all()]
 
-    # Top unresolved by votes
-    top_query = text(f"""
+    top_result = await db.execute(text(f"""
         SELECT id, component_id, feedback_type, title, vote_count, status, created_at
         FROM feedback_items
         {base_filter} AND status IN ('open', 'acknowledged')
         ORDER BY vote_count DESC
         LIMIT 10
-    """)
-    top_result = await db.execute(top_query, params)
+    """), params)
     top_items = [dict(row) for row in top_result.mappings().all()]
 
-    # Per-component breakdown
-    component_query = text(f"""
+    component_result = await db.execute(text(f"""
         SELECT
             component_id,
             COUNT(*) FILTER (WHERE status IN ('open', 'acknowledged')) AS open_count,
@@ -530,14 +532,23 @@ async def get_feedback_summary(
         {base_filter}
         GROUP BY component_id
         ORDER BY open_count DESC
-    """)
-    component_result = await db.execute(component_query, params)
+    """), params)
     by_component = [dict(row) for row in component_result.mappings().all()]
 
-    total = sum(c["count"] for c in counts)
+    return counts, top_items, by_component
 
+
+async def get_feedback_summary(
+    db: AsyncSession,
+    *,
+    project_id: str | None = None,
+    days: int = 30,
+) -> dict[str, Any]:
+    """Get aggregated feedback summary: counts by type/status, top items."""
+    base_filter, params = _build_summary_filter(project_id, days)
+    counts, top_items, by_component = await _run_feedback_summary_queries(db, base_filter, params)
     return {
-        "total_items": total,
+        "total_items": sum(c["count"] for c in counts),
         "counts_by_type_status": counts,
         "top_unresolved": top_items,
         "by_component": by_component,
