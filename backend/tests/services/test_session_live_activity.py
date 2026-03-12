@@ -79,3 +79,28 @@ def test_apply_live_activity_heartbeat_tracks_recent_paths() -> None:
     assert live["current_command"] == "Write backend/app/services/ownership_inventory.py"
     assert live["recent_read_paths"] == ["backend/app/services/session_live_activity.py"]
     assert live["recent_write_paths"] == ["backend/app/services/ownership_inventory.py"]
+
+
+def test_build_live_activity_response_normalizes_completed_sessions_with_stale_active_state() -> None:
+    session = MagicMock()
+    session.status = "completed"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Waiting for model after Bash",
+            "last_event_type": "tool_result",
+            "last_event_at": (datetime.now(UTC) - timedelta(seconds=70)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(seconds=70)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 2,
+        }
+    }
+
+    response = build_live_activity_response(session)
+
+    assert response is not None
+    assert response["phase"] == "completed"
+    assert response["status"] == "completed"
+    assert response["summary"] == "Session completed"
+    assert response["health"] == "completed"

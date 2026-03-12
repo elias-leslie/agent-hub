@@ -54,9 +54,6 @@ async def test_get_stale_session_stats_uses_event_recency_not_only_session_row()
 @pytest.mark.asyncio
 async def test_cleanup_superseded_persona_heartbeat_sessions_closes_older_active_rows() -> None:
     mock_db = AsyncMock()
-    mock_result = MagicMock()
-    mock_result.rowcount = 2
-    mock_db.execute.return_value = mock_result
 
     now = datetime.now(UTC)
     active_rows = [
@@ -64,6 +61,11 @@ async def test_cleanup_superseded_persona_heartbeat_sessions_closes_older_active
         SimpleNamespace(id="sess-old-1", created_at=now - timedelta(minutes=10)),
         SimpleNamespace(id="sess-old-2", created_at=now - timedelta(minutes=20)),
     ]
+    session_one = MagicMock(status="active", provider_metadata={})
+    session_two = MagicMock(status="active", provider_metadata={})
+    fetch_result = MagicMock()
+    fetch_result.scalars.return_value.all.return_value = [session_one, session_two]
+    mock_db.execute.return_value = fetch_result
 
     from app.tasks import session_cleanup as mod
 
@@ -78,10 +80,17 @@ async def test_cleanup_superseded_persona_heartbeat_sessions_closes_older_active
     assert cleaned == 2
     statement = mock_db.execute.await_args.args[0]
     sql = str(statement)
-    assert "UPDATE sessions" in sql
+    assert "SELECT sessions.id" in sql or "FROM sessions" in sql
     compiled = statement.compile()
     ids = set(compiled.params["id_1"])
     assert ids == {"sess-old-1", "sess-old-2"}
+    assert session_one.status == "completed"
+    assert session_two.status == "completed"
+    assert session_one.provider_metadata["live_activity"]["phase"] == "completed"
+    assert session_one.provider_metadata["live_activity"]["status"] == "completed"
+    assert session_one.provider_metadata["live_activity"]["summary"] == (
+        "Superseded by newer persona heartbeat"
+    )
 
 
 @pytest.mark.asyncio
@@ -105,9 +114,11 @@ async def test_cleanup_stale_sessions_updates_ids_returned_by_select() -> None:
     mock_db = AsyncMock()
     select_result = MagicMock()
     select_result.scalars.return_value.all.return_value = ["sess-1", "sess-2"]
-    update_result = MagicMock()
-    update_result.rowcount = 2
-    mock_db.execute.side_effect = [select_result, update_result]
+    session_one = MagicMock(status="active", provider_metadata={})
+    session_two = MagicMock(status="active", provider_metadata={})
+    fetch_result = MagicMock()
+    fetch_result.scalars.return_value.all.return_value = [session_one, session_two]
+    mock_db.execute.side_effect = [select_result, fetch_result]
 
     from app.tasks import session_cleanup as mod
 
@@ -120,3 +131,10 @@ async def test_cleanup_stale_sessions_updates_ids_returned_by_select() -> None:
     update_stmt = mock_db.execute.await_args_list[1].args[0]
     compiled = update_stmt.compile()
     assert set(compiled.params["id_1"]) == {"sess-1", "sess-2"}
+    assert session_one.status == "completed"
+    assert session_two.status == "completed"
+    assert session_one.provider_metadata["live_activity"]["phase"] == "completed"
+    assert session_one.provider_metadata["live_activity"]["status"] == "completed"
+    assert session_one.provider_metadata["live_activity"]["summary"] == (
+        "Auto-completed after 10m inactivity"
+    )

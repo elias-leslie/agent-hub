@@ -8,12 +8,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
-from sqlalchemy import CursorResult, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models import Session, SessionEvent
 from app.services.session_activity import last_activity_expr
+from app.services.session_live_activity import mark_session_completed
 
 logger = logging.getLogger(__name__)
 
@@ -97,13 +98,16 @@ async def cleanup_superseded_persona_heartbeat_sessions(db: AsyncSession) -> int
     if not superseded_ids:
         return 0
 
-    result = await db.execute(
-        update(Session)
-        .where(Session.id.in_(sorted(set(superseded_ids))))
-        .values(status="completed")
-    )
-    cursor_result: CursorResult[tuple[()]] = result  # type: ignore[assignment]
-    rows_updated = cursor_result.rowcount or 0
+    rows = (
+        await db.execute(select(Session).where(Session.id.in_(sorted(set(superseded_ids)))))
+    ).scalars().all()
+    for session in rows:
+        mark_session_completed(
+            session,
+            summary="Superseded by newer persona heartbeat",
+            termination_reason="superseded_persona_heartbeat",
+        )
+    rows_updated = len(rows)
     if rows_updated > 0:
         logger.info(
             "Auto-completed %d superseded persona heartbeat session(s)",
@@ -146,17 +150,20 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
         if not stale_ids:
             continue
 
-        result = await db.execute(
-            update(Session)
-            .where(
-                Session.id.in_(stale_ids),
+        rows = (
+            await db.execute(
+                select(Session).where(
+                    Session.id.in_(stale_ids),
+                )
             )
-            .values(status="completed")
-        )
-
-        # Cast to CursorResult to access rowcount attribute
-        cursor_result: CursorResult[tuple[()]] = result  # type: ignore[assignment]
-        rows_updated = cursor_result.rowcount or 0
+        ).scalars().all()
+        for session in rows:
+            mark_session_completed(
+                session,
+                summary=f"Auto-completed after {timeout_minutes}m inactivity",
+                termination_reason=f"session_cleanup_idle_gt_{timeout_minutes}m",
+            )
+        rows_updated = len(rows)
         if rows_updated > 0:
             logger.info(
                 f"Auto-completed {rows_updated} stale {session_type} sessions "
