@@ -187,6 +187,75 @@ async def test_build_agent_preview_adds_task_prompt_as_user_section() -> None:
 
 
 @pytest.mark.asyncio
+async def test_build_agent_preview_passes_agent_memory_config_to_context_builder() -> None:
+    agent = AgentDTO(
+        id=1,
+        slug="memory-curator",
+        name="Memory Curator",
+        description=None,
+        system_prompt="legacy system prompt",
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=[],
+        escalation_model_id=None,
+        strategies={},
+        temperature=0.2,
+        thinking_level=None,
+        verbosity_level=None,
+        is_active=True,
+        is_coding_agent=True,
+        tool_permissions=None,
+        memory_config={"max_mandates": 7, "include_tags": ["memory-curator"]},
+        max_concurrency=None,
+        max_subagent_concurrency=None,
+        daily_token_budget=None,
+        hourly_request_limit=None,
+        timeout_seconds=None,
+        version=1,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    fake_context = type(
+        "Ctx",
+        (),
+        {
+            "mandates": [],
+            "guardrails": [],
+            "get_loaded_uuids": lambda self: [],
+            "get_reference_uuids": lambda self: [],
+        },
+    )()
+
+    with (
+        patch(
+            "app.api.helpers.agent_preview.collect_runtime_prompt_sections",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.api.helpers.agent_preview.join_runtime_prompt_sections",
+            return_value="",
+        ),
+        patch(
+            "app.api.helpers.agent_preview.build_progressive_context",
+            new_callable=AsyncMock,
+            return_value=fake_context,
+        ) as build_progressive_context,
+        patch(
+            "app.api.helpers.agent_preview.format_progressive_context",
+            return_value="",
+        ),
+    ):
+        await build_agent_preview(
+            AsyncMock(),
+            agent,
+            prompt_input="Audit one memory target.",
+        )
+
+    assert build_progressive_context.await_args.kwargs["memory_config"] == agent.memory_config
+
+
+@pytest.mark.asyncio
 async def test_build_agent_preview_truncates_memory_query_like_runtime_injection() -> None:
     agent = AgentDTO(
         id=1,

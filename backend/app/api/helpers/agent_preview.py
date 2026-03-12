@@ -117,6 +117,7 @@ async def build_agent_preview(
         scope_id=scope_id,
         task_type=None if task_type == "chat" else task_type,
         phase=phase,
+        memory_config=agent.memory_config,
     )
 
     formatted_memory = format_progressive_context(context, include_citations=True)
