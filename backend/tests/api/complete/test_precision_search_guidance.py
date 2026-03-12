@@ -89,7 +89,8 @@ def test_reminder_mentions_tool_registration_and_exact_symbol_name() -> None:
 async def test_execute_and_build_result_injects_guidance_before_tool_execution() -> None:
     captured_messages: list[dict[str, object]] = []
 
-    async def _capture_route(ctx):
+    async def _capture_loop(ctx, *, should_execute_tools):
+        assert should_execute_tools is True
         captured_messages.extend(ctx.messages_dict)
         return CompletionInternalResult(
             content="done",
@@ -118,8 +119,8 @@ async def test_execute_and_build_result_injects_guidance_before_tool_execution()
             return_value=True,
         ),
         patch(
-            "app.api.complete._core_helpers._route_to_tool_executor",
-            new=AsyncMock(side_effect=_capture_route),
+            "app.api.complete._core_helpers.execute_agent_loop",
+            new=AsyncMock(side_effect=_capture_loop),
         ),
     ):
         await execute_and_build_result(

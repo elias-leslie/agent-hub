@@ -6,12 +6,10 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
 
+from .turn_budget import resolve_tool_max_turns, uses_openai_compat_tool_loop
+
 if TYPE_CHECKING:
     pass
-
-# Providers whose complete_with_tools uses OpenAI-compat pattern
-_OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "codex"})
-_DEFAULT_OPENAI_TOOL_TURNS = 20
 
 
 def build_event_stream(
@@ -29,12 +27,14 @@ def build_event_stream(
     agent_slug: str | None,
 ) -> Any:
     """Select and return the appropriate async event stream for the provider."""
-    if provider in _OPENAI_COMPAT_PROVIDERS:
+    effective_max_turns = resolve_tool_max_turns(provider, max_turns)
+
+    if uses_openai_compat_tool_loop(provider):
         from .openai_event_adapter import adapt_openai_stream
 
         return adapt_openai_stream(
             adapter, messages, model, tools or [],
-            working_dir, permission_config, max(max_turns, _DEFAULT_OPENAI_TOOL_TURNS), project_id, session_id,
+            working_dir, permission_config, effective_max_turns, project_id, session_id,
             agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
@@ -44,7 +44,7 @@ def build_event_stream(
         raw_stream = adapter.complete_with_tools(
             messages=messages, model=model, tools=tools or [],
             working_dir=working_dir, permission_config=permission_config,
-            project_id=project_id, max_turns=max_turns,
+            project_id=project_id, max_turns=effective_max_turns,
             agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
@@ -57,7 +57,7 @@ def build_event_stream(
         "tool_catalog": tool_catalog,
     }
     if provider in ("gemini", "cloudcode"):
-        kwargs["max_turns"] = max_turns
+        kwargs["max_turns"] = effective_max_turns
     if provider in ("gemini", "cloudcode") and project_id:
         kwargs["project_id"] = project_id
     if agent_slug:

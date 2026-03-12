@@ -155,6 +155,77 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
+    state = _ExecutionState(agent_slug="refactor", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="Bash",
+                            input={"command": "st pulse"},
+                            id="tool-1",
+                        )
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="tool_result",
+                tool_use_id="tool-1",
+                content="PULSE:agent-hub|tasks=0",
+                is_error=False,
+                duration_ms=5,
+            ), None
+            yield types.SimpleNamespace(type="result", result="Mode: campaign"), None
+
+        async def aclose(self) -> None:
+            return None
+
+    with (
+        patch(
+            "app.api.complete.tool_handler_utils.build_event_stream",
+            return_value=FakeEventStream(),
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_result",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-456",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert state.tool_result_summaries == ["Bash: PULSE:agent-hub|tasks=0"]
+
+
+@pytest.mark.asyncio
 async def test_complete_with_tools_returns_error_result_when_finalize_response_is_cancelled() -> None:
     session = _mock_session()
     db = AsyncMock()
