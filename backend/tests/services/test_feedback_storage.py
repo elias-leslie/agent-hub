@@ -10,6 +10,7 @@ import pytest
 from app.models.feedback import FeedbackItem, FeedbackVote
 from app.services.feedback_storage import (
     archive_stale_feedback_items,
+    count_feedback_items,
     create_feedback_item,
     get_component_feedback,
     get_feedback_item,
@@ -165,6 +166,51 @@ class TestSearchFeedbackItems:
         result = await search_feedback_items(db, component_id="sf.cli")
 
         assert result == []
+
+
+    @pytest.mark.asyncio
+    async def test_active_status_uses_active_status_filter(self) -> None:
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db.execute.return_value = mock_result
+
+        await search_feedback_items(db, status="active")
+
+        stmt = db.execute.await_args.args[0]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "IN ('open', 'acknowledged')" in compiled
+
+    @pytest.mark.asyncio
+    async def test_unknown_sort_defaults_to_vote_ordering(self) -> None:
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        db.execute.return_value = mock_result
+
+        await search_feedback_items(db, sort="custom")
+
+        stmt = db.execute.await_args.args[0]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "ORDER BY feedback_items.vote_count DESC" in compiled
+
+
+class TestCountFeedbackItems:
+    """Tests for count_feedback_items."""
+
+    @pytest.mark.asyncio
+    async def test_active_status_uses_active_status_filter(self) -> None:
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = 2
+        db.execute.return_value = mock_result
+
+        total = await count_feedback_items(db, status="active")
+
+        assert total == 2
+        stmt = db.execute.await_args.args[0]
+        compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+        assert "IN ('open', 'acknowledged')" in compiled
 
 
 class TestGetFeedbackItem:
