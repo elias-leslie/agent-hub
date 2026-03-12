@@ -32,6 +32,8 @@ async def handle_finish_reason(
     Returns:
         Tuple of (should_break, execution_status, execution_error)
     """
+    cap = hard_cap or max_turns
+
     if (
         finish_reason == "end_turn"
         and agent_slug == "persona"
@@ -55,7 +57,7 @@ async def handle_finish_reason(
         if (
             not (result.content or "").strip()
             and not state.get("empty_closeout_used")
-            and turn < max_turns
+            and turn < cap
         ):
             progress = create_progress(
                 turn,
@@ -91,7 +93,6 @@ async def handle_finish_reason(
 
     else:
         # Unknown finish reason or None - continue if more turns available
-        cap = hard_cap or max_turns
         if turn == cap:
             return True, "max_turns", f"Reached maximum turns ({cap})"
         else:
