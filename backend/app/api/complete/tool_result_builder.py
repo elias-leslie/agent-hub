@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-
-from app.services.context_tracker import log_token_usage
-from app.services.events import publish_complete
-from app.services.session_live_activity import mark_session_completed
-from app.services.token_counter import estimate_cost
 
 from .citation_tracker import track_citations
 from .tool_models import ToolExecutionResult
@@ -16,25 +10,19 @@ from .tool_models import ToolExecutionResult
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from app.models import Session as DBSession
 
-
-async def _track_and_log_usage(
+async def _track_citations_and_estimate_output(
     db: AsyncSession,
     session_id: str,
-    model: str,
     content: str,
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
 ) -> tuple[list[str], int]:
-    """Track citations, estimate tokens, and log usage. Returns (cited_uuids, output_tokens)."""
+    """Track citations and estimate output tokens. Returns (cited_uuids, output_tokens)."""
     estimated_output_tokens = len(content) // 4
     cited_uuids = await track_citations(
         content, loaded_memory_uuids, memory_group_id, db, session_id
     )
-    cost = estimate_cost(0, estimated_output_tokens, model)
-    await log_token_usage(db, session_id, model, 0, estimated_output_tokens, cost.total_cost_usd)
-    await publish_complete(session_id, 0, estimated_output_tokens, cost.total_cost_usd)
     return cited_uuids, estimated_output_tokens
 
 
@@ -82,9 +70,7 @@ def _build_success_result(
 
 async def finalize_result(
     db: AsyncSession,
-    session: DBSession,
     session_id: str,
-    is_new_session: bool,
     model: str,
     provider: str,
     content: str,
@@ -99,20 +85,10 @@ async def finalize_result(
     fallback_used: bool = False,
     fallback_reason: str | None = None,
 ) -> ToolExecutionResult:
-    """Finalize result: track citations, log usage, update session."""
-    cited_uuids, estimated_output_tokens = await _track_and_log_usage(
-        db, session_id, model, content, loaded_memory_uuids, memory_group_id
+    """Finalize result: track citations and build the terminal tool result."""
+    cited_uuids, estimated_output_tokens = await _track_citations_and_estimate_output(
+        db, session_id, content, loaded_memory_uuids, memory_group_id
     )
-    if is_new_session or session.session_type in ("completion",):
-        mark_session_completed(
-            session,
-            summary="Execution completed",
-            termination_reason=None,
-        )
-    else:
-        session.health_detail = "completed"
-    session.last_activity_at = datetime.now(UTC)
-    await db.commit()
     return _build_success_result(
         content, model, provider, session_id, loaded_memory_uuids,
         cited_uuids, estimated_output_tokens, thinking_content,

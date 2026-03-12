@@ -124,9 +124,7 @@ async def finalize_response(
 
     return await finalize_result(
         db=db,
-        session=session,
         session_id=session_id,
-        is_new_session=is_new_session,
         model=model,
         provider=provider,
         content=final_content,

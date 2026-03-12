@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.response_cache import get_response_cache
 
-from .execution_observability import persist_execution_observability
 from .helpers import get_adapter
 from .multi_turn_executor import execute_multi_turn
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result
 from .schemas import MessageInput
-from .session_manager import apply_execution_metadata
 from .tool_handlers import AgentProgress
 from .tool_router import route_tool_execution
 from .turn_budget import resolve_tool_max_turns
@@ -57,6 +56,110 @@ class AgentLoopRequest:
     task_type: str | None = None
 
 
+@dataclass
+class _LoopOutcome:
+    """Normalized terminal state for either tool or multi-turn execution."""
+
+    final_result: Any
+    final_content: str
+    total_input_tokens: int
+    total_output_tokens: int
+    final_finish_reason: str | None
+    cited_uuids_list: list[str]
+    total_thinking_tokens: int | None
+    tool_calls_count: int
+    execution_status: str
+    execution_error: str | None
+    current_container_id: str | None
+    progress_log: list[AgentProgress]
+
+
+def _normalize_tool_outcome(tool_result_dict: dict[str, Any]) -> _LoopOutcome:
+    """Normalize tool execution output to the shared loop outcome shape."""
+    progress_log = tool_result_dict.get("progress_log") or []
+    final_result = SimpleNamespace(**tool_result_dict)
+    return _LoopOutcome(
+        final_result=final_result,
+        final_content=tool_result_dict["content"],
+        total_input_tokens=tool_result_dict.get("input_tokens", 0),
+        total_output_tokens=tool_result_dict.get("output_tokens", 0),
+        final_finish_reason=tool_result_dict.get("finish_reason"),
+        cited_uuids_list=tool_result_dict.get("cited_uuids") or [],
+        total_thinking_tokens=tool_result_dict.get("thinking_tokens"),
+        tool_calls_count=tool_result_dict.get("tool_calls_count", 0) or 0,
+        execution_status=tool_result_dict.get("status", "success"),
+        execution_error=tool_result_dict.get("error"),
+        current_container_id=tool_result_dict.get("container_id"),
+        progress_log=progress_log,
+    )
+
+
+def _normalize_multi_turn_outcome(exec_result: dict[str, Any]) -> _LoopOutcome:
+    """Normalize multi-turn execution output to the shared loop outcome shape."""
+    return _LoopOutcome(
+        final_result=exec_result["final_result"],
+        final_content=exec_result["final_content"],
+        total_input_tokens=exec_result["total_input_tokens"],
+        total_output_tokens=exec_result["total_output_tokens"],
+        final_finish_reason=exec_result["final_finish_reason"],
+        cited_uuids_list=exec_result["cited_uuids_list"],
+        total_thinking_tokens=exec_result["total_thinking_tokens"],
+        tool_calls_count=exec_result["tool_calls_count"],
+        execution_status=exec_result["execution_status"],
+        execution_error=exec_result["execution_error"],
+        current_container_id=exec_result["current_container_id"],
+        progress_log=exec_result["progress_log"],
+    )
+
+
+async def _finalize_loop_result(
+    req: AgentLoopRequest,
+    *,
+    outcome: _LoopOutcome,
+    orchestration_path: str,
+) -> CompletionInternalResult:
+    """Finalize a normalized loop outcome through the shared completion path."""
+    effective_model = getattr(outcome.final_result, "model_used", None) or req.model
+    await finalize_completion_result(
+        req.db,
+        req.session,
+        req.session_id,
+        req.model,
+        effective_model,
+        req.provider,
+        outcome.total_input_tokens,
+        outcome.total_output_tokens,
+        req.is_new_session,
+        outcome.final_result,
+        project_id=req.project_id,
+        fallback_used=bool(getattr(outcome.final_result, "fallback_used", False)),
+        fallback_reason=getattr(outcome.final_result, "fallback_reason", None),
+        requested_max_turns=req.max_turns,
+        orchestration_path=orchestration_path,
+        execution_status=outcome.execution_status,
+        execution_error=outcome.execution_error,
+    )
+    result_dict = build_completion_result(
+        final_content=outcome.final_content,
+        model=req.model,
+        provider=req.provider,
+        total_input_tokens=outcome.total_input_tokens,
+        total_output_tokens=outcome.total_output_tokens,
+        final_finish_reason=outcome.final_finish_reason,
+        final_session_id=req.session_id,
+        loaded_memory_uuids=req.loaded_memory_uuids,
+        cited_uuids_list=outcome.cited_uuids_list,
+        total_thinking_tokens=outcome.total_thinking_tokens,
+        tool_calls_count=outcome.tool_calls_count,
+        execution_status=outcome.execution_status,
+        execution_error=outcome.execution_error,
+        current_container_id=outcome.current_container_id,
+        progress_log=outcome.progress_log,
+        final_result=outcome.final_result,
+    )
+    return CompletionInternalResult(**result_dict)
+
+
 async def _execute_tool_loop(req: AgentLoopRequest) -> CompletionInternalResult:
     effective_tool_turn_budget = resolve_tool_max_turns(req.provider, req.max_turns)
     tool_result_dict = await route_tool_execution(
@@ -80,30 +183,11 @@ async def _execute_tool_loop(req: AgentLoopRequest) -> CompletionInternalResult:
         max_turns=effective_tool_turn_budget,
         project_id=req.project_id,
     )
-    effective_model = tool_result_dict.get("model_used") or req.model
-    apply_execution_metadata(
-        req.session,
-        requested_model=req.model,
-        effective_model=effective_model,
-        fallback_used=bool(tool_result_dict.get("fallback_used", False)),
-        fallback_reason=tool_result_dict.get("fallback_reason"),
-    )
-    await persist_execution_observability(
-        req.db,
-        req.session,
-        req.session_id,
-        provider=req.provider,
-        model_used=effective_model,
-        requested_max_turns=req.max_turns,
+    return await _finalize_loop_result(
+        req,
+        outcome=_normalize_tool_outcome(tool_result_dict),
         orchestration_path="tool_loop",
-        final_finish_reason=tool_result_dict.get("finish_reason"),
-        execution_status=tool_result_dict.get("status"),
-        execution_error=tool_result_dict.get("error"),
-        turns_completed=tool_result_dict.get("turns"),
-        tool_calls_count=tool_result_dict.get("tool_calls_count", 0),
     )
-    await req.db.commit()
-    return CompletionInternalResult(**tool_result_dict)
 
 
 async def _execute_multi_turn_loop(req: AgentLoopRequest) -> CompletionInternalResult:
@@ -134,46 +218,11 @@ async def _execute_multi_turn_loop(req: AgentLoopRequest) -> CompletionInternalR
         agent_slug=req.agent_slug,
         task_type=req.task_type,
     )
-    final_result = exec_result["final_result"]
-    effective_model = getattr(final_result, "model_used", None) or req.model
-    await finalize_completion_result(
-        req.db,
-        req.session,
-        req.session_id,
-        req.model,
-        effective_model,
-        req.provider,
-        exec_result["total_input_tokens"],
-        exec_result["total_output_tokens"],
-        req.is_new_session,
-        final_result,
-        project_id=req.project_id,
-        fallback_used=bool(getattr(final_result, "fallback_used", False)),
-        fallback_reason=getattr(final_result, "fallback_reason", None),
-        requested_max_turns=req.max_turns,
+    return await _finalize_loop_result(
+        req,
+        outcome=_normalize_multi_turn_outcome(exec_result),
         orchestration_path="multi_turn",
-        execution_status=exec_result["execution_status"],
-        execution_error=exec_result["execution_error"],
     )
-    result_dict = build_completion_result(
-        final_content=exec_result["final_content"],
-        model=req.model,
-        provider=req.provider,
-        total_input_tokens=exec_result["total_input_tokens"],
-        total_output_tokens=exec_result["total_output_tokens"],
-        final_finish_reason=exec_result["final_finish_reason"],
-        final_session_id=req.session_id,
-        loaded_memory_uuids=req.loaded_memory_uuids,
-        cited_uuids_list=exec_result["cited_uuids_list"],
-        total_thinking_tokens=exec_result["total_thinking_tokens"],
-        tool_calls_count=exec_result["tool_calls_count"],
-        execution_status=exec_result["execution_status"],
-        execution_error=exec_result["execution_error"],
-        current_container_id=exec_result["current_container_id"],
-        progress_log=exec_result["progress_log"],
-        final_result=final_result,
-    )
-    return CompletionInternalResult(**result_dict)
 
 
 async def execute_agent_loop(

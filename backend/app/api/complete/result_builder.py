@@ -53,6 +53,7 @@ def build_completion_result(
     if progress_log:
         completed_turns = len([p for p in progress_log if p.status in ("running", "complete", "tool_use")])
         turns = completed_turns // 2 + 1
+    turns = getattr(final_result, "turns", None) or turns
 
     return {
         "content": final_content,
