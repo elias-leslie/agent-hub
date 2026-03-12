@@ -205,3 +205,37 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
     assert session.updated_at is not None
     assert db.commit.await_count == 1
     db.refresh.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_heartbeat_session_reactivates_completed_session() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-heartbeat-completed",
+        project_id="agent-hub",
+        provider="anthropic",
+        model="claude/external-tmux",
+        status="completed",
+        session_type="claude_code",
+        provider_metadata={},
+        models_used=["claude/external-tmux"],
+        providers_used=["anthropic"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute.return_value = MagicMock(scalar_one_or_none=lambda: session)
+
+    await heartbeat_session(
+        db=db,
+        session_id="session-heartbeat-completed",
+        request=SessionHeartbeatRequest(
+            cwd="/repo",
+            phase="running_tool",
+            status="active",
+            summary="External tmux session is running",
+            heartbeat_at=datetime.now(UTC),
+        ),
+    )
+
+    assert session.status == "active"

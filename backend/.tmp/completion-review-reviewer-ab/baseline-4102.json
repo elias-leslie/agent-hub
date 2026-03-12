@@ -1,0 +1,176 @@
+{
+  "benchmark_id": "completion-review-4425d26d",
+  "project_id": "agent-hub",
+  "models": [
+    "claude-sonnet-4-6"
+  ],
+  "case_ids": [
+    "review_recent_progress_patience",
+    "review_quiet_healthy_true_complete",
+    "review_true_complete_clean"
+  ],
+  "runs_per_case": 1,
+  "started_at": "2026-03-11T20:24:25.336425+00:00",
+  "completed_at": "2026-03-11T20:25:00.081553+00:00",
+  "attempts": [
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_recent_progress_patience",
+      "run_number": 1,
+      "latency_ms": 12878,
+      "session_id": "47156494-569b-401b-be03-b9abefd36f9c",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_recent_progress_patience\",\n  \"decision\": \"continue\",\n  \"confidence\": \"high\",\n  \"reason\": \"task-abc is still in active_running_task state with recent_progress=yes and an explicit pending next action (inspect_existing_lane); the over-optimistic heartbeat is treated as secondary evidence per the decision rules.\",\n  \"focus\": \"inspect_existing_lane for task-abc\"\n}",
+      "parsed": {
+        "case_id": "review_recent_progress_patience",
+        "decision": "continue",
+        "confidence": "high",
+        "reason": "task-abc is still in active_running_task state with recent_progress=yes and an explicit pending next action (inspect_existing_lane); the over-optimistic heartbeat is treated as secondary evidence per the decision rules.",
+        "focus": "inspect_existing_lane for task-abc"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 564,
+      "total_tokens": 568,
+      "created_at": "2026-03-11T20:24:38.374226+00:00"
+    },
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_quiet_healthy_true_complete",
+      "run_number": 1,
+      "latency_ms": 11554,
+      "session_id": "893c9a34-8d17-4adc-bd9b-054e3bde4614",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_quiet_healthy_true_complete\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"The sole workstream lane is in a healthy waiting_external state with no cleanup residue, no dirty worktrees, and no actionable next step Jenny can take \\u2014 the session is correctly blocked on an external signal. Heartbeat and cleanup both confirm nothing is outstanding.\",\n  \"focus\": \"await external signal on task-quiet\"\n}",
+      "parsed": {
+        "case_id": "review_quiet_healthy_true_complete",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "The sole workstream lane is in a healthy waiting_external state with no cleanup residue, no dirty worktrees, and no actionable next step Jenny can take \u2014 the session is correctly blocked on an external signal. Heartbeat and cleanup both confirm nothing is outstanding.",
+        "focus": "await external signal on task-quiet"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 508,
+      "total_tokens": 512,
+      "created_at": "2026-03-11T20:24:49.931449+00:00"
+    },
+    {
+      "model_id": "claude-sonnet-4-6",
+      "case_id": "review_true_complete_clean",
+      "run_number": 1,
+      "latency_ms": 10146,
+      "session_id": "f1b61bee-1c92-459c-a960-20bf08f89541",
+      "provider": "claude",
+      "effective_model": "claude-sonnet-4-6",
+      "requested_model": "claude-sonnet-4-6",
+      "content": "{\n  \"case_id\": \"review_true_complete_clean\",\n  \"decision\": \"complete\",\n  \"confidence\": \"high\",\n  \"reason\": \"Cleanup status shows zero needs_cleanup, dirty, orphan, or prunable items, and the workstream inventory is empty with no active or pending residue chains. Heartbeat and all state indicators are fully consistent.\",\n  \"focus\": \"no residue, session cleanly closed\"\n}",
+      "parsed": {
+        "case_id": "review_true_complete_clean",
+        "decision": "complete",
+        "confidence": "high",
+        "reason": "Cleanup status shows zero needs_cleanup, dirty, orphan, or prunable items, and the workstream inventory is empty with no active or pending residue chains. Heartbeat and all state indicators are fully consistent.",
+        "focus": "no residue, session cleanly closed"
+      },
+      "schema_valid": true,
+      "correctness_score": 1.0,
+      "composite_score": 100.0,
+      "passed": true,
+      "infra_failure": false,
+      "failure_detail": null,
+      "failure_kind": null,
+      "fallback_used": false,
+      "turns": 1,
+      "tool_calls_count": 0,
+      "used_tool_names": [],
+      "input_tokens": 4,
+      "output_tokens": 313,
+      "total_tokens": 317,
+      "created_at": "2026-03-11T20:25:00.081280+00:00"
+    }
+  ],
+  "summaries": [
+    {
+      "model_id": "claude-sonnet-4-6",
+      "attempts": 3,
+      "pass_rate": 100.0,
+      "avg_composite_score": 100.0,
+      "avg_correctness_score": 1.0,
+      "avg_latency_ms": 11526,
+      "avg_total_tokens": 465.7,
+      "avg_turns": 1
+    }
+  ],
+  "persisted_run_id": "fb4ac5ad-7976-4191-aa04-ef867e93c10c",
+  "suite_id": "completion-review-reviewer",
+  "experiment_summary": {
+    "experiment_key": "completion-review-reviewer-ab-20260311",
+    "name": "Completion review reviewer suite: sonnet vs codex",
+    "suite_id": "completion-review-reviewer",
+    "status": "open",
+    "decision": "hold",
+    "decision_reason": "underpowered",
+    "hypothesis": "Codex should outperform or match sonnet on reviewer-invoked completion review cases without new regression clusters.",
+    "min_runs_per_cohort": 5,
+    "baseline": {
+      "label": "baseline",
+      "run_count": 2,
+      "avg_score": 100.0,
+      "avg_pass_rate": 100.0,
+      "config_fingerprints": [
+        "2337018fe4"
+      ],
+      "config_stable": true,
+      "prompt_versions": [
+        "2026-03-11T18:07:03.730588+00:00:00a86d7b"
+      ],
+      "latest_completed_at": "2026-03-11T20:25:00.081553+00:00"
+    },
+    "candidate": {
+      "label": "candidate",
+      "run_count": 0,
+      "avg_score": null,
+      "avg_pass_rate": null,
+      "config_fingerprints": [],
+      "config_stable": true,
+      "prompt_versions": [],
+      "latest_completed_at": null
+    },
+    "score_delta": {
+      "mean_delta": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    "pass_rate_delta": {
+      "mean_delta": null,
+      "ci_low": null,
+      "ci_high": null
+    },
+    "updated_at": "2026-03-11T20:25:00.101787+00:00",
+    "created_at": "2026-03-11T20:24:21.593426+00:00"
+  }
+}
