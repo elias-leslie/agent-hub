@@ -23,6 +23,22 @@ class TestHeartbeatStatus:
                 return_value="2026-03-03T10:00:00+00:00",
             ),
             patch(
+                "app.api.heartbeat.get_heartbeat_state",
+                new_callable=AsyncMock,
+                return_value={
+                    "last_attempt": "2026-03-03T10:00:00+00:00",
+                    "last_success": "2026-03-03T10:00:00+00:00",
+                    "last_skip_reason": "",
+                    "last_error": "",
+                    "last_session_id": "sess-1",
+                },
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_metrics",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
                 "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
@@ -44,21 +60,38 @@ class TestHeartbeatStatus:
         data = response.json()
         assert data["running"] is False
         assert data["last_run"] == "2026-03-03T10:00:00+00:00"
+        assert data["last_attempt"] == "2026-03-03T10:00:00+00:00"
+        assert data["last_success"] == "2026-03-03T10:00:00+00:00"
         assert data["elapsed_seconds"] is None
         assert data["interval_minutes"] == 60
         assert data["execution_state"] == "active"
+        assert data["last_session_id"] == "sess-1"
 
     def test_heartbeat_status_when_running_returns_running(self, api_client):
         with (
             patch(
                 "app.api.heartbeat._get_effective_running_info",
                 new_callable=AsyncMock,
-                return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 45},
+                return_value={
+                    "started_at": "2026-03-03T10:00:00+00:00",
+                    "elapsed_seconds": 45,
+                    "session_id": "hb-session-1",
+                },
             ),
             patch(
                 "app.api.heartbeat.get_last_run_info",
                 new_callable=AsyncMock,
                 return_value="2026-03-03T09:00:00+00:00",
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_state",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_metrics",
+                new_callable=AsyncMock,
+                return_value=None,
             ),
             patch(
                 "app.api.heartbeat.get_heartbeat_interval",
@@ -82,6 +115,7 @@ class TestHeartbeatStatus:
         data = response.json()
         assert data["running"] is True
         assert data["elapsed_seconds"] == 45
+        assert data["running_session_id"] == "hb-session-1"
 
     def test_heartbeat_status_when_never_run_returns_null_last_run(self, api_client):
         with (
@@ -92,6 +126,16 @@ class TestHeartbeatStatus:
             ),
             patch(
                 "app.api.heartbeat.get_last_run_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_state",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_metrics",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -129,6 +173,16 @@ class TestHeartbeatStatus:
                 "app.api.heartbeat.get_last_run_info",
                 new_callable=AsyncMock,
                 return_value="2026-03-03T10:00:00+00:00",
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_state",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_metrics",
+                new_callable=AsyncMock,
+                return_value=None,
             ),
             patch(
                 "app.api.heartbeat.get_heartbeat_interval",
@@ -172,7 +226,11 @@ class TestHeartbeatStatus:
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
                 new_callable=AsyncMock,
-                return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 400},
+                return_value={
+                    "started_at": "2026-03-03T10:00:00+00:00",
+                    "elapsed_seconds": 400,
+                    "session_id": "hb-session-1",
+                },
             ),
             patch(
                 "app.api.heartbeat._has_live_heartbeat_session",

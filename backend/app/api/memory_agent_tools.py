@@ -232,7 +232,7 @@ async def api_save_learning(
     ```bash
     curl -X POST http://localhost:8003/api/memory/save-learning \\
       -H "Content-Type: application/json" \\
-      -d '{"content": "Always use async methods for DB operations", "injection_tier": "reference"}'
+      -d '{"content": "**Async DB**: Use async methods for DB operations.", "injection_tier": "reference"}'
     ```
     """
     from app.services.memory.episode_validation import EpisodeValidationError
@@ -252,7 +252,7 @@ async def api_save_learning(
 
 | # | Rule | Check |
 |---|------|-------|
-| 1 | Tier header | Must start with **Mandate**:, **Guardrail**:, or **Reference**: matching tier |
+| 1 | Topic header | Must start with a bold topic header like **Git Safety**: |
 | 2 | Imperative mood | Commands not suggestions |
 | 3 | Strong verb first | Lead with use / never / always / check / follow |
 | 4 | One atomic rule | Single concept per episode, not a list |
@@ -262,7 +262,7 @@ async def api_save_learning(
 | 8 | Summary | 10-40 chars |
 
 Example of GOOD format:
-  **Mandate**: Use /commit_it for commits when available. Never use raw git commit unless explicitly requested. Why: shared checks and publish flow stay consistent.
+  **Git Safety**: Use /commit_it for commits when available. Never use raw git commit unless explicitly requested. Why: shared checks and publish flow stay consistent.
 
 Example of BAD format:
   When working with git, you should remember to always commit first.

@@ -12,6 +12,7 @@ from app.adapters.base import Message
 from app.models import Session as DBSession
 from app.models import SessionEventType
 from app.services.event_storage import get_sequencer
+from app.services.session_live_activity import mark_session_completed
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,11 @@ async def maybe_reset_persona_session(
     session, _, _ = existing
     if not await should_reset_persona_session(db, session):
         return False
-    session.status = "completed"
+    mark_session_completed(
+        session,
+        summary="Persona session auto-reset",
+        termination_reason="persona_session_reset",
+    )
     await db.commit()
     logger.info("Persona session %s auto-reset", session.id)
     return True

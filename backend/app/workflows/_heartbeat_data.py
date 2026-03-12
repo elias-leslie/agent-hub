@@ -17,7 +17,7 @@ from app.services.ownership_lanes import (
     infer_task_id,
 )
 from app.services.task_overview_summary import (
-    build_actionable_ready_summary,
+    build_compact_task_overview,
     parse_task_overview_stats,
 )
 
@@ -131,16 +131,21 @@ def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
-async def _fetch_task_overview() -> str:
-    """Cross-project task overview via st ready-all (TOON output)."""
+async def _fetch_task_overview_raw() -> str:
+    """Return raw cross-project task overview via st ready-all."""
     output = await _run_st_command(
         ["st", "ready-all"],
         failure_log="Failed to fetch task overview for heartbeat prompt",
     )
+    return output
+
+
+async def _fetch_task_overview() -> str:
+    """Cross-project task overview condensed for heartbeat prompt injection."""
+    output = await _fetch_task_overview_raw()
     if not output:
         return ""
-    actionable = build_actionable_ready_summary(output)
-    return f"{output}\n\n{actionable}" if actionable else output
+    return build_compact_task_overview(output)
 
 
 def _session_stale_threshold_minutes(is_coding_agent: bool | None) -> int:

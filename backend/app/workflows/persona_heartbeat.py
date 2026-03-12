@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import uuid4
 
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
@@ -24,7 +25,10 @@ from app.workflows._heartbeat_redis import (
     check_redis_elapsed,
     clear_heartbeat_running,
     get_model_review_status,
-    record_heartbeat,
+    record_heartbeat_attempt,
+    record_heartbeat_error,
+    record_heartbeat_skip,
+    record_heartbeat_success,
     set_heartbeat_running,
 )
 
@@ -201,10 +205,19 @@ def _build_messages(system_content: str, prompt: str) -> list[dict[str, Any]]:
     return messages
 
 
-async def _execute_heartbeat(interval_minutes: int, target_project_id: str | None = None) -> HeartbeatResult:
+async def _execute_heartbeat(
+    interval_minutes: int,
+    *,
+    heartbeat_session_id: str,
+    target_project_id: str | None = None,
+) -> HeartbeatResult:
     """Run completion and record result; returns a HeartbeatResult."""
     try:
-        result = await _do_completion(interval_minutes, target_project_id=target_project_id)
+        result = await _do_completion(
+            interval_minutes,
+            heartbeat_session_id=heartbeat_session_id,
+            target_project_id=target_project_id,
+        )
     except Exception as e:
         logger.warning("Heartbeat completion failed: %s", e)
         return HeartbeatResult(
@@ -213,7 +226,12 @@ async def _execute_heartbeat(interval_minutes: int, target_project_id: str | Non
     return await postprocess_heartbeat(result, interval_minutes, target_project_id=target_project_id)
 
 
-async def _do_completion(interval_minutes: int, target_project_id: str | None = None):
+async def _do_completion(
+    interval_minutes: int,
+    *,
+    heartbeat_session_id: str,
+    target_project_id: str | None = None,
+):
     """Run the actual completion call — separated for error handling."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
@@ -243,7 +261,9 @@ async def _do_completion(interval_minutes: int, target_project_id: str | None = 
             temperature=temperature,
             project_id=execution_project,
             db=db,
+            session_id=heartbeat_session_id,
             agent_slug="persona",
+            request_source="heartbeat",
             use_memory=True,
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
             memory_config=agent_memory_config,
@@ -260,8 +280,7 @@ async def _do_completion(interval_minutes: int, target_project_id: str | None = 
             requested_provider=provider,
         )
 
-    await record_heartbeat(did_model_review=model_review_due)
-    return result
+    return result, model_review_due
 
 
 async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
@@ -274,25 +293,30 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
         should_run, interval_minutes, onboarding_complete, execution_state = await _should_run()
         if not should_run:
             reason = _get_skip_reason(interval_minutes, onboarding_complete, execution_state)
+            await record_heartbeat_skip(reason)
             ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
     else:
         interval_minutes, onboarding_complete = await get_heartbeat_interval()
         execution_state = await get_persona_execution_state()
         if not onboarding_complete:
+            await record_heartbeat_skip("not onboarded")
             ctx.log("Manual heartbeat skipped (not onboarded)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
         if execution_state == "paused":
+            await record_heartbeat_skip("paused")
             ctx.log("Manual heartbeat skipped (paused)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
     if not await check_project_permission(target_project_id or HEARTBEAT_PROJECT):
+        await record_heartbeat_skip("project_permission_off")
         ctx.log("Heartbeat skipped (project_permission_off)")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
     runtime = await get_heartbeat_runtime_info()
     if not runtime.heartbeat_supported:
         warning = runtime.warnings[0] if runtime.warnings else _build_runtime_warning(runtime.model)
+        await record_heartbeat_skip(f"runtime_incompatible: {warning}")
         ctx.log(f"Heartbeat skipped (runtime_incompatible: {warning})")
         return HeartbeatResult(
             status="skipped",
@@ -300,11 +324,33 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
             error=warning,
         ).model_dump()
 
-    await set_heartbeat_running()
+    heartbeat_session_id = str(uuid4())
+    await record_heartbeat_attempt(session_id=heartbeat_session_id)
+    await set_heartbeat_running(session_id=heartbeat_session_id)
     try:
-        out = await _execute_heartbeat(interval_minutes, target_project_id=target_project_id)
+        result, model_review_due = await _do_completion(
+            interval_minutes,
+            heartbeat_session_id=heartbeat_session_id,
+            target_project_id=target_project_id,
+        )
+        out = await postprocess_heartbeat(result, interval_minutes, target_project_id=target_project_id)
+        if out.status == "error":
+            await record_heartbeat_error(out.error or "unknown heartbeat error", session_id=heartbeat_session_id)
+        else:
+            await record_heartbeat_success(
+                session_id=heartbeat_session_id,
+                did_model_review=model_review_due,
+            )
         ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
         return out.model_dump()
+    except Exception as e:
+        await record_heartbeat_error(str(e), session_id=heartbeat_session_id)
+        logger.warning("Heartbeat completion failed: %s", e)
+        return HeartbeatResult(
+            status="error",
+            error=str(e),
+            interval_minutes=interval_minutes,
+        ).model_dump()
     finally:
         await clear_heartbeat_running()
 

@@ -187,16 +187,16 @@ class TestPersonaHeartbeatTask:
                 new_callable=AsyncMock,
             ) as mock_set_running,
             patch(
-                "app.workflows.persona_heartbeat._execute_heartbeat",
+                "app.workflows.persona_heartbeat.record_heartbeat_skip",
                 new_callable=AsyncMock,
-            ) as mock_execute,
+            ) as mock_skip,
         ):
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
         assert result["error"] == _build_runtime_warning(CODEX_GPT_5_1_MINI)
         mock_set_running.assert_not_awaited()
-        mock_execute.assert_not_awaited()
+        mock_skip.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_manual_heartbeat_uses_model_name_from_runtime_when_warning_missing(self):
@@ -266,12 +266,17 @@ class TestPersonaHeartbeatTask:
                 "app.workflows.persona_heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
             ) as mock_set_running,
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_skip",
+                new_callable=AsyncMock,
+            ) as mock_skip,
         ):
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
         mock_permission.assert_not_awaited()
         mock_set_running.assert_not_awaited()
+        mock_skip.assert_awaited_once_with("paused")
 
     @pytest.mark.asyncio
     async def test_manual_heartbeat_runs_when_runtime_is_supported(self):
@@ -302,6 +307,10 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ),
+            patch(
                 "app.workflows.persona_heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
             ),
@@ -310,19 +319,30 @@ class TestPersonaHeartbeatTask:
                 new_callable=AsyncMock,
             ),
             patch(
-                "app.workflows.persona_heartbeat._execute_heartbeat",
+                "app.workflows.persona_heartbeat._do_completion",
+                new_callable=AsyncMock,
+                return_value=(SimpleNamespace(content="HEARTBEAT_OK"), False),
+            ) as mock_do_completion,
+            patch(
+                "app.workflows.persona_heartbeat.postprocess_heartbeat",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
-                    model_dump=lambda: {"status": "success", "turns": 3, "tool_calls": 2},
+                    status="success",
                     turns=3,
                     tool_calls=2,
+                    model_dump=lambda: {"status": "success", "turns": 3, "tool_calls": 2},
                 ),
-            ) as mock_execute,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                new_callable=AsyncMock,
+            ) as mock_success,
         ):
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "success"
-        mock_execute.assert_awaited_once_with(60, target_project_id=None)
+        mock_do_completion.assert_awaited_once()
+        mock_success.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_manual_heartbeat_passes_target_project_to_execution(self):
@@ -353,6 +373,10 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ),
+            patch(
                 "app.workflows.persona_heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
             ),
@@ -361,14 +385,24 @@ class TestPersonaHeartbeatTask:
                 new_callable=AsyncMock,
             ),
             patch(
-                "app.workflows.persona_heartbeat._execute_heartbeat",
+                "app.workflows.persona_heartbeat._do_completion",
+                new_callable=AsyncMock,
+                return_value=(SimpleNamespace(content="HEARTBEAT_OK"), False),
+            ) as mock_do_completion,
+            patch(
+                "app.workflows.persona_heartbeat.postprocess_heartbeat",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
-                    model_dump=lambda: {"status": "success", "turns": 1, "tool_calls": 0},
+                    status="success",
                     turns=1,
                     tool_calls=0,
+                    model_dump=lambda: {"status": "success", "turns": 1, "tool_calls": 0},
                 ),
-            ) as mock_execute,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                new_callable=AsyncMock,
+            ),
         ):
             result = await _run_persona_heartbeat(
                 HeartbeatInput(manual=True, target_project_id="agent-hub"),
@@ -377,7 +411,7 @@ class TestPersonaHeartbeatTask:
 
         assert result["status"] == "success"
         mock_permission.assert_awaited_once_with("agent-hub")
-        mock_execute.assert_awaited_once_with(60, target_project_id="agent-hub")
+        mock_do_completion.assert_awaited_once()
 
 
 class TestHeartbeatCompletionRouting:
@@ -426,18 +460,17 @@ class TestHeartbeatCompletionRouting:
                 new_callable=AsyncMock,
                 return_value=complete_result,
             ) as mock_complete,
-            patch(
-                "app.workflows.persona_heartbeat.record_heartbeat",
-                new_callable=AsyncMock,
-            ),
         ):
-            result = await _do_completion(60)
+            result, model_review_due = await _do_completion(60, heartbeat_session_id="hb-session-1")
 
         assert result is complete_result
+        assert model_review_due is False
         mock_complete.assert_awaited_once()
         kwargs = mock_complete.await_args.kwargs
         assert kwargs["model"] == model_id
         assert kwargs["provider"] == provider
+        assert kwargs["session_id"] == "hb-session-1"
+        assert kwargs["request_source"] == "heartbeat"
         assert kwargs["execute_tools"] is True
         assert kwargs["enable_programmatic_tools"] is True
         assert kwargs["thinking_level"] == "medium"
@@ -487,15 +520,11 @@ class TestHeartbeatCompletionRouting:
                 new_callable=AsyncMock,
                 return_value=complete_result,
             ) as mock_complete,
-            patch(
-                "app.workflows.persona_heartbeat.record_heartbeat",
-                new_callable=AsyncMock,
-            ) as mock_record,
         ):
-            result = await _do_completion(45)
+            result, model_review_due = await _do_completion(45, heartbeat_session_id="hb-session-2")
 
         assert result is complete_result
-        mock_record.assert_awaited_once_with(did_model_review=True)
+        assert model_review_due is True
         kwargs = mock_complete.await_args.kwargs
         assert kwargs["messages"] == [
             {"role": "system", "content": "You are Jenny"},
@@ -516,6 +545,8 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["enable_programmatic_tools"] is True
         assert kwargs["task_type"] == "heartbeat"
         assert kwargs["thinking_level"] == "high"
+        assert kwargs["session_id"] == "hb-session-2"
+        assert kwargs["request_source"] == "heartbeat"
 
     @pytest.mark.asyncio
     async def test_do_completion_uses_target_project_for_execution_scope(self):
@@ -553,14 +584,15 @@ class TestHeartbeatCompletionRouting:
                 new_callable=AsyncMock,
                 return_value=complete_result,
             ) as mock_complete,
-            patch(
-                "app.workflows.persona_heartbeat.record_heartbeat",
-                new_callable=AsyncMock,
-            ),
         ):
-            result = await _do_completion(60, target_project_id="agent-hub")
+            result, model_review_due = await _do_completion(
+                60,
+                heartbeat_session_id="hb-session-3",
+                target_project_id="agent-hub",
+            )
 
         assert result is complete_result
+        assert model_review_due is False
         mock_prompt.assert_awaited_once_with(
             False,
             "not due",
@@ -572,3 +604,4 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["project_id"] == "agent-hub"
         assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
         assert kwargs["working_dir"] == KNOWN_ROOTS["agent-hub"]
+        assert kwargs["session_id"] == "hb-session-3"

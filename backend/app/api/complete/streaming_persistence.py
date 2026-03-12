@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime
 
 from app.models import Session as DBSession
+from app.services.session_live_activity import mark_session_completed
 
 from .event_helpers import save_events
 from .schemas import MessageInput, StreamingChunk
@@ -63,8 +64,11 @@ async def close_one_shot_session(session_id: str) -> None:
             )
             session = result.scalar_one_or_none()
             if session:
-                session.status = "completed"
-                session.health_detail = "completed"
+                mark_session_completed(
+                    session,
+                    summary="Streaming one-shot completed",
+                    termination_reason="streaming_one_shot_closed",
+                )
                 session.last_activity_at = datetime.now(UTC)
                 await fresh_db.commit()
                 logger.info("Streaming: closed one-shot session %s", session_id)

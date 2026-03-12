@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Session
 from app.services.agent_routing import resolve_agent
 from app.services.events import publish_session_start
+from app.services.session_live_activity import mark_session_completed
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,11 @@ async def close_session_if_active(db: AsyncSession, session: Session) -> tuple[s
     if session.status == "completed":
         return "completed", "Session was already completed"
 
-    session.status = "completed"
+    mark_session_completed(
+        session,
+        summary="Session closed",
+        termination_reason="session_closed_helper",
+    )
     await db.commit()
 
     # Inline summary tags ([[S:outcome:description]]) are the sole summary mechanism.
@@ -337,4 +342,3 @@ async def fork_session_at_turn(
     await db.commit()
 
     return new_session_id, fork_at, len(events_to_copy)
-

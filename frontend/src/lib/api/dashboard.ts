@@ -105,8 +105,20 @@ export async function fetchModelLatencyStats(days: number = 7): Promise<LatencyS
 export interface HeartbeatStatusResponse {
   running: boolean;
   last_run: string | null;
+  last_attempt: string | null;
+  last_success: string | null;
+  last_skip_reason: string | null;
+  last_error: string | null;
   elapsed_seconds: number | null;
   interval_minutes: number;
+  execution_state: string;
+  running_session_id: string | null;
+  last_session_id?: string | null;
+  last_turns?: number | null;
+  last_tool_calls?: number | null;
+  last_format_compliant?: boolean | null;
+  last_summary_stored?: boolean | null;
+  last_had_error?: boolean | null;
   runtime: HeartbeatRuntimeInfo | null;
 }
 

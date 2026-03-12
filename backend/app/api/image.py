@@ -28,6 +28,7 @@ from app.db import get_db
 from app.models import Agent
 from app.models import Session as DBSession
 from app.services.events import publish_complete, publish_session_start
+from app.services.session_live_activity import mark_session_completed
 
 # Type alias for database dependency
 DbDep = Annotated[AsyncSession, Depends(get_db)]
@@ -205,7 +206,11 @@ async def _complete_image_generation(
     """Update session to completed and build the response."""
     session.provider = result.provider
     session.model = result.model
-    session.status = "completed"
+    mark_session_completed(
+        session,
+        summary="Image generation completed",
+        termination_reason=None,
+    )
     await db.commit()
     await publish_complete(session_id, input_tokens=0, output_tokens=0, cost=0.0)
     image_base64 = base64.b64encode(result.image_data).decode("utf-8")

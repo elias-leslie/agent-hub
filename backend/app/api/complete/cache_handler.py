@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete
+from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import estimate_cost
 
 from .event_helpers import save_events
@@ -75,8 +76,13 @@ async def handle_cached_response(
 
     # Mark new sessions as completed (cached single-turn completions are done)
     if is_new_session:
-        session.status = "completed"
-    session.health_detail = "completed"
+        mark_session_completed(
+            session,
+            summary="Execution completed from cache",
+            termination_reason="completion_cached",
+        )
+    else:
+        session.health_detail = "completed"
     session.last_activity_at = datetime.now(UTC)
 
     await db.commit()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import TypedDict
@@ -13,9 +14,10 @@ REDIS_LAST_RUN_KEY = "persona:heartbeat:last_run"
 REDIS_LAST_MODEL_REVIEW_KEY = "persona:heartbeat:last_model_review"
 REDIS_METRICS_KEY = "persona:heartbeat:metrics"
 REDIS_RUNNING_KEY = "persona:heartbeat:running"
+REDIS_STATE_KEY = "persona:heartbeat:state"
 REDIS_DAILY_COUNT_PREFIX = "persona:heartbeat:daily"
 _DAILY_COUNT_TTL = 14 * 86400  # 14 days
-_RUNNING_TTL = 1800  # 30 minutes, matches execution timeout
+_RUNNING_TTL = 7500  # 2h workflow timeout + 5m slack
 _SPIKE_THRESHOLD = 50  # 3x normal rate at 60min interval
 
 
@@ -30,23 +32,84 @@ def _get_redis_client():
     )
 
 
-async def record_heartbeat(did_model_review: bool = False) -> None:
-    """Store current timestamp as last heartbeat run (and model review if done)."""
+async def record_heartbeat_attempt(*, session_id: str | None = None) -> None:
+    """Store current timestamp as the last heartbeat attempt."""
     client = _get_redis_client()
     try:
         now = datetime.now(UTC).isoformat()
+        mapping: dict[str, str] = {
+            "last_attempt": now,
+            "last_skip_reason": "",
+            "last_error": "",
+        }
+        if session_id:
+            mapping["last_session_id"] = session_id
+        await client.hset(REDIS_STATE_KEY, mapping=mapping)
+    finally:
+        await client.close()
+
+
+async def record_heartbeat_success(
+    *,
+    session_id: str | None = None,
+    did_model_review: bool = False,
+) -> None:
+    """Store current timestamp as the last successful heartbeat run."""
+    client = _get_redis_client()
+    try:
+        now = datetime.now(UTC).isoformat()
+        mapping: dict[str, str] = {
+            "last_attempt": now,
+            "last_success": now,
+            "last_skip_reason": "",
+            "last_error": "",
+        }
+        if session_id:
+            mapping["last_session_id"] = session_id
         await client.set(REDIS_LAST_RUN_KEY, now)
+        await client.hset(REDIS_STATE_KEY, mapping=mapping)
         if did_model_review:
             await client.set(REDIS_LAST_MODEL_REVIEW_KEY, now)
     finally:
         await client.close()
 
 
-async def get_model_review_status() -> tuple[bool, str]:
-    """Check if a model review is due (more than 7 days since last one).
+async def record_heartbeat_skip(reason: str, *, session_id: str | None = None) -> None:
+    """Store the latest skipped heartbeat attempt and its reason."""
+    client = _get_redis_client()
+    try:
+        now = datetime.now(UTC).isoformat()
+        mapping: dict[str, str] = {
+            "last_attempt": now,
+            "last_skip_reason": reason,
+            "last_error": "",
+        }
+        if session_id:
+            mapping["last_session_id"] = session_id
+        await client.hset(REDIS_STATE_KEY, mapping=mapping)
+    finally:
+        await client.close()
 
-    Returns (is_due, status_label).
-    """
+
+async def record_heartbeat_error(error: str, *, session_id: str | None = None) -> None:
+    """Store the latest failed heartbeat attempt and its error."""
+    client = _get_redis_client()
+    try:
+        now = datetime.now(UTC).isoformat()
+        mapping: dict[str, str] = {
+            "last_attempt": now,
+            "last_error": error,
+            "last_skip_reason": "",
+        }
+        if session_id:
+            mapping["last_session_id"] = session_id
+        await client.hset(REDIS_STATE_KEY, mapping=mapping)
+    finally:
+        await client.close()
+
+
+async def get_model_review_status() -> tuple[bool, str]:
+    """Check if a model review is due (more than 7 days since last one)."""
     client = _get_redis_client()
     try:
         last_review_str = await client.get(REDIS_LAST_MODEL_REVIEW_KEY)
@@ -62,7 +125,7 @@ async def get_model_review_status() -> tuple[bool, str]:
 
 
 async def check_redis_elapsed(interval_minutes: int) -> bool:
-    """Return True if enough time has elapsed since the last heartbeat run."""
+    """Return True if enough time has elapsed since the last successful heartbeat run."""
     client = _get_redis_client()
     try:
         last_run_str = await client.get(REDIS_LAST_RUN_KEY)
@@ -88,8 +151,6 @@ async def record_heartbeat_metrics(
     client = _get_redis_client()
     try:
         now = datetime.now(UTC)
-
-        # Update latest metrics hash
         await client.hset(
             REDIS_METRICS_KEY,
             mapping={
@@ -103,7 +164,6 @@ async def record_heartbeat_metrics(
             },
         )
 
-        # Increment daily counter
         date_key = f"{REDIS_DAILY_COUNT_PREFIX}:{now.strftime('%Y-%m-%d')}"
         count = await client.incr(date_key)
         if count == 1:
@@ -121,11 +181,17 @@ async def record_heartbeat_metrics(
         await client.close()
 
 
-async def set_heartbeat_running() -> None:
-    """Mark the heartbeat as currently running with a timestamp and TTL."""
+async def set_heartbeat_running(*, session_id: str | None = None) -> None:
+    """Mark the heartbeat as currently running with a timestamp, session id, and TTL."""
     client = _get_redis_client()
     try:
-        await client.set(REDIS_RUNNING_KEY, datetime.now(UTC).isoformat(), ex=_RUNNING_TTL)
+        payload = json.dumps(
+            {
+                "started_at": datetime.now(UTC).isoformat(),
+                "session_id": session_id,
+            }
+        )
+        await client.set(REDIS_RUNNING_KEY, payload, ex=_RUNNING_TTL)
     except Exception:
         logger.exception("Failed to set heartbeat running lock")
     finally:
@@ -146,24 +212,36 @@ async def clear_heartbeat_running() -> None:
 class HeartbeatRunningInfo(TypedDict):
     started_at: str
     elapsed_seconds: int
+    session_id: str | None
 
 
 async def get_heartbeat_running_info() -> HeartbeatRunningInfo | None:
     """Return running state info or None if not running."""
     client = _get_redis_client()
     try:
-        started_str = await client.get(REDIS_RUNNING_KEY)
+        payload = await client.get(REDIS_RUNNING_KEY)
+        if not payload:
+            return None
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            parsed = {"started_at": payload, "session_id": None}
+        started_str = str(parsed.get("started_at") or "")
         if not started_str:
             return None
         started = datetime.fromisoformat(started_str)
         elapsed = (datetime.now(UTC) - started).total_seconds()
-        return {"started_at": started_str, "elapsed_seconds": round(elapsed)}
+        return {
+            "started_at": started_str,
+            "elapsed_seconds": round(elapsed),
+            "session_id": parsed.get("session_id"),
+        }
     finally:
         await client.close()
 
 
 async def get_last_run_info() -> str | None:
-    """Return the ISO timestamp of the last completed heartbeat run, or None."""
+    """Return the ISO timestamp of the last successful heartbeat run, or None."""
     client = _get_redis_client()
     try:
         return await client.get(REDIS_LAST_RUN_KEY)
@@ -181,11 +259,29 @@ class HeartbeatMetrics(TypedDict, total=False):
     had_error: str
 
 
+class HeartbeatState(TypedDict, total=False):
+    last_attempt: str
+    last_success: str
+    last_skip_reason: str
+    last_error: str
+    last_session_id: str
+
+
 async def get_heartbeat_metrics() -> HeartbeatMetrics | None:
     """Return the latest heartbeat metrics hash, or None if no data."""
     client = _get_redis_client()
     try:
         data = await client.hgetall(REDIS_METRICS_KEY)
+        return data if data else None
+    finally:
+        await client.close()
+
+
+async def get_heartbeat_state() -> HeartbeatState | None:
+    """Return the latest heartbeat state hash, or None if no data."""
+    client = _get_redis_client()
+    try:
+        data = await client.hgetall(REDIS_STATE_KEY)
         return data if data else None
     finally:
         await client.close()
@@ -199,9 +295,13 @@ __all__ = [
     "clear_heartbeat_running",
     "get_heartbeat_metrics",
     "get_heartbeat_running_info",
+    "get_heartbeat_state",
     "get_last_run_info",
     "get_model_review_status",
-    "record_heartbeat",
+    "record_heartbeat_attempt",
+    "record_heartbeat_error",
     "record_heartbeat_metrics",
+    "record_heartbeat_skip",
+    "record_heartbeat_success",
     "set_heartbeat_running",
 ]
