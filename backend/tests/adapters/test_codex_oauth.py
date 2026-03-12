@@ -210,6 +210,65 @@ async def test_complete_with_tools_multiple_tool_calls_per_turn() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_with_tools_retries_empty_final_response_once() -> None:
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+    adapter._complete_from_input = AsyncMock(
+        side_effect=[
+            CompletionResult(
+                content="",
+                model="gpt-5.4",
+                provider="codex",
+                input_tokens=10,
+                output_tokens=5,
+                finish_reason="tool_use",
+                tool_calls=[ToolCallResult(id="call_x", name="noop", input={})],
+            ),
+            CompletionResult(
+                content="",
+                model="gpt-5.4",
+                provider="codex",
+                input_tokens=12,
+                output_tokens=1,
+                finish_reason="done",
+                tool_calls=[],
+            ),
+            CompletionResult(
+                content="No further changes needed.",
+                model="gpt-5.4",
+                provider="codex",
+                input_tokens=14,
+                output_tokens=4,
+                finish_reason="done",
+                tool_calls=[],
+            ),
+        ]
+    )
+
+    tool_handler = AsyncMock(return_value="ok")
+
+    events = []
+    async for event in adapter.complete_with_tools(
+        messages=[Message(role="user", content="loop once")],
+        model="codex/gpt-5.4",
+        tools=[{"name": "noop", "description": "noop", "input_schema": {"type": "object"}}],
+        tool_handler=tool_handler,
+        max_turns=5,
+    ):
+        events.append(event)
+
+    assert any(e.type == "content" and e.content == "No further changes needed." for e in events)
+    assert events[-1].type == "done"
+    assert adapter._complete_from_input.await_count == 3
+
+
+@pytest.mark.asyncio
 async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.adapters import codex_oauth as mod
 

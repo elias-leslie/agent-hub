@@ -41,6 +41,13 @@ from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 
 logger = logging.getLogger(__name__)
 _TOOL_TURN_TIMEOUT_SECONDS = DEFAULT_TIMEOUT
+_EMPTY_FINAL_RESPONSE_MSG = (
+    "You have finished tool work but have not produced a final user-facing response. "
+    "Write the final response now. "
+    "If no changes were needed, say so plainly. "
+    "If changes were made, summarize the exact changes and evidence. "
+    "Do not call more tools unless a missing fact blocks the response."
+)
 
 ToolHandler = Callable[[str, dict[str, Any]], Awaitable[str]]
 
@@ -94,6 +101,11 @@ def _assistant_tool_call_item(tool_id: str, name: str, arguments: dict[str, Any]
 def _tool_result_item(tool_id: str, output: str) -> dict[str, Any]:
     """Build a function_call_output item for a tool result."""
     return {"type": "function_call_output", "call_id": tool_id, "output": output}
+
+
+def _user_text_item(content: str) -> dict[str, Any]:
+    """Build a user message item for continuing a Responses session."""
+    return {"role": "user", "content": [{"type": "input_text", "text": content}]}
 
 
 # ---------------------------------------------------------------------------
@@ -327,6 +339,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         resolved_model = self._resolve_model(model)
         total_input_tokens = 0
         total_output_tokens = 0
+        empty_closeout_used = False
 
         for turn in range(max_turns):
             try:
@@ -368,6 +381,14 @@ class CodexOAuthAdapter(ProviderAdapter):
                 yield StreamEvent(type="content", content=result.content)
 
             if not result.tool_calls:
+                if (
+                    not (result.content or "").strip()
+                    and not empty_closeout_used
+                    and turn + 1 < max_turns
+                ):
+                    input_items.append(_user_text_item(_EMPTY_FINAL_RESPONSE_MSG))
+                    empty_closeout_used = True
+                    continue
                 yield StreamEvent(
                     type="done",
                     input_tokens=total_input_tokens,
