@@ -76,6 +76,8 @@ class EpisodeCreator:
         source: MemorySource = MemorySource.SYSTEM,
         injection_tier: str | None = None,
         summary: str | None = None,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
     ) -> CreateResult:
         """
         Create a new memory episode in PostgreSQL.
@@ -110,6 +112,8 @@ class EpisodeCreator:
             reference_time=reference_time,
             injection_tier=injection_tier,
             summary=summary,
+            changed_by=changed_by,
+            change_reason=change_reason,
         )
 
     async def batch_create(

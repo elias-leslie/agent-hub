@@ -25,6 +25,7 @@ class AddEpisodeRequest(BaseModel):
         None,
         description="UUID of episode to copy usage stats from (for edit flows)",
     )
+    change_reason: str | None = Field(None, description="Why this memory was created")
 
 
 class AddEpisodeResponse(BaseModel):
@@ -43,6 +44,8 @@ class EpisodeDetailResponse(BaseModel):
     injection_tier: str | None = None
     source_description: str | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
+    version: int | None = None
     # Properties
     pinned: bool = False
     auto_inject: bool = False
@@ -64,6 +67,7 @@ class DeleteEpisodeResponse(BaseModel):
     success: bool
     episode_id: str
     message: str
+    revision_id: str | None = None
 
 
 class UpdateEpisodeRequest(BaseModel):
@@ -74,6 +78,7 @@ class UpdateEpisodeRequest(BaseModel):
         None,
         description="Updated injection tier (mandate/guardrail/reference/archive)",
     )
+    change_reason: str | None = Field(None, description="Why this episode was updated")
 
 
 class UpdateEpisodeResponse(BaseModel):
@@ -83,6 +88,7 @@ class UpdateEpisodeResponse(BaseModel):
     episode_id: str
     injection_tier: str | None = None
     message: str
+    version: int | None = None
 
 
 class UpdateEpisodePropertiesRequest(BaseModel):
@@ -105,6 +111,7 @@ class UpdateEpisodePropertiesRequest(BaseModel):
         max_length=40,
         description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')",
     )
+    change_reason: str | None = Field(None, description="Why these properties changed")
 
 
 class UpdateEpisodePropertiesResponse(BaseModel):
@@ -119,3 +126,38 @@ class UpdateEpisodePropertiesResponse(BaseModel):
     trigger_phases: list[str] | None = None
     summary: str | None = None
     message: str
+    version: int | None = None
+
+
+class MemoryRevisionResponse(BaseModel):
+    """Single immutable revision snapshot for a memory episode."""
+
+    id: str
+    memory_id: str | None = None
+    memory_uuid: str
+    version: int
+    action: str
+    content: str
+    name: str | None = None
+    summary: str | None = None
+    injection_tier: str
+    scope: str
+    scope_id: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    changed_by: str | None = None
+    change_reason: str | None = None
+    content_hash: str
+    created_at: datetime
+
+
+class MemoryRevisionListResponse(BaseModel):
+    """Recent immutable revisions for a memory episode."""
+
+    revisions: list[MemoryRevisionResponse]
+    total: int
+
+
+class MemoryRestoreRequest(BaseModel):
+    """Restore one memory to a historical revision."""
+
+    change_reason: str | None = None

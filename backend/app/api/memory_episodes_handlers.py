@@ -17,6 +17,9 @@ if TYPE_CHECKING:
         AddEpisodeResponse,
         DeleteEpisodeResponse,
         EpisodeDetailResponse,
+        MemoryRestoreRequest,
+        MemoryRevisionListResponse,
+        MemoryRevisionResponse,
         UpdateEpisodePropertiesRequest,
         UpdateEpisodePropertiesResponse,
         UpdateEpisodeRequest,
@@ -43,6 +46,8 @@ async def handle_add_episode(
         source_description=request.source_description,
         reference_time=request.reference_time,
         source=request.source,
+        changed_by="api",
+        change_reason=request.change_reason or "Episode added",
     )
     if not result.success:
         raise HTTPException(
@@ -82,16 +87,22 @@ async def handle_get_episode(
 async def handle_delete_episode(
     full_uuid: str,
     memory: MemoryService,
+    change_reason: str | None = None,
 ) -> DeleteEpisodeResponse:
     """Delete an episode from memory."""
     from .memory_schemas import DeleteEpisodeResponse
 
     try:
-        await memory.delete_episode(full_uuid)
+        await memory.delete_episode(
+            full_uuid,
+            changed_by="api",
+            change_reason=change_reason,
+        )
         return DeleteEpisodeResponse(
             success=True,
             episode_id=full_uuid,
             message="Episode deleted successfully",
+            revision_id=None,
         )
     except Exception as e:
         raise HTTPException(
@@ -126,42 +137,66 @@ async def handle_update_episode_properties(
         final_summary = None
 
         if request.pinned is not None:
-            success = await set_episode_pinned(full_uuid, request.pinned)
+            success = await set_episode_pinned(
+                full_uuid,
+                request.pinned,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_pinned = request.pinned
             messages.append(f"pinned={request.pinned}")
 
         if request.auto_inject is not None:
-            success = await set_episode_auto_inject(full_uuid, request.auto_inject)
+            success = await set_episode_auto_inject(
+                full_uuid,
+                request.auto_inject,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_auto_inject = request.auto_inject
             messages.append(f"auto_inject={request.auto_inject}")
 
         if request.display_order is not None:
-            success = await set_episode_display_order(full_uuid, request.display_order)
+            success = await set_episode_display_order(
+                full_uuid,
+                request.display_order,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_display_order = request.display_order
             messages.append(f"display_order={request.display_order}")
 
         if request.trigger_task_types is not None:
-            success = await set_episode_trigger_task_types(full_uuid, request.trigger_task_types)
+            success = await set_episode_trigger_task_types(
+                full_uuid,
+                request.trigger_task_types,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_trigger_task_types = request.trigger_task_types
             messages.append(f"trigger_task_types={request.trigger_task_types}")
 
         if request.trigger_phases is not None:
-            success = await set_episode_trigger_phases(full_uuid, request.trigger_phases)
+            success = await set_episode_trigger_phases(
+                full_uuid,
+                request.trigger_phases,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_trigger_phases = request.trigger_phases
             messages.append(f"trigger_phases={request.trigger_phases}")
 
         if request.summary is not None:
-            success = await set_episode_summary(full_uuid, request.summary)
+            success = await set_episode_summary(
+                full_uuid,
+                request.summary,
+                change_reason=request.change_reason,
+            )
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_summary = request.summary
@@ -169,6 +204,9 @@ async def handle_update_episode_properties(
 
         if not messages:
             raise HTTPException(status_code=400, detail="No properties to update")
+
+        episode = await get_memory_repository().get_as_dict(full_uuid)
+        version = int(episode["version"]) if isinstance(episode, dict) and episode.get("version") is not None else None
 
         return UpdateEpisodePropertiesResponse(
             success=True,
@@ -180,6 +218,7 @@ async def handle_update_episode_properties(
             trigger_phases=final_trigger_phases,
             summary=final_summary,
             message=f"Updated: {', '.join(messages)}",
+            version=version,
         )
     except HTTPException:
         raise
@@ -234,16 +273,105 @@ async def handle_update_episode(
         messages.append(f"injection_tier={request.injection_tier.value}")
 
     try:
-        success = await repo.update(full_uuid, **updates)
+        update_kwargs = dict(updates)
+        update_kwargs["changed_by"] = "api"
+        if request.change_reason is not None:
+            update_kwargs["change_reason"] = request.change_reason
+        success = await repo.update(full_uuid, **update_kwargs)
         if not success:
             raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+        episode = await repo.get_as_dict(full_uuid)
+        version = int(episode["version"]) if isinstance(episode, dict) and episode.get("version") is not None else None
         return UpdateEpisodeResponse(
             success=True,
             episode_id=full_uuid,
             injection_tier=request.injection_tier.value if request.injection_tier is not None else None,
             message=f"Updated: {', '.join(messages)}",
+            version=version,
         )
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update episode: {e}") from e
+
+
+def _revision_to_response(revision: object) -> MemoryRevisionResponse:
+    from app.models.memory_unified import MemoryRevision
+
+    from .memory_schemas import MemoryRevisionResponse
+
+    assert isinstance(revision, MemoryRevision)
+    return MemoryRevisionResponse(
+        id=revision.id,
+        memory_id=str(revision.memory_id) if revision.memory_id else None,
+        memory_uuid=revision.memory_uuid,
+        version=revision.version,
+        action=revision.action,
+        content=revision.content,
+        name=revision.name,
+        summary=revision.summary,
+        injection_tier={1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(revision.tier, "reference"),
+        scope=revision.scope,
+        scope_id=revision.scope_id,
+        tags=list(revision.tags or []),
+        changed_by=revision.changed_by,
+        change_reason=revision.change_reason,
+        content_hash=revision.content_hash,
+        created_at=revision.created_at,
+    )
+
+
+async def resolve_episode_or_revision_uuid(episode_id: str) -> str:
+    """Resolve an episode UUID prefix against active rows first, then revisions."""
+    repo = get_memory_repository()
+    try:
+        return await repo.resolve_uuid_prefix(episode_id)
+    except ValueError:
+        try:
+            return await repo.resolve_revision_memory_uuid_prefix(episode_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+async def handle_list_episode_revisions(
+    episode_id: str,
+    *,
+    limit: int = 20,
+) -> MemoryRevisionListResponse:
+    """List immutable revision history for one memory episode."""
+    from .memory_schemas import MemoryRevisionListResponse
+
+    full_uuid = await resolve_episode_or_revision_uuid(episode_id)
+    repo = get_memory_repository()
+    revisions = await repo.list_revisions(full_uuid, limit=limit)
+    return MemoryRevisionListResponse(
+        revisions=[_revision_to_response(revision) for revision in revisions],
+        total=len(revisions),
+    )
+
+
+async def handle_restore_episode_revision(
+    episode_id: str,
+    revision_id: str,
+    request: MemoryRestoreRequest,
+) -> UpdateEpisodeResponse:
+    """Restore a memory episode to a previous revision."""
+    from .memory_schemas import UpdateEpisodeResponse
+
+    full_uuid = await resolve_episode_or_revision_uuid(episode_id)
+    repo = get_memory_repository()
+    restored = await repo.restore_revision(
+        full_uuid,
+        revision_id,
+        changed_by="api",
+        change_reason=request.change_reason,
+    )
+    if restored is None:
+        raise HTTPException(status_code=404, detail="Memory revision not found")
+    return UpdateEpisodeResponse(
+        success=True,
+        episode_id=full_uuid,
+        injection_tier=restored.injection_tier,
+        message=f"Restored revision {revision_id}",
+        version=restored.version,
+    )

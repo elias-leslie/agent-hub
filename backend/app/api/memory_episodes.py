@@ -14,6 +14,8 @@ from .memory_episodes_handlers import (
     handle_add_episode,
     handle_delete_episode,
     handle_get_episode,
+    handle_list_episode_revisions,
+    handle_restore_episode_revision,
     handle_update_episode,
     handle_update_episode_properties,
 )
@@ -35,6 +37,8 @@ from .memory_schemas import (
     DeleteEpisodeResponse,
     EpisodeDetailResponse,
     HealthResponse,
+    MemoryRestoreRequest,
+    MemoryRevisionListResponse,
     SearchResponse,
     UpdateEpisodePropertiesRequest,
     UpdateEpisodePropertiesResponse,
@@ -130,9 +134,10 @@ async def get_episode(
 async def delete_episode(
     full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
+    change_reason: Annotated[str | None, Query(description="Why this episode is being deleted")] = None,
 ) -> DeleteEpisodeResponse:
     """Delete episode and clean up orphaned entities/edges. Accepts UUID or 8-char prefix."""
-    return await handle_delete_episode(full_uuid, memory)
+    return await handle_delete_episode(full_uuid, memory, change_reason=change_reason)
 
 
 @router.patch("/episode/{episode_id}", response_model=UpdateEpisodeResponse)
@@ -160,6 +165,25 @@ async def get_episode_citations(
 ) -> Any:
     """Get injection sessions where this episode was cited."""
     return await handle_get_episode_citations(full_uuid, limit)
+
+
+@router.get("/episode/{episode_id}/revisions", response_model=MemoryRevisionListResponse)
+async def list_episode_revisions(
+    episode_id: str,
+    limit: Annotated[int, Query(ge=1, le=100, description="Max revisions")] = 20,
+) -> MemoryRevisionListResponse:
+    """List immutable revision history for an episode by current or historical UUID prefix."""
+    return await handle_list_episode_revisions(episode_id, limit=limit)
+
+
+@router.post("/episode/{episode_id}/revisions/{revision_id}/restore", response_model=UpdateEpisodeResponse)
+async def restore_episode_revision(
+    episode_id: str,
+    revision_id: str,
+    request: MemoryRestoreRequest,
+) -> UpdateEpisodeResponse:
+    """Restore an episode to a historical revision by current or historical UUID prefix."""
+    return await handle_restore_episode_revision(episode_id, revision_id, request)
 
 
 @router.get("/episode/{episode_id}/similar")

@@ -43,6 +43,8 @@ async def insert_memory(
     tier: int,
     summary: str | None,
     token_count: int,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
 ) -> str:
     """Insert a memory row via MemoryRepository.create() and return its UUID."""
     memory = await repo.create(
@@ -56,6 +58,8 @@ async def insert_memory(
         summary=summary,
         token_count=token_count,
         valid_at=reference_time,
+        changed_by=changed_by,
+        change_reason=change_reason,
     )
     return str(memory.id)
 

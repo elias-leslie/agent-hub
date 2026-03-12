@@ -18,6 +18,8 @@ from app.models import (
     AgentBenchmarkExperiment,
     AgentBenchmarkRun,
     AgentRegressionCluster,
+    Memory,
+    MemoryRevision,
     Persona,
     Prompt,
 )
@@ -51,6 +53,17 @@ def _heartbeat_prompt_descriptor(config_snapshot: dict[str, Any]) -> str | None:
     if not updated_at or not content_hash:
         return None
     return f"{updated_at}:{content_hash}"
+
+
+def _memory_state_descriptor(config_snapshot: dict[str, Any]) -> str | None:
+    memory_state = config_snapshot.get("memory_state")
+    if not isinstance(memory_state, dict):
+        return None
+    latest_revision_id = memory_state.get("latest_revision_id")
+    latest_revision_at = memory_state.get("latest_revision_at")
+    if not latest_revision_id or not latest_revision_at:
+        return None
+    return f"{latest_revision_at}:{latest_revision_id}"
 
 
 def _sample_mean(values: list[float]) -> float:
@@ -145,6 +158,9 @@ def _summarize_experiment_arm(
         hd = _heartbeat_prompt_descriptor(cs)
         if hd:
             prompt_version_set.add(hd)
+        md = _memory_state_descriptor(cs)
+        if md:
+            prompt_version_set.add(f"memory:{md}")
     prompt_versions = sorted(prompt_version_set)
 
     latest_completed = max(
@@ -392,6 +408,23 @@ async def capture_benchmark_config_snapshot(
                 })
         if task_prompt_sources:
             snapshot["prompt_stack"]["task_prompt_sources"] = task_prompt_sources
+
+        latest_memory_revision = await db.scalar(
+            select(MemoryRevision).order_by(MemoryRevision.created_at.desc())
+        )
+        active_memory_count = await db.scalar(
+            select(func.count()).select_from(Memory).where(Memory.status == "active")
+        )
+        snapshot["memory_state"] = {
+            "latest_revision_id": latest_memory_revision.id if latest_memory_revision else None,
+            "latest_revision_at": (
+                latest_memory_revision.created_at.isoformat()
+                if latest_memory_revision and latest_memory_revision.created_at
+                else None
+            ),
+            "latest_memory_uuid": latest_memory_revision.memory_uuid if latest_memory_revision else None,
+            "active_count": int(active_memory_count or 0),
+        }
 
         if agent_slug == "persona":
             snapshot.update(await _capture_persona_snapshot(db, agent))

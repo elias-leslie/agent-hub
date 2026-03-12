@@ -41,7 +41,11 @@ async def bulk_delete_episodes(
     try:
         memory = get_memory_service(MemoryScope.GLOBAL, None)
         resolved_ids, resolution_errors = await resolve_ids_with_errors(request.ids)
-        result = await memory.bulk_delete(resolved_ids)
+        result = await memory.bulk_delete(
+            resolved_ids,
+            changed_by="api",
+            change_reason=request.change_reason,
+        )
         all_errors = resolution_errors + result["errors"]
         return BulkDeleteResponse(
             deleted=result["deleted"],

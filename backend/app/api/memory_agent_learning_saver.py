@@ -69,13 +69,20 @@ async def store_learning_episode(
         source=MemorySource.SYSTEM,
         injection_tier=request.injection_tier.value,
         summary=request.summary,
+        changed_by="save_learning",
+        change_reason=request.change_reason or "Learning saved",
     )
 
     if not result.success:
         raise ValueError(f"Failed to save learning: {result.validation_error}")
 
     new_uuid = result.uuid or ""
-    await set_episode_properties(new_uuid, request.pinned, request.trigger_task_types)
+    await set_episode_properties(
+        new_uuid,
+        request.pinned,
+        request.trigger_task_types,
+        change_reason=request.change_reason or "Learning properties updated",
+    )
 
     return new_uuid, status.value
 

@@ -9,7 +9,12 @@ from .repository import get_memory_repository
 logger = logging.getLogger(__name__)
 
 
-async def delete_episode(episode_uuid: str) -> bool:
+async def delete_episode(
+    episode_uuid: str,
+    *,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
+) -> bool:
     """
     Delete an episode from memory.
 
@@ -24,7 +29,11 @@ async def delete_episode(episode_uuid: str) -> bool:
     """
     repo = get_memory_repository()
     try:
-        deleted = await repo.delete(episode_uuid)
+        deleted = await repo.delete(
+            episode_uuid,
+            changed_by=changed_by,
+            change_reason=change_reason,
+        )
         if not deleted:
             raise ValueError(f"Episode not found: {episode_uuid}")
         logger.info("Deleted episode: %s", episode_uuid)
@@ -36,7 +45,12 @@ async def delete_episode(episode_uuid: str) -> bool:
         raise
 
 
-async def bulk_delete_episodes(episode_uuids: list[str]) -> dict[str, Any]:
+async def bulk_delete_episodes(
+    episode_uuids: list[str],
+    *,
+    changed_by: str | None = None,
+    change_reason: str | None = None,
+) -> dict[str, Any]:
     """
     Delete multiple episodes from memory.
 
@@ -53,7 +67,11 @@ async def bulk_delete_episodes(episode_uuids: list[str]) -> dict[str, Any]:
 
     for uuid in episode_uuids:
         try:
-            ok = await repo.delete(uuid)
+            ok = await repo.delete(
+                uuid,
+                changed_by=changed_by,
+                change_reason=change_reason,
+            )
             if ok:
                 deleted += 1
                 logger.debug("Bulk deleted episode: %s", uuid)

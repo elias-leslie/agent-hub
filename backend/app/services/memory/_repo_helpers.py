@@ -26,6 +26,7 @@ def to_dict(mem: Memory) -> dict[str, Any]:
     """Convert Memory ORM object to dict (backward compat)."""
     return {
         "uuid": str(mem.id),
+        "version": mem.version,
         "content": mem.content,
         "name": mem.name,
         "summary": mem.summary,
