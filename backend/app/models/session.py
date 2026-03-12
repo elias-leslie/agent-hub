@@ -177,6 +177,9 @@ class Session(Base):
         Index("ix_sessions_status_last_activity", "status", "last_activity_at"),
     )
 
+    def __repr__(self) -> str:
+        return f"<Session id={self.id!r} project={self.project_id!r} status={self.status!r}>"
+
 
 class CostLog(Base):
     """Token usage and cost tracking per request."""
@@ -245,6 +248,9 @@ class SessionEvent(Base):
         Index("ix_session_events_type", "event_type"),
         Index("ix_session_events_tool", "tool_name"),
     )
+
+    def __repr__(self) -> str:
+        return f"<SessionEvent id={self.id!r} type={self.event_type!r} turn={self.turn}>"
 
 
 class SessionSummarySegment(Base):

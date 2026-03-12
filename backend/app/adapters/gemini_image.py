@@ -93,7 +93,7 @@ class GeminiImageAdapter(ImageAdapter):
                     self._sdk_client = make_sdk_client(fresh)
                     self._last_api_key = fresh
         except Exception:
-            pass
+            logger.debug("Gemini image API key refresh failed", exc_info=True)
 
     async def generate_image(
         self,

@@ -81,6 +81,7 @@ async def get_timeline(
             limit=limit,
         )
     except Exception as e:
+        logger.exception("Failed to get memory timeline")
         raise HTTPException(status_code=500, detail=f"Failed to get timeline: {e}") from e
 
 
@@ -94,6 +95,7 @@ async def get_sessions_with_memory_endpoint(
     try:
         return await get_sessions_with_memory(limit=limit, offset=offset)
     except Exception as e:
+        logger.exception("Failed to get sessions with memory")
         raise HTTPException(status_code=500, detail=f"Failed to get sessions: {e}") from e
 
 
@@ -108,6 +110,7 @@ async def get_top_memories_endpoint(
     try:
         return await get_top_memories(group_id=group_id, sort_by=sort_by, limit=limit)
     except Exception as e:
+        logger.exception("Failed to get top memories")
         raise HTTPException(status_code=500, detail=f"Failed to get top memories: {e}") from e
 
 
@@ -156,6 +159,7 @@ async def get_analytics(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to get memory analytics")
         raise HTTPException(status_code=500, detail=f"Failed to get analytics: {e}") from e
 
 

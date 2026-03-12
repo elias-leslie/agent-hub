@@ -5,6 +5,7 @@ import { Cpu, AlertCircle, Database, Loader2 } from "lucide-react";
 import type { ModelOption } from "@agent-hub/chat-ui";
 import { useModelsWithSync } from "@/components/chat/use-models";
 import { fetchApi } from "@/lib/api-config";
+import { useToastActions } from "@/components/error/toast";
 import { ModelCard } from "@/components/models/model-card";
 import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
@@ -19,6 +20,7 @@ export default function ModelsPage() {
     isLoading,
     isError,
   } = useModelsWithSync();
+  const toast = useToastActions();
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   // null = "show all" until models load; becomes a Set after first initialization
@@ -52,7 +54,7 @@ export default function ModelsPage() {
   const [sortBy, setSortBy] = useState("composite");
   const [groupByProvider, setGroupByProvider] = useState(false);
   const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
-  const [expandedModel, setExpandedModel] = useState<ModelOption | null>(null);
+  const [, setExpandedModel] = useState<ModelOption | null>(null);
 
   const handleProviderToggle = (provider: string) => {
     setSelectedProviders((prev) => {
@@ -96,8 +98,8 @@ export default function ModelsPage() {
     try {
       await fetchApi("/api/models/sync", { method: "POST" });
       await refetch();
-    } catch (err) {
-      console.error("Model sync failed:", err);
+    } catch {
+      toast.error("Sync failed", "Could not sync external benchmark data");
     } finally {
       setSyncing(false);
     }

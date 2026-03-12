@@ -17,23 +17,18 @@ interface MemoryTabProps {
 
 export function MemoryTab({ formData, updateField }: MemoryTabProps) {
   const isCustomEnabled = formData.memory_config != null;
-  const config = parseConfig(
-    (formData.memory_config as Record<string, unknown> | null) ?? null
-  );
+  const config = parseConfig(formData.memory_config ?? null);
 
   const updateConfig = (updates: Partial<MemoryConfig>) => {
     const newConfig = { ...config, ...updates };
-    updateField("memory_config", newConfig as unknown as Agent["memory_config"]);
+    updateField("memory_config", newConfig);
   };
 
   const toggleCustomSettings = () => {
     if (isCustomEnabled) {
       updateField("memory_config", null);
     } else {
-      updateField(
-        "memory_config",
-        { ...DEFAULT_CONFIG } as unknown as Agent["memory_config"]
-      );
+      updateField("memory_config", { ...DEFAULT_CONFIG });
     }
   };
 
@@ -58,7 +53,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             [field]: tags,
             [otherField]: otherTags,
             _tags_only: true,
-          } as unknown as Agent["memory_config"]
+          }
         );
       }
     }

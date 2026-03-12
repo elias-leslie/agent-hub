@@ -8,6 +8,7 @@ All functionality has been split into specialized modules:
 - gemini_errors: Error handling
 """
 
+import logging
 import uuid
 from typing import Any, cast
 
@@ -19,6 +20,8 @@ from app.adapters.gemini_errors import handle_error
 from app.adapters.gemini_messages import build_parts, convert_messages
 from app.adapters.gemini_response import process_response
 from app.adapters.gemini_thinking import get_thinking_level
+
+logger = logging.getLogger(__name__)
 
 
 async def do_complete_call(
@@ -62,7 +65,7 @@ def resolve_api_key(api_key: str | None) -> str | None:
         if cm.is_initialized:
             return cm.get_api_key("gemini")
     except Exception:
-        pass
+        logger.debug("Gemini credential lookup failed", exc_info=True)
     return None
 
 
@@ -75,7 +78,7 @@ def resolve_api_keys() -> list[str]:
         if cm.is_initialized:
             return cm.get_api_keys("gemini")
     except Exception:
-        pass
+        logger.debug("Gemini credential keys lookup failed", exc_info=True)
     return []
 
 

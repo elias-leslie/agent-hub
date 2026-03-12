@@ -5,12 +5,16 @@ import { cn } from "@/lib/utils";
 export function CopyIdButton({ id, className, asSpan }: { id: string; className?: string; asSpan?: boolean }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
+  const doCopy = async () => {
     await navigator.clipboard.writeText(id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    await doCopy();
   };
 
   const commonProps = {
@@ -42,7 +46,7 @@ export function CopyIdButton({ id, className, asSpan }: { id: string; className?
   // Use span when inside another interactive element (button/link)
   if (asSpan) {
     return (
-      <span role="button" tabIndex={0} {...commonProps} onKeyDown={(e) => e.key === 'Enter' && handleCopy(e as unknown as React.MouseEvent)}>
+      <span role="button" tabIndex={0} {...commonProps} onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); e.preventDefault(); doCopy(); } }}>
         {content}
       </span>
     );

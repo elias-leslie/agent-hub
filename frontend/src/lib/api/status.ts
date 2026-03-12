@@ -25,12 +25,22 @@ export interface ProviderStatus {
   health: ProviderHealthDetails | null;
 }
 
+export interface CircuitBreakerStatus {
+  state: string;
+  consecutive_failures: number;
+  last_error_signature: string | null;
+  cooldown_until: number | null;
+}
+
 export interface StatusResponse {
   status: "healthy" | "degraded";
   service: string;
   database: string;
   providers: ProviderStatus[];
   uptime_seconds: number;
+  circuit_breakers: Record<string, CircuitBreakerStatus> | null;
+  thrashing_events_total: number;
+  circuit_breaker_trips_total: number;
 }
 
 export async function fetchStatus(): Promise<StatusResponse> {

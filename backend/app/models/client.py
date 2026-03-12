@@ -78,6 +78,9 @@ class Client(Base):
         Index("ix_clients_display_name", "display_name"),
     )
 
+    def __repr__(self) -> str:
+        return f"<Client id={self.id!r} name={self.display_name!r} status={self.status!r}>"
+
 
 class APIKey(Base):
     """Virtual API keys for OpenAI-compatible endpoint authentication."""
@@ -99,6 +102,9 @@ class APIKey(Base):
     )  # Optional expiration
 
     __table_args__ = (Index("ix_api_keys_project", "project_id"),)
+
+    def __repr__(self) -> str:
+        return f"<APIKey id={self.id} prefix={self.key_prefix!r} project={self.project_id!r} active={bool(self.is_active)}>"
 
 
 class ClientControl(Base):
@@ -122,3 +128,6 @@ class ClientControl(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+    def __repr__(self) -> str:
+        return f"<ClientControl client={self.client_name!r} enabled={self.enabled}>"
