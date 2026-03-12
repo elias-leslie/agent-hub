@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -61,21 +62,39 @@ def _build_search_filters(
     """Build shared filter conditions for search queries."""
     conditions = []
     if query:
-        conditions.append(
-            text("search_vector @@ plainto_tsquery('english', :query)")
-        )
+        conditions.append(text("search_vector @@ plainto_tsquery('english', :query)"))
     if component_id:
         conditions.append(FeedbackItem.component_id == component_id)
     if feedback_type:
         conditions.append(FeedbackItem.feedback_type == feedback_type)
     if status:
-        if status == "active":
-            conditions.append(FeedbackItem.status.in_(ACTIVE_FEEDBACK_STATUSES))
-        else:
-            conditions.append(FeedbackItem.status == status)
+        conditions.append(_status_condition(status))
     if project_id:
         conditions.append(FeedbackItem.project_id == project_id)
     return conditions
+
+
+def _status_condition(status: str):
+    if status == "active":
+        return FeedbackItem.status.in_(ACTIVE_FEEDBACK_STATUSES)
+    return FeedbackItem.status == status
+
+
+def _apply_feedback_item_filters(stmt, conditions: Iterable, *, query: str | None = None):
+    for condition in conditions:
+        stmt = stmt.where(condition)
+    if query:
+        stmt = stmt.params(query=query)
+    return stmt
+
+
+def _build_feedback_list_order(sort: str):
+    sort_order = {
+        "votes": (FeedbackItem.vote_count.desc(), FeedbackItem.created_at.desc()),
+        "newest": (FeedbackItem.created_at.desc(),),
+        "oldest": (FeedbackItem.created_at.asc(),),
+    }
+    return sort_order.get(sort, (FeedbackItem.vote_count.desc(),))
 
 
 async def search_feedback_items(
@@ -92,21 +111,9 @@ async def search_feedback_items(
 ) -> list[FeedbackItem]:
     """Search/list feedback items with filters."""
     conditions = _build_search_filters(query, component_id, feedback_type, status, project_id)
-    stmt = select(FeedbackItem)
-    for cond in conditions:
-        stmt = stmt.where(cond)
-    if query:
-        stmt = stmt.params(query=query)
-
-    if sort == "votes":
-        stmt = stmt.order_by(FeedbackItem.vote_count.desc(), FeedbackItem.created_at.desc())
-    elif sort == "newest":
-        stmt = stmt.order_by(FeedbackItem.created_at.desc())
-    elif sort == "oldest":
-        stmt = stmt.order_by(FeedbackItem.created_at.asc())
-    else:
-        stmt = stmt.order_by(FeedbackItem.vote_count.desc())
-
+    stmt = _apply_feedback_item_filters(
+        select(FeedbackItem), conditions, query=query
+    ).order_by(*_build_feedback_list_order(sort))
     stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     return list(result.scalars().all())
@@ -123,11 +130,9 @@ async def count_feedback_items(
 ) -> int:
     """Count feedback items matching filters (for pagination total)."""
     conditions = _build_search_filters(query, component_id, feedback_type, status, project_id)
-    stmt = select(func.count()).select_from(FeedbackItem)
-    for cond in conditions:
-        stmt = stmt.where(cond)
-    if query:
-        stmt = stmt.params(query=query)
+    stmt = _apply_feedback_item_filters(
+        select(func.count()).select_from(FeedbackItem), conditions, query=query
+    )
     result = await db.execute(stmt)
     return result.scalar_one()
 
