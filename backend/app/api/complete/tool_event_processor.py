@@ -177,7 +177,8 @@ def _process_error_event(event: Any) -> str:
 
 async def process_tool_event(
     event: Any,
-    turn: int,
+    event_turn: int,
+    model_turn: int,
     session_id: str,
     db: AsyncSession,
     content_parts: list[str],
@@ -187,7 +188,7 @@ async def process_tool_event(
     agent_id: str | None = None,
     tool_use_id_to_name: dict[str, str] | None = None,
     tool_result_summaries: list[str] | None = None,
-) -> tuple[int, int, str | None]:
+) -> tuple[int, int, str | None, int]:
     """Process a single unified ToolEvent.
 
     Handles all event types: assistant, tool_result, result, error.
@@ -209,7 +210,7 @@ async def process_tool_event(
             Caller should pass a shared dict across calls.
 
     Returns:
-        Tuple of (updated_turn, tool_calls_increment, error_message)
+        Tuple of (updated_event_turn, tool_calls_increment, error_message, updated_model_turn)
         error_message is set if event indicates an error
     """
     event_type = getattr(event, "type", None)
@@ -218,22 +219,26 @@ async def process_tool_event(
 
     if event_type == "assistant":
         tool_calls_increment = await _process_assistant_event(
-            event, turn, session_id, db, content_parts, thinking_parts,
+            event, model_turn + 1, session_id, db, content_parts, thinking_parts,
             tracker, model_used, agent_id,
             tool_use_id_to_name=tool_use_id_to_name,
         )
+        if tool_calls_increment > 0:
+            model_turn += 1
     elif event_type == "tool_result":
-        turn = await _process_tool_result_event(
-            event, turn, session_id, db, model_used, agent_id,
+        event_turn = await _process_tool_result_event(
+            event, event_turn, session_id, db, model_used, agent_id,
             tool_use_id_to_name=tool_use_id_to_name,
             tool_result_summaries=tool_result_summaries,
         )
     elif event_type == "result":
         _process_result_event(event, content_parts)
+        if getattr(event, "finish_reason", None) != "max_turns":
+            model_turn += 1
     elif event_type == "error":
         error_message = _process_error_event(event)
 
-    return turn, tool_calls_increment, error_message
+    return event_turn, tool_calls_increment, error_message, model_turn
 
 
 def _summarize_tool_result(tool_name: str, content: str, is_error: bool) -> str | None:
