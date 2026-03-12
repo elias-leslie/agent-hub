@@ -65,21 +65,46 @@ async def test_execute_agent_loop_routes_tools_with_resolved_turn_budget() -> No
         session_id="sess-1",
         memory_uuids=[],
         cited_uuids=[],
+        thinking_tokens=None,
+        tool_calls_count=1,
+        status="success",
+        error=None,
+        container_id=None,
+        progress_log=[],
+        model_used="codex/gpt-5.4",
+        fallback_used=False,
+        fallback_reason=None,
+        turns=1,
     )
+    built = {
+        "content": "done",
+        "model": "codex/gpt-5.4",
+        "provider": "codex",
+        "input_tokens": 1,
+        "output_tokens": 1,
+        "finish_reason": "end_turn",
+        "session_id": "sess-1",
+        "memory_uuids": [],
+        "cited_uuids": [],
+    }
 
     with patch(
         "app.api.complete.agent_loop.route_tool_execution",
         new=AsyncMock(return_value=tool_result),
     ) as mock_route, patch(
-        "app.api.complete.agent_loop.persist_execution_observability",
+        "app.api.complete.agent_loop.finalize_completion_result",
         new=AsyncMock(),
-    ) as mock_observability:
+    ) as mock_finalize, patch(
+        "app.api.complete.agent_loop.build_completion_result",
+        return_value=built,
+    ):
         result = await execute_agent_loop(_request(), should_execute_tools=True)
 
     assert isinstance(result, CompletionInternalResult)
     assert mock_route.await_args.kwargs["max_turns"] == 20
-    assert mock_observability.await_args.kwargs["orchestration_path"] == "tool_loop"
-    assert mock_observability.await_args.kwargs["requested_max_turns"] == 1
+    assert mock_finalize.await_args.kwargs["orchestration_path"] == "tool_loop"
+    assert mock_finalize.await_args.kwargs["requested_max_turns"] == 1
+    assert mock_finalize.await_args.args[4] == "codex/gpt-5.4"
 
 
 @pytest.mark.asyncio
