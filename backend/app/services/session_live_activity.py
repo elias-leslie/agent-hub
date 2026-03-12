@@ -21,8 +21,20 @@ _ACTIVE_PHASES = {
 _QUIET_AFTER_SECONDS = 60
 _STALL_AFTER_SECONDS = 180
 _POST_TOOL_STALL_AFTER_SECONDS = 120
+_NO_ACTIVITY_STALL_AFTER_SECONDS = 90 * 60
+_DEAD_CANDIDATE_AFTER_SECONDS = 30 * 60
+_REAPABLE_AFTER_SECONDS = 6 * 60 * 60
 _TOUCHED_FILES_LIMIT = 10
 _RECENT_PATHS_LIMIT = 20
+_NON_REAPABLE_PHASES = {
+    "injecting_memory",
+    "planning",
+    "running_tool",
+    "reading_file",
+    "writing_file",
+    "running_validation",
+    "finalizing",
+}
 
 
 def _now_iso() -> str:
@@ -42,6 +54,18 @@ def _live_activity(metadata: dict[str, Any]) -> dict[str, Any]:
     if isinstance(live_activity, dict):
         return dict(live_activity)
     return {}
+
+
+def _activity_age_seconds(value: Any) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        last_dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if last_dt.tzinfo is None:
+        last_dt = last_dt.replace(tzinfo=UTC)
+    return max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
 
 
 def _path_from_tool_input(tool_input: dict[str, Any] | None) -> str | None:
@@ -138,6 +162,105 @@ def _summary_looks_active(summary: Any) -> bool:
             "Model planning",
         )
     )
+
+
+def _synthetic_live_activity(session: Session) -> dict[str, Any] | None:
+    metadata = _metadata_dict(session)
+    raw = _live_activity(metadata)
+    if raw:
+        return raw
+    if session.status != "active":
+        return None
+    last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
+    last_updated_iso = last_updated.isoformat() if last_updated is not None else None
+    return {
+        "phase": "unknown",
+        "status": "active",
+        "summary": "No structured activity recorded",
+        "last_event_type": None,
+        "last_event_at": last_updated_iso,
+        "last_model_activity_at": last_updated_iso,
+        "outstanding_tool_calls": 0,
+        "tool_calls_count": 0,
+        "files_touched": [],
+        "last_heartbeat_at": None,
+    }
+
+
+def _apply_lifecycle_state(
+    session: Session,
+    response: dict[str, Any],
+    *,
+    has_owner_lane: bool,
+    has_specialist_lane: bool,
+) -> None:
+    quiet_for_seconds = response.get("quiet_for_seconds")
+    quiet_for = quiet_for_seconds if isinstance(quiet_for_seconds, int) else None
+    phase = str(response.get("phase") or "unknown")
+    last_event_type = str(response.get("last_event_type") or "")
+    outstanding_tool_calls = int(response.get("outstanding_tool_calls") or 0)
+    last_heartbeat_age = _activity_age_seconds(response.get("last_heartbeat_at"))
+
+    dead_signals: list[str] = []
+    anti_reap_signals: list[str] = []
+    state = str(response.get("health") or response.get("status") or "idle")
+
+    if has_owner_lane:
+        anti_reap_signals.append("owner_lane")
+    if has_specialist_lane:
+        anti_reap_signals.append("specialist_lane")
+    if outstanding_tool_calls > 0:
+        anti_reap_signals.append("outstanding_tool_calls")
+    if phase in _NON_REAPABLE_PHASES:
+        anti_reap_signals.append(f"phase_{phase}")
+    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
+        anti_reap_signals.append("recent_write_activity")
+
+    if session.status == "active":
+        if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+            dead_signals.append("no_model_activity_30m")
+        if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+            dead_signals.append("no_structured_activity")
+        if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_only")
+        if response.get("termination_reason"):
+            dead_signals.append("termination_signal")
+        if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_missing")
+        elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_absent_6h")
+
+        if dead_signals:
+            state = "dead_candidate"
+
+        strong_dead_signals = {
+            "no_structured_activity",
+            "heartbeat_only",
+            "heartbeat_missing",
+            "heartbeat_absent_6h",
+            "termination_signal",
+        }
+        if (
+            quiet_for is not None
+            and quiet_for >= _REAPABLE_AFTER_SECONDS
+            and state == "dead_candidate"
+            and not anti_reap_signals
+            and any(signal in strong_dead_signals for signal in dead_signals)
+        ):
+            state = "reapable"
+
+    reason_codes = [*dead_signals, *anti_reap_signals]
+    if not reason_codes:
+        reason_codes = [f"health_{state}"]
+
+    response["lifecycle_state"] = state
+    response["lifecycle_reason_codes"] = reason_codes
+    response["dead_signals"] = dead_signals
+    response["anti_reap_signals"] = anti_reap_signals
+    response["has_owner_lane"] = has_owner_lane
+    response["has_specialist_lane"] = has_specialist_lane
+    response["reapable"] = state == "reapable"
+    response["reapable_reason"] = "+".join([*dead_signals, "no_lane"]) if state == "reapable" else None
 
 
 def update_live_activity_for_event(
@@ -354,10 +477,14 @@ def apply_live_activity_heartbeat(
     session.provider_metadata = metadata
 
 
-def build_live_activity_response(session: Session) -> dict[str, Any] | None:
+def build_live_activity_response(
+    session: Session,
+    *,
+    has_owner_lane: bool = False,
+    has_specialist_lane: bool = False,
+) -> dict[str, Any] | None:
     """Build API-ready live activity payload with dynamic quiet/stall classification."""
-    metadata = _metadata_dict(session)
-    raw = _live_activity(metadata)
+    raw = _synthetic_live_activity(session)
     if not raw:
         return None
 
@@ -372,6 +499,8 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
     if isinstance(last_activity, str):
         try:
             last_dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=UTC)
             quiet_for_seconds = max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
         except ValueError:
             quiet_for_seconds = None
@@ -401,6 +530,14 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
             )
         elif quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
             health = "quiet"
+    elif session.status == "active" and phase == "unknown":
+        health = "active"
+        if quiet_for_seconds is not None and quiet_for_seconds >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+            health = "stalled"
+            stalled = True
+            stall_reason = f"No structured activity for {quiet_for_seconds}s"
+        elif quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
+            health = "quiet"
     elif status == "error":
         health = "error"
     elif session.status == "completed":
@@ -423,4 +560,10 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
     response["stall_reason"] = stall_reason or response.get("stall_reason")
     response["files_touched"] = response.get("files_touched") or []
     response["last_heartbeat_at"] = response.get("last_heartbeat_at")
+    _apply_lifecycle_state(
+        session,
+        response,
+        has_owner_lane=has_owner_lane,
+        has_specialist_lane=has_specialist_lane,
+    )
     return response

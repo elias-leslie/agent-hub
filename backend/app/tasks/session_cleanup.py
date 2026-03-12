@@ -1,37 +1,22 @@
-"""Session cleanup background task.
-
-Automatically marks stale sessions as completed based on inactivity.
-Each session type has its own timeout threshold.
-"""
+"""Session cleanup background task."""
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from types import SimpleNamespace
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models import Session, SessionEvent
-from app.services.session_activity import last_activity_expr
-from app.services.session_live_activity import mark_session_completed
+from app.services.ownership_inventory import (
+    query_project_active_specialists,
+    query_project_ownership,
+)
+from app.services.session_live_activity import build_live_activity_response, mark_session_completed
 
 logger = logging.getLogger(__name__)
 
 _HEARTBEAT_PREFIX = "Run your regular heartbeat check."
-
-
-# Mapping of session types to their timeout settings (in minutes)
-def get_session_timeouts() -> dict[str, int]:
-    """Get session timeout configuration by type."""
-    return {
-        "completion": settings.session_timeout_completion,
-        "chat": settings.session_timeout_chat,
-        "roundtable": settings.session_timeout_roundtable,
-        "image_generation": settings.session_timeout_image_generation,
-        "agent": settings.session_timeout_agent,
-        "claude_code": settings.session_timeout_claude_code,
-    }
 
 
 async def _query_active_persona_heartbeat_sessions(
@@ -117,59 +102,44 @@ async def cleanup_superseded_persona_heartbeat_sessions(db: AsyncSession) -> int
 
 
 async def cleanup_stale_sessions(db: AsyncSession) -> int:
-    """Mark stale sessions as completed.
-
-    Uses batch UPDATE statements to avoid N+1 queries.
-    Each session type is updated in a single query.
-
-    Args:
-        db: Database session
-
-    Returns:
-        Number of sessions marked as completed
-    """
-    timeouts = get_session_timeouts()
-    now = datetime.now(UTC)
+    """Mark only high-confidence reapable sessions as completed."""
     total_cleaned = await cleanup_superseded_persona_heartbeat_sessions(db)
+    active_sessions = (
+        await db.execute(
+            select(Session).where(Session.status == "active").order_by(Session.created_at.desc())
+        )
+    ).scalars().all()
 
-    for session_type, timeout_minutes in timeouts.items():
-        cutoff = now - timedelta(minutes=timeout_minutes)
-        last_activity = last_activity_expr()
-        stale_ids = [
-            str(session_id)
-            for session_id in (
-                await db.execute(
-                    select(Session.id).where(
-                        Session.session_type == session_type,
-                        Session.status == "active",
-                        last_activity < cutoff,
-                    )
-                )
-            ).scalars().all()
-        ]
-        if not stale_ids:
+    project_ids = sorted({session.project_id for session in active_sessions if session.project_id})
+    owner_session_ids: set[str] = set()
+    specialist_session_ids: set[str] = set()
+    for project_id in project_ids:
+        owner_session_ids.update(
+            str(owner.session_id)
+            for owner in await query_project_ownership(db, project_id)
+            if getattr(owner, "session_id", None)
+        )
+        specialist_session_ids.update(
+            str(spec.session_id)
+            for spec in await query_project_active_specialists(db, project_id)
+            if getattr(spec, "session_id", None)
+        )
+
+    for session in active_sessions:
+        live_activity = build_live_activity_response(
+            session,
+            has_owner_lane=session.id in owner_session_ids,
+            has_specialist_lane=session.id in specialist_session_ids,
+        )
+        if not live_activity or not live_activity.get("reapable"):
             continue
-
-        rows = (
-            await db.execute(
-                select(Session).where(
-                    Session.id.in_(stale_ids),
-                )
-            )
-        ).scalars().all()
-        for session in rows:
-            mark_session_completed(
-                session,
-                summary=f"Auto-completed after {timeout_minutes}m inactivity",
-                termination_reason=f"session_cleanup_idle_gt_{timeout_minutes}m",
-            )
-        rows_updated = len(rows)
-        if rows_updated > 0:
-            logger.info(
-                f"Auto-completed {rows_updated} stale {session_type} sessions "
-                f"(idle > {timeout_minutes}min)"
-            )
-            total_cleaned += rows_updated
+        reason = str(live_activity.get("reapable_reason") or "session_reapable")
+        mark_session_completed(
+            session,
+            summary="Auto-reaped stale session",
+            termination_reason=reason,
+        )
+        total_cleaned += 1
 
     if total_cleaned > 0:
         await db.commit()
@@ -181,29 +151,33 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
 
 
 async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
-    """Get statistics on stale sessions by type.
-
-    Uses COUNT queries instead of loading all sessions to avoid N+1.
-
-    Returns:
-        Dict mapping session_type to count of stale sessions
-    """
-    timeouts = get_session_timeouts()
-    now = datetime.now(UTC)
-    stats: dict[str, int] = {}
-
-    for session_type, timeout_minutes in timeouts.items():
-        cutoff = now - timedelta(minutes=timeout_minutes)
-        last_activity = last_activity_expr()
-
-        # Use COUNT instead of loading all sessions
-        result = await db.execute(
-            select(func.count(Session.id)).where(
-                Session.session_type == session_type,
-                Session.status == "active",
-                last_activity < cutoff,
-            )
+    """Return reapable-session counts by type."""
+    sessions = (
+        await db.execute(select(Session).where(Session.status == "active"))
+    ).scalars().all()
+    owner_session_ids: set[str] = set()
+    specialist_session_ids: set[str] = set()
+    for project_id in sorted({session.project_id for session in sessions if session.project_id}):
+        owner_session_ids.update(
+            str(owner.session_id)
+            for owner in await query_project_ownership(db, project_id)
+            if getattr(owner, "session_id", None)
         )
-        stats[session_type] = result.scalar() or 0
+        specialist_session_ids.update(
+            str(spec.session_id)
+            for spec in await query_project_active_specialists(db, project_id)
+            if getattr(spec, "session_id", None)
+        )
+
+    stats: dict[str, int] = {}
+    for session in sessions:
+        live_activity = build_live_activity_response(
+            session,
+            has_owner_lane=session.id in owner_session_ids,
+            has_specialist_lane=session.id in specialist_session_ids,
+        )
+        if live_activity and live_activity.get("reapable"):
+            session_type = session.session_type or "unknown"
+            stats[session_type] = stats.get(session_type, 0) + 1
 
     return stats

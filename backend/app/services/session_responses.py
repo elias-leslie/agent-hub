@@ -9,6 +9,10 @@ from app.api.schemas.sessions import (
 )
 from app.models import Session, SessionEvent
 from app.services.context_tracker import calculate_context_usage
+from app.services.ownership_inventory import (
+    query_project_active_specialists,
+    query_project_ownership,
+)
 from app.services.session_tokens import calculate_agent_token_breakdown
 from app.services.session_transforms import (
     _effective_model,
@@ -39,6 +43,27 @@ async def _resolve_agent_display_names(
     return {row.slug: row.name for row in result.all()}
 
 
+async def build_project_lane_session_ids(
+    db: AsyncSession,
+    project_ids: set[str],
+) -> tuple[set[str], set[str]]:
+    """Return (owner_session_ids, specialist_session_ids) for the given projects."""
+    owner_session_ids: set[str] = set()
+    specialist_session_ids: set[str] = set()
+    for project_id in sorted(project_id for project_id in project_ids if project_id):
+        owner_session_ids.update(
+            str(owner.session_id)
+            for owner in await query_project_ownership(db, project_id)
+            if getattr(owner, "session_id", None)
+        )
+        specialist_session_ids.update(
+            str(session.session_id)
+            for session in await query_project_active_specialists(db, project_id)
+            if getattr(session, "session_id", None)
+        )
+    return owner_session_ids, specialist_session_ids
+
+
 async def build_full_session_response(
     db: AsyncSession, session: Session
 ) -> SessionResponse:
@@ -65,6 +90,10 @@ async def build_full_session_response(
     )
 
     agent_names = await _resolve_agent_display_names(db, session.events)
+    owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
+        db,
+        {session.project_id},
+    )
 
     return build_session_response(
         session,
@@ -73,6 +102,8 @@ async def build_full_session_response(
         agent_breakdown,
         total_input,
         total_output,
+        owner_session_ids=owner_session_ids,
+        specialist_session_ids=specialist_session_ids,
     )
 
 

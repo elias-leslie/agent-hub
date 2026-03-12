@@ -7,6 +7,20 @@ from typing import Any
 from .tool_handlers import AgentProgress
 
 
+def _resolve_turns(
+    progress_log: list[AgentProgress],
+    final_result: Any | None,
+) -> int:
+    """Prefer explicit result turns, else fall back to the highest logged turn."""
+    result_turns = getattr(final_result, "turns", None)
+    if result_turns:
+        return result_turns
+    logged_turns = [entry.turn for entry in progress_log if entry.turn > 0]
+    if logged_turns:
+        return max(logged_turns)
+    return 1
+
+
 def build_completion_result(
     final_content: str,
     model: str,
@@ -48,12 +62,7 @@ def build_completion_result(
     Returns:
         Dict with all result attributes
     """
-    # Calculate turns from progress log
-    turns = 1
-    if progress_log:
-        completed_turns = len([p for p in progress_log if p.status in ("running", "complete", "tool_use")])
-        turns = completed_turns // 2 + 1
-    turns = getattr(final_result, "turns", None) or turns
+    turns = _resolve_turns(progress_log, final_result)
 
     return {
         "content": final_content,
@@ -66,11 +75,11 @@ def build_completion_result(
         "memory_uuids": loaded_memory_uuids,
         "cited_uuids": cited_uuids_list,
         "from_cache": False,
-        "cache_metrics": final_result.cache_metrics if final_result else None,
-        "thinking_content": final_result.thinking_content if final_result else None,
+        "cache_metrics": getattr(final_result, "cache_metrics", None),
+        "thinking_content": getattr(final_result, "thinking_content", None),
         "thinking_tokens": total_thinking_tokens if total_thinking_tokens else None,
-        "tool_calls": final_result.tool_calls if final_result else None,
-        "container": final_result.container if final_result else None,
+        "tool_calls": getattr(final_result, "tool_calls", None),
+        "container": getattr(final_result, "container", None),
         "turns": turns,
         "tool_calls_count": tool_calls_count,
         "status": execution_status,

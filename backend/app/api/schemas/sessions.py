@@ -125,6 +125,23 @@ class LiveActivityResponse(BaseModel):
     termination_reason: str | None = None
     files_touched: list[str] = Field(default_factory=list)
     last_heartbeat_at: str | None = None
+    lifecycle_state: str = Field(default="idle", description="Canonical lifecycle classification")
+    lifecycle_reason_codes: list[str] = Field(
+        default_factory=list,
+        description="Reason codes supporting the current lifecycle classification",
+    )
+    dead_signals: list[str] = Field(
+        default_factory=list,
+        description="Signals suggesting the session is no longer meaningfully live",
+    )
+    anti_reap_signals: list[str] = Field(
+        default_factory=list,
+        description="Signals that block conservative automatic reaping",
+    )
+    has_owner_lane: bool = Field(default=False, description="Whether an owner lane still points at this session")
+    has_specialist_lane: bool = Field(default=False, description="Whether a specialist lane still points at this session")
+    reapable: bool = Field(default=False, description="Whether the session is safe for conservative auto-reaping")
+    reapable_reason: str | None = Field(default=None, description="Compact reason string for reapable sessions")
 
 
 class SessionResponse(BaseModel):
