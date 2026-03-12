@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message, ProviderError
 from app.services.container_manager import ContainerManager
+from app.services.session_health import health_detail_for_error, update_session_health
 
 from .context_compaction import maybe_compact_context
 from .multi_turn_helpers import (
@@ -80,6 +81,12 @@ async def _run_with_error_handling(
         record_timeout_in_health_prober(cfg.provider, e)
         state["execution_status"] = "error"
         state["execution_error"] = str(e)
+        await update_session_health(
+            cfg.db,
+            cfg.session_id,
+            health_detail_for_error(e),
+            commit=True,
+        )
         raise
 
 

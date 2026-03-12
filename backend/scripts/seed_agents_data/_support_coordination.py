@@ -31,7 +31,7 @@ _SUPERVISOR: dict[str, object] = {
     "fallback_models": [CLAUDE_SONNET],
     "escalation_model_id": CLAUDE_OPUS,
     "temperature": 0.4,
-    "is_coding_agent": True,
+    "is_coding_agent": False,
     "memory_config": {
         "include_mandates": True,
     },

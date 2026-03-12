@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from datetime import UTC, datetime
 
 from app.models import Session as DBSession
 
@@ -63,6 +64,8 @@ async def close_one_shot_session(session_id: str) -> None:
             session = result.scalar_one_or_none()
             if session:
                 session.status = "completed"
+                session.health_detail = "completed"
+                session.last_activity_at = datetime.now(UTC)
                 await fresh_db.commit()
                 logger.info("Streaming: closed one-shot session %s", session_id)
     except Exception as close_err:

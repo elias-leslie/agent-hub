@@ -11,6 +11,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.services.session_health import (
+    executing_tool_health_detail,
+    update_session_health,
+)
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,6 +82,12 @@ async def _process_tool_use_block(
     if tool_use_id and tool_use_id_to_name is not None:
         tool_use_id_to_name[tool_use_id] = tool_name
 
+    await update_session_health(
+        db,
+        session_id,
+        executing_tool_health_detail(tool_name),
+        commit=True,
+    )
     await store_tool_use(db, session_id, tool_name, tool_input, model_used=model_used, agent_id=agent_id)
     await tracker.report_tool_use(turn, tool_name, tool_input)
     return 1
@@ -98,6 +109,7 @@ async def _process_assistant_event(
     message = getattr(event, "message", None)
     if not message:
         return 0
+    await update_session_health(db, session_id, "processing_response", commit=True)
     tool_calls_increment = 0
     for block in getattr(message, "content", []):
         block_type = getattr(block, "type", None)
@@ -140,6 +152,7 @@ async def _process_tool_result_event(
         content=tool_content, is_error=is_error,
         duration_ms=duration_ms, agent_id=agent_id, model_used=model_used,
     )
+    await update_session_health(db, session_id, "processing_response", commit=True)
     return turn + 1
 
 

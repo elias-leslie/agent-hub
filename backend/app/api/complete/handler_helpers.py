@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +95,8 @@ async def save_and_track(
         })
     if is_new_session:
         session.status = "completed"
+    session.health_detail = "completed"
+    session.last_activity_at = datetime.now(UTC)
     mark_session_terminal_state(
         session,
         phase="completed",

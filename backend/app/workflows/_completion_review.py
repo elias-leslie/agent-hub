@@ -7,7 +7,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from app.api.complete.core import complete_internal
 from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
 from app.services.persona_prompt_service import render_completion_review_prompt
 
@@ -88,6 +87,7 @@ async def review_persona_completion(
     reviewer_agent_slug: str = "supervisor",
 ) -> CompletionReviewOutcome:
     """Run one bounded supervisor review over a finished Jenny session."""
+    from app.api.complete.core import complete_internal
     from app.db import async_session
 
     prompt = await _build_review_prompt(

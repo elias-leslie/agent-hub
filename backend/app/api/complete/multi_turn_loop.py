@@ -10,6 +10,7 @@ from app.adapters.base import Message
 from app.services.container_manager import ContainerManager
 from app.services.context_tracker import format_budget_message
 from app.services.health_prober import record_provider_failure, record_provider_success
+from app.services.session_health import update_session_health
 from app.services.token_counter import get_context_limit
 
 from .finish_reason_handler import handle_finish_reason
@@ -25,6 +26,7 @@ async def run_adapter_turn(
     current_container_id: str | None,
 ) -> tuple[Any, int]:
     """Call the adapter for one turn and return (result, duration_ms)."""
+    await update_session_health(cfg.db, cfg.session_id, "calling_model", commit=True)
     turn_start = time.monotonic()
     try:
         result = await cfg.adapter.complete(
@@ -79,6 +81,7 @@ async def execute_single_turn(
     await report_progress(progress, cfg.progress_callback)
 
     result, turn_duration_ms = await run_adapter_turn(cfg, turn, state["current_container_id"])
+    await update_session_health(cfg.db, cfg.session_id, "processing_response", commit=True)
     await process_turn_result(
         result, turn, state, container_manager, cfg.db, cfg.session_id,
         cfg.model, cfg.user_messages_for_db, cfg.messages_dict, cfg.temperature,

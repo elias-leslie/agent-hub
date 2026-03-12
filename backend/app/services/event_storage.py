@@ -128,7 +128,9 @@ async def store_event(
             content=content,
             model_used=model_used,
         )
-        parent_session.updated_at = datetime.now(UTC)
+        touched_at = datetime.now(UTC)
+        parent_session.updated_at = touched_at
+        parent_session.last_activity_at = touched_at
     return event
 
 

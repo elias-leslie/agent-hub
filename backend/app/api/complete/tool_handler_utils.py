@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
 from app.models import Session as DBSession
+from app.services.session_health import health_detail_for_error, update_session_health
 
 from .tool_event_processor import process_tool_event
 from .tool_models import ToolExecutionResult
@@ -66,6 +67,8 @@ async def _run_tool_loop(
 
     Returns an error result on failure, else None (results in state).
     """
+    await update_session_health(db, session_id, "calling_model", commit=True)
+
     event_stream = build_event_stream(
         adapter=adapter,
         messages=state.messages_for_adapter,
@@ -99,6 +102,14 @@ async def _run_tool_loop(
                 # Record the terminal error, but keep draining the provider stream so
                 # SDK-backed generators can unwind cleanly on their own task boundary.
                 terminal_error_message = error_message
+                await update_session_health(
+                    db,
+                    session_id,
+                    health_detail_for_error(error_message),
+                    commit=True,
+                )
+            elif getattr(event, "type", None) == "tool_result":
+                await update_session_health(db, session_id, "calling_model", commit=True)
     finally:
         if hasattr(event_stream, "aclose"):
             await event_stream.aclose()

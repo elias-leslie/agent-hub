@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import ProviderError
 from app.services.container_manager import ContainerManager
+from app.services.session_health import health_detail_for_error, update_session_health
 
 from .turn_processor import (
     process_first_turn,
@@ -190,6 +191,12 @@ async def handle_provider_error(
     state["execution_error"] = str(e)
     logger.exception(f"Provider error during multi-turn execution: {e}")
     try:
+        await update_session_health(
+            db,
+            session_id,
+            health_detail_for_error(e),
+            commit=True,
+        )
         from app.services.event_storage import store_error_event
 
         await store_error_event(

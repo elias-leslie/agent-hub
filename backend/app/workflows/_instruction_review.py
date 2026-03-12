@@ -13,7 +13,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from app.api.complete.core import complete_internal
 from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
 
 logger = logging.getLogger(__name__)
@@ -113,6 +112,7 @@ async def review_instruction_edit(
     reviewer_agent_slug: str = "supervisor",
 ) -> InstructionReviewOutcome:
     """Run one bounded supervisor review over a proposed instruction edit."""
+    from app.api.complete.core import complete_internal
     from app.db import async_session
 
     prompt = _build_review_prompt(

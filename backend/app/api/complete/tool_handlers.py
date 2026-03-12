@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.models import Session as DBSession
+from app.services.session_health import health_detail_for_error, update_session_health
 
 from .tool_event_storage import store_assistant_response, store_user_messages
 from .tool_handler_utils import _ExecutionState, _init_execution_state, _run_tool_loop
@@ -116,6 +117,12 @@ async def _execute_and_handle_errors(
         )
     except Exception as e:
         logger.exception(f"{provider} complete_with_tools error: {e}")
+        await update_session_health(
+            db,
+            session_id,
+            health_detail_for_error(e),
+            commit=True,
+        )
         await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
         return build_error_result(
             e, model, provider, session_id, loaded_memory_uuids,
@@ -180,6 +187,12 @@ async def _complete_with_tools(
         )
     except Exception as e:
         logger.exception("%s finalize_response error: %s", provider, e)
+        await update_session_health(
+            db,
+            session_id,
+            health_detail_for_error(e),
+            commit=True,
+        )
         await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
         return build_error_result(
             e, model, provider, session_id, loaded_memory_uuids,
