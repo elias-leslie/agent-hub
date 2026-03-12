@@ -51,6 +51,8 @@ def _build_success_result(
     turn: int,
     tool_calls_count: int,
     progress_log: list[Any] | None,
+    fallback_used: bool,
+    fallback_reason: str | None,
 ) -> ToolExecutionResult:
     """Construct a successful ToolExecutionResult."""
     return ToolExecutionResult(
@@ -69,6 +71,11 @@ def _build_success_result(
         tool_calls_count=tool_calls_count,
         status="success",
         progress_log=progress_log or [],
+        model_used=model,
+        requested_model=model,
+        requested_provider=provider,
+        fallback_used=fallback_used,
+        fallback_reason=fallback_reason,
     )
 
 
@@ -87,6 +94,8 @@ async def finalize_result(
     turn: int = 1,
     tool_calls_count: int = 0,
     progress_log: list[Any] | None = None,
+    fallback_used: bool = False,
+    fallback_reason: str | None = None,
 ) -> ToolExecutionResult:
     """Finalize result: track citations, log usage, update session."""
     cited_uuids, estimated_output_tokens = await _track_and_log_usage(
@@ -106,6 +115,7 @@ async def finalize_result(
         content, model, provider, session_id, loaded_memory_uuids,
         cited_uuids, estimated_output_tokens, thinking_content,
         thinking_tokens, turn, tool_calls_count, progress_log,
+        fallback_used, fallback_reason,
     )
 
 
@@ -134,4 +144,7 @@ def build_error_result(
         error=str(error),
         turns=turns,
         tool_calls_count=tool_calls_count,
+        model_used=model,
+        requested_model=model,
+        requested_provider=provider,
     )

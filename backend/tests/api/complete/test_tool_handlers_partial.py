@@ -281,6 +281,63 @@ async def test_complete_with_tools_returns_error_result_when_finalize_response_i
 
 
 @pytest.mark.asyncio
+async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer() -> None:
+    session = _mock_session()
+    session.agent_slug = "refactor"
+    db = AsyncMock()
+    tool_result = types.SimpleNamespace(status="success", content="done")
+
+    with (
+        patch(
+            "app.api.complete.tool_handlers.store_user_messages",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "app.api.complete.tool_handlers.finalize_response",
+            new_callable=AsyncMock,
+            return_value=tool_result,
+        ) as mock_finalize,
+    ):
+        from app.api.complete.tool_handlers import _complete_with_tools
+
+        adapter = MagicMock()
+        result = await _complete_with_tools(
+            adapter=adapter,
+            messages=[{"role": "user", "content": "hello"}],
+            messages_for_db=[],
+            model="claude-sonnet-4-6",
+            provider="claude",
+            temperature=0.25,
+            tools=[],
+            tool_catalog=None,
+            working_dir="/home/kasadis/agent-hub",
+            permission_config=None,
+            db=db,
+            session=session,
+            session_id="session-123",
+            is_new_session=True,
+            loaded_memory_uuids=[],
+            memory_group_id=None,
+            skip_cache=False,
+            progress_callback=None,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is tool_result
+    assert mock_finalize.await_args.kwargs["adapter"] is adapter
+    assert mock_finalize.await_args.kwargs["temperature"] == 0.25
+    assert mock_finalize.await_args.kwargs["working_dir"] == "/home/kasadis/agent-hub"
+    assert mock_finalize.await_args.kwargs["base_messages"][0].role == "user"
+    assert mock_finalize.await_args.kwargs["base_messages"][0].content == "hello"
+
+
+@pytest.mark.asyncio
 async def test_complete_with_tools_returns_error_result_when_partial_store_is_cancelled() -> None:
     session = _mock_session()
     db = AsyncMock()

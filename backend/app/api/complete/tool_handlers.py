@@ -212,6 +212,10 @@ async def _complete_with_tools(
             db, session, session_id, is_new_session, model, provider,
             state.content_parts, state.thinking_parts, loaded_memory_uuids,
             memory_group_id, state.turn, state.tool_calls_count, tracker,
+            adapter=adapter,
+            base_messages=state.messages_for_adapter,
+            temperature=temperature,
+            working_dir=working_dir,
             tool_result_summaries=state.tool_result_summaries,
         )
     except asyncio.CancelledError as e:

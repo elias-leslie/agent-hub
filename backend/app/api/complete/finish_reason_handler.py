@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
 
+from .closeout_policy import append_closeout_turn, plan_user_facing_closeout
 from .tool_handlers import AgentProgress
 from .turn_processor import create_progress, report_progress
 
@@ -48,27 +49,38 @@ async def handle_finish_reason(
         )
         progress_log.append(progress)
         await report_progress(progress, progress_callback)
-        _append_message(messages_for_adapter, messages_dict, "assistant", result.content)
-        _append_message(messages_for_adapter, messages_dict, "user", _CLOSEOUT_AUDIT_MSG)
+        append_closeout_turn(
+            messages_for_adapter,
+            messages_dict,
+            result.content,
+            _CLOSEOUT_AUDIT_MSG,
+        )
         state["closeout_audit_used"] = True
         return False, "success", None
 
     if finish_reason == "end_turn":
-        if (
-            not (result.content or "").strip()
-            and not state.get("empty_closeout_used")
-            and turn < cap
-        ):
+        closeout_plan = plan_user_facing_closeout(
+            result.content,
+            tool_calls_count=len(getattr(result, "tool_calls", None) or []),
+            allow_recovery=turn < cap,
+            recovery_used=bool(state.get("closeout_recovery_used")),
+        )
+        if closeout_plan.action == "recover":
             progress = create_progress(
                 turn,
-                "empty_closeout_retry",
-                "Agent ended without a user-facing response; requesting one final closeout turn",
+                closeout_plan.progress_status or "closeout_recovery",
+                closeout_plan.progress_message
+                or "Agent ended without a user-facing response; requesting one final closeout turn",
             )
             progress_log.append(progress)
             await report_progress(progress, progress_callback)
-            _append_message(messages_for_adapter, messages_dict, "assistant", result.content)
-            _append_message(messages_for_adapter, messages_dict, "user", _EMPTY_FINAL_RESPONSE_MSG)
-            state["empty_closeout_used"] = True
+            append_closeout_turn(
+                messages_for_adapter,
+                messages_dict,
+                result.content,
+                closeout_plan.prompt or "",
+            )
+            state["closeout_recovery_used"] = True
             return False, "success", None
 
         progress = create_progress(turn, "complete", "Agent completed task")
@@ -112,16 +124,6 @@ _CLOSEOUT_AUDIT_MSG = (
     "If one answer shows unfinished concrete work, do that work now. "
     "Do not start speculative new work. Do not loop on this audit."
     "</system-closeout-audit>"
-)
-
-_EMPTY_FINAL_RESPONSE_MSG = (
-    "<system-final-response>"
-    "You have finished tool work but have not produced a final user-facing response. "
-    "Write the final response now. "
-    "If no changes were needed, say so plainly. "
-    "If changes were made, summarize the exact changes and evidence. "
-    "Do not call more tools unless a missing fact blocks the response."
-    "</system-final-response>"
 )
 
 

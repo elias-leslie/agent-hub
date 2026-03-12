@@ -5,11 +5,16 @@ from unittest.mock import AsyncMock, sentinel
 
 import pytest
 
+from app.adapters.base import Message
 from app.api.complete.tool_response_finalizer import finalize_response
 
 
+def _tracker() -> SimpleNamespace:
+    return SimpleNamespace(report_complete=AsyncMock(), report_status=AsyncMock(), log=[])
+
+
 @pytest.mark.asyncio
-async def test_finalize_response_replaces_mode_only_closeout_with_tool_summary(mocker) -> None:
+async def test_finalize_response_requests_final_closeout_for_placeholder_tool_summary(mocker) -> None:
     mock_store = mocker.patch(
         "app.api.complete.tool_event_storage.store_assistant_response",
         new_callable=AsyncMock,
@@ -19,7 +24,15 @@ async def test_finalize_response_replaces_mode_only_closeout_with_tool_summary(m
         new_callable=AsyncMock,
         return_value=sentinel.result,
     )
-    tracker = SimpleNamespace(report_complete=AsyncMock(), log=[])
+    adapter = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(
+                content="Verified queue state and overlap risk.",
+                thinking_content=None,
+                tool_calls=[],
+            )
+        )
+    )
 
     result = await finalize_response(
         db=AsyncMock(),
@@ -34,15 +47,117 @@ async def test_finalize_response_replaces_mode_only_closeout_with_tool_summary(m
         memory_group_id=None,
         turn=2,
         tool_calls_count=3,
-        tracker=tracker,
+        tracker=_tracker(),
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Do a minimal coordination check.")],
+        temperature=0.0,
+        working_dir="/home/kasadis/agent-hub",
         tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0", "Bash: OVERLAPS[0]"],
     )
 
     assert result is sentinel.result
+    adapter.complete.assert_awaited_once()
+    recovery_messages = adapter.complete.await_args.kwargs["messages"]
+    assert recovery_messages[-1].role == "user"
+    assert "Captured observations:" in recovery_messages[-1].content
+    assert "Mode: campaign" in recovery_messages[-1].content
+    assert mock_store.await_args.args[2] == "Verified queue state and overlap risk."
+    assert mock_finalize.await_args.kwargs["fallback_used"] is False
+
+
+@pytest.mark.asyncio
+async def test_finalize_response_recovery_success_bypasses_deterministic_fallback(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    tracker = _tracker()
+    adapter = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(
+                content="No further changes were needed. Verified pulse and overlap state.",
+                thinking_content="closeout reasoning",
+                tool_calls=[],
+            )
+        )
+    )
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="refactor"),
+        session_id="sess-2",
+        is_new_session=True,
+        model="claude-sonnet-4-6",
+        provider="claude",
+        content_parts=["Mode: campaign"],
+        thinking_parts=["initial reasoning"],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=2,
+        tool_calls_count=1,
+        tracker=tracker,
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Do a minimal coordination check.")],
+        temperature=0.0,
+        working_dir=None,
+        tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0"],
+    )
+
+    stored_content = mock_store.await_args.args[2]
+    assert stored_content == "No further changes were needed. Verified pulse and overlap state."
+    assert "Tool execution completed" not in stored_content
+    assert tracker.report_status.await_count == 1
+    assert mock_finalize.await_args.kwargs["thinking_content"] == "initial reasoning\ncloseout reasoning"
+    assert mock_finalize.await_args.kwargs["fallback_used"] is False
+    assert mock_finalize.await_args.kwargs["fallback_reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_finalize_response_falls_back_when_closeout_recovery_fails(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    tracker = _tracker()
+    adapter = SimpleNamespace(complete=AsyncMock(side_effect=RuntimeError("provider unavailable")))
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="refactor"),
+        session_id="sess-3",
+        is_new_session=True,
+        model="claude-sonnet-4-6",
+        provider="claude",
+        content_parts=["Mode: campaign"],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=3,
+        tool_calls_count=2,
+        tracker=tracker,
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Do a minimal coordination check.")],
+        temperature=0.0,
+        working_dir=None,
+        tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0", "Bash: OVERLAPS[0]"],
+    )
+
     stored_content = mock_store.await_args.args[2]
     assert "Tool execution completed" in stored_content
     assert "Bash: PULSE:agent-hub|tasks=0" in stored_content
-    assert mock_finalize.await_args.kwargs["content"] == stored_content
+    assert tracker.report_status.await_count == 2
+    assert mock_finalize.await_args.kwargs["fallback_used"] is True
+    assert mock_finalize.await_args.kwargs["fallback_reason"] == "tool_closeout_recovery_error"
 
 
 @pytest.mark.asyncio
@@ -56,12 +171,12 @@ async def test_finalize_response_preserves_substantive_content(mocker) -> None:
         new_callable=AsyncMock,
         return_value=sentinel.result,
     )
-    tracker = SimpleNamespace(report_complete=AsyncMock(), log=[])
+    adapter = SimpleNamespace(complete=AsyncMock())
 
     await finalize_response(
         db=AsyncMock(),
         session=SimpleNamespace(agent_slug="debugger"),
-        session_id="sess-2",
+        session_id="sess-4",
         is_new_session=True,
         model="claude-sonnet-4-6",
         provider="claude",
@@ -71,9 +186,14 @@ async def test_finalize_response_preserves_substantive_content(mocker) -> None:
         memory_group_id=None,
         turn=1,
         tool_calls_count=2,
-        tracker=tracker,
+        tracker=_tracker(),
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Do a minimal coordination check.")],
+        temperature=0.0,
+        working_dir=None,
         tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0"],
     )
 
+    adapter.complete.assert_not_awaited()
     assert mock_store.await_args.args[2] == "Verified queue state and overlap risk."
     assert mock_finalize.await_args.kwargs["content"] == "Verified queue state and overlap risk."

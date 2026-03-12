@@ -61,3 +61,14 @@ class ProgressTracker:
         )
         self.log.append(progress)
         await self._emit_callback(progress)
+
+    async def report_status(
+        self,
+        turn: int,
+        status: str,
+        message: str,
+    ) -> None:
+        """Report a custom progress update."""
+        progress = AgentProgress(turn=turn, status=status, message=message)
+        self.log.append(progress)
+        await self._emit_callback(progress)
