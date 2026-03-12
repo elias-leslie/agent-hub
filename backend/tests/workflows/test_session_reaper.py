@@ -41,3 +41,31 @@ async def test_session_reaper_uses_event_recency_for_global_stale_detection() ->
     assert "session_events" in sql
     assert "max(session_events.created_at)" in sql
     assert "sessions.updated_at" in sql
+
+
+@pytest.mark.asyncio
+async def test_session_reaper_marks_terminal_live_activity_when_reaping() -> None:
+    mock_db = AsyncMock()
+    completion_session = MagicMock(status="active", provider_metadata={})
+    stale_session = MagicMock(status="active", provider_metadata={})
+    completion_result = MagicMock()
+    completion_result.scalars.return_value.all.return_value = [completion_session]
+    stale_result = MagicMock()
+    stale_result.scalars.return_value.all.return_value = [stale_session]
+    mock_db.execute.side_effect = [completion_result, stale_result]
+
+    reaped_completion, reaped_stale = await reap_stale_sessions(mock_db, datetime.now(UTC))
+
+    assert reaped_completion == 1
+    assert reaped_stale == 1
+    assert completion_session.status == "completed"
+    assert stale_session.status == "completed"
+    assert completion_session.provider_metadata["live_activity"]["phase"] == "completed"
+    assert stale_session.provider_metadata["live_activity"]["phase"] == "completed"
+    assert completion_session.provider_metadata["live_activity"]["summary"] == (
+        "Auto-completed by session reaper after 4h inactivity"
+    )
+    assert stale_session.provider_metadata["live_activity"]["summary"] == (
+        "Auto-completed by session reaper after 24h inactivity"
+    )
+    mock_db.commit.assert_awaited_once()

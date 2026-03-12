@@ -124,6 +124,22 @@ def _mark_non_terminal_state(
     live_activity["last_model_activity_at"] = now_iso
 
 
+def _summary_looks_active(summary: Any) -> bool:
+    if not isinstance(summary, str):
+        return True
+    return summary.startswith(
+        (
+            "Waiting for model",
+            "Tool failed:",
+            "Running ",
+            "Reading ",
+            "Writing ",
+            "Injecting memory",
+            "Model planning",
+        )
+    )
+
+
 def update_live_activity_for_event(
     session: Session,
     *,
@@ -275,6 +291,24 @@ def mark_session_terminal_state(
     session.provider_metadata = metadata
 
 
+def mark_session_completed(
+    session: Session,
+    *,
+    summary: str,
+    termination_reason: str | None,
+) -> None:
+    """Synchronize completed status with terminal live activity metadata."""
+    session.status = "completed"
+    session.health_detail = "completed"
+    mark_session_terminal_state(
+        session,
+        phase="completed",
+        status="completed",
+        summary=summary,
+        termination_reason=termination_reason,
+    )
+
+
 def apply_live_activity_heartbeat(
     session: Session,
     *,
@@ -370,8 +404,18 @@ def build_live_activity_response(session: Session) -> dict[str, Any] | None:
     elif status == "error":
         health = "error"
     elif session.status == "completed":
+        response["status"] = "completed"
+        if phase in _ACTIVE_PHASES:
+            response["phase"] = "completed"
+        if status != "completed" and _summary_looks_active(response.get("summary")):
+            response["summary"] = "Session completed"
         health = "completed"
     elif session.status == "failed":
+        response["status"] = "failed"
+        if phase in _ACTIVE_PHASES:
+            response["phase"] = "failed"
+        if status not in {"failed", "error"} and _summary_looks_active(response.get("summary")):
+            response["summary"] = "Session failed"
         health = "failed"
 
     response["health"] = health

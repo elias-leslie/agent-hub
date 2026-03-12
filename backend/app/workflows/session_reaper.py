@@ -27,37 +27,49 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
     """Close sessions whose last observed activity is beyond the reaper thresholds."""
     from datetime import timedelta
 
-    from sqlalchemy import update
+    from sqlalchemy import select
 
     from app.models import Session
     from app.services.session_activity import last_activity_expr
+    from app.services.session_live_activity import mark_session_completed
 
     last_activity = last_activity_expr()
 
     cutoff_4h = now - timedelta(hours=4)
-    result = await db.execute(
-        update(Session)
-        .where(
-            Session.status == "active",
-            Session.session_type == "completion",
-            last_activity < cutoff_4h,
+    completion_sessions = (
+        await db.execute(
+            select(Session).where(
+                Session.status == "active",
+                Session.session_type == "completion",
+                last_activity < cutoff_4h,
+            )
         )
-        .values(status="completed")
-        .execution_options(synchronize_session="fetch")
-    )
-    reaped_completion = result.rowcount  # type: ignore[assignment]
+    ).scalars().all()
+    for session in completion_sessions:
+        mark_session_completed(
+            session,
+            summary="Auto-completed by session reaper after 4h inactivity",
+            termination_reason="session_reaper_completion_timeout",
+        )
+    reaped_completion = len(completion_sessions)
 
     cutoff_24h = now - timedelta(hours=24)
-    result = await db.execute(
-        update(Session)
-        .where(
-            Session.status == "active",
-            last_activity < cutoff_24h,
-        )
-        .values(status="completed")
-        .execution_options(synchronize_session="fetch")
+    stale_query = select(Session).where(
+        Session.status == "active",
+        last_activity < cutoff_24h,
     )
-    reaped_stale = result.rowcount  # type: ignore[assignment]
+    if completion_sessions:
+        stale_query = stale_query.where(
+            Session.id.notin_([session.id for session in completion_sessions])
+        )
+    stale_sessions = (await db.execute(stale_query)).scalars().all()
+    for session in stale_sessions:
+        mark_session_completed(
+            session,
+            summary="Auto-completed by session reaper after 24h inactivity",
+            termination_reason="session_reaper_global_timeout",
+        )
+    reaped_stale = len(stale_sessions)
 
     await db.commit()
     return reaped_completion, reaped_stale
