@@ -31,6 +31,13 @@ from app.adapters.base import (
 )
 
 logger = logging.getLogger(__name__)
+_EMPTY_FINAL_RESPONSE_MSG = (
+    "You have finished tool work but have not produced a final user-facing response. "
+    "Write the final response now. "
+    "If no changes were needed, say so plainly. "
+    "If changes were made, summarize the exact changes and evidence. "
+    "Do not call more tools unless a missing fact blocks the response."
+)
 
 
 class OpenAICompatibleAdapter(ProviderAdapter):
@@ -223,6 +230,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         temperature: float = kwargs.pop("temperature", 1.0)
         max_tokens: int | None = kwargs.pop("max_tokens", None)
         extra_kwargs = {**kwargs, "tools": tools}
+        empty_closeout_used = False
 
         for _turn in range(max_turns):
             await self._refresh_credentials()
@@ -244,6 +252,14 @@ class OpenAICompatibleAdapter(ProviderAdapter):
 
             # No tool calls → we are done
             if not result.tool_calls:
+                if (
+                    not (result.content or "").strip()
+                    and not empty_closeout_used
+                    and _turn + 1 < max_turns
+                ):
+                    openai_messages.append({"role": "user", "content": _EMPTY_FINAL_RESPONSE_MSG})
+                    empty_closeout_used = True
+                    continue
                 if result.content:
                     yield StreamEvent(type="content", content=result.content)
                 yield StreamEvent(
