@@ -1,5 +1,6 @@
 """Memory agent tools endpoints - for recording learnings during task execution."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -42,6 +43,8 @@ from .memory_agent_schemas import (
     SaveLearningResponse,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -65,6 +68,7 @@ async def api_record_discovery(request: RecordDiscoveryRequest) -> RecordRespons
     try:
         return await record_discovery(request)
     except Exception as e:
+        logger.exception("Failed to record discovery")
         raise HTTPException(status_code=500, detail=f"Failed to record discovery: {e}") from e
 
 
@@ -74,6 +78,7 @@ async def api_record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
     try:
         return await record_gotcha(request)
     except Exception as e:
+        logger.exception("Failed to record gotcha")
         raise HTTPException(status_code=500, detail=f"Failed to record gotcha: {e}") from e
 
 
@@ -83,6 +88,7 @@ async def api_record_pattern(request: RecordPatternRequest) -> RecordResponse:
     try:
         return await record_pattern(request)
     except Exception as e:
+        logger.exception("Failed to record pattern")
         raise HTTPException(status_code=500, detail=f"Failed to record pattern: {e}") from e
 
 
@@ -96,6 +102,7 @@ async def api_get_session_context(
     try:
         return await get_session_context(scope=scope, scope_id=scope_id, num_results=num_results)
     except Exception as e:
+        logger.exception("Failed to get session context")
         raise HTTPException(status_code=500, detail=f"Failed to get session context: {e}") from e
 
 
@@ -110,6 +117,7 @@ async def api_extract_learnings(request: ExtractLearningsRequest) -> ExtractionR
     try:
         return await extract_learnings(request)
     except Exception as e:
+        logger.exception("Failed to extract learnings")
         raise HTTPException(status_code=500, detail=f"Failed to extract learnings: {e}") from e
 
 
@@ -119,6 +127,7 @@ async def api_promote_learning(request: PromoteRequest) -> PromotionResult:
     try:
         return await promote_learning(request)
     except Exception as e:
+        logger.exception("Failed to promote learning")
         raise HTTPException(status_code=500, detail=f"Failed to promote learning: {e}") from e
 
 
@@ -210,6 +219,7 @@ async def api_get_canonical_context(request: CanonicalContextRequest) -> Canonic
         )
         return CanonicalContextResponse(facts=facts, count=len(facts))
     except Exception as e:
+        logger.exception("Failed to get canonical context")
         raise HTTPException(status_code=500, detail=f"Failed to get canonical context: {e}") from e
 
 
@@ -270,4 +280,5 @@ Example of BAD format:
             },
         ) from e
     except Exception as e:
+        logger.exception("Failed to save learning")
         raise HTTPException(status_code=500, detail=f"Failed to save learning: {e}") from e
