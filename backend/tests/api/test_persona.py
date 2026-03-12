@@ -94,6 +94,54 @@ class TestGetPersonaEndpoint:
         assert data["session_reset_hour"] == 9
         assert data["session_reset_idle_minutes"] == 120
 
+    def test_migrates_legacy_user_context_into_structured_profile(self, api_client, mock_db_session):
+        persona = _make_persona(
+            user_profile=None,
+            user_context="# User Profile: Elias\n\n## Identity\n- Name: Elias\n",
+        )
+
+        async def _migrate(*_args, **_kwargs):
+            persona.user_profile = {
+                "user_identity": "- Name: Elias",
+                "timezone": "America/New_York",
+            }
+            persona.user_context = "## Identity Review\n- Name approved"
+            return True
+
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock_get_persona,
+            patch(
+                "app.api.persona.migrate_legacy_user_context_to_profile",
+                new=AsyncMock(side_effect=_migrate),
+            ) as mock_migrate,
+            patch(
+                "app.api.persona.commit_and_refresh",
+                new=AsyncMock(return_value=persona),
+            ) as mock_commit,
+            patch(
+                "app.api.persona.helpers.get_persona_personality_document",
+                new=AsyncMock(side_effect=lambda _db: persona.personality),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_heartbeat_instructions",
+                new=AsyncMock(side_effect=lambda _db: persona.heartbeat_instructions),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_user_context_document",
+                new=AsyncMock(side_effect=lambda _db: persona.user_context),
+            ),
+        ):
+            mock_get_persona.return_value = persona
+            response = api_client.get("/api/persona")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user_profile"]["user_identity"] == "- Name: Elias"
+        assert data["user_profile"]["timezone"] == "America/New_York"
+        assert data["user_context"] == "## Identity Review\n- Name approved"
+        mock_migrate.assert_awaited_once()
+        mock_commit.assert_awaited_once()
+
 
 class TestUpdatePersonaEndpoint:
     """Tests for PUT /api/persona."""

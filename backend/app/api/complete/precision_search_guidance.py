@@ -8,8 +8,11 @@ from typing import Any
 PRECISION_CODE_SEARCH_TOOL_NAME = "precision_code_search"
 PRECISION_CODE_SEARCH_REMINDER = (
     "Use precision_code_search first for symbol or implementation lookup "
-    "(functions, classes, components, handlers, endpoints, schemas). "
-    "Fall back to rg/text search if it returns empty, stale, or irrelevant results."
+    "(functions, classes, components, handlers, endpoints, schemas, "
+    "tool definitions, registrations, and wiring). Start with the exact symbol "
+    "or tool name when you have it, then refine if needed. The tool is symbol-first "
+    "and already broadens to indexed text fallback when symbols miss. Only switch to "
+    "raw rg/text search if its result is empty, stale, or irrelevant."
 )
 
 _WORKFLOW_META_TERMS = (
@@ -33,6 +36,7 @@ _CODE_NAV_TERMS = (
     "where are",
     "find ",
     "locate",
+    "defined",
     "implemented",
     "implementation",
     "definition",
@@ -40,6 +44,15 @@ _CODE_NAV_TERMS = (
     "call site",
     "usage",
     "references",
+    "registered",
+    "registration",
+    "wired",
+    "wiring",
+    "tool path",
+    "tooling path",
+    "shared tool",
+    "executor",
+    "registry",
     "handler",
     "endpoint",
     "route",

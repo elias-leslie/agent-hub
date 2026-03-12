@@ -24,6 +24,18 @@ def test_should_inject_for_code_navigation_query() -> None:
     assert should_inject_precision_search_guidance(messages, tools) is True
 
 
+def test_should_inject_for_tool_registration_query() -> None:
+    messages = [
+        {
+            "role": "user",
+            "content": "Is precision_code_search already wired into the shared tool registry for persona?",
+        }
+    ]
+    tools = [{"name": "precision_code_search"}]
+
+    assert should_inject_precision_search_guidance(messages, tools) is True
+
+
 def test_should_not_inject_for_workflow_query() -> None:
     messages = [{"role": "user", "content": "What is the cleanup status for this repo?"}]
     tools = [{"name": "precision_code_search"}]
@@ -66,6 +78,11 @@ def test_maybe_inject_inserts_system_message_after_existing_system_messages() ->
     assert guided[0]["content"] == "Existing rule"
     assert guided[1]["role"] == "system"
     assert guided[1]["content"] == PRECISION_CODE_SEARCH_REMINDER
+
+
+def test_reminder_mentions_tool_registration_and_exact_symbol_name() -> None:
+    assert "tool definitions" in PRECISION_CODE_SEARCH_REMINDER
+    assert "exact symbol" in PRECISION_CODE_SEARCH_REMINDER
 
 
 @pytest.mark.asyncio
@@ -129,6 +146,7 @@ async def test_execute_and_build_result_injects_guidance_before_tool_execution()
             defer_tool_loading=False,
             enable_caching=False,
             cache_ttl="ephemeral",
+            task_type=None,
             thinking_level=None,
             container_id=None,
             response_format=None,
