@@ -233,6 +233,86 @@ async def test_stream_sdk_messages_marks_empty_result_after_tool_result_as_end_t
 
 
 @pytest.mark.asyncio
+async def test_stream_sdk_messages_prefers_native_stop_reason_over_budget_inference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                result = ResultMessage()
+                result.stop_reason = "max_turns"
+                result.num_turns = 2
+                return result
+            raise StopAsyncIteration
+
+    def fake_query(*, prompt, options):
+        return ClosingIterator()
+
+    fake_sdk = types.SimpleNamespace(query=fake_query)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+    seen = []
+    async for message, session_id in _stream_sdk_messages("prompt", types.SimpleNamespace(max_turns=4), "claude"):
+        seen.append(
+            (
+                type(message).__name__,
+                session_id,
+                getattr(message, "finish_reason", None),
+                getattr(message, "stop_reason", None),
+            )
+        )
+
+    assert seen[-1] == ("ResultMessage", None, "max_turns", "max_turns")
+
+
+@pytest.mark.asyncio
+async def test_stream_sdk_messages_maps_error_max_turns_subtype_without_budget_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                result = ResultMessage()
+                result.subtype = "error_max_turns"
+                result.num_turns = 2
+                return result
+            raise StopAsyncIteration
+
+    def fake_query(*, prompt, options):
+        return ClosingIterator()
+
+    fake_sdk = types.SimpleNamespace(query=fake_query)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+    seen = []
+    async for message, session_id in _stream_sdk_messages("prompt", types.SimpleNamespace(max_turns=4), "claude"):
+        seen.append(
+            (
+                type(message).__name__,
+                session_id,
+                getattr(message, "finish_reason", None),
+                getattr(message, "stop_reason", None),
+            )
+        )
+
+    assert seen[-1] == ("ResultMessage", None, "max_turns", "max_turns")
+
+
+@pytest.mark.asyncio
 async def test_stream_sdk_messages_marks_empty_result_at_budget_as_max_turns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
