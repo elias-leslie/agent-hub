@@ -14,10 +14,14 @@ class ResultMessage:
         result: str,
         usage: dict[str, int] | None = None,
         finish_reason: str | None = None,
+        stop_reason: str | None = None,
+        subtype: str = "success",
     ) -> None:
         self.result = result
         self.usage = usage or {}
         self.finish_reason = finish_reason
+        self.stop_reason = stop_reason
+        self.subtype = subtype
 
 
 @pytest.mark.asyncio
@@ -48,6 +52,24 @@ def test_adapt_claude_message_preserves_finish_reason_for_empty_result_message()
     events = adapt_claude_message(ResultMessage("", finish_reason="max_turns"))
     assert len(events) == 1
     assert events[0].type == "result"
+    assert events[0].finish_reason == "max_turns"
+    assert events[0].result == ""
+
+
+def test_adapt_claude_message_uses_stop_reason_when_finish_reason_missing() -> None:
+    events = adapt_claude_message(ResultMessage("", stop_reason="max_turns"))
+    assert len(events) == 1
+    assert events[0].type == "result"
+    assert events[0].subtype == "success"
+    assert events[0].finish_reason == "max_turns"
+    assert events[0].result == ""
+
+
+def test_adapt_claude_message_maps_error_max_turns_subtype() -> None:
+    events = adapt_claude_message(ResultMessage("", subtype="error_max_turns"))
+    assert len(events) == 1
+    assert events[0].type == "result"
+    assert events[0].subtype == "error_max_turns"
     assert events[0].finish_reason == "max_turns"
     assert events[0].result == ""
 

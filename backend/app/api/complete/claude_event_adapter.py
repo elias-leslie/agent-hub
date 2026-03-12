@@ -12,6 +12,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters._claude_result_metadata import resolve_result_finish_reason
 from app.adapters.base import ProviderError
 from app.adapters.claude_utils import extract_block_content, is_thinking_block, is_tool_use_block
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
@@ -67,11 +68,12 @@ def _convert_user_message(msg: Any) -> list[ToolEvent]:
 
 def _convert_result_message(msg: Any) -> list[ToolEvent]:
     """Convert Claude ResultMessage into a terminal result event."""
-    finish_reason = getattr(msg, "finish_reason", None) or "end_turn"
+    subtype = getattr(msg, "subtype", None)
+    finish_reason = resolve_result_finish_reason(msg)
     result_text = getattr(msg, "result", None)
     if isinstance(result_text, str) and result_text.strip():
-        return [ToolEvent(type="result", result=result_text, finish_reason=finish_reason)]
-    return [ToolEvent(type="result", result="", finish_reason=finish_reason)]
+        return [ToolEvent(type="result", subtype=subtype, result=result_text, finish_reason=finish_reason)]
+    return [ToolEvent(type="result", subtype=subtype, result="", finish_reason=finish_reason)]
 
 
 def _convert_top_level_assistant_block(msg: Any) -> ToolContentBlock | None:

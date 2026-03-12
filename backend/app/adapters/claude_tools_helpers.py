@@ -8,6 +8,10 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from app.adapters._claude_result_metadata import (
+    normalized_stop_reason,
+    resolve_result_finish_reason,
+)
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude_tools_mcp import build_mcp_server as _build_mcp_server_impl
 from app.adapters.claude_tools_permissions import (
@@ -45,12 +49,13 @@ _STREAM_STOP = object()  # Sentinel: async iteration exhausted
 class ResultMessage:
     """Fallback terminal message when the Claude SDK omits its final result frame."""
 
-    subtype: str = "result"
+    subtype: str = "success"
     duration_ms: int = 0
     duration_api_ms: int = 0
     is_error: bool = False
     num_turns: int = 0
     session_id: str | None = None
+    stop_reason: str | None = None
     total_cost_usd: float | None = None
     usage: dict[str, Any] | None = None
     result: str | None = None
@@ -288,14 +293,6 @@ async def _fetch_next_or_stop(
         raise ProviderError(str(exc), provider=provider_name, retriable=True) from exc
 
 
-def _result_hit_turn_budget(message: Any, max_turns: int | None) -> bool:
-    """Return True when the SDK result reports it exhausted the configured turn budget."""
-    if max_turns is None or max_turns <= 0:
-        return False
-    num_turns = getattr(message, "num_turns", None)
-    return isinstance(num_turns, int) and num_turns >= max_turns
-
-
 async def _iterate_sdk_messages(
     prompt: str | Any,
     options: Any,
@@ -349,6 +346,7 @@ async def _iterate_sdk_messages(
                     yield (
                         ResultMessage(
                             session_id=session_id,
+                            stop_reason=finish_reason,
                             finish_reason=finish_reason,
                         ),
                         session_id,
@@ -362,27 +360,33 @@ async def _iterate_sdk_messages(
                     logger.info(f"Claude SDK session ID: {session_id}")
                 continue
             if type(message).__name__ == "ResultMessage":
-                if getattr(message, "finish_reason", None) is None:
-                    inferred_finish_reason = (
-                        "max_turns"
-                        if _result_hit_turn_budget(message, configured_max_turns)
-                        else "end_turn"
+                resolved_finish_reason = resolve_result_finish_reason(
+                    message,
+                    configured_max_turns=configured_max_turns,
+                )
+                resolved_stop_reason = normalized_stop_reason(
+                    message,
+                    configured_max_turns=configured_max_turns,
+                )
+                try:
+                    message.finish_reason = resolved_finish_reason
+                    if resolved_stop_reason is not None:
+                        message.stop_reason = resolved_stop_reason
+                except Exception:
+                    message = ResultMessage(
+                        session_id=session_id,
+                        subtype=getattr(message, "subtype", "success"),
+                        stop_reason=resolved_stop_reason,
+                        finish_reason=resolved_finish_reason,
+                        result=getattr(message, "result", None),
+                        usage=getattr(message, "usage", None),
+                        structured_output=getattr(message, "structured_output", None),
+                        total_cost_usd=getattr(message, "total_cost_usd", None),
+                        num_turns=getattr(message, "num_turns", 0),
+                        is_error=getattr(message, "is_error", False),
+                        duration_ms=getattr(message, "duration_ms", 0),
+                        duration_api_ms=getattr(message, "duration_api_ms", 0),
                     )
-                    try:
-                        message.finish_reason = inferred_finish_reason
-                    except Exception:
-                        message = ResultMessage(
-                            session_id=session_id,
-                            finish_reason=inferred_finish_reason,
-                            result=getattr(message, "result", None),
-                            usage=getattr(message, "usage", None),
-                            structured_output=getattr(message, "structured_output", None),
-                            total_cost_usd=getattr(message, "total_cost_usd", None),
-                            num_turns=getattr(message, "num_turns", 0),
-                            is_error=getattr(message, "is_error", False),
-                            duration_ms=getattr(message, "duration_ms", 0),
-                            duration_api_ms=getattr(message, "duration_api_ms", 0),
-                        )
                 yield (message, session_id)
                 done_emitted = True
                 await _close_sdk_message_iter(message_iter)
