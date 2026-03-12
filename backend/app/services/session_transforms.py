@@ -253,6 +253,8 @@ def _session_list_item(
     session: Session,
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
+    owner_session_ids: set[str] | None = None,
+    specialist_session_ids: set[str] | None = None,
 ) -> SessionListItem:
     model_info = _session_model_info(session)
     working_dir = _working_dir(session)
@@ -289,7 +291,11 @@ def _session_list_item(
         observed_read_paths=_scope_list(session.observed_read_paths),
         observed_write_paths=_scope_list(session.observed_write_paths),
         scope_confidence=_optional_str(session.scope_confidence),
-        live_activity=build_live_activity_response(session),
+        live_activity=build_live_activity_response(
+            session,
+            has_owner_lane=session.id in (owner_session_ids or set()),
+            has_specialist_lane=session.id in (specialist_session_ids or set()),
+        ),
         message_count=msg_counts.get(session.id, 0),
         total_input_tokens=session_tokens.get("input", 0),
         total_output_tokens=session_tokens.get("output", 0),
@@ -302,8 +308,19 @@ def build_session_list_items(
     sessions: list[Session],
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
+    owner_session_ids: set[str] | None = None,
+    specialist_session_ids: set[str] | None = None,
 ) -> list[SessionListItem]:
-    return [_session_list_item(session, msg_counts, token_stats) for session in sessions]
+    return [
+        _session_list_item(
+            session,
+            msg_counts,
+            token_stats,
+            owner_session_ids=owner_session_ids,
+            specialist_session_ids=specialist_session_ids,
+        )
+        for session in sessions
+    ]
 
 
 def build_session_response(
@@ -313,6 +330,8 @@ def build_session_response(
     agent_breakdown: list[AgentTokenBreakdown] | None = None,
     total_input: int = 0,
     total_output: int = 0,
+    owner_session_ids: set[str] | None = None,
+    specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
     model_info = _session_model_info(session)
     return SessionResponse(
@@ -345,7 +364,11 @@ def build_session_response(
         scope_confidence=_optional_str(session.scope_confidence),
         created_at=session.created_at,
         updated_at=session.updated_at,
-        live_activity=build_live_activity_response(session),
+        live_activity=build_live_activity_response(
+            session,
+            has_owner_lane=session.id in (owner_session_ids or set()),
+            has_specialist_lane=session.id in (specialist_session_ids or set()),
+        ),
         messages=messages or [],
         context_usage=context_usage,
         agent_token_breakdown=agent_breakdown or [],

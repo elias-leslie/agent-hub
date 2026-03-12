@@ -21,9 +21,7 @@ from app.api.schemas.sessions import (
 from app.db import get_db
 from app.services.session_helpers import (
     build_event_responses,
-    build_full_session_response,
     build_session_list_items,
-    build_session_response,
     close_session_if_active,
     fork_session_at_turn,
     get_session_or_404,
@@ -42,6 +40,11 @@ from app.services.session_ingestion import (
     heartbeat_session,
     upsert_session,
 )
+from app.services.session_responses import (
+    build_full_session_response,
+    build_project_lane_session_ids,
+)
+from app.services.session_transforms import build_session_response
 
 router = APIRouter()
 
@@ -210,8 +213,18 @@ async def list_sessions(
     sessions, total, msg_counts, token_stats = await list_sessions_with_stats(
         db, project_id, status, agent_slug, session_type, page, page_size, parent_session_id
     )
+    owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
+        db,
+        {session.project_id for session in sessions},
+    )
     return SessionListResponse(
-        sessions=build_session_list_items(sessions, msg_counts, token_stats),
+        sessions=build_session_list_items(
+            sessions,
+            msg_counts,
+            token_stats,
+            owner_session_ids=owner_session_ids,
+            specialist_session_ids=specialist_session_ids,
+        ),
         total=total,
         page=page,
         page_size=page_size,

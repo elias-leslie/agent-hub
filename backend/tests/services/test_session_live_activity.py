@@ -104,3 +104,95 @@ def test_build_live_activity_response_normalizes_completed_sessions_with_stale_a
     assert response["status"] == "completed"
     assert response["summary"] == "Session completed"
     assert response["health"] == "completed"
+
+
+def test_build_live_activity_response_marks_heartbeat_only_session_dead_candidate() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Transcript sync heartbeat",
+            "last_event_type": "heartbeat",
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=45)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(hours=2)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 2,
+            "last_heartbeat_at": datetime.now(UTC).isoformat(),
+        }
+    }
+
+    response = build_live_activity_response(session)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "dead_candidate"
+    assert "heartbeat_only" in response["dead_signals"]
+    assert response["reapable"] is False
+
+
+def test_build_live_activity_response_marks_lane_free_heartbeat_only_session_reapable() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Transcript sync heartbeat",
+            "last_event_type": "heartbeat",
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=45)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(hours=7)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 2,
+            "last_heartbeat_at": datetime.now(UTC).isoformat(),
+        }
+    }
+
+    response = build_live_activity_response(session, has_owner_lane=False, has_specialist_lane=False)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "reapable"
+    assert response["reapable"] is True
+    assert response["reapable_reason"] == "no_model_activity_30m+heartbeat_only+no_lane"
+
+
+def test_build_live_activity_response_marks_stale_untracked_session_reapable() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {}
+    session.updated_at = datetime.now(UTC) - timedelta(hours=7)
+    session.last_activity_at = None
+    session.created_at = datetime.now(UTC) - timedelta(hours=8)
+
+    response = build_live_activity_response(session)
+
+    assert response is not None
+    assert response["phase"] == "unknown"
+    assert response["lifecycle_state"] == "reapable"
+    assert "no_structured_activity" in response["dead_signals"]
+    assert response["reapable_reason"] == "no_model_activity_30m+no_structured_activity+heartbeat_missing+no_lane"
+
+
+def test_build_live_activity_response_blocks_reaping_when_lane_is_active() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Transcript sync heartbeat",
+            "last_event_type": "heartbeat",
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=45)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(hours=7)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 2,
+            "last_heartbeat_at": datetime.now(UTC).isoformat(),
+        }
+    }
+
+    response = build_live_activity_response(session, has_owner_lane=True)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "dead_candidate"
+    assert response["reapable"] is False
+    assert "owner_lane" in response["anti_reap_signals"]

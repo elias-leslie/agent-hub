@@ -179,6 +179,8 @@ class TestGetSession:
         #   (3) latest CostLog input_tokens     — scalar_one_or_none → int | None
         #       (called inside calculate_context_usage)
         #   (4) _resolve_agent_display_names    — .all() → list[Row]
+        #   (5) query_project_ownership         — .all() → list[Row]
+        #   (6) query_project_active_specialists — .all() → list[Row]
         #
         # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
         # StopIteration when _resolve_agent_display_names is invoked more than once — any
@@ -213,8 +215,8 @@ class TestGetSession:
         assert data["context_usage"]["limit_tokens"] == 1050000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
-        assert mock_session.execute.call_count == 4, (
-            f"Expected 4 DB queries, got {mock_session.execute.call_count} "
+        assert mock_session.execute.call_count == 6, (
+            f"Expected 6 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
 
@@ -350,14 +352,24 @@ class TestListSessions:
             ("session-1", "assistant", 200),
         ]
 
-        mock_session.execute = AsyncMock(
-            side_effect=[
+        mock_lane_result = MagicMock()
+        mock_lane_result.all.return_value = []
+
+        _call_queue: deque[MagicMock] = deque(
+            [
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
                 mock_token_stats_result,
+                mock_lane_result,
+                mock_lane_result,
             ]
         )
+
+        async def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
+            return _call_queue.popleft()
+
+        mock_session.execute = AsyncMock(side_effect=_execute_side_effect)
 
         response = client.get("/api/sessions")
 
@@ -428,14 +440,24 @@ class TestListSessions:
         mock_token_stats_result = MagicMock()
         mock_token_stats_result.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[
+        mock_lane_result = MagicMock()
+        mock_lane_result.all.return_value = []
+
+        _call_queue: deque[MagicMock] = deque(
+            [
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
                 mock_token_stats_result,
+                mock_lane_result,
+                mock_lane_result,
             ]
         )
+
+        async def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
+            return _call_queue.popleft()
+
+        mock_session.execute = AsyncMock(side_effect=_execute_side_effect)
 
         response = client.get("/api/sessions")
 
