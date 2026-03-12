@@ -356,6 +356,8 @@ SEEDED_PROMPTS = (
     },
 )
 
+_HEARTBEAT_SLUG = "persona-heartbeat-orchestrator"
+
 SOURCE_OF_TRUTH_GUARDRAIL_ID = "d6f5ec92-587a-4d4a-a203-10ddf18e4f3e"
 SOURCE_OF_TRUTH_GUARDRAIL_CONTENT = (
     "**Guardrail**: Never hardcode runtime prompts or instructions in Python, and never "
@@ -456,6 +458,49 @@ If approaching your turn limit, prioritize saving durable insights before doing 
 """
 
 
+def _upsert_memory(bind: sa.Connection, *, id: str, content: str) -> None:
+    bind.execute(
+        sa.text(
+            """
+            INSERT INTO memories (
+                id, content, name, summary, memory_type, scope, scope_id,
+                group_id, source, source_description, tags, tier, pinned,
+                auto_inject, display_order, status, valid_at, created_at, updated_at
+            ) VALUES (
+                :id, :content,
+                'prompt_memory_source_of_truth',
+                'keep prompts in db/memory',
+                'guardrail', 'project', 'agent-hub', 'project-agent-hub',
+                'system:migration',
+                'guardrail source:rule_migration confidence:100 migrated_from:prompt_consolidation',
+                ARRAY['codex','prompt-source-of-truth']::varchar[],
+                2, true, false, 5, 'active',
+                NOW(), NOW(), NOW()
+            )
+            ON CONFLICT (id) DO UPDATE SET
+                content = EXCLUDED.content,
+                name = EXCLUDED.name,
+                summary = EXCLUDED.summary,
+                memory_type = EXCLUDED.memory_type,
+                scope = EXCLUDED.scope,
+                scope_id = EXCLUDED.scope_id,
+                group_id = EXCLUDED.group_id,
+                source = EXCLUDED.source,
+                source_description = EXCLUDED.source_description,
+                tags = EXCLUDED.tags,
+                tier = EXCLUDED.tier,
+                pinned = EXCLUDED.pinned,
+                auto_inject = EXCLUDED.auto_inject,
+                display_order = EXCLUDED.display_order,
+                status = EXCLUDED.status,
+                valid_at = EXCLUDED.valid_at,
+                updated_at = NOW()
+            """
+        ),
+        {"id": id, "content": content},
+    )
+
+
 def _upsert_prompt(
     bind: sa.Connection,
     *,
@@ -495,79 +540,9 @@ def _upsert_prompt(
 
 def upgrade() -> None:
     bind = op.get_bind()
-
     for prompt in SEEDED_PROMPTS:
         _upsert_prompt(bind, **prompt)
-
-    bind.execute(
-        sa.text(
-            """
-            INSERT INTO memories (
-                id,
-                content,
-                name,
-                summary,
-                memory_type,
-                scope,
-                scope_id,
-                group_id,
-                source,
-                source_description,
-                tags,
-                tier,
-                pinned,
-                auto_inject,
-                display_order,
-                status,
-                valid_at,
-                created_at,
-                updated_at
-            ) VALUES (
-                :id,
-                :content,
-                'prompt_memory_source_of_truth',
-                'keep prompts in db/memory',
-                'guardrail',
-                'project',
-                'agent-hub',
-                'project-agent-hub',
-                'system:migration',
-                'guardrail source:rule_migration confidence:100 migrated_from:prompt_consolidation',
-                ARRAY['codex','prompt-source-of-truth']::varchar[],
-                2,
-                true,
-                false,
-                5,
-                'active',
-                NOW(),
-                NOW(),
-                NOW()
-            )
-            ON CONFLICT (id) DO UPDATE SET
-                content = EXCLUDED.content,
-                name = EXCLUDED.name,
-                summary = EXCLUDED.summary,
-                memory_type = EXCLUDED.memory_type,
-                scope = EXCLUDED.scope,
-                scope_id = EXCLUDED.scope_id,
-                group_id = EXCLUDED.group_id,
-                source = EXCLUDED.source,
-                source_description = EXCLUDED.source_description,
-                tags = EXCLUDED.tags,
-                tier = EXCLUDED.tier,
-                pinned = EXCLUDED.pinned,
-                auto_inject = EXCLUDED.auto_inject,
-                display_order = EXCLUDED.display_order,
-                status = EXCLUDED.status,
-                valid_at = EXCLUDED.valid_at,
-                updated_at = NOW()
-            """
-        ),
-        {
-            "id": SOURCE_OF_TRUTH_GUARDRAIL_ID,
-            "content": SOURCE_OF_TRUTH_GUARDRAIL_CONTENT,
-        },
-    )
+    _upsert_memory(bind, id=SOURCE_OF_TRUTH_GUARDRAIL_ID, content=SOURCE_OF_TRUTH_GUARDRAIL_CONTENT)
 
 
 def downgrade() -> None:
@@ -579,20 +554,12 @@ def downgrade() -> None:
     )
 
     for prompt in SEEDED_PROMPTS:
-        if prompt["slug"] == "persona-heartbeat-orchestrator":
+        if prompt["slug"] == _HEARTBEAT_SLUG:
             bind.execute(
                 sa.text(
-                    """
-                    UPDATE prompts
-                    SET content = :content,
-                        updated_at = NOW()
-                    WHERE slug = :slug
-                    """
+                    "UPDATE prompts SET content = :content, updated_at = NOW() WHERE slug = :slug"
                 ),
-                {
-                    "slug": "persona-heartbeat-orchestrator",
-                    "content": HEARTBEAT_TEMPLATE_V1,
-                },
+                {"slug": _HEARTBEAT_SLUG, "content": HEARTBEAT_TEMPLATE_V1},
             )
             continue
         bind.execute(
