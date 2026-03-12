@@ -32,6 +32,7 @@ class _ExecutionState:
     tool_result_summaries: list[str] = field(default_factory=list)
     tool_calls_count: int = 0
     turn: int = 0
+    terminal_finish_reason: str | None = None
 
 
 def _init_execution_state(
@@ -99,6 +100,8 @@ async def _run_tool_loop(
                 tool_result_summaries=state.tool_result_summaries,
             )
             state.tool_calls_count += tools_delta
+            if getattr(event, "type", None) == "result":
+                state.terminal_finish_reason = getattr(event, "finish_reason", None) or "end_turn"
 
             if error_message and terminal_error_message is None:
                 # Record the terminal error, but keep draining the provider stream so

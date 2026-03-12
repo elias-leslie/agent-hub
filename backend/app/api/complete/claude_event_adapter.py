@@ -67,10 +67,11 @@ def _convert_user_message(msg: Any) -> list[ToolEvent]:
 
 def _convert_result_message(msg: Any) -> list[ToolEvent]:
     """Convert Claude ResultMessage into a terminal result event."""
+    finish_reason = getattr(msg, "finish_reason", None) or "end_turn"
     result_text = getattr(msg, "result", None)
     if isinstance(result_text, str) and result_text.strip():
-        return [ToolEvent(type="result", result=result_text)]
-    return []
+        return [ToolEvent(type="result", result=result_text, finish_reason=finish_reason)]
+    return [ToolEvent(type="result", result="", finish_reason=finish_reason)]
 
 
 def adapt_claude_message(msg: Any) -> list[ToolEvent]:

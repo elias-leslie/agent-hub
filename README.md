@@ -1,10 +1,10 @@
 # Agent Hub
 
-AI agent memory and orchestration system with multi-model completion API and Graphiti-based knowledge graph.
+AI agent memory and orchestration system with multi-model completion API and PostgreSQL-backed semantic memory.
 
 ## Overview
 
-Agent Hub provides a unified API for AI agent completion, memory management, and multi-agent orchestration. It supports multiple model providers (Claude, Gemini, OpenAI, OpenRouter), manages persistent memory through a Neo4j knowledge graph, and handles agent configuration, access control, and session management.
+Agent Hub provides a unified API for AI agent completion, memory management, and multi-agent orchestration. It supports multiple model providers (Claude, Gemini, OpenAI, OpenRouter), manages persistent memory through PostgreSQL + pgvector, and handles agent configuration, access control, and session management.
 
 Key capabilities:
 - **Completion API** - Unified multi-model completion with streaming, tool use, vision, and extended thinking
@@ -20,7 +20,7 @@ Key capabilities:
 |-------|-----------|
 | Backend | FastAPI, Python 3.13+, SQLAlchemy 2.0, Pydantic 2 |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
-| Database | PostgreSQL (relational), Neo4j (knowledge graph via Graphiti) |
+| Database | PostgreSQL (relational + pgvector memory) |
 | Caching | Redis |
 | Workflows | Hatchet (completion, observation, scheduled tasks) |
 | AI Providers | Anthropic Claude, Google Gemini, OpenAI, OpenRouter |
@@ -36,7 +36,7 @@ agent-hub/
 │   │   ├── services/      # Business logic
 │   │   │   ├── completion/    # Multi-model completion
 │   │   │   │   └── adapters/  # Claude, Gemini, OpenAI, OpenRouter
-│   │   │   ├── memory/        # Graphiti-based memory system
+│   │   │   ├── memory/        # PostgreSQL + pgvector memory system
 │   │   │   ├── agent/         # Agent management
 │   │   │   └── auth/          # Client authentication
 │   │   ├── models/        # SQLAlchemy ORM models
@@ -69,7 +69,7 @@ agent-hub/
 
 ### Memory System
 - **Progressive context injection** - Mandates (always enforced) → Guardrails (protective rules) → References (searchable knowledge)
-- **Knowledge graph** - Neo4j + Graphiti for semantic memory storage and retrieval
+- **Semantic memory** - PostgreSQL + pgvector for memory storage and retrieval
 - **Episode lifecycle** - Create, search, promote, deduplicate, and optimize memory episodes
 - **Session continuity** - Cross-session context preservation
 - **Auto-tier optimization** - Promotion and demotion based on usage patterns
@@ -100,7 +100,6 @@ agent-hub/
 
 Infrastructure dependencies:
 - PostgreSQL: 5432
-- Neo4j: 7687
 - Redis: 6379
 - Hatchet: 8888 (HTTP) / 7077 (gRPC)
 
@@ -111,7 +110,6 @@ Infrastructure dependencies:
 - Python 3.13+
 - Node.js 20+
 - PostgreSQL 15+
-- Neo4j 5+
 - Redis
 
 ### Backend
@@ -195,7 +193,7 @@ pip install agent-hub-client  # from packages/agent-hub-client
 
 ## Database
 
-18+ tables across PostgreSQL (agents, sessions, memory episodes, credentials, usage stats, telemetry) and Neo4j (knowledge graph nodes and relationships). Schema managed via Alembic migrations.
+18+ tables across PostgreSQL (agents, sessions, memory episodes, credentials, usage stats, telemetry, pgvector-backed embeddings). Schema managed via Alembic migrations.
 
 ## Scheduled Tasks
 

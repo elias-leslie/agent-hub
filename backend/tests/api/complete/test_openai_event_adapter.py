@@ -82,11 +82,12 @@ class TestAdaptStreamEvent:
         assert result is None
 
     def test_done_event(self) -> None:
-        event = StreamEvent(type="done")
+        event = StreamEvent(type="done", finish_reason="max_turns")
         result = adapt_stream_event(event)
         assert result is not None
         assert result.type == "result"
         assert result.subtype == "success"
+        assert result.finish_reason == "max_turns"
 
     def test_error_event(self) -> None:
         event = StreamEvent(type="error", error="connection timeout")

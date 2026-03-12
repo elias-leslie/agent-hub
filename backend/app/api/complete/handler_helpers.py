@@ -18,6 +18,7 @@ from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import build_output_usage, estimate_cost
 
 from .event_helpers import save_events
+from .execution_observability import persist_execution_observability
 from .helpers import is_error_response
 from .schemas import (
     CacheInfo,
@@ -55,6 +56,20 @@ async def save_and_track(
         effective_model=effective_model,
         fallback_used=effective_model != resolved_model,
         fallback_reason=fallback_reason,
+    )
+    await persist_execution_observability(
+        db,
+        session,
+        session_id,
+        provider=getattr(result, "provider", session.provider),
+        model_used=effective_model,
+        requested_max_turns=request.max_turns,
+        orchestration_path="single_turn",
+        final_finish_reason=getattr(result, "finish_reason", None),
+        execution_status="success",
+        execution_error=None,
+        turns_completed=1,
+        tool_calls_count=len(getattr(result, "tool_calls", None) or []),
     )
     await save_events(
         db, session_id, request.messages, result.content,

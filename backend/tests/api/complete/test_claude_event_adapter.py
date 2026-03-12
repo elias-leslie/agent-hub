@@ -7,9 +7,15 @@ from app.api.complete.claude_event_adapter import adapt_claude_message, adapt_cl
 
 
 class ResultMessage:
-    def __init__(self, result: str, usage: dict[str, int] | None = None) -> None:
+    def __init__(
+        self,
+        result: str,
+        usage: dict[str, int] | None = None,
+        finish_reason: str | None = None,
+    ) -> None:
         self.result = result
         self.usage = usage or {}
+        self.finish_reason = finish_reason
 
 
 @pytest.mark.asyncio
@@ -30,7 +36,18 @@ async def test_adapt_claude_stream_emits_terminal_result_event() -> None:
 
 def test_adapt_claude_message_ignores_empty_result_message() -> None:
     events = adapt_claude_message(ResultMessage("   "))
-    assert events == []
+    assert len(events) == 1
+    assert events[0].type == "result"
+    assert events[0].finish_reason == "end_turn"
+    assert events[0].result == ""
+
+
+def test_adapt_claude_message_preserves_finish_reason_for_empty_result_message() -> None:
+    events = adapt_claude_message(ResultMessage("", finish_reason="max_turns"))
+    assert len(events) == 1
+    assert events[0].type == "result"
+    assert events[0].finish_reason == "max_turns"
+    assert events[0].result == ""
 
 
 @pytest.mark.asyncio

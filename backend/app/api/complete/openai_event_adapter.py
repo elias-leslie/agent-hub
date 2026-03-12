@@ -73,6 +73,7 @@ def adapt_stream_event(event: StreamEvent) -> ToolEvent | None:
             type="result",
             subtype="success",
             result="",  # Content already yielded via "content" events
+            finish_reason=getattr(event, "finish_reason", None),
         )
 
     if event.type == "error":

@@ -197,7 +197,15 @@ async def run_tool_loop(
                 yield _yield_tool_use_event(tc, session_id)
 
             if not tool_calls:
-                yield (ToolEvent(type="result", subtype="success", result=accumulated_text), session_id)
+                yield (
+                    ToolEvent(
+                        type="result",
+                        subtype="success",
+                        result=accumulated_text,
+                        finish_reason="end_turn",
+                    ),
+                    session_id,
+                )
                 return
 
             # Execute tools and collect results
@@ -226,7 +234,15 @@ async def run_tool_loop(
             contents.append({"role": "user", "parts": tool_response_parts})
 
         # Exhausted max_turns
-        yield (ToolEvent(type="result", subtype="success", result=accumulated_text), session_id)
+        yield (
+            ToolEvent(
+                type="result",
+                subtype="success",
+                result=accumulated_text,
+                finish_reason="max_turns",
+            ),
+            session_id,
+        )
 
     except Exception as e:
         logger.error("CloudCode Claude tool error: %s\n%s", e, traceback.format_exc())

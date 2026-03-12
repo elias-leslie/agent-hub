@@ -54,7 +54,7 @@ async def add_episode(
     request: AddEpisodeRequest,
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
 ) -> AddEpisodeResponse:
-    """Add an episode to the knowledge graph. Optionally set tier and preserve stats."""
+    """Add an episode to semantic memory. Optionally set tier and preserve stats."""
     return await handle_add_episode(request, memory)
 
 
