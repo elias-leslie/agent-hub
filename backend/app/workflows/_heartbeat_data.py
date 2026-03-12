@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import subprocess
@@ -110,64 +111,72 @@ def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
-def _fetch_task_overview() -> str:
+async def _run_st_command(
+    cmd: list[str],
+    *,
+    timeout: int = 15,
+    failure_log: str,
+) -> str:
+    """Run an `st` command off the event loop and return stripped stdout."""
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except Exception:
+        logger.debug(failure_log, exc_info=True)
+        return ""
+    stdout = proc.stdout
+    if isinstance(stdout, bytes):
+        stdout = stdout.decode(errors="replace")
+    return stdout.strip() if isinstance(stdout, str) else ""
+
+
+async def _fetch_task_overview() -> str:
     """Cross-project task overview via st ready-all (TOON output)."""
-    try:
-        proc = subprocess.run(
-            ["st", "ready-all"], capture_output=True, text=True, timeout=15,
-        )
-        output = proc.stdout.strip()
-        if not output:
-            return ""
-        actionable = build_actionable_ready_summary(output)
-        return f"{output}\n\n{actionable}" if actionable else output
-    except Exception:
-        logger.debug("Failed to fetch task overview for heartbeat prompt", exc_info=True)
+    output = await _run_st_command(
+        ["st", "ready-all"],
+        failure_log="Failed to fetch task overview for heartbeat prompt",
+    )
+    if not output:
         return ""
+    actionable = build_actionable_ready_summary(output)
+    return f"{output}\n\n{actionable}" if actionable else output
 
 
-def _fetch_cleanup_status() -> str:
+async def _fetch_cleanup_status() -> str:
     """Cross-project git hygiene summary via st cleanup status (TOON output)."""
-    try:
-        proc = subprocess.run(
-            ["st", "cleanup", "status", "--all"],
-            capture_output=True, text=True, timeout=15,
-        )
-        output = proc.stdout.strip()
-        if not output:
-            return ""
-        actionable = build_actionable_cleanup_summary(output)
-        return f"{output}\n\n{actionable}" if actionable else output
-    except Exception:
-        logger.debug("Failed to fetch cleanup status for heartbeat prompt", exc_info=True)
+    output = await _run_st_command(
+        ["st", "cleanup", "status", "--all"],
+        failure_log="Failed to fetch cleanup status for heartbeat prompt",
+    )
+    if not output:
         return ""
+    actionable = build_actionable_cleanup_summary(output)
+    return f"{output}\n\n{actionable}" if actionable else output
 
 
-def _fetch_backup_status(project_id: str | None = None) -> str:
+async def _fetch_backup_status(project_id: str | None = None) -> str:
     """Fetch most recent backup status for a project-backed source."""
     cmd = ["st"]
     if project_id:
         cmd.extend(["-P", project_id])
     cmd.extend(["backup", "status"])
-    try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-        return proc.stdout.strip() if proc.stdout.strip() else ""
-    except Exception:
-        logger.debug("Failed to fetch backup status for heartbeat prompt", exc_info=True)
-        return ""
+    return await _run_st_command(
+        cmd,
+        failure_log="Failed to fetch backup status for heartbeat prompt",
+    )
 
 
-def _fetch_backup_schedule(source_id: str) -> str:
+async def _fetch_backup_schedule(source_id: str) -> str:
     """Fetch schedule details for a single backup source."""
-    try:
-        proc = subprocess.run(
-            ["st", "backup", "schedule", source_id],
-            capture_output=True, text=True, timeout=15,
-        )
-        return proc.stdout.strip() if proc.stdout.strip() else ""
-    except Exception:
-        logger.debug("Failed to fetch backup schedule for heartbeat prompt", exc_info=True)
-        return ""
+    return await _run_st_command(
+        ["st", "backup", "schedule", source_id],
+        failure_log="Failed to fetch backup schedule for heartbeat prompt",
+    )
 
 
 async def _fetch_active_sessions_section() -> str:
@@ -750,11 +759,16 @@ def _build_workstream_lines(
     return lines
 
 
-async def _get_workstream_inventory(provider: str | None = None) -> str:
+async def _get_workstream_inventory(
+    provider: str | None = None,
+    *,
+    task_overview: str | None = None,
+) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
-        task_overview = _fetch_task_overview()
+        if task_overview is None:
+            task_overview = await _fetch_task_overview()
         visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
         stale_tasks = _parse_stale_tasks_from_overview(task_overview)
 
@@ -777,9 +791,10 @@ async def _get_workstream_inventory(provider: str | None = None) -> str:
         return ""
 
 
-async def _get_active_work_summary() -> str:
+async def _get_active_work_summary(*, task_overview: str | None = None) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
-    task_overview = _fetch_task_overview()
+    if task_overview is None:
+        task_overview = await _fetch_task_overview()
     overview_stats = parse_task_overview_stats(task_overview)
     sessions_section = await _fetch_active_sessions_section()
     suppress_completed = (
@@ -802,24 +817,24 @@ async def _get_active_work_summary() -> str:
     return f"\n<active_work>\n{body}\n</active_work>"
 
 
-def _get_cleanup_status_summary() -> str:
+async def _get_cleanup_status_summary() -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    cleanup_status = _fetch_cleanup_status()
+    cleanup_status = await _fetch_cleanup_status()
     if not cleanup_status:
         return ""
     return f"\n<cleanup_status>\n{cleanup_status}\n</cleanup_status>"
 
 
-def _get_protection_status_summary(target_project_id: str | None = None) -> str:
+async def _get_protection_status_summary(target_project_id: str | None = None) -> str:
     """Build a <protection_status> XML block from canonical backup surfaces."""
     sections: list[str] = []
 
-    latest = _fetch_backup_status(target_project_id)
+    latest = await _fetch_backup_status(target_project_id)
     if latest:
         sections.append(latest)
 
     target_source = target_project_id or "persona-sandbox"
-    schedule = _fetch_backup_schedule(target_source)
+    schedule = await _fetch_backup_schedule(target_source)
     if schedule:
         sections.append(schedule)
 
@@ -854,20 +869,12 @@ async def _get_agent_roster_summary() -> str:
         return ""
 
 
-def _get_git_status_summary() -> str:
+async def _get_git_status_summary() -> str:
     """Build a <git_state> XML block from the canonical `st git status` surface."""
-    try:
-        proc = subprocess.run(
-            ["st", "--compact", "git", "status"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-    except Exception:
-        logger.debug("Failed to fetch git status for heartbeat prompt", exc_info=True)
-        return ""
-
-    git_status = proc.stdout.strip()
+    git_status = await _run_st_command(
+        ["st", "--compact", "git", "status"],
+        failure_log="Failed to fetch git status for heartbeat prompt",
+    )
     if not git_status:
         return ""
 

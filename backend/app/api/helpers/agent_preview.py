@@ -67,6 +67,11 @@ def _memory_scope_for_project(project_id: str | None) -> tuple[MemoryScope, str 
     return MemoryScope.GLOBAL, None
 
 
+def _build_preview_memory_query(task_prompt: str | None, prompt_input: str | None) -> str:
+    """Mirror runtime memory-query extraction from the latest user message."""
+    return (task_prompt or prompt_input or "")[:500]
+
+
 async def build_agent_preview(
     db: AsyncSession,
     agent: AgentDTO,
@@ -92,9 +97,20 @@ async def build_agent_preview(
         phase=phase,
         prompt_input=prompt_input,
     )
+    task_prompt_section = (
+        RuntimePromptSection(
+            label="Task Prompt",
+            source_kind="task_prompt",
+            source_id=task_type or "task",
+            placement="user",
+            content=task_prompt,
+        )
+        if task_prompt
+        else None
+    )
 
     scope, scope_id = _memory_scope_for_project(project_id)
-    memory_query = task_prompt or prompt_input or ""
+    memory_query = _build_preview_memory_query(task_prompt, prompt_input)
     context = await build_progressive_context(
         query=memory_query,
         scope=scope,
@@ -111,15 +127,23 @@ async def build_agent_preview(
                 label="Memory Context",
                 source_kind="memory_context",
                 source_id=scope_id or "global",
+                placement="system",
                 content=formatted_memory,
             )
         )
+    if task_prompt_section:
+        runtime_sections.append(task_prompt_section)
 
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
+    full_context = "\n\n".join(section.content for section in runtime_sections if section.content)
 
     return {
         "combined_prompt": combined,
+        "full_context": full_context,
+        "memory_query": memory_query,
+        "loaded_memory_uuids": context.get_loaded_uuids(),
+        "reference_uuids": context.get_reference_uuids(),
         "mandate_count": len(context.mandates),
         "guardrail_count": len(context.guardrails),
         "mandate_uuids": [u for u in mandate_uuids if u],

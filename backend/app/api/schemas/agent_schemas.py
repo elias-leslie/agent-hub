@@ -157,6 +157,7 @@ class AgentPreviewSection(BaseModel):
     label: str
     source_kind: str
     source_id: str
+    placement: str = "system"
     role: str | None = None
     priority: int | None = None
     updated_at: str | None = None
@@ -172,6 +173,10 @@ class AgentPreviewResponse(BaseModel):
     slug: str
     name: str
     combined_prompt: str
+    full_context: str
+    memory_query: str = ""
+    loaded_memory_uuids: list[str] = Field(default_factory=list)
+    reference_uuids: list[str] = Field(default_factory=list)
     mandate_count: int
     guardrail_count: int
     mandate_uuids: list[str]

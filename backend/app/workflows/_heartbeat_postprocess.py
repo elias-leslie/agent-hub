@@ -149,7 +149,7 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
 async def _get_cleanup_status_summary() -> str:
     from app.workflows._heartbeat_data import _get_cleanup_status_summary as fetch_cleanup_status
 
-    return fetch_cleanup_status()
+    return await fetch_cleanup_status()
 
 
 async def _get_workstream_inventory() -> str:

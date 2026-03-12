@@ -32,19 +32,51 @@ export function PreviewModal({ preview, previewMode, onClose }: PreviewModalProp
         <div className="p-6 overflow-y-auto max-h-[60vh]">
           {preview ? (
             <div className="space-y-4">
-              {preview.task_prompt ? (
-                <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Task Prompt
+              <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Memory Query
+                </div>
+                <pre className="whitespace-pre-wrap text-sm font-mono text-slate-700 dark:text-slate-300">
+                  {preview.memory_query || "(empty)"}
+                </pre>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Loaded Memory UUIDs
+                </div>
+                <pre className="whitespace-pre-wrap break-all text-sm font-mono text-slate-700 dark:text-slate-300">
+                  {preview.loaded_memory_uuids.length > 0
+                    ? preview.loaded_memory_uuids.join("\n")
+                    : "(none)"}
+                </pre>
+              </div>
+              {preview.sections.map((section) => (
+                <div
+                  key={`${section.source_kind}:${section.source_id}:${section.content_hash}`}
+                  className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800"
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className="font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">
+                      {section.label}
+                    </span>
+                    <span>{section.placement}</span>
+                    <span>{section.source_kind}</span>
+                    <span>{section.source_id}</span>
+                    <span>{section.estimated_tokens} tok</span>
                   </div>
                   <pre className="whitespace-pre-wrap text-sm font-mono text-slate-700 dark:text-slate-300">
-                    {preview.task_prompt}
+                    {section.content}
                   </pre>
                 </div>
-              ) : null}
-              <pre className="whitespace-pre-wrap text-sm font-mono text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
-                {preview.combined_prompt}
-              </pre>
+              ))}
+              <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Full Context
+                </div>
+                <pre className="whitespace-pre-wrap text-sm font-mono text-slate-700 dark:text-slate-300">
+                  {preview.full_context || preview.combined_prompt}
+                </pre>
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-center py-8">

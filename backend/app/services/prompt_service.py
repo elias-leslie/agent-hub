@@ -250,6 +250,7 @@ async def get_agent_prompts(
     agent_id: int,
     *,
     include_roles: list[str] | None = None,
+    exclude_roles: list[str] | None = None,
 ) -> list[AgentPrompt]:
     """Get all prompts assigned to an agent, ordered by priority ASC.
 
@@ -267,8 +268,25 @@ async def get_agent_prompts(
     )
     if include_roles is not None:
         stmt = stmt.where(AgentPrompt.role.in_(include_roles))
+    if exclude_roles:
+        stmt = stmt.where(~AgentPrompt.role.in_(exclude_roles))
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+def get_runtime_excluded_prompt_roles(
+    *,
+    agent_slug: str | None,
+    prompt_mode: str = "full",
+) -> list[str]:
+    """Return prompt-assignment roles that should not be injected twice at runtime."""
+    if prompt_mode == "full" and agent_slug == "persona":
+        return [
+            "persona-personality",
+            "persona-user-context",
+            "heartbeat-instructions",
+        ]
+    return []
 
 
 async def assign_prompt(
@@ -353,6 +371,7 @@ async def build_prompt_context(
     agent_id: int,
     *,
     include_roles: list[str] | None = None,
+    exclude_roles: list[str] | None = None,
     agent_slug: str | None = None,
 ) -> str:
     """Compose global prompts + agent's role-assigned prompts into a single block.
@@ -380,7 +399,12 @@ async def build_prompt_context(
             continue
         sections.append(p.content)
 
-    agent_assignments = await get_agent_prompts(db, agent_id, include_roles=include_roles)
+    agent_assignments = await get_agent_prompts(
+        db,
+        agent_id,
+        include_roles=include_roles,
+        exclude_roles=exclude_roles,
+    )
     for ap in agent_assignments:
         if not ap.prompt.enabled:
             continue
