@@ -9,7 +9,11 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.prompt_service import get_agent_prompts, get_all_prompts
+from app.services.prompt_service import (
+    get_agent_prompts,
+    get_all_prompts,
+    get_runtime_excluded_prompt_roles,
+)
 from app.services.token_counter import count_tokens
 
 
@@ -19,6 +23,7 @@ class RuntimePromptSection:
     source_kind: str
     source_id: str
     content: str
+    placement: str = "system"
     role: str | None = None
     priority: int | None = None
     updated_at: datetime | None = None
@@ -40,6 +45,7 @@ class RuntimePromptSection:
             "label": self.label,
             "source_kind": self.source_kind,
             "source_id": self.source_id,
+            "placement": self.placement,
             "role": self.role,
             "priority": self.priority,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -54,6 +60,7 @@ class RuntimePromptSection:
             "label": self.label,
             "source_kind": self.source_kind,
             "source_id": self.source_id,
+            "placement": self.placement,
             "role": self.role,
             "priority": self.priority,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -89,7 +96,13 @@ async def collect_runtime_prompt_sections(
             )
         )
 
-    assignments = await get_agent_prompts(db, agent.id)
+    assignments = await get_agent_prompts(
+        db,
+        agent.id,
+        exclude_roles=get_runtime_excluded_prompt_roles(
+            agent_slug=getattr(agent, "slug", None),
+        ),
+    )
     for assignment in assignments:
         prompt = assignment.prompt
         if not prompt.enabled:

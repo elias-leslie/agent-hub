@@ -15,6 +15,10 @@ export interface AgentPreview {
     slug: string;
     name: string;
     combined_prompt: string;
+    full_context: string;
+    memory_query: string;
+    loaded_memory_uuids: string[];
+    reference_uuids: string[];
     mandate_count: number;
     guardrail_count?: number;
     mandate_uuids: string[];
@@ -27,6 +31,7 @@ export interface AgentPreview {
         label: string;
         source_kind: string;
         source_id: string;
+        placement: string;
         content_hash: string;
         chars: number;
         estimated_tokens: number;

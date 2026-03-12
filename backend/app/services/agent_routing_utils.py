@@ -48,10 +48,22 @@ async def inject_agent_mandates(
     """Build system content with DB-stored prompts + agent's system prompt."""
     sections = []
     prompt_context = None
+    exclude_roles: list[str] | None = None
+    if db and prompt_mode != "none":
+        from app.services.prompt_service import get_runtime_excluded_prompt_roles
+
+        exclude_roles = get_runtime_excluded_prompt_roles(
+            agent_slug=agent.slug,
+            prompt_mode=prompt_mode,
+        )
     if db and prompt_mode != "none":
         from app.services.prompt_service import build_prompt_context
         prompt_context = await build_prompt_context(
-            db, agent.id, include_roles=include_roles, agent_slug=agent.slug
+            db,
+            agent.id,
+            include_roles=include_roles,
+            exclude_roles=exclude_roles,
+            agent_slug=agent.slug,
         )
         if prompt_context:
             sections.append(prompt_context)

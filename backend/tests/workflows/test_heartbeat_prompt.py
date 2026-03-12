@@ -38,18 +38,16 @@ def _mock_async_session_with_rows(rows: list[object]):
 class TestGetGitStatusSummary:
     """Tests for _get_git_status_summary."""
 
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_returns_xml_block(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock)
+    async def test_returns_xml_block(self, mock_run: AsyncMock) -> None:
         """Returns <git_state> XML when compact git status has content."""
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout=(
-                "GIT[2]\n"
-                "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
-                "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
-            ),
+        mock_run.return_value = (
+            "GIT[2]\n"
+            "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
+            "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
         )
-        result = _get_git_status_summary()
+        result = await _get_git_status_summary()
 
         assert result.startswith("\n<git_state>")
         assert result.endswith("</git_state>")
@@ -57,11 +55,11 @@ class TestGetGitStatusSummary:
         assert "ACTIONABLE-GIT[1]" in result
         assert "agent-hub" in result
 
-    @patch("app.workflows._heartbeat_data.subprocess.run")
-    def test_empty_when_no_git_state(self, mock_run: MagicMock) -> None:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock, return_value="")
+    async def test_empty_when_no_git_state(self, mock_run: AsyncMock) -> None:
         """Returns empty when compact git status output is empty."""
-        mock_run.return_value = MagicMock(stdout="", returncode=0)
-        result = _get_git_status_summary()
+        result = await _get_git_status_summary()
         assert result == ""
 
 
@@ -73,16 +71,20 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt._get_protection_status_summary",
+        new_callable=AsyncMock,
         return_value="\n<protection_status>\nLATEST bkp-123|completed|8.5MB\nSOURCE:agent-hub|enabled|daily|retention_days:30\n</protection_status>",
     )
     @patch(
         "app.workflows._heartbeat_prompt._get_cleanup_status_summary",
+        new_callable=AsyncMock,
         return_value="\n<cleanup_status>\nCLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 orphan=1 prunable=0\n</cleanup_status>",
     )
     @patch(
         "app.workflows._heartbeat_prompt._get_git_status_summary",
+        new_callable=AsyncMock,
         return_value="\n<git_state>\n[summitflow] test data\n</git_state>",
     )
+    @patch("app.workflows._heartbeat_prompt._fetch_task_overview", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt.require_prompt_content",
         new_callable=AsyncMock,
@@ -121,9 +123,10 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @pytest.mark.asyncio
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
-    @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", return_value="")
-    @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", return_value="")
-    @patch("app.workflows._heartbeat_prompt._get_git_status_summary", return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._fetch_task_overview", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt.require_prompt_content",
         new_callable=AsyncMock,
@@ -152,17 +155,18 @@ class TestBuildHeartbeatPromptIncludesGitState:
 class TestProtectionStatusSummary:
     """Tests for the heartbeat protection summary block."""
 
-    @patch("app.workflows._heartbeat_data._fetch_backup_schedule")
-    @patch("app.workflows._heartbeat_data._fetch_backup_status")
-    def test_returns_target_project_backup_summary(
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_backup_schedule", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_backup_status", new_callable=AsyncMock)
+    async def test_returns_target_project_backup_summary(
         self,
-        mock_status: MagicMock,
-        mock_schedule: MagicMock,
+        mock_status: AsyncMock,
+        mock_schedule: AsyncMock,
     ) -> None:
         mock_status.return_value = "LATEST bkp-123|completed|8.5MB"
         mock_schedule.return_value = "SOURCE:agent-hub|enabled|daily|retention_days:30"
 
-        result = _get_protection_status_summary("agent-hub")
+        result = await _get_protection_status_summary("agent-hub")
 
         assert result.startswith("\n<protection_status>")
         assert "LATEST bkp-123|completed|8.5MB" in result
@@ -170,17 +174,18 @@ class TestProtectionStatusSummary:
         mock_status.assert_called_once_with("agent-hub")
         mock_schedule.assert_called_once_with("agent-hub")
 
-    @patch("app.workflows._heartbeat_data._fetch_backup_schedule")
-    @patch("app.workflows._heartbeat_data._fetch_backup_status")
-    def test_empty_when_no_backup_data(
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_backup_schedule", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_backup_status", new_callable=AsyncMock)
+    async def test_empty_when_no_backup_data(
         self,
-        mock_status: MagicMock,
-        mock_schedule: MagicMock,
+        mock_status: AsyncMock,
+        mock_schedule: AsyncMock,
     ) -> None:
         mock_status.return_value = ""
         mock_schedule.return_value = ""
 
-        assert _get_protection_status_summary("agent-hub") == ""
+        assert await _get_protection_status_summary("agent-hub") == ""
 
 
 class TestActiveSpecialistInventory:
@@ -336,19 +341,22 @@ agent-hub (1 ready, 1 stale)
 class TestCleanupStatusSummary:
     """Tests for heartbeat cleanup-status section."""
 
+    @pytest.mark.asyncio
     @patch(
         "app.workflows._heartbeat_data._fetch_cleanup_status",
+        new_callable=AsyncMock,
         return_value="CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
     )
-    def test_returns_xml_block(self, _mock_fetch: MagicMock) -> None:
-        result = _get_cleanup_status_summary()
+    async def test_returns_xml_block(self, _mock_fetch: AsyncMock) -> None:
+        result = await _get_cleanup_status_summary()
         assert result.startswith("\n<cleanup_status>")
         assert "needs_cleanup=1" in result
         assert result.endswith("</cleanup_status>")
 
-    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", return_value="")
-    def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: MagicMock) -> None:
-        assert _get_cleanup_status_summary() == ""
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock, return_value="")
+    async def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: AsyncMock) -> None:
+        assert await _get_cleanup_status_summary() == ""
 
 
 class TestGetWorkstreamInventory:

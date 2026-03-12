@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from datetime import UTC, datetime
 from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
 from app.services.prompt_service import require_prompt_content
 from app.workflows._heartbeat_data import (
+    _fetch_task_overview,
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
@@ -128,15 +130,35 @@ async def _append_dynamic_sections(
     provider: str | None = None,
 ) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
-    for section in (
-        await _get_active_work_summary(),
+    task_overview = await _fetch_task_overview()
+    (
+        active_work,
+        protection_status,
+        cleanup_status,
+        active_specialists,
+        agent_roster,
+        workstream_inventory,
+        git_status,
+        feedback_summary,
+    ) = await asyncio.gather(
+        _get_active_work_summary(task_overview=task_overview),
         _get_protection_status_summary(target_project_id),
         _get_cleanup_status_summary(),
-        await _get_active_specialist_inventory(),
-        await _get_agent_roster_summary(),
-        await _get_workstream_inventory(provider),
+        _get_active_specialist_inventory(),
+        _get_agent_roster_summary(),
+        _get_workstream_inventory(provider, task_overview=task_overview),
         _get_git_status_summary(),
-        await _get_feedback_summary_section(),
+        _get_feedback_summary_section(),
+    )
+    for section in (
+        active_work,
+        protection_status,
+        cleanup_status,
+        active_specialists,
+        agent_roster,
+        workstream_inventory,
+        git_status,
+        feedback_summary,
     ):
         if section:
             prompt += section

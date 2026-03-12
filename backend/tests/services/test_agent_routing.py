@@ -180,6 +180,70 @@ class TestInjectAgentMandates:
         assert result.system_content == expected
         assert result.injected_uuids == []
 
+    @pytest.mark.asyncio
+    async def test_persona_runtime_excludes_prompt_backed_context_roles(self) -> None:
+        from datetime import UTC, datetime
+
+        persona_agent = AgentDTO(
+            id=9,
+            slug="persona",
+            name="Jenny",
+            description=None,
+            system_prompt="Legacy persona system prompt",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.3,
+            thinking_level="medium",
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=False,
+            tool_permissions=None,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        mock_db = AsyncMock()
+        with (
+            patch(
+                "app.services.prompt_service.build_prompt_context",
+                new=AsyncMock(return_value="<persona_system>core</persona_system>"),
+            ) as build_prompt_context,
+            patch(
+                "app.services.persona_service.get_persona_context_for_agent",
+                new=AsyncMock(return_value="<personality>Jenny</personality>"),
+            ),
+        ):
+            result = await inject_agent_mandates(
+                persona_agent,
+                mock_db,
+                task_type="heartbeat",
+            )
+
+        assert result.system_content == (
+            "<persona_system>core</persona_system>\n\n"
+            "<persona_context>\n<personality>Jenny</personality>\n</persona_context>"
+        )
+        build_prompt_context.assert_awaited_once_with(
+            mock_db,
+            persona_agent.id,
+            include_roles=None,
+            exclude_roles=[
+                "persona-personality",
+                "persona-user-context",
+                "heartbeat-instructions",
+            ],
+            agent_slug="persona",
+        )
+
 
 class TestCompleteWithFallback:
 
