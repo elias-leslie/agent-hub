@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.services.context_tracker import log_token_usage
@@ -75,6 +76,8 @@ async def handle_cached_response(
     # Mark new sessions as completed (cached single-turn completions are done)
     if is_new_session:
         session.status = "completed"
+    session.health_detail = "completed"
+    session.last_activity_at = datetime.now(UTC)
 
     await db.commit()
 

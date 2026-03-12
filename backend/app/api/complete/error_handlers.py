@@ -15,6 +15,7 @@ from app.adapters.base import (
 )
 from app.models import Session
 from app.services.events import publish_error
+from app.services.session_health import health_detail_for_error
 from app.services.session_live_activity import mark_session_terminal_state
 
 if TYPE_CHECKING:
@@ -39,6 +40,7 @@ async def _store_error_event(
         session = await db.get(Session, session_id)
         if session is not None:
             session.status = "failed"
+            session.health_detail = health_detail_for_error(error_message)
             mark_session_terminal_state(
                 session,
                 phase="error",

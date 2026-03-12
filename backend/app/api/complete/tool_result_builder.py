@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.services.context_tracker import log_token_usage
@@ -93,6 +94,8 @@ async def finalize_result(
     )
     if is_new_session or session.session_type in ("completion",):
         session.status = "completed"
+    session.health_detail = "completed"
+    session.last_activity_at = datetime.now(UTC)
     mark_session_terminal_state(
         session,
         phase="completed",

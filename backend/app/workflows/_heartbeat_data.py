@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.services.cleanup_summary import build_actionable_cleanup_summary
 from app.services.git_status_summary import build_actionable_git_summary
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = STALE_WORKSTREAM_IDLE_MINUTES
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
+_ACTIVE_SESSION_LOOKBACK_HOURS = 24
+_ACTIVE_SESSION_GHOST_MINUTES = 15
+_DEFAULT_SESSION_STALE_MINUTES = 15
+_CODING_AGENT_SESSION_STALE_MINUTES = 30
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 _CLAUDE_MCP_PREFIX = "mcp__agent-hub__"
@@ -169,34 +173,155 @@ def _fetch_backup_schedule(source_id: str) -> str:
 async def _fetch_active_sessions_section() -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        from app.db import async_session
-        from app.services.memory.continuity_query import query_active_sessions
-
-        async with async_session() as db:
-            sessions: list[dict[str, object]] = await query_active_sessions(
-                db, max_entries=5
-            )
-
+        sessions = await _query_active_sessions_for_heartbeat(max_entries=5)
         if not sessions:
             return ""
         lines = [f"Active agent sessions: {len(sessions)}"]
+        now = datetime.now(UTC)
         for s in sessions:
-            parts: list[str] = []
-            if s.get("external_id"):
-                parts.append(str(s["external_id"]))
-            if s.get("current_branch"):
-                parts.append(f"branch: {s['current_branch']}")
-            fc = s.get("touched_file_count", 0)
-            if fc:
-                parts.append(f"files: {fc}")
-            detail = ", ".join(parts) if parts else f"{s.get('event_count', 0)} events"
-            lines.append(
-                f"- {s.get('agent_slug', 'session')} on {s.get('project_id', 'unknown')}, {detail}"
-            )
+            lines.append(_format_active_session_entry(s, now=now))
         return "\n".join(lines)
     except Exception:
         logger.debug("Failed to fetch active sessions for heartbeat prompt", exc_info=True)
         return ""
+
+
+def _session_stale_threshold_minutes(is_coding_agent: bool | None) -> int:
+    """Return the stale-session threshold for an agent."""
+    if is_coding_agent:
+        return _CODING_AGENT_SESSION_STALE_MINUTES
+    return _DEFAULT_SESSION_STALE_MINUTES
+
+
+def _session_is_in_flight(health_detail: str | None) -> bool:
+    """Return whether a health detail represents active in-flight work."""
+    if not health_detail:
+        return False
+    return health_detail == "calling_model" or health_detail.startswith("executing_tool:")
+
+
+def _session_display_health(health_detail: str | None, *, is_stale: bool) -> str:
+    """Return the display health label for a heartbeat row."""
+    if is_stale and not _session_is_in_flight(health_detail):
+        return "idle"
+    return health_detail or "idle"
+
+
+def _format_activity_age(last_activity_at: datetime | None, *, now: datetime) -> str:
+    """Format a relative age label for heartbeat output."""
+    if last_activity_at is None:
+        return "unknown"
+
+    normalized = (
+        last_activity_at.replace(tzinfo=UTC)
+        if last_activity_at.tzinfo is None
+        else last_activity_at.astimezone(UTC)
+    )
+    seconds = max(int((now - normalized).total_seconds()), 0)
+    if seconds < 60:
+        return f"{seconds}s ago"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes}m ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours}h ago"
+    return f"{hours // 24}d ago"
+
+
+def _format_active_session_entry(session: dict[str, object], *, now: datetime) -> str:
+    """Format one active-session heartbeat row."""
+    is_stale = bool(session.get("is_stale"))
+    task_ref = session.get("task_ref") or "-"
+    parts = [
+        str(session.get("agent_slug") or "session"),
+        str(task_ref),
+        _session_display_health(
+            session.get("health_detail") if isinstance(session.get("health_detail"), str) else None,
+            is_stale=is_stale,
+        ),
+        _format_activity_age(
+            session.get("last_activity_at") if isinstance(session.get("last_activity_at"), datetime) else None,
+            now=now,
+        ),
+        f"turn {int(session.get('turn_count') or 0)}",
+    ]
+    health_detail = session.get("health_detail") if isinstance(session.get("health_detail"), str) else None
+    if is_stale and not _session_is_in_flight(health_detail):
+        parts.append("STALE")
+    return f"- {' | '.join(parts)}"
+
+
+async def _query_active_sessions_for_heartbeat(max_entries: int = 5) -> list[dict[str, object]]:
+    """Fetch active sessions enriched with heartbeat health metadata."""
+    from sqlalchemy import and_, func, or_, select
+
+    from app.db import async_session
+    from app.models import Agent, Session, SessionEvent
+
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
+    ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
+
+    event_count = (
+        select(func.count(SessionEvent.id))
+        .where(SessionEvent.session_id == Session.id)
+        .correlate(Session)
+        .scalar_subquery()
+    )
+    turn_count = (
+        select(func.max(SessionEvent.turn))
+        .where(SessionEvent.session_id == Session.id)
+        .correlate(Session)
+        .scalar_subquery()
+    )
+
+    async with async_session() as db:
+        rows = (
+            await db.execute(
+                select(
+                    Session.agent_slug,
+                    Session.external_id,
+                    Session.current_branch,
+                    Session.health_detail,
+                    Session.last_activity_at,
+                    Session.created_at,
+                    Agent.is_coding_agent,
+                    turn_count.label("turn_count"),
+                )
+                .outerjoin(Agent, Agent.slug == Session.agent_slug)
+                .where(
+                    and_(
+                        Session.status == "active",
+                        Session.agent_slug.isnot(None),
+                        Session.created_at >= cutoff,
+                        or_(event_count > 0, Session.created_at >= ghost_cutoff),
+                    )
+                )
+                .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
+                .limit(max_entries)
+            )
+        ).all()
+
+    sessions: list[dict[str, object]] = []
+    for row in rows:
+        last_activity_at = row.last_activity_at or row.created_at
+        threshold_minutes = _session_stale_threshold_minutes(row.is_coding_agent)
+        idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
+        sessions.append(
+            {
+                "agent_slug": row.agent_slug,
+                "task_ref": infer_task_id(row.external_id, row.current_branch)
+                or row.external_id
+                or row.current_branch,
+                "health_detail": row.health_detail,
+                "last_activity_at": last_activity_at,
+                "turn_count": int(row.turn_count or 0),
+                "idle_minutes": idle_minutes,
+                "is_stale": idle_minutes >= threshold_minutes,
+            }
+        )
+    return sessions
 
 
 async def _query_completed_sessions(cutoff: datetime) -> list:
