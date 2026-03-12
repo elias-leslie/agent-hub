@@ -168,6 +168,55 @@ async def test_upsert_session_create_sets_timestamps_without_refresh() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_upsert_session_reactivates_existing_completed_session() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-existing",
+        project_id="agent-hub",
+        provider="anthropic",
+        model="claude/external-tmux",
+        status="completed",
+        session_type="claude_code",
+        provider_metadata={},
+        models_used=["claude/external-tmux"],
+        providers_used=["anthropic"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._validate_project_id",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.services.session_ingestion.service.get_or_create_session",
+            new_callable=AsyncMock,
+            return_value=(session, True),
+        ),
+    ):
+        updated, result = await upsert_session(
+            db=db,
+            request=SessionUpsertRequest(
+                session_id="session-existing",
+                project_id="agent-hub",
+                provider="anthropic",
+                model="claude/external-tmux",
+                session_type="claude_code",
+                current_branch="main",
+            ),
+        )
+
+    assert result.created is False
+    assert updated is session
+    assert session.status == "active"
+    assert session.updated_at is not None
+    assert db.commit.await_count == 1
+    db.refresh.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_heartbeat_session_updates_without_refresh() -> None:
     db = AsyncMock()
     session = Session(
