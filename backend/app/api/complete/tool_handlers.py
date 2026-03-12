@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.models import Session as DBSession
 from app.services.session_health import health_detail_for_error, update_session_health
-from app.services.session_live_activity import mark_session_terminal_state
+from app.services.session_live_activity import mark_session_completed
 
 from .tool_event_storage import store_assistant_response, store_user_messages
 from .tool_handler_utils import _ExecutionState, _init_execution_state, _run_tool_loop
@@ -76,29 +76,21 @@ async def _store_partial_response(
             else:
                 content = "Session interrupted before response"
         estimated_tokens = len(content) // 4
-        session.status = "completed"
-        session.health_detail = "completed"
+        mark_session_completed(
+            session,
+            summary="Execution interrupted",
+            termination_reason=error_detail,
+        )
         await store_assistant_response(
             db, session_id, content, model, estimated_tokens,
             agent_id=state.agent_slug,
-        )
-        mark_session_terminal_state(
-            session,
-            phase="completed",
-            status="completed",
-            summary="Execution interrupted",
-            termination_reason=error_detail,
         )
         await db.commit()
     except Exception:
         logger.warning("Failed to store partial response for session %s", session_id)
         try:
-            session.status = "completed"
-            session.health_detail = "completed"
-            mark_session_terminal_state(
+            mark_session_completed(
                 session,
-                phase="completed",
-                status="completed",
                 summary="Execution interrupted",
                 termination_reason=error_detail,
             )

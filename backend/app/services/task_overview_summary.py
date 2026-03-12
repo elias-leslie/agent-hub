@@ -39,6 +39,14 @@ class ReadyTaskCandidate:
     title: str
 
 
+@dataclass(frozen=True)
+class ProjectOverview:
+    """Compact per-project summary row parsed from ready-all output."""
+
+    project_id: str
+    label: str
+
+
 def parse_task_overview_stats(task_overview: str) -> TaskOverviewStats:
     """Parse the READY-ALL headline counts from compact CLI output."""
     first_line = task_overview.strip().splitlines()[0] if task_overview.strip() else ""
@@ -118,10 +126,60 @@ def build_actionable_ready_summary(
     return "\n".join(lines)
 
 
+def extract_project_overviews(task_overview: str) -> list[ProjectOverview]:
+    """Extract compact per-project count labels from ready-all output."""
+    overviews: list[ProjectOverview] = []
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        match = _PROJECT_RE.match(line)
+        if not match:
+            continue
+        overviews.append(
+            ProjectOverview(
+                project_id=match.group("project"),
+                label=match.group("label").strip(),
+            )
+        )
+    return overviews
+
+
+def build_compact_task_overview(
+    task_overview: str,
+    *,
+    per_project_limit: int = 2,
+) -> str:
+    """Build a compact ready-all summary for prompt injection."""
+    if not task_overview.strip():
+        return ""
+
+    lines: list[str] = []
+    first_line = task_overview.strip().splitlines()[0]
+    if first_line:
+        lines.append(first_line)
+
+    project_overviews = extract_project_overviews(task_overview)
+    if project_overviews:
+        lines.append("")
+        lines.append(f"PROJECTS[{len(project_overviews)}]")
+        for overview in project_overviews:
+            lines.append(f"- {overview.project_id} | {overview.label}")
+
+    actionable = build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit)
+    if actionable:
+        lines.append("")
+        lines.append(actionable)
+
+    return "\n".join(lines)
+
+
 __all__ = [
     "ReadyTaskCandidate",
     "TaskOverviewStats",
     "build_actionable_ready_summary",
+    "build_compact_task_overview",
+    "extract_project_overviews",
     "extract_ready_task_candidates",
     "parse_task_overview_stats",
 ]

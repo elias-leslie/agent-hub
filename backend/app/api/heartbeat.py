@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -16,6 +16,7 @@ from app.workflows._heartbeat_redis import (
     clear_heartbeat_running,
     get_heartbeat_metrics,
     get_heartbeat_running_info,
+    get_heartbeat_state,
     get_last_run_info,
 )
 from app.workflows.persona_heartbeat import (
@@ -40,9 +41,14 @@ _HEARTBEAT_SESSION_IDLE_SECONDS = 180
 class HeartbeatStatusResponse(BaseModel):
     running: bool
     last_run: str | None = None
+    last_attempt: str | None = None
+    last_success: str | None = None
+    last_skip_reason: str | None = None
+    last_error: str | None = None
     elapsed_seconds: int | None = None
     interval_minutes: int
     execution_state: str = "active"
+    running_session_id: str | None = None
     # Last completed heartbeat metrics (from Redis)
     last_session_id: str | None = None
     last_turns: int | None = None
@@ -62,21 +68,26 @@ class HeartbeatTriggerRequest(BaseModel):
     target_project_id: str | None = None
 
 
-async def _has_live_heartbeat_session(started_at_iso: str) -> bool:
-    """Sanity-check the Redis running lock against recent persona session activity."""
+async def _has_live_heartbeat_session(
+    started_at_iso: str,
+    session_id: str | None,
+) -> bool:
+    """Sanity-check the Redis running lock against the exact heartbeat session."""
     started_at = datetime.fromisoformat(started_at_iso)
     if started_at.tzinfo is None:
         started_at = started_at.replace(tzinfo=UTC)
     now = datetime.now(UTC)
+    if not session_id:
+        return (now - started_at).total_seconds() <= _HEARTBEAT_SESSION_GRACE_SECONDS
 
     async with async_session() as db:
         result = await db.execute(
             select(Session.updated_at)
             .where(
+                Session.id == session_id,
                 Session.agent_slug == "persona",
-                Session.created_at >= started_at - timedelta(seconds=30),
+                Session.request_source == "heartbeat",
             )
-            .order_by(Session.updated_at.desc())
             .limit(1)
         )
         last_updated = result.scalar_one_or_none()
@@ -94,7 +105,10 @@ async def _get_effective_running_info() -> HeartbeatRunningInfo | None:
     running_info = await get_heartbeat_running_info()
     if not running_info:
         return None
-    if await _has_live_heartbeat_session(str(running_info["started_at"])):
+    if await _has_live_heartbeat_session(
+        str(running_info["started_at"]),
+        running_info.get("session_id"),
+    ):
         return running_info
 
     logger.warning(
@@ -110,6 +124,7 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     """Return current heartbeat running state, last run info, and metrics."""
     running_info = await _get_effective_running_info()
     last_run = await get_last_run_info()
+    state = await get_heartbeat_state()
     interval_minutes, _ = await get_heartbeat_interval()
     execution_state = await get_persona_execution_state()
     metrics = await get_heartbeat_metrics()
@@ -118,19 +133,26 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     resp = HeartbeatStatusResponse(
         running=running_info is not None,
         last_run=last_run,
+        last_attempt=state.get("last_attempt") if state else None,
+        last_success=state.get("last_success") if state else last_run,
+        last_skip_reason=state.get("last_skip_reason") if state else None,
+        last_error=state.get("last_error") if state else None,
         elapsed_seconds=running_info.get("elapsed_seconds") if running_info else None,
         interval_minutes=interval_minutes,
         execution_state=execution_state,
+        running_session_id=running_info.get("session_id") if running_info else None,
         runtime=runtime,
     )
 
     if metrics:
-        resp.last_session_id = metrics.get("session_id")
+        resp.last_session_id = metrics.get("session_id") or (state.get("last_session_id") if state else None)
         resp.last_turns = int(metrics["turns"]) if metrics.get("turns") else None
         resp.last_tool_calls = int(metrics["tool_calls"]) if metrics.get("tool_calls") else None
         resp.last_format_compliant = metrics.get("format_compliant") == "True"
         resp.last_summary_stored = metrics.get("summary_stored") == "True"
         resp.last_had_error = metrics.get("had_error") == "True"
+    elif state:
+        resp.last_session_id = state.get("last_session_id")
 
     return resp
 

@@ -35,6 +35,33 @@ def _provider_model_label(provider: str, model: str) -> str:
     return model if model.startswith(prefix) else f"{provider}/{model}"
 
 
+def _terminal_result_line(session: DBSession) -> str | None:
+    """Return a terminal-state line derived from live activity metadata when available."""
+    try:
+        from app.services.session_live_activity import build_live_activity_response
+
+        activity = build_live_activity_response(session)
+    except Exception:
+        logger.debug("Failed to build terminal live activity for inspect_session", exc_info=True)
+        return None
+
+    if not activity:
+        return None
+
+    status = str(activity.get("status") or session.status)
+    summary = activity.get("summary")
+    termination_reason = activity.get("termination_reason")
+    if status not in {"completed", "failed", "error"} and not termination_reason:
+        return None
+
+    parts = [f"Latest result: {status}"]
+    if isinstance(summary, str) and summary:
+        parts.append(summary)
+    if isinstance(termination_reason, str) and termination_reason:
+        parts.append(f"reason={termination_reason}")
+    return " | ".join(parts)
+
+
 def _looks_like_coding_task(task: str) -> bool:
     """Heuristic to detect tasks likely requiring code modification."""
     return any(keyword in task.lower() for keyword in _CODING_TASK_KEYWORDS)
@@ -373,10 +400,13 @@ async def inspect_session(session_id: str) -> str:
             lines.append(f"Summary: {session.summary_oneliner}")
         if recent_tools:
             lines.append(f"Recent tools: {', '.join(recent_tools)}")
+        terminal_line = _terminal_result_line(session)
         if latest_assistant and latest_assistant.content:
             lines.extend(["Latest assistant message:", latest_assistant.content.strip()])
         elif latest_error and latest_error.content:
             lines.extend(["Latest error:", latest_error.content.strip()])
+        elif terminal_line:
+            lines.append(terminal_line)
         else:
             lines.append("Latest result: (no assistant message stored yet)")
         return "\n".join(lines)
@@ -392,6 +422,7 @@ async def cancel_consultation(session_id: str) -> str:
 
         from app.db import async_session
         from app.models import Session as DBSession
+        from app.services.session_live_activity import mark_session_completed
 
         async with async_session() as db:
             result = await db.execute(
@@ -402,7 +433,11 @@ async def cancel_consultation(session_id: str) -> str:
                 return f"Error: Session '{session_id}' not found."
             if session.request_source != "consultation":
                 return f"Error: Session '{session_id}' is not a consultation."
-            session.status = "completed"
+            mark_session_completed(
+                session,
+                summary="Consultation cancelled",
+                termination_reason="consultation_cancelled",
+            )
             await db.commit()
             return f"Consultation session {session_id} closed."
     except Exception as e:

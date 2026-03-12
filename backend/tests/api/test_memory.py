@@ -111,7 +111,7 @@ class TestUpdateEpisodeEndpoint:
         ):
             response = await client.patch(
                 "/api/memory/episode/test-uuid-123",
-                json={"content": "**Reference**: Use refreshed episode content."},
+                json={"content": "**Episode Refresh**: Use refreshed episode content."},
             )
 
         assert response.status_code == 200
@@ -119,7 +119,7 @@ class TestUpdateEpisodeEndpoint:
         assert data["success"] is True
         assert data["episode_id"] == "test-uuid-123"
         assert "content" in data["message"].lower()
-        mock_embedder.embed.assert_awaited_once_with("**Reference**: Use refreshed episode content.")
+        mock_embedder.embed.assert_awaited_once_with("**Episode Refresh**: Use refreshed episode content.")
         mock_repo.update.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -145,19 +145,19 @@ class TestUpdateEpisodeEndpoint:
     async def test_update_episode_rejects_invalid_content_for_existing_tier(
         self, client: AsyncClient
     ):
-        """Content-only updates should still enforce the stored tier header format."""
+        """Content-only updates should still enforce the topic-header format."""
         mock_repo = AsyncMock()
         mock_repo.get_as_dict = AsyncMock(return_value={"injection_tier": "mandate"})
 
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
                 "/api/memory/episode/test-uuid-123",
-                json={"content": "**Git Safety**: Use /commit_it for commits when available."},
+                json={"content": "**Git Safety**: Git commits should use /commit_it when available."},
             )
 
         assert response.status_code == 422
         body = response.json()
-        assert "exact tier header" in body["message"].lower()
+        assert "direct imperative" in body["message"].lower()
         assert body["error"] == "validation_error"
 
     @pytest.mark.asyncio
@@ -181,7 +181,7 @@ class TestSaveLearningEndpoint:
         response = await client.post(
             "/api/memory/save-learning",
             json={
-                "content": "**Git Safety**: Use /commit_it for commits when available.",
+                "content": "Use /commit_it for commits when available.",
                 "summary": "Use commit flow",
                 "injection_tier": "mandate",
             },
@@ -190,7 +190,7 @@ class TestSaveLearningEndpoint:
         assert response.status_code == 422
         body = response.json()
         assert body["error"] == "validation_error"
-        assert "exact tier header" in body["message"].lower()
+        assert "bold topic header" in body["message"].lower()
         assert "FORMAT_STANDARD" in body["hint"]
 
 

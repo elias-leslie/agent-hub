@@ -18,23 +18,12 @@ class EpisodeValidationError(Exception):
 class EpisodeValidator:
     """Validates episode content for quality and conciseness."""
 
-    HEADER_LABELS: ClassVar[dict[str, str]] = {
-        "mandate": "Mandate",
-        "guardrail": "Guardrail",
-        "reference": "Reference",
-    }
-    ANY_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*]+\*\*:")
-    TIER_HEADER_PATTERNS: ClassVar[dict[str, re.Pattern[str]]] = {
-        tier: re.compile(rf"^\*\*{label}\*\*:")
-        for tier, label in HEADER_LABELS.items()
-    }
+    ANY_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*\n][^*\n]{0,78}\*\*:")
     CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?<![\|])\s*::\s*|(?<!\|)\s*->\s*(?!\|)"
     )
     LIST_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?m)^\s*(?:[-*]|\d+\.)\s+")
-    MULTI_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"(?m)^\*\*(?:Mandate|Guardrail|Reference)\*\*:"
-    )
+    MULTI_HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"(?m)^\*\*[^*\n][^*\n]{0,78}\*\*:")
     HEARTBEAT_JOURNAL_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?im)^(##\s*heartbeat:|\[auto\]\s)"
     )
@@ -67,7 +56,7 @@ class EpisodeValidator:
         "important:",
     ]
     IMPERATIVE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        r"^\*\*(?:Mandate|Guardrail|Reference)\*\*:\s*"
+        r"^\*\*[^*\n][^*\n]{0,78}\*\*:\s*"
         r"(?:Use|Never|Always|Check|Follow|Avoid|Run|Keep|Prefer|Treat|Record|Verify|Fix|Delete|Remove|Commit|Push|Restart|Rebuild)\b"
     )
 
@@ -87,27 +76,18 @@ class EpisodeValidator:
         content_lower = content.lower()
 
         # Rule 1: Header format
-        header_pattern = cls.TIER_HEADER_PATTERNS.get(tier) if tier else cls.ANY_HEADER_PATTERN
-        if header_pattern is None:
+        if tier and tier not in {"mandate", "guardrail", "reference"}:
             raise EpisodeValidationError(
                 message=f"Unsupported memory tier {tier!r}.",
                 detected_patterns=["Unsupported Tier"],
             )
-        if not header_pattern.match(content):
-            if tier:
-                expected = f"**{cls.HEADER_LABELS[tier]}**:"
-                message = (
-                    f"Episode must start with the exact tier header {expected}. "
-                    "Use tier-matched headers so authority is unambiguous."
-                )
-                detected_patterns = ["Wrong Tier Header"]
-            else:
-                message = (
-                    "Episode must start with a bold topic header. "
-                    "Format: '**Topic**: Content...'. "
-                    "Example: '**Service Scripts**: Use ./scripts/rebuild.sh...'"
-                )
-                detected_patterns = ["Missing Header"]
+        if not cls.ANY_HEADER_PATTERN.match(content):
+            message = (
+                "Episode must start with a bold topic header. "
+                "Format: '**Topic**: Content...'. "
+                "Example: '**Service Scripts**: Use ./scripts/rebuild.sh...'"
+            )
+            detected_patterns = ["Missing Header"]
             raise EpisodeValidationError(
                 message=message,
                 detected_patterns=detected_patterns,
@@ -115,7 +95,7 @@ class EpisodeValidator:
 
         if tier and not cls.IMPERATIVE_PATTERN.match(content):
             raise EpisodeValidationError(
-                message="Episode must start with a direct imperative after the tier header.",
+                message="Episode must start with a direct imperative after the topic header.",
                 detected_patterns=["Weak Imperative"],
             )
 

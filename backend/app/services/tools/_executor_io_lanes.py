@@ -212,6 +212,8 @@ async def _mark_stale_active_sessions(
 
     now = datetime.now(UTC)
     async with async_session() as db:
+        from app.services.session_live_activity import mark_session_completed
+
         for session in stale_active:
             branch = getattr(session, "current_branch", None) or "unknown branch"
             idle_minutes = idle_minutes_from_timestamps(
@@ -220,7 +222,11 @@ async def _mark_stale_active_sessions(
                 workstream_updated_at=getattr(session, "workstream_updated_at", None),
                 now=now,
             )
-            session.status = "completed"
+            mark_session_completed(
+                session,
+                summary=f"{note_prefix} after {idle_minutes}m inactivity ({branch})",
+                termination_reason=f"cleanup_closed:{workstream_status}",
+            )
             session.workstream_status = workstream_status
             session.workstream_note = f"{note_prefix} after {idle_minutes}m inactivity ({branch})"
             session.workstream_updated_at = now
