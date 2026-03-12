@@ -52,6 +52,23 @@ async def handle_finish_reason(
         return False, "success", None
 
     if finish_reason == "end_turn":
+        if (
+            not (result.content or "").strip()
+            and not state.get("empty_closeout_used")
+            and turn < max_turns
+        ):
+            progress = create_progress(
+                turn,
+                "empty_closeout_retry",
+                "Agent ended without a user-facing response; requesting one final closeout turn",
+            )
+            progress_log.append(progress)
+            await report_progress(progress, progress_callback)
+            _append_message(messages_for_adapter, messages_dict, "assistant", result.content)
+            _append_message(messages_for_adapter, messages_dict, "user", _EMPTY_FINAL_RESPONSE_MSG)
+            state["empty_closeout_used"] = True
+            return False, "success", None
+
         progress = create_progress(turn, "complete", "Agent completed task")
         progress_log.append(progress)
         await report_progress(progress, progress_callback)
@@ -94,6 +111,16 @@ _CLOSEOUT_AUDIT_MSG = (
     "If one answer shows unfinished concrete work, do that work now. "
     "Do not start speculative new work. Do not loop on this audit."
     "</system-closeout-audit>"
+)
+
+_EMPTY_FINAL_RESPONSE_MSG = (
+    "<system-final-response>"
+    "You have finished tool work but have not produced a final user-facing response. "
+    "Write the final response now. "
+    "If no changes were needed, say so plainly. "
+    "If changes were made, summarize the exact changes and evidence. "
+    "Do not call more tools unless a missing fact blocks the response."
+    "</system-final-response>"
 )
 
 
