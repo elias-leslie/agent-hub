@@ -81,36 +81,6 @@ async def get_project_access_summary() -> str:
     return "\n".join(lines)
 
 
-def _render_persona_tool_name(tool_name: str, provider: str | None = None) -> str:
-    """Render a callable persona tool name for the target provider."""
-    if provider == "claude":
-        return f"{_CLAUDE_MCP_PREFIX}{tool_name}"
-    return tool_name
-
-
-def _tool_call(
-    tool_name: str,
-    arguments: str = "",
-    *,
-    provider: str | None = None,
-) -> str:
-    """Render a callable tool invocation string for heartbeat guidance."""
-    rendered_name = _render_persona_tool_name(tool_name, provider)
-    return f"{rendered_name}({arguments})" if arguments else f"{rendered_name}()"
-
-
-def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
-    """Return (count, comma-separated list) of persona-specific tool names."""
-    try:
-        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
-
-        names = [_render_persona_tool_name(t.name, provider) for t in PERSONA_EXTRA_TOOLS]
-        return len(names), ", ".join(names)
-    except Exception:
-        logger.exception("Failed to list persona tools")
-        return 0, "(unavailable)"
-
-
 async def _run_st_command(
     cmd: list[str],
     *,
@@ -135,6 +105,32 @@ async def _run_st_command(
     return stdout.strip() if isinstance(stdout, str) else ""
 
 
+def _tool_call(
+    tool_name: str,
+    arguments: str = "",
+    *,
+    provider: str | None = None,
+) -> str:
+    """Render a callable tool invocation string for heartbeat guidance."""
+    rendered = f"{_CLAUDE_MCP_PREFIX}{tool_name}" if provider == "claude" else tool_name
+    return f"{rendered}({arguments})" if arguments else f"{rendered}()"
+
+
+def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
+    """Return (count, comma-separated list) of persona-specific tool names."""
+    try:
+        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
+
+        names = [
+            f"{_CLAUDE_MCP_PREFIX}{t.name}" if provider == "claude" else t.name
+            for t in PERSONA_EXTRA_TOOLS
+        ]
+        return len(names), ", ".join(names)
+    except Exception:
+        logger.exception("Failed to list persona tools")
+        return 0, "(unavailable)"
+
+
 async def _fetch_task_overview() -> str:
     """Cross-project task overview via st ready-all (TOON output)."""
     output = await _run_st_command(
@@ -147,46 +143,139 @@ async def _fetch_task_overview() -> str:
     return f"{output}\n\n{actionable}" if actionable else output
 
 
-async def _fetch_cleanup_status() -> str:
-    """Cross-project git hygiene summary via st cleanup status (TOON output)."""
-    output = await _run_st_command(
-        ["st", "cleanup", "status", "--all"],
-        failure_log="Failed to fetch cleanup status for heartbeat prompt",
+def _session_stale_threshold_minutes(is_coding_agent: bool | None) -> int:
+    """Return the stale-session threshold for an agent."""
+    if is_coding_agent:
+        return _CODING_AGENT_SESSION_STALE_MINUTES
+    return _DEFAULT_SESSION_STALE_MINUTES
+
+
+def _session_display_health(health_detail: str | None, *, is_stale: bool) -> str:
+    """Return the display health label for a heartbeat row."""
+    in_flight = health_detail is not None and (
+        health_detail == "calling_model" or health_detail.startswith("executing_tool:")
     )
-    if not output:
-        return ""
-    actionable = build_actionable_cleanup_summary(output)
-    return f"{output}\n\n{actionable}" if actionable else output
+    if is_stale and not in_flight:
+        return "idle"
+    return health_detail or "idle"
 
 
-async def _fetch_backup_status(project_id: str | None = None) -> str:
-    """Fetch most recent backup status for a project-backed source."""
-    cmd = ["st"]
-    if project_id:
-        cmd.extend(["-P", project_id])
-    cmd.extend(["backup", "status"])
-    return await _run_st_command(
-        cmd,
-        failure_log="Failed to fetch backup status for heartbeat prompt",
+def _format_active_session_entry(session: dict[str, object], *, now: datetime) -> str:
+    """Format one active-session heartbeat row."""
+    is_stale = bool(session.get("is_stale"))
+    task_ref = session.get("task_ref") or "-"
+    _hd_raw = session.get("health_detail")
+    health_detail: str | None = _hd_raw if isinstance(_hd_raw, str) else None
+    _la = session.get("last_activity_at")
+    if not isinstance(_la, datetime):
+        age_str = "unknown"
+    else:
+        normalized = (
+            _la.replace(tzinfo=UTC)
+            if _la.tzinfo is None
+            else _la.astimezone(UTC)
+        )
+        seconds = max(int((now - normalized).total_seconds()), 0)
+        minutes = seconds // 60
+        if seconds < 60:
+            age_str = f"{seconds}s ago"
+        elif minutes < 60:
+            age_str = f"{minutes}m ago"
+        else:
+            hours = minutes // 60
+            age_str = f"{hours}h ago" if hours < 24 else f"{hours // 24}d ago"
+    parts = [
+        str(session.get("agent_slug") or "session"),
+        str(task_ref),
+        _session_display_health(health_detail, is_stale=is_stale),
+        age_str,
+        f"turn {int(session.get('turn_count') or 0)}",
+    ]
+    in_flight = health_detail is not None and (
+        health_detail == "calling_model" or health_detail.startswith("executing_tool:")
     )
-
-
-async def _fetch_backup_schedule(source_id: str) -> str:
-    """Fetch schedule details for a single backup source."""
-    return await _run_st_command(
-        ["st", "backup", "schedule", source_id],
-        failure_log="Failed to fetch backup schedule for heartbeat prompt",
-    )
+    if is_stale and not in_flight:
+        parts.append("STALE")
+    return f"- {' | '.join(parts)}"
 
 
 async def _fetch_active_sessions_section() -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        sessions = await _query_active_sessions_for_heartbeat(max_entries=5)
-        if not sessions:
-            return ""
-        lines = [f"Active agent sessions: {len(sessions)}"]
+        from sqlalchemy import and_, func, or_, select
+
+        from app.db import async_session
+        from app.models import Agent, Session, SessionEvent
+
         now = datetime.now(UTC)
+        cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
+        ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
+
+        event_count = (
+            select(func.count(SessionEvent.id))
+            .where(SessionEvent.session_id == Session.id)
+            .correlate(Session)
+            .scalar_subquery()
+        )
+        turn_count = (
+            select(func.max(SessionEvent.turn))
+            .where(SessionEvent.session_id == Session.id)
+            .correlate(Session)
+            .scalar_subquery()
+        )
+
+        async with async_session() as db:
+            rows = (
+                await db.execute(
+                    select(
+                        Session.agent_slug,
+                        Session.external_id,
+                        Session.current_branch,
+                        Session.health_detail,
+                        Session.last_activity_at,
+                        Session.created_at,
+                        Agent.is_coding_agent,
+                        turn_count.label("turn_count"),
+                    )
+                    .outerjoin(Agent, Agent.slug == Session.agent_slug)
+                    .where(
+                        and_(
+                            Session.status == "active",
+                            Session.agent_slug.isnot(None),
+                            Session.created_at >= cutoff,
+                            or_(event_count > 0, Session.created_at >= ghost_cutoff),
+                        )
+                    )
+                    .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
+                    .limit(5)
+                )
+            ).all()
+
+        if not rows:
+            return ""
+
+        sessions: list[dict[str, object]] = []
+        for row in rows:
+            last_activity_at = row.last_activity_at or row.created_at
+            threshold = _session_stale_threshold_minutes(row.is_coding_agent)
+            idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
+            sessions.append(
+                {
+                    "agent_slug": row.agent_slug,
+                    "task_ref": (
+                        infer_task_id(row.external_id, row.current_branch)
+                        or row.external_id
+                        or row.current_branch
+                    ),
+                    "health_detail": row.health_detail,
+                    "last_activity_at": last_activity_at,
+                    "turn_count": int(row.turn_count or 0),
+                    "idle_minutes": idle_minutes,
+                    "is_stale": idle_minutes >= threshold,
+                }
+            )
+
+        lines = [f"Active agent sessions: {len(sessions)}"]
         for s in sessions:
             lines.append(_format_active_session_entry(s, now=now))
         return "\n".join(lines)
@@ -195,184 +284,40 @@ async def _fetch_active_sessions_section() -> str:
         return ""
 
 
-def _session_stale_threshold_minutes(is_coding_agent: bool | None) -> int:
-    """Return the stale-session threshold for an agent."""
-    if is_coding_agent:
-        return _CODING_AGENT_SESSION_STALE_MINUTES
-    return _DEFAULT_SESSION_STALE_MINUTES
-
-
-def _session_is_in_flight(health_detail: str | None) -> bool:
-    """Return whether a health detail represents active in-flight work."""
-    if not health_detail:
-        return False
-    return health_detail == "calling_model" or health_detail.startswith("executing_tool:")
-
-
-def _session_display_health(health_detail: str | None, *, is_stale: bool) -> str:
-    """Return the display health label for a heartbeat row."""
-    if is_stale and not _session_is_in_flight(health_detail):
-        return "idle"
-    return health_detail or "idle"
-
-
-def _format_activity_age(last_activity_at: datetime | None, *, now: datetime) -> str:
-    """Format a relative age label for heartbeat output."""
-    if last_activity_at is None:
-        return "unknown"
-
-    normalized = (
-        last_activity_at.replace(tzinfo=UTC)
-        if last_activity_at.tzinfo is None
-        else last_activity_at.astimezone(UTC)
-    )
-    seconds = max(int((now - normalized).total_seconds()), 0)
-    if seconds < 60:
-        return f"{seconds}s ago"
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes}m ago"
-    hours = minutes // 60
-    if hours < 24:
-        return f"{hours}h ago"
-    return f"{hours // 24}d ago"
-
-
-def _format_active_session_entry(session: dict[str, object], *, now: datetime) -> str:
-    """Format one active-session heartbeat row."""
-    is_stale = bool(session.get("is_stale"))
-    task_ref = session.get("task_ref") or "-"
-    parts = [
-        str(session.get("agent_slug") or "session"),
-        str(task_ref),
-        _session_display_health(
-            session.get("health_detail") if isinstance(session.get("health_detail"), str) else None,
-            is_stale=is_stale,
-        ),
-        _format_activity_age(
-            session.get("last_activity_at") if isinstance(session.get("last_activity_at"), datetime) else None,
-            now=now,
-        ),
-        f"turn {int(session.get('turn_count') or 0)}",
-    ]
-    health_detail = session.get("health_detail") if isinstance(session.get("health_detail"), str) else None
-    if is_stale and not _session_is_in_flight(health_detail):
-        parts.append("STALE")
-    return f"- {' | '.join(parts)}"
-
-
-async def _query_active_sessions_for_heartbeat(max_entries: int = 5) -> list[dict[str, object]]:
-    """Fetch active sessions enriched with heartbeat health metadata."""
-    from sqlalchemy import and_, func, or_, select
-
-    from app.db import async_session
-    from app.models import Agent, Session, SessionEvent
-
-    now = datetime.now(UTC)
-    cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
-    ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
-
-    event_count = (
-        select(func.count(SessionEvent.id))
-        .where(SessionEvent.session_id == Session.id)
-        .correlate(Session)
-        .scalar_subquery()
-    )
-    turn_count = (
-        select(func.max(SessionEvent.turn))
-        .where(SessionEvent.session_id == Session.id)
-        .correlate(Session)
-        .scalar_subquery()
-    )
-
-    async with async_session() as db:
-        rows = (
-            await db.execute(
-                select(
-                    Session.agent_slug,
-                    Session.external_id,
-                    Session.current_branch,
-                    Session.health_detail,
-                    Session.last_activity_at,
-                    Session.created_at,
-                    Agent.is_coding_agent,
-                    turn_count.label("turn_count"),
-                )
-                .outerjoin(Agent, Agent.slug == Session.agent_slug)
-                .where(
-                    and_(
-                        Session.status == "active",
-                        Session.agent_slug.isnot(None),
-                        Session.created_at >= cutoff,
-                        or_(event_count > 0, Session.created_at >= ghost_cutoff),
-                    )
-                )
-                .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
-                .limit(max_entries)
-            )
-        ).all()
-
-    sessions: list[dict[str, object]] = []
-    for row in rows:
-        last_activity_at = row.last_activity_at or row.created_at
-        threshold_minutes = _session_stale_threshold_minutes(row.is_coding_agent)
-        idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
-        sessions.append(
-            {
-                "agent_slug": row.agent_slug,
-                "task_ref": infer_task_id(row.external_id, row.current_branch)
-                or row.external_id
-                or row.current_branch,
-                "health_detail": row.health_detail,
-                "last_activity_at": last_activity_at,
-                "turn_count": int(row.turn_count or 0),
-                "idle_minutes": idle_minutes,
-                "is_stale": idle_minutes >= threshold_minutes,
-            }
-        )
-    return sessions
-
-
-async def _query_completed_sessions(cutoff: datetime) -> list:
-    """Fetch recently completed non-persona sessions from the DB."""
-    from sqlalchemy import and_, select
-
-    from app.db import async_session
-    from app.models import Session
-
-    async with async_session() as db:
-        result = await db.execute(
-            select(
-                Session.agent_slug,
-                Session.project_id,
-                Session.summary_oneliner,
-                Session.created_at,
-            )
-            .where(
-                and_(
-                    Session.status == "completed",
-                    Session.created_at >= cutoff,
-                    Session.summary_oneliner.isnot(None),
-                    Session.agent_slug != "persona",
-                )
-            )
-            .order_by(Session.created_at.desc())
-            .limit(10)
-        )
-        return list(result.all())
-
-
 async def _fetch_recently_completed_sessions_section() -> str:
     """Show recently completed agent sessions with their summaries.
 
     Gives Jenny automatic visibility into what dispatched agents accomplished.
     """
     try:
-        from datetime import timedelta
+        from sqlalchemy import and_, select
+
+        from app.db import async_session
+        from app.models import Session
 
         cutoff = datetime.now(UTC) - timedelta(hours=2)
         now = datetime.now(UTC)
-        rows = await _query_completed_sessions(cutoff)
+
+        async with async_session() as db:
+            result = await db.execute(
+                select(
+                    Session.agent_slug,
+                    Session.project_id,
+                    Session.summary_oneliner,
+                    Session.created_at,
+                )
+                .where(
+                    and_(
+                        Session.status == "completed",
+                        Session.created_at >= cutoff,
+                        Session.summary_oneliner.isnot(None),
+                        Session.agent_slug != "persona",
+                    )
+                )
+                .order_by(Session.created_at.desc())
+                .limit(10)
+            )
+            rows = list(result.all())
 
         if not rows:
             return ""
@@ -392,61 +337,56 @@ async def _fetch_recently_completed_sessions_section() -> str:
         return ""
 
 
-async def _query_active_specialist_sessions() -> list[dict[str, object]]:
-    """Fetch active non-owner specialist sessions for heartbeat duplicate-avoidance.
-
-    These are active sessions without a task/worktree lane, which means they can still
-    overlap in practice even though the ownership inventory correctly excludes them.
-    """
-    from datetime import timedelta
-
-    from sqlalchemy import and_, select
-
-    from app.db import async_session
-    from app.models import Session
-
-    cutoff = datetime.now(UTC) - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
-
-    async with async_session() as db:
-        query = (
-            select(
-                Session.id, Session.agent_slug, Session.project_id,
-                Session.parent_session_id, Session.request_source, Session.created_at,
-            )
-            .where(
-                and_(
-                    Session.status == "active",
-                    Session.agent_slug.isnot(None),
-                    Session.project_id != "persona-sandbox",
-                    Session.created_at >= cutoff,
-                    Session.external_id.is_(None),
-                    Session.current_branch.is_(None),
-                )
-            )
-            .order_by(Session.created_at.desc())
-            .limit(50)
-        )
-        rows = (await db.execute(query)).all()
-
-    now = datetime.now(UTC)
-    return [
-        {
-            "session_id": row.id,
-            "agent_slug": row.agent_slug,
-            "project_id": row.project_id,
-            "parent_session_id": row.parent_session_id,
-            "request_source": row.request_source,
-            "created_at": row.created_at,
-            "age_minutes": int((now - row.created_at).total_seconds() / 60),
-        }
-        for row in rows
-    ]
-
-
 async def _get_active_specialist_inventory() -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
-        rows = await _query_active_specialist_sessions()
+        from sqlalchemy import and_, select
+
+        from app.db import async_session
+        from app.models import Session
+
+        cutoff = datetime.now(UTC) - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
+        now = datetime.now(UTC)
+
+        async with async_session() as db:
+            raw_rows = (
+                await db.execute(
+                    select(
+                        Session.id,
+                        Session.agent_slug,
+                        Session.project_id,
+                        Session.parent_session_id,
+                        Session.request_source,
+                        Session.created_at,
+                    )
+                    .where(
+                        and_(
+                            Session.status == "active",
+                            Session.agent_slug.isnot(None),
+                            Session.project_id != "persona-sandbox",
+                            Session.created_at >= cutoff,
+                            Session.external_id.is_(None),
+                            Session.current_branch.is_(None),
+                        )
+                    )
+                    .order_by(Session.created_at.desc())
+                    .limit(50)
+                )
+            ).all()
+
+        rows = [
+            {
+                "session_id": row.id,
+                "agent_slug": row.agent_slug,
+                "project_id": row.project_id,
+                "parent_session_id": row.parent_session_id,
+                "request_source": row.request_source,
+                "created_at": row.created_at,
+                "age_minutes": int((now - row.created_at).total_seconds() / 60),
+            }
+            for row in raw_rows
+        ]
+
         if not rows:
             return ""
 
@@ -486,73 +426,6 @@ async def _get_active_specialist_inventory() -> str:
     except Exception:
         logger.debug("Failed to build active specialist inventory for heartbeat", exc_info=True)
         return ""
-
-
-def _workstream_row_to_dict(row: object, now: datetime) -> dict[str, object]:
-    """Convert a raw DB session row into a workstream dict."""
-    return {
-        "session_id": row.id,  # type: ignore[attr-defined]
-        "agent_slug": row.agent_slug,  # type: ignore[attr-defined]
-        "project_id": row.project_id,  # type: ignore[attr-defined]
-        "external_id": row.external_id,  # type: ignore[attr-defined]
-        "current_branch": row.current_branch,  # type: ignore[attr-defined]
-        "working_dir": (
-            row.provider_metadata.get("cwd")  # type: ignore[attr-defined]
-            if isinstance(row.provider_metadata, dict)  # type: ignore[attr-defined]
-            else None
-        ),
-        "status": row.status,  # type: ignore[attr-defined]
-        "workstream_status": row.workstream_status,  # type: ignore[attr-defined]
-        "workstream_note": row.workstream_note,  # type: ignore[attr-defined]
-        "workstream_updated_at": row.workstream_updated_at,  # type: ignore[attr-defined]
-        "created_at": row.created_at,  # type: ignore[attr-defined]
-        "updated_at": row.updated_at,  # type: ignore[attr-defined]
-        "age_minutes": int((now - row.created_at).total_seconds() / 60),  # type: ignore[attr-defined]
-        "idle_minutes": idle_minutes_from_timestamps(
-            created_at=row.created_at,  # type: ignore[attr-defined]
-            updated_at=row.updated_at,  # type: ignore[attr-defined]
-            workstream_updated_at=row.workstream_updated_at,  # type: ignore[attr-defined]
-            now=now,
-        ),
-    }
-
-
-async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
-    """Fetch recent session rows that look like task/worktree lanes."""
-    from datetime import timedelta
-
-    from sqlalchemy import and_, or_, select
-
-    from app.db import async_session
-    from app.models import Session
-
-    cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
-
-    async with async_session() as db:
-        query = (
-            select(
-                Session.id, Session.agent_slug, Session.project_id,
-                Session.external_id, Session.current_branch, Session.provider_metadata,
-                Session.status, Session.workstream_status, Session.workstream_note,
-                Session.workstream_updated_at, Session.created_at, Session.updated_at,
-            )
-            .where(
-                and_(
-                    Session.agent_slug.isnot(None),
-                    Session.created_at >= cutoff,
-                    or_(
-                        Session.external_id.isnot(None),
-                        Session.current_branch.isnot(None),
-                    ),
-                )
-            )
-            .order_by(Session.created_at.desc())
-            .limit(50)
-        )
-        rows = (await db.execute(query)).all()
-
-    now = datetime.now(UTC)
-    return [_workstream_row_to_dict(row, now) for row in rows]
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
@@ -604,19 +477,13 @@ def _build_workstream_next_action(
         return "completed_no_task_id"
     if state == "stale_active":
         if task_id:
-            query_active = _tool_call(
-                "query_sessions",
-                'status="active"',
-                provider=provider,
-            )
+            query_active = _tool_call("query_sessions", 'status="active"', provider=provider)
             retire_lane = _tool_call(
                 "manage_tasks",
                 f'action="retire_lane", task_id="{task_id}", project_id="{project_id}"',
                 provider=provider,
             )
-            return (
-                f"{query_active} then {retire_lane} if truly stale"
-            )
+            return f"{query_active} then {retire_lane} if truly stale"
         return (
             f"{_tool_call('query_sessions', 'status=\"active\"', provider=provider)} "
             "then verify or retire the stale lane"
@@ -632,158 +499,6 @@ def _build_workstream_next_action(
     return "monitor"
 
 
-def _infer_task_id_from_lane(lane_rows: list[dict[str, object]]) -> str | None:
-    """Return the first inferred task_id found across a group of lane rows."""
-    for row in lane_rows:
-        ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-        br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-        task_id = infer_task_id(ei, br)
-        if task_id:
-            return task_id
-    return None
-
-
-def _parse_stale_tasks_from_overview(task_overview: str) -> list[dict[str, str]]:
-    """Extract stale-running task entries from ready-all TOON output."""
-    stale_tasks: list[dict[str, str]] = []
-    cur_project: str | None = None
-    for raw_line in task_overview.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        if not line.startswith(" ") and "(" in line and line.endswith(")"):
-            cur_project = line.split(" ", 1)[0]
-            continue
-        m = _STALE_READY_ALL_LINE.match(line)
-        if m and cur_project:
-            stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
-    return stale_tasks
-
-
-def _format_lane_line(
-    *,
-    project_id: str,
-    lane_key: str,
-    lane_rows: list[dict[str, object]],
-    lane_state: str,
-    task_id: str | None,
-    provider: str | None,
-) -> str:
-    """Format a single workstream lane as a pipe-separated inventory line."""
-    branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
-    agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
-    active_rows = [r for r in lane_rows if r.get("status") == "active"]
-    active_count = len(active_rows)
-    completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
-    idle_minutes = (
-        min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
-        if active_count else None
-    )
-    ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
-    working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
-    next_action = _build_workstream_next_action(
-        state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
-    )
-    label = task_id or lane_key
-    parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={active_count}"]
-    if idle_minutes is not None:
-        parts.append(f"idle={idle_minutes}m")
-    if completed_count:
-        parts.append(f"completed={completed_count}")
-    if ws_statuses:
-        parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
-    if branches:
-        parts.append(f"branches={len(branches)}")
-    if working_dirs:
-        parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
-    if agents:
-        parts.append(f"agents={','.join(sorted(agents))}")
-    parts.append(f"next={next_action}")
-    return " | ".join(parts)
-
-
-def _should_skip_workstream_lane(
-    *,
-    lane_rows: list[dict[str, object]],
-    lane_state: str,
-    task_id: str | None,
-    visible_task_ids: set[str],
-    task_overview: str,
-) -> bool:
-    """Return whether a lane is non-actionable heartbeat noise."""
-    if (
-        lane_state == "completed_ready_for_closure"
-        and task_id
-        and task_overview
-        and task_id not in visible_task_ids
-    ):
-        return True
-    if lane_state != "completed_ready_for_closure" or task_id:
-        return False
-
-    agents = {str(row["agent_slug"]) for row in lane_rows if row.get("agent_slug")}
-    return agents == {"persona"}
-
-
-def _group_workstream_rows(
-    rows: list[dict[str, object]],
-) -> dict[tuple[str, str], list[dict[str, object]]]:
-    """Group collapsed workstream rows by (project_id, lane_key)."""
-    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
-    for row in rows:
-        ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
-        br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
-        tid = infer_task_id(ei, br) or ""
-        lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
-        if lane_key:
-            grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
-    return grouped
-
-
-def _reconcile_line(project_id: str, task_id: str, provider: str | None) -> str:
-    """Format a stale_running_task reconcile line."""
-    next_action = _tool_call(
-        "manage_tasks",
-        f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-        provider=provider,
-    )
-    return f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_action}"
-
-
-def _build_workstream_lines(
-    grouped: dict[tuple[str, str], list[dict[str, object]]],
-    stale_keys: set[tuple[str, str]],
-    visible_task_ids: set[str],
-    task_overview: str,
-    provider: str | None,
-) -> list[str]:
-    """Build per-lane inventory lines from grouped rows and stale task set."""
-    lines = ["Recent workstreams:"]
-    for (project_id, lane_key), lane_rows in sorted(grouped.items()):
-        task_id = _infer_task_id_from_lane(lane_rows)
-        lane_state = _classify_workstream_lane(lane_rows)
-        if _should_skip_workstream_lane(
-            lane_rows=lane_rows,
-            lane_state=lane_state,
-            task_id=task_id,
-            visible_task_ids=visible_task_ids,
-            task_overview=task_overview,
-        ):
-            continue
-        if task_id and (project_id, task_id) in stale_keys:
-            lines.append(_reconcile_line(project_id, task_id, provider))
-            stale_keys.discard((project_id, task_id))
-            continue
-        lines.append(_format_lane_line(
-            project_id=project_id, lane_key=lane_key, lane_rows=lane_rows,
-            lane_state=lane_state, task_id=task_id, provider=provider,
-        ))
-    for project_id, task_id in sorted(stale_keys):
-        if (project_id, task_id) not in grouped:
-            lines.append(_reconcile_line(project_id, task_id, provider))
-    return lines
-
-
 async def _get_workstream_inventory(
     provider: str | None = None,
     *,
@@ -791,22 +506,186 @@ async def _get_workstream_inventory(
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
-        rows = collapse_active_workstream_rows(await _query_recent_workstream_sessions())
+        from sqlalchemy import and_, or_, select
+
+        from app.db import async_session
+        from app.models import Session
+
+        # Fetch recent task/worktree sessions
+        cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+        async with async_session() as db:
+            raw_rows = (
+                await db.execute(
+                    select(
+                        Session.id, Session.agent_slug, Session.project_id,
+                        Session.external_id, Session.current_branch, Session.provider_metadata,
+                        Session.status, Session.workstream_status, Session.workstream_note,
+                        Session.workstream_updated_at, Session.created_at, Session.updated_at,
+                    )
+                    .where(
+                        and_(
+                            Session.agent_slug.isnot(None),
+                            Session.created_at >= cutoff,
+                            or_(
+                                Session.external_id.isnot(None),
+                                Session.current_branch.isnot(None),
+                            ),
+                        )
+                    )
+                    .order_by(Session.created_at.desc())
+                    .limit(50)
+                )
+            ).all()
+
+        now = datetime.now(UTC)
+        rows = collapse_active_workstream_rows([
+            {
+                "session_id": row.id,
+                "agent_slug": row.agent_slug,
+                "project_id": row.project_id,
+                "external_id": row.external_id,
+                "current_branch": row.current_branch,
+                "working_dir": (
+                    row.provider_metadata.get("cwd")
+                    if isinstance(row.provider_metadata, dict)
+                    else None
+                ),
+                "status": row.status,
+                "workstream_status": row.workstream_status,
+                "workstream_note": row.workstream_note,
+                "workstream_updated_at": row.workstream_updated_at,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+                "age_minutes": int((now - row.created_at).total_seconds() / 60),
+                "idle_minutes": idle_minutes_from_timestamps(
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                    workstream_updated_at=row.workstream_updated_at,
+                    now=now,
+                ),
+            }
+            for row in raw_rows
+        ])
+
         if task_overview is None:
             task_overview = await _fetch_task_overview()
         visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
-        stale_tasks = _parse_stale_tasks_from_overview(task_overview)
+
+        # Parse stale-running tasks from ready-all TOON output
+        stale_tasks: list[dict[str, str]] = []
+        cur_project: str | None = None
+        for raw_line in task_overview.splitlines():
+            line = raw_line.rstrip()
+            if not line:
+                continue
+            if not line.startswith(" ") and "(" in line and line.endswith(")"):
+                cur_project = line.split(" ", 1)[0]
+                continue
+            m = _STALE_READY_ALL_LINE.match(line)
+            if m and cur_project:
+                stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
 
         if not rows and not stale_tasks:
             return ""
 
-        grouped = _group_workstream_rows(rows)
+        # Group rows by (project_id, lane_key)
+        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in rows:
+            ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
+            br = row.get("current_branch") if isinstance(row.get("current_branch"), str) else None
+            tid = infer_task_id(ei, br) or ""
+            lane_key = tid or str(row.get("current_branch") or row.get("session_id") or "")
+            if lane_key:
+                grouped.setdefault((str(row["project_id"]), lane_key), []).append(row)
+
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
 
         if not grouped and not stale_tasks:
             return ""
 
-        lines = _build_workstream_lines(grouped, stale_keys, visible_task_ids, task_overview, provider)
+        # Build per-lane inventory lines
+        lines = ["Recent workstreams:"]
+        for (project_id, lane_key), lane_rows in sorted(grouped.items()):
+            # Infer task_id from lane rows
+            task_id: str | None = None
+            for lr in lane_rows:
+                ei = lr.get("external_id") if isinstance(lr.get("external_id"), str) else None
+                br = lr.get("current_branch") if isinstance(lr.get("current_branch"), str) else None
+                task_id = infer_task_id(ei, br)
+                if task_id:
+                    break
+
+            lane_state = _classify_workstream_lane(lane_rows)
+
+            # Skip non-actionable lanes
+            if (
+                lane_state == "completed_ready_for_closure"
+                and task_id
+                and task_overview
+                and task_id not in visible_task_ids
+            ):
+                continue
+            if lane_state == "completed_ready_for_closure" and not task_id:
+                agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+                if agents == {"persona"}:
+                    continue
+
+            # Reconcile stale lane
+            if task_id and (project_id, task_id) in stale_keys:
+                next_a = _tool_call(
+                    "manage_tasks",
+                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                    provider=provider,
+                )
+                lines.append(
+                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+                )
+                stale_keys.discard((project_id, task_id))
+                continue
+
+            # Format lane line
+            branches = {str(r["current_branch"]) for r in lane_rows if r.get("current_branch")}
+            agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
+            active_rows = [r for r in lane_rows if r.get("status") == "active"]
+            completed_count = sum(1 for r in lane_rows if r.get("status") == "completed")
+            idle_minutes = (
+                min(int(r.get("idle_minutes", _STALE_ACTIVE_MINUTES + 1)) for r in active_rows)
+                if active_rows
+                else None
+            )
+            ws_statuses = {str(r["workstream_status"]) for r in lane_rows if r.get("workstream_status")}
+            working_dirs = {str(r["working_dir"]) for r in lane_rows if r.get("working_dir")}
+            next_action = _build_workstream_next_action(
+                state=lane_state, project_id=project_id, task_id=task_id, provider=provider,
+            )
+            label = task_id or lane_key
+            parts = [f"- {project_id} | {label}", f"state={lane_state}", f"active={len(active_rows)}"]
+            if idle_minutes is not None:
+                parts.append(f"idle={idle_minutes}m")
+            if completed_count:
+                parts.append(f"completed={completed_count}")
+            if ws_statuses:
+                parts.append(f"lifecycle={','.join(sorted(ws_statuses))}")
+            if branches:
+                parts.append(f"branches={len(branches)}")
+            if working_dirs:
+                parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
+            if agents:
+                parts.append(f"agents={','.join(sorted(agents))}")
+            parts.append(f"next={next_action}")
+            lines.append(" | ".join(parts))
+
+        for project_id, task_id in sorted(stale_keys):
+            if (project_id, task_id) not in grouped:
+                next_a = _tool_call(
+                    "manage_tasks",
+                    f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
+                    provider=provider,
+                )
+                lines.append(
+                    f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
+                )
+
         if len(lines) == 1:
             return ""
         body = "\n".join(lines)
@@ -844,22 +723,37 @@ async def _get_active_work_summary(*, task_overview: str | None = None) -> str:
 
 async def _get_cleanup_status_summary() -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    cleanup_status = await _fetch_cleanup_status()
-    if not cleanup_status:
+    output = await _run_st_command(
+        ["st", "cleanup", "status", "--all"],
+        failure_log="Failed to fetch cleanup status for heartbeat prompt",
+    )
+    if not output:
         return ""
-    return f"\n<cleanup_status>\n{cleanup_status}\n</cleanup_status>"
+    actionable = build_actionable_cleanup_summary(output)
+    body = f"{output}\n\n{actionable}" if actionable else output
+    return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
 
 
 async def _get_protection_status_summary(target_project_id: str | None = None) -> str:
     """Build a <protection_status> XML block from canonical backup surfaces."""
     sections: list[str] = []
 
-    latest = await _fetch_backup_status(target_project_id)
+    backup_cmd = ["st"]
+    if target_project_id:
+        backup_cmd.extend(["-P", target_project_id])
+    backup_cmd.extend(["backup", "status"])
+    latest = await _run_st_command(
+        backup_cmd,
+        failure_log="Failed to fetch backup status for heartbeat prompt",
+    )
     if latest:
         sections.append(latest)
 
     target_source = target_project_id or "persona-sandbox"
-    schedule = await _fetch_backup_schedule(target_source)
+    schedule = await _run_st_command(
+        ["st", "backup", "schedule", target_source],
+        failure_log="Failed to fetch backup schedule for heartbeat prompt",
+    )
     if schedule:
         sections.append(schedule)
 
@@ -910,47 +804,6 @@ async def _get_git_status_summary() -> str:
     return f"\n<git_state>\n{body}\n</git_state>"
 
 
-def _aggregate_open_type_counts(summary: dict) -> dict[str, int]:
-    """Sum feedback counts by type for open/acknowledged items."""
-    type_counts: dict[str, int] = {}
-    for row in summary.get("counts_by_type_status", []):
-        if row.get("status") not in {"open", "acknowledged"}:
-            continue
-        ft = row.get("feedback_type", "unknown")
-        type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
-    return type_counts
-
-
-def _format_feedback_header(summary: dict, unresolved_count: int, total: int) -> list[str]:
-    """Build header lines: count, type breakdown, and hotspots."""
-    lines = [f"Unresolved items: {unresolved_count} (of {total} total, last 30d)"]
-    type_counts = _aggregate_open_type_counts(summary)
-    if type_counts:
-        breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
-        lines.append(f"By type: {breakdown}")
-    hot = [r for r in summary.get("by_component", []) if int(r.get("open_count", 0) or 0) > 0][:3]
-    if hot:
-        hotspots = ", ".join(
-            f"{r['component_id']} open={r['open_count']} votes={r['total_votes'] or 0}"
-            for r in hot
-        )
-        lines.append(f"Hotspots: {hotspots}")
-    return lines
-
-
-def _format_feedback_table_rows(top_items: list) -> list[str]:
-    """Format the tabular feedback item rows (header + data)."""
-    lines = ["", f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title", "-" * 78]
-    for item in top_items[:5]:
-        short_id = str(item.id)[:8]
-        lines.append(
-            f"{short_id:>8}  {item.feedback_type:<11}  "
-            f"{item.component_id:<20}  {item.vote_count:>5}  "
-            f"{(item.title or '')[:40]}"
-        )
-    return lines
-
-
 async def _get_feedback_summary_section() -> str:
     """Build a <feedback_summary> XML block with open feedback stats and top items."""
     try:
@@ -964,14 +817,38 @@ async def _get_feedback_summary_section() -> str:
         if not top_items:
             return ""
 
-        unresolved_count = sum(_aggregate_open_type_counts(summary).values())
+        # Aggregate open/acknowledged counts by type
+        type_counts: dict[str, int] = {}
+        for row in summary.get("counts_by_type_status", []):
+            if row.get("status") in {"open", "acknowledged"}:
+                ft = row.get("feedback_type", "unknown")
+                type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
+
+        unresolved_count = sum(type_counts.values())
         if unresolved_count == 0:
             return ""
 
-        lines = (
-            _format_feedback_header(summary, unresolved_count, summary.get("total_items", 0))
-            + _format_feedback_table_rows(top_items)
-        )
+        lines = [f"Unresolved items: {unresolved_count} (of {summary.get('total_items', 0)} total, last 30d)"]
+        if type_counts:
+            breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
+            lines.append(f"By type: {breakdown}")
+        hot = [r for r in summary.get("by_component", []) if int(r.get("open_count", 0) or 0) > 0][:3]
+        if hot:
+            hotspots = ", ".join(
+                f"{r['component_id']} open={r['open_count']} votes={r['total_votes'] or 0}"
+                for r in hot
+            )
+            lines.append(f"Hotspots: {hotspots}")
+
+        lines += ["", f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title", "-" * 78]
+        for item in top_items[:5]:
+            short_id = str(item.id)[:8]
+            lines.append(
+                f"{short_id:>8}  {item.feedback_type:<11}  "
+                f"{item.component_id:<20}  {item.vote_count:>5}  "
+                f"{(item.title or '')[:40]}"
+            )
+
         body = "\n".join(lines)
         logger.info("Feedback summary: %d unresolved items", unresolved_count)
         return f"\n<feedback_summary>\n{body}\n</feedback_summary>"
@@ -984,11 +861,9 @@ __all__ = [
     "_build_workstream_next_action",
     "_classify_workstream_lane",
     "_fetch_active_sessions_section",
-    "_fetch_backup_schedule",
-    "_fetch_backup_status",
-    "_fetch_cleanup_status",
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
+    "_format_active_session_entry",
     "_get_active_specialist_inventory",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
@@ -998,9 +873,9 @@ __all__ = [
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
     "_get_workstream_inventory",
-    "_query_active_specialist_sessions",
-    "_query_recent_workstream_sessions",
-    "_render_persona_tool_name",
+    "_run_st_command",
+    "_session_display_health",
+    "_session_stale_threshold_minutes",
     "_tool_call",
     "get_project_access_summary",
 ]
