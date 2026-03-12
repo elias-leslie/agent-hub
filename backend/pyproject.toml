@@ -46,7 +46,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "alembic>=1.16.0",
-    "psycopg2-binary>=2.9.10",
     # Testing - Core
     "pytest>=9.0.0",
     "pytest-asyncio>=1.0.0",
