@@ -421,7 +421,7 @@ class TestGetPersonaContextForAgent:
         assert "Communication Style: Concise and direct." in result
 
     @pytest.mark.asyncio
-    async def test_evolution_guidelines_always_present(self):
+    async def test_evolution_guidelines_present_in_chat_context(self):
         persona = _make_persona(
             personality=None,
             heartbeat_instructions=None,
@@ -436,6 +436,28 @@ class TestGetPersonaContextForAgent:
 
         assert "<evolution_guidelines>" in result
         assert "Self-Evolution Guidelines" in result
+
+    @pytest.mark.asyncio
+    async def test_evolution_guidelines_omitted_in_heartbeat_context(self):
+        persona = _make_persona(
+            personality=None,
+            heartbeat_instructions="Check task queue.",
+            user_context=None,
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result_persona
+
+        with patch(
+            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
+            new_callable=AsyncMock,
+            return_value="Check task queue.",
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
+
+        assert "<heartbeat_instructions>" in result
+        assert "<evolution_guidelines>" not in result
 
     @pytest.mark.asyncio
     async def test_phase_not_started_injects_bootstrap_and_advances(self):

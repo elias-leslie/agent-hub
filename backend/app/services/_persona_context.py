@@ -150,7 +150,7 @@ async def get_persona_context_for_agent(
             f"<heartbeat_instructions>\n{heartbeat_instructions}\n</heartbeat_instructions>"
         )
 
-    if phase == "complete":
+    if phase == "complete" and task_type != "heartbeat":
         evolution_guidelines = await get_persona_evolution_guidelines()
         sections.append(
             f"<evolution_guidelines>\n{evolution_guidelines}\n</evolution_guidelines>"

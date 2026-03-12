@@ -509,6 +509,36 @@ class TestGetWorkstreamInventory:
         assert result == ""
 
     @pytest.mark.asyncio
+    async def test_omits_persona_completed_lanes_without_task_ids(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-persona",
+                "agent_slug": "persona",
+                "project_id": "agent-hub",
+                "external_id": None,
+                "current_branch": None,
+                "status": "completed",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+            },
+        ]
+
+        with (
+            patch(
+                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                new_callable=AsyncMock,
+                return_value=fake_rows,
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_task_overview",
+                return_value="READY-ALL[0 ready, 0 blocked, 0 active, 0 stale across 0 projects]",
+            ),
+        ):
+            result = await _get_workstream_inventory()
+
+        assert result == ""
+
+    @pytest.mark.asyncio
     async def test_reports_stale_active_lane_from_idle_time_not_session_age(self) -> None:
         fake_rows = [
             {

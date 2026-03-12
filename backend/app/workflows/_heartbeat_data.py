@@ -702,6 +702,29 @@ def _format_lane_line(
     return " | ".join(parts)
 
 
+def _should_skip_workstream_lane(
+    *,
+    lane_rows: list[dict[str, object]],
+    lane_state: str,
+    task_id: str | None,
+    visible_task_ids: set[str],
+    task_overview: str,
+) -> bool:
+    """Return whether a lane is non-actionable heartbeat noise."""
+    if (
+        lane_state == "completed_ready_for_closure"
+        and task_id
+        and task_overview
+        and task_id not in visible_task_ids
+    ):
+        return True
+    if lane_state != "completed_ready_for_closure" or task_id:
+        return False
+
+    agents = {str(row["agent_slug"]) for row in lane_rows if row.get("agent_slug")}
+    return agents == {"persona"}
+
+
 def _group_workstream_rows(
     rows: list[dict[str, object]],
 ) -> dict[tuple[str, str], list[dict[str, object]]]:
@@ -739,10 +762,12 @@ def _build_workstream_lines(
     for (project_id, lane_key), lane_rows in sorted(grouped.items()):
         task_id = _infer_task_id_from_lane(lane_rows)
         lane_state = _classify_workstream_lane(lane_rows)
-        if (
-            lane_state == "completed_ready_for_closure"
-            and task_id and task_overview
-            and task_id not in visible_task_ids
+        if _should_skip_workstream_lane(
+            lane_rows=lane_rows,
+            lane_state=lane_state,
+            task_id=task_id,
+            visible_task_ids=visible_task_ids,
+            task_overview=task_overview,
         ):
             continue
         if task_id and (project_id, task_id) in stale_keys:
@@ -844,7 +869,7 @@ async def _get_protection_status_summary(target_project_id: str | None = None) -
 
 
 async def _get_agent_roster_summary() -> str:
-    """Build an <agent_roster> XML block listing active agents with descriptions."""
+    """Build a compact <agent_roster> XML block listing active agent slugs."""
     try:
         from app.db import async_session
         from app.services.agent_service import get_agent_service
@@ -856,11 +881,13 @@ async def _get_agent_roster_summary() -> str:
         if not agents:
             return ""
 
-        lines = [
-            f"- {a.slug} [{'coding' if a.is_coding_agent else 'general'}]: "
-            f"{a.description or '(no description)'}"
-            for a in agents
-        ]
+        coding_agents = sorted(a.slug for a in agents if a.is_coding_agent)
+        general_agents = sorted(a.slug for a in agents if not a.is_coding_agent)
+        lines = [f"Total active agents: {len(agents)}"]
+        if coding_agents:
+            lines.append(f"Coding ({len(coding_agents)}): {', '.join(coding_agents)}")
+        if general_agents:
+            lines.append(f"General ({len(general_agents)}): {', '.join(general_agents)}")
         body = "\n".join(lines)
         logger.info("Agent roster summary: %d agents", len(agents))
         return f"\n<agent_roster>\n{body}\n</agent_roster>"
