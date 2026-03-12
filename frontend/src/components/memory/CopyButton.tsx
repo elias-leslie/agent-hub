@@ -30,6 +30,7 @@ export function CopyButton({
         "active:scale-95",
         className
       )}
+      aria-label="Copy to clipboard"
       title={copied ? undefined : "Copy to clipboard"}
     >
       {copied ? (

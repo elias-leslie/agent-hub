@@ -91,6 +91,7 @@ export function ProviderForm({
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
             {showPassword ? (
@@ -143,6 +144,7 @@ export function ProviderForm({
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
           >
             {showPassword ? (
