@@ -24,6 +24,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _resolve_reported_turn(turn: int, tracker: ProgressTracker) -> int:
+    """Prefer grouped progress turns over raw event-derived counters."""
+    logged_turns = [entry.turn for entry in tracker.log if entry.turn > 0 and entry.status != "complete"]
+    if logged_turns:
+        return max(logged_turns)
+    return turn or 1
+
+
 async def finalize_response(
     db: AsyncSession,
     session: DBSession,
@@ -54,6 +62,7 @@ async def finalize_response(
     final_content = "".join(content_parts)
     fallback_used = False
     fallback_reason: str | None = None
+    reported_turn = _resolve_reported_turn(turn, tracker)
 
     closeout_plan = plan_user_facing_closeout(
         final_content,
@@ -64,7 +73,7 @@ async def finalize_response(
     )
     if closeout_plan.action == "recover":
         await tracker.report_status(
-            turn or 1,
+            reported_turn,
             closeout_plan.progress_status or "closeout_recovery",
             closeout_plan.progress_message
             or "Requesting one final user-facing closeout response",
@@ -102,7 +111,7 @@ async def finalize_response(
                 tool_result_summaries or [],
             )
             await tracker.report_status(
-                turn or 1,
+                reported_turn,
                 fallback_plan.progress_status or "closeout_fallback",
                 fallback_plan.progress_message
                 or "Using deterministic tool summary after closeout recovery failed",
@@ -120,7 +129,7 @@ async def finalize_response(
         estimated_tokens,
         agent_id=agent_slug,
     )
-    await tracker.report_complete(turn or 1, tool_calls_count)
+    await tracker.report_complete(reported_turn, tool_calls_count)
 
     return await finalize_result(
         db=db,
@@ -132,7 +141,7 @@ async def finalize_response(
         memory_group_id=memory_group_id,
         thinking_content=thinking_content,
         thinking_tokens=thinking_tokens,
-        turn=turn or 1,
+        turn=reported_turn,
         tool_calls_count=tool_calls_count,
         finish_reason=finish_reason,
         progress_log=tracker.log,

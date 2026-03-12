@@ -390,6 +390,175 @@ async def test_run_tool_loop_counts_one_model_turn_for_multiple_tool_results_in_
     assert result is None
     assert state.turn == 1
     assert state.tool_calls_count == 2
+    assert tracker.report_tool_use.await_args_list[0].args[0] == 1
+    assert tracker.report_tool_use.await_args_list[1].args[0] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_counts_one_model_turn_for_batched_top_level_claude_tool_use_blocks() -> None:
+    state = _ExecutionState(agent_slug="refactor", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="Bash",
+                            input={"command": "pwd"},
+                            id="tool-1",
+                        ),
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="Bash",
+                            input={"command": "git status --short --branch"},
+                            id="tool-2",
+                        ),
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="result",
+                result="",
+                finish_reason="max_turns",
+            ), None
+
+        async def aclose(self) -> None:
+            return None
+
+    with (
+        patch(
+            "app.api.complete.tool_handler_utils.build_event_stream",
+            return_value=FakeEventStream(),
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-batched-claude",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert state.turn == 1
+    assert state.tool_calls_count == 2
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_counts_one_model_turn_for_consecutive_assistant_tool_use_events() -> None:
+    state = _ExecutionState(agent_slug="refactor", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="Bash",
+                            input={"command": "st pulse"},
+                            id="tool-1",
+                        ),
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="Bash",
+                            input={"command": "st sessions ownership"},
+                            id="tool-2",
+                        ),
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="tool_result",
+                tool_use_id="tool-1",
+                content="PULSE:agent-hub|tasks=0",
+                is_error=False,
+                duration_ms=5,
+            ), None
+            yield types.SimpleNamespace(
+                type="tool_result",
+                tool_use_id="tool-2",
+                content="OWNERSHIP[0]",
+                is_error=False,
+                duration_ms=5,
+            ), None
+            yield types.SimpleNamespace(
+                type="result",
+                result="",
+                finish_reason="max_turns",
+            ), None
+
+        async def aclose(self) -> None:
+            return None
+
+    with (
+        patch(
+            "app.api.complete.tool_handler_utils.build_event_stream",
+            return_value=FakeEventStream(),
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_result",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-consecutive-assistant-events",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert state.turn == 1
+    assert state.tool_calls_count == 2
 
 
 @pytest.mark.asyncio
