@@ -1,10 +1,13 @@
 """Memory episode rating endpoints - ACE-aligned agent citation feedback."""
 
+import logging
 import uuid as uuid_module
 
 from fastapi import APIRouter, HTTPException
 
 from .memory_schemas import RateEpisodeRequest, RateEpisodeResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -53,6 +56,7 @@ async def rate_episode(
             message=f"Rated episode as {request.rating.value}",
         )
     except Exception as e:
+        logger.exception("Failed to rate episode %s", uuid)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to rate episode: {e}",
