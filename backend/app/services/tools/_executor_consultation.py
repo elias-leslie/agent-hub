@@ -6,7 +6,11 @@ Handles agent consultation, dispatch, steering, listing, and cancellation.
 from __future__ import annotations
 
 import logging
+import re
+import shlex
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -19,6 +23,39 @@ _CODING_TASK_KEYWORDS = (
     "build", "lint", "compile", "typescript", "python", "sql",
     "frontend", "backend", "api", "file",
 )
+_SPECIALIST_AGENT_SLUGS = frozenset({"refactor", "debugger"})
+_TASK_ID_RE = re.compile(r"(?im)^\s*Task(?:[- ]ID)?:\s*(task-[a-z0-9]+)\s*$")
+_MODE_RE = re.compile(r"(?im)^\s*Mode:\s*(task|campaign)\s*$")
+_WORKTREE_RE = re.compile(r"(?im)^\s*Worktree:\s*(.+?)\s*$")
+_BRANCH_RE = re.compile(r"(?im)^\s*\+\s+([^\s]+)\s+\[task\]\s*$")
+_SHARED_PLUMBING_MARKERS = (
+    "/alembic/",
+    "/migrations/",
+    "/schema",
+    "/schemas/",
+    "/contract",
+    "/contracts/",
+    "/routing",
+    "/routes/",
+    "/config",
+    "/build",
+    "/exports",
+    "/index.",
+    "/utils/",
+)
+
+
+@dataclass(frozen=True)
+class SpecialistDispatchRequest:
+    mode: str | None
+    task_id: str | None
+
+
+@dataclass(frozen=True)
+class SpecialistDispatchPlan:
+    event_type: str
+    current_branch: str | None = None
+    working_dir: str | None = None
 
 
 def _session_working_dir(session: object) -> str | None:
@@ -79,6 +116,216 @@ def _dispatch_result_text(agent_slug: str, is_coding_agent: bool, task: str) -> 
         f"{warning}Dispatched {agent_slug} ({kind}). "
         f"Results will appear in your next heartbeat context, "
         f"or use query_sessions(agent_slug='{agent_slug}') to check status."
+    )
+
+
+def _parse_specialist_dispatch_request(task: str) -> SpecialistDispatchRequest:
+    """Extract explicit specialist mode and optional task id from a dispatch prompt."""
+    mode_match = _MODE_RE.search(task)
+    task_match = _TASK_ID_RE.search(task)
+    return SpecialistDispatchRequest(
+        mode=mode_match.group(1).lower() if mode_match else None,
+        task_id=task_match.group(1).lower() if task_match else None,
+    )
+
+
+def _is_shared_plumbing_path(path: str) -> bool:
+    lowered = path.lower()
+    return any(marker in lowered for marker in _SHARED_PLUMBING_MARKERS)
+
+
+async def _project_dispatch_overlap_block_reason(
+    *,
+    project_id: str,
+    agent_slug: str,
+    mode: str,
+    task_id: str | None,
+    owners: list[object],
+    specialists: list[object],
+) -> str | None:
+    """Return a blocking reason when live project state makes a new specialist lane unsafe."""
+    if mode == "campaign":
+        duplicate_campaign = next(
+            (
+                specialist
+                for specialist in specialists
+                if getattr(specialist, "agent_slug", None) == agent_slug
+                and getattr(specialist, "request_source", None) == "persona_wake:dispatch_campaign"
+            ),
+            None,
+        )
+        if duplicate_campaign is not None:
+            return (
+                f"Dispatch blocked for {project_id}: {agent_slug} already has an active "
+                "campaign session in this project. Query or inspect the existing campaign "
+                "instead of creating a duplicate lane."
+            )
+
+    relevant_specialists = [
+        specialist
+        for specialist in specialists
+        if not (
+            mode == "task"
+            and getattr(specialist, "agent_slug", None) == agent_slug
+            and getattr(specialist, "request_source", None) == "persona_wake:dispatch_campaign"
+        )
+    ]
+    if relevant_specialists:
+        specialist = relevant_specialists[0]
+        detail = getattr(specialist, "agent_slug", None) or "unknown"
+        return (
+            f"Dispatch blocked for {project_id}: active specialist {detail} has missing scope "
+            "evidence, so parallel same-project coding would be blind overlap risk. Wait, "
+            "inspect, or reconcile before dispatching another specialist lane."
+        )
+
+    for owner in owners:
+        owner_task_id = getattr(owner, "task_id", None)
+        if mode == "task" and task_id and owner_task_id == task_id:
+            continue
+
+        scope_paths = list(getattr(owner, "scope_paths", []) or [])
+        if not scope_paths:
+            detail = owner_task_id or getattr(owner, "branch", None) or getattr(owner, "session_id", "unknown")
+            return (
+                f"Dispatch blocked for {project_id}: live lane {detail} has missing scope evidence. "
+                "Do not start another coding lane until scope is known or the lane is reconciled."
+            )
+
+        shared_paths = [path for path in scope_paths if _is_shared_plumbing_path(path)]
+        if shared_paths:
+            return (
+                f"Dispatch blocked for {project_id}: live lane touches shared-plumbing paths "
+                f"({shared_paths[0]}). Treat migrations, schemas, contracts, routing, build/config, "
+                "shared exports, and cross-cutting utilities as blockers to blind parallel coding."
+            )
+
+    return None
+
+
+async def _run_project_st_command(project_id: str, subcommand: str) -> str:
+    """Run one st command in the target project root with the project venv active."""
+    from app.constants.projects import get_known_roots
+    from app.services.tools._executor_bash import run_bash
+    from app.services.tools.project_env import build_project_env
+
+    root = get_known_roots().get(project_id)
+    working_dir = Path(root or ".").resolve()
+    env = build_project_env(working_dir)
+    return await run_bash(
+        f"st -P {shlex.quote(project_id)} {subcommand}",
+        working_dir,
+        env,
+    )
+
+
+async def _run_project_command(project_id: str, command: str) -> str:
+    """Run a raw shell command in the target project root with the project venv active."""
+    from app.constants.projects import get_known_roots
+    from app.services.tools._executor_bash import run_bash
+    from app.services.tools.project_env import build_project_env
+
+    root = get_known_roots().get(project_id)
+    working_dir = Path(root or ".").resolve()
+    env = build_project_env(working_dir)
+    return await run_bash(command, working_dir, env)
+
+
+async def _ensure_task_lane_context(
+    project_id: str,
+    task_id: str,
+) -> tuple[str | None, str | None, str | None]:
+    """Return (branch, worktree, error) for a claimed task lane, claiming if needed."""
+    details = await _run_project_st_command(
+        project_id,
+        f"checkpoints -d {shlex.quote(task_id)}",
+    )
+    if "No checkpoint found" in details:
+        claim = await _run_project_st_command(project_id, f"claim {shlex.quote(task_id)}")
+        if "Error:" in claim or claim.startswith("ERROR"):
+            return (None, None, f"Dispatch blocked for {task_id}: {claim.strip()}")
+        details = await _run_project_st_command(
+            project_id,
+            f"checkpoints -d {shlex.quote(task_id)}",
+        )
+
+    branch_match = _BRANCH_RE.search(details)
+    worktree_match = _WORKTREE_RE.search(details)
+    branch = branch_match.group(1).strip() if branch_match else None
+    worktree = worktree_match.group(1).strip() if worktree_match else None
+    if not branch or not worktree:
+        return (
+            None,
+            None,
+            f"Dispatch blocked for {task_id}: unable to resolve claimed branch/worktree from checkpoint details.",
+        )
+    return (branch, worktree, None)
+
+
+async def _prepare_specialist_dispatch(
+    *,
+    db: object,
+    project_id: str,
+    agent_slug: str,
+    task: str,
+) -> SpecialistDispatchPlan:
+    """Validate specialist dispatch mode and attach task-lane metadata when needed."""
+    from app.services.ownership_inventory import (
+        query_project_active_specialists,
+        query_project_ownership,
+    )
+    from app.services.tools._executor_io_tasks import (
+        _cleanup_dispatch_block_reason,
+        _live_dispatch_block_reason,
+    )
+
+    request = _parse_specialist_dispatch_request(task)
+    if request.mode not in {"task", "campaign"}:
+        raise ValueError(
+            f"Dispatch blocked for {agent_slug}: include an explicit `Mode: task` or "
+            f"`Mode: campaign` line in the dispatch prompt."
+        )
+
+    async def _bash_fn(command: str) -> str:
+        return await _run_project_command(project_id, command)
+
+    cleanup_block, _ = await _cleanup_dispatch_block_reason(_bash_fn, project_id)
+    if cleanup_block:
+        raise ValueError(cleanup_block)
+
+    owners = await query_project_ownership(db, project_id)
+    specialists = await query_project_active_specialists(db, project_id)
+    overlap_block = await _project_dispatch_overlap_block_reason(
+        project_id=project_id,
+        agent_slug=agent_slug,
+        mode=request.mode,
+        task_id=request.task_id,
+        owners=owners,
+        specialists=specialists,
+    )
+    if overlap_block:
+        raise ValueError(overlap_block)
+
+    if request.mode == "campaign":
+        return SpecialistDispatchPlan(event_type="dispatch_campaign")
+
+    if not request.task_id:
+        raise ValueError(
+            f"Dispatch blocked for {agent_slug}: `Mode: task` requires a `Task-ID: task-...` line."
+        )
+
+    live_block = await _live_dispatch_block_reason(_bash_fn, request.task_id, project_id)
+    if live_block:
+        raise ValueError(live_block)
+
+    branch, worktree, lane_error = await _ensure_task_lane_context(project_id, request.task_id)
+    if lane_error:
+        raise ValueError(lane_error)
+
+    return SpecialistDispatchPlan(
+        event_type="dispatch_task",
+        current_branch=branch,
+        working_dir=worktree,
     )
 
 
@@ -172,6 +419,16 @@ async def dispatch_agent(
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
+            dispatch_plan = (
+                await _prepare_specialist_dispatch(
+                    db=db,
+                    project_id=project_id,
+                    agent_slug=agent_slug,
+                    task=task,
+                )
+                if agent_slug in _SPECIALIST_AGENT_SLUGS
+                else SpecialistDispatchPlan(event_type="dispatch")
+            )
 
         dispatch_wake(
             agent_slug=agent_slug,
@@ -180,12 +437,16 @@ async def dispatch_agent(
             temperature=resolved.agent.temperature,
             prompt=task,
             project_id=project_id,
-            event_type="dispatch",
+            event_type=dispatch_plan.event_type,
             thinking_level=resolved.agent.thinking_level,
             max_turns=max_turns,
             parent_session_id=parent_session_id,
+            current_branch=dispatch_plan.current_branch,
+            working_dir=dispatch_plan.working_dir,
         )
         return _dispatch_result_text(agent_slug, bool(resolved.agent.is_coding_agent), task)
+    except ValueError as e:
+        return str(e)
     except Exception as e:
         logger.exception(f"dispatch_agent failed for '{agent_slug}'")
         return f"Error dispatching agent '{agent_slug}': {e}"

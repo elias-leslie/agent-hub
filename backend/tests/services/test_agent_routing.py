@@ -22,6 +22,7 @@ from app.services.agent_routing import (
     resolve_agent,
 )
 from app.services.agent_service import AgentDTO
+from app.services.prompt_service import get_runtime_excluded_prompt_roles
 
 
 @dataclass
@@ -237,11 +238,75 @@ class TestInjectAgentMandates:
             persona_agent.id,
             include_roles=None,
             exclude_roles=[
+                "autocode",
                 "persona-personality",
                 "persona-user-context",
                 "heartbeat-instructions",
             ],
             agent_slug="persona",
+        )
+
+    @pytest.mark.asyncio
+    async def test_inject_agent_mandates_excludes_autocode_role_for_non_autocode_runtime(self):
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=7,
+            slug="refactor",
+            name="Refactor",
+            description=None,
+            system_prompt="Refactor safely.",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.3,
+            thinking_level="medium",
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=True,
+            tool_permissions=None,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        assert get_runtime_excluded_prompt_roles(
+            agent_slug="refactor",
+            prompt_mode="full",
+            task_type="wake",
+        ) == ["autocode"]
+
+        mock_db = AsyncMock()
+        with (
+            patch(
+                "app.services.prompt_service.build_prompt_context",
+                new=AsyncMock(return_value="<agent_persona>core</agent_persona>"),
+            ) as build_prompt_context,
+            patch(
+                "app.services.persona_service.get_persona_context_for_agent",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            result = await inject_agent_mandates(
+                agent,
+                mock_db,
+                task_type="wake",
+            )
+
+        assert result.system_content == "<agent_persona>core</agent_persona>"
+        build_prompt_context.assert_awaited_once_with(
+            mock_db,
+            agent.id,
+            include_roles=None,
+            exclude_roles=["autocode"],
+            agent_slug="refactor",
         )
 
 

@@ -235,6 +235,68 @@ async def test_agent_wake_forwards_parent_session_id():
 
 
 @pytest.mark.asyncio
+async def test_agent_wake_forwards_lane_metadata():
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
+    complete_result = SimpleNamespace(
+        status="success",
+        turns=2,
+        tool_calls_count=1,
+        error=None,
+        session_id="sess-wake-3",
+        content="Finished task-lane validation.",
+    )
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=complete_result,
+        ) as mock_complete,
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="refactor",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Mode: task\nTask-ID: task-12345678\nTask: Refactor the overlap preflight.",
+                project_id="agent-hub",
+                event_type="dispatch_task",
+                current_branch="task-12345678/main",
+                working_dir="/tmp/worktrees/task-12345678",
+            )
+        )
+
+    assert mock_complete.await_args.kwargs["external_id"] == "wake-step:mock-step-run-id"
+    assert mock_complete.await_args.kwargs["current_branch"] == "task-12345678/main"
+    assert mock_complete.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-12345678"
+    assert mock_complete.await_args.kwargs["request_source"] == "persona_wake:dispatch_task"
+
+
+@pytest.mark.asyncio
 async def test_agent_wake_skips_replayed_step_run() -> None:
     existing = SimpleNamespace(
         id="existing-wake-session",

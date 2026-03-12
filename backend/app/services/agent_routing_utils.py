@@ -55,6 +55,7 @@ async def inject_agent_mandates(
         exclude_roles = get_runtime_excluded_prompt_roles(
             agent_slug=agent.slug,
             prompt_mode=prompt_mode,
+            task_type=task_type,
         )
     if db and prompt_mode != "none":
         from app.services.prompt_service import build_prompt_context

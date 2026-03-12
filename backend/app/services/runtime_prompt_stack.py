@@ -101,6 +101,7 @@ async def collect_runtime_prompt_sections(
         agent.id,
         exclude_roles=get_runtime_excluded_prompt_roles(
             agent_slug=getattr(agent, "slug", None),
+            task_type=task_type,
         ),
     )
     for assignment in assignments:

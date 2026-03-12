@@ -34,6 +34,8 @@ class WakeInput(BaseModel):
     thinking_level: str | None = None
     max_turns: int | None = None
     parent_session_id: str | None = None
+    current_branch: str | None = None
+    working_dir: str | None = None
 
 
 class WakeResult(BaseModel):
@@ -160,6 +162,8 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
                 phase=input.event_type,
                 thinking_level=input.thinking_level,
                 parent_session_id=input.parent_session_id,
+                current_branch=input.current_branch,
+                working_dir=input.working_dir,
             )
         except asyncio.CancelledError:
             with suppress(Exception):
@@ -200,6 +204,8 @@ def dispatch_wake(
     thinking_level: str | None = None,
     max_turns: int | None = None,
     parent_session_id: str | None = None,
+    current_branch: str | None = None,
+    working_dir: str | None = None,
 ) -> None:
     """Dispatch a wake workflow via Hatchet (fire-and-forget)."""
     wake_input = WakeInput(
@@ -213,6 +219,8 @@ def dispatch_wake(
         thinking_level=thinking_level,
         max_turns=max_turns,
         parent_session_id=parent_session_id,
+        current_branch=current_branch,
+        working_dir=working_dir,
     )
     agent_wake_task.run_no_wait(wake_input)
     logger.info("Dispatched wake workflow for %s/%s", agent_slug, event_type)
