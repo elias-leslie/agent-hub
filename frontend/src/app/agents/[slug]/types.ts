@@ -75,7 +75,6 @@ export type ModelInfo = CatalogModel;
 export type TabId =
   | "general"
   | "models"
-  | "prompt"
   | "parameters"
   | "permissions"
   | "prompts"

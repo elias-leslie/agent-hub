@@ -28,6 +28,7 @@ from app.services._persona_crud import (
 )
 from app.services._persona_onboarding import submit_and_review_onboarding
 from app.services._persona_templates import DEFAULT_PERSONA_PERSONALITY
+from app.services.owned_prompt_service import sync_persona_document_prompts
 
 __all__ = [
     "DEFAULT_LIMITS",
@@ -68,6 +69,15 @@ async def get_or_create_persona(db: AsyncSession) -> Persona:
         execution_state="active",
     )
     db.add(persona)
+    await db.flush()
+    await sync_persona_document_prompts(
+        db,
+        agent=agent,
+        personality=DEFAULT_PERSONA_PERSONALITY,
+        user_context="",
+        heartbeat_instructions="",
+        change_reason="Initial persona prompt bootstrap",
+    )
     await db.commit()
     await db.refresh(persona)
     logger.info("Created default persona for agent %s", agent.slug)

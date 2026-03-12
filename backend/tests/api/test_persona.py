@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -48,13 +49,35 @@ def _make_persona(**overrides) -> MagicMock:
     return mock
 
 
+@contextmanager
+def _patch_persona_prompt_documents(persona: MagicMock):
+    with (
+        patch(
+            "app.api.persona.helpers.get_persona_personality_document",
+            new=AsyncMock(return_value=persona.personality),
+        ),
+        patch(
+            "app.api.persona.helpers.get_persona_heartbeat_instructions",
+            new=AsyncMock(return_value=persona.heartbeat_instructions),
+        ),
+        patch(
+            "app.api.persona.helpers.get_persona_user_context_document",
+            new=AsyncMock(return_value=persona.user_context),
+        ),
+    ):
+        yield
+
+
 class TestGetPersonaEndpoint:
     """Tests for GET /api/persona."""
 
-    def test_returns_persona_response(self, api_client):
+    def test_returns_persona_response(self, api_client, mock_db_session):
         persona = _make_persona()
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            _patch_persona_prompt_documents(persona),
+        ):
             mock.return_value = persona
             response = api_client.get("/api/persona")
 
@@ -122,7 +145,10 @@ class TestUpdatePersonaEndpoint:
     def test_no_op_when_empty_update(self, api_client):
         persona = _make_persona(version=2)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            _patch_persona_prompt_documents(persona),
+        ):
             mock.return_value = persona
             response = api_client.put("/api/persona", json={})
 
@@ -136,7 +162,14 @@ class TestResetOnboardingEndpoint:
     def test_resets_onboarding_flag_and_phase(self, api_client, mock_db_session):
         persona = _make_persona(onboarding_complete=True, onboarding_phase="complete", version=3)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            _patch_persona_prompt_documents(persona),
+            patch(
+                "app.api.persona.clear_persona_user_context_document",
+                new=AsyncMock(),
+            ) as mock_clear,
+        ):
             mock.return_value = persona
             response = api_client.post("/api/persona/reset-onboarding")
 
@@ -145,15 +178,19 @@ class TestResetOnboardingEndpoint:
         assert data["onboarding_complete"] is False
         assert data["onboarding_phase"] == "not_started"
         assert data["version"] == 4  # incremented
+        mock_clear.assert_awaited_once()
 
 
 class TestGetPersonalityEndpoint:
     """Tests for GET /api/persona/personality."""
 
-    def test_returns_personality_and_version(self, api_client):
+    def test_returns_personality_and_version(self, api_client, mock_db_session):
         persona = _make_persona(personality="Creative and bold.", version=7)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            _patch_persona_prompt_documents(persona),
+        ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
 
@@ -162,10 +199,13 @@ class TestGetPersonalityEndpoint:
         assert data["personality"] == "Creative and bold."
         assert data["version"] == 7
 
-    def test_returns_null_personality_when_not_set(self, api_client):
+    def test_returns_null_personality_when_not_set(self, api_client, mock_db_session):
         persona = _make_persona(personality=None)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            _patch_persona_prompt_documents(persona),
+        ):
             mock.return_value = persona
             response = api_client.get("/api/persona/personality")
 
@@ -179,7 +219,25 @@ class TestUpdatePersonalityEndpoint:
     def test_updates_personality(self, api_client, mock_db_session):
         persona = _make_persona(version=3)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            patch(
+                "app.api.persona.set_persona_personality_document",
+                new=AsyncMock(return_value=(len(persona.personality), len("New personality text."))),
+            ) as mock_set,
+            patch(
+                "app.api.persona.helpers.get_persona_personality_document",
+                new=AsyncMock(return_value="New personality text."),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_heartbeat_instructions",
+                new=AsyncMock(return_value=persona.heartbeat_instructions),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_user_context_document",
+                new=AsyncMock(return_value=persona.user_context),
+            ),
+        ):
             mock.return_value = persona
             response = api_client.put(
                 "/api/persona/personality",
@@ -190,11 +248,30 @@ class TestUpdatePersonalityEndpoint:
         data = response.json()
         assert data["personality"] == "New personality text."
         assert data["version"] == 4
+        mock_set.assert_awaited_once()
 
     def test_updates_personality_without_reason(self, api_client, mock_db_session):
         persona = _make_persona(version=1)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            patch(
+                "app.api.persona.set_persona_personality_document",
+                new=AsyncMock(return_value=(len(persona.personality), len("Updated."))),
+            ) as mock_set,
+            patch(
+                "app.api.persona.helpers.get_persona_personality_document",
+                new=AsyncMock(return_value="Updated."),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_heartbeat_instructions",
+                new=AsyncMock(return_value=persona.heartbeat_instructions),
+            ),
+            patch(
+                "app.api.persona.helpers.get_persona_user_context_document",
+                new=AsyncMock(return_value=persona.user_context),
+            ),
+        ):
             mock.return_value = persona
             response = api_client.put(
                 "/api/persona/personality",
@@ -203,6 +280,7 @@ class TestUpdatePersonalityEndpoint:
 
         assert response.status_code == 200
         assert response.json()["version"] == 2
+        mock_set.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.models.persona import Persona
-
 SHRINKAGE_MIN_LEN = 200
 SHRINKAGE_RATIO = 0.5
 
@@ -38,20 +36,6 @@ def validate_text_document_update(old_text: str, new_text: str, *, field_label: 
             f"than existing ({len(old_value)} chars). This looks like accidental data loss."
         )
     return old_value, new_value
-
-
-def apply_persona_text_update(persona: Persona, field: str, new_text: str, *, field_label: str | None = None) -> tuple[int, int]:
-    """Update one persona text field with shrinkage protection and backup handling."""
-    old_text, new_value = validate_text_document_update(
-        getattr(persona, field) or "",
-        new_text,
-        field_label=field_label or field,
-    )
-    backup_field = f"{field}_previous"
-    if hasattr(persona, backup_field):
-        setattr(persona, backup_field, old_text)
-    setattr(persona, field, new_value)
-    return len(old_text), len(new_value)
 
 
 def normalize_user_profile(value: Mapping[str, Any] | None) -> dict[str, str] | None:
@@ -93,7 +77,6 @@ __all__ = [
     "SHRINKAGE_RATIO",
     "USER_PROFILE_FIELDS",
     "PersonaDocumentShrinkageError",
-    "apply_persona_text_update",
     "get_user_profile_timezone",
     "normalize_user_profile",
     "render_user_profile",

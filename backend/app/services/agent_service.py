@@ -27,6 +27,9 @@ from app.services.agent_crud import (
     get_version_history as get_version_history_crud,
 )
 from app.services.agent_dto import AgentDTO
+from app.services.owned_prompt_service import sync_agent_system_prompt
+from app.services.prompt_catalog import build_agent_system_prompt_slug
+from app.services.prompt_service import get_prompt_by_slug
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +45,12 @@ class AgentService:
         url = redis_url or settings.agent_hub_redis_url
         self._cache = AgentCache(url)
 
+    async def _resolve_system_prompt(self, db: AsyncSession, agent: Any) -> str:
+        prompt = await get_prompt_by_slug(db, build_agent_system_prompt_slug(agent.slug))
+        if prompt and prompt.enabled and prompt.content.strip():
+            return prompt.content.strip()
+        return agent.system_prompt
+
     async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
         """Get agent by slug with caching."""
         cached = await self._cache.get(slug)
@@ -51,7 +60,10 @@ class AgentService:
         agent = await get_agent_by_slug(db, slug, active_only=True)
 
         if agent:
-            dto = AgentDTO.from_model(agent)
+            dto = AgentDTO.from_model(
+                agent,
+                system_prompt_override=await self._resolve_system_prompt(db, agent),
+            )
             await self._cache.set(dto)
             return dto
 
@@ -60,7 +72,12 @@ class AgentService:
     async def get_by_id(self, db: AsyncSession, agent_id: int) -> AgentDTO | None:
         """Get agent by ID."""
         agent = await get_agent_by_id(db, agent_id)
-        return AgentDTO.from_model(agent) if agent else None
+        if not agent:
+            return None
+        return AgentDTO.from_model(
+            agent,
+            system_prompt_override=await self._resolve_system_prompt(db, agent),
+        )
 
     async def list_agents(
         self,
@@ -75,7 +92,13 @@ class AgentService:
         agents = await list_agents_query(
             db, active_only=active_only, coding_only=coding_only, limit=limit, offset=offset
         )
-        return [AgentDTO.from_model(a) for a in agents]
+        return [
+            AgentDTO.from_model(
+                agent,
+                system_prompt_override=await self._resolve_system_prompt(db, agent),
+            )
+            for agent in agents
+        ]
 
     async def create(
         self,
@@ -127,9 +150,17 @@ class AgentService:
             timeout_seconds=timeout_seconds,
         )
         db.add(agent)
+        await db.flush()
+        await sync_agent_system_prompt(
+            db,
+            agent=agent,
+            system_prompt=system_prompt,
+            changed_by=changed_by,
+            change_reason="Initial agent system prompt bootstrap",
+        )
         await db.commit()
         await db.refresh(agent)
-        dto = AgentDTO.from_model(agent)
+        dto = AgentDTO.from_model(agent, system_prompt_override=system_prompt)
         await self._finalize_create(db, agent.id, dto, changed_by)
         logger.info(f"Created agent: {slug}")
         return dto
@@ -201,9 +232,20 @@ class AgentService:
             timeout_seconds=timeout_seconds,
         )
         agent.version += 1
+        if system_prompt is not None:
+            await sync_agent_system_prompt(
+                db,
+                agent=agent,
+                system_prompt=system_prompt,
+                changed_by=changed_by,
+                change_reason=change_reason or "Updated agent system prompt",
+            )
         await db.commit()
         await db.refresh(agent)
-        dto = AgentDTO.from_model(agent)
+        dto = AgentDTO.from_model(
+            agent,
+            system_prompt_override=await self._resolve_system_prompt(db, agent),
+        )
         await self._finalize_update(db, agent, dto, old_slug, changed_by, change_reason)
         logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
         return dto
@@ -262,6 +304,9 @@ class AgentService:
     async def close(self) -> None:
         """Close Redis connection."""
         await self._cache.close()
+
+    async def invalidate_slug(self, slug: str) -> None:
+        await self._cache.invalidate(slug)
 
 
 # Singleton instance

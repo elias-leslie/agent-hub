@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
+from app.services.persona_document_prompt_service import get_persona_personality_document
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,9 @@ async def get_persona_for_agent(db: AsyncSession, agent_id: int) -> Persona | No
 async def get_persona_personality_for_agent(db: AsyncSession, agent_id: int) -> str | None:
     """Get just the personality text for an agent's persona."""
     persona = await get_persona_for_agent(db, agent_id)
-    return persona.personality if persona else None
+    if not persona:
+        return None
+    return await get_persona_personality_document(db)
 
 
 def _compute_daily_reset_time(now: datetime, reset_hour: int) -> datetime:

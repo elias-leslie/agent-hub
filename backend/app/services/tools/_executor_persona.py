@@ -15,12 +15,14 @@ async def read_personality() -> str:
     """Read the persona's current personality document."""
     try:
         from app.db import async_session
-        from app.services.persona_service import get_or_create_persona
+        from app.services.persona_document_prompt_service import (
+            get_persona_personality_document,
+        )
 
         async with async_session() as db:
-            persona = await get_or_create_persona(db)
-            if persona.personality:
-                return persona.personality
+            personality = await get_persona_personality_document(db)
+            if personality:
+                return personality
             return "(No personality document set. Use write_personality to create one.)"
     except Exception as e:
         logger.exception("read_personality failed")
@@ -34,19 +36,22 @@ async def write_personality(personality: str, reason: str) -> str:
 
     try:
         from app.db import async_session
+        from app.services.persona_document_prompt_service import (
+            set_persona_personality_document,
+        )
         from app.services.persona_documents import (
             PersonaDocumentShrinkageError,
-            apply_persona_text_update,
         )
         from app.services.persona_service import get_or_create_persona
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
             try:
-                old_len, new_len = apply_persona_text_update(
-                    persona,
-                    "personality",
+                old_len, new_len = await set_persona_personality_document(
+                    db,
                     personality,
+                    changed_by="persona_tool",
+                    change_reason=reason or "Persona personality tool update",
                 )
             except PersonaDocumentShrinkageError as exc:
                 return (
@@ -70,19 +75,22 @@ async def write_user_context(user_context: str) -> str:
 
     try:
         from app.db import async_session
+        from app.services.persona_document_prompt_service import (
+            set_persona_user_context_document,
+        )
         from app.services.persona_documents import (
             PersonaDocumentShrinkageError,
-            apply_persona_text_update,
         )
         from app.services.persona_service import get_or_create_persona
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
             try:
-                old_len, new_len = apply_persona_text_update(
-                    persona,
-                    "user_context",
+                old_len, new_len = await set_persona_user_context_document(
+                    db,
                     user_context,
+                    changed_by="persona_tool",
+                    change_reason="Persona user context tool update",
                 )
             except PersonaDocumentShrinkageError as exc:
                 return (
@@ -103,12 +111,14 @@ async def read_user_context() -> str:
     """Read the persona's current user context."""
     try:
         from app.db import async_session
-        from app.services.persona_service import get_or_create_persona
+        from app.services.persona_document_prompt_service import (
+            get_persona_user_context_document,
+        )
 
         async with async_session() as db:
-            persona = await get_or_create_persona(db)
-            if persona.user_context:
-                return persona.user_context
+            user_context = await get_persona_user_context_document(db)
+            if user_context:
+                return user_context
             return "(No user context set. Use write_user_context to record what you learn about the user.)"
     except Exception as e:
         logger.exception("read_user_context failed")
@@ -263,13 +273,15 @@ async def submit_onboarding(summary: str) -> str:
     try:
         from app.db import async_session
         from app.services.persona_service import (
-            get_or_create_persona,
             submit_and_review_onboarding,
         )
 
         async with async_session() as db:
-            persona = await get_or_create_persona(db)
-            user_context_snapshot = persona.user_context
+            from app.services.persona_document_prompt_service import (
+                get_persona_user_context_document,
+            )
+
+            user_context_snapshot = await get_persona_user_context_document(db)
 
             result = await submit_and_review_onboarding(
                 db, summary, user_context_snapshot,

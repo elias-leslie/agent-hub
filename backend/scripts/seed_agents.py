@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.config import settings
 from app.models import Agent
+from app.services.owned_prompt_service import sync_agent_system_prompt
 from scripts.seed_agents_data import DEACTIVATE_SLUGS, DEFAULT_AGENTS
 
 logging.basicConfig(level=logging.INFO)
@@ -60,6 +61,13 @@ async def seed_agents(db: AsyncSession) -> int:
             version=1,
         )
         db.add(agent)
+        await db.flush()
+        await sync_agent_system_prompt(
+            db,
+            agent=agent,
+            system_prompt=agent_data["system_prompt"],
+            change_reason="Seed default agent system prompt",
+        )
         created += 1
         logger.info(f"Created agent: {slug}")
 

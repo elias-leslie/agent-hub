@@ -37,6 +37,9 @@ class PromptResponse(BaseModel):
     is_global: bool
     enabled: bool
     exclude_agents: list[str]
+    owner_agent_slug: str | None = None
+    prompt_type: str | None = None
+    deletion_locked: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -57,6 +60,9 @@ class PromptRevisionResponse(BaseModel):
     is_global: bool
     enabled: bool
     exclude_agents: list[str]
+    owner_agent_id: int | None
+    prompt_type: str | None = None
+    deletion_locked: bool = False
     content_hash: str
     changed_by: str | None
     change_reason: str | None

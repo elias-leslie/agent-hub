@@ -106,17 +106,6 @@ async def collect_runtime_prompt_sections(
             )
         )
 
-    if agent.system_prompt:
-        sections.append(
-            RuntimePromptSection(
-                label="Agent System Prompt",
-                source_kind="agent_system_prompt",
-                source_id=agent.slug,
-                content=f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>",
-                updated_at=getattr(agent, "updated_at", None),
-            )
-        )
-
     from app.services.persona_service import get_persona_context_for_agent
 
     persona_context = await get_persona_context_for_agent(

@@ -40,6 +40,15 @@ class Prompt(Base):
     is_global: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    owner_agent_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=True
+    )
+    prompt_type: Mapped[str] = mapped_column(
+        String(50), default="standard", server_default="standard"
+    )
+    deletion_locked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -48,12 +57,15 @@ class Prompt(Base):
     agent_assignments: Mapped[list[AgentPrompt]] = relationship(
         "AgentPrompt", back_populates="prompt", cascade="all, delete-orphan", lazy="raise"
     )
+    owner_agent: Mapped[Any | None] = relationship("Agent", lazy="raise")
     revisions: Mapped[list[PromptRevision]] = relationship(
         "PromptRevision", back_populates="prompt", lazy="raise"
     )
 
     __table_args__ = (
         Index("ix_prompts_is_global", "is_global", postgresql_where=(is_global == True)),  # noqa: E712
+        Index("ix_prompts_owner_agent_id", "owner_agent_id"),
+        Index("ix_prompts_prompt_type", "prompt_type"),
     )
 
 
@@ -102,6 +114,13 @@ class PromptRevision(Base):
     is_global: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     exclude_agents: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
+    owner_agent_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    prompt_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="standard", server_default="standard"
+    )
+    deletion_locked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     changed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

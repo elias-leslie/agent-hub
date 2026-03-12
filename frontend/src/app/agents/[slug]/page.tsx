@@ -10,7 +10,6 @@ import { AgentEditorHeader } from "./components/AgentEditorHeader";
 import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
 import { ModelsTab } from "./components/ModelsTab";
-import { PromptTab } from "./components/PromptTab";
 import { ParametersTab } from "./components/ParametersTab";
 import { PermissionsTab } from "./components/PermissionsTab";
 import { PromptsTab } from "./components/PromptsTab";
@@ -173,19 +172,6 @@ export default function AgentEditorPage() {
                 updateField={updateField}
               />
             )}
-            {activeTab === "prompt" && (
-              <PromptTab
-                formData={formData}
-                preview={preview}
-                previewFetching={previewFetching}
-                showInlinePreview={showInlinePreview}
-                setShowInlinePreview={setShowInlinePreview}
-                previewMode={previewMode}
-                setPreviewMode={setPreviewMode}
-                updateField={updateField}
-                refetchPreview={refetchPreview}
-              />
-            )}
             {activeTab === "parameters" && (
               <ParametersTab
                 formData={formData}
@@ -197,7 +183,16 @@ export default function AgentEditorPage() {
               <PermissionsTab formData={formData} updateField={updateField} />
             )}
             {activeTab === "prompts" && (
-              <PromptsTab agentSlug={slug} />
+              <PromptsTab
+                agentSlug={slug}
+                preview={preview}
+                previewFetching={previewFetching}
+                showInlinePreview={showInlinePreview}
+                setShowInlinePreview={setShowInlinePreview}
+                previewMode={previewMode}
+                setPreviewMode={setPreviewMode}
+                refetchPreview={refetchPreview}
+              />
             )}
             {activeTab === "memory" && (
               <MemoryTab formData={formData} updateField={updateField} />

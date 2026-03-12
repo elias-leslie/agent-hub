@@ -6,7 +6,6 @@ import { getApiBaseUrl, buildApiUrl, fetchApi } from "@/lib/api-config";
 import type { PersonaAutosaveState } from "@/app/persona/hooks/usePersona";
 import { useHeartbeat } from "@/app/persona/hooks/useHeartbeat";
 import type { Persona, PersonaUpdate } from "@/types/persona";
-import { PersonaDocumentSection } from "./PersonaDocumentSection";
 
 interface VoiceHeartbeatTabProps {
   persona: Persona;
@@ -176,7 +175,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
             Heartbeat
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Autonomous check-in schedule and instructions.
+            Autonomous check-in schedule and runtime readiness.
           </p>
         </div>
 
@@ -250,17 +249,6 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
             </div>
           )}
         </div>
-
-        {/* Heartbeat Instructions */}
-        <PersonaDocumentSection
-          label="Heartbeat Instructions"
-          description="Custom instructions for autonomous heartbeat checks. Defines what to monitor and when to alert."
-          value={persona.heartbeat_instructions || ""}
-          placeholder="Describe what the persona should check during heartbeats..."
-          onSave={(v) => onUpdate({ heartbeat_instructions: v })}
-          autosave={autosave}
-          textareaClassName="min-h-[200px] h-[calc(100vh-24rem)]"
-        />
       </div>
     </div>
   );

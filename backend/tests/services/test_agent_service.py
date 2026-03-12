@@ -212,7 +212,10 @@ class TestAgentService:
 
         mock_db.refresh = mock_refresh
 
-        with patch.object(service._cache, "set"):
+        with (
+            patch.object(service._cache, "set"),
+            patch("app.services.agent_service.sync_agent_system_prompt", new=AsyncMock()),
+        ):
             agent = await service.create(
                 mock_db,
                 slug="test-agent",
@@ -233,7 +236,7 @@ class TestAgentService:
         assert agent.thinking_level == "high"
         assert agent.verbosity_level == "medium"
         assert agent.timeout_seconds == 45.0
-        assert mock_db.add.call_count == 2  # Agent + AgentVersion
+        assert mock_db.add.call_count == 2
 
     @pytest.mark.asyncio
     async def test_update_agent(self, service, mock_db, mock_agent):

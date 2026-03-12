@@ -8,13 +8,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.persona_document_prompt_service import (
+    clear_persona_user_context_document,
+    set_persona_personality_document,
+    set_persona_user_context_document,
+)
 from app.services.persona_documents import normalize_user_profile
 from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
 from .activity import router as _activity_router
-from .constants import PROTECTED_TEXT_FIELDS
-from .helpers import apply_shrinkage_protection, commit_and_refresh, persona_to_response
+from .helpers import commit_and_refresh, persona_to_response
 from .schemas import (
     PersonaPersonalityResponse,
     PersonaPersonalityUpdate,
@@ -47,12 +51,18 @@ async def update_persona(
     if not update_data:
         return await persona_to_response(db, persona)
 
+    personality = update_data.pop("personality", None)
     heartbeat_instructions = update_data.pop("heartbeat_instructions", None)
     user_profile = update_data.pop("user_profile", None)
+    user_context = update_data.pop("user_context", None)
 
-    for field in PROTECTED_TEXT_FIELDS:
-        if field in update_data and update_data[field] is not None:
-            apply_shrinkage_protection(persona, field, update_data[field], update_data)
+    if personality is not None:
+        await set_persona_personality_document(
+            db,
+            personality,
+            changed_by="api",
+            change_reason="Persona settings update",
+        )
 
     if heartbeat_instructions is not None:
         old_text = (await persona_to_response(db, persona)).heartbeat_instructions or ""
@@ -70,6 +80,14 @@ async def update_persona(
                 ),
             )
         await set_persona_heartbeat_instructions(db, new_text)
+
+    if user_context is not None:
+        await set_persona_user_context_document(
+            db,
+            user_context,
+            changed_by="api",
+            change_reason="Persona settings update",
+        )
 
     if user_profile is not None:
         persona.user_profile = normalize_user_profile(user_profile)
@@ -91,14 +109,18 @@ async def update_persona(
 async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
     """Reset onboarding so bootstrap instructions are injected on next conversation.
 
-    Clears user_context and resets onboarding_attempts so Jenny starts truly
+    Clears prompt-backed user context and resets onboarding_attempts so Jenny starts truly
     fresh — no stale context that could make her act mid-onboarding.
     """
     persona = await get_or_create_persona(db)
     persona.onboarding_complete = False
     persona.onboarding_phase = "not_started"
     persona.onboarding_attempts = 0
-    persona.user_context = None
+    await clear_persona_user_context_document(
+        db,
+        changed_by="api",
+        change_reason="Persona onboarding reset",
+    )
     persona.version += 1
     await commit_and_refresh(db, persona)
     logger.info("Persona onboarding fully reset (phase → not_started, context cleared)")
@@ -109,8 +131,9 @@ async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaRespons
 async def get_personality(db: AsyncSession = Depends(get_db)) -> PersonaPersonalityResponse:
     """Get just the personality document (for agent self-read)."""
     persona = await get_or_create_persona(db)
+    personality = (await persona_to_response(db, persona)).personality
     return PersonaPersonalityResponse(
-        personality=persona.personality,
+        personality=personality,
         version=persona.version,
     )
 
@@ -122,11 +145,12 @@ async def update_personality(
 ) -> PersonaPersonalityResponse:
     """Update the personality document (for agent self-modification)."""
     persona = await get_or_create_persona(db)
-
-    # Apply shrinkage protection — same guard used by PUT /api/persona for text fields
-    update_data: dict = {"personality": update.personality}
-    apply_shrinkage_protection(persona, "personality", update.personality, update_data)
-    persona.personality = update_data["personality"]
+    await set_persona_personality_document(
+        db,
+        update.personality,
+        changed_by="api",
+        change_reason=update.reason or "Persona personality update",
+    )
 
     persona.version += 1
     await commit_and_refresh(db, persona)
@@ -134,7 +158,7 @@ async def update_personality(
     reason_log = f" reason={update.reason}" if update.reason else ""
     logger.info("Personality updated: version=%d%s", persona.version, reason_log)
     return PersonaPersonalityResponse(
-        personality=persona.personality,
+        personality=(await persona_to_response(db, persona)).personality,
         version=persona.version,
     )
 

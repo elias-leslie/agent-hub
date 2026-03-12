@@ -440,14 +440,21 @@ async def capture_benchmark_config_snapshot(
         if agent_slug == "persona":
             persona = await db.scalar(select(Persona).where(Persona.agent_id == agent.id))
             if persona is not None:
+                from app.services.persona_document_prompt_service import (
+                    get_persona_personality_document,
+                    get_persona_user_context_document,
+                )
+
+                personality_text = await get_persona_personality_document(db) or ""
+                user_context_text = await get_persona_user_context_document(db) or ""
                 snapshot["persona_documents"] = {
                     "personality": {
-                        "content_hash": hashlib.sha256((persona.personality or "").encode("utf-8")).hexdigest()[:8],
-                        "content_length": len(persona.personality or ""),
+                        "content_hash": hashlib.sha256(personality_text.encode("utf-8")).hexdigest()[:8],
+                        "content_length": len(personality_text),
                     },
                     "user_context": {
-                        "content_hash": hashlib.sha256((persona.user_context or "").encode("utf-8")).hexdigest()[:8],
-                        "content_length": len(persona.user_context or ""),
+                        "content_hash": hashlib.sha256(user_context_text.encode("utf-8")).hexdigest()[:8],
+                        "content_length": len(user_context_text),
                     },
                     "user_profile": {
                         "content_hash": hashlib.sha256(

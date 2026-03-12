@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
+from app.services.persona_document_prompt_service import (
+    get_persona_personality_document,
+    get_persona_user_context_document,
+)
 from app.services.persona_documents import (
-    PersonaDocumentShrinkageError,
-    apply_persona_text_update,
     normalize_user_profile,
 )
 from app.services.persona_instruction_service import get_persona_heartbeat_instructions
@@ -22,14 +23,16 @@ async def persona_to_response(
     agent_slug: str = "persona",
 ) -> PersonaResponse:
     """Convert a Persona ORM object to response schema."""
+    personality = await get_persona_personality_document(db)
     heartbeat_instructions = await get_persona_heartbeat_instructions(db)
+    user_context = await get_persona_user_context_document(db)
     return PersonaResponse(
         id=persona.id,
         name=persona.name,
-        personality=persona.personality,
+        personality=personality,
         user_profile=normalize_user_profile(persona.user_profile),
         heartbeat_instructions=heartbeat_instructions,
-        user_context=persona.user_context,
+        user_context=user_context,
         voice_id=persona.voice_id,
         voice_enabled=persona.voice_enabled,
         heartbeat_interval_minutes=persona.heartbeat_interval_minutes,
@@ -46,28 +49,6 @@ async def persona_to_response(
         version=persona.version,
         updated_at=persona.updated_at.isoformat() if persona.updated_at else None,
     )
-
-
-def apply_shrinkage_protection(
-    persona: Persona,
-    field: str,
-    new_text: str,
-    update_data: dict,
-) -> None:
-    """Raise HTTPException if new text is suspiciously shorter than old.
-
-    Also saves a backup of the old value if the model has a ``<field>_previous``
-    attribute, then writes the stripped new value into *update_data*.
-    """
-    try:
-        apply_persona_text_update(persona, field, new_text)
-    except PersonaDocumentShrinkageError as exc:
-        raise HTTPException(
-            status_code=422,
-            detail=str(exc),
-        ) from exc
-    update_data[field] = getattr(persona, field)
-
 
 async def commit_and_refresh(db: AsyncSession, persona: Persona) -> Persona:
     """Commit the current transaction and refresh *persona* from the DB."""
