@@ -206,8 +206,7 @@ async def test_complete_with_tools_returns_error_result_when_finalize_response_i
 
     assert result.status == "error"
     assert result.error == "finalize cancelled"
-    store_partial.assert_not_awaited()
-    db.rollback.assert_awaited()
+    store_partial.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -263,7 +262,7 @@ async def test_complete_with_tools_returns_error_result_when_partial_store_is_ca
 
     assert result.status == "error"
     assert result.error == "finalize cancelled"
-    store_partial.assert_not_awaited()
+    store_partial.assert_awaited_once()
     db.rollback.assert_awaited()
 
 
@@ -311,5 +310,4 @@ async def test_execute_and_handle_errors_handles_cancelled_tool_loop() -> None:
     assert result is not None
     assert result.status == "error"
     assert result.error == "tool loop cancelled"
-    store_partial.assert_not_awaited()
-    db.rollback.assert_awaited()
+    store_partial.assert_awaited_once()

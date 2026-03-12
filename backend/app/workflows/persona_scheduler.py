@@ -167,7 +167,9 @@ async def _execute_push(job: Any) -> str:
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        # Scheduler jobs can invoke full persona completions that exceed one minute.
+        # Drop overlapping cron ticks instead of cancelling live Jenny work mid-run.
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
