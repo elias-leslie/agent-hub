@@ -24,6 +24,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 DEFAULT_MAX_TOOL_TURNS = 15
+_EMPTY_FINAL_RESPONSE_MSG = (
+    "<system-final-response>"
+    "You have finished tool work but have not produced a final user-facing response. "
+    "Write the final response now. "
+    "If no changes were needed, say so plainly. "
+    "If changes were made, summarize the exact changes and evidence. "
+    "Do not call more tools unless a missing fact blocks the response."
+    "</system-final-response>"
+)
 
 __all__ = [
     "DEFAULT_MAX_TOOL_TURNS",
@@ -53,6 +62,7 @@ async def iter_stream_sse_with_tools(
         session_id=ctx.session_id,
     )
     current_messages = list(messages)
+    empty_closeout_used = False
 
     for turn in range(1, max_tool_turns + 1):
         turn_sses, pending_calls, resolved_ids, turn_text, done_event = await collect_turn_events(
@@ -65,6 +75,15 @@ async def iter_stream_sse_with_tools(
             return
         unresolved = [tc for tc in pending_calls if tc.tool_id not in resolved_ids]
         if not unresolved:
+            if (
+                not content_buf[0].strip()
+                and not empty_closeout_used
+                and turn < max_tool_turns
+            ):
+                current_messages.append(Message(role="assistant", content=turn_text))
+                current_messages.append(Message(role="user", content=_EMPTY_FINAL_RESPONSE_MSG))
+                empty_closeout_used = True
+                continue
             yield await build_done_sse(
                 event=done_event, ctx=ctx,
                 accumulated_content=content_buf[0], seq=ctx.next_seq(),
