@@ -229,7 +229,7 @@ def build_agentic_response(
         context_usage=context_usage_info,
         output_usage=None,
         session_id=internal_result.session_id,
-        finish_reason="end_turn"
+        finish_reason=internal_result.finish_reason
         if internal_result.status == "success"
         else internal_result.status,
         from_cache=internal_result.from_cache,

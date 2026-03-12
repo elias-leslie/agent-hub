@@ -9,7 +9,7 @@ import pytest
 
 from app.adapters.base import CompletionResult, ProviderError
 from app.adapters.types import Message
-from app.api.complete.execution import execute_with_fallback
+from app.api.complete.execution import build_agentic_response, execute_with_fallback
 from app.api.complete.types import CompletionInternalResult
 
 
@@ -290,3 +290,31 @@ async def test_execute_without_db_records_provider_failure() -> None:
 
     record_success.assert_not_called()
     record_failure.assert_called_once()
+
+
+def test_build_agentic_response_preserves_internal_finish_reason_on_success() -> None:
+    internal_result = CompletionInternalResult(
+        content="done",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=1,
+        output_tokens=2,
+        finish_reason="max_turns",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
+        status="success",
+        turns=3,
+        tool_calls_count=5,
+    )
+
+    response = build_agentic_response(
+        internal_result=internal_result,
+        context_usage_info=None,
+        thinking_level=None,
+        agent_used="debugger",
+        fallback_used=False,
+        trace_id=None,
+    )
+
+    assert response.finish_reason == "max_turns"
