@@ -29,7 +29,7 @@ export function EpisodesTab() {
   const groupId = searchParams.get("group") || undefined;
   const scope = (searchParams.get("scope") as MemoryScope) || undefined;
   const category = (searchParams.get("category") as MemoryCategory) || undefined;
-  const sortBy = (searchParams.get("sort") as MemorySortBy) || "created_at";
+  const sortBy = (searchParams.get("sort") as MemorySortBy) || "updated_at";
 
   const [viewMode, setViewMode] = useState<EpisodesViewMode>(() => {
     try {
@@ -155,9 +155,9 @@ export function EpisodesTab() {
   }, []);
 
   // Client-side sorts need the full dataset; backend pages are newest-first.
-  // Therefore created_at DESC is stable with pagination, but created_at ASC is not.
+  // Therefore updated_at DESC is stable with pagination, but other orders are not.
   const shouldPrefetchAllPages = !isSearchMode && (
-    sortField !== "created_at" || sortDirection === "asc"
+    sortField !== "updated_at" || sortDirection === "asc"
   );
   useEffect(() => {
     if (!shouldPrefetchAllPages || !hasMore || isFetchingMore || isLoadingEpisodes) {

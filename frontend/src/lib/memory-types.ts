@@ -21,6 +21,7 @@ export interface MemoryEpisode {
   scope_id: string | null;
   source_description: string;
   created_at: string;
+  updated_at?: string | null;
   valid_at: string;
   // ACE-aligned usage stats
   loaded_count?: number;
@@ -39,7 +40,7 @@ export interface MemoryEpisode {
 }
 
 // Sort options for memory list
-export type MemorySortBy = "created_at" | "utility_score" | "loaded_count";
+export type MemorySortBy = "updated_at" | "created_at" | "utility_score" | "loaded_count";
 export type MemorySortOrder = "asc" | "desc";
 
 // Paginated list result

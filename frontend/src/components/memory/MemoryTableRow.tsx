@@ -143,7 +143,7 @@ export function MemoryTableRow({
         {/* Time - hidden on mobile */}
         <div className="hidden md:block text-right">
           <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
-            {formatRelativeTime(item.created_at)}
+            {formatRelativeTime(item.updated_at || item.created_at)}
           </span>
         </div>
 

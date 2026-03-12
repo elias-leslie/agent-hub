@@ -17,6 +17,8 @@ async def list_episodes_paginated(
     limit: int = 50,
     cursor: str | None = None,
     category: MemoryCategory | None = None,
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
 ) -> MemoryListResult:
     """
     List episodes with cursor-based pagination.
@@ -46,6 +48,8 @@ async def list_episodes_paginated(
         category=cat_value,
         limit=limit,
         cursor=cursor,
+        order_by=sort_by,
+        sort_order=sort_order,
     )
 
     memories = result["memories"]

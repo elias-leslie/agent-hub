@@ -35,7 +35,8 @@ const CATEGORIES: { id: MemoryCategory | "all"; label: string; icon: string }[] 
 ];
 
 const SORT_OPTIONS: { id: MemorySortBy; label: string }[] = [
-  { id: "created_at", label: "Recent" },
+  { id: "updated_at", label: "Recently Changed" },
+  { id: "created_at", label: "Recently Created" },
   { id: "utility_score", label: "Most Useful" },
   { id: "loaded_count", label: "Most Used" },
 ];
@@ -51,7 +52,7 @@ export function MemoryFilters({
   searchQuery,
   onSearchChange,
   isSearching,
-  sortBy = "created_at",
+  sortBy = "updated_at",
   onSortChange,
 }: MemoryFiltersProps) {
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
@@ -86,7 +87,7 @@ export function MemoryFilters({
     ? SCOPES.find((s) => s.id === selectedScope)?.label || selectedScope
     : "All Scopes";
 
-  const selectedSortLabel = SORT_OPTIONS.find((s) => s.id === sortBy)?.label || "Recent";
+  const selectedSortLabel = SORT_OPTIONS.find((s) => s.id === sortBy)?.label || "Recently Changed";
 
   return (
     <div className="space-y-4">

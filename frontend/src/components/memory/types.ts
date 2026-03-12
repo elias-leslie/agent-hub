@@ -1,1 +1,1 @@
-export type SortField = "scope" | "category" | "tier" | "content" | "created_at" | "utility";
+export type SortField = "scope" | "category" | "tier" | "content" | "updated_at" | "created_at" | "utility";

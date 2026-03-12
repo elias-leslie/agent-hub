@@ -19,6 +19,8 @@ async def handle_list_episodes(
     cursor: str | None,
     category: MemoryCategory | None,
     all_groups: bool = False,
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
 ) -> MemoryListResult:
     """List memory episodes with cursor-based pagination."""
     try:
@@ -27,6 +29,8 @@ async def handle_list_episodes(
             cursor=cursor,
             category=category,
             all_groups=all_groups,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list episodes: {e}") from e

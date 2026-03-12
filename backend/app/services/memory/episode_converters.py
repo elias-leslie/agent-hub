@@ -77,6 +77,7 @@ def convert_raw_episode_to_memory_episode(
     mapped_source = _map_source(raw_source)
 
     created_at = _get_attr_or_key(ep, "created_at")
+    updated_at = _get_attr_or_key(ep, "updated_at") or created_at
     valid_at = _get_attr_or_key(ep, "valid_at") or created_at
 
     return MemoryEpisode(
@@ -89,6 +90,7 @@ def convert_raw_episode_to_memory_episode(
         scope_id=resolved_scope_id,
         source_description=_get_attr_or_key(ep, "source_description") or "",
         created_at=created_at,
+        updated_at=updated_at,
         valid_at=valid_at,
         entities=_get_attr_or_key(ep, "entity_edges") or [],
         summary=_get_attr_or_key(ep, "summary"),

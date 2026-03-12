@@ -25,18 +25,26 @@ def _parse_pagination_cursor(cursor: str) -> tuple[datetime, _uuid.UUID | None]:
     return datetime.fromisoformat(timestamp_raw), _uuid.UUID(uuid_raw)
 
 
-def _build_pagination_cursor(created_at: datetime, memory_id: _uuid.UUID) -> str:
-    """Build a stable pagination cursor using created_at plus UUID tie-breaker."""
-    return f"{created_at.isoformat()}|{memory_id}"
+def _build_pagination_cursor(timestamp: datetime, memory_id: _uuid.UUID) -> str:
+    """Build a stable pagination cursor using the active sort timestamp plus UUID."""
+    return f"{timestamp.isoformat()}|{memory_id}"
 
 
-def _apply_list_order(stmt: Any, order_by: str) -> Any:
+def _resolve_sort_column(order_by: str):
+    """Return the timestamp column used for ordering and cursor pagination."""
+    if order_by == "created_at":
+        return Memory.created_at
+    return Memory.updated_at
+
+
+def _apply_list_order(stmt: Any, order_by: str, sort_order: str = "desc") -> Any:
     """Apply ordering to a Memory select statement."""
     if order_by == "display_order":
         return stmt.order_by(Memory.display_order, Memory.created_at.desc())
-    if order_by == "loaded_count":
-        return stmt.order_by(Memory.loaded_count.desc())
-    return stmt.order_by(Memory.created_at.desc())
+    sort_column = _resolve_sort_column(order_by)
+    if sort_order == "asc":
+        return stmt.order_by(sort_column.asc(), Memory.id.asc())
+    return stmt.order_by(sort_column.desc(), Memory.id.desc())
 
 
 def _build_list_conditions(
@@ -97,6 +105,7 @@ class QueryRepository:
         limit: int = 100,
         offset: int = 0,
         order_by: str = "display_order",
+        sort_order: str = "desc",
         db: AsyncSession | None = None,
     ) -> list[Memory]:
         """List memories with filtering and pagination."""
@@ -115,7 +124,7 @@ class QueryRepository:
         stmt = select(Memory)
         if conditions:
             stmt = stmt.where(and_(*conditions))
-        stmt = _apply_list_order(stmt, order_by).limit(limit).offset(offset)
+        stmt = _apply_list_order(stmt, order_by, sort_order).limit(limit).offset(offset)
 
         if db:
             result = await db.execute(stmt)
@@ -187,9 +196,12 @@ class QueryRepository:
         category: str | None = None,
         limit: int = 50,
         cursor: str | None = None,
+        order_by: str = "updated_at",
+        sort_order: str = "desc",
         db: AsyncSession | None = None,
     ) -> dict[str, Any]:
         """Paginated list compatible with MemoryListResult format."""
+        sort_column = _resolve_sort_column(order_by)
         stmt = select(Memory).where(Memory.status == "active")
         if group_id:
             stmt = stmt.where(Memory.group_id == group_id)
@@ -205,16 +217,27 @@ class QueryRepository:
             with contextlib.suppress(ValueError):
                 cursor_time, cursor_id = _parse_pagination_cursor(cursor)
                 if cursor_id is None:
-                    stmt = stmt.where(Memory.created_at < cursor_time)
+                    if sort_order == "asc":
+                        stmt = stmt.where(sort_column > cursor_time)
+                    else:
+                        stmt = stmt.where(sort_column < cursor_time)
                 else:
-                    stmt = stmt.where(
-                        or_(
-                            Memory.created_at < cursor_time,
-                            and_(Memory.created_at == cursor_time, Memory.id < cursor_id),
+                    if sort_order == "asc":
+                        stmt = stmt.where(
+                            or_(
+                                sort_column > cursor_time,
+                                and_(sort_column == cursor_time, Memory.id > cursor_id),
+                            )
                         )
-                    )
+                    else:
+                        stmt = stmt.where(
+                            or_(
+                                sort_column < cursor_time,
+                                and_(sort_column == cursor_time, Memory.id < cursor_id),
+                            )
+                        )
 
-        stmt = stmt.order_by(Memory.created_at.desc(), Memory.id.desc()).limit(limit + 1)
+        stmt = _apply_list_order(stmt, order_by, sort_order).limit(limit + 1)
 
         if db:
             result = await db.execute(stmt)
@@ -226,11 +249,11 @@ class QueryRepository:
 
         has_more = len(rows) > limit
         memories = rows[:limit]
-        next_cursor = (
-            _build_pagination_cursor(memories[-1].created_at, memories[-1].id)
-            if memories and has_more
-            else None
-        )
+        next_cursor = None
+        if memories and has_more:
+            last = memories[-1]
+            last_timestamp = getattr(last, order_by, None) or last.updated_at or last.created_at
+            next_cursor = _build_pagination_cursor(last_timestamp, last.id)
         return {"memories": memories, "total": len(memories), "cursor": next_cursor, "has_more": has_more}
 
     async def text_search(

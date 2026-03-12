@@ -61,9 +61,21 @@ async def list_episodes(
     cursor: Annotated[str | None, Query(description="Timestamp cursor for pagination")] = None,
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
     all_groups: Annotated[bool, Query(description="Include all groups instead of current scope")] = False,
+    sort_by: Annotated[str, Query(description="Sort field: updated_at or created_at")] = "updated_at",
+    sort_order: Annotated[str, Query(description="Sort direction: asc or desc")] = "desc",
 ) -> MemoryListResult:
     """List episodes with cursor-based pagination (reverse chronological order)."""
-    return await handle_list_episodes(memory, limit, cursor, category, all_groups)
+    normalized_sort_by = sort_by if sort_by in {"updated_at", "created_at"} else "updated_at"
+    normalized_sort_order = sort_order if sort_order in {"asc", "desc"} else "desc"
+    return await handle_list_episodes(
+        memory,
+        limit,
+        cursor,
+        category,
+        all_groups,
+        normalized_sort_by,
+        normalized_sort_order,
+    )
 
 
 @router.get("/stats", response_model=MemoryStats)
