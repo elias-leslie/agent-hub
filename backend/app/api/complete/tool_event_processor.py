@@ -135,6 +135,7 @@ async def _process_tool_result_event(
     model_used: str | None,
     agent_id: str | None,
     tool_use_id_to_name: dict[str, str] | None = None,
+    tool_result_summaries: list[str] | None = None,
 ) -> int:
     """Store a tool_result event and return the incremented turn."""
     from .tool_event_storage import store_tool_result
@@ -146,6 +147,10 @@ async def _process_tool_result_event(
 
     # Resolve actual tool name from the tool_use_id mapping
     tool_name = (tool_use_id_to_name or {}).get(tool_use_id, tool_use_id)
+    if tool_result_summaries is not None:
+        summary = _summarize_tool_result(tool_name, tool_content, is_error)
+        if summary:
+            tool_result_summaries.append(summary)
 
     await store_tool_result(
         db, session_id, tool_name=tool_name, tool_use_id=tool_use_id,
@@ -181,6 +186,7 @@ async def process_tool_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     tool_use_id_to_name: dict[str, str] | None = None,
+    tool_result_summaries: list[str] | None = None,
 ) -> tuple[int, int, str | None]:
     """Process a single unified ToolEvent.
 
@@ -220,6 +226,7 @@ async def process_tool_event(
         turn = await _process_tool_result_event(
             event, turn, session_id, db, model_used, agent_id,
             tool_use_id_to_name=tool_use_id_to_name,
+            tool_result_summaries=tool_result_summaries,
         )
     elif event_type == "result":
         _process_result_event(event, content_parts)
@@ -227,3 +234,14 @@ async def process_tool_event(
         error_message = _process_error_event(event)
 
     return turn, tool_calls_increment, error_message
+
+
+def _summarize_tool_result(tool_name: str, content: str, is_error: bool) -> str | None:
+    """Build a compact one-line summary from a tool result."""
+    first_line = next((line.strip() for line in str(content).splitlines() if line.strip()), "")
+    if not first_line:
+        first_line = "<no output>"
+    prefix = f"{tool_name or 'tool'}"
+    if is_error:
+        prefix = f"{prefix} error"
+    return f"{prefix}: {first_line[:160]}"

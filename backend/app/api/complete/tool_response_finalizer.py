@@ -27,6 +27,7 @@ async def finalize_response(
     turn: int,
     tool_calls_count: int,
     tracker: ProgressTracker,
+    tool_result_summaries: list[str] | None = None,
 ) -> ToolExecutionResult:
     """Finalize response with optional thinking content support.
 
@@ -56,6 +57,11 @@ async def finalize_response(
 
     agent_slug = getattr(session, "agent_slug", None)
     final_content = "".join(content_parts)
+    if _needs_tool_closeout_fallback(final_content, tool_calls_count):
+        final_content = _build_tool_closeout_fallback(
+            final_content,
+            tool_result_summaries or [],
+        )
     thinking_content = "\n".join(thinking_parts) if thinking_parts else None
     thinking_tokens = len(thinking_content) // 4 if thinking_content else None
     estimated_tokens = len(final_content) // 4
@@ -82,3 +88,24 @@ async def finalize_response(
         tool_calls_count=tool_calls_count,
         progress_log=tracker.log,
     )
+
+
+def _needs_tool_closeout_fallback(content: str, tool_calls_count: int) -> bool:
+    """Detect the demonstrated low-signal closeout pattern from tool runs."""
+    return tool_calls_count > 0 and content.strip() in {"Mode: task", "Mode: campaign"}
+
+
+def _build_tool_closeout_fallback(content: str, tool_result_summaries: list[str]) -> str:
+    """Replace a mode-only placeholder with a compact deterministic summary."""
+    header = content.strip() or "Tool run"
+    lines = [
+        header,
+        "",
+        "Tool execution completed, but the agent did not provide a usable final summary.",
+        "Captured observations:",
+    ]
+    if tool_result_summaries:
+        lines.extend(f"- {summary}" for summary in tool_result_summaries[:8])
+    else:
+        lines.append("- Tool calls completed; inspect session events for detailed outputs.")
+    return "\n".join(lines)

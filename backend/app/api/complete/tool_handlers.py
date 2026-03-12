@@ -212,6 +212,7 @@ async def _complete_with_tools(
             db, session, session_id, is_new_session, model, provider,
             state.content_parts, state.thinking_parts, loaded_memory_uuids,
             memory_group_id, state.turn, state.tool_calls_count, tracker,
+            tool_result_summaries=state.tool_result_summaries,
         )
     except asyncio.CancelledError as e:
         logger.exception("%s finalize_response cancelled: %s", provider, e)
