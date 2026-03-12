@@ -44,15 +44,15 @@ def mask_value(value: str) -> str:
 class CredentialCreate(BaseModel):
     """Request body for creating a credential."""
 
-    provider: str = Field(..., description="Provider name (claude, codex, gemini, minimax, nvidia, openrouter, openai, xai, zhipu)")
-    credential_type: str = Field(..., description="Type: api_key, oauth_token, refresh_token")
-    value: str = Field(..., min_length=1, description="Credential value (will be encrypted)")
+    provider: str = Field(..., max_length=50, description="Provider name (claude, codex, gemini, minimax, nvidia, openrouter, openai, xai, zhipu)")
+    credential_type: str = Field(..., max_length=50, description="Type: api_key, oauth_token, refresh_token")
+    value: str = Field(..., min_length=1, max_length=10000, description="Credential value (will be encrypted)")
 
 
 class CredentialUpdate(BaseModel):
     """Request body for updating a credential."""
 
-    value: str = Field(..., min_length=1, description="New credential value")
+    value: str = Field(..., min_length=1, max_length=10000, description="New credential value")
 
 
 class CredentialResponse(BaseModel):

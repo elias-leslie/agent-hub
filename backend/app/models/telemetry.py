@@ -76,6 +76,9 @@ class RequestLog(Base):
         Index("ix_request_logs_agent_slug", "agent_slug"),
     )
 
+    def __repr__(self) -> str:
+        return f"<RequestLog id={self.id} {self.method} {self.endpoint} status={self.status_code}>"
+
 
 class TruncationEvent(Base):
     """Telemetry for response truncations (output limit events)."""
@@ -101,3 +104,6 @@ class TruncationEvent(Base):
         Index("ix_truncation_events_model_created", "model", "created_at"),
         Index("ix_truncation_events_created", "created_at"),
     )
+
+    def __repr__(self) -> str:
+        return f"<TruncationEvent model={self.model!r} tokens={self.output_tokens}/{self.max_tokens_requested}>"

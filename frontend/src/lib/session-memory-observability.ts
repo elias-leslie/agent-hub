@@ -23,8 +23,9 @@ export function summarizeSessionMemoryObservability(
     if (event.event_type === "memory_inject") {
       selectedCount += Number(toolInput.reference_selected_count ?? 0);
       indexCount += Number(toolInput.reference_index_count ?? 0);
+      const rawUuids = toolInput.reference_selected_uuids;
       selectedRefs = new Set(
-        ((toolInput.reference_selected_uuids as unknown[]) ?? [])
+        (Array.isArray(rawUuids) ? rawUuids : [])
           .filter(Boolean)
           .map((uuid) => String(uuid))
       );
@@ -32,9 +33,10 @@ export function summarizeSessionMemoryObservability(
     }
 
     if (event.event_type === "memory_cite") {
-      const citedUuids = (((toolInput.uuids as unknown[]) ?? []).filter(Boolean)).map(
-        (uuid) => String(uuid)
-      );
+      const rawCited = toolInput.uuids;
+      const citedUuids = (Array.isArray(rawCited) ? rawCited : [])
+        .filter(Boolean)
+        .map((uuid) => String(uuid));
       totalCitedCount += citedUuids.length;
       selectedCitedCount += citedUuids.filter((uuid) => selectedRefs.has(uuid)).length;
     }

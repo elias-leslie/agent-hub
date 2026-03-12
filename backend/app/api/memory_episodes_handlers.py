@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
@@ -10,6 +11,8 @@ from app.services.memory import MemoryService
 from app.services.memory.embedder import get_embedder
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.repository import get_memory_repository
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .memory_schemas import (

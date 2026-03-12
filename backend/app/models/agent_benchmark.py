@@ -77,6 +77,9 @@ class AgentBenchmarkRun(Base):
         Index("ix_agent_benchmark_runs_agent_suite_completed", "agent_slug", "suite_id", "completed_at"),
     )
 
+    def __repr__(self) -> str:
+        return f"<AgentBenchmarkRun id={self.benchmark_id!r} agent={self.agent_slug!r} status={self.status!r}>"
+
 
 class AgentBenchmarkExperiment(Base):
     """Controlled benchmark comparison between baseline and candidate cohorts."""
@@ -107,6 +110,9 @@ class AgentBenchmarkExperiment(Base):
     __table_args__ = (
         Index("ix_agent_benchmark_experiments_agent_suite_created", "agent_slug", "suite_id", "created_at"),
     )
+
+    def __repr__(self) -> str:
+        return f"<AgentBenchmarkExperiment key={self.experiment_key!r} status={self.status!r} decision={self.decision!r}>"
 
 
 class AgentBenchmarkAttempt(Base):
@@ -163,6 +169,9 @@ class AgentBenchmarkAttempt(Base):
         Index("ix_agent_benchmark_attempts_agent_model_created", "agent_slug", "model_id", "created_at"),
     )
 
+    def __repr__(self) -> str:
+        return f"<AgentBenchmarkAttempt case={self.case_id!r} model={self.model_id!r} passed={self.passed}>"
+
 
 class AgentRegressionCluster(Base):
     """Tracks recurring benchmark regressions until they are resolved."""
@@ -211,3 +220,6 @@ class AgentRegressionCluster(Base):
         ),
         Index("ix_agent_regression_clusters_agent_suite_status", "agent_slug", "suite_id", "status"),
     )
+
+    def __repr__(self) -> str:
+        return f"<AgentRegressionCluster case={self.case_id!r} status={self.status!r} count={self.occurrence_count}>"

@@ -531,5 +531,5 @@ def _get_quota_info(exc: Exception | None) -> str:
                 f" consumer={quota.get('consumer', '?')}]"
             )
     except Exception:
-        pass
+        logger.debug("Failed to extract quota details from error", exc_info=True)
     return ""

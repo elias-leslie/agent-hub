@@ -45,7 +45,7 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
         .values(status="completed")
         .execution_options(synchronize_session="fetch")
     )
-    reaped_completion = result.rowcount  # type: ignore[assignment]
+    reaped_completion = result.rowcount
 
     cutoff_24h = now - timedelta(hours=24)
     result = await db.execute(
@@ -57,7 +57,7 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
         .values(status="completed")
         .execution_options(synchronize_session="fetch")
     )
-    reaped_stale = result.rowcount  # type: ignore[assignment]
+    reaped_stale = result.rowcount
 
     await db.commit()
     return reaped_completion, reaped_stale

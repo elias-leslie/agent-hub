@@ -5,6 +5,7 @@ import { Layers, Zap, Activity, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatNumber, formatLatency } from "@/lib/formatters";
 import type { DashboardStatsResponse } from "@/lib/api";
+import type { StatusResponse } from "@/lib/api/status";
 import { fetchProviderHealth, type ProviderHealth } from "@/lib/api/dashboard";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,15 +22,19 @@ function stateColor(state: string) {
 function ProviderHealthPanel() {
   const [providers, setProviders] = useState<ProviderHealth[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
         const res = await fetchProviderHealth();
-        if (mounted) setProviders(res.providers);
+        if (mounted) {
+          setProviders(res.providers);
+          setError(false);
+        }
       } catch {
-        // silently fail
+        if (mounted) setError(true);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -40,6 +45,11 @@ function ProviderHealthPanel() {
   }, []);
 
   if (loading) return <div className="h-24 bg-slate-800 rounded animate-pulse" />;
+  if (error) return (
+    <div className="flex items-center justify-center h-20 text-red-400/70 text-xs">
+      Failed to load provider health
+    </div>
+  );
   if (providers.length === 0) return (
     <div className="flex items-center justify-center h-20 text-slate-500 text-xs">
       No provider data available
@@ -75,7 +85,7 @@ function ProviderHealthPanel() {
   );
 }
 
-export function HealthTabContent({ stats, status }: { stats: DashboardStatsResponse | undefined; status: any }) {
+export function HealthTabContent({ stats, status }: { stats: DashboardStatsResponse | undefined; status: StatusResponse | undefined }) {
   if (!stats) return <div className="h-48 bg-slate-800 rounded animate-pulse" />;
 
   return (
@@ -164,7 +174,7 @@ export function HealthTabContent({ stats, status }: { stats: DashboardStatsRespo
             Circuit Breakers
           </h4>
           <div className="grid grid-cols-2 gap-4">
-            {status?.circuit_breakers ? Object.entries(status.circuit_breakers).map(([name, info]: [string, any]) => (
+            {status?.circuit_breakers ? Object.entries(status.circuit_breakers).map(([name, info]) => (
               <div key={name} className="flex items-center justify-between p-2 rounded bg-slate-900/50 border border-slate-800">
                 <div>
                   <p className="text-[10px] font-medium text-slate-300 capitalize">{name}</p>

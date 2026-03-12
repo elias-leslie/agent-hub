@@ -7,14 +7,16 @@ export function PreferencesTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [availableModels, setAvailableModels] = useState<CatalogModel[]>([]);
 
+  const [loadError, setLoadError] = useState(false);
+
   // Load models on mount
   useEffect(() => {
     const loadData = async () => {
       try {
         const models = await getModels();
         setAvailableModels(models);
-      } catch (error) {
-        console.error("Failed to load preferences:", error);
+      } catch {
+        setLoadError(true);
       } finally {
         setIsLoading(false);
       }
@@ -28,6 +30,16 @@ export function PreferencesTab() {
       <div className="flex items-center justify-center p-8">
         <div className="text-sm text-slate-500 dark:text-slate-400">
           Loading preferences...
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-sm text-red-500 dark:text-red-400">
+          Failed to load preferences. Please try refreshing the page.
         </div>
       </div>
     );

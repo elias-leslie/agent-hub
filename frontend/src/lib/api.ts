@@ -8,6 +8,7 @@
 
 // Re-export all status-related exports
 export type {
+  CircuitBreakerStatus,
   ProviderHealthDetails,
   ProviderStatus,
   StatusResponse,

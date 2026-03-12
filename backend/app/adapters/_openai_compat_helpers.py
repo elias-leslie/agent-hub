@@ -190,7 +190,7 @@ def resolve_api_key(provider_name: str, explicit_key: str | None) -> str | None:
         if cm.is_initialized:
             return cm.get_api_key(provider_name)
     except Exception:
-        pass
+        logger.debug("Credential manager lookup failed for %s", provider_name, exc_info=True)
     return None
 
 
