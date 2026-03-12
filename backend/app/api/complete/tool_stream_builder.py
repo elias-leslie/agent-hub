@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 # Providers whose complete_with_tools uses OpenAI-compat pattern
 _OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "codex"})
+_DEFAULT_OPENAI_TOOL_TURNS = 20
 
 
 def build_event_stream(
@@ -33,7 +34,7 @@ def build_event_stream(
 
         return adapt_openai_stream(
             adapter, messages, model, tools or [],
-            working_dir, permission_config, max_turns, project_id, session_id,
+            working_dir, permission_config, max(max_turns, _DEFAULT_OPENAI_TOOL_TURNS), project_id, session_id,
             agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
