@@ -31,12 +31,9 @@ from app.services.prompt_catalog import (
 )
 from app.services.runtime_prompt_stack import collect_runtime_prompt_sections
 
-
-def _parse_dt(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    normalized = value.replace("Z", "+00:00")
-    return datetime.fromisoformat(normalized)
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
 
 
 def _round_metric(value: float | None, digits: int = 1) -> float | None:
@@ -56,30 +53,13 @@ def _heartbeat_prompt_descriptor(config_snapshot: dict[str, Any]) -> str | None:
     return f"{updated_at}:{content_hash}"
 
 
-def _prompt_stack_descriptors(config_snapshot: dict[str, Any]) -> list[str]:
-    prompt_stack = config_snapshot.get("prompt_stack")
-    if isinstance(prompt_stack, dict):
-        descriptors = prompt_stack.get("descriptors")
-        if isinstance(descriptors, list):
-            return sorted({str(item) for item in descriptors if item})
-    heartbeat_descriptor = _heartbeat_prompt_descriptor(config_snapshot)
-    return [heartbeat_descriptor] if heartbeat_descriptor else []
+def _sample_mean(values: list[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
 
 
-def _describe_prompt_row(prompt: Prompt | None) -> dict[str, Any] | None:
-    if prompt is None:
-        return None
-    content = prompt.content or ""
-    return {
-        "slug": prompt.slug,
-        "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
-        "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest()[:8],
-        "content_length": len(content),
-    }
-
-
-def _cluster_regression_key(case_id: str, failure_detail: str) -> str:
-    return f"{case_id}::{failure_detail}"
+# ---------------------------------------------------------------------------
+# Config fingerprinting
+# ---------------------------------------------------------------------------
 
 
 def _normalize_config_snapshot_for_fingerprint(value: Any) -> Any:
@@ -92,12 +72,6 @@ def _normalize_config_snapshot_for_fingerprint(value: Any) -> Any:
     if isinstance(value, list):
         return [_normalize_config_snapshot_for_fingerprint(item) for item in value]
     return value
-
-
-def _config_fingerprint(config_snapshot: dict[str, Any]) -> str:
-    normalized = _normalize_config_snapshot_for_fingerprint(config_snapshot or {})
-    serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
 
 
 def _run_config_fingerprint(run: AgentBenchmarkRun) -> str:
@@ -113,8 +87,9 @@ def _run_config_fingerprint(run: AgentBenchmarkRun) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:10]
 
 
-def _sample_mean(values: list[float]) -> float:
-    return sum(values) / len(values) if values else 0.0
+# ---------------------------------------------------------------------------
+# Experiment statistics
+# ---------------------------------------------------------------------------
 
 
 def _bootstrap_mean_delta(
@@ -156,14 +131,22 @@ def _summarize_experiment_arm(
     scores = [float(run.avg_score or 0.0) for run in runs]
     pass_rates = [float(run.pass_rate or 0.0) for run in runs]
     fingerprints = sorted({_run_config_fingerprint(run) for run in runs})
-    prompt_versions = sorted(
-        {
-            descriptor
-            for run in runs
-            for descriptor in _prompt_stack_descriptors(dict(run.config_snapshot or {}))
-            if descriptor
-        }
-    )
+
+    # Inline: collect prompt version descriptors from config snapshots
+    prompt_version_set: set[str] = set()
+    for run in runs:
+        cs = dict(run.config_snapshot or {})
+        ps = cs.get("prompt_stack")
+        if isinstance(ps, dict):
+            raw = ps.get("descriptors")
+            if isinstance(raw, list):
+                prompt_version_set.update(str(item) for item in raw if item)
+                continue
+        hd = _heartbeat_prompt_descriptor(cs)
+        if hd:
+            prompt_version_set.add(hd)
+    prompt_versions = sorted(prompt_version_set)
+
     latest_completed = max(
         (run.completed_at for run in runs if run.completed_at is not None),
         default=None,
@@ -182,41 +165,9 @@ def _summarize_experiment_arm(
     }
 
 
-def _decide_experiment_outcome(
-    baseline: dict[str, Any],
-    candidate: dict[str, Any],
-    score_delta: dict[str, float | None],
-    pass_rate_delta: dict[str, float | None],
-    min_runs: int,
-) -> tuple[str, str]:
-    """Return (decision, reason) based on experiment arm statistics."""
-    if min(baseline["run_count"], candidate["run_count"]) < min_runs:
-        return "hold", "underpowered"
-    if not baseline["config_stable"] or not candidate["config_stable"]:
-        return "hold", "mixed_config"
-    if (
-        score_delta["ci_low"] is not None
-        and pass_rate_delta["ci_low"] is not None
-        and float(score_delta["ci_low"]) > 0.5
-        and float(pass_rate_delta["ci_low"]) >= -1.0
-    ):
-        return "promote", "candidate_outperforms_baseline"
-    if (
-        score_delta["ci_high"] is not None
-        and pass_rate_delta["ci_high"] is not None
-        and (
-            (
-                float(score_delta["ci_high"]) <= 0.0
-                and float(score_delta["mean_delta"] or 0.0) <= -0.5
-            )
-            or (
-                float(pass_rate_delta["ci_high"]) <= 0.0
-                and float(pass_rate_delta["mean_delta"] or 0.0) <= -1.0
-            )
-        )
-    ):
-        return "rollback", "candidate_underperforms_baseline"
-    return "hold", "no_clear_winner"
+# ---------------------------------------------------------------------------
+# Public experiment API
+# ---------------------------------------------------------------------------
 
 
 def summarize_benchmark_experiment(
@@ -241,7 +192,36 @@ def summarize_benchmark_experiment(
     )
 
     min_runs = int(experiment.min_runs_per_cohort or 3)
-    decision, reason = _decide_experiment_outcome(baseline, candidate, score_delta, pass_rate_delta, min_runs)
+
+    # Inline: decide experiment outcome
+    if min(baseline["run_count"], candidate["run_count"]) < min_runs:
+        decision, reason = "hold", "underpowered"
+    elif not baseline["config_stable"] or not candidate["config_stable"]:
+        decision, reason = "hold", "mixed_config"
+    elif (
+        score_delta["ci_low"] is not None
+        and pass_rate_delta["ci_low"] is not None
+        and float(score_delta["ci_low"]) > 0.5
+        and float(pass_rate_delta["ci_low"]) >= -1.0
+    ):
+        decision, reason = "promote", "candidate_outperforms_baseline"
+    elif (
+        score_delta["ci_high"] is not None
+        and pass_rate_delta["ci_high"] is not None
+        and (
+            (
+                float(score_delta["ci_high"]) <= 0.0
+                and float(score_delta["mean_delta"] or 0.0) <= -0.5
+            )
+            or (
+                float(pass_rate_delta["ci_high"]) <= 0.0
+                and float(pass_rate_delta["mean_delta"] or 0.0) <= -1.0
+            )
+        )
+    ):
+        decision, reason = "rollback", "candidate_underperforms_baseline"
+    else:
+        decision, reason = "hold", "no_clear_winner"
 
     return {
         "experiment_key": experiment.experiment_key,
@@ -261,110 +241,34 @@ def summarize_benchmark_experiment(
     }
 
 
-def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, str], dict[str, Any]]:
-    grouped: dict[tuple[str, str], dict[str, Any]] = {}
-    for attempt in attempts:
-        if attempt.get("passed"):
-            continue
-        case_id = str(attempt.get("case_id") or "")
-        failure_detail = str(attempt.get("failure_detail") or "failed")
-        key = (case_id, failure_detail)
-        bucket = grouped.setdefault(
-            key,
-            {
-                "case_id": case_id,
-                "failure_detail": failure_detail,
-                "occurrence_count": 0,
-                "score_total": 0.0,
-                "models": set(),
-            },
-        )
-        bucket["occurrence_count"] += 1
-        bucket["score_total"] += float(attempt.get("composite_score") or 0.0)
-        model_id = str(attempt.get("model_id") or "")
-        if model_id:
-            bucket["models"].add(model_id)
-    return grouped
-
-
-def _should_update_regression_clusters(
-    *,
-    experiment_cohort: str | None,
-    metadata: dict[str, Any],
-) -> bool:
-    override = metadata.get("update_regression_clusters")
-    if override is not None:
-        return bool(override)
-    return experiment_cohort != "candidate"
-
-
-async def _ensure_benchmark_experiment(
+async def get_benchmark_experiment_summary_by_key(
     db: AsyncSession,
-    *,
-    payload: dict[str, Any],
-    run_agent_slug: str,
-    run_project_id: str,
-    run_suite_id: str,
-) -> AgentBenchmarkExperiment:
-    experiment_key = str(payload["experiment_key"])
+    experiment_key: str,
+) -> dict[str, Any] | None:
     experiment = await db.scalar(
         select(AgentBenchmarkExperiment).where(
             AgentBenchmarkExperiment.experiment_key == experiment_key
         )
     )
     if experiment is None:
-        experiment = AgentBenchmarkExperiment(
-            experiment_key=experiment_key,
-            agent_slug=run_agent_slug,
-            project_id=str(payload.get("project_id") or run_project_id),
-            suite_id=str(payload.get("suite_id") or run_suite_id),
-            name=str(payload.get("name") or experiment_key),
-            hypothesis=payload.get("hypothesis"),
-            baseline_label=str(payload.get("baseline_label") or "baseline"),
-            candidate_label=str(payload.get("candidate_label") or "candidate"),
-            min_runs_per_cohort=int(payload.get("min_runs_per_cohort") or 3),
-        )
-        db.add(experiment)
-        await db.flush()
-        return experiment
+        return None
 
-    if payload.get("name"):
-        experiment.name = str(payload["name"])
-    if payload.get("hypothesis"):
-        experiment.hypothesis = str(payload["hypothesis"])
-    if payload.get("baseline_label"):
-        experiment.baseline_label = str(payload["baseline_label"])
-    if payload.get("candidate_label"):
-        experiment.candidate_label = str(payload["candidate_label"])
-    if payload.get("min_runs_per_cohort"):
-        experiment.min_runs_per_cohort = int(payload["min_runs_per_cohort"])
-    return experiment
-
-
-async def _refresh_benchmark_experiment(
-    db: AsyncSession,
-    experiment: AgentBenchmarkExperiment,
-) -> dict[str, Any]:
     runs = (
         await db.execute(
-            select(AgentBenchmarkRun).where(
+            select(AgentBenchmarkRun)
+            .where(
                 AgentBenchmarkRun.experiment_id == experiment.id,
                 AgentBenchmarkRun.completed_at.is_not(None),
             )
+            .order_by(AgentBenchmarkRun.completed_at.desc())
         )
     ).scalars().all()
+    return summarize_benchmark_experiment(experiment, runs)
 
-    summary = summarize_benchmark_experiment(experiment, runs)
-    experiment.decision = str(summary["decision"])
-    experiment.decision_reason = summary["decision_reason"]
-    experiment.evidence = {
-        "baseline": summary["baseline"],
-        "candidate": summary["candidate"],
-        "score_delta": summary["score_delta"],
-        "pass_rate_delta": summary["pass_rate_delta"],
-        "min_runs_per_cohort": summary["min_runs_per_cohort"],
-    }
-    return summary
+
+# ---------------------------------------------------------------------------
+# Config snapshot capture
+# ---------------------------------------------------------------------------
 
 
 def _task_prompt_slugs(task_type: str | None) -> list[str]:
@@ -421,9 +325,14 @@ async def _capture_persona_snapshot(db: AsyncSession, agent: Agent) -> dict[str,
     prompt = await db.scalar(
         select(Prompt).where(Prompt.slug == PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
     )
-    descriptor = _describe_prompt_row(prompt)
-    if descriptor is not None:
-        snapshot["heartbeat_prompt"] = descriptor
+    if prompt is not None:
+        _content = prompt.content or ""
+        snapshot["heartbeat_prompt"] = {
+            "slug": prompt.slug,
+            "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
+            "content_hash": hashlib.sha256(_content.encode("utf-8")).hexdigest()[:8],
+            "content_length": len(_content),
+        }
 
     reviewer_agent = await db.scalar(select(Agent).where(Agent.slug == "supervisor"))
     if reviewer_agent is not None:
@@ -473,9 +382,14 @@ async def capture_benchmark_config_snapshot(
         task_prompt_sources: list[dict[str, Any]] = []
         for prompt_slug in _task_prompt_slugs(task_type):
             prompt = await db.scalar(select(Prompt).where(Prompt.slug == prompt_slug))
-            descriptor = _describe_prompt_row(prompt)
-            if descriptor:
-                task_prompt_sources.append(descriptor)
+            if prompt is not None:
+                _content = prompt.content or ""
+                task_prompt_sources.append({
+                    "slug": prompt.slug,
+                    "updated_at": prompt.updated_at.isoformat() if prompt.updated_at else None,
+                    "content_hash": hashlib.sha256(_content.encode("utf-8")).hexdigest()[:8],
+                    "content_length": len(_content),
+                })
         if task_prompt_sources:
             snapshot["prompt_stack"]["task_prompt_sources"] = task_prompt_sources
 
@@ -485,12 +399,63 @@ async def capture_benchmark_config_snapshot(
         return snapshot
 
 
-async def persist_benchmark_payload(payload: dict[str, Any]) -> str:
-    """Persist one benchmark run and update regression cluster state."""
-    async with async_session() as db:
-        run_id = await _persist_benchmark_payload(db, payload)
-        await db.commit()
-        return run_id
+# ---------------------------------------------------------------------------
+# Persistence pipeline
+# ---------------------------------------------------------------------------
+
+
+def _should_update_regression_clusters(
+    *,
+    experiment_cohort: str | None,
+    metadata: dict[str, Any],
+) -> bool:
+    override = metadata.get("update_regression_clusters")
+    if override is not None:
+        return bool(override)
+    return experiment_cohort != "candidate"
+
+
+async def _ensure_benchmark_experiment(
+    db: AsyncSession,
+    *,
+    payload: dict[str, Any],
+    run_agent_slug: str,
+    run_project_id: str,
+    run_suite_id: str,
+) -> AgentBenchmarkExperiment:
+    experiment_key = str(payload["experiment_key"])
+    experiment = await db.scalar(
+        select(AgentBenchmarkExperiment).where(
+            AgentBenchmarkExperiment.experiment_key == experiment_key
+        )
+    )
+    if experiment is None:
+        experiment = AgentBenchmarkExperiment(
+            experiment_key=experiment_key,
+            agent_slug=run_agent_slug,
+            project_id=str(payload.get("project_id") or run_project_id),
+            suite_id=str(payload.get("suite_id") or run_suite_id),
+            name=str(payload.get("name") or experiment_key),
+            hypothesis=payload.get("hypothesis"),
+            baseline_label=str(payload.get("baseline_label") or "baseline"),
+            candidate_label=str(payload.get("candidate_label") or "candidate"),
+            min_runs_per_cohort=int(payload.get("min_runs_per_cohort") or 3),
+        )
+        db.add(experiment)
+        await db.flush()
+        return experiment
+
+    if payload.get("name"):
+        experiment.name = str(payload["name"])
+    if payload.get("hypothesis"):
+        experiment.hypothesis = str(payload["hypothesis"])
+    if payload.get("baseline_label"):
+        experiment.baseline_label = str(payload["baseline_label"])
+    if payload.get("candidate_label"):
+        experiment.candidate_label = str(payload["candidate_label"])
+    if payload.get("min_runs_per_cohort"):
+        experiment.min_runs_per_cohort = int(payload["min_runs_per_cohort"])
+    return experiment
 
 
 def _make_run(
@@ -500,6 +465,8 @@ def _make_run(
     metadata: dict[str, Any],
 ) -> AgentBenchmarkRun:
     """Construct an AgentBenchmarkRun from a payload dict."""
+    raw_started = payload.get("started_at")
+    raw_completed = payload.get("completed_at")
     return AgentBenchmarkRun(
         benchmark_id=str(payload["benchmark_id"]),
         agent_slug=str(payload["agent_slug"]),
@@ -521,8 +488,12 @@ def _make_run(
         infra_failure_count=int(payload.get("infra_failure_count") or 0),
         config_snapshot=dict(payload.get("config_snapshot") or {}),
         run_metadata=metadata,
-        started_at=_parse_dt(payload.get("started_at")) or datetime.now(UTC),
-        completed_at=_parse_dt(payload.get("completed_at")),
+        started_at=(
+            datetime.fromisoformat(raw_started.replace("Z", "+00:00")) if raw_started else None
+        ) or datetime.now(UTC),
+        completed_at=(
+            datetime.fromisoformat(raw_completed.replace("Z", "+00:00")) if raw_completed else None
+        ),
     )
 
 
@@ -563,64 +534,13 @@ def _make_attempt(run: AgentBenchmarkRun, attempt_payload: dict[str, Any]) -> Ag
     )
 
 
-async def _upsert_regression_cluster(
-    db: AsyncSession,
-    run: AgentBenchmarkRun,
-    case_id: str,
-    failure_detail: str,
-    bucket: dict[str, Any],
-    open_cluster_map: dict[str, AgentRegressionCluster],
-    completed_at: datetime,
-) -> None:
-    """Create or update a single regression cluster for one failure bucket."""
-    regression_key = _cluster_regression_key(case_id, failure_detail)
-    cluster = open_cluster_map.get(regression_key)
-    if cluster is None:
-        cluster = await db.scalar(
-            select(AgentRegressionCluster).where(
-                AgentRegressionCluster.agent_slug == run.agent_slug,
-                AgentRegressionCluster.suite_id == run.suite_id,
-                AgentRegressionCluster.regression_key == regression_key,
-            )
-        )
-    latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
-    if cluster is None:
-        db.add(AgentRegressionCluster(
-            agent_slug=run.agent_slug,
-            suite_id=run.suite_id,
-            regression_key=regression_key,
-            case_id=case_id,
-            failure_detail=failure_detail,
-            status="open",
-            first_seen_run_id=run.id,
-            last_seen_run_id=run.id,
-            occurrence_count=bucket["occurrence_count"],
-            latest_avg_score=latest_avg_score,
-            affected_models=sorted(bucket["models"]),
-            opened_at=completed_at,
-            last_seen_at=completed_at,
-        ))
-        return
-    cluster.status = "open"
-    cluster.resolved_at = None
-    cluster.last_seen_run_id = run.id
-    cluster.last_seen_at = completed_at
-    cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
-    cluster.latest_avg_score = latest_avg_score
-    cluster.affected_models = sorted(bucket["models"])
-    if not cluster.first_seen_run_id:
-        cluster.first_seen_run_id = run.id
-    if not cluster.opened_at:
-        cluster.opened_at = completed_at
-
-
 async def _update_regression_clusters(
     db: AsyncSession,
     run: AgentBenchmarkRun,
     grouped_failures: dict[tuple[str, str], dict[str, Any]],
 ) -> None:
     """Upsert open/resolved regression clusters based on this run's failures."""
-    current_keys = {_cluster_regression_key(case_id, detail) for case_id, detail in grouped_failures}
+    current_keys = {f"{case_id}::{detail}" for case_id, detail in grouped_failures}
     open_clusters = (
         await db.execute(
             select(AgentRegressionCluster).where(
@@ -634,9 +554,46 @@ async def _update_regression_clusters(
     completed_at = run.completed_at or datetime.now(UTC)
 
     for (case_id, failure_detail), bucket in grouped_failures.items():
-        await _upsert_regression_cluster(
-            db, run, case_id, failure_detail, bucket, open_cluster_map, completed_at
-        )
+        regression_key = f"{case_id}::{failure_detail}"
+        cluster = open_cluster_map.get(regression_key)
+        if cluster is None:
+            cluster = await db.scalar(
+                select(AgentRegressionCluster).where(
+                    AgentRegressionCluster.agent_slug == run.agent_slug,
+                    AgentRegressionCluster.suite_id == run.suite_id,
+                    AgentRegressionCluster.regression_key == regression_key,
+                )
+            )
+        latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
+        if cluster is None:
+            db.add(AgentRegressionCluster(
+                agent_slug=run.agent_slug,
+                suite_id=run.suite_id,
+                regression_key=regression_key,
+                case_id=case_id,
+                failure_detail=failure_detail,
+                status="open",
+                first_seen_run_id=run.id,
+                last_seen_run_id=run.id,
+                occurrence_count=bucket["occurrence_count"],
+                latest_avg_score=latest_avg_score,
+                affected_models=sorted(bucket["models"]),
+                opened_at=completed_at,
+                last_seen_at=completed_at,
+            ))
+        else:
+            cluster.status = "open"
+            cluster.resolved_at = None
+            cluster.last_seen_run_id = run.id
+            cluster.last_seen_at = completed_at
+            cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
+            cluster.latest_avg_score = latest_avg_score
+            cluster.affected_models = sorted(bucket["models"])
+            if not cluster.first_seen_run_id:
+                cluster.first_seen_run_id = run.id
+            if not cluster.opened_at:
+                cluster.opened_at = completed_at
+
     for cluster in open_clusters:
         if cluster.regression_key not in current_keys:
             cluster.status = "resolved"
@@ -667,49 +624,75 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
         db.add(_make_attempt(run, attempt_payload))
 
     if _should_update_regression_clusters(experiment_cohort=experiment_cohort, metadata=metadata):
-        await _update_regression_clusters(db, run, _group_attempt_failures(attempts))
+        # Group attempt failures inline
+        grouped: dict[tuple[str, str], dict[str, Any]] = {}
+        for attempt in attempts:
+            if attempt.get("passed"):
+                continue
+            case_id = str(attempt.get("case_id") or "")
+            failure_detail = str(attempt.get("failure_detail") or "failed")
+            key = (case_id, failure_detail)
+            bucket = grouped.setdefault(
+                key,
+                {"case_id": case_id, "failure_detail": failure_detail,
+                 "occurrence_count": 0, "score_total": 0.0, "models": set()},
+            )
+            bucket["occurrence_count"] += 1
+            bucket["score_total"] += float(attempt.get("composite_score") or 0.0)
+            if model_id := str(attempt.get("model_id") or ""):
+                bucket["models"].add(model_id)
+        await _update_regression_clusters(db, run, grouped)
 
     if experiment is not None:
-        await _refresh_benchmark_experiment(db, experiment)
+        # Refresh experiment decision inline
+        exp_runs = (
+            await db.execute(
+                select(AgentBenchmarkRun).where(
+                    AgentBenchmarkRun.experiment_id == experiment.id,
+                    AgentBenchmarkRun.completed_at.is_not(None),
+                )
+            )
+        ).scalars().all()
+        summary = summarize_benchmark_experiment(experiment, list(exp_runs))
+        experiment.decision = str(summary["decision"])
+        experiment.decision_reason = summary["decision_reason"]
+        experiment.evidence = {
+            "baseline": summary["baseline"],
+            "candidate": summary["candidate"],
+            "score_delta": summary["score_delta"],
+            "pass_rate_delta": summary["pass_rate_delta"],
+            "min_runs_per_cohort": summary["min_runs_per_cohort"],
+        }
 
     return run.id
 
 
-async def get_benchmark_experiment_summary_by_key(
-    db: AsyncSession,
-    experiment_key: str,
-) -> dict[str, Any] | None:
-    experiment = await db.scalar(
-        select(AgentBenchmarkExperiment).where(
-            AgentBenchmarkExperiment.experiment_key == experiment_key
-        )
-    )
-    if experiment is None:
-        return None
-
-    runs = (
-        await db.execute(
-            select(AgentBenchmarkRun)
-            .where(
-                AgentBenchmarkRun.experiment_id == experiment.id,
-                AgentBenchmarkRun.completed_at.is_not(None),
-            )
-            .order_by(AgentBenchmarkRun.completed_at.desc())
-        )
-    ).scalars().all()
-    return summarize_benchmark_experiment(experiment, runs)
+async def persist_benchmark_payload(payload: dict[str, Any]) -> str:
+    """Persist one benchmark run and update regression cluster state."""
+    async with async_session() as db:
+        run_id = await _persist_benchmark_payload(db, payload)
+        await db.commit()
+        return run_id
 
 
-# --- Dashboard query helpers -------------------------------------------------
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
 
 
-async def _query_recent_runs(
+async def get_agent_benchmark_dashboard(
     db: AsyncSession,
     agent_slug: str,
-    suite_id: str | None,
-    cutoff: datetime,
-):
-    stmt = (
+    *,
+    days: int = 30,
+    limit: int = 20,
+    suite_id: str | None = None,
+) -> dict[str, Any]:
+    """Return benchmark history, trendlines, and open regression state."""
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+
+    # Query: recent runs
+    _stmt = (
         select(AgentBenchmarkRun)
         .where(
             AgentBenchmarkRun.agent_slug == agent_slug,
@@ -719,16 +702,12 @@ async def _query_recent_runs(
         .order_by(AgentBenchmarkRun.completed_at.desc())
     )
     if suite_id:
-        stmt = stmt.where(AgentBenchmarkRun.suite_id == suite_id)
-    return (await db.execute(stmt)).scalars().all()
+        _stmt = _stmt.where(AgentBenchmarkRun.suite_id == suite_id)
+    runs = (await db.execute(_stmt)).scalars().all()
+    limited_runs = runs[:limit]
 
-
-async def _query_open_clusters(
-    db: AsyncSession,
-    agent_slug: str,
-    suite_id: str | None,
-):
-    stmt = (
+    # Query: open regression clusters
+    _cluster_stmt = (
         select(AgentRegressionCluster)
         .where(
             AgentRegressionCluster.agent_slug == agent_slug,
@@ -737,32 +716,21 @@ async def _query_open_clusters(
         .order_by(AgentRegressionCluster.last_seen_at.desc())
     )
     if suite_id:
-        stmt = stmt.where(AgentRegressionCluster.suite_id == suite_id)
-    return (await db.execute(stmt)).scalars().all()
+        _cluster_stmt = _cluster_stmt.where(AgentRegressionCluster.suite_id == suite_id)
+    open_clusters = (await db.execute(_cluster_stmt)).scalars().all()
 
-
-async def _query_experiments(
-    db: AsyncSession,
-    agent_slug: str,
-    suite_id: str | None,
-):
-    stmt = (
+    # Query: experiments
+    _exp_stmt = (
         select(AgentBenchmarkExperiment)
         .where(AgentBenchmarkExperiment.agent_slug == agent_slug)
         .order_by(AgentBenchmarkExperiment.updated_at.desc())
     )
     if suite_id:
-        stmt = stmt.where(AgentBenchmarkExperiment.suite_id == suite_id)
-    return (await db.execute(stmt)).scalars().all()
+        _exp_stmt = _exp_stmt.where(AgentBenchmarkExperiment.suite_id == suite_id)
+    experiments = (await db.execute(_exp_stmt)).scalars().all()
 
-
-async def _query_model_performance(
-    db: AsyncSession,
-    agent_slug: str,
-    suite_id: str | None,
-    cutoff: datetime,
-):
-    stmt = (
+    # Query: model performance
+    _model_stmt = (
         select(
             AgentBenchmarkAttempt.model_id,
             func.count(AgentBenchmarkAttempt.id),
@@ -781,135 +749,48 @@ async def _query_model_performance(
         .order_by(func.avg(AgentBenchmarkAttempt.composite_score).desc())
     )
     if suite_id:
-        stmt = stmt.where(AgentBenchmarkRun.suite_id == suite_id)
-    return (await db.execute(stmt)).all()
+        _model_stmt = _model_stmt.where(AgentBenchmarkRun.suite_id == suite_id)
+    model_rows = (await db.execute(_model_stmt)).all()
 
-
-async def _fetch_experiment_summaries(
-    db: AsyncSession,
-    experiments: list[AgentBenchmarkExperiment],
-) -> list[dict[str, Any]]:
-    if not experiments:
-        return []
-    experiment_run_rows = (
-        await db.execute(
-            select(AgentBenchmarkRun)
-            .where(
-                AgentBenchmarkRun.experiment_id.in_([exp.id for exp in experiments]),
-                AgentBenchmarkRun.completed_at.is_not(None),
+    # Fetch experiment summaries inline
+    top_experiments = list(experiments[:10])
+    experiment_summaries: list[dict[str, Any]] = []
+    if top_experiments:
+        exp_run_rows = (
+            await db.execute(
+                select(AgentBenchmarkRun)
+                .where(
+                    AgentBenchmarkRun.experiment_id.in_([exp.id for exp in top_experiments]),
+                    AgentBenchmarkRun.completed_at.is_not(None),
+                )
+                .order_by(AgentBenchmarkRun.completed_at.desc())
             )
-            .order_by(AgentBenchmarkRun.completed_at.desc())
-        )
-    ).scalars().all()
+        ).scalars().all()
+        runs_by_experiment: dict[str, list[AgentBenchmarkRun]] = {}
+        for exp_run in exp_run_rows:
+            if exp_run.experiment_id:
+                runs_by_experiment.setdefault(exp_run.experiment_id, []).append(exp_run)
+        experiment_summaries = [
+            summarize_benchmark_experiment(exp, runs_by_experiment.get(exp.id, []))
+            for exp in top_experiments
+        ]
 
-    runs_by_experiment: dict[str, list[AgentBenchmarkRun]] = {}
-    for run in experiment_run_rows:
-        if run.experiment_id:
-            runs_by_experiment.setdefault(run.experiment_id, []).append(run)
-
-    return [
-        summarize_benchmark_experiment(exp, runs_by_experiment.get(exp.id, []))
-        for exp in experiments
-    ]
-
-
-# --- Dashboard serializers ---------------------------------------------------
-
-
-def _serialize_run(run: AgentBenchmarkRun) -> dict[str, Any]:
-    return {
-        "run_id": run.id,
-        "benchmark_id": run.benchmark_id,
-        "suite_id": run.suite_id,
-        "run_kind": run.run_kind,
-        "started_at": run.started_at.isoformat(),
-        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-        "avg_score": _round_metric(run.avg_score),
-        "pass_rate": _round_metric(run.pass_rate),
-        "attempt_count": int(run.attempt_count or 0),
-        "passed_attempt_count": int(run.passed_attempt_count or 0),
-        "infra_failure_count": int(run.infra_failure_count or 0),
-        "models": list(run.models or []),
-        "case_ids": list(run.case_ids or []),
-        "config_snapshot": dict(run.config_snapshot or {}),
-        "metadata": dict(run.run_metadata or {}),
-    }
-
-
-def _serialize_trend_point(run: AgentBenchmarkRun) -> dict[str, Any]:
-    return {
-        "run_id": run.id,
-        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-        "suite_id": run.suite_id,
-        "run_kind": run.run_kind,
-        "avg_score": _round_metric(run.avg_score),
-        "pass_rate": _round_metric(run.pass_rate),
-        "attempts": int(run.attempt_count or 0),
-        "prompt_version": _heartbeat_prompt_descriptor(dict(run.config_snapshot or {})),
-    }
-
-
-def _serialize_cluster(cluster: AgentRegressionCluster) -> dict[str, Any]:
-    return {
-        "regression_key": cluster.regression_key,
-        "suite_id": cluster.suite_id,
-        "case_id": cluster.case_id,
-        "failure_detail": cluster.failure_detail,
-        "status": cluster.status,
-        "occurrence_count": int(cluster.occurrence_count or 0),
-        "latest_avg_score": _round_metric(cluster.latest_avg_score),
-        "affected_models": list(cluster.affected_models or []),
-        "opened_at": cluster.opened_at.isoformat() if cluster.opened_at else None,
-        "last_seen_at": cluster.last_seen_at.isoformat() if cluster.last_seen_at else None,
-        "resolved_at": cluster.resolved_at.isoformat() if cluster.resolved_at else None,
-    }
-
-
-def _serialize_model_row(row: Any) -> dict[str, Any]:
-    model_id, attempts, avg_model_score, passed, avg_latency, latest_completed_at = row
-    return {
-        "model_id": str(model_id),
-        "attempts": int(attempts or 0),
-        "avg_score": _round_metric(avg_model_score),
-        "pass_rate": round((int(passed or 0) / int(attempts or 1)) * 100, 1) if attempts else 0.0,
-        "avg_latency_ms": _round_metric(avg_latency),
-        "latest_completed_at": latest_completed_at.isoformat() if latest_completed_at else None,
-    }
-
-
-def _collect_tracked_models(runs: list[AgentBenchmarkRun]) -> list[str]:
-    tracked: list[str] = []
-    seen: set[str] = set()
-    for run in runs:
-        for model_id in run.models or []:
-            if model_id not in seen:
-                seen.add(model_id)
-                tracked.append(model_id)
-    return tracked
-
-
-async def get_agent_benchmark_dashboard(
-    db: AsyncSession,
-    agent_slug: str,
-    *,
-    days: int = 30,
-    limit: int = 20,
-    suite_id: str | None = None,
-) -> dict[str, Any]:
-    """Return benchmark history, trendlines, and open regression state."""
-    cutoff = datetime.now(UTC) - timedelta(days=days)
-    runs = await _query_recent_runs(db, agent_slug, suite_id, cutoff)
-    limited_runs = runs[:limit]
-    open_clusters = await _query_open_clusters(db, agent_slug, suite_id)
-    experiments = await _query_experiments(db, agent_slug, suite_id)
-    model_rows = await _query_model_performance(db, agent_slug, suite_id, cutoff)
-
+    # Compute overview stats
     total_attempts = sum(int(run.attempt_count or 0) for run in runs)
     total_passed = sum(int(run.passed_attempt_count or 0) for run in runs)
     avg_score = (
         round(sum(float(run.avg_score or 0.0) for run in runs) / len(runs), 1) if runs else 0.0
     )
     pass_rate = round((total_passed / total_attempts) * 100, 1) if total_attempts else 0.0
+
+    # Collect tracked models (insertion-order dedup)
+    tracked_models: list[str] = []
+    _seen_models: set[str] = set()
+    for run in runs:
+        for model_id in run.models or []:
+            if model_id not in _seen_models:
+                _seen_models.add(model_id)
+                tracked_models.append(model_id)
 
     return {
         "agent_slug": agent_slug,
@@ -921,11 +802,67 @@ async def get_agent_benchmark_dashboard(
             "latest_completed_at": (
                 runs[0].completed_at.isoformat() if runs and runs[0].completed_at else None
             ),
-            "tracked_models": _collect_tracked_models(runs),
+            "tracked_models": tracked_models,
         },
-        "trend": [_serialize_trend_point(run) for run in reversed(limited_runs)],
-        "recent_runs": [_serialize_run(run) for run in limited_runs],
-        "open_regressions": [_serialize_cluster(c) for c in open_clusters[:10]],
-        "model_performance": [_serialize_model_row(row) for row in model_rows],
-        "experiments": await _fetch_experiment_summaries(db, experiments[:10]),
+        "trend": [
+            {
+                "run_id": run.id,
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                "suite_id": run.suite_id,
+                "run_kind": run.run_kind,
+                "avg_score": _round_metric(run.avg_score),
+                "pass_rate": _round_metric(run.pass_rate),
+                "attempts": int(run.attempt_count or 0),
+                "prompt_version": _heartbeat_prompt_descriptor(dict(run.config_snapshot or {})),
+            }
+            for run in reversed(limited_runs)
+        ],
+        "recent_runs": [
+            {
+                "run_id": run.id,
+                "benchmark_id": run.benchmark_id,
+                "suite_id": run.suite_id,
+                "run_kind": run.run_kind,
+                "started_at": run.started_at.isoformat(),
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                "avg_score": _round_metric(run.avg_score),
+                "pass_rate": _round_metric(run.pass_rate),
+                "attempt_count": int(run.attempt_count or 0),
+                "passed_attempt_count": int(run.passed_attempt_count or 0),
+                "infra_failure_count": int(run.infra_failure_count or 0),
+                "models": list(run.models or []),
+                "case_ids": list(run.case_ids or []),
+                "config_snapshot": dict(run.config_snapshot or {}),
+                "metadata": dict(run.run_metadata or {}),
+            }
+            for run in limited_runs
+        ],
+        "open_regressions": [
+            {
+                "regression_key": c.regression_key,
+                "suite_id": c.suite_id,
+                "case_id": c.case_id,
+                "failure_detail": c.failure_detail,
+                "status": c.status,
+                "occurrence_count": int(c.occurrence_count or 0),
+                "latest_avg_score": _round_metric(c.latest_avg_score),
+                "affected_models": list(c.affected_models or []),
+                "opened_at": c.opened_at.isoformat() if c.opened_at else None,
+                "last_seen_at": c.last_seen_at.isoformat() if c.last_seen_at else None,
+                "resolved_at": c.resolved_at.isoformat() if c.resolved_at else None,
+            }
+            for c in open_clusters[:10]
+        ],
+        "model_performance": [
+            {
+                "model_id": str(row[0]),
+                "attempts": int(row[1] or 0),
+                "avg_score": _round_metric(row[2]),
+                "pass_rate": round((int(row[3] or 0) / int(row[1] or 1)) * 100, 1) if row[1] else 0.0,
+                "avg_latency_ms": _round_metric(row[4]),
+                "latest_completed_at": row[5].isoformat() if row[5] else None,
+            }
+            for row in model_rows
+        ],
+        "experiments": experiment_summaries,
     }
