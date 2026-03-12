@@ -11,6 +11,7 @@ class BulkDeleteRequest(BaseModel):
     """Request body for bulk episode deletion."""
 
     ids: list[str] = Field(..., min_length=1, description="Episode UUIDs to delete")
+    change_reason: str | None = Field(None, description="Why these episodes are being deleted")
 
 
 class BulkDeleteError(BaseModel):

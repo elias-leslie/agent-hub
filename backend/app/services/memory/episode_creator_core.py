@@ -53,6 +53,8 @@ async def _create_and_finalize(
     config: IngestionConfig,
     injection_tier: str | None,
     summary: str | None,
+    changed_by: str | None,
+    change_reason: str | None,
 ) -> CreateResult:
     """Embed content, insert into PostgreSQL, and return result."""
     try:
@@ -71,6 +73,8 @@ async def _create_and_finalize(
             tier=tier_num,
             summary=summary,
             token_count=token_count_value,
+            changed_by=changed_by,
+            change_reason=change_reason,
         )
         logger.info(
             "Created memory %s (tier=%s, tokens=%d)",
@@ -97,6 +101,8 @@ async def create_episode_internal(
     reference_time: datetime,
     injection_tier: str | None,
     summary: str | None,
+    changed_by: str | None,
+    change_reason: str | None,
 ) -> CreateResult:
     """Internal implementation of episode creation."""
     if (result := validate_content(content, config)) is not None:
@@ -111,5 +117,5 @@ async def create_episode_internal(
     return await _create_and_finalize(
         repo, embedder, group_id, content, name,
         source_description, reference_time,
-        config, injection_tier, summary,
+        config, injection_tier, summary, changed_by, change_reason,
     )

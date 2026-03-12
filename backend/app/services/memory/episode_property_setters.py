@@ -29,6 +29,8 @@ async def _set_episode_property(
     field_name: str,
     value: Any,
     description: str = "",
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set a single property on a memory record.
 
@@ -43,7 +45,12 @@ async def _set_episode_property(
     """
     repo = get_memory_repository()
     try:
-        result = await repo.update(episode_uuid, **{field_name: value})
+        result = await repo.update(
+            episode_uuid,
+            changed_by="api",
+            change_reason=change_reason,
+            **{field_name: value},
+        )
         if result:
             logger.debug("%s succeeded for memory %s", description, episode_uuid[:8])
         else:
@@ -57,6 +64,8 @@ async def _set_episode_property(
 async def set_episode_injection_tier(
     episode_uuid: str,
     injection_tier: str,
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set injection_tier on a memory record.
 
@@ -65,81 +74,103 @@ async def set_episode_injection_tier(
     return await _set_episode_property(
         episode_uuid, "injection_tier", injection_tier,
         f"set injection_tier={injection_tier}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_pinned(
     episode_uuid: str,
     pinned: bool,
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set pinned on a memory record. Pinned memories are never auto-demoted."""
     return await _set_episode_property(
         episode_uuid, "pinned", pinned,
         f"set pinned={pinned}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_auto_inject(
     episode_uuid: str,
     auto_inject: bool,
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set auto_inject on a memory record. Auto-injected references behave like mandates."""
     return await _set_episode_property(
         episode_uuid, "auto_inject", auto_inject,
         f"set auto_inject={auto_inject}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_display_order(
     episode_uuid: str,
     display_order: int,
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set display_order on a memory record. Lower values = earlier injection."""
     return await _set_episode_property(
         episode_uuid, "display_order", display_order,
         f"set display_order={display_order}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_trigger_task_types(
     episode_uuid: str,
     trigger_task_types: list[str],
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set trigger_task_types on a memory record."""
     return await _set_episode_property(
         episode_uuid, "trigger_task_types", trigger_task_types,
         f"set trigger_task_types={trigger_task_types}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_trigger_phases(
     episode_uuid: str,
     trigger_phases: list[str],
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set trigger_phases on a memory record."""
     return await _set_episode_property(
         episode_uuid, "trigger_phases", trigger_phases,
         f"set trigger_phases={trigger_phases}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_tags(
     episode_uuid: str,
     tags: list[str],
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set tags on a memory record. Used for per-agent memory filtering."""
     return await _set_episode_property(
         episode_uuid, "tags", tags,
         f"set tags={tags}",
+        change_reason=change_reason,
     )
 
 
 async def set_episode_summary(
     episode_uuid: str,
     summary: str,
+    *,
+    change_reason: str | None = None,
 ) -> bool:
     """Set summary on a memory record. ~20 char action phrase for TOON index."""
     return await _set_episode_property(
         episode_uuid, "summary", summary,
         f"set summary={summary[:20]}",
+        change_reason=change_reason,
     )

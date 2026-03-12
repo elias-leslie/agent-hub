@@ -124,6 +124,8 @@ async def set_episode_properties(
     uuid: str,
     pinned: bool,
     trigger_task_types: list[str] | None,
+    *,
+    change_reason: str | None = None,
 ) -> None:
     """Set additional properties on episode if provided."""
     if not uuid or (not pinned and not trigger_task_types):
@@ -135,6 +137,6 @@ async def set_episode_properties(
     )
 
     if pinned:
-        await set_episode_pinned(uuid, True)
+        await set_episode_pinned(uuid, True, change_reason=change_reason)
     if trigger_task_types:
-        await set_episode_trigger_task_types(uuid, trigger_task_types)
+        await set_episode_trigger_task_types(uuid, trigger_task_types, change_reason=change_reason)

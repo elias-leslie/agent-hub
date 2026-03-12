@@ -90,6 +90,23 @@ class TestDeleteEpisodeEndpoint:
         data = response.json()
         assert "failed" in data["message"].lower()
 
+    @pytest.mark.asyncio
+    async def test_delete_episode_forwards_change_reason(
+        self, client: AsyncClient, mock_memory_service: AsyncMock
+    ):
+        mock_memory_service.delete_episode = AsyncMock(return_value=True)
+
+        response = await client.delete(
+            "/api/memory/episode/test-uuid-123?change_reason=dedupe",
+        )
+
+        assert response.status_code == 200
+        mock_memory_service.delete_episode.assert_awaited_once_with(
+            "test-uuid-123",
+            changed_by="api",
+            change_reason="dedupe",
+        )
+
 
 class TestUpdateEpisodeEndpoint:
     """Tests for PATCH /api/memory/episode/{id} endpoint."""
@@ -139,7 +156,34 @@ class TestUpdateEpisodeEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["injection_tier"] == "mandate"
-        mock_repo.update.assert_awaited_once_with("test-uuid-123", injection_tier="mandate")
+        mock_repo.update.assert_awaited_once_with(
+            "test-uuid-123",
+            injection_tier="mandate",
+            changed_by="api",
+        )
+
+    @pytest.mark.asyncio
+    async def test_update_episode_forwards_change_reason(
+        self, client: AsyncClient
+    ):
+        mock_repo = AsyncMock()
+        mock_repo.update = AsyncMock(return_value=True)
+        mock_repo.get_as_dict = AsyncMock(return_value={"version": 4})
+
+        with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
+            response = await client.patch(
+                "/api/memory/episode/test-uuid-123",
+                json={"injection_tier": "mandate", "change_reason": "normalize tier"},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["version"] == 4
+        mock_repo.update.assert_awaited_once_with(
+            "test-uuid-123",
+            changed_by="api",
+            injection_tier="mandate",
+            change_reason="normalize tier",
+        )
 
     @pytest.mark.asyncio
     async def test_update_episode_rejects_invalid_content_for_existing_tier(
@@ -248,3 +292,61 @@ class TestBulkDeleteEndpoint:
 
         # Should return 422 for validation error (empty list)
         assert response.status_code == 422
+
+
+class TestMemoryRevisionEndpoints:
+    @pytest.mark.asyncio
+    async def test_list_memory_revisions_returns_history(self, client: AsyncClient):
+        with patch(
+            "app.api.memory_episodes.handle_list_episode_revisions",
+            new=AsyncMock(
+                return_value={
+                    "revisions": [
+                        {
+                            "id": "rev-1",
+                            "memory_uuid": "test-uuid-1234",
+                            "version": 3,
+                            "action": "update",
+                            "content": "**Topic**: Use dt.",
+                            "summary": "use dt",
+                            "injection_tier": "reference",
+                            "scope": "global",
+                            "tags": [],
+                            "content_hash": "abcd1234",
+                            "created_at": "2026-03-12T13:00:00Z",
+                        }
+                    ],
+                    "total": 1,
+                }
+            ),
+        ):
+            response = await client.get("/api/memory/episode/test-uuid/revisions")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["revisions"][0]["id"] == "rev-1"
+
+    @pytest.mark.asyncio
+    async def test_restore_memory_revision_returns_restored_episode(self, client: AsyncClient):
+        with patch(
+            "app.api.memory_episodes.handle_restore_episode_revision",
+            new=AsyncMock(
+                return_value={
+                    "success": True,
+                    "episode_id": "test-uuid-1234",
+                    "injection_tier": "reference",
+                    "message": "Restored revision rev-1",
+                    "version": 5,
+                }
+            ),
+        ):
+            response = await client.post(
+                "/api/memory/episode/test-uuid/revisions/rev-1/restore",
+                json={"change_reason": "Rollback bad edit"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["version"] == 5

@@ -80,6 +80,7 @@ class SaveLearningRequest(BaseModel):
     trigger_task_types: list[str] | None = Field(
         None, description="Task types that trigger this reference (e.g., ['database', 'memory'])"
     )
+    change_reason: str | None = Field(None, description="Why this learning is being recorded")
 
 
 class SaveLearningResponse(BaseModel):

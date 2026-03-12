@@ -68,13 +68,33 @@ class _ServiceSearchMixin:
 class _ServiceCrudMixin:
     """CRUD and cleanup methods for MemoryService."""
 
-    async def delete_episode(self, episode_uuid: str) -> bool:
+    async def delete_episode(
+        self,
+        episode_uuid: str,
+        *,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
+    ) -> bool:
         """Delete an episode from memory."""
-        return await crud.delete_episode(episode_uuid)
+        return await crud.delete_episode(
+            episode_uuid,
+            changed_by=changed_by,
+            change_reason=change_reason,
+        )
 
-    async def bulk_delete(self, episode_uuids: list[str]) -> dict[str, Any]:
+    async def bulk_delete(
+        self,
+        episode_uuids: list[str],
+        *,
+        changed_by: str | None = None,
+        change_reason: str | None = None,
+    ) -> dict[str, Any]:
         """Delete multiple episodes from memory."""
-        return await crud.bulk_delete_episodes(episode_uuids)
+        return await crud.bulk_delete_episodes(
+            episode_uuids,
+            changed_by=changed_by,
+            change_reason=change_reason,
+        )
 
     async def get_episode(self, episode_uuid: str) -> dict[str, Any] | None:
         """Get detailed information about a single episode including usage stats."""
