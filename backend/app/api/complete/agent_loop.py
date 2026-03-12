@@ -10,11 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.response_cache import get_response_cache
 
+from .execution_observability import persist_execution_observability
 from .helpers import get_adapter
 from .multi_turn_executor import execute_multi_turn
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result
 from .schemas import MessageInput
+from .session_manager import apply_execution_metadata
 from .tool_handlers import AgentProgress
 from .tool_router import route_tool_execution
 from .turn_budget import resolve_tool_max_turns
@@ -56,6 +58,7 @@ class AgentLoopRequest:
 
 
 async def _execute_tool_loop(req: AgentLoopRequest) -> CompletionInternalResult:
+    effective_tool_turn_budget = resolve_tool_max_turns(req.provider, req.max_turns)
     tool_result_dict = await route_tool_execution(
         provider=req.provider,
         messages_dict=req.messages_dict,
@@ -74,9 +77,32 @@ async def _execute_tool_loop(req: AgentLoopRequest) -> CompletionInternalResult:
         memory_group_id=req.memory_group_id,
         skip_cache=req.skip_cache,
         progress_callback=req.progress_callback,
-        max_turns=resolve_tool_max_turns(req.provider, req.max_turns),
+        max_turns=effective_tool_turn_budget,
         project_id=req.project_id,
     )
+    effective_model = tool_result_dict.get("model_used") or req.model
+    apply_execution_metadata(
+        req.session,
+        requested_model=req.model,
+        effective_model=effective_model,
+        fallback_used=bool(tool_result_dict.get("fallback_used", False)),
+        fallback_reason=tool_result_dict.get("fallback_reason"),
+    )
+    await persist_execution_observability(
+        req.db,
+        req.session,
+        req.session_id,
+        provider=req.provider,
+        model_used=effective_model,
+        requested_max_turns=req.max_turns,
+        orchestration_path="tool_loop",
+        final_finish_reason=tool_result_dict.get("finish_reason"),
+        execution_status=tool_result_dict.get("status"),
+        execution_error=tool_result_dict.get("error"),
+        turns_completed=tool_result_dict.get("turns"),
+        tool_calls_count=tool_result_dict.get("tool_calls_count", 0),
+    )
+    await req.db.commit()
     return CompletionInternalResult(**tool_result_dict)
 
 
@@ -116,6 +142,7 @@ async def _execute_multi_turn_loop(req: AgentLoopRequest) -> CompletionInternalR
         req.session_id,
         req.model,
         effective_model,
+        req.provider,
         exec_result["total_input_tokens"],
         exec_result["total_output_tokens"],
         req.is_new_session,
@@ -123,6 +150,10 @@ async def _execute_multi_turn_loop(req: AgentLoopRequest) -> CompletionInternalR
         project_id=req.project_id,
         fallback_used=bool(getattr(final_result, "fallback_used", False)),
         fallback_reason=getattr(final_result, "fallback_reason", None),
+        requested_max_turns=req.max_turns,
+        orchestration_path="multi_turn",
+        execution_status=exec_result["execution_status"],
+        execution_error=exec_result["execution_error"],
     )
     result_dict = build_completion_result(
         final_content=exec_result["final_content"],

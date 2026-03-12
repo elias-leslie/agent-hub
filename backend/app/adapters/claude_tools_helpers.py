@@ -55,6 +55,7 @@ class ResultMessage:
     usage: dict[str, Any] | None = None
     result: str | None = None
     structured_output: Any = None
+    finish_reason: str | None = None
 
 
 @dataclass
@@ -297,6 +298,7 @@ async def _iterate_sdk_messages(
     done_emitted = False
     saw_payload = False
     pending_tool_calls = 0
+    saw_tool_result = False
     idle_watch_armed = False
     skip_iterator_close = False
     iterator_closed = False
@@ -331,10 +333,18 @@ async def _iterate_sdk_messages(
                 raise exc
             if message is _STREAM_STOP:
                 if saw_payload and not done_emitted:
+                    finish_reason = "max_turns" if saw_tool_result and pending_tool_calls == 0 else "end_turn"
                     logger.warning(
-                        "Claude SDK stream ended without ResultMessage; synthesizing terminal result"
+                        "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
+                        finish_reason,
                     )
-                    yield (ResultMessage(session_id=session_id), session_id)
+                    yield (
+                        ResultMessage(
+                            session_id=session_id,
+                            finish_reason=finish_reason,
+                        ),
+                        session_id,
+                    )
                 await _close_sdk_message_iter(message_iter)
                 iterator_closed = True
                 return
@@ -344,6 +354,23 @@ async def _iterate_sdk_messages(
                     logger.info(f"Claude SDK session ID: {session_id}")
                 continue
             if type(message).__name__ == "ResultMessage":
+                if getattr(message, "finish_reason", None) is None:
+                    inferred_finish_reason = "max_turns" if saw_tool_result else "end_turn"
+                    try:
+                        message.finish_reason = inferred_finish_reason
+                    except Exception:
+                        message = ResultMessage(
+                            session_id=session_id,
+                            finish_reason=inferred_finish_reason,
+                            result=getattr(message, "result", None),
+                            usage=getattr(message, "usage", None),
+                            structured_output=getattr(message, "structured_output", None),
+                            total_cost_usd=getattr(message, "total_cost_usd", None),
+                            num_turns=getattr(message, "num_turns", 0),
+                            is_error=getattr(message, "is_error", False),
+                            duration_ms=getattr(message, "duration_ms", 0),
+                            duration_api_ms=getattr(message, "duration_api_ms", 0),
+                        )
                 yield (message, session_id)
                 done_emitted = True
                 await _close_sdk_message_iter(message_iter)
@@ -355,6 +382,7 @@ async def _iterate_sdk_messages(
             if _message_has_tool_use(message):
                 pending_tool_calls += 1
             if _message_has_tool_result(message):
+                saw_tool_result = True
                 pending_tool_calls = max(0, pending_tool_calls - 1)
             yield (message, session_id)
     finally:

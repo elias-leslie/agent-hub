@@ -31,7 +31,7 @@ async def handle_add_episode(
     request: AddEpisodeRequest,
     memory: MemoryService,
 ) -> AddEpisodeResponse:
-    """Add an episode to the knowledge graph memory."""
+    """Add an episode to semantic memory."""
     from datetime import UTC, datetime
 
     from app.services.memory.ingestion_config import LEARNING

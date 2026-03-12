@@ -92,11 +92,56 @@ async def test_stream_sdk_messages_synthesizes_result_when_stream_ends_without_o
 
     seen = []
     async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
-        seen.append((type(message).__name__, session_id))
+        seen.append((type(message).__name__, session_id, getattr(message, "finish_reason", None)))
 
     iterator = iterator_holder["iterator"]
-    assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
+    assert seen == [("SimpleNamespace", None, None), ("ResultMessage", None, "end_turn")]
     assert iterator.closed is True
+
+
+@pytest.mark.asyncio
+async def test_stream_sdk_messages_synthesizes_max_turns_after_tool_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                tool_use = types.SimpleNamespace(
+                    type="tool_use",
+                    id="tool-1",
+                    name="Bash",
+                    input={"command": "printf 'STEP 1\\n'"},
+                )
+                return types.SimpleNamespace(content=[tool_use], subtype=None)
+            if self._step == 1:
+                self._step += 1
+                tool_result = types.SimpleNamespace(
+                    type="tool_result",
+                    tool_use_id="tool-1",
+                    content="STEP 1\n",
+                    is_error=False,
+                )
+                return types.SimpleNamespace(content=[tool_result], subtype=None)
+            raise StopAsyncIteration
+
+    def fake_query(*, prompt, options):
+        return ClosingIterator()
+
+    fake_sdk = types.SimpleNamespace(query=fake_query)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+    seen = []
+    async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
+        seen.append((type(message).__name__, session_id, getattr(message, "finish_reason", None)))
+
+    assert seen[-1] == ("ResultMessage", None, "max_turns")
 
 
 @pytest.mark.asyncio
@@ -137,6 +182,54 @@ async def test_stream_sdk_messages_allows_slow_post_tool_progress_without_synthe
         seen.append((type(message).__name__, session_id))
 
     assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
+
+
+@pytest.mark.asyncio
+async def test_stream_sdk_messages_marks_empty_result_after_tool_result_as_max_turns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self._step = 0
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            if self._step == 0:
+                self._step += 1
+                tool_use = types.SimpleNamespace(
+                    type="tool_use",
+                    id="tool-1",
+                    name="Bash",
+                    input={"command": "printf 'STEP 1\\n'"},
+                )
+                return types.SimpleNamespace(content=[tool_use], subtype=None)
+            if self._step == 1:
+                self._step += 1
+                tool_result = types.SimpleNamespace(
+                    type="tool_result",
+                    tool_use_id="tool-1",
+                    content="STEP 1\n",
+                    is_error=False,
+                )
+                return types.SimpleNamespace(content=[tool_result], subtype=None)
+            if self._step == 2:
+                self._step += 1
+                return ResultMessage()
+            raise StopAsyncIteration
+
+    def fake_query(*, prompt, options):
+        return ClosingIterator()
+
+    fake_sdk = types.SimpleNamespace(query=fake_query)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+    seen = []
+    async for message, session_id in _stream_sdk_messages("prompt", object(), "claude"):
+        seen.append((type(message).__name__, session_id, getattr(message, "finish_reason", None)))
+
+    assert seen[-1] == ("ResultMessage", None, "max_turns")
 
 
 @pytest.mark.asyncio

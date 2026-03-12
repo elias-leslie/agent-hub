@@ -21,6 +21,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     )
     result = SimpleNamespace(
         content="done",
+        provider="claude",
         input_tokens=11,
         output_tokens=13,
         thinking_content=None,
@@ -39,6 +40,10 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
 
     with (
         patch("app.api.complete.handler_helpers.save_events", new_callable=AsyncMock) as mock_save_events,
+        patch(
+            "app.api.complete.handler_helpers.persist_execution_observability",
+            new_callable=AsyncMock,
+        ) as mock_observability,
         patch("app.api.complete.handler_helpers.estimate_cost", return_value=MagicMock(total_cost_usd=0.0)) as mock_cost,
         patch("app.api.complete.handler_helpers.log_token_usage", new_callable=AsyncMock) as mock_log_tokens,
         patch("app.api.complete.handler_helpers.publish_complete", new_callable=AsyncMock),
@@ -56,6 +61,9 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
         )
 
     assert mock_save_events.await_args.args[6] == "claude-haiku-4-5"
+    assert mock_observability.await_args.kwargs["orchestration_path"] == "single_turn"
+    assert mock_observability.await_args.kwargs["requested_max_turns"] == 1
+    assert mock_observability.await_args.kwargs["provider"] == "claude"
     assert mock_cost.call_args.args[2] == "claude-haiku-4-5"
     assert mock_log_tokens.await_args.args[2] == "claude-haiku-4-5"
     assert session.model == "claude-haiku-4-5"

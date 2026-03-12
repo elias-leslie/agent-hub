@@ -11,6 +11,7 @@ from app.services.events import publish_complete
 from app.services.session_live_activity import mark_session_completed
 from app.services.token_counter import estimate_cost
 
+from .execution_observability import persist_execution_observability
 from .session_manager import apply_execution_metadata, update_provider_metadata
 
 if TYPE_CHECKING:
@@ -27,6 +28,7 @@ async def finalize_completion_result(
     session_id: str,
     requested_model: str,
     effective_model: str,
+    provider: str,
     total_input_tokens: int,
     total_output_tokens: int,
     is_new_session: bool,
@@ -34,6 +36,10 @@ async def finalize_completion_result(
     project_id: str | None = None,
     fallback_used: bool = False,
     fallback_reason: str | None = None,
+    requested_max_turns: int = 1,
+    orchestration_path: str = "single_turn",
+    execution_status: str | None = None,
+    execution_error: str | None = None,
 ) -> None:
     """Finalize completion result with token logging and session status.
 
@@ -56,6 +62,20 @@ async def finalize_completion_result(
         effective_model=effective_model,
         fallback_used=fallback_used,
         fallback_reason=fallback_reason,
+    )
+    await persist_execution_observability(
+        db,
+        session,
+        session_id,
+        provider=provider,
+        model_used=effective_model,
+        requested_max_turns=requested_max_turns,
+        orchestration_path=orchestration_path,
+        final_finish_reason=getattr(final_result, "finish_reason", None),
+        execution_status=execution_status,
+        execution_error=execution_error,
+        turns_completed=getattr(final_result, "turns", None),
+        tool_calls_count=getattr(final_result, "tool_calls_count", 0) or 0,
     )
 
     cost = estimate_cost(total_input_tokens, total_output_tokens, effective_model)

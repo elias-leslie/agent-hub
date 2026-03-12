@@ -50,6 +50,7 @@ def _build_success_result(
     thinking_tokens: int | None,
     turn: int,
     tool_calls_count: int,
+    finish_reason: str | None,
     progress_log: list[Any] | None,
     fallback_used: bool,
     fallback_reason: str | None,
@@ -61,7 +62,7 @@ def _build_success_result(
         provider=provider,
         input_tokens=0,
         output_tokens=estimated_output_tokens,
-        finish_reason="end_turn",
+        finish_reason=finish_reason,
         session_id=session_id,
         memory_uuids=loaded_memory_uuids,
         cited_uuids=cited_uuids,
@@ -93,6 +94,7 @@ async def finalize_result(
     thinking_tokens: int | None = None,
     turn: int = 1,
     tool_calls_count: int = 0,
+    finish_reason: str | None = "end_turn",
     progress_log: list[Any] | None = None,
     fallback_used: bool = False,
     fallback_reason: str | None = None,
@@ -114,7 +116,7 @@ async def finalize_result(
     return _build_success_result(
         content, model, provider, session_id, loaded_memory_uuids,
         cited_uuids, estimated_output_tokens, thinking_content,
-        thinking_tokens, turn, tool_calls_count, progress_log,
+        thinking_tokens, turn, tool_calls_count, finish_reason, progress_log,
         fallback_used, fallback_reason,
     )
 

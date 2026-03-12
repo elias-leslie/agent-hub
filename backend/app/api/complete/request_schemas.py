@@ -133,7 +133,7 @@ class CompletionRequest(BaseModel):
     )
     use_memory: bool = Field(
         default=True,
-        description="Inject relevant context from knowledge graph memory",
+        description="Inject relevant context from semantic memory",
     )
     memory_group_id: str | None = Field(
         default=None,

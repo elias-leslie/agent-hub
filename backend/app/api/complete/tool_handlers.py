@@ -211,7 +211,7 @@ async def _complete_with_tools(
         return await finalize_response(
             db, session, session_id, is_new_session, model, provider,
             state.content_parts, state.thinking_parts, loaded_memory_uuids,
-            memory_group_id, state.turn, state.tool_calls_count, tracker,
+            memory_group_id, state.turn, state.tool_calls_count, state.terminal_finish_reason, tracker,
             adapter=adapter,
             base_messages=state.messages_for_adapter,
             temperature=temperature,

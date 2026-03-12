@@ -47,3 +47,4 @@ class ToolEvent:
     result: str = ""
     error: str = ""
     duration_ms: int | None = None
+    finish_reason: str | None = None

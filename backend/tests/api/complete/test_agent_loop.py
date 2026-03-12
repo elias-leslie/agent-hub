@@ -17,7 +17,16 @@ def _request(**overrides) -> AgentLoopRequest:
         model="codex/gpt-5.4",
         temperature=0.0,
         db=AsyncMock(),
-        session=SimpleNamespace(),
+        session=SimpleNamespace(
+            provider="codex",
+            model="codex/gpt-5.4",
+            models_used=[],
+            providers_used=[],
+            provider_metadata={},
+            agent_slug="refactor",
+            client_id=None,
+            request_source=None,
+        ),
         session_id="sess-1",
         is_new_session=True,
         loaded_memory_uuids=[],
@@ -61,11 +70,16 @@ async def test_execute_agent_loop_routes_tools_with_resolved_turn_budget() -> No
     with patch(
         "app.api.complete.agent_loop.route_tool_execution",
         new=AsyncMock(return_value=tool_result),
-    ) as mock_route:
+    ) as mock_route, patch(
+        "app.api.complete.agent_loop.persist_execution_observability",
+        new=AsyncMock(),
+    ) as mock_observability:
         result = await execute_agent_loop(_request(), should_execute_tools=True)
 
     assert isinstance(result, CompletionInternalResult)
     assert mock_route.await_args.kwargs["max_turns"] == 20
+    assert mock_observability.await_args.kwargs["orchestration_path"] == "tool_loop"
+    assert mock_observability.await_args.kwargs["requested_max_turns"] == 1
 
 
 @pytest.mark.asyncio
@@ -124,3 +138,6 @@ async def test_execute_agent_loop_finalizes_multi_turn_results() -> None:
     assert isinstance(result, CompletionInternalResult)
     mock_finalize.assert_awaited_once()
     assert mock_finalize.await_args.args[4] == "codex/gpt-5.4"
+    assert mock_finalize.await_args.args[5] == "codex"
+    assert mock_finalize.await_args.kwargs["requested_max_turns"] == 1
+    assert mock_finalize.await_args.kwargs["orchestration_path"] == "multi_turn"

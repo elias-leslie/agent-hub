@@ -24,6 +24,10 @@ async def test_finalize_completion_result_tracks_effective_model_and_fallback_re
     )
 
     with (
+        patch(
+            "app.api.complete.result_finalizer.persist_execution_observability",
+            new_callable=AsyncMock,
+        ) as mock_observability,
         patch("app.api.complete.result_finalizer.log_token_usage", new_callable=AsyncMock) as mock_log_tokens,
         patch("app.api.complete.result_finalizer.publish_complete", new_callable=AsyncMock),
         patch("app.api.complete.result_finalizer.estimate_cost", return_value=MagicMock(total_cost_usd=0.0)),
@@ -34,6 +38,7 @@ async def test_finalize_completion_result_tracks_effective_model_and_fallback_re
             session_id="sess-1",
             requested_model="claude-sonnet-4-6",
             effective_model="codex/gpt-5.4",
+            provider="codex",
             total_input_tokens=10,
             total_output_tokens=20,
             is_new_session=True,
@@ -49,4 +54,6 @@ async def test_finalize_completion_result_tracks_effective_model_and_fallback_re
     assert session.provider_metadata["effective_model"] == "codex/gpt-5.4"
     assert session.provider_metadata["fallback_used"] is True
     assert session.provider_metadata["fallback_reason"] == "TimeoutError: claude primary timed out"
+    assert mock_observability.await_args.kwargs["orchestration_path"] == "single_turn"
+    assert mock_observability.await_args.kwargs["provider"] == "codex"
     assert mock_log_tokens.await_args.args[2] == "codex/gpt-5.4"
