@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.services.persona_document_prompt_service import (
     clear_persona_user_context_document,
+    migrate_legacy_user_context_to_profile,
     set_persona_personality_document,
     set_persona_user_context_document,
 )
@@ -36,6 +37,14 @@ router = APIRouter(prefix="/persona", tags=["persona"])
 async def get_persona(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
     """Get the full persona configuration."""
     persona = await get_or_create_persona(db)
+    if await migrate_legacy_user_context_to_profile(
+        db,
+        persona,
+        changed_by="api",
+        change_reason="Normalize legacy persona user context into structured profile",
+    ):
+        persona.version += 1
+        await commit_and_refresh(db, persona)
     return await persona_to_response(db, persona)
 
 
