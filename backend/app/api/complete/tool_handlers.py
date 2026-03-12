@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.models import Session as DBSession
 from app.services.session_health import health_detail_for_error, update_session_health
+from app.services.session_live_activity import mark_session_terminal_state
 
 from .tool_event_storage import store_assistant_response, store_user_messages
 from .tool_handler_utils import _ExecutionState, _init_execution_state, _run_tool_loop
@@ -25,6 +26,29 @@ if TYPE_CHECKING:
     from .schemas import MessageInput
 
 logger = logging.getLogger(__name__)
+
+
+async def _store_partial_response_best_effort(
+    db: AsyncSession,
+    session_id: str,
+    session: DBSession,
+    state: _ExecutionState,
+    model: str,
+    error_detail: str | None = None,
+) -> None:
+    """Attempt to persist partial output even when the surrounding task is cancelling."""
+    try:
+        await _store_partial_response(
+            db,
+            session_id,
+            session,
+            state,
+            model,
+            error_detail=error_detail,
+        )
+    except asyncio.CancelledError:
+        logger.warning("Partial response storage cancelled for session %s", session_id)
+        await _rollback_after_cancellation(db)
 
 
 async def _store_partial_response(
@@ -53,15 +77,31 @@ async def _store_partial_response(
                 content = "Session interrupted before response"
         estimated_tokens = len(content) // 4
         session.status = "completed"
+        session.health_detail = "completed"
         await store_assistant_response(
             db, session_id, content, model, estimated_tokens,
             agent_id=state.agent_slug,
+        )
+        mark_session_terminal_state(
+            session,
+            phase="completed",
+            status="completed",
+            summary="Execution interrupted",
+            termination_reason=error_detail,
         )
         await db.commit()
     except Exception:
         logger.warning("Failed to store partial response for session %s", session_id)
         try:
             session.status = "completed"
+            session.health_detail = "completed"
+            mark_session_terminal_state(
+                session,
+                phase="completed",
+                status="completed",
+                summary="Execution interrupted",
+                termination_reason=error_detail,
+            )
             await db.commit()
         except Exception:
             pass
@@ -105,9 +145,17 @@ async def _execute_and_handle_errors(
         return None
     except asyncio.CancelledError as e:
         logger.exception("%s complete_with_tools cancelled: %s", provider, e)
-        await _rollback_after_cancellation(db)
+        error_detail = str(e) or "Completion cancelled unexpectedly."
+        await _store_partial_response_best_effort(
+            db,
+            session_id,
+            session,
+            state,
+            model,
+            error_detail=error_detail,
+        )
         return build_error_result(
-            Exception(str(e) or "Completion cancelled unexpectedly."),
+            Exception(error_detail),
             model,
             provider,
             session_id,
@@ -175,9 +223,17 @@ async def _complete_with_tools(
         )
     except asyncio.CancelledError as e:
         logger.exception("%s finalize_response cancelled: %s", provider, e)
-        await _rollback_after_cancellation(db)
+        error_detail = str(e) or "Completion cancelled unexpectedly."
+        await _store_partial_response_best_effort(
+            db,
+            session_id,
+            session,
+            state,
+            model,
+            error_detail=error_detail,
+        )
         return build_error_result(
-            Exception(str(e) or "Completion cancelled unexpectedly."),
+            Exception(error_detail),
             model,
             provider,
             session_id,
