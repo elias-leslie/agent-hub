@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,6 +13,8 @@ from .memory_schemas import (
     TriggeredReferenceItem,
     TriggeredReferencesResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -41,6 +44,7 @@ async def get_triggered_references_endpoint(
             count=len(refs),
         )
     except Exception as e:
+        logger.exception("Failed to get triggered references for task_type=%s", task_type)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get triggered references: {e}",
@@ -70,6 +74,7 @@ async def get_phase_triggered_references_endpoint(
             count=len(refs),
         )
     except Exception as e:
+        logger.exception("Failed to get phase triggered references for phase=%s", phase)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get phase triggered references: {e}",

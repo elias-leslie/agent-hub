@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,8 @@ from app.services.memory.observation_schema import ObservationRequest, Observati
 from app.services.memory.service import MemoryScope
 
 from .memory_dependencies import get_scope_params
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -33,6 +36,7 @@ async def capture_observation_endpoint(
     try:
         return await capture_observation(request, scope, scope_id)
     except Exception as e:
+        logger.exception("Failed to capture observation")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to capture observation: {e}",

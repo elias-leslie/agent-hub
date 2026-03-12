@@ -1,5 +1,6 @@
 """Memory bulk operations endpoints."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -22,6 +23,8 @@ from .memory_schemas import (
     EpisodeDetailResponse,
     OrphanedCleanupResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,6 +52,7 @@ async def bulk_delete_episodes(
             errors=[BulkDeleteError(**e) for e in all_errors],
         )
     except Exception as e:
+        logger.exception("Bulk delete failed")
         raise HTTPException(status_code=500, detail=f"Bulk delete failed: {e}") from e
 
 
@@ -72,6 +76,7 @@ async def batch_get_episodes(
         missing = unresolved + [uuid for uuid in resolved_uuids if uuid not in results]
         return BatchGetResponse(episodes=episodes, found=len(episodes), missing=missing)
     except Exception as e:
+        logger.exception("Batch get failed")
         raise HTTPException(status_code=500, detail=f"Batch get failed: {e}") from e
 
 
@@ -117,6 +122,7 @@ async def cleanup_stale_memories(
         result = await memory.cleanup_stale_memories(ttl_days=ttl_days)
         return CleanupResponse(**result)
     except Exception as e:
+        logger.exception("Memory cleanup failed")
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {e}") from e
 
 
@@ -131,4 +137,5 @@ async def cleanup_orphaned_edges() -> OrphanedCleanupResponse:
         result = await memory.cleanup_orphaned_edges()
         return OrphanedCleanupResponse(**result)
     except Exception as e:
+        logger.exception("Orphaned edge cleanup failed")
         raise HTTPException(status_code=500, detail=f"Orphaned cleanup failed: {e}") from e

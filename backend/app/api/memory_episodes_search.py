@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
@@ -11,6 +12,8 @@ from app.services.memory.service import MemoryCategory, MemoryListResult
 
 if TYPE_CHECKING:
     from .memory_schemas import SearchResponse
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_search_memory(
@@ -35,6 +38,7 @@ async def handle_search_memory(
             count=len(results),
         )
     except Exception as e:
+        logger.exception("Memory search failed for query: %s", query[:100])
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
 
 
@@ -59,6 +63,7 @@ async def handle_text_search_memory(
             has_more=False,
         )
     except Exception as e:
+        logger.exception("Text search failed for query: %s", query[:100])
         raise HTTPException(status_code=500, detail=f"Text search failed: {e}") from e
 
 
@@ -97,4 +102,5 @@ async def handle_get_similar_episodes(
             "total": len(similar),
         }
     except Exception as e:
+        logger.exception("Failed to find similar episodes for %s", full_uuid)
         raise HTTPException(status_code=500, detail=f"Failed to find similar episodes: {e}") from e
