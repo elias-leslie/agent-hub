@@ -201,3 +201,49 @@ async def test_finalize_response_preserves_substantive_content(mocker) -> None:
     adapter.complete.assert_not_awaited()
     assert mock_store.await_args.args[2] == "Verified queue state and overlap risk."
     assert mock_finalize.await_args.kwargs["content"] == "Verified queue state and overlap risk."
+
+
+@pytest.mark.asyncio
+async def test_finalize_response_prefers_progress_turns_for_reported_turn_count(mocker) -> None:
+    mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    tracker = _tracker()
+    tracker.log.extend(
+        [
+            SimpleNamespace(turn=1, status="tool_use", message="Using tool: Bash"),
+            SimpleNamespace(turn=2, status="tool_use", message="Using tool: Bash"),
+            SimpleNamespace(turn=4, status="tool_use", message="Using tool: Bash"),
+        ]
+    )
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="debugger"),
+        session_id="sess-5",
+        is_new_session=True,
+        model="claude-sonnet-4-6",
+        provider="claude",
+        content_parts=["Verified queue state and overlap risk."],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=8,
+        tool_calls_count=3,
+        finish_reason="max_turns",
+        tracker=tracker,
+        adapter=SimpleNamespace(complete=AsyncMock()),
+        base_messages=[Message(role="user", content="Do a minimal coordination check.")],
+        temperature=0.0,
+        working_dir=None,
+        tool_result_summaries=["Bash: OVERLAPS[0]"],
+    )
+
+    tracker.report_complete.assert_awaited_once_with(4, 3)
+    assert mock_finalize.await_args.kwargs["turn"] == 4

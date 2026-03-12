@@ -33,6 +33,7 @@ class _ExecutionState:
     tool_calls_count: int = 0
     turn: int = 0
     event_turn: int = 0
+    awaiting_tool_results: bool = False
     terminal_finish_reason: str | None = None
 
 
@@ -94,8 +95,14 @@ async def _run_tool_loop(
 
     try:
         async for event, _session_id in event_stream:
-            state.event_turn, tools_delta, error_message, state.turn = await process_tool_event(
-                event, state.event_turn, state.turn, session_id, db, state.content_parts,
+            (
+                state.event_turn,
+                tools_delta,
+                error_message,
+                state.turn,
+                state.awaiting_tool_results,
+            ) = await process_tool_event(
+                event, state.event_turn, state.turn, state.awaiting_tool_results, session_id, db, state.content_parts,
                 state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
                 tool_use_id_to_name=tool_use_id_to_name,
                 tool_result_summaries=state.tool_result_summaries,

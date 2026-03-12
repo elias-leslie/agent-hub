@@ -74,6 +74,33 @@ def _convert_result_message(msg: Any) -> list[ToolEvent]:
     return [ToolEvent(type="result", result="", finish_reason=finish_reason)]
 
 
+def _convert_top_level_assistant_block(msg: Any) -> ToolContentBlock | None:
+    """Convert a top-level Claude thinking/tool_use block into assistant content."""
+    if is_thinking_block(msg):
+        thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
+        if thinking_text:
+            return ToolContentBlock(type="thinking", text=thinking_text)
+        return None
+
+    if is_tool_use_block(msg):
+        tool_id = getattr(msg, "id", "")
+        if tool_id:
+            _tool_start_times[tool_id] = time.monotonic()
+        return ToolContentBlock(
+            type="tool_use",
+            name=getattr(msg, "name", "unknown"),
+            input=getattr(msg, "input", {}),
+            id=tool_id,
+        )
+
+    return None
+
+
+def _assistant_event(blocks: list[ToolContentBlock]) -> ToolEvent:
+    """Build a normalized assistant ToolEvent from buffered content blocks."""
+    return ToolEvent(type="assistant", message=ToolMessage(content=list(blocks)))
+
+
 def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     """Convert a single Claude SDK message into a list of ToolEvents.
 
@@ -86,34 +113,9 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     """
     from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
-    # Top-level thinking block (not inside AssistantMessage)
-    if is_thinking_block(msg):
-        thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
-        if thinking_text:
-            return [ToolEvent(
-                type="assistant",
-                message=ToolMessage(content=[
-                    ToolContentBlock(type="thinking", text=thinking_text),
-                ]),
-            )]
-        return []
-
-    # Top-level tool use block
-    if is_tool_use_block(msg):
-        tool_id = getattr(msg, "id", "")
-        if tool_id:
-            _tool_start_times[tool_id] = time.monotonic()
-        return [ToolEvent(
-            type="assistant",
-            message=ToolMessage(content=[
-                ToolContentBlock(
-                    type="tool_use",
-                    name=getattr(msg, "name", "unknown"),
-                    input=getattr(msg, "input", {}),
-                    id=tool_id,
-                ),
-            ]),
-        )]
+    top_level_block = _convert_top_level_assistant_block(msg)
+    if top_level_block is not None:
+        return [_assistant_event([top_level_block])]
 
     if isinstance(msg, AssistantMessage):
         return _convert_assistant_message(msg)
@@ -142,12 +144,42 @@ async def adapt_claude_stream(
         (ToolEvent, session_id) tuples
     """
     last_session_id = ""
+    pending_assistant_blocks: list[ToolContentBlock] = []
+
+    def _flush_pending() -> list[tuple[ToolEvent, str]]:
+        if not pending_assistant_blocks:
+            return []
+        event = _assistant_event(pending_assistant_blocks)
+        pending_assistant_blocks.clear()
+        return [(event, last_session_id)]
+
     try:
         async for msg, session_id in stream:
             last_session_id = session_id or last_session_id
-            for event in adapt_claude_message(msg):
+            pending_block = _convert_top_level_assistant_block(msg)
+            if pending_block is not None:
+                pending_assistant_blocks.append(pending_block)
+                continue
+
+            events = adapt_claude_message(msg)
+            if pending_assistant_blocks:
+                if events and events[0].type == "assistant" and events[0].message is not None:
+                    events[0].message.content = [*pending_assistant_blocks, *events[0].message.content]
+                    pending_assistant_blocks.clear()
+                else:
+                    for pending_event in _flush_pending():
+                        yield pending_event
+
+            for event in events:
                 yield event, session_id
+
+        for pending_event in _flush_pending():
+            yield pending_event
     except ProviderError as exc:
+        for pending_event in _flush_pending():
+            yield pending_event
         yield ToolEvent(type="error", error=str(exc)), last_session_id
     except Exception as exc:
+        for pending_event in _flush_pending():
+            yield pending_event
         yield ToolEvent(type="error", error=str(exc)), last_session_id
