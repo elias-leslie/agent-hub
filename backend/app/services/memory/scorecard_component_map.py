@@ -83,6 +83,12 @@ COMPONENTS: dict[str, ComponentInfo] = {
         project="summitflow",
         description="Task views, explorer, kanban, health panels",
     ),
+    "sf.search": ComponentInfo(
+        id="sf.search",
+        name="Precision Code Search",
+        project="summitflow",
+        description="st search, symbol/text/endpoint search, explorer index",
+    ),
     "sf.scripts": ComponentInfo(
         id="sf.scripts",
         name="Infrastructure Scripts",
@@ -206,6 +212,7 @@ TOOL_TO_COMPONENT: dict[str, str] = {
     "st abandon": "sf.cli",
     "st autocode": "sf.workflows",
     "st memory": "sf.cli.memory",
+    "st search": "sf.search",
     "st complete": "ah.completion",
     # Infrastructure
     "restart.sh": "sf.scripts",
