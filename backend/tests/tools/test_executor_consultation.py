@@ -1,4 +1,4 @@
-"""Tests for executor consultation observability helpers."""
+"""Tests for executor consultation observability and dispatch helpers."""
 
 from __future__ import annotations
 
@@ -9,7 +9,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.tools._executor_consultation import inspect_session, query_sessions
+from app.services.ownership_inventory import ActiveSpecialistSession, OwnershipOwner
+from app.services.tools._executor_consultation import (
+    _parse_specialist_dispatch_request,
+    _project_dispatch_overlap_block_reason,
+    inspect_session,
+    query_sessions,
+)
 
 
 @pytest.mark.asyncio
@@ -175,3 +181,70 @@ async def test_inspect_session_not_found() -> None:
         result = await inspect_session("missing")
 
     assert "session 'missing' not found" in result
+
+
+def test_parse_specialist_dispatch_request_reads_mode_and_task_id() -> None:
+    parsed = _parse_specialist_dispatch_request(
+        "Mode: task\nTask-ID: task-12345678\nTask: Refactor the overlap guard."
+    )
+
+    assert parsed.mode == "task"
+    assert parsed.task_id == "task-12345678"
+
+
+@pytest.mark.asyncio
+async def test_project_dispatch_overlap_block_reason_blocks_missing_scope_specialist() -> None:
+    block = await _project_dispatch_overlap_block_reason(
+        project_id="agent-hub",
+        agent_slug="debugger",
+        mode="campaign",
+        task_id=None,
+        owners=[],
+        specialists=[
+            ActiveSpecialistSession(
+                session_id="sess-1",
+                agent_slug="reviewer",
+                project_id="agent-hub",
+                parent_session_id=None,
+                request_source="persona_wake:dispatch",
+                created_at=datetime.now(UTC),
+                age_minutes=2,
+            )
+        ],
+    )
+
+    assert "missing scope evidence" in block
+    assert "reviewer" in block
+
+
+@pytest.mark.asyncio
+async def test_project_dispatch_overlap_block_reason_blocks_shared_plumbing_owner() -> None:
+    block = await _project_dispatch_overlap_block_reason(
+        project_id="agent-hub",
+        agent_slug="debugger",
+        mode="task",
+        task_id="task-12345678",
+        owners=[
+            OwnershipOwner(
+                task_id="task-deadbeef",
+                session_id="sess-owner",
+                agent_slug="coder",
+                branch="task-deadbeef/main",
+                worktree_path="/tmp/worktrees/task-deadbeef",
+                is_worktree=True,
+                session_status="active",
+                workstream_status=None,
+                workstream_note=None,
+                ownership_kind="scoped",
+                scope_paths=["backend/alembic/versions/123_add_mode.py"],
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                age_minutes=1,
+                is_stale=False,
+            )
+        ],
+        specialists=[],
+    )
+
+    assert "shared-plumbing" in block
+    assert "backend/alembic/versions/123_add_mode.py" in block

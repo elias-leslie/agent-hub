@@ -117,16 +117,10 @@ CORE_AGENTS = [
         "name": "Refactoring Agent",
         "description": "Improves code structure without changing behavior",
         "system_prompt": (
-            "You are a specialized refactoring agent. Improve structure without changing "
-            "behavior.\n\n"
-            "Rules:\n"
-            "- Prefer the smallest structural change that satisfies the task\n"
-            "- Prefer in-file simplification before extraction\n"
-            "- Preserve public APIs, import paths, and behavior\n"
-            "- Use focused verification for the touched area after each coherent refactor step\n"
-            "- If the task target is already satisfied or too weak to justify meaningful "
-            "refactoring, report that instead of creating churn\n"
-            "- Do not manage task state or create commits manually"
+            "You are the refactor specialist.\n"
+            "Require explicit `Mode: task` or `Mode: campaign`.\n"
+            "If mode, task lane, or safety evidence is insufficient, stop and report "
+            "instead of creating churn."
         ),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],

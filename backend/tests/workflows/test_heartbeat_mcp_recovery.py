@@ -87,6 +87,8 @@ class TestDispatchAgentFireAndForget:
             thinking_level="medium",
             max_turns=25,
             parent_session_id=None,
+            current_branch=None,
+            working_dir=None,
         )
         assert "Dispatched git-agent" in result
         assert "heartbeat" in result
@@ -114,13 +116,13 @@ class TestDispatchAgentFireAndForget:
 
             await dispatch_agent(
                 "summitflow",
-                "debugger",
+                "git-agent",
                 "Advance the stale task recovery flow.",
                 parent_session_id="parent-session-123",
             )
 
         mock_wake.assert_called_once_with(
-            agent_slug="debugger",
+            agent_slug="git-agent",
             model="codex/gpt-5.4",
             provider="codex",
             temperature=0.2,
@@ -130,6 +132,8 @@ class TestDispatchAgentFireAndForget:
             thinking_level="high",
             max_turns=25,
             parent_session_id="parent-session-123",
+            current_branch=None,
+            working_dir=None,
         )
 
     @pytest.mark.asyncio
@@ -169,6 +173,88 @@ class TestDispatchAgentFireAndForget:
         result = await dispatch_agent(None, "git-agent", "Fix the bug")
         assert "error" in result.lower()
         assert "project_id" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_requires_explicit_mode_for_specialists(self):
+        mock_db = AsyncMock()
+        mock_resolved = MagicMock()
+        mock_resolved.model = "claude-sonnet-4-5"
+        mock_resolved.provider = "claude"
+        mock_resolved.agent.temperature = 0.3
+        mock_resolved.agent.thinking_level = "medium"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            result = await dispatch_agent(
+                "agent-hub",
+                "refactor",
+                "Refactor the overlap guard.",
+            )
+
+        assert "Mode: task" in result
+        assert "Mode: campaign" in result
+        mock_wake.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_for_task_mode_forwards_lane_metadata(self):
+        mock_db = AsyncMock()
+        mock_resolved = MagicMock()
+        mock_resolved.model = "codex/gpt-5.4"
+        mock_resolved.provider = "codex"
+        mock_resolved.agent.temperature = 0.2
+        mock_resolved.agent.thinking_level = "high"
+
+        fake_plan = MagicMock()
+        fake_plan.event_type = "dispatch_task"
+        fake_plan.current_branch = "task-12345678/main"
+        fake_plan.working_dir = "/tmp/worktrees/task-12345678"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
+            patch(
+                "app.services.tools._executor_consultation._prepare_specialist_dispatch",
+                new_callable=AsyncMock,
+                return_value=fake_plan,
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            await dispatch_agent(
+                "agent-hub",
+                "debugger",
+                "Mode: task\nTask-ID: task-12345678\nTask: Debug the overlap gate.",
+                parent_session_id="parent-session-123",
+            )
+
+        mock_wake.assert_called_once_with(
+            agent_slug="debugger",
+            model="codex/gpt-5.4",
+            provider="codex",
+            temperature=0.2,
+            prompt="Mode: task\nTask-ID: task-12345678\nTask: Debug the overlap gate.",
+            project_id="agent-hub",
+            event_type="dispatch_task",
+            thinking_level="high",
+            max_turns=25,
+            parent_session_id="parent-session-123",
+            current_branch="task-12345678/main",
+            working_dir="/tmp/worktrees/task-12345678",
+        )
 
 
 class TestRetryFailedMcpTools:
