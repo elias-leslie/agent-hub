@@ -218,6 +218,30 @@ async def test_project_dispatch_overlap_block_reason_blocks_missing_scope_specia
 
 
 @pytest.mark.asyncio
+async def test_project_dispatch_overlap_block_reason_ignores_persona_heartbeat_session() -> None:
+    block = await _project_dispatch_overlap_block_reason(
+        project_id="agent-hub",
+        agent_slug="refactor",
+        mode="task",
+        task_id="task-141fb0da",
+        owners=[],
+        specialists=[
+            ActiveSpecialistSession(
+                session_id="sess-persona",
+                agent_slug="persona",
+                project_id="agent-hub",
+                parent_session_id=None,
+                request_source="heartbeat",
+                created_at=datetime.now(UTC),
+                age_minutes=1,
+            )
+        ],
+    )
+
+    assert block is None
+
+
+@pytest.mark.asyncio
 async def test_project_dispatch_overlap_block_reason_blocks_shared_plumbing_owner() -> None:
     block = await _project_dispatch_overlap_block_reason(
         project_id="agent-hub",

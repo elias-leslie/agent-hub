@@ -45,6 +45,11 @@ _SHARED_PLUMBING_MARKERS = (
 )
 
 
+def _is_wake_dispatch_specialist_session(session: object) -> bool:
+    request_source = getattr(session, "request_source", None)
+    return isinstance(request_source, str) and request_source.startswith("persona_wake:dispatch")
+
+
 @dataclass(frozen=True)
 class SpecialistDispatchRequest:
     mode: str | None
@@ -164,7 +169,8 @@ async def _project_dispatch_overlap_block_reason(
     relevant_specialists = [
         specialist
         for specialist in specialists
-        if not (
+        if _is_wake_dispatch_specialist_session(specialist)
+        and not (
             mode == "task"
             and getattr(specialist, "agent_slug", None) == agent_slug
             and getattr(specialist, "request_source", None) == "persona_wake:dispatch_campaign"
