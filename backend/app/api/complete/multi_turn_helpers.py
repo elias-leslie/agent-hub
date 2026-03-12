@@ -102,7 +102,7 @@ def init_execution_state(container_id: str | None) -> dict[str, Any]:
         "execution_status": "success",
         "execution_error": None,
         "closeout_audit_used": False,
-        "empty_closeout_used": False,
+        "closeout_recovery_used": False,
     }
 
 
