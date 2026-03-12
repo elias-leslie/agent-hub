@@ -88,6 +88,57 @@ def _mock_async_session(persona: Any):
     return _session, mock_db
 
 
+@pytest.fixture(autouse=True)
+def _mock_prompt_backed_persona_documents():
+    async def _get_personality(db):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        if persona is None:
+            return None
+        return getattr(persona, "personality", None)
+
+    async def _set_personality(db, personality, **_kwargs):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        old_text = (getattr(persona, "personality", "") or "").strip()
+        persona.personality = personality.strip()
+        return len(old_text), len(persona.personality)
+
+    async def _get_user_context(db):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        if persona is None:
+            return None
+        return getattr(persona, "user_context", None)
+
+    async def _set_user_context(db, user_context, **_kwargs):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        old_text = (getattr(persona, "user_context", "") or "").strip()
+        persona.user_context = user_context.strip()
+        return len(old_text), len(persona.user_context)
+
+    with (
+        patch(
+            "app.services.persona_document_prompt_service.get_persona_personality_document",
+            new=_get_personality,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.set_persona_personality_document",
+            new=_set_personality,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.get_persona_user_context_document",
+            new=_get_user_context,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.set_persona_user_context_document",
+            new=_set_user_context,
+        ),
+    ):
+        yield
+
+
 # ---------------------------------------------------------------------------
 # 1. ALL 20 PERSONA TOOLS DISPATCH VIA EXECUTOR
 # ---------------------------------------------------------------------------

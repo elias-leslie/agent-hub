@@ -29,8 +29,44 @@ def assert_prompt_contains_all(prompt: str, substrings: list[str]) -> None:
         assert substring in prompt, f"Expected prompt to contain: {substring!r}"
 
 
-def test_build_wake_prompt_includes_current_st_guidance():
-    prompt = _build_wake_prompt("Investigate the current task branch.")
+@pytest.mark.asyncio
+async def test_build_wake_prompt_includes_current_st_guidance():
+    guidance = "\n".join(
+        [
+            "st ready-all",
+            "st ready --limit N",
+            "st sessions list --status <status> --limit N",
+            "st session-events <session_id>",
+            "st session-events -T task-123 --page-size 100",
+            "Do not add stale flags like `-P`, `--project`, `--human`, or `--compact`",
+            "Do not use `--session` with `st session-events`",
+            "Never pass `st sessions list` output `session_id` values to `st session-events`",
+            "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
+            "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
+            "do not inspect `/home/kasadis/.local/share/st/worktrees/...`",
+            "If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only",
+            "Treat task ids as opaque",
+            "do not strip the `task-` prefix",
+            "Example: `st done <task-id>` has no `--note` flag",
+            "start with the concrete task context, current diff/status, and the files or commands named in the task/prompt",
+            "inspect those first and only widen the search if that targeted path is insufficient",
+            "Prefer `dt -q -d` as the first validation pass from the repo root",
+            "use paths relative to that directory",
+            "For `read_file`, use repo-relative paths or fully expanded absolute paths",
+            "Do not use shell shortcuts like `~` inside `read_file` paths",
+            "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
+            "If `git branch` or snapshot metadata shows a task branch already attached to another worktree",
+            "Do not `git checkout` that branch in the current worktree just to inspect it",
+            "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
+            'When completing a task with a note, use `st done <task-id> --message "..."`',
+            "Avoid exploratory `--help` calls unless a known-good command above still fails.",
+        ]
+    )
+    with patch(
+        "app.services.persona_prompt_service.get_persona_wake_guidance",
+        new=AsyncMock(return_value=guidance),
+    ):
+        prompt = await _build_wake_prompt("Investigate the current task branch.")
 
     assert_prompt_contains_all(
         prompt,
@@ -84,6 +120,10 @@ async def test_agent_wake_stores_summary_for_completed_session():
 
     with (
         patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
         patch(
             "app.services.project_permission_service.get_project_permission",
             new_callable=AsyncMock,
@@ -154,6 +194,10 @@ async def test_agent_wake_forwards_parent_session_id():
     with (
         patch("app.db.async_session", _mock_async_session(mock_db)),
         patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
             "app.services.project_permission_service.get_project_permission",
             new_callable=AsyncMock,
             return_value=mock_perm,
@@ -204,6 +248,10 @@ async def test_agent_wake_skips_replayed_step_run() -> None:
     with (
         patch("app.db.async_session", _mock_async_session(mock_db)),
         patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
             "app.services.project_permission_service.get_project_permission",
             new_callable=AsyncMock,
             return_value=mock_perm,
@@ -247,6 +295,10 @@ async def test_agent_wake_rolls_back_and_closes_on_cancellation() -> None:
 
     with (
         patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
         patch(
             "app.services.project_permission_service.get_project_permission",
             new_callable=AsyncMock,

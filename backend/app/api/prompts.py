@@ -49,10 +49,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/prompts", tags=["prompts"])
 
 
+async def _invalidate_owned_agent_cache(prompt: object | None) -> None:
+    from app.models.prompt import Prompt
+    from app.services.owned_prompt_service import AGENT_SYSTEM_PROMPT_TYPE
+
+    if not isinstance(prompt, Prompt):
+        return
+    owner_agent = prompt.__dict__.get("owner_agent")
+    if prompt.prompt_type != AGENT_SYSTEM_PROMPT_TYPE or owner_agent is None:
+        return
+
+    service = get_agent_service()
+    await service.invalidate_slug(owner_agent.slug)
+
+
 def _prompt_to_response(p: object) -> PromptResponse:
     from app.models.prompt import Prompt
 
     assert isinstance(p, Prompt)
+    owner_agent = p.__dict__.get("owner_agent")
     return PromptResponse(
         id=p.id,
         slug=p.slug,
@@ -62,6 +77,9 @@ def _prompt_to_response(p: object) -> PromptResponse:
         is_global=p.is_global,
         enabled=p.enabled,
         exclude_agents=p.exclude_agents or [],
+        owner_agent_slug=owner_agent.slug if owner_agent else None,
+        prompt_type=p.prompt_type,
+        deletion_locked=bool(p.deletion_locked),
         created_at=p.created_at,
         updated_at=p.updated_at,
     )
@@ -82,6 +100,9 @@ def _revision_to_response(revision: object) -> PromptRevisionResponse:
         is_global=revision.is_global,
         enabled=revision.enabled,
         exclude_agents=revision.exclude_agents or [],
+        owner_agent_id=revision.owner_agent_id,
+        prompt_type=revision.prompt_type,
+        deletion_locked=bool(revision.deletion_locked),
         content_hash=revision.content_hash,
         changed_by=revision.changed_by,
         change_reason=revision.change_reason,
@@ -165,6 +186,7 @@ async def update_prompt_endpoint(
     )
     if not updated:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
+    await _invalidate_owned_agent_cache(updated)
     return _prompt_to_response(updated)
 
 
@@ -203,6 +225,7 @@ async def restore_prompt_revision_endpoint(
     )
     if not restored:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
+    await _invalidate_owned_agent_cache(restored)
     return _prompt_to_response(restored)
 
 
@@ -212,9 +235,16 @@ async def delete_prompt_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> None:
-    deleted = await delete_prompt(db, slug)
+    prompt = await get_prompt_by_slug(db, slug)
+    if prompt is None:
+        raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
+    try:
+        deleted = await delete_prompt(db, slug)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
+    await _invalidate_owned_agent_cache(prompt)
 
 
 # --- Agent prompt assignment endpoints (nested under /prompts/agents) ---

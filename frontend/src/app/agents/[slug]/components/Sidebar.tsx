@@ -5,7 +5,6 @@ import { TabId, Agent } from "../types";
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "general", label: "General", icon: Settings2 },
   { id: "models", label: "Models", icon: Cpu },
-  { id: "prompt", label: "Prompt", icon: FileText },
   { id: "parameters", label: "Parameters", icon: Sliders },
   { id: "permissions", label: "Permissions", icon: Shield },
   { id: "prompts", label: "Prompts", icon: ScrollText },

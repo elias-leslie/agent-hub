@@ -156,7 +156,7 @@ describe("persona settings tabs", () => {
     );
   });
 
-  it("updates heartbeat interval, voice selection, and heartbeat instructions", async () => {
+  it("updates heartbeat interval and voice selection", async () => {
     const onUpdate = vi.fn();
 
     render(<VoiceHeartbeatTab persona={basePersona} onUpdate={onUpdate} autosave={idleAutosave} />);
@@ -166,19 +166,29 @@ describe("persona settings tabs", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Select voice Guy" }));
     expect(mockSetSelectedVoice).toHaveBeenCalledWith("voice-2");
+    expect(screen.getByText("Claude Opus 4.6")).toBeInTheDocument();
+    expect(screen.getByText("Tools: supported")).toBeInTheDocument();
+  });
 
-    const instructions = screen.getByPlaceholderText("Describe what the persona should check during heartbeats...");
-    fireEvent.change(instructions, { target: { value: "Check queues and active sessions" } });
+  it("updates structured user profile fields from identity settings", () => {
+    const onUpdate = vi.fn();
 
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
+    render(
+      <IdentityTab
+        persona={basePersona}
+        onUpdate={onUpdate}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Timezone"), {
+      target: { value: "America/Chicago" },
     });
 
     expect(onUpdate).toHaveBeenCalledWith({
-      heartbeat_instructions: "Check queues and active sessions",
+      user_profile: {
+        timezone: "America/Chicago",
+      },
     });
-    expect(screen.getByText("Claude Opus 4.6")).toBeInTheDocument();
-    expect(screen.getByText("Tools: supported")).toBeInTheDocument();
   });
 
   it("filters voices and previews the selected sample", () => {

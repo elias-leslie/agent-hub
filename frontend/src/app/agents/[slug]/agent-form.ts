@@ -4,7 +4,6 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
   return {
     name: agent.name,
     description: agent.description,
-    system_prompt: agent.system_prompt,
     primary_model_id: agent.primary_model_id,
     fallback_models: agent.fallback_models,
     escalation_model_id: agent.escalation_model_id,
@@ -27,8 +26,8 @@ export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent
   const payload = { ...formData }
 
   if (!payload.name) delete payload.name
-  if (!payload.system_prompt) delete payload.system_prompt
   if (!payload.primary_model_id) delete payload.primary_model_id
+  delete payload.system_prompt
 
   return payload
 }

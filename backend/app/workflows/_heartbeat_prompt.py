@@ -48,6 +48,9 @@ async def _get_persona_timezone() -> str:
     """
     from app.db import async_session
     from app.services._persona_crud import get_persona
+    from app.services.persona_document_prompt_service import (
+        get_persona_user_context_document,
+    )
 
     try:
         async with async_session() as db:
@@ -74,8 +77,9 @@ async def _get_persona_timezone() -> str:
             logger.warning("Invalid timezone in persona.limits: %s", tz_value)
 
     # 2. Best-effort extraction from user_context (IANA format e.g. America/Chicago)
-    if persona.user_context:
-        match = _IANA_TZ_PATTERN.search(persona.user_context)
+    user_context = await get_persona_user_context_document(db)
+    if user_context:
+        match = _IANA_TZ_PATTERN.search(user_context)
         if match and _validate_iana_timezone(match.group(1)):
             return match.group(1)
 

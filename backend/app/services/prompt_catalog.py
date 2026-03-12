@@ -1,5 +1,12 @@
 """Canonical prompt slugs used by runtime workflows and UI."""
 
+
+def build_agent_system_prompt_slug(agent_slug: str) -> str:
+    return f"{agent_slug}-system-prompt"
+
+
+PERSONA_PERSONALITY_PROMPT_SLUG = "persona-personality-document"
+PERSONA_USER_CONTEXT_PROMPT_SLUG = "persona-user-context"
 PLATFORM_CONTEXT_PROMPT_SLUG = "platform-context"
 PERSONA_HEARTBEAT_PROMPT_SLUG = "persona-heartbeat-orchestrator"
 PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG = "persona-heartbeat-instructions"
@@ -24,6 +31,9 @@ __all__ = [
     "PERSONA_ONBOARDING_CONTINUATION_PROMPT_SLUG",
     "PERSONA_ONBOARDING_PENDING_APPROVAL_PROMPT_SLUG",
     "PERSONA_ONBOARDING_REVIEW_PROMPT_SLUG",
+    "PERSONA_PERSONALITY_PROMPT_SLUG",
+    "PERSONA_USER_CONTEXT_PROMPT_SLUG",
     "PERSONA_WAKE_GUIDANCE_PROMPT_SLUG",
     "PLATFORM_CONTEXT_PROMPT_SLUG",
+    "build_agent_system_prompt_slug",
 ]

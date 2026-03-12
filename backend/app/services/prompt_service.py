@@ -38,6 +38,9 @@ async def record_prompt_revision(
         is_global=prompt.is_global,
         enabled=prompt.enabled,
         exclude_agents=list(prompt.exclude_agents or []),
+        owner_agent_id=prompt.owner_agent_id,
+        prompt_type=prompt.prompt_type,
+        deletion_locked=prompt.deletion_locked,
         content_hash=_prompt_content_hash(prompt.content),
         changed_by=changed_by,
         change_reason=change_reason,
@@ -54,7 +57,7 @@ async def get_all_prompts(
     enabled_only: bool = False,
 ) -> list[Prompt]:
     """List prompts with optional global filter."""
-    stmt = select(Prompt).order_by(Prompt.slug)
+    stmt = select(Prompt).options(selectinload(Prompt.owner_agent)).order_by(Prompt.slug)
     if is_global is not None:
         stmt = stmt.where(Prompt.is_global == is_global)
     if enabled_only:
@@ -65,7 +68,11 @@ async def get_all_prompts(
 
 async def get_prompt_by_slug(db: AsyncSession, slug: str) -> Prompt | None:
     """Get a single prompt by slug."""
-    result = await db.execute(select(Prompt).where(Prompt.slug == slug))
+    result = await db.execute(
+        select(Prompt)
+        .options(selectinload(Prompt.owner_agent))
+        .where(Prompt.slug == slug)
+    )
     return result.scalar_one_or_none()
 
 
@@ -79,6 +86,9 @@ async def create_prompt(
     is_global: bool = False,
     enabled: bool = True,
     exclude_agents: list[str] | None = None,
+    owner_agent_id: int | None = None,
+    prompt_type: str = "standard",
+    deletion_locked: bool = False,
     changed_by: str | None = None,
     change_reason: str | None = None,
 ) -> Prompt:
@@ -91,6 +101,9 @@ async def create_prompt(
         is_global=is_global,
         enabled=enabled,
         exclude_agents=exclude_agents or [],
+        owner_agent_id=owner_agent_id,
+        prompt_type=prompt_type,
+        deletion_locked=deletion_locked,
     )
     db.add(prompt)
     await db.flush()
@@ -119,7 +132,15 @@ async def update_prompt(
     if not prompt:
         return None
 
-    allowed_fields = {"name", "content", "description", "is_global", "enabled", "slug", "exclude_agents"}
+    allowed_fields = {
+        "name",
+        "content",
+        "description",
+        "is_global",
+        "enabled",
+        "slug",
+        "exclude_agents",
+    }
     for key, value in kwargs.items():
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
@@ -143,6 +164,8 @@ async def delete_prompt(db: AsyncSession, slug: str) -> bool:
     prompt = await get_prompt_by_slug(db, slug)
     if not prompt:
         return False
+    if prompt.deletion_locked:
+        raise ValueError(f"Prompt '{slug}' is locked and cannot be deleted")
 
     await record_prompt_revision(
         db,
@@ -238,7 +261,7 @@ async def get_agent_prompts(
     """
     stmt = (
         select(AgentPrompt)
-        .options(selectinload(AgentPrompt.prompt))
+        .options(selectinload(AgentPrompt.prompt).selectinload(Prompt.owner_agent))
         .where(AgentPrompt.agent_id == agent_id)
         .order_by(AgentPrompt.priority.asc())
     )

@@ -58,6 +58,30 @@ def _make_persona(**overrides) -> MagicMock:
     return mock
 
 
+@pytest.fixture(autouse=True)
+def _mock_persona_prompt_documents():
+    async def _get_personality(db):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        if persona is None:
+            return None
+        return getattr(persona, "personality", None)
+
+    async def _get_user_context(db):
+        result = await db.execute(object())
+        persona = result.scalar_one_or_none()
+        if persona is None:
+            return None
+        return getattr(persona, "user_context", None)
+
+    with (
+        patch("app.services._persona_context.get_persona_personality_document", new=_get_personality),
+        patch("app.services._persona_context.get_persona_user_context_document", new=_get_user_context),
+        patch("app.services._persona_crud.get_persona_personality_document", new=_get_personality),
+    ):
+        yield
+
+
 
 class TestGetPersona:
     """Tests for get_persona() — singleton fetch."""
@@ -699,7 +723,7 @@ class TestGetOrCreatePersona:
 
             assert isinstance(result, Persona)
             assert result.agent_id == 10
-            db.add.assert_called_once()
+            assert isinstance(db.add.call_args_list[0].args[0], Persona)
             db.commit.assert_awaited_once()
 
     @pytest.mark.asyncio

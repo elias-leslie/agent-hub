@@ -184,7 +184,7 @@ export default function PromptEditPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={handleDelete}
-              disabled={deleteMutation.isPending}
+              disabled={deleteMutation.isPending || prompt.deletion_locked}
               className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
             >
               {deleteMutation.isPending ? (
@@ -192,7 +192,7 @@ export default function PromptEditPage() {
               ) : (
                 <span className="flex items-center gap-2">
                   <Trash2 className="h-4 w-4" />
-                  {confirmDelete ? "Confirm Delete" : "Delete"}
+                  {prompt.deletion_locked ? "Locked" : confirmDelete ? "Confirm Delete" : "Delete"}
                 </span>
               )}
             </button>
@@ -225,6 +225,16 @@ export default function PromptEditPage() {
             <div className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm font-mono text-slate-500 dark:text-slate-400">
               {prompt.slug}
             </div>
+            {prompt.owner_agent_slug && (
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Owned by agent: {prompt.owner_agent_slug}
+              </p>
+            )}
+            {prompt.deletion_locked && (
+              <p className="text-[11px] text-amber-600 dark:text-amber-300">
+                This prompt is locked and cannot be deleted.
+              </p>
+            )}
           </div>
 
           {/* Name */}

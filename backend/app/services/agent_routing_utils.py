@@ -47,6 +47,7 @@ async def inject_agent_mandates(
 ) -> MandateInjection:
     """Build system content with DB-stored prompts + agent's system prompt."""
     sections = []
+    prompt_context = None
     if db and prompt_mode != "none":
         from app.services.prompt_service import build_prompt_context
         prompt_context = await build_prompt_context(
@@ -54,8 +55,7 @@ async def inject_agent_mandates(
         )
         if prompt_context:
             sections.append(prompt_context)
-
-    if agent.system_prompt:
+    elif prompt_mode != "none" and agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
 
     if db and prompt_mode == "full":
@@ -63,6 +63,9 @@ async def inject_agent_mandates(
         persona_context = await get_persona_context_for_agent(db, agent.id, task_type=task_type)
         if persona_context:
             sections.append(f"<persona_context>\n{persona_context}\n</persona_context>")
+
+    if db and prompt_mode != "none" and not prompt_context and agent.system_prompt:
+        sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
 
     if project_id:
         perm_block = await _build_project_permissions_block(project_id, db)

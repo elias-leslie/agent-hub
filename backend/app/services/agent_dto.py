@@ -37,14 +37,14 @@ class AgentDTO:
     updated_at: datetime
 
     @classmethod
-    def from_model(cls, agent: Agent) -> "AgentDTO":
+    def from_model(cls, agent: Agent, *, system_prompt_override: str | None = None) -> "AgentDTO":
         """Create DTO from SQLAlchemy model."""
         return cls(
             id=agent.id,
             slug=agent.slug,
             name=agent.name,
             description=agent.description,
-            system_prompt=agent.system_prompt,
+            system_prompt=system_prompt_override if system_prompt_override is not None else agent.system_prompt,
             primary_model_id=agent.primary_model_id,
             fallback_models=agent.fallback_models or [],
             escalation_model_id=agent.escalation_model_id,

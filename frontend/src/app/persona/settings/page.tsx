@@ -12,14 +12,12 @@ import {
   PERSONA_SETTINGS_TABS,
 } from "./components/PersonaSettingsSidebar";
 import { IdentityTab } from "./components/IdentityTab";
-import { PersonalityTab } from "./components/PersonalityTab";
 import { VoiceHeartbeatTab } from "./components/VoiceHeartbeatTab";
 import { SessionLimitsTab } from "./components/SessionLimitsTab";
 
 // Reuse agent tab components directly
 import { ModelsTab } from "@/app/agents/[slug]/components/ModelsTab";
 import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
-import { PromptTab } from "@/app/agents/[slug]/components/PromptTab";
 import { PromptsTab } from "@/app/agents/[slug]/components/PromptsTab";
 import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
@@ -157,28 +155,17 @@ export default function PersonaSettingsPage() {
                   />
                 </div>
               )}
-              {activeTab === "personality" && (
-                <PersonalityTab
-                  persona={persona}
-                  onUpdate={updatePersonaField}
-                  autosave={personaAutosave}
+              {activeTab === "prompts" && (
+                <PromptsTab
+                  agentSlug="persona"
+                  preview={preview}
+                  previewFetching={previewFetching}
+                  showInlinePreview={showInlinePreview}
+                  setShowInlinePreview={setShowInlinePreview}
+                  previewMode={previewMode}
+                  setPreviewMode={setPreviewMode}
+                  refetchPreview={refetchPreview}
                 />
-              )}
-              {activeTab === "prompt" && (
-                <div className="space-y-8">
-                  <PromptTab
-                    formData={agentFormData}
-                    preview={preview}
-                    previewFetching={previewFetching}
-                    showInlinePreview={showInlinePreview}
-                    setShowInlinePreview={setShowInlinePreview}
-                    previewMode={previewMode}
-                    setPreviewMode={setPreviewMode}
-                    updateField={updateAgentField}
-                    refetchPreview={refetchPreview}
-                  />
-                  <PromptsTab agentSlug="persona" />
-                </div>
               )}
               {activeTab === "voice" && (
                 <VoiceHeartbeatTab

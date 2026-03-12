@@ -13,8 +13,6 @@ HOURS_MAP: dict[str, int] = {
 
 # Fields that receive shrinkage-protection checks on update
 PROTECTED_TEXT_FIELDS: tuple[str, ...] = (
-    "user_context",
-    "personality",
 )
 
 # PERSONA_PROJECTS removed — persona activity now queries all projects

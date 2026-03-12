@@ -319,6 +319,14 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
     with (
         patch("app.services.agent_benchmark_service.async_session", _session),
         patch(
+            "app.services.persona_document_prompt_service.get_persona_personality_document",
+            new=AsyncMock(return_value=persona.personality),
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.get_persona_user_context_document",
+            new=AsyncMock(return_value=persona.user_context),
+        ),
+        patch(
             "app.services.agent_benchmark_service.collect_runtime_prompt_sections",
             new=AsyncMock(
                 return_value=[

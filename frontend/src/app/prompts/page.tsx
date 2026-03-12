@@ -197,12 +197,24 @@ export default function PromptsPage() {
                     {truncate(prompt.description, 80)}
                   </td>
                   <td className="px-4 py-3">
-                    {prompt.is_global && (
-                      <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 inline-flex items-center gap-1">
-                        <Globe className="h-3 w-3" />
-                        Global
-                      </span>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {prompt.is_global && (
+                        <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 inline-flex items-center gap-1">
+                          <Globe className="h-3 w-3" />
+                          Global
+                        </span>
+                      )}
+                      {prompt.owner_agent_slug && (
+                        <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1">
+                          {prompt.owner_agent_slug}
+                        </span>
+                      )}
+                      {prompt.deletion_locked && (
+                        <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 inline-flex items-center gap-1">
+                          Locked
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className={cn(
@@ -220,13 +232,19 @@ export default function PromptsPage() {
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={(e) => handleDelete(e, prompt.slug)}
+                      disabled={prompt.deletion_locked}
                       className={cn(
                         "inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors",
+                        prompt.deletion_locked &&
+                          "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-slate-400",
                         pendingDeleteSlug === prompt.slug
                           ? "bg-red-600 text-white hover:bg-red-700"
                           : "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30",
                       )}
                       title={
+                        prompt.deletion_locked
+                          ? "Locked prompts cannot be deleted"
+                          :
                         pendingDeleteSlug === prompt.slug
                           ? "Click again to confirm"
                           : "Delete prompt"

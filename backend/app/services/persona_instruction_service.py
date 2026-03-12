@@ -2,23 +2,32 @@
 
 from __future__ import annotations
 
-import inspect
-
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.prompt import Prompt
-from app.services.prompt_catalog import PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG
-from app.services.prompt_service import get_prompt_by_slug, record_prompt_revision
+from app.models.agent import Agent
+from app.services.owned_prompt_service import sync_persona_document_prompts
+from app.services.prompt_catalog import (
+    PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
+    PERSONA_PERSONALITY_PROMPT_SLUG,
+    PERSONA_USER_CONTEXT_PROMPT_SLUG,
+)
+from app.services.prompt_service import get_prompt_by_slug
+
+
+async def _get_persona_agent(db: AsyncSession) -> Agent:
+    result = await db.execute(select(Agent).where(Agent.slug == "persona"))
+    agent = result.scalar_one_or_none()
+    if agent is None:
+        raise RuntimeError("Persona agent not found")
+    return agent
 
 
 async def get_persona_heartbeat_instructions(db: AsyncSession) -> str | None:
     """Return the canonical prompt-backed heartbeat instructions for Jenny."""
     if db is None or not hasattr(db, "execute"):
         return None
-    raw_prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
-    while inspect.isawaitable(raw_prompt):
-        raw_prompt = await raw_prompt
-    prompt = raw_prompt if isinstance(raw_prompt, Prompt) else None
+    prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
     if not prompt or not prompt.enabled:
         return None
     content = prompt.content.strip()
@@ -33,45 +42,19 @@ async def set_persona_heartbeat_instructions(
     change_reason: str | None = None,
 ) -> tuple[int, int]:
     """Upsert the canonical heartbeat-instructions prompt and return old/new lengths."""
-    raw_prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
-    while inspect.isawaitable(raw_prompt):
-        raw_prompt = await raw_prompt
-    prompt = raw_prompt if isinstance(raw_prompt, Prompt) else None
-    old_content = prompt.content if prompt else None
-    while inspect.isawaitable(old_content):
-        old_content = await old_content
-    if not isinstance(old_content, str):
-        old_content = ""
-    old_text = old_content.strip()
+    prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)
+    old_text = prompt.content.strip() if prompt else ""
     new_text = heartbeat_instructions.strip()
-
-    action = "update"
-    if prompt:
-        prompt.name = "Persona Heartbeat Instructions"
-        prompt.description = "Jenny-specific mutable guidance for heartbeat runs."
-        prompt.content = new_text
-        prompt.is_global = False
-        prompt.enabled = True
-    else:
-        prompt = Prompt(
-            slug=PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG,
-            name="Persona Heartbeat Instructions",
-            description="Jenny-specific mutable guidance for heartbeat runs.",
-            content=new_text,
-            is_global=False,
-            enabled=True,
-            exclude_agents=[],
-        )
-        db.add(prompt)
-        action = "create"
-
-    if prompt is not None:
-        await db.flush()
-        await record_prompt_revision(
-            db,
-            prompt,
-            action=action,
-            changed_by=changed_by,
-            change_reason=change_reason or "Persona heartbeat instructions updated",
-        )
+    agent = await _get_persona_agent(db)
+    personality_prompt = await get_prompt_by_slug(db, PERSONA_PERSONALITY_PROMPT_SLUG)
+    user_context_prompt = await get_prompt_by_slug(db, PERSONA_USER_CONTEXT_PROMPT_SLUG)
+    await sync_persona_document_prompts(
+        db,
+        agent=agent,
+        personality=personality_prompt.content if personality_prompt else "",
+        user_context=user_context_prompt.content if user_context_prompt else "",
+        heartbeat_instructions=new_text,
+        changed_by=changed_by,
+        change_reason=change_reason or "Persona heartbeat instructions updated",
+    )
     return len(old_text), len(new_text)

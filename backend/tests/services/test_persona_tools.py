@@ -35,6 +35,9 @@ def _patch_db_and_persona(persona: MagicMock):
     """
     mock_db = AsyncMock()
     mock_db.commit = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = persona
+    mock_db.execute.return_value = mock_result
 
     session_ctx = AsyncMock()
     session_ctx.__aenter__ = AsyncMock(return_value=mock_db)
@@ -48,6 +51,132 @@ def _patch_db_and_persona(persona: MagicMock):
         ),
         mock_db,
     )
+
+
+@pytest.fixture(autouse=True)
+def _mock_prompt_backed_persona_documents():
+    from app.services.persona_documents import validate_text_document_update
+
+    async def _get_personality(db):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        if persona is None:
+            return None
+        return getattr(persona, "personality", None)
+
+    async def _set_personality(db, personality, **_kwargs):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        old_raw = getattr(persona, "personality", "") or ""
+        old_text, new_text = validate_text_document_update(
+            old_raw,
+            personality,
+            field_label="personality",
+        )
+        persona.personality_previous = old_raw or None
+        persona.personality = new_text
+        return len(old_text), len(new_text)
+
+    async def _get_user_context(db):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        if persona is None:
+            return None
+        return getattr(persona, "user_context", None)
+
+    async def _set_user_context(db, user_context, **_kwargs):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        old_raw = getattr(persona, "user_context", "") or ""
+        old_text, new_text = validate_text_document_update(
+            old_raw,
+            user_context,
+            field_label="user_context",
+        )
+        persona.user_context_previous = old_raw or None
+        persona.user_context = new_text
+        return len(old_text), len(new_text)
+
+    async def _get_heartbeat(db):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        if persona is None:
+            return None
+        return getattr(persona, "heartbeat_instructions", None)
+
+    async def _set_heartbeat(db, heartbeat_instructions, **_kwargs):
+        result = await db.execute(object())
+        while hasattr(result, "__await__"):
+            result = await result
+        persona = result.scalar_one_or_none()
+        while hasattr(persona, "__await__"):
+            persona = await persona
+        old_raw = getattr(persona, "heartbeat_instructions", "") or ""
+        old_text, new_text = validate_text_document_update(
+            old_raw,
+            heartbeat_instructions,
+            field_label="heartbeat_instructions",
+        )
+        persona.heartbeat_instructions = new_text
+        return len(old_text), len(persona.heartbeat_instructions)
+
+    with (
+        patch(
+            "app.services.persona_document_prompt_service.get_persona_personality_document",
+            new=_get_personality,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.set_persona_personality_document",
+            new=_set_personality,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.get_persona_user_context_document",
+            new=_get_user_context,
+        ),
+        patch(
+            "app.services.persona_document_prompt_service.set_persona_user_context_document",
+            new=_set_user_context,
+        ),
+        patch(
+            "app.services.persona_instruction_service.get_persona_heartbeat_instructions",
+            new=_get_heartbeat,
+        ),
+        patch(
+            "app.services.persona_instruction_service.set_persona_heartbeat_instructions",
+            new=_set_heartbeat,
+        ),
+        patch(
+            "app.workflows._instruction_review.review_instruction_edit",
+            new=AsyncMock(
+                return_value=MagicMock(
+                    used=False,
+                    decision=None,
+                    reason=None,
+                )
+            ),
+        ),
+    ):
+        yield
 
 
 # --- write_user_context ---

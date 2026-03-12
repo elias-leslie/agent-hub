@@ -11,6 +11,9 @@ export interface Prompt {
   is_global: boolean;
   enabled: boolean;
   exclude_agents: string[];
+  owner_agent_slug: string | null;
+  prompt_type: string;
+  deletion_locked: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +29,9 @@ export interface PromptRevision {
   is_global: boolean;
   enabled: boolean;
   exclude_agents: string[];
+  owner_agent_id: number | null;
+  prompt_type: string;
+  deletion_locked: boolean;
   content_hash: string;
   changed_by: string | null;
   change_reason: string | null;
@@ -80,6 +86,7 @@ export async function createPrompt(data: {
   description?: string;
   is_global?: boolean;
   enabled?: boolean;
+  exclude_agents?: string[];
 }): Promise<Prompt> {
   const res = await fetchApi("/api/prompts", {
     method: "POST",
