@@ -27,6 +27,8 @@ async def test_handle_list_episodes_defaults_all_groups_false() -> None:
         cursor=None,
         category=None,
         all_groups=False,
+        sort_by="updated_at",
+        sort_order="desc",
     )
 
 

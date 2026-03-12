@@ -47,9 +47,28 @@ async def test_list_paginated_uses_uuid_tiebreaker_when_cursor_contains_uuid() -
     stmt = mock_db.execute.call_args.args[0]
     compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
 
-    assert "ORDER BY memories.created_at DESC, memories.id DESC" in compiled
-    assert "memories.created_at = " in compiled
+    assert "ORDER BY memories.updated_at DESC, memories.id DESC" in compiled
+    assert "memories.updated_at = " in compiled
     assert f"memories.id < '{str(memory_id).replace('-', '')}'" in compiled
+
+
+@pytest.mark.asyncio
+async def test_list_paginated_created_at_sort_uses_created_at_column() -> None:
+    """Explicit created_at sorting should keep the historical ordering path."""
+    repo = QueryRepository()
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = []
+    mock_result.scalars.return_value = mock_scalars
+    mock_db.execute.return_value = mock_result
+
+    await repo.list_paginated(limit=10, order_by="created_at", sort_order="asc", db=mock_db)
+
+    stmt = mock_db.execute.call_args.args[0]
+    compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
+
+    assert "ORDER BY memories.created_at ASC, memories.id ASC" in compiled
 
 
 def test_parse_pagination_cursor_accepts_legacy_timestamp_only() -> None:

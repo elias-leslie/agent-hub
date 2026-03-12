@@ -33,6 +33,7 @@ def _mem(
         content=content,
         source_description="s",
         created_at=now,
+        updated_at=now,
         valid_at=now,
         summary=None,
         loaded_count=0,
@@ -72,11 +73,14 @@ async def test_list_episodes_paginated_uses_row_scope_from_group_id() -> None:
         category=None,
         limit=50,
         cursor=None,
+        order_by="updated_at",
+        sort_order="desc",
     )
     assert result.total == 1
     assert result.episodes[0].uuid == "123"
     assert result.episodes[0].scope == MemoryScope.PROJECT
     assert result.episodes[0].scope_id == "agent-hub"
+    assert result.episodes[0].updated_at is not None
 
 
 @pytest.mark.asyncio
@@ -134,6 +138,7 @@ async def test_list_episodes_paginated_handles_nullable_name_content() -> None:
     assert result.total == 1
     assert result.episodes[0].name == ""
     assert result.episodes[0].content == ""
+    assert result.episodes[0].updated_at is not None
 
 
 @pytest.mark.asyncio

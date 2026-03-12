@@ -104,11 +104,13 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
         cursor: str | None = None,
         category: MemoryCategory | None = None,
         all_groups: bool = False,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> MemoryListResult:
         """List episodes with cursor-based pagination."""
         group_id = None if all_groups else self._group_id
         return await list_episodes_paginated(
-            group_id, self.scope, self.scope_id, limit, cursor, category
+            group_id, self.scope, self.scope_id, limit, cursor, category, sort_by, sort_order
         )
 
     async def get_scope_stats(self) -> list[MemoryScopeCount]:

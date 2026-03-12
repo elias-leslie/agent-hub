@@ -79,7 +79,7 @@ export interface UseMemoryReturn {
 }
 
 export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
-  const { groupId, scope, category, sortBy = "created_at", sortOrder = "desc", limit = 50 } = options;
+  const { groupId, scope, category, sortBy = "updated_at", sortOrder = "desc", limit = 50 } = options;
   const queryClient = useQueryClient();
 
   // Selection state

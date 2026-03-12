@@ -10,7 +10,7 @@ interface UseEpisodesFiltersProps {
 }
 
 export function useEpisodesFilters({ displayItems }: UseEpisodesFiltersProps) {
-  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortField, setSortField] = useState<SortField>("updated_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [pinnedOnly, setPinnedOnly] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -37,6 +37,11 @@ export function useEpisodesFilters({ displayItems }: UseEpisodesFiltersProps) {
           break;
         case "created_at":
           cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case "updated_at":
+          cmp =
+            new Date(a.updated_at || a.created_at).getTime() -
+            new Date(b.updated_at || b.created_at).getTime();
           break;
         case "utility":
           cmp = (a.utility_score || 0) - (b.utility_score || 0);

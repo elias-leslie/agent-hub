@@ -101,6 +101,7 @@ class MemoryEpisode(BaseModel):
     scope_id: str | None = None  # project_id or task_id depending on scope
     source_description: str
     created_at: datetime
+    updated_at: datetime | None = None
     valid_at: datetime
     entities: list[str] = []
     summary: str | None = None
