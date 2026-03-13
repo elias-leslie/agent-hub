@@ -344,22 +344,25 @@ class TestGetContextTokenStats:
 
         assert stats["mandates_tokens"] == 0
         assert stats["guardrails_tokens"] == 0
+        assert stats["reference_tokens"] == 0
         assert stats["mandates_count"] == 0
         assert stats["guardrails_count"] == 0
+        assert stats["reference_count"] == 0
 
-    def test_counts_tokens_correctly(self):
-        """Test token counting per block."""
+    def test_counts_rendered_tokens_and_references(self):
+        """Token stats should reflect rendered text for every injected block."""
         now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
                     uuid="m1",
-                    content="a" * 40,
+                    content="a" * 80,
+                    rendered_content="a" * 20,
                     source=MemorySource.SYSTEM,
                     relevance_score=1.0,
                     created_at=now,
                     facts=[],
-                ),  # 40/4 = 10 tokens
+                ),  # 20/4 = 5 tokens
             ],
             guardrails=[
                 MemorySearchResult(
@@ -371,13 +374,26 @@ class TestGetContextTokenStats:
                     facts=[],
                 ),  # 20/4 = 5 tokens
             ],
+            reference=[
+                MemorySearchResult(
+                    uuid="r1",
+                    content="c" * 40,
+                    rendered_content="c" * 8,
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
+                ),  # 8/4 = 2 tokens
+            ],
         )
         stats = get_context_token_stats(ctx)
 
-        assert stats["mandates_tokens"] == 10
+        assert stats["mandates_tokens"] == 5
         assert stats["guardrails_tokens"] == 5
+        assert stats["reference_tokens"] == 2
         assert stats["mandates_count"] == 1
         assert stats["guardrails_count"] == 1
+        assert stats["reference_count"] == 1
 
 
 class TestGetRelevanceDebugInfo:
@@ -390,16 +406,18 @@ class TestGetRelevanceDebugInfo:
 
         assert info["mandates"] == []
         assert info["guardrails"] == []
+        assert info["reference"] == []
         assert "stats" in info
 
     def test_formats_items_correctly(self):
-        """Test that items are formatted with short IDs and snippets."""
+        """Debug info should use the rendered prompt text and short IDs."""
         now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
                     uuid="12345678-full-uuid-here",
                     content="This is a very long content that should be truncated to 80 characters in the snippet...",
+                    rendered_content="Rendered snippet should win over the full content.",
                     source=MemorySource.SYSTEM,
                     relevance_score=0.95,
                     created_at=now,
@@ -414,8 +432,7 @@ class TestGetRelevanceDebugInfo:
         assert info["mandates"][0]["id"] == "12345678"
         # Check score rounded
         assert info["mandates"][0]["score"] == 0.95
-        # Check snippet truncation (80 chars + ...)
-        assert len(info["mandates"][0]["snippet"]) <= 83
+        assert info["mandates"][0]["snippet"] == "Rendered snippet should win over the full content."
         # Check date is just date portion
         assert len(info["mandates"][0]["created"]) == 10
 
@@ -460,11 +477,22 @@ class TestFormatRelevanceDebugBlock:
                     facts=[],
                 ),
             ],
+            reference=[
+                MemorySearchResult(
+                    uuid="r1",
+                    content="r",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
+                ),
+            ],
             debug_info={"query": "test"},
         )
         result = format_relevance_debug_block(ctx)
         assert "MANDATES:" in result
         assert "GUARDRAILS:" in result
+        assert "REFERENCES:" in result
 
     def test_includes_token_stats(self):
         """Test that token stats are included."""
