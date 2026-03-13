@@ -324,6 +324,8 @@ class TestReferenceInjection:
 
         result = format_progressive_context(context, include_citations=True)
 
-        assert "## References" in result
+        assert "open the exact episode with `st memory get <uuid8>` before acting" in result
+        assert "## Selected References" in result
+        assert "Likely direct fits for this task" in result
         assert "[R:f2ae2668]" in result
         assert "## Reference Index" not in result
