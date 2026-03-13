@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.agent_dto import AgentDTO
+from app.services.memory.context_builder_settings import resolve_memory_config_includes
 from app.services.memory.context_injector import (
     build_progressive_context,
     format_progressive_context,
@@ -111,10 +112,16 @@ async def build_agent_preview(
 
     scope, scope_id = _memory_scope_for_project(project_id)
     memory_query = _build_preview_memory_query(task_prompt, prompt_input)
+    include_mandates, include_guardrails, include_references = resolve_memory_config_includes(
+        agent.memory_config
+    )
     context = await build_progressive_context(
         query=memory_query,
         scope=scope,
         scope_id=scope_id,
+        include_mandates=include_mandates,
+        include_guardrails=include_guardrails,
+        include_references=include_references,
         task_type=None if task_type == "chat" else task_type,
         phase=phase,
         memory_config=agent.memory_config,

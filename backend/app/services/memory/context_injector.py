@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from .context_builder import ProgressiveContext, build_progressive_context
+from .context_builder_settings import resolve_memory_config_includes
 from .context_injector_formatter import (
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
@@ -137,9 +138,7 @@ async def _build_context_and_format(
     memory_config: dict[str, Any] | None,
 ) -> tuple[ProgressiveContext, str | None]:
     """Build progressive context and format it."""
-    mc_mandates = memory_config.get("include_mandates", True) if memory_config else True
-    mc_guardrails = memory_config.get("include_guardrails", True) if memory_config else True
-    mc_references = memory_config.get("include_references", True) if memory_config else True
+    mc_mandates, mc_guardrails, mc_references = resolve_memory_config_includes(memory_config)
     context = await build_progressive_context(
         query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
         include_mandates=mc_mandates,
