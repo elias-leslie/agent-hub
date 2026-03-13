@@ -353,7 +353,7 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
         f"{result.projects_with_issues} project(s) with issues "
         f"out of {result.projects_checked} checked.\n\n"
         f"Review the findings and take action:\n"
-        f"- For critical issues: create tasks or dispatch the fixer agent\n"
+        f"- For critical issues: create tasks or dispatch the debugger agent\n"
         f"- For warnings: log them and monitor\n"
         f"- For info items: note in journal if patterns emerge\n\n"
         f"Findings:\n{findings_text}"

@@ -583,7 +583,7 @@ class TestGetWorkstreamInventory:
             },
             {
                 "session_id": "sess-4",
-                "agent_slug": "fixer",
+                "agent_slug": "debugger",
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/follow-up",

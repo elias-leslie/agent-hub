@@ -116,7 +116,7 @@ DISPATCH_AGENT_TOOL = Tool(
         "properties": {
             "agent_slug": {
                 "type": "string",
-                "description": "The agent to dispatch (e.g., 'site-checker', 'coder', 'fixer')",
+                "description": "The agent to dispatch (e.g., 'site-checker', 'coder', 'debugger')",
             },
             "task": {
                 "type": "string",
@@ -136,7 +136,7 @@ DISPATCH_AGENT_TOOL = Tool(
     },
     category="agents",
     search_keywords=["delegate", "autonomous agent", "dispatch work"],
-    usage_examples=["Dispatch the fixer agent to repair a failing test lane."],
+    usage_examples=["Dispatch the debugger agent to repair a failing test lane."],
 )
 
 # --- Subagent steering tools ---
