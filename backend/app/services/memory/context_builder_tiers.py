@@ -6,6 +6,7 @@ import re
 from collections import Counter
 
 from .budget import count_tokens
+from .context_profiles import full_render_tags_for_profile
 from .service import MemorySearchResult
 
 PROMPT_TIER_L0 = "L0"
@@ -29,16 +30,23 @@ def plan_context_render_tiers(
     guardrails: list[MemorySearchResult],
     references: list[MemorySearchResult],
     query: str,
+    consumer_profile: str | None = None,
 ) -> None:
     """Assign an initial render tier to each injected memory item."""
     query_terms = _tokenize(query)
+    force_full_tags = full_render_tags_for_profile(consumer_profile)
     for block, items in (
         ("mandate", mandates),
         ("guardrail", guardrails),
         ("reference", references),
     ):
         for item in items:
-            tier, reason = _select_initial_tier(item, block=block, query_terms=query_terms)
+            tier, reason = _select_initial_tier(
+                item,
+                block=block,
+                query_terms=query_terms,
+                force_full_tags=force_full_tags,
+            )
             _apply_render_tier(item, tier, reason)
 
 
@@ -104,7 +112,10 @@ def _select_initial_tier(
     *,
     block: str,
     query_terms: set[str],
+    force_full_tags: set[str],
 ) -> tuple[str, str]:
+    if force_full_tags and force_full_tags.intersection(item.tags):
+        return PROMPT_TIER_L2, "consumer_profile_tag"
     query_overlap = _query_overlap(item, query_terms)
     if block == "mandate":
         if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:

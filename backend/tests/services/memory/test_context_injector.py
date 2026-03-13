@@ -333,6 +333,26 @@ class TestFormatProgressiveContext:
         assert "Compact overview of the rule." in result
         assert "Full rule body with detailed rationale" not in result
 
+    def test_codex_startup_adds_local_lookup_fallback_line(self):
+        """Codex startup should explain what to do when later memory lookups are blocked."""
+        now = datetime.now(UTC)
+        ctx = ProgressiveContext(
+            mandates=[
+                MemorySearchResult(
+                    uuid="m1-uuid",
+                    content="Critical startup rule.",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
+                ),
+            ],
+        )
+
+        result = format_progressive_context(ctx, consumer_profile="codex_startup")
+
+        assert "If local memory lookup is unavailable in this shell" in result
+
 
 class TestGetContextTokenStats:
     """Tests for get_context_token_stats function."""

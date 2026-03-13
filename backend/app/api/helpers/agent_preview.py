@@ -125,9 +125,14 @@ async def build_agent_preview(
         task_type=None if task_type == "chat" else task_type,
         phase=phase,
         memory_config=agent.memory_config,
+        consumer_profile="agent_preview",
     )
 
-    formatted_memory = format_progressive_context(context, include_citations=True)
+    formatted_memory = format_progressive_context(
+        context,
+        include_citations=True,
+        consumer_profile="agent_preview",
+    )
     if formatted_memory:
         combined = f"{combined}\n\n{formatted_memory}" if combined else formatted_memory
         runtime_sections.append(
