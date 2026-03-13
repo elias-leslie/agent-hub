@@ -317,13 +317,8 @@ export function AgentPreviewPanel({
                 <StatCard label="Guardrails" value={formatNumber(preview.guardrail_count)} />
                 <StatCard label="Loaded Memory" value={formatNumber(preview.loaded_memory_uuids.length)} />
                 <StatCard
-                  label="Budget"
-                  value={
-                    typeof memoryDebug.total_tokens === "number"
-                      ? `${formatNumber(memoryDebug.total_tokens)} / ${formatNumber(memoryDebug.budget_limit)}`
-                      : "—"
-                  }
-                  tone={memoryDebug.budget_hit ? "warning" : "default"}
+                  label="Tokens"
+                  value={formatNumber(memoryDebug.total_tokens)}
                 />
                 <StatCard
                   label="Chars Saved"

@@ -29,8 +29,6 @@ export interface AgentPreviewMemoryDebug {
   guardrails_count?: number;
   reference_count?: number;
   total_tokens?: number;
-  budget_limit?: number | null;
-  budget_hit?: boolean;
   query?: string;
   task_type?: string | null;
   phase?: string | null;

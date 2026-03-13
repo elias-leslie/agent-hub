@@ -7,10 +7,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .budget import BudgetUsage
-from .context_builder_budget import apply_budget_enforcement
 from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
-from .context_builder_processors import apply_count_limits, compute_token_counts
+from .context_builder_processors import compute_token_counts
 from .context_builder_settings import apply_memory_config_overrides
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
@@ -49,53 +48,35 @@ class ProgressiveContext:
 
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
-    """Apply include/exclude tag filters to context blocks in-place.
-
-    exclude_tags applies to all tiers (remove unwanted content everywhere).
-    include_tags only applies to references (mandates/guardrails always injected).
-    """
+    """Apply audience and exclude tag filters to context blocks in-place."""
     exclude_tags = memory_config.get("exclude_tags", [])
-    include_tags = memory_config.get("include_tags", [])
+    audience_tags = memory_config.get("audience_tags", memory_config.get("include_tags", []))
     if exclude_tags:
         context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
         context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
         context.reference = filter_by_tags(context.reference, [], exclude_tags)
-    if include_tags:
-        context.reference = filter_by_tags(context.reference, include_tags, [])
+    if audience_tags:
+        context.mandates = filter_by_tags(context.mandates, audience_tags, [])
+        context.guardrails = filter_by_tags(context.guardrails, audience_tags, [])
+        context.reference = filter_by_tags(context.reference, audience_tags, [])
 
 
-def _apply_limits_and_budget(context: ProgressiveContext, settings: Any) -> BudgetUsage:
-    """Apply count limits and budget enforcement; return populated BudgetUsage."""
-    budget = BudgetUsage(total_budget=settings.total_budget)
+def _build_usage_snapshot(context: ProgressiveContext) -> BudgetUsage:
+    """Capture rendered token totals and coverage counts for the current context."""
+    budget = BudgetUsage()
     budget.mandates_total = len(context.mandates)
     budget.guardrails_total = len(context.guardrails)
     budget.reference_total = len(context.reference)
-
-    context.mandates, context.guardrails = apply_count_limits(context.mandates, context.guardrails, settings)
     budget.mandates_tokens, budget.guardrails_tokens, budget.reference_tokens = compute_token_counts(
         context.mandates,
         context.guardrails,
         context.reference,
     )
-
-    if settings.budget_enabled:
-        context.mandates, context.guardrails, context.reference = apply_budget_enforcement(
-            context.mandates,
-            context.guardrails,
-            context.reference,
-            budget,
-        )
-    else:
-        logger.debug(
-            "Budget enforcement disabled - injecting all %d memories (%d tokens)",
-            len(context.mandates) + len(context.guardrails) + len(context.reference),
-            budget.total_tokens,
-        )
     return budget
 
 
 def _finalize_context(
-    context: ProgressiveContext, budget: BudgetUsage, settings: Any, query: str, task_type: str | None, phase: str | None
+    context: ProgressiveContext, budget: BudgetUsage, query: str, task_type: str | None, phase: str | None
 ) -> None:
     """Set total_tokens, budget_usage, debug_info, and emit log line in-place."""
     plan_debug = build_memory_plan_debug(
@@ -111,18 +92,15 @@ def _finalize_context(
         "guardrails_count": len(context.guardrails),
         "reference_count": len(context.reference),
         "total_tokens": context.total_tokens,
-        "budget_limit": settings.total_budget,
-        "budget_hit": budget.hit_limit,
         "query": query[:100] if query else "",
         "task_type": task_type,
         "phase": phase,
         **plan_debug,
     }
     logger.info(
-        "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d/%d%s%s%s",
+        "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d%s%s",
         len(context.mandates), len(context.guardrails), len(context.reference),
-        context.total_tokens, settings.total_budget,
-        " (budget exceeded)" if budget.hit_limit else "",
+        context.total_tokens,
         f" task_type={task_type}" if task_type else "",
         f" phase={phase}" if phase else "",
     )
@@ -134,6 +112,7 @@ async def build_progressive_context(
     scope_id: str | None = None,
     include_mandates: bool = True,
     include_guardrails: bool = True,
+    include_references: bool = True,
     include_global: bool = True,
     task_type: str | None = None,
     phase: str | None = None,
@@ -152,20 +131,23 @@ async def build_progressive_context(
         scopes_to_query.append((MemoryScope.GLOBAL, None))
 
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
-        scopes_to_query, include_mandates, include_guardrails, task_type, phase
+        scopes_to_query, include_mandates, include_guardrails, include_references, task_type, phase
     )
-    selected_reference_payloads = await get_query_relevant_references_as_search_results(
-        query,
-        scopes_to_query,
-    )
-    if selected_reference_payloads:
-        existing = {item.uuid for item in context.reference}
-        for payload in selected_reference_payloads:
-            result = MemorySearchResult.model_validate(payload)
-            if result.uuid in existing:
-                continue
-            context.reference.append(result)
-            existing.add(result.uuid)
+    if not include_references:
+        context.reference = []
+    if include_references:
+        selected_reference_payloads = await get_query_relevant_references_as_search_results(
+            query,
+            scopes_to_query,
+        )
+        if selected_reference_payloads:
+            existing = {item.uuid for item in context.reference}
+            for payload in selected_reference_payloads:
+                result = MemorySearchResult.model_validate(payload)
+                if result.uuid in existing:
+                    continue
+                context.reference.append(result)
+                existing.add(result.uuid)
 
     settings = await get_memory_settings()
     apply_memory_config_overrides(settings, memory_config)
@@ -179,15 +161,16 @@ async def build_progressive_context(
         query,
     )
 
-    budget = BudgetUsage(total_budget=settings.total_budget)
+    budget = BudgetUsage()
     if not settings.enabled:
         logger.info("Memory injection disabled - returning empty context")
         context.mandates = []
         context.guardrails = []
+        context.reference = []
         context.budget_usage = budget
         context.total_tokens = 0
         return context
 
-    budget = _apply_limits_and_budget(context, settings)
-    _finalize_context(context, budget, settings, query, task_type, phase)
+    budget = _build_usage_snapshot(context)
+    _finalize_context(context, budget, query, task_type, phase)
     return context

@@ -16,13 +16,11 @@ from .context_injector_formatter import (
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
     MEMORY_CONTEXT_HEADER,
-    format_context_with_reference_index,
     format_progressive_context,
     format_relevance_debug_block,
     get_context_token_stats,
     get_relevance_debug_info,
 )
-from .context_injector_queries import build_reference_toon_index
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import MemoryScope
 from .settings import get_memory_settings
@@ -35,8 +33,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "CHARS_PER_TOKEN", "CITATION_INSTRUCTION", "GUARDRAIL_DIRECTIVE", "MANDATE_DIRECTIVE",
     "MEMORY_CONTEXT_END", "MEMORY_CONTEXT_HEADER", "MEMORY_CONTEXT_START", "ProgressiveContext",
-    "build_progressive_context", "build_reference_toon_index", "format_context_with_reference_index",
-    "format_progressive_context", "format_relevance_debug_block", "get_context_token_stats",
+    "build_progressive_context", "format_progressive_context", "format_relevance_debug_block", "get_context_token_stats",
     "get_relevance_debug_info", "inject_progressive_context", "parse_memory_group_id",
 ]
 
@@ -138,41 +135,33 @@ async def _build_context_and_format(
     task_type: str | None,
     phase: str | None,
     memory_config: dict[str, Any] | None,
-) -> tuple[ProgressiveContext, str | None, list[tuple[str, str | None, str, bool]]]:
-    """Build progressive context and format it, returning context, text, and passive index rows."""
+) -> tuple[ProgressiveContext, str | None]:
+    """Build progressive context and format it."""
     mc_mandates = memory_config.get("include_mandates", True) if memory_config else True
     mc_guardrails = memory_config.get("include_guardrails", True) if memory_config else True
+    mc_references = memory_config.get("include_references", True) if memory_config else True
     context = await build_progressive_context(
         query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
-        include_mandates=mc_mandates, include_guardrails=mc_guardrails, memory_config=memory_config,
+        include_mandates=mc_mandates,
+        include_guardrails=mc_guardrails,
+        include_references=mc_references,
+        memory_config=memory_config,
     )
-
-    settings = await get_memory_settings()
-    ref_enabled = (
-        memory_config.get("reference_index_enabled", memory_config.get("reference_index", settings.reference_index_enabled))
-        if memory_config else settings.reference_index_enabled
-    )
-    ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else []
-    if ref_episodes and context.reference:
-        selected_uuids = {item.uuid for item in context.reference}
-        ref_episodes = [episode for episode in ref_episodes if episode[0] not in selected_uuids]
-    formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
-    return context, formatted, ref_episodes
+    formatted = format_progressive_context(context, include_citations=True)
+    return context, formatted
 
 
 def _annotate_reference_observability(
     context: ProgressiveContext,
-    reference_episodes: list[tuple[str, str | None, str, bool]],
 ) -> None:
-    """Attach selected-vs-indexed reference observability to context.debug_info."""
+    """Attach reference observability to context.debug_info."""
     selected_uuids = context.get_reference_uuids()
-    index_uuids = [uuid for uuid, *_ in reference_episodes if uuid]
     context.debug_info.update(
         {
             "reference_selected_count": len(selected_uuids),
-            "reference_index_count": len(index_uuids),
+            "reference_index_count": 0,
             "reference_selected_uuids": selected_uuids,
-            "reference_index_uuids": index_uuids,
+            "reference_index_uuids": [],
         }
     )
 
@@ -242,13 +231,13 @@ async def inject_progressive_context(
     if not messages or not (query or (query := _extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
-    context, formatted, ref_episodes = await _build_context_and_format(
+    context, formatted = await _build_context_and_format(
         query=query, scope=scope, scope_id=scope_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
     )
     if not formatted:
         return messages, context
-    _annotate_reference_observability(context, ref_episodes)
+    _annotate_reference_observability(context)
 
     memory_block = await _apply_continuity_to_context(
         context, formatted, scope, scope_id, session_id, memory_config, current_branch, include_continuity,

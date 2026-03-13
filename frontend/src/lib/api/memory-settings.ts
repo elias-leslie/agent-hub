@@ -2,7 +2,7 @@
  * Memory settings API client.
  *
  * Provides functions for managing memory system configuration
- * including enable/disable toggle and token budget settings.
+ * including enable/disable toggle and continuity settings.
  */
 
 import { getApiBaseUrl, fetchApi } from "../api-config";
@@ -11,11 +11,6 @@ const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface MemorySettings {
   enabled: boolean; // Kill switch for memory injection
-  budget_enabled: boolean; // Budget enforcement toggle
-  total_budget: number; // Total token budget
-  max_mandates: number; // Per-tier count limit (0 = unlimited)
-  max_guardrails: number; // Per-tier count limit (0 = unlimited)
-  reference_index_enabled: boolean; // TOON reference index toggle
   continuity_enabled: boolean; // Recent Activity block toggle
   continuity_max_sessions: number; // Max sessions in Recent Activity
 }
@@ -26,9 +21,6 @@ export interface BudgetUsage {
   reference_tokens: number;
   continuity_tokens: number;
   total_tokens: number;
-  total_budget: number;
-  remaining: number;
-  hit_limit: boolean;
   // Count fields for coverage tracking
   mandates_injected: number;
   mandates_total: number;
@@ -85,7 +77,7 @@ export async function updateSettings(
 }
 
 /**
- * Get budget usage statistics.
+ * Get current rendered memory usage statistics.
  */
 export async function getBudgetUsage(): Promise<BudgetUsage> {
   const response = await fetchApi(`${API_BASE}/memory/budget-usage`);
