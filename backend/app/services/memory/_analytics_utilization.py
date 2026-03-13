@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import Text, func, or_, select
 
 from app.db import async_session
 from app.models import MemoryInjectionMetric, Session, SessionEvent, SessionEventType
@@ -36,6 +36,20 @@ def _has_memory_debug(tool_input: dict[str, Any] | None) -> bool:
         return False
     memory_debug = tool_input.get("memory_debug")
     return isinstance(memory_debug, dict) and bool(memory_debug)
+
+
+def _extract_memory_command_kind(tool_input: dict[str, Any] | None) -> str | None:
+    """Classify supported memory lookup commands from tool input payloads."""
+    if not isinstance(tool_input, dict):
+        return None
+    command = tool_input.get("cmd") or tool_input.get("command")
+    if not isinstance(command, str):
+        return None
+    if command.startswith("st memory search"):
+        return "search"
+    if command.startswith("st memory get"):
+        return "get"
+    return None
 
 
 def _build_memory_utilization_metrics(
@@ -112,19 +126,10 @@ async def get_memory_utilization_summary(
 ) -> MemoryUtilizationMetrics:
     """Return recent evidence that agents are expanding and citing injected memory."""
     cutoff = datetime.now(UTC) - lookback_delta
-    command_text = func.coalesce(
-        SessionEvent.tool_input["cmd"].astext,
-        SessionEvent.tool_input["command"].astext,
-        "",
-    )
-    command_kind = case(
-        (command_text.like("st memory search%"), "search"),
-        (command_text.like("st memory get%"), "get"),
-        else_="other",
-    ).label("command_kind")
+    tool_input_text = SessionEvent.tool_input.cast(Text)
     tool_use_filters = or_(
-        command_text.like("st memory search%"),
-        command_text.like("st memory get%"),
+        tool_input_text.like("%st memory search%"),
+        tool_input_text.like("%st memory get%"),
     )
 
     injection_stmt = (
@@ -140,7 +145,7 @@ async def get_memory_utilization_summary(
         SessionEvent.created_at >= cutoff,
     )
     lookup_stmt = (
-        select(SessionEvent.session_id, SessionEvent.created_at, command_kind)
+        select(SessionEvent.session_id, SessionEvent.created_at, SessionEvent.tool_input)
         .where(
             SessionEvent.event_type == SessionEventType.TOOL_USE,
             SessionEvent.created_at >= cutoff,
@@ -210,8 +215,8 @@ async def get_memory_utilization_summary(
     citation_session_ids = {session_id for (session_id,) in citation_rows}
     lookup_events = [
         _LookupEvent(session_id=session_id, created_at=created_at, command_kind=command_kind)
-        for session_id, created_at, command_kind in lookup_rows
-        if command_kind in {"search", "get"}
+        for session_id, created_at, tool_input in lookup_rows
+        if (command_kind := _extract_memory_command_kind(tool_input)) is not None
     ]
 
     assistant_total = int(assistant_counts.assistant_total or 0)

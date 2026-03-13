@@ -6,8 +6,15 @@ from datetime import UTC, datetime
 
 from app.services.memory._analytics_utilization import (
     _build_memory_utilization_metrics,
+    _extract_memory_command_kind,
     _LookupEvent,
 )
+
+
+def test_extract_memory_command_kind_handles_supported_commands() -> None:
+    assert _extract_memory_command_kind({"cmd": "st memory search prompt structure"}) == "search"
+    assert _extract_memory_command_kind({"command": "st memory get 115b32e3"}) == "get"
+    assert _extract_memory_command_kind({"cmd": "st search anything"}) is None
 
 
 def test_build_memory_utilization_metrics_tracks_lookup_and_reference_followthrough() -> None:
