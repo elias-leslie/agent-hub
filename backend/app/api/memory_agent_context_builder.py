@@ -93,9 +93,7 @@ async def format_context_with_continuity(
     context.debug_info.update(
         {
             "reference_selected_count": len(selected_reference_uuids),
-            "reference_index_count": 0,
             "reference_selected_uuids": selected_reference_uuids,
-            "reference_index_uuids": [],
         }
     )
     from app.services.memory.context_injector import format_progressive_context
@@ -139,7 +137,7 @@ async def track_and_record_metrics(
             reference_selected_count=int(
                 context.debug_info.get("reference_selected_count", len(context.reference))
             ),
-            reference_index_count=int(context.debug_info.get("reference_index_count", 0)),
+            reference_index_count=0,
             total_tokens=context.total_tokens,
             query=query,
             variant=variant,
@@ -150,7 +148,7 @@ async def track_and_record_metrics(
             reference_selected_uuids=list(
                 context.debug_info.get("reference_selected_uuids", [])
             ),
-            reference_index_uuids=list(context.debug_info.get("reference_index_uuids", [])),
+            reference_index_uuids=[],
         ))
         logger.info(
             "Progressive-context metrics: session=%s external=%s loaded=%d latency=%dms",

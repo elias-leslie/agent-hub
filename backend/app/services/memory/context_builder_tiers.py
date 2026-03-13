@@ -122,7 +122,7 @@ def _select_initial_tier(
             return PROMPT_TIER_L2, "already_compact"
         if query_overlap >= _QUERY_MATCH_THRESHOLD:
             return PROMPT_TIER_L2, "query_match"
-        return PROMPT_TIER_L1, "default_overview"
+        return PROMPT_TIER_L0, "default_summary"
 
     if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
         return PROMPT_TIER_L2, "already_compact"

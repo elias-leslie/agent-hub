@@ -1,7 +1,7 @@
 """Context injection service for memory-augmented completions.
 
 Orchestrates: build_progressive_context() → format → inject into messages.
-Heavy lifting (retrieval, budget) lives in context_builder.py.
+Heavy lifting (retrieval, tiering, token accounting) lives in context_builder.py.
 """
 
 from __future__ import annotations
@@ -154,14 +154,12 @@ async def _build_context_and_format(
 def _annotate_reference_observability(
     context: ProgressiveContext,
 ) -> None:
-    """Attach reference observability to context.debug_info."""
+    """Attach selected-reference observability to context.debug_info."""
     selected_uuids = context.get_reference_uuids()
     context.debug_info.update(
         {
             "reference_selected_count": len(selected_uuids),
-            "reference_index_count": 0,
             "reference_selected_uuids": selected_uuids,
-            "reference_index_uuids": [],
         }
     )
 
@@ -180,12 +178,12 @@ def _record_injection_metrics(
         injection_latency_ms=latency_ms, mandates_count=len(context.mandates),
         guardrails_count=len(context.guardrails), reference_count=len(context.reference),
         reference_selected_count=int(context.debug_info.get("reference_selected_count", len(context.reference))),
-        reference_index_count=int(context.debug_info.get("reference_index_count", 0)),
+        reference_index_count=0,
         total_tokens=context.total_tokens, query=query, variant=variant,
         session_id=session_id, external_id=external_id, project_id=project_id,
         memories_loaded=context.get_loaded_uuids(),
         reference_selected_uuids=list(context.debug_info.get("reference_selected_uuids", [])),
-        reference_index_uuids=list(context.debug_info.get("reference_index_uuids", [])),
+        reference_index_uuids=[],
     ))
 
 
@@ -248,10 +246,9 @@ async def inject_progressive_context(
     context.debug_info.update({"variant": variant, "injection_latency_ms": latency_ms})
     continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
     logger.info(
-        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d refs_selected=%d refs_index=%d continuity_tokens=%d scope=%s",
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d refs_selected=%d continuity_tokens=%d scope=%s",
         variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
         context.debug_info.get("reference_selected_count", len(context.reference)),
-        context.debug_info.get("reference_index_count", 0),
         continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
     )
     if collect_metrics:
