@@ -38,7 +38,7 @@ def _resolve_account_id() -> str:
             if account_id:
                 return account_id
     except Exception:
-        pass
+        logger.debug("Cloudflare credential lookup failed", exc_info=True)
     raise AuthenticationError("cloudflare")
 
 

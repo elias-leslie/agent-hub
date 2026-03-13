@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
@@ -10,6 +11,8 @@ from app.services.memory import MemoryService
 from app.services.memory.embedder import get_embedder
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.repository import get_memory_repository
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from .memory_schemas import (
@@ -105,6 +108,7 @@ async def handle_delete_episode(
             revision_id=None,
         )
     except Exception as e:
+        logger.exception("Failed to delete episode %s", full_uuid)
         raise HTTPException(
             status_code=404 if "not found" in str(e).lower() else 500,
             detail=f"Failed to delete episode: {e}",
@@ -223,6 +227,7 @@ async def handle_update_episode_properties(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Failed to update properties for %s", full_uuid)
         raise HTTPException(status_code=500, detail=f"Failed to update properties: {e}") from e
 
 
@@ -292,6 +297,7 @@ async def handle_update_episode(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Failed to update episode %s", full_uuid)
         raise HTTPException(status_code=500, detail=f"Failed to update episode: {e}") from e
 
 

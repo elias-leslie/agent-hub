@@ -25,7 +25,7 @@ class MessageInput(BaseModel):
     }
     """
 
-    role: str = Field(..., description="Message role: user, assistant, or system")
+    role: str = Field(..., max_length=20, description="Message role: user, assistant, or system")
     content: str | list[dict[str, Any]] = Field(
         ..., description="Message content - string or list of content blocks"
     )
@@ -34,8 +34,8 @@ class MessageInput(BaseModel):
 class ToolDefinition(BaseModel):
     """Tool definition for model to call."""
 
-    name: str = Field(..., description="Tool name")
-    description: str = Field(..., description="Tool description")
+    name: str = Field(..., max_length=100, description="Tool name")
+    description: str = Field(..., max_length=5000, description="Tool description")
     input_schema: dict[str, Any] = Field(..., description="JSON Schema for tool parameters")
     allowed_callers: list[str] = Field(
         default=["direct"],
@@ -95,14 +95,14 @@ class CompletionRequest(BaseModel):
     )
     messages: list[MessageInput] = Field(..., description="Conversation messages")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
-    session_id: str | None = Field(default=None, description="Existing session ID to continue")
+    session_id: str | None = Field(default=None, max_length=100, description="Existing session ID to continue")
     project_id: str = Field(..., description="Project ID for session tracking (required)")
     external_id: str | None = Field(
         default=None,
         description="External ID for cost aggregation (e.g., task-123, user-456)",
     )
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
-    cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
+    cache_ttl: str = Field(default="ephemeral", max_length=20, description="Cache TTL: ephemeral (5min) or 1h")
     response_format: ResponseFormat | None = Field(
         default=None,
         description="Response format: {type: 'json_object', schema: {...}} for JSON mode",
@@ -149,6 +149,7 @@ class CompletionRequest(BaseModel):
     )
     agent_slug: str | None = Field(
         default=None,
+        max_length=100,
         description=(
             "Agent slug for routing (e.g., 'coder', 'planner'). When provided, "
             "loads agent config from database, injects mandates, and uses fallback chains."
@@ -178,6 +179,7 @@ class CompletionRequest(BaseModel):
     )
     working_dir: str | None = Field(
         default=None,
+        max_length=500,
         description="Working directory for tool execution (agentic mode only).",
     )
     execute_tools: bool = Field(
@@ -190,11 +192,13 @@ class CompletionRequest(BaseModel):
     )
     trace_id: str | None = Field(
         default=None,
+        max_length=200,
         description="Trace ID for event correlation (e.g., SummitFlow task_id). "
         "Events are published to Redis for real-time observability.",
     )
     current_branch: str | None = Field(
         default=None,
+        max_length=200,
         description="Current git branch for continuity branch scoping (e.g., 'main', 'feature/auth')",
     )
     async_execution: bool = Field(
@@ -207,5 +211,5 @@ class CompletionRequest(BaseModel):
 class EstimateRequest(BaseModel):
     """Request body for cost estimation endpoint."""
 
-    model: str = Field(..., description="Model identifier")
+    model: str = Field(..., max_length=200, description="Model identifier")
     messages: list[MessageInput] = Field(..., description="Conversation messages")

@@ -18,6 +18,7 @@ import {
   type ClientControl,
   type BlockedRequest,
 } from "@/lib/api";
+import { useToastActions } from "@/components/error/toast";
 import { KillSwitchToggle } from "./components/KillSwitchToggle";
 import { BlockedRequestsTable } from "./components/BlockedRequestsTable";
 
@@ -26,6 +27,7 @@ export default function AdminPage() {
   const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const toast = useToastActions();
 
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -33,13 +35,13 @@ export default function AdminPage() {
       const [c, b] = await Promise.all([fetchClients(), fetchBlockedRequests()]);
       setClients(c);
       setBlockedRequests(b);
-    } catch (error) {
-      console.error("Failed to refresh:", error);
+    } catch {
+      toast.error("Failed to refresh", "Could not load client and request data");
     } finally {
       setIsRefreshing(false);
       setIsLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     refresh();
@@ -56,8 +58,8 @@ export default function AdminPage() {
           await enableClient(clientName);
         }
         await refresh();
-      } catch (error) {
-        console.error("Failed to toggle client:", error);
+      } catch {
+        toast.error("Failed to toggle client", `Could not update ${clientName}`);
       }
     },
     [refresh]
@@ -111,6 +113,7 @@ export default function AdminPage() {
               <button
                 onClick={refresh}
                 disabled={isRefreshing}
+                aria-label="Refresh client and request data"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border border-slate-700"
               >
                 <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />

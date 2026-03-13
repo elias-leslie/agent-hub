@@ -12,15 +12,17 @@ logger = logging.getLogger(__name__)
 
 
 class SummarizeRequest(BaseModel):
-    project_id: str | None = Field(default=None, description="Project ID (fallback if session lacks it)")
-    branch: str | None = Field(default=None, description="Git branch name for continuity scoping")
+    project_id: str | None = Field(default=None, max_length=100, description="Project ID (fallback if session lacks it)")
+    branch: str | None = Field(default=None, max_length=200, description="Git branch name for continuity scoping")
     is_worktree: bool = Field(default=False, description="Whether session was in a git worktree")
     transcript_path: str | None = Field(
         default=None,
+        max_length=500,
         description="Path to CC JSONL transcript for richer summaries (e.g., ~/.claude/projects/.../session.jsonl)",
     )
     git_context: str | None = Field(
         default=None,
+        max_length=10000,
         description="Raw git log --oneline output captured at session end for commit context enrichment",
     )
     async_dispatch: bool = Field(
@@ -112,6 +114,7 @@ async def run_sync_summarize(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to generate session summary for %s", session_id)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate summary: {e}",

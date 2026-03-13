@@ -80,3 +80,6 @@ class Persona(Base):
     __table_args__ = (
         Index("ix_persona_agent_id", "agent_id", unique=True),
     )
+
+    def __repr__(self) -> str:
+        return f"<Persona id={self.id} name={self.name!r} agent_id={self.agent_id}>"

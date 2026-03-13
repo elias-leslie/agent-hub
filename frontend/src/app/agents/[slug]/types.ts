@@ -8,6 +8,7 @@ export type {
   PreviewScenario,
   PreviewTaskType,
 } from "@/types/agent-preview";
+import type { MemoryConfig } from "./components/memory/types";
 
 export interface ToolPermission {
   name: string;
@@ -38,7 +39,7 @@ export interface Agent {
   is_active: boolean;
   is_coding_agent: boolean;
   tool_permissions: PermissionConfig | null;
-  memory_config: Record<string, unknown> | null;
+  memory_config: (MemoryConfig & Record<string, unknown>) | null;
   max_concurrency: number | null;
   max_subagent_concurrency: number | null;
   daily_token_budget: number | null;

@@ -50,6 +50,9 @@ const mockStatus = {
     },
   ],
   uptime_seconds: 3600,
+  circuit_breakers: null,
+  thrashing_events_total: 0,
+  circuit_breaker_trips_total: 0,
 };
 
 const mockDailyCosts = {

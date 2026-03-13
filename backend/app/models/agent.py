@@ -96,6 +96,9 @@ class Agent(Base):
         Index("ix_agents_active", "is_active"),
     )
 
+    def __repr__(self) -> str:
+        return f"<Agent id={self.id} slug={self.slug!r} active={self.is_active}>"
+
 
 class AgentVersion(Base):
     """Audit history for agent configuration changes.
@@ -127,3 +130,6 @@ class AgentVersion(Base):
         Index("ix_agent_versions_agent_id", "agent_id"),
         Index("ix_agent_versions_agent_version", "agent_id", "version"),
     )
+
+    def __repr__(self) -> str:
+        return f"<AgentVersion id={self.id} agent_id={self.agent_id} version={self.version}>"

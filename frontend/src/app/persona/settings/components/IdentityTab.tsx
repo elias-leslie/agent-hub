@@ -94,7 +94,6 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
         message: "Onboarding reset. Bootstrap instructions will be injected into the next new conversation.",
       });
     } catch (err) {
-      console.error("Failed to reset onboarding:", err);
       setResetState({
         status: "error",
         message: err instanceof Error ? err.message : "Failed to reset onboarding",
