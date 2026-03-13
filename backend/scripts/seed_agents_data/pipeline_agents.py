@@ -1,6 +1,6 @@
 """Pipeline agents for task management and code quality.
 
-Includes: ideator, ideator-public, triager, fixer, debugger, test-writer, optimizer, ux-polisher
+Includes: ideator, ideator-public, triager, debugger, test-writer, optimizer, ux-polisher
 
 Agent definitions are split into focused sub-modules:
 - _ideator_agents: conversational task creation agents

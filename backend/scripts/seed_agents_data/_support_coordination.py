@@ -1,6 +1,6 @@
 """Coordination and oversight support agents.
 
-Includes: supervisor, qa
+Includes: supervisor
 """
 
 from app.constants import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
@@ -37,34 +37,4 @@ _SUPERVISOR: dict[str, object] = {
     },
 }
 
-_QA: dict[str, object] = {
-    "slug": "qa",
-    "name": "QA Supervisor",
-    "description": "Reviews task execution quality and determines pass/fail",
-    "system_prompt": (
-        "You are a QA supervisor agent. You review the overall quality of task "
-        "execution and make final pass/fail determinations.\n\n"
-        "Review criteria:\n"
-        "- All subtasks completed and passing\n"
-        "- Code quality meets standards\n"
-        "- No regressions introduced\n"
-        "- Verify commands all passing\n"
-        "- Scope discipline maintained (no feature creep)\n\n"
-        "Verdicts:\n"
-        "- PASS: Task meets all criteria\n"
-        "- FAIL: Specific issues that must be addressed\n"
-        "- PARTIAL: Some subtasks pass, others need work\n\n"
-        "Be thorough but efficient. Block only on real issues."
-    ),
-    "primary_model_id": CLAUDE_OPUS,
-    "fallback_models": [CLAUDE_SONNET],
-    "escalation_model_id": CLAUDE_OPUS,
-    "temperature": 0.2,
-    "is_coding_agent": False,
-    "memory_config": {
-        "include_mandates": True,
-        "include_guardrails": True,
-    },
-}
-
-COORDINATION_AGENTS: list[dict[str, object]] = [_SUPERVISOR, _QA]
+COORDINATION_AGENTS: list[dict[str, object]] = [_SUPERVISOR]

@@ -1,6 +1,6 @@
 """Utility support agents.
 
-Includes: validator, designer, reasoner, voice-responder, complexity-assessor
+Includes: validator, designer, reasoner, voice-responder
 """
 
 from app.constants import (
@@ -91,29 +91,6 @@ _VOICE_RESPONDER: dict[str, object] = {
     },
 }
 
-_COMPLEXITY_ASSESSOR: dict[str, object] = {
-    "slug": "complexity-assessor",
-    "name": "Complexity Assessor",
-    "description": "Assesses task complexity for planning and resource allocation",
-    "system_prompt": (
-        "You are a task complexity assessment agent. You analyze task descriptions "
-        "and codebase context to estimate complexity and recommend approaches.\n\n"
-        "Evaluate:\n"
-        "- Number of files and systems affected\n"
-        "- Risk of regressions\n"
-        "- Need for architectural decisions\n"
-        "- Testing requirements\n\n"
-        "Your outputs are machine-parsed — follow the requested format exactly."
-    ),
-    "primary_model_id": GEMINI_FLASH,
-    "fallback_models": [CLAUDE_HAIKU],
-    "temperature": 0.2,
-    "is_coding_agent": False,
-    "memory_config": {
-        "include_mandates": True,
-    },
-}
-
 _SITE_CHECKER: dict[str, object] = {
     "slug": "site-checker",
     "name": "Site Health Checker",
@@ -140,6 +117,5 @@ UTILITY_AGENTS: list[dict[str, object]] = [
     _DESIGNER,
     _REASONER,
     _VOICE_RESPONDER,
-    _COMPLEXITY_ASSESSOR,
     _SITE_CHECKER,
 ]

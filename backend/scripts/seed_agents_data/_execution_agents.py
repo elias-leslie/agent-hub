@@ -32,34 +32,8 @@ EXECUTION_AGENTS = [
         },
     },
     {
-        "slug": "fixer",
-        "name": "Fix Agent",
-        "description": "Addresses review feedback and fixes specific issues in code",
-        "system_prompt": (
-            "You are a fix agent. You receive specific code review feedback and make "
-            "targeted fixes to address the issues.\n\n"
-            "Guidelines:\n"
-            "- Fix ONLY the specific issues mentioned in the review\n"
-            "- Do not refactor or improve surrounding code\n"
-            "- Do not add features beyond the fix scope\n"
-            "- Run verify commands after each fix\n"
-            "- If a fix requires changes beyond the current subtask scope, "
-            "report this rather than making broad changes\n"
-            "- Keep changes minimal and surgical"
-        ),
-        "primary_model_id": GEMINI_FLASH,
-        "fallback_models": [CLAUDE_SONNET],
-        "escalation_model_id": CLAUDE_OPUS,
-        "temperature": 0.2,
-        "is_coding_agent": True,
-        "memory_config": {
-            "include_mandates": True,
-            "include_guardrails": True,
-        },
-    },
-    {
         "slug": "debugger",
-        "name": "Bug Fixer",
+        "name": "Debugger",
         "description": "Diagnoses and fixes defects with root cause analysis",
         "system_prompt": (
             "You are the debugger specialist. Diagnose and fix bugs through "
