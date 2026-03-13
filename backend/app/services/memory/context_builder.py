@@ -1,4 +1,4 @@
-"""Progressive context builder: mandates, guardrails, and reference blocks."""
+"""Tier-aware context builder for mandates, guardrails, and direct references."""
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def _build_usage_snapshot(context: ProgressiveContext) -> BudgetUsage:
 def _finalize_context(
     context: ProgressiveContext, budget: BudgetUsage, query: str, task_type: str | None, phase: str | None
 ) -> None:
-    """Set total_tokens, budget_usage, debug_info, and emit log line in-place."""
+    """Set token totals, debug_info, and emit a compact observability line."""
     plan_debug = build_memory_plan_debug(
         context.mandates,
         context.guardrails,
@@ -106,6 +106,16 @@ def _finalize_context(
     )
 
 
+def _should_select_query_references(
+    task_type: str | None,
+    memory_config: dict[str, Any] | None,
+) -> bool:
+    """Return True when semantic/text-selected references should be added."""
+    if memory_config and "query_reference_selection_enabled" in memory_config:
+        return bool(memory_config["query_reference_selection_enabled"])
+    return task_type in (None, "", "chat")
+
+
 async def build_progressive_context(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -118,11 +128,13 @@ async def build_progressive_context(
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
 ) -> ProgressiveContext:
-    """Build 2-block progressive context (mandates + guardrails).
+    """Build tier-aware context for mandates, guardrails, and direct references.
 
     Deterministic injection: ALL mandates and guardrails for the scope are
-    injected. No scoring, no thresholds - just demotion filtering for mandates.
-    Reference items included when auto_inject=true or task_type/phase match.
+    injected. No scoring, no thresholds - just tiered prompt rendering.
+    References still include auto-inject and task/phase-triggered items. Query-
+    selected references are chat-default because template-driven task prompts
+    are too noisy to use as semantic retrieval queries.
     """
     context = ProgressiveContext()
 
@@ -135,7 +147,7 @@ async def build_progressive_context(
     )
     if not include_references:
         context.reference = []
-    if include_references:
+    if include_references and _should_select_query_references(task_type, memory_config):
         selected_reference_payloads = await get_query_relevant_references_as_search_results(
             query,
             scopes_to_query,

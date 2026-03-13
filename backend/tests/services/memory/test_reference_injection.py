@@ -151,13 +151,13 @@ class TestReferenceInjection:
             )
 
         assert context.mandates[0].render_tier == "L2"
-        assert context.guardrails[0].render_tier == "L1"
+        assert context.guardrails[0].render_tier == "L0"
         assert context.guardrails[0].rendered_content is not None
         assert len(context.guardrails[0].rendered_content) < len(long_guardrail)
-        assert context.debug_info["tier_counts"] == {"L1": 1, "L2": 1}
+        assert context.debug_info["tier_counts"] == {"L0": 1, "L2": 1}
         assert context.debug_info["render_chars_saved"] > 0
         assert context.debug_info["memory_plan"][0]["uuid"] == "mandate-uuid"
-        assert context.debug_info["memory_plan"][1]["tier"] == "L1"
+        assert context.debug_info["memory_plan"][1]["tier"] == "L0"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_uses_compact_defaults_for_long_mandates(self) -> None:
@@ -241,6 +241,43 @@ class TestReferenceInjection:
             "f2ae2668-da26-46e1-b499-ffac6141e377",
             "015a8754-95f0-4370-8a8c-077ace49ca90",
         ]
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_skips_query_selected_references_for_heartbeat(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        selector = AsyncMock(
+            return_value=[
+                _reference_result(
+                    "f2ae2668-da26-46e1-b499-ffac6141e377",
+                    "**Session Surfaces**: Existing ref.",
+                ).model_dump()
+            ]
+        )
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=selector,
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Run the heartbeat now and review dynamic sections.",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                task_type="heartbeat",
+            )
+
+        selector.assert_not_awaited()
+        assert context.reference == []
+        assert context.debug_info["reference_count"] == 0
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_skips_references_when_disabled(self) -> None:
