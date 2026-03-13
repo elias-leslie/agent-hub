@@ -80,30 +80,29 @@ class TestFilterByTags:
 
 
 class TestApplyTagFilters:
-    """Tests for _apply_tag_filters — scoping include_tags to references only."""
+    """Tests for _apply_tag_filters — audience tags scope eligible memories."""
 
-    def test_include_tags_only_applied_to_references(self):
-        """include_tags should NOT filter mandates or guardrails."""
+    def test_audience_tags_apply_to_all_memory_types(self):
+        """audience_tags should filter mandates, guardrails, and references."""
         from app.services.memory.context_builder import ProgressiveContext
 
-        mandate = _make_result(uuid="m1", tags=[])
-        guardrail = _make_result(uuid="g1", tags=[])
+        mandate = _make_result(uuid="m1", tags=["persona-relevant"])
+        guardrail = _make_result(uuid="g1", tags=["persona-relevant"])
         ref_tagged = _make_result(uuid="r1", tags=["persona-relevant"])
         ref_untagged = _make_result(uuid="r2", tags=[])
+        ref_other = _make_result(uuid="r3", tags=["coder-only"])
 
         context = ProgressiveContext(
             mandates=[mandate],
             guardrails=[guardrail],
-            reference=[ref_tagged, ref_untagged],
+            reference=[ref_tagged, ref_untagged, ref_other],
         )
-        memory_config = {"include_tags": ["persona-relevant"], "exclude_tags": []}
+        memory_config = {"audience_tags": ["persona-relevant"], "exclude_tags": []}
 
         _apply_tag_filters(context, memory_config)
 
-        # Mandates and guardrails should be untouched
         assert len(context.mandates) == 1
         assert len(context.guardrails) == 1
-        # Only the tagged reference should remain
         assert len(context.reference) == 1
         assert context.reference[0].uuid == "r1"
 
@@ -140,7 +139,7 @@ class TestApplyTagFilters:
             guardrails=[_make_result(uuid="g1")],
             reference=[_make_result(uuid="r1")],
         )
-        memory_config = {"include_tags": [], "exclude_tags": []}
+        memory_config = {"audience_tags": [], "exclude_tags": []}
 
         _apply_tag_filters(context, memory_config)
 

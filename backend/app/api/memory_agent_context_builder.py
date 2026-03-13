@@ -6,8 +6,6 @@ import time
 from app.services.memory.context_injector import ProgressiveContext
 from app.services.memory.service import MemoryScope
 
-from .memory_agent_helpers import build_reference_episodes
-
 logger = logging.getLogger(__name__)
 
 
@@ -90,27 +88,19 @@ async def format_context_with_continuity(
     current_branch: str | None,
     session_id: str | None = None,
 ) -> str:
-    """Format context with reference index and prepend continuity."""
-    from app.services.memory.context_injector import format_context_with_reference_index
-
-    reference_episodes = await build_reference_episodes(scope, scope_id) or []
+    """Format context and prepend continuity."""
     selected_reference_uuids = context.get_reference_uuids()
-    indexed_reference_uuids = [
-        uuid for uuid, *_ in reference_episodes if uuid and uuid not in set(selected_reference_uuids)
-    ]
     context.debug_info.update(
         {
             "reference_selected_count": len(selected_reference_uuids),
-            "reference_index_count": len(indexed_reference_uuids),
+            "reference_index_count": 0,
             "reference_selected_uuids": selected_reference_uuids,
-            "reference_index_uuids": indexed_reference_uuids,
+            "reference_index_uuids": [],
         }
     )
-    formatted = format_context_with_reference_index(
-        context,
-        reference_episodes=reference_episodes,
-        include_citations=True,
-    )
+    from app.services.memory.context_injector import format_progressive_context
+
+    formatted = format_progressive_context(context, include_citations=True)
 
     continuity_md = await build_continuity_markdown(
         scope, scope_id, current_branch, session_id=session_id,

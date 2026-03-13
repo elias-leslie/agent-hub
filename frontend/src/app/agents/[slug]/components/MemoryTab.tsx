@@ -38,14 +38,14 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
   };
 
   const handleUpdateTags = (
-    field: "include_tags" | "exclude_tags",
+    field: "audience_tags" | "exclude_tags",
     tags: string[]
   ) => {
     if (isCustomEnabled) {
       updateConfig({ [field]: tags });
     } else {
       const otherField =
-        field === "include_tags" ? "exclude_tags" : "include_tags";
+        field === "audience_tags" ? "exclude_tags" : "audience_tags";
       const otherTags = config[otherField];
 
       if (tags.length === 0 && otherTags.length === 0) {
@@ -57,7 +57,6 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             ...DEFAULT_CONFIG,
             [field]: tags,
             [otherField]: otherTags,
-            _tags_only: true,
           } as unknown as Agent["memory_config"]
         );
       }
@@ -105,7 +104,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
 
       {/* Tag Filtering Section */}
       <TagFilteringSection
-        includeTags={config.include_tags}
+        audienceTags={config.audience_tags}
         excludeTags={config.exclude_tags}
         onUpdateTags={handleUpdateTags}
       />

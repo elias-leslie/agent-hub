@@ -204,7 +204,7 @@ async def test_build_agent_preview_passes_agent_memory_config_to_context_builder
         is_active=True,
         is_coding_agent=True,
         tool_permissions=None,
-        memory_config={"max_mandates": 7, "include_tags": ["memory-curator"]},
+        memory_config={"include_references": True, "audience_tags": ["memory-curator"]},
         max_concurrency=None,
         max_subagent_concurrency=None,
         daily_token_budget=None,

@@ -9,9 +9,6 @@ const usage = {
   reference_tokens: 0,
   continuity_tokens: 32,
   total_tokens: 197,
-  total_budget: 3500,
-  remaining: 3303,
-  hit_limit: false,
   mandates_injected: 3,
   mandates_total: 4,
   guardrails_injected: 2,
@@ -21,16 +18,11 @@ const usage = {
 };
 
 describe("BudgetUsageDisplay", () => {
-  it("shows unlimited token usage when budget enforcement is off", () => {
-    render(
-      <BudgetUsageDisplay
-        usage={usage}
-        budgetEnabled={false}
-        referenceIndexEnabled={true}
-        continuityEnabled={true}
-      />,
-    );
+  it("shows rendered token and reference coverage totals", () => {
+    render(<BudgetUsageDisplay usage={usage} continuityEnabled={true} />);
 
-    expect(screen.getByText("197 (Unlimited)")).toBeInTheDocument();
+    expect(screen.getByText("197")).toBeInTheDocument();
+    expect(screen.getByText("References")).toBeInTheDocument();
+    expect(screen.getByText("0/8")).toBeInTheDocument();
   });
 });

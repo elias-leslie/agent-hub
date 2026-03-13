@@ -1,11 +1,9 @@
 "use client";
 
-import { ToggleLeft, ToggleRight, Gauge, Power, Shield, AlertTriangle, History } from "lucide-react";
+import { Power, History } from "lucide-react";
 import { ModalHeader } from "./ModalHeader";
 import { ModalFooter } from "./ModalFooter";
 import { ToggleSetting } from "./ToggleSetting";
-import { TokenBudgetSlider } from "./TokenBudgetSlider";
-import { TierLimitSlider } from "./TierLimitSlider";
 import { LLMConfigDisplay } from "./LLMConfigDisplay";
 import { BudgetUsageDisplay } from "./BudgetUsageDisplay";
 import { useMemorySettings } from "./useMemorySettings";
@@ -20,16 +18,6 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
     llmConfig,
     enabled,
     setEnabled,
-    budgetEnabled,
-    setBudgetEnabled,
-    budget,
-    setBudget,
-    maxMandates,
-    setMaxMandates,
-    maxGuardrails,
-    setMaxGuardrails,
-    referenceIndexEnabled,
-    setReferenceIndexEnabled,
     continuityEnabled,
     setContinuityEnabled,
     continuityMaxSessions,
@@ -70,65 +58,6 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
 
               {enabled && (
                 <>
-                  <ToggleSetting
-                    label="Budget Enforcement"
-                    enabled={budgetEnabled}
-                    onToggle={() => setBudgetEnabled(!budgetEnabled)}
-                    activeIcon={ToggleRight}
-                    inactiveIcon={ToggleLeft}
-                    activeLabel="Limited"
-                    inactiveLabel="Unlimited"
-                    activeDescription={`Limit injection to ${budget.toLocaleString()} tokens`}
-                    inactiveDescription="Inject all memories (no limit)"
-                  />
-
-                  {budgetEnabled && <TokenBudgetSlider budget={budget} onChange={setBudget} />}
-
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                      <Gauge className="w-4 h-4" />
-                      Per-Type Injection Limits
-                    </div>
-                    <p className="text-xs text-slate-500 -mt-2">
-                      Set maximum items per memory type (0 = unlimited)
-                    </p>
-                    <TierLimitSlider
-                      label="Mandates"
-                      icon={Shield}
-                      value={maxMandates}
-                      max={usage?.mandates_total || 20}
-                      onChange={setMaxMandates}
-                      colorClass="text-emerald-600 dark:text-emerald-400"
-                      borderColorClass="border-emerald-200 dark:border-emerald-800"
-                      bgColorClass="bg-emerald-50/50 dark:bg-emerald-900/10"
-                      accentColorClass="accent-emerald-600"
-                    />
-                    <TierLimitSlider
-                      label="Guardrails"
-                      icon={AlertTriangle}
-                      value={maxGuardrails}
-                      max={usage?.guardrails_total || 20}
-                      onChange={setMaxGuardrails}
-                      colorClass="text-amber-600 dark:text-amber-400"
-                      borderColorClass="border-amber-200 dark:border-amber-800"
-                      bgColorClass="bg-amber-50/50 dark:bg-amber-900/10"
-                      accentColorClass="accent-amber-600"
-                    />
-                  </div>
-
-                  <ToggleSetting
-                    label="Reference Index"
-                    enabled={referenceIndexEnabled}
-                    onToggle={() => setReferenceIndexEnabled(!referenceIndexEnabled)}
-                    activeIcon={ToggleRight}
-                    inactiveIcon={ToggleLeft}
-                    activeLabel="Enabled"
-                    inactiveLabel="Disabled"
-                    activeDescription="TOON compressed index for reference discoverability (~800 tokens)"
-                    inactiveDescription="No reference index injected"
-                    variant="sky"
-                  />
-
                   <ToggleSetting
                     label="Session Continuity"
                     enabled={continuityEnabled}
@@ -173,8 +102,6 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                   {usage && (
                     <BudgetUsageDisplay
                       usage={usage}
-                      budgetEnabled={budgetEnabled}
-                      referenceIndexEnabled={referenceIndexEnabled}
                       continuityEnabled={continuityEnabled}
                     />
                   )}

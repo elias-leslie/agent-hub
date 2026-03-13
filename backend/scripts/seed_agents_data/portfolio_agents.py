@@ -13,13 +13,11 @@ from app.constants import (
 
 _FINANCE_MEMORY_CONFIG: dict[str, object] = {
     "injection_enabled": True,
-    "budget_enforcement": True,
-    "token_budget": 1200,
     "include_mandates": False,
     "include_guardrails": False,
-    "reference_index": False,
+    "include_references": True,
     "continuity_enabled": False,
-    "include_tags": ["finance-relevant"],
+    "audience_tags": ["finance-relevant"],
     "exclude_tags": [],
 }
 
