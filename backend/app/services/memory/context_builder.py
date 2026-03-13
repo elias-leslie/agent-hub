@@ -50,7 +50,7 @@ class ProgressiveContext:
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
     """Apply audience and exclude tag filters to context blocks in-place."""
     exclude_tags = memory_config.get("exclude_tags", [])
-    audience_tags = memory_config.get("audience_tags", memory_config.get("include_tags", []))
+    audience_tags = memory_config.get("audience_tags", [])
     if exclude_tags:
         context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
         context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
