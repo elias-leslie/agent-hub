@@ -2,6 +2,7 @@
 name = "agent-hub"
 version = "0.1.0"
 description = "Unified agentic AI service for Claude/Gemini workloads"
+license = "Apache-2.0"
 requires-python = ">=3.13"
 dependencies = [
     # Core API framework

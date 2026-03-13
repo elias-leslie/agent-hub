@@ -24,7 +24,7 @@ Key capabilities:
 | Caching | Redis |
 | Workflows | Hatchet (completion, observation, scheduled tasks) |
 | AI Providers | Anthropic Claude, Google Gemini, OpenAI, OpenRouter |
-| Quality | Ruff, Mypy, pytest, Vitest, Playwright, Biome |
+| Quality | Ruff, Ty, pytest, Vitest, Playwright, Biome |
 
 ## Architecture
 
@@ -140,7 +140,8 @@ npm run dev
 
 ### Environment
 
-Create `~/.env.local` with:
+Create `~/.env.local` using [`.env.example`](.env.example) and
+[backend/.env.example](backend/.env.example) as the placeholder references:
 
 ```bash
 # Required
@@ -227,4 +228,16 @@ npm run test:e2e      # E2E tests (Playwright)
 
 ## License
 
-Private project - All rights reserved
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+## Security
+
+Please report suspected vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md).
+
+## Commercial
+
+Commercial use is permitted under the Apache 2.0 license.
+
+For commercial support, custom work, partnership discussions, or private
+licensing for future versions, contact `summitflow42@gmail.com`.
