@@ -42,7 +42,7 @@ MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     + "\n- Summarize your work: [[S:completed:what you accomplished]] or partial/failed"
 )
 CODEX_STARTUP_FALLBACK_LINE = (
-    "- If local memory lookup is unavailable in this shell, rely on the full-text startup-critical rules below and repo-local evidence."
+    "- If local memory lookup is unavailable in this shell, treat the full-text startup-critical rules below as authoritative for command-shape and workflow questions. Use repo-local evidence for implementation facts or explicit local overrides, not to dilute these rules."
 )
 
 # Keep for backward compatibility
