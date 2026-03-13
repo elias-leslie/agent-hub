@@ -59,6 +59,7 @@ async def build_progressive_context_response(
     project_id: str | None = None,
     session_id: str | None = None,
     current_branch: str | None = None,
+    consumer_profile: str | None = None,
 ) -> ProgressiveContextResponse:
     """Build progressive context response with all necessary data."""
     start_time = time.monotonic()
@@ -73,6 +74,7 @@ async def build_progressive_context_response(
         variant_override=variant_override,
         external_id=external_id,
         project_id=project_id,
+        consumer_profile=consumer_profile,
     )
 
     formatted = await format_context_with_continuity(
@@ -81,6 +83,7 @@ async def build_progressive_context_response(
         scope_id=scope_id,
         current_branch=current_branch,
         session_id=session_id,
+        consumer_profile=consumer_profile,
     )
 
     await track_and_record_metrics(

@@ -19,6 +19,7 @@ async def build_progressive_context_with_variant(
     variant_override: str | None,
     external_id: str | None,
     project_id: str | None,
+    consumer_profile: str | None,
 ) -> tuple[ProgressiveContext, str]:
     """Build progressive context and assign variant."""
     from app.services.memory.context_injector import build_progressive_context
@@ -37,6 +38,7 @@ async def build_progressive_context_with_variant(
         include_global=include_global,
         task_type=task_type,
         phase=phase,
+        consumer_profile=consumer_profile,
     )
 
     context.debug_info["variant"] = assigned_variant.value
@@ -87,6 +89,7 @@ async def format_context_with_continuity(
     scope_id: str | None,
     current_branch: str | None,
     session_id: str | None = None,
+    consumer_profile: str | None = None,
 ) -> str:
     """Format context and prepend continuity."""
     selected_reference_uuids = context.get_reference_uuids()
@@ -98,7 +101,11 @@ async def format_context_with_continuity(
     )
     from app.services.memory.context_injector import format_progressive_context
 
-    formatted = format_progressive_context(context, include_citations=True)
+    formatted = format_progressive_context(
+        context,
+        include_citations=True,
+        consumer_profile=consumer_profile,
+    )
 
     continuity_md = await build_continuity_markdown(
         scope, scope_id, current_branch, session_id=session_id,

@@ -136,6 +136,7 @@ async def _build_context_and_format(
     task_type: str | None,
     phase: str | None,
     memory_config: dict[str, Any] | None,
+    consumer_profile: str | None,
 ) -> tuple[ProgressiveContext, str | None]:
     """Build progressive context and format it."""
     mc_mandates, mc_guardrails, mc_references = resolve_memory_config_includes(memory_config)
@@ -145,8 +146,13 @@ async def _build_context_and_format(
         include_guardrails=mc_guardrails,
         include_references=mc_references,
         memory_config=memory_config,
+        consumer_profile=consumer_profile,
     )
-    formatted = format_progressive_context(context, include_citations=True)
+    formatted = format_progressive_context(
+        context,
+        include_citations=True,
+        consumer_profile=consumer_profile,
+    )
     return context, formatted
 
 
@@ -222,6 +228,7 @@ async def inject_progressive_context(
     include_continuity: bool = True,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
+    consumer_profile: str | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """Inject mandates and guardrails context into messages. Main entry point for memory injection."""
     start_time = time.monotonic()
@@ -231,6 +238,7 @@ async def inject_progressive_context(
     context, formatted = await _build_context_and_format(
         query=query, scope=scope, scope_id=scope_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
+        consumer_profile=consumer_profile,
     )
     if not formatted:
         return messages, context

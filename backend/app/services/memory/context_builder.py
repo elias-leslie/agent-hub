@@ -13,6 +13,7 @@ from .context_builder_processors import compute_token_counts
 from .context_builder_settings import apply_memory_config_overrides
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
+from .context_profiles import priority_tags_for_profile
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
 
@@ -61,6 +62,20 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
         context.reference = filter_by_tags(context.reference, audience_tags, [])
 
 
+def _prioritize_items_for_profile(
+    items: list[MemorySearchResult],
+    consumer_profile: str | None,
+) -> list[MemorySearchResult]:
+    """Move tagged startup-critical items to the front for profile-specific startup UX."""
+    priority_tags = priority_tags_for_profile(consumer_profile)
+    if not priority_tags:
+        return items
+    return sorted(
+        items,
+        key=lambda item: (0 if priority_tags.intersection(item.tags) else 1, -item.relevance_score),
+    )
+
+
 def _build_usage_snapshot(context: ProgressiveContext) -> BudgetUsage:
     """Capture rendered token totals and coverage counts for the current context."""
     budget = BudgetUsage()
@@ -76,7 +91,12 @@ def _build_usage_snapshot(context: ProgressiveContext) -> BudgetUsage:
 
 
 def _finalize_context(
-    context: ProgressiveContext, budget: BudgetUsage, query: str, task_type: str | None, phase: str | None
+    context: ProgressiveContext,
+    budget: BudgetUsage,
+    query: str,
+    task_type: str | None,
+    phase: str | None,
+    consumer_profile: str | None,
 ) -> None:
     """Set token totals, debug_info, and emit a compact observability line."""
     plan_debug = build_memory_plan_debug(
@@ -95,6 +115,7 @@ def _finalize_context(
         "query": query[:100] if query else "",
         "task_type": task_type,
         "phase": phase,
+        "consumer_profile": consumer_profile or "agent_runtime",
         **plan_debug,
     }
     logger.info(
@@ -127,6 +148,7 @@ async def build_progressive_context(
     task_type: str | None = None,
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
+    consumer_profile: str | None = None,
 ) -> ProgressiveContext:
     """Build tier-aware context for mandates, guardrails, and direct references.
 
@@ -166,11 +188,16 @@ async def build_progressive_context(
     if memory_config:
         _apply_tag_filters(context, memory_config)
 
+    context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
+    context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
+    context.reference = _prioritize_items_for_profile(context.reference, consumer_profile)
+
     plan_context_render_tiers(
         context.mandates,
         context.guardrails,
         context.reference,
         query,
+        consumer_profile=consumer_profile,
     )
 
     budget = BudgetUsage()
@@ -184,5 +211,5 @@ async def build_progressive_context(
         return context
 
     budget = _build_usage_snapshot(context)
-    _finalize_context(context, budget, query, task_type, phase)
+    _finalize_context(context, budget, query, task_type, phase, consumer_profile)
     return context

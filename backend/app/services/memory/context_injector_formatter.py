@@ -23,6 +23,7 @@ from .context_injector_debug import (
     get_context_token_stats,
     get_relevance_debug_info,
 )
+from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
 if TYPE_CHECKING:
     from .context_injector import ProgressiveContext
@@ -39,6 +40,9 @@ MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
     + "\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)"
     + "\n- Summarize your work: [[S:completed:what you accomplished]] or partial/failed"
+)
+CODEX_STARTUP_FALLBACK_LINE = (
+    "- If local memory lookup is unavailable in this shell, rely on the full-text startup-critical rules below and repo-local evidence."
 )
 
 # Keep for backward compatibility
@@ -62,14 +66,17 @@ __all__ = [
 def format_progressive_context(
     context: ProgressiveContext,
     include_citations: bool = True,
+    consumer_profile: str | None = None,
 ) -> str:
     """Format progressive context into a string for injection."""
     parts: list[str] = []
+    profile = resolve_consumer_profile(consumer_profile)
 
     if context.mandates or context.guardrails or context.reference:
-        parts.append(
-            MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
-        )
+        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+        if profile == MemoryConsumerProfile.CODEX_STARTUP:
+            header = f"{header}\n{CODEX_STARTUP_FALLBACK_LINE}"
+        parts.append(header)
         parts.append("")
 
     # 2. Mandates

@@ -10,6 +10,7 @@ import pytest
 from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_injector import format_progressive_context
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
+from app.services.memory.context_profiles import CODEX_STARTUP_FULL_TAG
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -204,6 +205,66 @@ class TestReferenceInjection:
 
         assert context.mandates[0].render_tier == "L0"
         assert context.mandates[0].rendered_content == "Keep durable instructions canonical and compact."
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_codex_startup_promotes_tagged_items(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(
+                    return_value=(
+                        [
+                            MemorySearchResult(
+                                uuid="later-uuid",
+                                content=(
+                                    "Keep startup guidance concise, verify commands against the live environment, "
+                                    "and avoid acting on a summary when the full rule text could change behavior."
+                                ),
+                                summary="Generic startup guidance.",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=0.8,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                            ),
+                            MemorySearchResult(
+                                uuid="critical-uuid",
+                                content="Use st memory get before acting when a summary could change behavior.",
+                                summary="Expand exact rules first.",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=0.6,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                                tags=[CODEX_STARTUP_FULL_TAG],
+                            ),
+                        ],
+                        [],
+                        [],
+                    )
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="General startup guidance.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="codex_startup",
+            )
+
+        assert [item.uuid for item in context.mandates] == ["critical-uuid", "later-uuid"]
+        assert context.mandates[0].render_tier == "L2"
+        assert context.mandates[0].render_reason == "consumer_profile_tag"
+        assert context.mandates[0].rendered_content == context.mandates[0].content
+        assert context.mandates[1].render_tier == "L0"
+        assert context.debug_info["consumer_profile"] == "codex_startup"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_dedupes_selected_references(self) -> None:

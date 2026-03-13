@@ -174,6 +174,12 @@ async def get_progressive_context(
             description="Current git branch for session continuity scoping (e.g., 'main', 'feature/auth')"
         ),
     ] = None,
+    consumer_profile: Annotated[
+        str | None,
+        Query(
+            description="Caller profile for path-specific rendering (agent_runtime, agent_preview, claude_session_start, codex_startup)"
+        ),
+    ] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -200,6 +206,7 @@ async def get_progressive_context(
         project_id=project_id,
         session_id=session_id,
         current_branch=current_branch,
+        consumer_profile=consumer_profile,
     )
 
 
