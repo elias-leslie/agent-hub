@@ -2,43 +2,9 @@
 
 from __future__ import annotations
 
-import logging
-
 from .budget import count_tokens
 from .context_builder_tiers import get_rendered_content
 from .service import MemorySearchResult
-from .settings import MemorySettingsDTO
-
-logger = logging.getLogger(__name__)
-
-
-def apply_count_limits(
-    mandates: list[MemorySearchResult],
-    guardrails: list[MemorySearchResult],
-    settings: MemorySettingsDTO,
-) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
-    """Apply max_mandates and max_guardrails count limits.
-
-    Returns:
-        Tuple of (limited_mandates, limited_guardrails)
-    """
-    if settings.max_mandates > 0 and len(mandates) > settings.max_mandates:
-        logger.info(
-            "Applying mandate count limit: %d -> %d",
-            len(mandates),
-            settings.max_mandates,
-        )
-        mandates = mandates[: settings.max_mandates]
-
-    if settings.max_guardrails > 0 and len(guardrails) > settings.max_guardrails:
-        logger.info(
-            "Applying guardrail count limit: %d -> %d",
-            len(guardrails),
-            settings.max_guardrails,
-        )
-        guardrails = guardrails[: settings.max_guardrails]
-
-    return mandates, guardrails
 
 
 def compute_token_counts(

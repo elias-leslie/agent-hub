@@ -18,7 +18,7 @@ class _FakeContext:
         self.reference = ["r1"]
         self.debug_info = {
             "reference_selected_uuids": ["ref-selected-1"],
-            "reference_index_uuids": ["ref-index-1", "ref-index-2"],
+            "reference_index_uuids": [],
         }
 
     def get_loaded_uuids(self) -> list[str]:
@@ -131,10 +131,7 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     mock_track.assert_awaited_once_with(["11111111-1111-1111-1111-111111111111"])
     mock_store.assert_awaited_once()
     assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
-    assert mock_store.await_args.kwargs["reference_index_uuids"] == [
-        "ref-index-1",
-        "ref-index-2",
-    ]
+    assert mock_store.await_args.kwargs["reference_index_uuids"] == []
 
 
 @pytest.mark.asyncio
@@ -198,10 +195,7 @@ async def test_build_session_and_messages_records_reference_breakdown_on_non_str
     assert result[6] == 3
     assert result[7] == ["11111111-1111-1111-1111-111111111111"]
     assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
-    assert mock_store.await_args.kwargs["reference_index_uuids"] == [
-        "ref-index-1",
-        "ref-index-2",
-    ]
+    assert mock_store.await_args.kwargs["reference_index_uuids"] == []
 
 
 @pytest.mark.asyncio

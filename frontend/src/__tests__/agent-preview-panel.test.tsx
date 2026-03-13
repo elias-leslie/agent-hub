@@ -12,8 +12,6 @@ const preview: AgentPreview = {
   memory_query: "heartbeat project state",
   memory_debug: {
     total_tokens: 1800,
-    budget_limit: 3500,
-    budget_hit: false,
     tier_counts: { L1: 2, L2: 1 },
     render_chars_saved: 640,
     memory_plan: [
@@ -99,6 +97,8 @@ describe("AgentPreviewPanel", () => {
     expect(screen.getByText("L1 2")).toBeInTheDocument();
     expect(screen.getByText("Chars Saved")).toBeInTheDocument();
     expect(screen.getByText("640")).toBeInTheDocument();
+    expect(screen.getByText("Tokens")).toBeInTheDocument();
+    expect(screen.getByText("1,800")).toBeInTheDocument();
     expect(screen.getByText("Memory Plan")).toBeInTheDocument();
     expect(screen.getByText("Use preview first")).toBeInTheDocument();
     expect(screen.getByText("Platform Context")).toBeInTheDocument();

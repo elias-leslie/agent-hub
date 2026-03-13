@@ -36,7 +36,7 @@ CORE_AGENTS = [
         "memory_config": {
             "include_mandates": True,
             "include_guardrails": True,
-            "reference_index_enabled": True,
+            "include_references": True,
         },
     },
     {
@@ -65,7 +65,7 @@ CORE_AGENTS = [
         "memory_config": {
             "include_mandates": True,
             "include_guardrails": True,
-            "reference_index_enabled": True,
+            "include_references": True,
         },
     },
     {
@@ -132,11 +132,9 @@ CORE_AGENTS = [
             "include_guardrails": True,
             "continuity_enabled": True,
             "continuity_max_sessions": 4,
+            "include_references": True,
             "cross_project_enabled": False,
             "live_sessions_enabled": True,
-            "total_budget": 2500,
-            "max_mandates": 12,
-            "max_guardrails": 12,
         },
     },
 ]

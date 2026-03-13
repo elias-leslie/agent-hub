@@ -2,6 +2,7 @@
 
 import time
 
+from app.services.memory.context_builder_tiers import get_rendered_content
 from app.services.memory.service import MemoryScope
 
 from .memory_agent_context_builder import (
@@ -25,15 +26,15 @@ def _assemble_context_response(context, formatted, variant, debug) -> Progressiv
 
     return ProgressiveContextResponse(
         mandates=ProgressiveContextBlock(
-            items=[m.content for m in context.mandates],
+            items=[get_rendered_content(m) for m in context.mandates],
             count=len(context.mandates),
         ),
         guardrails=ProgressiveContextBlock(
-            items=[g.content for g in context.guardrails],
+            items=[get_rendered_content(g) for g in context.guardrails],
             count=len(context.guardrails),
         ),
         reference=ProgressiveContextBlock(
-            items=[r.content for r in context.reference],
+            items=[get_rendered_content(r) for r in context.reference],
             count=len(context.reference),
         ),
         total_tokens=context.total_tokens,

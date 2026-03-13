@@ -15,8 +15,8 @@ PROMPT_TIER_L2 = "L2"
 _QUERY_TOKEN_PATTERN = re.compile(r"[a-z0-9_./-]{3,}")
 _L0_MAX_CHARS = 72
 _L1_MAX_CHARS = 220
-_FULL_TEXT_TOKEN_THRESHOLD = 48
-_QUERY_MATCH_THRESHOLD = 2
+_FULL_TEXT_TOKEN_THRESHOLD = 24
+_QUERY_MATCH_THRESHOLD = 3
 
 
 def get_rendered_content(item: MemorySearchResult) -> str:
@@ -105,15 +105,30 @@ def _select_initial_tier(
     block: str,
     query_terms: set[str],
 ) -> tuple[str, str]:
-    if item.pinned:
-        return PROMPT_TIER_L2, "pinned"
-    if block == "reference":
-        return PROMPT_TIER_L2, "selected_reference"
+    query_overlap = _query_overlap(item, query_terms)
+    if block == "mandate":
+        if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
+            return PROMPT_TIER_L2, "already_compact"
+        if query_overlap >= _QUERY_MATCH_THRESHOLD:
+            return PROMPT_TIER_L2, "query_match"
+        if item.pinned:
+            return PROMPT_TIER_L1, "pinned_overview"
+        return PROMPT_TIER_L0, "default_summary"
+
+    if block == "guardrail":
+        if item.pinned:
+            return PROMPT_TIER_L2, "pinned_guardrail"
+        if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
+            return PROMPT_TIER_L2, "already_compact"
+        if query_overlap >= _QUERY_MATCH_THRESHOLD:
+            return PROMPT_TIER_L2, "query_match"
+        return PROMPT_TIER_L1, "default_overview"
+
     if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
         return PROMPT_TIER_L2, "already_compact"
-    if _query_overlap(item, query_terms) >= _QUERY_MATCH_THRESHOLD:
+    if query_overlap >= _QUERY_MATCH_THRESHOLD:
         return PROMPT_TIER_L2, "query_match"
-    return PROMPT_TIER_L1, "default_overview"
+    return PROMPT_TIER_L1, "selected_reference"
 
 
 def _apply_render_tier(item: MemorySearchResult, tier: str, reason: str | None) -> None:
@@ -168,7 +183,7 @@ def _query_overlap(item: MemorySearchResult, query_terms: set[str]) -> int:
         " ".join(
             [
                 item.summary or "",
-                item.content,
+                item.overview or "",
                 " ".join(item.tags),
             ]
         )

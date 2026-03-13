@@ -19,11 +19,6 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
   const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
 
   const [enabled, setEnabled] = useState(true);
-  const [budgetEnabled, setBudgetEnabled] = useState(true);
-  const [budget, setBudget] = useState(2000);
-  const [maxMandates, setMaxMandates] = useState(0);
-  const [maxGuardrails, setMaxGuardrails] = useState(0);
-  const [referenceIndexEnabled, setReferenceIndexEnabled] = useState(true);
   const [continuityEnabled, setContinuityEnabled] = useState(true);
   const [continuityMaxSessions, setContinuityMaxSessions] = useState(5);
 
@@ -44,11 +39,6 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
       setUsage(usageData);
       setLlmConfig(llmData);
       setEnabled(settingsData.enabled);
-      setBudgetEnabled(settingsData.budget_enabled);
-      setBudget(settingsData.total_budget);
-      setMaxMandates(settingsData.max_mandates ?? 0);
-      setMaxGuardrails(settingsData.max_guardrails ?? 0);
-      setReferenceIndexEnabled(settingsData.reference_index_enabled ?? true);
       setContinuityEnabled(settingsData.continuity_enabled ?? true);
       setContinuityMaxSessions(settingsData.continuity_max_sessions ?? 5);
     } catch (e) {
@@ -64,11 +54,6 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
     try {
       const updated = await updateSettings({
         enabled,
-        budget_enabled: budgetEnabled,
-        total_budget: budget,
-        max_mandates: maxMandates,
-        max_guardrails: maxGuardrails,
-        reference_index_enabled: referenceIndexEnabled,
         continuity_enabled: continuityEnabled,
         continuity_max_sessions: continuityMaxSessions,
       });
@@ -92,16 +77,6 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
     llmConfig,
     enabled,
     setEnabled,
-    budgetEnabled,
-    setBudgetEnabled,
-    budget,
-    setBudget,
-    maxMandates,
-    setMaxMandates,
-    maxGuardrails,
-    setMaxGuardrails,
-    referenceIndexEnabled,
-    setReferenceIndexEnabled,
     continuityEnabled,
     setContinuityEnabled,
     continuityMaxSessions,

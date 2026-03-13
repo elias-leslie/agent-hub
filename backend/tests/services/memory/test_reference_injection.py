@@ -8,9 +8,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.memory.context_builder import build_progressive_context
-from app.services.memory.context_injector import format_context_with_reference_index
+from app.services.memory.context_injector import format_progressive_context
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
-from app.services.memory.context_injector_queries import build_reference_toon_index
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -161,6 +160,52 @@ class TestReferenceInjection:
         assert context.debug_info["memory_plan"][1]["tier"] == "L1"
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_uses_compact_defaults_for_long_mandates(self) -> None:
+        long_mandate = (
+            "Use one canonical prompt layer for durable instructions, then keep dynamic state and examples "
+            "in task-specific prompt variables so the runtime stays compact and easier to reason about."
+        )
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(
+                    return_value=(
+                        [
+                            MemorySearchResult(
+                                uuid="mandate-uuid",
+                                content=long_mandate,
+                                summary="Keep durable instructions canonical and compact.",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=1.0,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                            )
+                        ],
+                        [],
+                        [],
+                    )
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Unrelated query that should not force expansion.",
+                scope=MemoryScope.GLOBAL,
+            )
+
+        assert context.mandates[0].render_tier == "L0"
+        assert context.mandates[0].rendered_content == "Keep durable instructions canonical and compact."
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_dedupes_selected_references(self) -> None:
         existing = _reference_result(
             "f2ae2668-da26-46e1-b499-ffac6141e377",
@@ -197,9 +242,39 @@ class TestReferenceInjection:
             "015a8754-95f0-4370-8a8c-077ace49ca90",
         ]
 
-    def test_format_context_with_reference_index_renders_selected_references_and_excludes_them_from_index(
-        self,
-    ) -> None:
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_skips_references_when_disabled(self) -> None:
+        auto_reference = _reference_result(
+            "f2ae2668-da26-46e1-b499-ffac6141e377",
+            "**Session Surfaces**: Existing ref.",
+        )
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], [auto_reference])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[auto_reference.model_dump()]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Show specialist overlap in st context",
+                scope=MemoryScope.PROJECT,
+                scope_id="summitflow",
+                include_references=False,
+            )
+
+        assert context.reference == []
+        assert context.debug_info["reference_count"] == 0
+
+    def test_format_progressive_context_renders_selected_references_without_passive_index(self) -> None:
         context = type("Ctx", (), {})()
         context.mandates = []
         context.guardrails = []
@@ -210,64 +285,8 @@ class TestReferenceInjection:
             )
         ]
 
-        result = format_context_with_reference_index(
-            context,
-            reference_episodes=[
-                (
-                    "015a8754-95f0-4370-8a8c-077ace49ca90",
-                    "Done path + specialists",
-                    "**Operator Context**: Expect st context to show SPECIALISTS lines.",
-                    False,
-                )
-            ],
-            include_citations=True,
-        )
+        result = format_progressive_context(context, include_citations=True)
 
         assert "## References" in result
         assert "[R:f2ae2668]" in result
-        assert "## Reference Index" in result
-        assert "015a8754" in result
-
-    @pytest.mark.asyncio
-    async def test_build_reference_toon_index_skips_operational_noise(self) -> None:
-        with patch(
-            "app.services.memory.context_injector_queries.get_episodes_by_tier",
-            new=AsyncMock(
-                return_value=[
-                    {
-                        "uuid": "good-uuid",
-                        "summary": "Service scripts",
-                        "content": "**Service Scripts**: Use rebuild.sh for frontend changes.",
-                        "pinned": False,
-                        "metadata": {},
-                        "source_description": "learning",
-                    },
-                    {
-                        "uuid": "summary-uuid",
-                        "summary": "Session summary",
-                        "content": "[Session Summary: abc]\nSomething happened.",
-                        "pinned": False,
-                        "metadata": {"is_session_summary": True},
-                        "source_description": "session_summary",
-                    },
-                    {
-                        "uuid": "heartbeat-uuid",
-                        "summary": "Heartbeat",
-                        "content": "## Heartbeat: 20:56 EST\n\n### Orient",
-                        "pinned": False,
-                        "metadata": {},
-                        "source_description": "learning",
-                    },
-                ]
-            ),
-        ):
-            result = await build_reference_toon_index(MemoryScope.PROJECT, "portfolio-ai")
-
-        assert result == [
-            (
-                "good-uuid",
-                "Service scripts",
-                "**Service Scripts**: Use rebuild.sh for frontend changes.",
-                False,
-            )
-        ]
+        assert "## Reference Index" not in result
