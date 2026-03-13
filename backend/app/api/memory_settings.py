@@ -26,13 +26,7 @@ async def get_settings() -> SettingsResponse:
         settings = await get_memory_settings(db)
         return SettingsResponse(
             enabled=settings.enabled,
-            budget_enabled=settings.budget_enabled,
-            total_budget=settings.total_budget,
-            max_mandates=settings.max_mandates,
-            max_guardrails=settings.max_guardrails,
-            reference_index_enabled=settings.reference_index_enabled,
             continuity_enabled=settings.continuity_enabled,
-
             continuity_max_sessions=settings.continuity_max_sessions,
         )
 
@@ -49,23 +43,12 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
         settings = await update_memory_settings(
             db,
             enabled=request.enabled,
-            budget_enabled=request.budget_enabled,
-            total_budget=request.total_budget,
-            max_mandates=request.max_mandates,
-            max_guardrails=request.max_guardrails,
-            reference_index_enabled=request.reference_index_enabled,
             continuity_enabled=request.continuity_enabled,
             continuity_max_sessions=request.continuity_max_sessions,
         )
         return SettingsResponse(
             enabled=settings.enabled,
-            budget_enabled=settings.budget_enabled,
-            total_budget=settings.total_budget,
-            max_mandates=settings.max_mandates,
-            max_guardrails=settings.max_guardrails,
-            reference_index_enabled=settings.reference_index_enabled,
             continuity_enabled=settings.continuity_enabled,
-
             continuity_max_sessions=settings.continuity_max_sessions,
         )
 
@@ -84,12 +67,7 @@ async def get_llm_config() -> dict[str, str]:
 
 @router.get("/budget-usage", response_model=BudgetUsageResponse)
 async def get_budget_usage() -> BudgetUsageResponse:
-    """Get current budget usage statistics.
-
-    Returns token usage breakdown by category and remaining budget.
-    Computes actual usage by calling get_progressive_context internally.
-    Also returns counts for coverage tracking.
-    """
+    """Get current rendered memory usage statistics."""
     from app.services.memory.budget import count_tokens
     from app.services.memory.context_injector import build_progressive_context
     from app.services.memory.continuity_injector import build_continuity_context
@@ -131,9 +109,6 @@ async def get_budget_usage() -> BudgetUsageResponse:
             reference_tokens=context.budget_usage.reference_tokens,
             continuity_tokens=continuity_tokens,
             total_tokens=context.budget_usage.total_tokens + continuity_tokens,
-            total_budget=context.budget_usage.total_budget,
-            remaining=max(0, context.budget_usage.total_budget - context.budget_usage.total_tokens - continuity_tokens),
-            hit_limit=context.budget_usage.total_tokens + continuity_tokens >= context.budget_usage.total_budget,
             mandates_injected=len(context.mandates),
             mandates_total=mandates_total,
             guardrails_injected=len(context.guardrails),
@@ -148,9 +123,6 @@ async def get_budget_usage() -> BudgetUsageResponse:
         reference_tokens=0,
         continuity_tokens=continuity_tokens,
         total_tokens=continuity_tokens,
-        total_budget=3500,
-        remaining=max(0, 3500 - continuity_tokens),
-        hit_limit=False,
         mandates_injected=0,
         mandates_total=mandates_total,
         guardrails_injected=0,

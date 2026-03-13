@@ -84,7 +84,7 @@ _SPECIFIER: dict[str, object] = {
     "memory_config": {
         "include_mandates": True,
         "include_guardrails": True,
-        "reference_index_enabled": True,
+        "include_references": True,
     },
 }
 
@@ -163,7 +163,7 @@ _CRITIC: dict[str, object] = {
     "memory_config": {
         "include_mandates": True,
         "include_guardrails": True,
-        "reference_index_enabled": True,
+        "include_references": True,
     },
 }
 

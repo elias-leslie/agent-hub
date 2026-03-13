@@ -33,6 +33,7 @@ def _build_scope_tasks(
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     include_mandates: bool,
     include_guardrails: bool,
+    include_references: bool,
 ) -> tuple[list[asyncio.Task[list[MemorySearchResult]]], list[str]]:
     """Build parallel tasks for each scope, returning tasks and matching keys."""
     tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
@@ -49,14 +50,15 @@ def _build_scope_tasks(
                 asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
             )
             task_keys.append(f"guardrails_{query_scope.value}")
-        tasks.append(
-            asyncio.create_task(
-                get_auto_inject_references_as_search_results(
-                    scope=query_scope, scope_id=query_scope_id
+        if include_references:
+            tasks.append(
+                asyncio.create_task(
+                    get_auto_inject_references_as_search_results(
+                        scope=query_scope, scope_id=query_scope_id
+                    )
                 )
             )
-        )
-        task_keys.append(f"reference_{query_scope.value}")
+            task_keys.append(f"reference_{query_scope.value}")
 
     return tasks, task_keys
 
@@ -96,6 +98,7 @@ async def fetch_all_episodes(
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     include_mandates: bool,
     include_guardrails: bool,
+    include_references: bool,
     task_type: str | None,
     phase: str | None,
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult]]:
@@ -105,10 +108,10 @@ async def fetch_all_episodes(
         Tuple of (mandates, guardrails, reference)
     """
     tasks, task_keys = _build_scope_tasks(
-        scopes_to_query, include_mandates, include_guardrails
+        scopes_to_query, include_mandates, include_guardrails, include_references
     )
 
-    if task_type:
+    if include_references and task_type:
         tasks.append(
             asyncio.create_task(
                 get_triggered_references_as_search_results(task_type=task_type, group_id="global")
@@ -116,7 +119,7 @@ async def fetch_all_episodes(
         )
         task_keys.append("reference_triggered")
 
-    if phase:
+    if include_references and phase:
         tasks.append(
             asyncio.create_task(
                 get_phase_triggered_references_as_search_results(phase=phase, group_id="global")

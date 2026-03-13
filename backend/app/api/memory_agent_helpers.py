@@ -1,36 +1,9 @@
 """Helper functions for memory agent handlers."""
 
 from app.services.memory.context_injector import ProgressiveContext
-from app.services.memory.service import MemoryScope
 
 from .memory_agent_schemas import SaveLearningResponse, ScoringBreakdown
 from .memory_schemas import BudgetUsageResponse
-
-
-async def build_reference_episodes(
-    scope: MemoryScope,
-    scope_id: str | None,
-) -> list[tuple[str, str | None, str, bool]] | None:
-    """Build reference TOON index if enabled."""
-    from app.services.memory.context_injector import build_reference_toon_index
-    from app.services.memory.settings import get_memory_settings
-
-    settings = await get_memory_settings()
-    if not settings.reference_index_enabled:
-        return None
-
-    # Always include global scope references
-    reference_episodes = await build_reference_toon_index(MemoryScope.GLOBAL, None)
-
-    # Add project-specific references if project scope requested
-    if scope == MemoryScope.PROJECT and scope_id:
-        project_refs = await build_reference_toon_index(scope, scope_id)
-        if project_refs:
-            # Dedupe by UUID (global first, then project)
-            seen_uuids = {r[0] for r in reference_episodes}
-            reference_episodes.extend(r for r in project_refs if r[0] not in seen_uuids)
-
-    return reference_episodes
 
 
 def build_scoring_breakdown(context: ProgressiveContext) -> list[ScoringBreakdown]:
@@ -81,9 +54,6 @@ def build_budget_usage(context: ProgressiveContext) -> BudgetUsageResponse | Non
         reference_tokens=context.budget_usage.reference_tokens,
         continuity_tokens=context.budget_usage.continuity_tokens,
         total_tokens=context.budget_usage.total_tokens,
-        total_budget=context.budget_usage.total_budget,
-        remaining=context.budget_usage.remaining,
-        hit_limit=context.budget_usage.hit_limit,
         mandates_injected=len(context.mandates),
         guardrails_injected=len(context.guardrails),
         reference_injected=len(context.reference),

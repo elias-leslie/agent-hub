@@ -104,7 +104,7 @@ IDEATOR_AGENTS = [
         "memory_config": {
             "include_mandates": True,
             "include_guardrails": True,
-            "reference_index_enabled": True,
+            "include_references": True,
         },
     },
     {

@@ -99,25 +99,6 @@ async def get_auto_inject_references(
         return []
 
 
-async def build_reference_toon_index(
-    scope: MemoryScope = MemoryScope.GLOBAL,
-    scope_id: str | None = None,
-) -> list[tuple[str, str | None, str, bool]]:
-    """
-    Get all reference-tier episodes for TOON index generation.
-
-    Returns list of (uuid, summary, content, pinned) tuples for TOON formatting.
-    Summary is used for display; content is fallback only.
-    Pinned items are expanded to full content in format_context_with_reference_index.
-    """
-    episodes = await get_episodes_by_tier("reference", scope, scope_id)
-    return [
-        (ep.get("uuid", ""), ep.get("summary"), ep.get("content", ""), ep.get("pinned", False))
-        for ep in episodes
-        if ep.get("uuid") and ep.get("content") and _is_reference_candidate(ep)
-    ]
-
-
 def _tokenize(text: str) -> set[str]:
     return {match.group(0) for match in _TOKEN_PATTERN.finditer(text.lower())}
 

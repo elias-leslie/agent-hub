@@ -2,17 +2,17 @@ import { Tags } from "lucide-react";
 import { parseTagsFromInput } from "./utils";
 
 interface TagFilteringSectionProps {
-  includeTags: string[];
+  audienceTags: string[];
   excludeTags: string[];
-  onUpdateTags: (field: "include_tags" | "exclude_tags", tags: string[]) => void;
+  onUpdateTags: (field: "audience_tags" | "exclude_tags", tags: string[]) => void;
 }
 
 export function TagFilteringSection({
-  includeTags,
+  audienceTags,
   excludeTags,
   onUpdateTags,
 }: TagFilteringSectionProps) {
-  const handleTagChange = (field: "include_tags" | "exclude_tags", value: string) => {
+  const handleTagChange = (field: "audience_tags" | "exclude_tags", value: string) => {
     const tags = parseTagsFromInput(value);
     onUpdateTags(field, tags);
   };
@@ -27,24 +27,24 @@ export function TagFilteringSection({
       </div>
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Include = only inject these tagged episodes. Exclude = never inject
-        these tagged episodes.
+        Audience tags route specialist memories to this agent. Exclude tags are
+        an advanced suppression escape hatch.
       </p>
 
-      {/* Include Tags */}
+      {/* Audience Tags */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-          Include Tags
+          Audience Tags
         </label>
         <input
           type="text"
-          value={includeTags.join(", ")}
-          onChange={(e) => handleTagChange("include_tags", e.target.value)}
-          placeholder="e.g. python, deployment, security"
+          value={audienceTags.join(", ")}
+          onChange={(e) => handleTagChange("audience_tags", e.target.value)}
+          placeholder="e.g. agent:debugger, workflow:heartbeat, provider:codex"
           className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          Comma-separated whitelist of episode tags
+          Only memories with at least one matching tag remain eligible.
         </p>
       </div>
 
@@ -61,7 +61,7 @@ export function TagFilteringSection({
           className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-400 dark:text-slate-500">
-          Comma-separated blacklist of episode tags
+          Force-hide memories with these tags, even if they would otherwise match.
         </p>
       </div>
     </div>

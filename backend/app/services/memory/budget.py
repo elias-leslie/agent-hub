@@ -1,8 +1,4 @@
-"""Token budget management for memory injection.
-
-Provides functions to count tokens and track budget usage across
-the three memory categories: mandates, guardrails, and reference.
-"""
+"""Token accounting for memory injection."""
 
 from dataclasses import dataclass
 
@@ -27,16 +23,13 @@ def count_tokens(text: str) -> int:
 
 @dataclass
 class BudgetUsage:
-    """Tracks token usage across memory categories.
+    """Tracks rendered token usage across memory categories.
 
     Attributes:
         mandates_tokens: Tokens used by mandate content
         guardrails_tokens: Tokens used by guardrail content
         reference_tokens: Tokens used by reference content
         total_tokens: Total tokens used
-        total_budget: Configured budget limit
-        remaining: Tokens remaining in budget
-        hit_limit: Whether budget limit was reached
         mandates_total: Total mandates available before budget cutoff
         guardrails_total: Total guardrails available before budget cutoff
         reference_total: Total reference items available before budget cutoff
@@ -46,7 +39,7 @@ class BudgetUsage:
     guardrails_tokens: int = 0
     reference_tokens: int = 0
     continuity_tokens: int = 0
-    total_budget: int = 2000
+    total_budget: int = 0
     # Total counts (before budget filtering)
     mandates_total: int = 0
     guardrails_total: int = 0
@@ -59,12 +52,16 @@ class BudgetUsage:
 
     @property
     def remaining(self) -> int:
-        """Tokens remaining in budget."""
+        """Compatibility shim for deprecated budget APIs."""
+        if self.total_budget <= 0:
+            return 0
         return max(0, self.total_budget - self.total_tokens)
 
     @property
     def hit_limit(self) -> bool:
-        """Whether budget limit was reached."""
+        """Compatibility shim for deprecated budget APIs."""
+        if self.total_budget <= 0:
+            return False
         return self.total_tokens >= self.total_budget
 
     def to_dict(self) -> dict[str, int | bool]:
