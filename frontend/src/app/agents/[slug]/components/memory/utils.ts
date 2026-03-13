@@ -13,10 +13,7 @@ export function parseConfig(raw: Record<string, unknown> | null): MemoryConfig {
     include_references: (raw.include_references as boolean | undefined) ?? true,
     continuity_enabled: (raw.continuity_enabled as boolean) ?? true,
     continuity_max_sessions: (raw.continuity_max_sessions as number) ?? 5,
-    audience_tags:
-      (raw.audience_tags as string[] | undefined) ??
-      (raw.include_tags as string[] | undefined) ??
-      [],
+    audience_tags: (raw.audience_tags as string[] | undefined) ?? [],
     exclude_tags: (raw.exclude_tags as string[]) ?? [],
   };
 }
