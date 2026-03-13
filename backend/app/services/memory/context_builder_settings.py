@@ -7,6 +7,19 @@ from typing import Any
 from .settings import MemorySettingsDTO
 
 
+def resolve_memory_config_includes(
+    memory_config: dict[str, Any] | None,
+) -> tuple[bool, bool, bool]:
+    """Resolve per-agent include flags with runtime defaults."""
+    if not memory_config:
+        return True, True, True
+    return (
+        bool(memory_config.get("include_mandates", True)),
+        bool(memory_config.get("include_guardrails", True)),
+        bool(memory_config.get("include_references", True)),
+    )
+
+
 def apply_memory_config_overrides(
     settings: MemorySettingsDTO,
     memory_config: dict[str, Any] | None,
