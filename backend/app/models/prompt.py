@@ -68,6 +68,9 @@ class Prompt(Base):
         Index("ix_prompts_prompt_type", "prompt_type"),
     )
 
+    def __repr__(self) -> str:
+        return f"<Prompt id={self.id} slug={self.slug!r} global={self.is_global}>"
+
 
 class AgentPrompt(Base):
     """Join table assigning prompts to agents with role and priority."""
@@ -132,3 +135,6 @@ class PromptRevision(Base):
         Index("ix_prompt_revisions_prompt_id", "prompt_id"),
         Index("ix_prompt_revisions_prompt_slug_created", "prompt_slug", "created_at"),
     )
+
+    def __repr__(self) -> str:
+        return f"<PromptRevision id={self.id!r} slug={self.prompt_slug!r} action={self.action!r}>"

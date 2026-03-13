@@ -5,10 +5,14 @@ Provides citation scanning and task outcome reporting for memory analytics.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.session_ingestion import FinalizeSessionRequest, finalize_session
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -129,6 +133,7 @@ async def analyze_session(
             summary_stored=result.summary_stored,
         )
     except Exception as e:
+        logger.exception("Failed to analyze session %s", session_id)
         raise HTTPException(
             status_code=500,
             detail=f"Failed to analyze session: {e}",
@@ -160,6 +165,7 @@ async def report_task_outcome(
             memories_credited=result.memories_credited,
         )
     except Exception as e:
+        logger.exception("Failed to process task outcome")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process task outcome: {e}",
@@ -203,6 +209,7 @@ async def report_task_outcome_by_task(
             total_memories_credited=total_memories,
         )
     except Exception as e:
+        logger.exception("Failed to process task outcome")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process task outcome: {e}",

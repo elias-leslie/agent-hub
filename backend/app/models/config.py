@@ -24,6 +24,9 @@ class Credential(Base):
 
     __table_args__ = (Index("ix_credentials_provider_type", "provider", "credential_type"),)
 
+    def __repr__(self) -> str:
+        return f"<Credential id={self.id} provider={self.provider!r} type={self.credential_type!r}>"
+
 
 class UserPreference(Base):
     """User preferences key-value store."""
@@ -62,3 +65,6 @@ class WebhookSubscription(Base):
     failure_count: Mapped[int] = mapped_column(Integer, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
+
+    def __repr__(self) -> str:
+        return f"<WebhookSubscription id={self.id} active={bool(self.is_active)} failures={self.failure_count}>"

@@ -83,7 +83,7 @@ class _RootsProxy(dict):
         return repr(_get_known_roots())
 
 
-KNOWN_ROOTS: dict[str, str] = _RootsProxy()  # type: ignore[assignment]
+KNOWN_ROOTS: dict[str, str] = _RootsProxy()
 
 
 def _is_blocked_command(command: str) -> bool:

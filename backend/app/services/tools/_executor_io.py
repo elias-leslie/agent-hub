@@ -86,7 +86,7 @@ async def manage_tasks(
         return f"{overview}\n\n{actionable}" if actionable else overview
     if action == "get_context":
         err = _require_task_id(action, task_id)
-        return err if err else await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id))  # type: ignore[arg-type]
+        return err if err else await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id))
     if action == "create":
         if not title:
             return "Error: title required for create"
@@ -97,7 +97,7 @@ async def manage_tasks(
         )
     if action == "dispatch":
         err = _require_task_id(action, task_id)
-        return err if err else await _handle_dispatch(bash_fn, task_id, project_id)  # type: ignore[arg-type]
+        return err if err else await _handle_dispatch(bash_fn, task_id, project_id)
     if action == "cleanup_status":
         return await _handle_cleanup_status(bash_fn, project_id)
     if action == "cleanup_worktrees":
@@ -116,10 +116,10 @@ async def manage_tasks(
         err = _require_task_id(action, task_id)
         if err: return err  # noqa: E701
         handler = _reconcile_task_lane if action == "reconcile" else _retire_task_lane
-        return await handler(bash_fn, task_id, project_id)  # type: ignore[arg-type]
+        return await handler(bash_fn, task_id, project_id)
     if action in _SIMPLE_TASK_ACTIONS:
         err = _require_task_id(action, task_id)
-        return err if err else await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))  # type: ignore[arg-type]
+        return err if err else await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))
     return (
         f"Error: Unknown action '{action}'. "
         "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/salvage_orphan/cleanup_all_safe/"

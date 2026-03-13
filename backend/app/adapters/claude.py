@@ -129,7 +129,7 @@ class ClaudeAdapter(ProviderAdapter):
                 await ensure_valid_token()
                 return True
             except Exception:
-                pass
+                logger.debug("Claude direct API token validation failed", exc_info=True)
         return self._cli_path is not None
 
     async def complete(

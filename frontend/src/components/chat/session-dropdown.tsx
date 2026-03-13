@@ -138,7 +138,8 @@ export function SessionDropdown({
         onSelectSession(null);
       }
     } catch {
-      // Silent failure - user can refresh
+      setSessions((prev) => prev); // trigger re-render to restore UI
+      console.error("Failed to delete session", sessionId);
     }
   };
 
@@ -272,6 +273,7 @@ export function SessionDropdown({
                     </div>
                     <button
                       onClick={(e) => handleDeleteSession(e, session.id)}
+                      aria-label="Delete session"
                       className={cn(
                         "p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity",
                         "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"

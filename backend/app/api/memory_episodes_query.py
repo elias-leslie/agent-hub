@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
@@ -11,6 +12,8 @@ from app.services.memory.service import MemoryCategory, MemoryListResult, Memory
 
 if TYPE_CHECKING:
     from .memory_schemas import HealthResponse
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_list_episodes(
@@ -33,6 +36,7 @@ async def handle_list_episodes(
             sort_order=sort_order,
         )
     except Exception as e:
+        logger.exception("Failed to list episodes")
         raise HTTPException(status_code=500, detail=f"Failed to list episodes: {e}") from e
 
 
@@ -44,6 +48,7 @@ async def handle_get_memory_stats(
     try:
         return await memory.get_stats(all_groups=all_groups)
     except Exception as e:
+        logger.exception("Failed to get memory stats")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
 
 
@@ -52,6 +57,7 @@ async def handle_list_memory_scopes(memory: MemoryService) -> Any:
     try:
         return await memory.get_scope_stats()
     except Exception as e:
+        logger.exception("Failed to list memory scopes")
         raise HTTPException(status_code=500, detail=f"Failed to list scopes: {e}") from e
 
 
@@ -90,6 +96,7 @@ async def handle_get_episode_citations(full_uuid: str, limit: int) -> dict[str, 
             "total": len(records),
         }
     except Exception as e:
+        logger.exception("Failed to get citations for %s", full_uuid)
         raise HTTPException(status_code=500, detail=f"Failed to get citations: {e}") from e
 
 

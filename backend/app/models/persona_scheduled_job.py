@@ -66,3 +66,6 @@ class PersonaScheduledJob(Base):
     __table_args__ = (
         Index("ix_persona_scheduled_jobs_next_run", "enabled", "next_run_at"),
     )
+
+    def __repr__(self) -> str:
+        return f"<PersonaScheduledJob name={self.name!r} type={self.schedule_type!r} enabled={self.enabled}>"

@@ -93,6 +93,9 @@ class FeedbackItem(Base):
         Index("idx_feedback_items_created", "created_at"),
     )
 
+    def __repr__(self) -> str:
+        return f"<FeedbackItem id={self.id!r} type={self.feedback_type!r} component={self.component_id!r} status={self.status!r}>"
+
 
 class FeedbackVote(Base):
     """Vote on an existing feedback item — one vote per session.
@@ -128,3 +131,6 @@ class FeedbackVote(Base):
         Index("idx_feedback_votes_item", "feedback_item_id"),
         Index("idx_feedback_votes_session", "session_id"),
     )
+
+    def __repr__(self) -> str:
+        return f"<FeedbackVote id={self.id!r} item={self.feedback_item_id!r}>"

@@ -1,5 +1,6 @@
 """Memory metrics endpoints for injection monitoring."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
@@ -8,6 +9,8 @@ from app.services.memory.analytics_models import InjectionMetricsSummary
 from app.services.memory.analytics_service import get_injection_metrics_summary
 
 from .memory_lookback import parse_memory_lookback
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -44,6 +47,7 @@ async def get_memory_metrics(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
+        logger.exception("Failed to get injection metrics")
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get metrics: {e}",
