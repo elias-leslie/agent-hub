@@ -275,7 +275,12 @@ def _validate_prompt_source(target: str, result: RunnerResult) -> ProbeResult:
     stale_markdown_action = _string(data.get("action_for_stale_markdown")).lower()
     if data.get("checked_in_markdown_authoritative") is not False:
         reasons.append("checked_in_markdown_authoritative must be false")
-    if "db" not in durable_prompt_source and "database" not in durable_prompt_source:
+    if (
+        "db" not in durable_prompt_source
+        and "database" not in durable_prompt_source
+        and "postgres" not in durable_prompt_source
+        and "prompts table" not in durable_prompt_source
+    ):
         reasons.append("durable_prompt_source should mention DB-backed prompts")
     if "delete" not in stale_markdown_action:
         reasons.append("action_for_stale_markdown should say to delete stale markdown")
