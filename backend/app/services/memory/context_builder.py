@@ -12,6 +12,7 @@ from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
 from .context_builder_processors import apply_count_limits, compute_token_counts
 from .context_builder_settings import apply_memory_config_overrides
+from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
@@ -97,9 +98,15 @@ def _finalize_context(
     context: ProgressiveContext, budget: BudgetUsage, settings: Any, query: str, task_type: str | None, phase: str | None
 ) -> None:
     """Set total_tokens, budget_usage, debug_info, and emit log line in-place."""
+    plan_debug = build_memory_plan_debug(
+        context.mandates,
+        context.guardrails,
+        context.reference,
+    )
     context.budget_usage = budget
     context.total_tokens = budget.total_tokens
     context.debug_info = {
+        **context.debug_info,
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
         "reference_count": len(context.reference),
@@ -109,6 +116,7 @@ def _finalize_context(
         "query": query[:100] if query else "",
         "task_type": task_type,
         "phase": phase,
+        **plan_debug,
     }
     logger.info(
         "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d/%d%s%s%s",
@@ -163,6 +171,13 @@ async def build_progressive_context(
     apply_memory_config_overrides(settings, memory_config)
     if memory_config:
         _apply_tag_filters(context, memory_config)
+
+    plan_context_render_tiers(
+        context.mandates,
+        context.guardrails,
+        context.reference,
+        query,
+    )
 
     budget = BudgetUsage(total_budget=settings.total_budget)
     if not settings.enabled:

@@ -287,12 +287,14 @@ async def store_memory_inject_event(
     memory_count: int,
     reference_selected_uuids: list[str] | None = None,
     reference_index_uuids: list[str] | None = None,
+    memory_debug: dict[str, Any] | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
 ) -> SessionEvent:
     """Store a memory injection event."""
     selected_reference_uuids = reference_selected_uuids or []
     indexed_reference_uuids = reference_index_uuids or []
+    debug_payload = memory_debug or {}
     return await store_event(
         db=db,
         session_id=session_id,
@@ -308,6 +310,7 @@ async def store_memory_inject_event(
             "reference_index_count": len(indexed_reference_uuids),
             "reference_selected_uuids": selected_reference_uuids,
             "reference_index_uuids": indexed_reference_uuids,
+            "memory_debug": debug_payload,
         },
         agent_id=agent_id,
         agent_name=agent_name,

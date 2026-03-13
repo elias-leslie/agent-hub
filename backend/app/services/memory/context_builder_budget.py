@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from .budget import BudgetUsage, count_tokens
+from .context_builder_tiers import demote_item_to_fit_budget, get_rendered_content
 from .service import MemorySearchResult
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,9 @@ def apply_budget_enforcement(
     mandates_tokens = 0
     filtered_mandates = []
     for m in mandates:
-        tokens = count_tokens(m.content)
+        tokens = count_tokens(get_rendered_content(m))
+        while mandates_tokens + tokens > mandates_cap and demote_item_to_fit_budget(m):
+            tokens = count_tokens(get_rendered_content(m))
         if mandates_tokens + tokens <= mandates_cap:
             filtered_mandates.append(m)
             mandates_tokens += tokens
@@ -45,7 +48,9 @@ def apply_budget_enforcement(
     guardrails_tokens = 0
     filtered_guardrails = []
     for g in guardrails:
-        tokens = count_tokens(g.content)
+        tokens = count_tokens(get_rendered_content(g))
+        while guardrails_tokens + tokens > guardrails_cap and demote_item_to_fit_budget(g):
+            tokens = count_tokens(get_rendered_content(g))
         if guardrails_tokens + tokens <= guardrails_cap:
             filtered_guardrails.append(g)
             guardrails_tokens += tokens
@@ -58,7 +63,9 @@ def apply_budget_enforcement(
     reference_tokens = 0
     filtered_references = []
     for r in references:
-        tokens = count_tokens(r.content)
+        tokens = count_tokens(get_rendered_content(r))
+        while reference_tokens + tokens > references_cap and demote_item_to_fit_budget(r):
+            tokens = count_tokens(get_rendered_content(r))
         if reference_tokens + tokens <= references_cap:
             filtered_references.append(r)
             reference_tokens += tokens

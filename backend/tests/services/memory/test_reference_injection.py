@@ -87,6 +87,80 @@ class TestReferenceInjection:
         assert context.budget_usage.reference_tokens > 0
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_assigns_render_tiers_and_saves_chars(self) -> None:
+        long_guardrail = (
+            "Never bypass authentication middleware. Always debug the root cause, preserve the access check, "
+            "and confirm the real credentials or test setup problem before changing code paths. "
+            "Do not patch around auth failures, do not disable middleware for tests, and do not replace "
+            "authorization logic with temporary bypasses while investigating."
+        )
+        settings = MemorySettingsDTO(
+            enabled=True,
+            budget_enabled=True,
+            total_budget=3500,
+            max_mandates=0,
+            max_guardrails=0,
+            reference_index_enabled=True,
+            continuity_enabled=True,
+            continuity_max_sessions=5,
+        )
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(
+                    return_value=(
+                        [
+                            MemorySearchResult(
+                                uuid="mandate-uuid",
+                                content="Use AsyncAgentHubClient for Agent Hub completions.",
+                                summary="Use AsyncAgentHubClient",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=1.0,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                            )
+                        ],
+                        [
+                            MemorySearchResult(
+                                uuid="guardrail-uuid",
+                                content=long_guardrail,
+                                summary="Preserve auth middleware",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=0.9,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                            )
+                        ],
+                        [],
+                    )
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="How should Agent Hub completions call the SDK?",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+            )
+
+        assert context.mandates[0].render_tier == "L2"
+        assert context.guardrails[0].render_tier == "L1"
+        assert context.guardrails[0].rendered_content is not None
+        assert len(context.guardrails[0].rendered_content) < len(long_guardrail)
+        assert context.debug_info["tier_counts"] == {"L1": 1, "L2": 1}
+        assert context.debug_info["render_chars_saved"] > 0
+        assert context.debug_info["memory_plan"][0]["uuid"] == "mandate-uuid"
+        assert context.debug_info["memory_plan"][1]["tier"] == "L1"
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_dedupes_selected_references(self) -> None:
         existing = _reference_result(
             "f2ae2668-da26-46e1-b499-ffac6141e377",

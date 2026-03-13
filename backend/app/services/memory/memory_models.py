@@ -70,6 +70,11 @@ class MemorySearchResult(BaseModel):
 
     uuid: str
     content: str
+    summary: str | None = None
+    overview: str | None = None
+    rendered_content: str | None = None
+    render_tier: str | None = None
+    render_reason: str | None = None
     source: MemorySource
     relevance_score: float
     created_at: datetime
@@ -78,6 +83,11 @@ class MemorySearchResult(BaseModel):
     category: MemoryCategory | None = None
     pinned: bool = False
     tags: list[str] = []
+
+    @property
+    def prompt_content(self) -> str:
+        """Return the text currently selected for prompt injection."""
+        return self.rendered_content or self.content
 
 
 class MemoryContext(BaseModel):

@@ -143,6 +143,7 @@ async def build_agent_preview(
         "combined_prompt": combined,
         "full_context": full_context,
         "memory_query": memory_query,
+        "memory_debug": dict(getattr(context, "debug_info", {})),
         "loaded_memory_uuids": context.get_loaded_uuids(),
         "reference_uuids": context.get_reference_uuids(),
         "mandate_count": len(context.mandates),

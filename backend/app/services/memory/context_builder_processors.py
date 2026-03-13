@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from .budget import count_tokens
+from .context_builder_tiers import get_rendered_content
 from .service import MemorySearchResult
 from .settings import MemorySettingsDTO
 
@@ -50,7 +51,7 @@ def compute_token_counts(
     Returns:
         Tuple of (mandates_tokens, guardrails_tokens, reference_tokens)
     """
-    mandates_tokens = sum(count_tokens(m.content) for m in mandates)
-    guardrails_tokens = sum(count_tokens(g.content) for g in guardrails)
-    reference_tokens = sum(count_tokens(r.content) for r in references)
+    mandates_tokens = sum(count_tokens(get_rendered_content(m)) for m in mandates)
+    guardrails_tokens = sum(count_tokens(get_rendered_content(g)) for g in guardrails)
+    reference_tokens = sum(count_tokens(get_rendered_content(r)) for r in references)
     return mandates_tokens, guardrails_tokens, reference_tokens

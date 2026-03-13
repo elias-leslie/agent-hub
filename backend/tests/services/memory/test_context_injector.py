@@ -310,6 +310,29 @@ class TestFormatProgressiveContext:
         assert CITATION_INSTRUCTION not in result
         assert "Content" in result
 
+    def test_prefers_rendered_content_for_tiered_items(self):
+        """Tier-aware formatting should inject the planned render text, not always full content."""
+        now = datetime.now(UTC)
+        ctx = ProgressiveContext(
+            mandates=[
+                MemorySearchResult(
+                    uuid="m1-uuid",
+                    content="Full rule body with detailed rationale and edge-case coverage.",
+                    rendered_content="Compact overview of the rule.",
+                    render_tier="L1",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
+                ),
+            ],
+        )
+
+        result = format_progressive_context(ctx)
+
+        assert "Compact overview of the rule." in result
+        assert "Full rule body with detailed rationale" not in result
+
 
 class TestGetContextTokenStats:
     """Tests for get_context_token_stats function."""
