@@ -245,6 +245,7 @@ async def preview_agent(
         combined_prompt=preview["combined_prompt"],
         full_context=preview["full_context"],
         memory_query=preview["memory_query"],
+        memory_debug=preview["memory_debug"],
         loaded_memory_uuids=preview["loaded_memory_uuids"],
         reference_uuids=preview["reference_uuids"],
         mandate_count=preview["mandate_count"],

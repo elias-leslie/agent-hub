@@ -13,6 +13,7 @@ from .citation_parser import (
     format_mandate_citation,
     format_reference_citation,
 )
+from .context_builder_tiers import get_rendered_content
 from .context_injector_debug import (
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
@@ -117,14 +118,15 @@ def _format_memory_item(
     item: MemorySearchResult, type_prefix: str, include_citations: bool
 ) -> str:
     """Helper to format a single mandate or guardrail item."""
+    render_text = get_rendered_content(item)
     if include_citations and item.uuid:
         citation = {
             "M": format_mandate_citation,
             "G": format_guardrail_citation,
             "R": format_reference_citation,
         }[type_prefix](item.uuid)
-        return f"- {citation} {item.content}"
-    return f"- {item.content}"
+        return f"- {citation} {render_text}"
+    return f"- {render_text}"
 
 
 def _format_references(

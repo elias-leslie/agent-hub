@@ -38,6 +38,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
     return MemorySearchResult(
         uuid=uuid,
         content=content,
+        summary=ep.get("summary"),
         source=source,
         relevance_score=1.0,
         created_at=created_at,
@@ -69,6 +70,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
         return MemorySearchResult(
             uuid=uuid,
             content=content,
+            summary=ep.get("summary"),
             source=MemorySource.SYSTEM,
             relevance_score=1.0,
             created_at=created_at,
@@ -96,6 +98,7 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
     return MemorySearchResult(
         uuid=uuid,
         content=content,
+        summary=ep.get("summary"),
         source=MemorySource.SYSTEM,
         relevance_score=1.0,
         created_at=created_at,

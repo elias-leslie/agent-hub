@@ -175,6 +175,7 @@ class AgentPreviewResponse(BaseModel):
     combined_prompt: str
     full_context: str
     memory_query: str = ""
+    memory_debug: dict[str, Any] = Field(default_factory=dict)
     loaded_memory_uuids: list[str] = Field(default_factory=list)
     reference_uuids: list[str] = Field(default_factory=list)
     mandate_count: int

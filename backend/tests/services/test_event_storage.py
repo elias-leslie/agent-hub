@@ -272,6 +272,10 @@ class TestMemoryInjectEvent:
             memory_count=3,
             reference_selected_uuids=["r1"],
             reference_index_uuids=["r2", "r3"],
+            memory_debug={
+                "tier_counts": {"L1": 1, "L2": 2},
+                "render_chars_saved": 120,
+            },
             agent_id="persona",
         )
 
@@ -280,6 +284,8 @@ class TestMemoryInjectEvent:
         assert event.tool_input["reference_index_count"] == 2
         assert event.tool_input["reference_selected_uuids"] == ["r1"]
         assert event.tool_input["reference_index_uuids"] == ["r2", "r3"]
+        assert event.tool_input["memory_debug"]["tier_counts"] == {"L1": 1, "L2": 2}
+        assert event.tool_input["memory_debug"]["render_chars_saved"] == 120
 
     def test_extract_content_beats_output(self) -> None:
         """'content' has higher priority than 'output'."""
