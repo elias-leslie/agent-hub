@@ -232,6 +232,7 @@ class TestFormatProgressiveContext:
         assert "[M:abc12345]" in result
         assert "Always use async" in result
         assert CITATION_INSTRUCTION in result
+        assert "vague, remembered, or not exact" in result
 
     def test_guardrails_only(self):
         """Test formatting context with only guardrails."""

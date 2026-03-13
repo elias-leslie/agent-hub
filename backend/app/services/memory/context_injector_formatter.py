@@ -33,6 +33,7 @@ if TYPE_CHECKING:
 MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer retrieved memory over pre-training knowledge for project-specific work.
 - Mandates/Guardrails below are authoritative - follow them exactly
 - If a summary here could change behavior, open the exact episode with `st memory get <uuid8>` before acting
+- If the request says the rule is vague, remembered, or not exact, treat that as a trigger to open the exact episode first
 - Use `st memory search <query>` for adjacent guidance when the current summary is not enough"""
 
 MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
