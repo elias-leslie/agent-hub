@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.memory.analytics_models import (
+    MemoryUtilizationMetrics,
     ScopeDistribution,
     TierDistribution,
     TopMemory,
@@ -113,6 +114,33 @@ async def test_get_memory_dashboard_separates_state_and_activity() -> None:
             new_callable=AsyncMock,
             return_value={"by_type": {}, "recent": [], "total": 0},
         ),
+        patch(
+            "app.services.memory.analytics_service.get_memory_utilization_summary",
+            new_callable=AsyncMock,
+            return_value=MemoryUtilizationMetrics(
+                injection_sessions=4,
+                citation_sessions=2,
+                lookup_sessions=3,
+                lookup_after_injection_sessions=2,
+                memory_search_calls=3,
+                memory_get_calls=2,
+                assistant_message_count=5,
+                assistant_messages_with_memory_citations=2,
+                citation_session_rate=0.5,
+                lookup_session_rate=0.75,
+                expansion_session_rate=0.5,
+                assistant_citation_rate=0.4,
+                sessions_with_selected_references=2,
+                sessions_with_cited_selected_references=1,
+                selected_reference_count=6,
+                selected_reference_cited_count=3,
+                selected_reference_citation_rate=0.5,
+                selected_reference_session_rate=0.5,
+                memory_inject_event_count=4,
+                memory_inject_events_with_debug=4,
+                memory_debug_coverage_rate=1.0,
+            ),
+        ),
     ):
         dashboard = await get_memory_dashboard(
             lookback_delta=timedelta(hours=1),
@@ -126,3 +154,5 @@ async def test_get_memory_dashboard_separates_state_and_activity() -> None:
     assert dashboard.activity.usage_totals.loaded == 6
     assert dashboard.activity.injection_metrics.period_granularity == "hour"
     assert dashboard.activity.injection_metrics.outcomes.unknown_count == 1
+    assert dashboard.activity.utilization.lookup_after_injection_sessions == 2
+    assert dashboard.activity.utilization.selected_reference_citation_rate == 0.5

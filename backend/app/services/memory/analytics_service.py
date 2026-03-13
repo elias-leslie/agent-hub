@@ -13,11 +13,13 @@ from app.db import async_session
 from app.models import MemoryInjectionMetric
 from app.models.memory import UsageStatLog
 
+from ._analytics_utilization import get_memory_utilization_summary
 from .analytics_models import (
     InjectionMetricsSummary,
     MemoryAnalyticsActivity,
     MemoryAnalyticsDashboard,
     MemoryAnalyticsState,
+    MemoryUtilizationMetrics,
     OutcomeSummary,
     TimePeriodMetrics,
     TopMemory,
@@ -36,6 +38,13 @@ from .analytics_queries import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _project_id_filter_from_group_id(group_id: str | None) -> str | None:
+    """Derive a project filter from canonical project group ids."""
+    if not group_id or not group_id.startswith("project-"):
+        return None
+    return group_id[len("project-") :]
 
 
 def _normalize_usage_totals(raw: dict[str, int]) -> UsageTotals:
@@ -262,6 +271,7 @@ async def get_memory_dashboard(
 ) -> MemoryAnalyticsDashboard:
     """Return the explicit analytics dashboard payload for the memory page."""
     period = "hour" if lookback_delta <= timedelta(days=1) else "day"
+    project_id_filter = _project_id_filter_from_group_id(group_id)
 
     tier_dist = await get_tier_distribution(group_id)
     scope_dist = await get_scope_distribution(group_id)
@@ -272,7 +282,15 @@ async def get_memory_dashboard(
     top_memories = await get_top_memories_query(group_id, top_memories_sort_by, top_memories_limit)
 
     activity_usage_totals = _normalize_usage_totals(await get_recent_usage_totals(lookback_delta))
-    injection_metrics = await get_injection_metrics_summary(lookback_delta, period=period)
+    injection_metrics = await get_injection_metrics_summary(
+        lookback_delta,
+        period=period,
+        project_id_filter=project_id_filter,
+    )
+    utilization: MemoryUtilizationMetrics = await get_memory_utilization_summary(
+        lookback_delta,
+        project_id_filter=project_id_filter,
+    )
     tier_changes = await get_tier_changes_summary(lookback_delta=lookback_delta)
 
     state = MemoryAnalyticsState(
@@ -289,6 +307,7 @@ async def get_memory_dashboard(
         lookback=lookback_label,
         usage_totals=activity_usage_totals,
         injection_metrics=injection_metrics,
+        utilization=utilization,
         tier_changes=tier_changes,
     )
     return MemoryAnalyticsDashboard(state=state, activity=activity)

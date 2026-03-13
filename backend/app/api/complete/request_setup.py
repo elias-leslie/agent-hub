@@ -175,6 +175,7 @@ async def inject_memory(
                         reference_index_uuids=list(
                             progressive_context.debug_info.get("reference_index_uuids", [])
                         ),
+                        memory_debug=dict(progressive_context.debug_info),
                         agent_id=agent_slug,
                     )
         except Exception as e:

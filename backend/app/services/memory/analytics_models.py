@@ -96,6 +96,32 @@ class InjectionMetricsSummary(BaseModel):
     outcomes: OutcomeSummary
 
 
+class MemoryUtilizationMetrics(BaseModel):
+    """Recent evidence that agents are using injected memory effectively."""
+
+    injection_sessions: int
+    citation_sessions: int
+    lookup_sessions: int
+    lookup_after_injection_sessions: int
+    memory_search_calls: int
+    memory_get_calls: int
+    assistant_message_count: int
+    assistant_messages_with_memory_citations: int
+    citation_session_rate: float
+    lookup_session_rate: float
+    expansion_session_rate: float
+    assistant_citation_rate: float
+    sessions_with_selected_references: int
+    sessions_with_cited_selected_references: int
+    selected_reference_count: int
+    selected_reference_cited_count: int
+    selected_reference_citation_rate: float
+    selected_reference_session_rate: float
+    memory_inject_event_count: int
+    memory_inject_events_with_debug: int
+    memory_debug_coverage_rate: float
+
+
 class MemoryAnalyticsState(BaseModel):
     """Current memory system state derived from memory records."""
 
@@ -115,6 +141,7 @@ class MemoryAnalyticsActivity(BaseModel):
     lookback: str
     usage_totals: UsageTotals
     injection_metrics: InjectionMetricsSummary
+    utilization: MemoryUtilizationMetrics
     tier_changes: dict[str, object]
 
 
