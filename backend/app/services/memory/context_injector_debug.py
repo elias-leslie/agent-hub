@@ -18,7 +18,7 @@ CHARS_PER_TOKEN = 4
 # Progressive disclosure directive blocks
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
-REFERENCE_DIRECTIVE = "## References"
+REFERENCE_DIRECTIVE = "## Selected References"
 
 
 def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:

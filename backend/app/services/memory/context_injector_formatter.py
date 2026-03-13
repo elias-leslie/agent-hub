@@ -18,6 +18,7 @@ from .context_injector_debug import (
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
+    REFERENCE_DIRECTIVE,
     format_relevance_debug_block,
     get_context_token_stats,
     get_relevance_debug_info,
@@ -28,10 +29,10 @@ if TYPE_CHECKING:
     from .service import MemorySearchResult
 
 # Memory context header with retrieval-led reasoning instruction
-MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer context-injected and retrieval-led reasoning over pre-training knowledge.
+MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer retrieved memory over pre-training knowledge for project-specific work.
 - Mandates/Guardrails below are authoritative - follow them exactly
-- Use `st memory search <query>` or retrieve `st memory get <uuid8>` for second-hop references
-- When in doubt, search the memory system before relying on general knowledge"""
+- If a summary here could change behavior, open the exact episode with `st memory get <uuid8>` before acting
+- Use `st memory search <query>` for adjacent guidance when the current summary is not enough"""
 
 MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     MEMORY_CONTEXT_HEADER_BASE
@@ -50,6 +51,7 @@ __all__ = [
     "MEMORY_CONTEXT_HEADER",
     "MEMORY_CONTEXT_HEADER_BASE",
     "MEMORY_CONTEXT_HEADER_WITH_CITATIONS",
+    "REFERENCE_DIRECTIVE",
     "format_progressive_context",
     "format_relevance_debug_block",
     "get_context_token_stats",
@@ -88,7 +90,10 @@ def format_progressive_context(
     if context.reference:
         if parts:
             parts.append("")
-        parts.append("## References")
+        parts.append(REFERENCE_DIRECTIVE)
+        parts.append(
+            "- Likely direct fits for this task. Use `st memory get <uuid8>` before broad search if one may affect behavior."
+        )
         for r in context.reference:
             parts.append(_format_memory_item(r, "R", include_citations))
 
