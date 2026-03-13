@@ -9,9 +9,8 @@ from datetime import UTC, datetime
 
 from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
 from app.services.prompt_service import require_prompt_content
-from app.services.task_overview_summary import build_compact_task_overview
 from app.workflows._heartbeat_data import (
-    _fetch_task_overview_raw,
+    _fetch_task_overview,
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
@@ -131,8 +130,7 @@ async def _append_dynamic_sections(
     provider: str | None = None,
 ) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
-    raw_task_overview = await _fetch_task_overview_raw()
-    task_overview = build_compact_task_overview(raw_task_overview) if raw_task_overview else ""
+    task_overview = await _fetch_task_overview()
     (
         active_work,
         protection_status,
@@ -148,7 +146,7 @@ async def _append_dynamic_sections(
         _get_cleanup_status_summary(),
         _get_active_specialist_inventory(),
         _get_agent_roster_summary(),
-        _get_workstream_inventory(provider, task_overview=raw_task_overview),
+        _get_workstream_inventory(provider),
         _get_git_status_summary(),
         _get_feedback_summary_section(),
     )
