@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Loader2, Menu } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -21,7 +21,9 @@ import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
 import { PromptsTab } from "@/app/agents/[slug]/components/PromptsTab";
 import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
-import type { PreviewTaskType } from "@/app/agents/[slug]/types";
+import type { PreviewScenario, PreviewTaskType } from "@/app/agents/[slug]/types";
+import { useAgentPreview } from "@/app/agents/[slug]/hooks/useAgentPreview";
+import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
 
 export default function PersonaSettingsPage() {
   const searchParams = useSearchParams();
@@ -29,6 +31,9 @@ export default function PersonaSettingsPage() {
   const [activeTab, setActiveTab] = useState<PersonaTabId>("identity");
   const [showInlinePreview, setShowInlinePreview] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewTaskType>("heartbeat");
+  const [previewScenario, setPreviewScenario] = useState<PreviewScenario>(() => ({
+    ...DEFAULT_PREVIEW_SCENARIO,
+  }));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
@@ -48,17 +53,28 @@ export default function PersonaSettingsPage() {
     saveSuccess,
     saveError,
     availableModels,
-    preview,
-    previewFetching,
-    refetchPreview,
     refreshPersona,
-  } = usePersonaSettings(previewMode);
-
-  useEffect(() => {
-    if (showInlinePreview) {
-      refetchPreview();
-    }
-  }, [previewMode, showInlinePreview, refetchPreview]);
+  } = usePersonaSettings();
+  const {
+    data: preview,
+    isFetching: previewFetching,
+    refetch: refetchPreview,
+    error: previewQueryError,
+  } = useAgentPreview({
+    slug: "persona",
+    previewMode,
+    scenario: previewScenario,
+    enabled: showInlinePreview,
+  });
+  const updatePreviewScenario = useCallback((updates: Partial<PreviewScenario>) => {
+    setPreviewScenario((prev) => ({ ...prev, ...updates }));
+  }, []);
+  const previewError =
+    previewQueryError instanceof Error
+      ? previewQueryError.message
+      : previewQueryError
+        ? "Failed to load preview"
+        : null;
 
   if (personaLoading || agentLoading) {
     return (
@@ -160,10 +176,13 @@ export default function PersonaSettingsPage() {
                   agentSlug="persona"
                   preview={preview}
                   previewFetching={previewFetching}
+                  previewError={previewError}
                   showInlinePreview={showInlinePreview}
                   setShowInlinePreview={setShowInlinePreview}
                   previewMode={previewMode}
                   setPreviewMode={setPreviewMode}
+                  previewScenario={previewScenario}
+                  onPreviewScenarioChange={updatePreviewScenario}
                   refetchPreview={refetchPreview}
                 />
               )}

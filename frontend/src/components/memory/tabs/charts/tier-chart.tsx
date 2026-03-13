@@ -9,7 +9,7 @@ interface TierChartProps {
 }
 
 export function TierChart({ data, onTierClick }: TierChartProps) {
-  if (data.length === 0) return <EmptyChart label="No tier data" />;
+  if (data.length === 0) return <EmptyChart label="No type data" />;
 
   const chartData = data.map((d) => ({
     name: TIER_LABELS[d.tier] || d.tier,

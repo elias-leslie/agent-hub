@@ -87,7 +87,7 @@ export function MemoryTable({
           <div className="hidden md:block">
             <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={onSort} />
           </div>
-          <SortableHeader label="Tier" field="tier" currentField={sortField} direction={sortDirection} onSort={onSort} />
+          <SortableHeader label="Type" field="tier" currentField={sortField} direction={sortDirection} onSort={onSort} />
           <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={onSort} />
           <div className="hidden md:block">
             <SortableHeader label="Updated" field="updated_at" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />

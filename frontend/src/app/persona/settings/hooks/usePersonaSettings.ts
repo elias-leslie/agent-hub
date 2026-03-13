@@ -1,16 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
+import { fetchAgent, updateAgent, fetchModels } from "@/lib/api";
 import {
   buildAgentUpdatePayload,
   createAgentFormData,
 } from "@/app/agents/[slug]/agent-form";
-import type { Agent, PreviewTaskType } from "@/app/agents/[slug]/types";
+import type { Agent } from "@/app/agents/[slug]/types";
 import { usePersona } from "@/app/persona/hooks/usePersona";
 
 const PERSONA_SLUG = "persona";
 
-export function usePersonaSettings(previewMode: PreviewTaskType = "heartbeat") {
+export function usePersonaSettings() {
   const queryClient = useQueryClient();
   const {
     persona,
@@ -34,12 +34,6 @@ export function usePersonaSettings(previewMode: PreviewTaskType = "heartbeat") {
   const { data: availableModels = [] } = useQuery({
     queryKey: ["models", "options"],
     queryFn: fetchModels,
-  });
-
-  const { data: preview, refetch: refetchPreview, isFetching: previewFetching } = useQuery({
-    queryKey: ["agent-preview", PERSONA_SLUG, previewMode],
-    queryFn: () => fetchPreview(PERSONA_SLUG, { taskType: previewMode }),
-    enabled: false,
   });
 
   const [agentFormData, setAgentFormData] = useState<Partial<Agent>>({});
@@ -98,10 +92,5 @@ export function usePersonaSettings(previewMode: PreviewTaskType = "heartbeat") {
 
     // Models
     availableModels,
-
-    // Preview
-    preview,
-    previewFetching,
-    refetchPreview,
   };
 }

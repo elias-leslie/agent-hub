@@ -3,13 +3,17 @@ import type { BudgetUsage } from "@/lib/api/memory-settings";
 
 export function BudgetUsageDisplay({
   usage,
+  budgetEnabled,
   referenceIndexEnabled,
   continuityEnabled,
 }: {
   usage: BudgetUsage;
+  budgetEnabled: boolean;
   referenceIndexEnabled: boolean;
   continuityEnabled?: boolean;
 }) {
+  const showBudgetLimit = budgetEnabled && usage.total_budget > 0;
+
   return (
     <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
       <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -68,10 +72,14 @@ export function BudgetUsageDisplay({
             <span className="text-slate-700 dark:text-slate-300">Tokens</span>
             <span
               className={`font-mono ${
-                usage.hit_limit ? "text-red-500" : "text-slate-700 dark:text-slate-300"
+                usage.hit_limit && showBudgetLimit
+                  ? "text-red-500"
+                  : "text-slate-700 dark:text-slate-300"
               }`}
             >
-              {usage.total_tokens.toLocaleString()} / {usage.total_budget.toLocaleString()}
+              {showBudgetLimit
+                ? `${usage.total_tokens.toLocaleString()} / ${usage.total_budget.toLocaleString()}`
+                : `${usage.total_tokens.toLocaleString()} (Unlimited)`}
             </span>
           </div>
           <div className="flex justify-between text-xs text-slate-500 mt-1">

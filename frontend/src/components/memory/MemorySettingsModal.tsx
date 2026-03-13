@@ -87,10 +87,10 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                       <Gauge className="w-4 h-4" />
-                      Per-Tier Injection Limits
+                      Per-Type Injection Limits
                     </div>
                     <p className="text-xs text-slate-500 -mt-2">
-                      Set maximum items per tier (0 = unlimited)
+                      Set maximum items per memory type (0 = unlimited)
                     </p>
                     <TierLimitSlider
                       label="Mandates"
@@ -173,6 +173,7 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                   {usage && (
                     <BudgetUsageDisplay
                       usage={usage}
+                      budgetEnabled={budgetEnabled}
                       referenceIndexEnabled={referenceIndexEnabled}
                       continuityEnabled={continuityEnabled}
                     />
