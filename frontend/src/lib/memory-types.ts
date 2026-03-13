@@ -251,10 +251,35 @@ export interface MemoryAnalyticsState {
   top_memories: TopMemory[];
 }
 
+export interface MemoryUtilizationMetrics {
+  injection_sessions: number;
+  citation_sessions: number;
+  lookup_sessions: number;
+  lookup_after_injection_sessions: number;
+  memory_search_calls: number;
+  memory_get_calls: number;
+  assistant_message_count: number;
+  assistant_messages_with_memory_citations: number;
+  citation_session_rate: number;
+  lookup_session_rate: number;
+  expansion_session_rate: number;
+  assistant_citation_rate: number;
+  sessions_with_selected_references: number;
+  sessions_with_cited_selected_references: number;
+  selected_reference_count: number;
+  selected_reference_cited_count: number;
+  selected_reference_citation_rate: number;
+  selected_reference_session_rate: number;
+  memory_inject_event_count: number;
+  memory_inject_events_with_debug: number;
+  memory_debug_coverage_rate: number;
+}
+
 export interface MemoryAnalyticsActivity {
   lookback: string;
   usage_totals: UsageTotals & { success: number };
   injection_metrics: MetricsDashboard;
+  utilization: MemoryUtilizationMetrics;
   tier_changes: TierChangesSummary;
 }
 

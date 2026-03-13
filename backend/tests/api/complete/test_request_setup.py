@@ -132,6 +132,10 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     mock_store.assert_awaited_once()
     assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
     assert mock_store.await_args.kwargs["reference_index_uuids"] == []
+    assert mock_store.await_args.kwargs["memory_debug"] == {
+        "reference_selected_uuids": ["ref-selected-1"],
+        "reference_index_uuids": [],
+    }
 
 
 @pytest.mark.asyncio
@@ -196,6 +200,10 @@ async def test_build_session_and_messages_records_reference_breakdown_on_non_str
     assert result[7] == ["11111111-1111-1111-1111-111111111111"]
     assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
     assert mock_store.await_args.kwargs["reference_index_uuids"] == []
+    assert mock_store.await_args.kwargs["memory_debug"] == {
+        "reference_selected_uuids": ["ref-selected-1"],
+        "reference_index_uuids": [],
+    }
 
 
 @pytest.mark.asyncio
