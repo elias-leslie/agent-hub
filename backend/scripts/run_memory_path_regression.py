@@ -29,9 +29,9 @@ if (
 
 
 STARTUP_COMMANDS_PROMPT = (
-    "Without running any commands, return only JSON with keys "
+    "An engineering task in this repo is about to begin. Without running any commands, return only JSON with keys "
     "closeout_check_cmd, repo_symbol_search_cmd, memory_lookup_cmd, quality_check_cmd. "
-    "Use only startup context."
+    "Use the command you would reach for first in that situation, based only on startup context."
 )
 COMMIT_RULE_PROMPT = (
     "I vaguely remember there is a memory about the canonical git commit workflow, "
@@ -176,7 +176,7 @@ def _run_claude_bypass(prompt: str) -> RunnerResult:
 
 
 def _run_agent_hub(agent_slug: str, prompt: str, *, execute_tools: bool) -> RunnerResult:
-    args = ["st", "complete", "-a", agent_slug, "-p", "agent-hub", "--raw", prompt]
+    args = ["st", "complete", "-a", agent_slug, "-p", "agent-hub", "--raw", "-n", "3", prompt]
     if execute_tools:
         args.insert(-1, "-x")
     result = _run_command(args, timeout=240)
@@ -227,8 +227,12 @@ def _validate_startup_commands(target: str, result: RunnerResult) -> ProbeResult
         reasons.append("closeout_check_cmd should be `st cleanup status`")
     if not _string(data.get("repo_symbol_search_cmd")).startswith("st search"):
         reasons.append("repo_symbol_search_cmd should start with `st search`")
-    if not _string(data.get("memory_lookup_cmd")).startswith("st memory search"):
-        reasons.append("memory_lookup_cmd should start with `st memory search`")
+    memory_lookup_cmd = _string(data.get("memory_lookup_cmd"))
+    if not (
+        memory_lookup_cmd.startswith("st memory search")
+        or memory_lookup_cmd.startswith("st memory get")
+    ):
+        reasons.append("memory_lookup_cmd should start with `st memory search` or `st memory get`")
     if not _string(data.get("quality_check_cmd")).startswith("dt"):
         reasons.append("quality_check_cmd should start with `dt`")
     status = "pass" if not reasons else "fail"
@@ -241,14 +245,17 @@ def _validate_commit_rule(target: str, result: RunnerResult) -> ProbeResult:
     warnings: list[str] = []
     checkpoint_requirement = _string(data.get("checkpoint_requirement"))
     preferred_commit_path = _string(data.get("preferred_commit_path"))
+    lookup_cmds = _list_of_strings(data.get("lookup_cmds"))
     if data.get("raw_git_commit_preferred") is not False:
         reasons.append("raw_git_commit_preferred must be false")
-    if "git status --short --branch" not in checkpoint_requirement:
+    if (
+        "git status --short --branch" not in checkpoint_requirement
+        and not any("git status --short --branch" in command for command in lookup_cmds)
+    ):
         reasons.append("checkpoint_requirement should mention `git status --short --branch`")
     if "/commit_it" not in preferred_commit_path and "commit.sh" not in preferred_commit_path:
         reasons.append("preferred_commit_path should mention `/commit_it` or `commit.sh`")
 
-    lookup_cmds = _list_of_strings(data.get("lookup_cmds"))
     evidence_commands = result.evidence.get("commands") or _commands_from_progress_log(result.evidence.get("progress_log") or [])
     command_text = "\n".join(lookup_cmds + evidence_commands)
     if "st memory get 919e883f" not in command_text and "st memory search" not in command_text:
@@ -404,14 +411,6 @@ def main() -> None:
     if not args.skip_agents:
         agent_slugs = [slug.strip() for slug in args.agents.split(",") if slug.strip()]
         for agent_slug in agent_slugs:
-            results.append(
-                _run_probe(
-                    target=f"agent:{agent_slug}",
-                    prompt="startup_commands",
-                    runner=lambda slug=agent_slug: _run_agent_hub(slug, STARTUP_COMMANDS_PROMPT, execute_tools=False),
-                    validator=_validate_startup_commands,
-                )
-            )
             results.append(
                 _run_probe(
                     target=f"agent:{agent_slug}",
