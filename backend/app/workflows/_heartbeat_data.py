@@ -268,13 +268,19 @@ def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
     }
 
 
+async def _query_active_sessions_for_heartbeat() -> list[dict[str, object]]:
+    """Query and map active sessions for heartbeat display."""
+    rows, now = await _query_active_sessions()
+    return [_map_active_session_row(r, now=now) for r in rows]
+
+
 async def _fetch_active_sessions_section() -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        rows, now = await _query_active_sessions()
-        if not rows:
+        sessions = await _query_active_sessions_for_heartbeat()
+        if not sessions:
             return ""
-        sessions = [_map_active_session_row(r, now=now) for r in rows]
+        now = datetime.now(UTC)
         lines = [f"Active agent sessions: {len(sessions)}"]
         for s in sessions:
             lines.append(_format_active_session_entry(s, now=now))
@@ -337,7 +343,7 @@ async def _fetch_recently_completed_sessions_section() -> str:
         return ""
 
 
-async def _query_specialist_rows() -> list[dict[str, object]]:
+async def _query_active_specialist_sessions() -> list[dict[str, object]]:
     """Query active specialist sessions and return as dicts with age_minutes."""
     from sqlalchemy import and_, select
 
@@ -409,7 +415,7 @@ def _format_specialist_group_line(
 async def _get_active_specialist_inventory() -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
-        rows = await _query_specialist_rows()
+        rows = await _query_active_specialist_sessions()
         if not rows:
             return ""
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -524,7 +530,7 @@ def _map_workstream_row(row: object, *, now: datetime) -> dict[str, object]:
     }
 
 
-async def _fetch_collapsed_workstream_rows() -> list[dict[str, object]]:
+async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
     """Query workstream sessions from DB and collapse to deduplicated active rows."""
     from sqlalchemy import and_, or_, select
 
@@ -701,7 +707,7 @@ async def _get_workstream_inventory(
     try:
         if task_overview is None:
             task_overview = await _fetch_task_overview()
-        rows = await _fetch_collapsed_workstream_rows()
+        rows = await _query_recent_workstream_sessions()
         stale_tasks = _parse_stale_running_tasks(task_overview)
         if not rows and not stale_tasks:
             return ""
@@ -746,12 +752,17 @@ async def _get_active_work_summary(*, task_overview: str | None = None) -> str:
     return f"\n<active_work>\n{body}\n</active_work>"
 
 
-async def _get_cleanup_status_summary() -> str:
-    """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    output = await _run_st_command(
+async def _fetch_cleanup_status() -> str:
+    """Run `st cleanup status --all` and return stripped stdout."""
+    return await _run_st_command(
         ["st", "cleanup", "status", "--all"],
         failure_log="Failed to fetch cleanup status for heartbeat prompt",
     )
+
+
+async def _get_cleanup_status_summary() -> str:
+    """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
+    output = await _fetch_cleanup_status()
     if not output:
         return ""
     actionable = build_actionable_cleanup_summary(output)
@@ -759,29 +770,31 @@ async def _get_cleanup_status_summary() -> str:
     return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
 
 
-async def _get_protection_status_summary(target_project_id: str | None = None) -> str:
-    """Build a <protection_status> XML block from canonical backup surfaces."""
-    sections: list[str] = []
-
-    backup_cmd = ["st"]
+async def _fetch_backup_status(target_project_id: str | None = None) -> str:
+    """Run `st backup status` for the given project and return stripped stdout."""
+    cmd = ["st"]
     if target_project_id:
-        backup_cmd.extend(["-P", target_project_id])
-    backup_cmd.extend(["backup", "status"])
-    latest = await _run_st_command(
-        backup_cmd,
-        failure_log="Failed to fetch backup status for heartbeat prompt",
-    )
-    if latest:
-        sections.append(latest)
+        cmd.extend(["-P", target_project_id])
+    cmd.extend(["backup", "status"])
+    return await _run_st_command(cmd, failure_log="Failed to fetch backup status for heartbeat prompt")
 
-    target_source = target_project_id or "persona-sandbox"
-    schedule = await _run_st_command(
-        ["st", "backup", "schedule", target_source],
+
+async def _fetch_backup_schedule(target_project_id: str | None = None) -> str:
+    """Run `st backup schedule` for the given project source and return stripped stdout."""
+    source = target_project_id or "persona-sandbox"
+    return await _run_st_command(
+        ["st", "backup", "schedule", source],
         failure_log="Failed to fetch backup schedule for heartbeat prompt",
     )
-    if schedule:
-        sections.append(schedule)
 
+
+async def _get_protection_status_summary(target_project_id: str | None = None) -> str:
+    """Build a <protection_status> XML block from canonical backup surfaces."""
+    latest, schedule = await asyncio.gather(
+        _fetch_backup_status(target_project_id),
+        _fetch_backup_schedule(target_project_id),
+    )
+    sections = [s for s in (latest, schedule) if s]
     if not sections:
         return ""
     return "\n<protection_status>\n" + "\n---\n".join(sections) + "\n</protection_status>"
@@ -886,6 +899,9 @@ __all__ = [
     "_build_workstream_next_action",
     "_classify_workstream_lane",
     "_fetch_active_sessions_section",
+    "_fetch_backup_schedule",
+    "_fetch_backup_status",
+    "_fetch_cleanup_status",
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
     "_format_active_session_entry",
@@ -898,6 +914,9 @@ __all__ = [
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
     "_get_workstream_inventory",
+    "_query_active_sessions_for_heartbeat",
+    "_query_active_specialist_sessions",
+    "_query_recent_workstream_sessions",
     "_run_st_command",
     "_session_display_health",
     "_session_stale_threshold_minutes",
