@@ -88,7 +88,9 @@ CONSULT_AGENT_TOOL = Tool(
     name="consult_agent",
     description=(
         "Consult another agent for text-only advice (no tool execution). Use when you "
-        "need expert review, a second opinion, or strategic guidance. "
+        "need expert review, a second opinion, or strategic guidance after checking "
+        "direct sources first. Do not use it for exact rule text or file/project facts "
+        "you can retrieve with `st memory get/search`, `read_file`, or search tools. "
         "Your agent roster shows available agents. "
         "Use consult_agent for advice; use dispatch_agent to run an agent with full tool access."
     ),
@@ -113,7 +115,7 @@ CONSULT_AGENT_TOOL = Tool(
     },
     category="agents",
     search_keywords=["second opinion", "review", "strategy"],
-    usage_examples=["Ask the reviewer agent for risk-focused feedback."],
+    usage_examples=["Ask the reviewer agent for risk-focused feedback after inspecting the code."],
 )
 
 PRECISION_CODE_SEARCH_TOOL = Tool(

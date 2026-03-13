@@ -151,6 +151,18 @@ class TestStandardTools:
         assert "consult_agent" in names
         assert "precision_code_search" in names
 
+    def test_consult_agent_description_prefers_direct_sources_for_exact_facts(self) -> None:
+        """Consultation should be framed as advice, not a shortcut around direct lookup."""
+        tools = {tool.name: tool for tool in get_standard_tools()}
+        consult_tool = tools["consult_agent"]
+
+        assert "expert review" in consult_tool.description
+        assert "Do not use it for exact rule text" in consult_tool.description
+        assert "`st memory get/search`" in consult_tool.description
+        assert consult_tool.usage_examples == [
+            "Ask the reviewer agent for risk-focused feedback after inspecting the code.",
+        ]
+
     def test_create_handler_with_workdir(self, tmp_path: Path) -> None:
         """Test handler creation with working directory."""
         handler = create_direct_handler(str(tmp_path))
