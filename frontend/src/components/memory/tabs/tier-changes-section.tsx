@@ -60,7 +60,7 @@ interface TierChangesSectionProps {
 
 export function TierChangesSection({ data }: TierChangesSectionProps) {
   if (!data || data.total === 0) {
-    return <p className="text-xs text-slate-500 text-center py-4">No tier changes recorded</p>;
+    return <p className="text-xs text-slate-500 text-center py-4">No type changes recorded</p>;
   }
 
   return (

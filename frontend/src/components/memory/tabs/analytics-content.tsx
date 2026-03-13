@@ -60,7 +60,7 @@ function ActivityKpiCards({ analytics }: { analytics: MemoryAnalyticsDashboard["
       <MetricCard label="Outcome Coverage" value={`${(analytics.injection_metrics.outcomes.coverage_rate * 100).toFixed(1)}%`} icon={Activity} color="emerald" />
       <MetricCard label="Success Rate" value={`${(analytics.injection_metrics.outcomes.success_rate * 100).toFixed(1)}%`} icon={CheckCircle2} color="green" />
       <MetricCard label="Citation Rate" value={`${(analytics.injection_metrics.overall_citation_rate * 100).toFixed(1)}%`} icon={TrendingUp} color="sky" />
-      <MetricCard label="Tier Changes" value={analytics.tier_changes.total.toLocaleString()} icon={ArrowUpDown} color="amber" />
+      <MetricCard label="Type Changes" value={analytics.tier_changes.total.toLocaleString()} icon={ArrowUpDown} color="amber" />
     </div>
   );
 }
@@ -74,7 +74,7 @@ function StateDistributionRow({ analytics, onTierClick }: StateDistributionRowPr
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-        <SectionHeader title="Tier Distribution" icon={Layers} />
+        <SectionHeader title="Type Distribution" icon={Layers} />
         <TierChart data={analytics.tier_distribution} onTierClick={onTierClick} />
       </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
@@ -118,7 +118,7 @@ function DetailRow({
         />
       </div>
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-        <SectionHeader title="Tier Changes" icon={ArrowUpDown} />
+        <SectionHeader title="Type Changes" icon={ArrowUpDown} />
         <TierChangesSection data={analytics.activity.tier_changes} />
       </div>
     </div>

@@ -75,7 +75,7 @@ export function BulkToolbar({
             ) : (
               <ChevronDown className={cn("w-4 h-4 transition-transform", tierDropdownOpen && "rotate-180")} />
             )}
-            Tier
+            Type
           </button>
           {tierDropdownOpen && (
             <div className="absolute bottom-full mb-2 left-0 w-44 rounded-lg border border-slate-700 bg-slate-900 shadow-xl overflow-hidden">

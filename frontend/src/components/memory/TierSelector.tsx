@@ -24,7 +24,7 @@ export function TierSelector({ value, onChange, disabled }: TierSelectorProps) {
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Tier</label>
+      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Type</label>
       <div className="relative">
         <button
           type="button"

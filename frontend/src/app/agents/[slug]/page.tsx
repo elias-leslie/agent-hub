@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { Agent, PreviewTaskType, TabId } from "./types";
-import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
+import { Agent, PreviewScenario, PreviewTaskType, TabId } from "./types";
+import { fetchAgent, updateAgent, fetchModels } from "@/lib/api";
 import { AgentEditorHeader } from "./components/AgentEditorHeader";
 import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
@@ -14,8 +14,9 @@ import { ParametersTab } from "./components/ParametersTab";
 import { PermissionsTab } from "./components/PermissionsTab";
 import { PromptsTab } from "./components/PromptsTab";
 import { MemoryTab } from "./components/MemoryTab";
-import { PreviewModal } from "./components/PreviewModal";
 import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
+import { useAgentPreview } from "./hooks/useAgentPreview";
+import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
 
 export default function AgentEditorPage() {
   const params = useParams();
@@ -33,9 +34,11 @@ export default function AgentEditorPage() {
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [formData, setFormData] = useState<Partial<Agent>>({});
   const [hasChanges, setHasChanges] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewTaskType>("chat");
+  const [previewScenario, setPreviewScenario] = useState<PreviewScenario>(() => ({
+    ...DEFAULT_PREVIEW_SCENARIO,
+  }));
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const { data: agent, isLoading, error } = useQuery({
@@ -49,10 +52,16 @@ export default function AgentEditorPage() {
     queryFn: fetchModels,
   });
 
-  const { data: preview, refetch: refetchPreview, isFetching: previewFetching } = useQuery({
-    queryKey: ["agent-preview", slug, previewMode],
-    queryFn: () => fetchPreview(slug, { taskType: previewMode }),
-    enabled: (showPreview || showInlinePreview) && !!slug,
+  const {
+    data: preview,
+    refetch: refetchPreview,
+    isFetching: previewFetching,
+    error: previewQueryError,
+  } = useAgentPreview({
+    slug,
+    previewMode,
+    scenario: previewScenario,
+    enabled: showInlinePreview && !!slug,
   });
 
   const mutation = useMutation({
@@ -86,15 +95,27 @@ export default function AgentEditorPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setHasChanges(true);
   }, []);
+  const updatePreviewScenario = useCallback((updates: Partial<PreviewScenario>) => {
+    setPreviewScenario((prev) => ({ ...prev, ...updates }));
+  }, []);
 
   const handleSave = () => {
     mutation.mutate(buildAgentUpdatePayload(formData));
   };
 
   const handlePreview = () => {
-    setShowPreview(true);
-    refetchPreview();
+    setActiveTab("prompts");
+    setShowInlinePreview(true);
+    if (showInlinePreview) {
+      void refetchPreview();
+    }
   };
+  const previewError =
+    previewQueryError instanceof Error
+      ? previewQueryError.message
+      : previewQueryError
+        ? "Failed to load preview"
+        : null;
 
   if (isLoading) {
     return (
@@ -187,10 +208,13 @@ export default function AgentEditorPage() {
                 agentSlug={slug}
                 preview={preview}
                 previewFetching={previewFetching}
+                previewError={previewError}
                 showInlinePreview={showInlinePreview}
                 setShowInlinePreview={setShowInlinePreview}
                 previewMode={previewMode}
                 setPreviewMode={setPreviewMode}
+                previewScenario={previewScenario}
+                onPreviewScenarioChange={updatePreviewScenario}
                 refetchPreview={refetchPreview}
               />
             )}
@@ -201,13 +225,6 @@ export default function AgentEditorPage() {
         </main>
       </div>
 
-      {showPreview && (
-        <PreviewModal
-          preview={preview}
-          previewMode={previewMode}
-          onClose={() => setShowPreview(false)}
-        />
-      )}
     </div>
   );
 }
