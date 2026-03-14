@@ -493,6 +493,98 @@ class TestIdentifyClientUnit:
         assert request.state.allowed_projects is None
 
 
+class TestLogRejectionUnknownClient:
+    """Tests for log_rejection handling of unknown client IDs.
+
+    When a request arrives with an unregistered client_id, the rejection must
+    be logged to request_logs with client_id=NULL (to avoid FK violations)
+    while the raw unknown ID is emitted via structured logging.
+    """
+
+    @pytest.mark.asyncio
+    async def test_log_rejection_nullifies_client_id_for_unknown_client(self):
+        """client_not_found rejection must pass client_id=None to log_request."""
+        from app.middleware.access_control_logging import log_rejection
+
+        with patch(
+            "app.middleware.access_control_logging.log_request",
+            new_callable=AsyncMock,
+        ) as mock_log_request:
+            await log_rejection(
+                path="/api/complete",
+                method="POST",
+                start_time=0.0,
+                client_id="unknown-nonexistent-id",
+                request_source="test-source",
+                tool_type="api",
+                tool_name=None,
+                source_path=None,
+                rejection_reason="client_not_found",
+            )
+
+            mock_log_request.assert_called_once()
+            call_kwargs = mock_log_request.call_args
+            # client_id must be None in the DB insert to avoid FK violation
+            assert call_kwargs.kwargs["client_id"] is None
+            assert call_kwargs.kwargs["rejection_reason"] == "client_not_found"
+
+    @pytest.mark.asyncio
+    async def test_log_rejection_preserves_client_id_for_known_clients(self):
+        """Suspended/blocked rejections must preserve the real client_id."""
+        from app.middleware.access_control_logging import log_rejection
+
+        with patch(
+            "app.middleware.access_control_logging.log_request",
+            new_callable=AsyncMock,
+        ) as mock_log_request:
+            await log_rejection(
+                path="/api/complete",
+                method="POST",
+                start_time=0.0,
+                client_id="known-suspended-id",
+                request_source="test-source",
+                tool_type="api",
+                tool_name=None,
+                source_path=None,
+                rejection_reason="client_suspended",
+            )
+
+            call_kwargs = mock_log_request.call_args
+            # Known client IDs should be preserved
+            assert call_kwargs.kwargs["client_id"] == "known-suspended-id"
+
+    @pytest.mark.asyncio
+    async def test_log_rejection_emits_structured_log_for_unknown_client(self):
+        """Unknown client rejection must emit a structured warning log."""
+        from app.middleware.access_control_logging import log_rejection
+
+        with (
+            patch(
+                "app.middleware.access_control_logging.log_request",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.middleware.access_control_logging.logger",
+            ) as mock_logger,
+        ):
+            await log_rejection(
+                path="/api/complete",
+                method="POST",
+                start_time=0.0,
+                client_id="mystery-client-abc",
+                request_source="test-source",
+                tool_type="api",
+                tool_name=None,
+                source_path=None,
+                rejection_reason="client_not_found",
+            )
+
+            mock_logger.warning.assert_called_once()
+            log_msg_args = mock_logger.warning.call_args
+            # The unknown client_id must appear in the log for observability
+            assert "mystery-client-abc" in str(log_msg_args)
+
+
 class TestHandleIdentifiedRequest:
     """Tests for the handle_identified_request handler."""
 

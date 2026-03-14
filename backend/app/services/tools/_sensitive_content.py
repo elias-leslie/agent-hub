@@ -10,6 +10,32 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _SCANNER = Path.home() / "summitflow" / "scripts" / "lib" / "sensitive_scan.py"
+_DEFAULT_BLOCK_REASON = "sensitive content requires review"
+
+
+def _parse_scan_output(stdout: bytes, stderr: bytes, path: str) -> str:
+    """Extract a human-readable block reason from scanner output."""
+    payload_text = stdout.decode("utf-8", errors="replace").strip()
+    if payload_text:
+        try:
+            payload = json.loads(payload_text)
+            findings = payload.get("findings") or []
+            if findings:
+                first = findings[0]
+                description = str(first.get("description") or _DEFAULT_BLOCK_REASON)
+                finding_path = str(first.get("path") or path)
+                return f"{description} ({finding_path})"
+            summary = str(payload.get("summary") or "").strip()
+            if summary:
+                return summary
+        except json.JSONDecodeError:
+            pass
+
+    stderr_text = stderr.decode("utf-8", errors="replace").strip()
+    if stderr_text:
+        return stderr_text.splitlines()[0]
+
+    return _DEFAULT_BLOCK_REASON
 
 
 async def scan_runtime_sensitive_content(
@@ -49,24 +75,4 @@ async def scan_runtime_sensitive_content(
     if process.returncode == 0:
         return None
 
-    payload_text = stdout.decode("utf-8", errors="replace").strip()
-    if payload_text:
-        try:
-            payload = json.loads(payload_text)
-            findings = payload.get("findings") or []
-            if findings:
-                first = findings[0]
-                description = str(first.get("description") or "sensitive content requires review")
-                finding_path = str(first.get("path") or path)
-                return f"{description} ({finding_path})"
-            summary = str(payload.get("summary") or "").strip()
-            if summary:
-                return summary
-        except json.JSONDecodeError:
-            pass
-
-    stderr_text = stderr.decode("utf-8", errors="replace").strip()
-    if stderr_text:
-        return stderr_text.splitlines()[0]
-
-    return "sensitive content requires review"
+    return _parse_scan_output(stdout, stderr, path)
