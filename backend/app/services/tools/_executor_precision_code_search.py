@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 DEFAULT_PRECISION_SEARCH_BUDGET = 1200
-PRECISION_SEARCH_SCRIPT = Path("/home/kasadis/summitflow/scripts/precision-code-search.py")
+PRECISION_SEARCH_SCRIPT = Path(os.environ.get(
+    "PRECISION_SEARCH_SCRIPT",
+    str(Path.home() / "summitflow" / "scripts" / "precision-code-search.py"),
+))
 
 
 def _error_payload(message: str, **extra: object) -> str:

@@ -23,13 +23,14 @@ import json
 import logging
 import sys
 import uuid as _uuid
+from pathlib import Path
 from datetime import UTC, datetime
 
 from neo4j import AsyncGraphDatabase
 from sqlalchemy import text
 
 # Add project root to path
-sys.path.insert(0, "/home/kasadis/agent-hub/backend")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from app.db import async_session
 from app.models.memory_unified import Memory
