@@ -7,7 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import AuthenticationError, CompletionResult, Message, RateLimitError, StreamEvent
+from app.adapters.base import (
+    AuthenticationError,
+    CompletionResult,
+    Message,
+    RateLimitError,
+    StreamEvent,
+)
 from app.adapters.gemini import GeminiAdapter
 from app.constants.models import GEMINI_FLASH
 
