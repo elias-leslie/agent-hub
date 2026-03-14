@@ -10,6 +10,7 @@ from .context_injector_blocks import (
     get_guardrails,
     get_mandates,
     get_phase_triggered_references_as_search_results,
+    get_pinned_episodes_as_search_results,
     get_triggered_references_as_search_results,
 )
 from .service import MemoryScope, MemorySearchResult
@@ -45,11 +46,31 @@ def _build_scope_tasks(
                 asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
             )
             task_keys.append(f"mandates_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "mandate",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"mandates_pinned_{query_scope.value}")
         if include_guardrails:
             tasks.append(
                 asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
             )
             task_keys.append(f"guardrails_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "guardrail",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"guardrails_pinned_{query_scope.value}")
         if include_references:
             tasks.append(
                 asyncio.create_task(
@@ -59,6 +80,16 @@ def _build_scope_tasks(
                 )
             )
             task_keys.append(f"reference_{query_scope.value}")
+            tasks.append(
+                asyncio.create_task(
+                    get_pinned_episodes_as_search_results(
+                        "reference",
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                    )
+                )
+            )
+            task_keys.append(f"reference_pinned_{query_scope.value}")
 
     return tasks, task_keys
 

@@ -76,11 +76,11 @@ export function EpisodeFormFields({
         >
           <Pin className={cn("w-4 h-4", pinned ? "text-violet-600 dark:text-violet-400" : "text-slate-400")} />
           <span className={pinned ? "text-violet-700 dark:text-violet-300 font-medium" : "text-slate-600 dark:text-slate-400"}>
-            {pinned ? "Pinned (always injected)" : "Not pinned"}
+            {pinned ? "Pinned (always shown)" : "Not pinned"}
           </span>
         </button>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Pinned episodes are always included in context, regardless of budget limits.
+          Pinned episodes are always included when memory and this category are enabled, regardless of budget limits.
         </p>
       </div>
 
