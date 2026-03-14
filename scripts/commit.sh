@@ -1,1 +1,10 @@
-/home/kasadis/summitflow/scripts/commit.sh
+#!/bin/bash
+#
+# Thin wrapper to the canonical SummitFlow commit implementation.
+#
+
+set -euo pipefail
+
+CANONICAL_SUMMITFLOW_ROOT="${SUMMITFLOW_BACKUP_ROOT:-$HOME/summitflow}"
+
+exec bash "$CANONICAL_SUMMITFLOW_ROOT/scripts/commit.sh" "$@"
