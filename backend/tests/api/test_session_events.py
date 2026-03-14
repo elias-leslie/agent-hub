@@ -8,7 +8,14 @@ import pytest
 
 from app.db import get_db
 from app.main import app
+from app.services.event_storage import get_sequencer
 from tests.conftest import APITestClient
+
+
+@pytest.fixture(autouse=True)
+def _reset_sequencer() -> None:
+    """Reset the global event sequencer so tests don't leak sequence state."""
+    get_sequencer()._sessions.clear()
 
 
 @pytest.fixture

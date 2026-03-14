@@ -76,12 +76,22 @@ class TestSessionsApiFiltering:
             ("session-1", "assistant", 100),
         ]
 
+        # Mock ownership query (_fetch_candidate_sessions returns empty)
+        mock_ownership_result = MagicMock()
+        mock_ownership_result.scalars.return_value.all.return_value = []
+
+        # Mock active specialists query (_fetch_active_specialists returns empty)
+        mock_specialists_result = MagicMock()
+        mock_specialists_result.scalars.return_value.all.return_value = []
+
         mock_session.execute = AsyncMock(
             side_effect=[
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
                 mock_token_stats_result,
+                mock_ownership_result,      # _fetch_candidate_sessions
+                mock_specialists_result,    # _fetch_active_specialists
             ]
         )
 
@@ -208,18 +218,28 @@ class TestGetSession:
         mock_session_result = MagicMock()
         mock_session_result.scalar_one_or_none.return_value = mock_db_session
 
-        # Token totals
+        # Token totals (get_session_token_totals)
         mock_token_result = MagicMock()
         mock_token_result.one.return_value = (100, 50)
 
-        # Context query
+        # Latest CostLog context query (calculate_context_usage)
         mock_context_result = MagicMock()
         mock_context_result.scalar_one_or_none.return_value = None
+
+        # Ownership query (_fetch_candidate_sessions returns empty)
+        mock_ownership_result = MagicMock()
+        mock_ownership_result.scalars.return_value.all.return_value = []
+
+        # Active specialists query (_fetch_active_specialists returns empty)
+        mock_specialists_result = MagicMock()
+        mock_specialists_result.scalars.return_value.all.return_value = []
 
         mock_session.execute.side_effect = [
             mock_session_result,
             mock_token_result,
             mock_context_result,
+            mock_ownership_result,      # _fetch_candidate_sessions
+            mock_specialists_result,    # _fetch_active_specialists
         ]
 
         response = client.get("/api/sessions/session-portfolio-123")
@@ -260,8 +280,20 @@ class TestMultiProjectScenario:
         mock_token_stats_1 = MagicMock()
         mock_token_stats_1.all.return_value = [("port-1", "user", 50), ("port-1", "assistant", 100)]
 
+        # Mock ownership query (_fetch_candidate_sessions returns empty)
+        mock_ownership_1 = MagicMock()
+        mock_ownership_1.scalars.return_value.all.return_value = []
+
+        # Mock active specialists query (_fetch_active_specialists returns empty)
+        mock_specialists_1 = MagicMock()
+        mock_specialists_1.scalars.return_value.all.return_value = []
+
         mock_session.execute = AsyncMock(
-            side_effect=[mock_count_1, mock_list_1, mock_msg_count_1, mock_token_stats_1]
+            side_effect=[
+                mock_count_1, mock_list_1, mock_msg_count_1, mock_token_stats_1,
+                mock_ownership_1,       # _fetch_candidate_sessions
+                mock_specialists_1,     # _fetch_active_specialists
+            ]
         )
 
         response = client.get("/api/sessions?project_id=portfolio-ai")
@@ -298,8 +330,20 @@ class TestMultiProjectScenario:
             ("session-purpose", "assistant", 60),
         ]
 
+        # Mock ownership query (_fetch_candidate_sessions returns empty)
+        mock_ownership = MagicMock()
+        mock_ownership.scalars.return_value.all.return_value = []
+
+        # Mock active specialists query (_fetch_active_specialists returns empty)
+        mock_specialists = MagicMock()
+        mock_specialists.scalars.return_value.all.return_value = []
+
         mock_session.execute = AsyncMock(
-            side_effect=[mock_count, mock_list, mock_msg_count, mock_token_stats]
+            side_effect=[
+                mock_count, mock_list, mock_msg_count, mock_token_stats,
+                mock_ownership,         # _fetch_candidate_sessions
+                mock_specialists,       # _fetch_active_specialists
+            ]
         )
 
         response = client.get("/api/sessions")

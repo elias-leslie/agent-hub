@@ -813,108 +813,132 @@ class TestCrossProjectPathEnforcement:
     @pytest.mark.asyncio
     async def test_cross_project_read_denied_at_off_tier(self):
         """Reading a file in a project with tier=off should be denied."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
-
         with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="off",
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
         ):
-            call = ToolCall(
-                id="x1",
-                name="read_file",
-                input={"path": "/home/testuser/summitflow/src/main.py"},
-            )
-            decision = await hook(call)
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="off",
+            ):
+                call = ToolCall(
+                    id="x1",
+                    name="read_file",
+                    input={"path": "/home/testuser/summitflow/src/main.py"},
+                )
+                decision = await hook(call)
 
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
     async def test_cross_project_read_allowed_at_read_tier(self):
         """Reading a file in a project with tier=read should be allowed."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
-
         with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
         ):
-            call = ToolCall(
-                id="x2",
-                name="read_file",
-                input={"path": "/home/testuser/summitflow/src/main.py"},
-            )
-            decision = await hook(call)
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="read",
+            ):
+                call = ToolCall(
+                    id="x2",
+                    name="read_file",
+                    input={"path": "/home/testuser/summitflow/src/main.py"},
+                )
+                decision = await hook(call)
 
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
     async def test_cross_project_write_denied_at_read_tier(self):
         """Writing to a project with tier=read should be denied."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
-
         with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
         ):
-            call = ToolCall(
-                id="x3",
-                name="write_file",
-                input={"path": "/home/testuser/summitflow/src/main.py", "content": "hack"},
-            )
-            decision = await hook(call)
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="read",
+            ):
+                call = ToolCall(
+                    id="x3",
+                    name="write_file",
+                    input={"path": "/home/testuser/summitflow/src/main.py", "content": "hack"},
+                )
+                decision = await hook(call)
 
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
     async def test_cross_project_write_allowed_at_write_tier(self):
         """Writing to a project with tier=write should be allowed."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
-
         with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="write",
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
         ):
-            call = ToolCall(
-                id="x4",
-                name="write_file",
-                input={"path": "/home/testuser/summitflow/src/main.py", "content": "ok"},
-            )
-            decision = await hook(call)
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="write",
+            ):
+                call = ToolCall(
+                    id="x4",
+                    name="write_file",
+                    input={"path": "/home/testuser/summitflow/src/main.py", "content": "ok"},
+                )
+                decision = await hook(call)
 
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
     async def test_sandbox_local_paths_allowed(self):
         """Files not in any known project root should be allowed."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
+        with patch(
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
+        ):
+            hook = _create_cross_project_permission_hook("persona-sandbox")
 
-        call = ToolCall(
-            id="x5",
-            name="read_file",
-            input={"path": "/tmp/scratch.txt"},
-        )
-        decision = await hook(call)
-        assert decision == ToolDecision.ALLOW
+            call = ToolCall(
+                id="x5",
+                name="read_file",
+                input={"path": "/tmp/scratch.txt"},
+            )
+            decision = await hook(call)
+            assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
     async def test_bash_cross_project_denied_at_read_tier(self):
         """Bash referencing another project's root should be denied at read tier."""
-        hook = _create_cross_project_permission_hook("persona-sandbox")
-
         with patch(
-            "app.services.project_permission_service._get_cached_tier",
-            new_callable=AsyncMock,
-            return_value="read",
+            "app.services.tools.direct_executor_core.KNOWN_ROOTS",
+            {"summitflow": "/home/testuser/summitflow", "persona-sandbox": SANDBOX_DIR},
         ):
-            call = ToolCall(
-                id="x6",
-                name="bash",
-                input={"command": "cat /home/testuser/summitflow/pyproject.toml"},
-            )
-            decision = await hook(call)
+            hook = _create_cross_project_permission_hook("persona-sandbox")
+
+            with patch(
+                "app.services.project_permission_service._get_cached_tier",
+                new_callable=AsyncMock,
+                return_value="read",
+            ):
+                call = ToolCall(
+                    id="x6",
+                    name="bash",
+                    input={"command": "cat /home/testuser/summitflow/pyproject.toml"},
+                )
+                decision = await hook(call)
 
         assert decision == ToolDecision.DENY
 

@@ -305,9 +305,14 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         user_profile={"timezone": "America/New_York", "autonomy_level": "high"},
         onboarding_phase="complete",
     )
+    memory_revision = SimpleNamespace(
+        id=42,
+        created_at=datetime.fromisoformat("2026-03-12T08:00:00+00:00"),
+        memory_uuid="mem-uuid-001",
+    )
     mock_db = AsyncMock()
     mock_db.scalar = AsyncMock(
-        side_effect=[persona_agent, persona, heartbeat_prompt, supervisor_agent]
+        side_effect=[persona_agent, memory_revision, 5, persona, heartbeat_prompt, supervisor_agent]
     )
 
     from contextlib import asynccontextmanager
