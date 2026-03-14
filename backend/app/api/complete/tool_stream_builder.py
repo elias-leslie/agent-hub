@@ -50,15 +50,15 @@ def build_event_stream(
         )
         return adapt_claude_stream(raw_stream)
 
-    # Gemini, CloudCode, and any other provider using ToolEvent natively
+    # Gemini and any other provider using ToolEvent natively
     kwargs: dict[str, Any] = {
         "messages": messages, "model": model, "tools": tools or [],
         "working_dir": working_dir, "permission_config": permission_config,
         "tool_catalog": tool_catalog,
     }
-    if provider in ("gemini", "cloudcode"):
+    if provider == "gemini":
         kwargs["max_turns"] = effective_max_turns
-    if provider in ("gemini", "cloudcode") and project_id:
+    if provider == "gemini" and project_id:
         kwargs["project_id"] = project_id
     if agent_slug:
         kwargs["agent_slug"] = agent_slug

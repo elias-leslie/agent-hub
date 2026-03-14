@@ -32,6 +32,7 @@ from app.services.tools._executor_file_io import (
     write_file as _write_file,
 )
 from app.services.tools._executor_registry import build_tool_registry
+from app.services.tools._sensitive_content import scan_runtime_sensitive_content
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
@@ -207,6 +208,14 @@ class DirectToolExecutor:
 
     async def write_file(self, path: str, content: str) -> str:
         """Write a file."""
+        block_reason = await scan_runtime_sensitive_content(
+            path,
+            content,
+            repo_root=str(self.working_dir),
+            tool_name="write_file",
+        )
+        if block_reason:
+            return f"Error: Write blocked: {block_reason}"
         return await _write_file(path, content, self.working_dir, self._allowed_root)
 
     async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:

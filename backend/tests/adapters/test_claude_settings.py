@@ -190,6 +190,29 @@ class TestBuildBoundaryHook:
         assert "/evil/path.py" in reason
         assert "/tmp/worktree" in reason
 
+    @pytest.mark.asyncio
+    async def test_blocks_write_with_sensitive_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def _fake_scan(path: str, content: str, **_: Any) -> str | None:
+            if "ghp_" in content:
+                return "Secret-like credential detected by gitleaks"
+            return None
+
+        monkeypatch.setattr(
+            "app.adapters._claude_settings.scan_runtime_sensitive_content",
+            _fake_scan,
+        )
+
+        hook = self._get_hook("/tmp/worktree")
+        result = await self._call_hook(
+            hook,
+            "Write",
+            {
+                "file_path": "/tmp/worktree/.env",
+                "content": "TOKEN=ghp_123456789012345678901234567890123456",
+            },
+        )
+        assert self._is_denied(result)
+
     @staticmethod
     def _get_hook(working_dir: str, agent_slug: str | None = None) -> Any:
         from app.adapters._claude_settings import build_boundary_hook

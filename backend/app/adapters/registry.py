@@ -84,10 +84,6 @@ def _ensure_registered() -> None:
         from app.adapters.gemini import GeminiAdapter
         return GeminiAdapter()
 
-    def _cloudcode() -> ProviderAdapter:
-        from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
-        return CloudCodeClaudeAdapter()
-
     def _codex() -> ProviderAdapter:
         from app.adapters.codex_oauth import CodexOAuthAdapter
         return CodexOAuthAdapter()
@@ -127,9 +123,6 @@ def _ensure_registered() -> None:
     register("gemini", _gemini, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
         supports_images=True,
-    ))
-    register("cloudcode", _cloudcode, ProviderCapabilities(
-        supports_tool_execution=True, supports_thinking=True,
     ))
     register("codex", _codex, ProviderCapabilities(
         supports_tool_execution=True,
@@ -250,7 +243,6 @@ def get_provider_for_model(model: str) -> str:
     prefix_map = [
         ("openrouter/", "openrouter"),
         ("or/", "openrouter"),
-        ("cloudcode/", "cloudcode"),
         ("codex/", "codex"),
         ("openai/", "openai"),
         ("xai/", "xai"),

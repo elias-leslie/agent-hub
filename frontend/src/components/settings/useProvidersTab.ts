@@ -13,12 +13,14 @@ import {
   updateCredential,
   deleteCredential,
   setPrimaryCredential,
-  updateUserPreferences,
-  fetchUserPreferences,
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
-import { isOAuthProvider, listKnownProviderIds } from "./constants";
+import {
+  filterVisibleSettingsProviders,
+  isOAuthProvider,
+  listKnownProviderIds,
+} from "./constants";
 import type { SaveCredentialOptions } from "./ProviderCardTypes";
 import type { ProviderHealthData } from "./ProviderCardTypes";
 
@@ -40,10 +42,6 @@ export function useProvidersTab() {
       queryKey: ["oauth-status", providerId] as const,
       queryFn: () => fetchOAuthStatus(providerId),
     })),
-  });
-  const { data: userPrefs } = useQuery({
-    queryKey: ["user-preferences"],
-    queryFn: () => fetchUserPreferences(),
   });
   const { data: statusData } = useQuery({
     queryKey: ["provider-status"],
@@ -143,26 +141,6 @@ export function useProvidersTab() {
       setError(e instanceof Error ? e.message : "OAuth exchange failed");
     }
   }
-
-  const prefMut = useMutation({
-    mutationFn: (args: { provider: string; pref: "oauth" | "api_key" }) => {
-      const key = `${args.provider}_auth_preference` as "gemini_auth_preference" | "codex_auth_preference";
-      return updateUserPreferences({ [key]: args.pref });
-    },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: ["oauth-status", vars.provider] });
-    },
-    onError: (e: Error) => setError(e.message),
-  });
-
-  const vertexProjectMut = useMutation({
-    mutationFn: (project: string) =>
-      updateUserPreferences({ gemini_vertex_project: project }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["user-preferences"] });
-    },
-    onError: (e: Error) => setError(e.message),
-  });
 
   function resetForm() {
     setEditingProvider(null);
@@ -284,13 +262,11 @@ export function useProvidersTab() {
     };
   }
 
-  const providerIds = Array.from(
-    new Set([
-      ...knownProviderIds,
-      ...Object.keys(credentialsByProvider),
-      ...(statusData?.providers.map((p) => p.name) ?? []),
-    ]),
-  ).sort((a, b) => a.localeCompare(b));
+  const providerIds = filterVisibleSettingsProviders([
+    ...knownProviderIds,
+    ...Object.keys(credentialsByProvider),
+    ...(statusData?.providers.map((p) => p.name) ?? []),
+  ]);
 
   return {
     isLoading,
@@ -310,7 +286,6 @@ export function useProvidersTab() {
     setManualPasteProvider,
     setManualPasteState,
     setOauthLoading,
-    userPrefs,
     isSaving: createMut.isPending || updateMut.isPending,
     isDeletingAny: deleteMut.isPending,
     resetForm,
@@ -322,8 +297,5 @@ export function useProvidersTab() {
     getHealthData,
     onDelete: (ids: number[]) => deleteMut.mutate(ids),
     onSetPrimaryCredential: (credentialId: number) => setPrimaryMut.mutate(credentialId),
-    onPreferenceChange: (provider: string, pref: "oauth" | "api_key") =>
-      prefMut.mutate({ provider, pref }),
-    onVertexProjectChange: (project: string) => vertexProjectMut.mutate(project),
   };
 }

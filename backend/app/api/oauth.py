@@ -1,8 +1,8 @@
-"""OAuth flow endpoints for Claude, Codex, and Gemini providers.
+"""OAuth flow endpoints for Claude and Codex providers.
 
 Handles the browser-based OAuth PKCE flow:
 1. Frontend calls POST /api/oauth/{provider}/authorize
-2. Backend generates PKCE params, starts temp callback server (Codex/Gemini),
+2. Backend generates PKCE params, starts temp callback server (Codex),
    returns auth URL
 3. Frontend opens auth URL in popup AND shows manual paste input
 4. **Local path**: callback server receives redirect -> tokens stored -> popup
@@ -22,20 +22,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.claude_auth import create_claude_auth_flow
 from app.adapters.codex_auth import create_auth_flow as create_codex_auth_flow
-from app.adapters.gemini_auth import create_antigravity_auth_flow, create_gemini_auth_flow
-from app.api.oauth_exchange import exchange_claude, exchange_codex, exchange_google_provider
-from app.api.oauth_flows import complete_antigravity_flow, complete_codex_flow, complete_gemini_flow
+from app.api.oauth_exchange import exchange_claude, exchange_codex
+from app.api.oauth_flows import complete_codex_flow
 from app.api.oauth_schemas import (
     OAuthAuthorizeResponse,
     OAuthExchangeRequest,
     OAuthExchangeResponse,
     OAuthStatusResponse,
 )
-from app.api.oauth_status import (
-    check_claude_token_status,
-    check_codex_token_status,
-    check_google_token_status,
-)
+from app.api.oauth_status import check_claude_token_status, check_codex_token_status
 from app.api.oauth_store import (
     cancel_active_server,
     cleanup_expired_flows,
@@ -51,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
-_SUPPORTED_PROVIDERS = frozenset({"claude", "codex", "gemini", "antigravity"})
+_SUPPORTED_PROVIDERS = frozenset({"claude", "codex"})
 
 
 # ---------------------------------------------------------------------------
@@ -67,28 +62,6 @@ async def authorize_codex(db: Annotated[AsyncSession, Depends(get_db)]) -> OAuth
     flow = create_codex_auth_flow()
     set_pending_flow(flow["state"], "codex", flow["code_verifier"])
     spawn_background_task(complete_codex_flow(flow["state"], db))
-    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
-
-
-@router.post("/gemini/authorize", response_model=OAuthAuthorizeResponse)
-async def authorize_gemini(db: Annotated[AsyncSession, Depends(get_db)]) -> OAuthAuthorizeResponse:
-    """Start Gemini OAuth PKCE flow; backend starts a local callback server."""
-    cleanup_expired_flows()
-    cancel_active_server("gemini")
-    flow = create_gemini_auth_flow()
-    set_pending_flow(flow["state"], "gemini", flow["code_verifier"])
-    spawn_background_task(complete_gemini_flow(flow["state"], db))
-    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
-
-
-@router.post("/antigravity/authorize", response_model=OAuthAuthorizeResponse)
-async def authorize_antigravity(db: Annotated[AsyncSession, Depends(get_db)]) -> OAuthAuthorizeResponse:
-    """Start Antigravity OAuth PKCE flow for Claude model access."""
-    cleanup_expired_flows()
-    cancel_active_server("antigravity")
-    flow = create_antigravity_auth_flow()
-    set_pending_flow(flow["state"], "antigravity", flow["code_verifier"])
-    spawn_background_task(complete_antigravity_flow(flow["state"], db))
     return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
 
 
@@ -122,10 +95,8 @@ async def get_oauth_status(
 
     if provider == "claude":
         oauth_status, email = check_claude_token_status()
-    elif provider == "codex":
-        oauth_status, email = check_codex_token_status()
     else:
-        oauth_status, email = check_google_token_status(provider)
+        oauth_status, email = check_codex_token_status()
 
     preferred_auth = await get_preference_value(db, f"{provider}_auth_preference", "api_key")
 
@@ -169,10 +140,8 @@ async def exchange_oauth_code(
     try:
         if provider == "claude":
             email = await exchange_claude(body, code_verifier, db)
-        elif provider == "codex":
-            email = await exchange_codex(body, code_verifier, db)
         else:
-            email = await exchange_google_provider(provider, body, code_verifier, db)
+            email = await exchange_codex(body, code_verifier, db)
 
         from app.api.complete.helpers_adapters import invalidate_adapter
 

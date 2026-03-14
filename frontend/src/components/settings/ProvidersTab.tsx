@@ -24,7 +24,6 @@ export function ProvidersTab() {
     setManualPasteProvider,
     setManualPasteState,
     setOauthLoading,
-    userPrefs,
     isSaving,
     isDeletingAny,
     resetForm,
@@ -36,8 +35,6 @@ export function ProvidersTab() {
     getHealthData,
     onDelete,
     onSetPrimaryCredential,
-    onPreferenceChange,
-    onVertexProjectChange,
   } = useProvidersTab();
 
   if (isLoading) {
@@ -131,13 +128,6 @@ export function ProvidersTab() {
                 setManualPasteState(null);
                 setOauthLoading(null);
               }}
-              onPreferenceChange={
-                provider.supportsApiKey
-                  ? (pref) => onPreferenceChange(provider.id, pref)
-                  : undefined
-              }
-              vertexProject={provider.id === "gemini" ? userPrefs?.gemini_vertex_project ?? "" : undefined}
-              onVertexProjectChange={provider.id === "gemini" ? onVertexProjectChange : undefined}
               onEditCredential={(credentialId) => {
                 resetForm();
                 setEditingCredentialId(credentialId);

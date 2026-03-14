@@ -27,11 +27,7 @@ export default function ModelsPage() {
   const [selectedProviders, setSelectedProviders] = useState<Set<string> | null>(null);
   const initialized = useRef(false);
 
-  // Providers from API, excluding cloudcode (internal routing — not user-facing)
-  const availableProviders = useMemo(
-    () => Object.fromEntries(Object.entries(allProviders).filter(([id]) => id !== "cloudcode")),
-    [allProviders],
-  );
+  const availableProviders = useMemo(() => allProviders, [allProviders]);
   const availableProviderIds = useMemo(() => Object.keys(availableProviders), [availableProviders]);
 
   // Initialize selectedProviders to all available providers on first load

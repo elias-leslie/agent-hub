@@ -134,7 +134,7 @@ export function ProviderStatusDisplay({
       />
 
       {/* Preference toggle for dual-auth providers */}
-      {hasBothCredentials && provider.supportsApiKey && onPreferenceChange && (
+      {hasBothCredentials && onPreferenceChange && (
         <PreferenceToggle preferredAuth={preferredAuth} onPreferenceChange={onPreferenceChange} />
       )}
 

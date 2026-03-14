@@ -132,9 +132,10 @@ class TestErrorHandling:
             ClaudeAdapter()
 
     def test_gemini_adapter_falls_back_to_adc_without_api_key(self):
-        """GeminiAdapter should fall back to ADC when no API key is configured."""
+        """GeminiAdapter should stay unconfigured when no API key is present."""
         adapter = GeminiAdapter(api_key="")
-        assert adapter._auth_mode == "adc"
+        assert adapter._api_keys == []
+        assert adapter._client is None
 
 
 class TestCompletionResultContract:

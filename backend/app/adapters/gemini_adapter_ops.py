@@ -1,4 +1,4 @@
-"""Health check and complete operations for the Gemini adapter."""
+"""Health check and tool operations for the Gemini adapter."""
 
 import logging
 from collections.abc import AsyncIterator
@@ -6,7 +6,6 @@ from typing import Any
 
 from app.adapters._errors_types import ProviderError
 from app.adapters.base import CompletionResult, Message
-from app.adapters.gemini_cloudcode import cloudcode_tool_loop
 from app.adapters.gemini_tools import execute_tool_loop
 from app.adapters.gemini_utils import do_complete_call
 
@@ -19,12 +18,6 @@ async def sdk_health_check(client: Any) -> bool:
 
     model_info = await client.aio.models.get(model=GEMINI_FLASH)
     return model_info is not None
-
-
-async def cloudcode_health_check(cc_client: Any) -> bool:
-    """Check reachability by validating CloudCode OAuth token (zero tokens consumed)."""
-    await cc_client._ensure_token()
-    return bool(cc_client.access_token)
 
 
 async def sdk_complete(
@@ -87,8 +80,6 @@ async def sdk_complete_with_failover(
 
 
 async def tool_loop(
-    auth_mode: str,
-    cc_client: Any,
     sdk_client: Any,
     messages: list[Message],
     model: str,
@@ -100,23 +91,9 @@ async def tool_loop(
     project_id: str | None,
     kwargs: dict[str, Any],
 ) -> AsyncIterator[tuple[Any, str | None]]:
-    """Dispatch tool loop to CloudCode or SDK path."""
-    if auth_mode == "oauth" and cc_client is not None:
-        async for event in cloudcode_tool_loop(
-            client=cc_client,
-            messages=messages,
-            model=model,
-            tools=tools,
-            working_dir=working_dir,
-            max_tokens=max_tokens,
-            max_turns=max_turns,
-            provider_name=provider_name,
-            project_id=project_id,
-            **kwargs,
-        ):
-            yield event
-        return
-
+    """Run the SDK-backed Gemini tool loop."""
+    if sdk_client is None:
+        raise ProviderError("Gemini API key is not configured", provider=provider_name, retriable=False)
     async for event in execute_tool_loop(
         client=sdk_client,
         messages=messages,

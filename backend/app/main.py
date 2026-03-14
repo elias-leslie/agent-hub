@@ -42,19 +42,6 @@ async def _startup() -> None:
     except Exception as e:
         logger.warning("Failed to load credentials at startup: %s", e)
 
-    try:
-        async with async_session() as db:
-            from app.adapters.gemini import set_gemini_auth_preference, set_gemini_vertex_project
-            from app.api.preferences import get_preference_value
-
-            gemini_pref = await get_preference_value(db, "gemini_auth_preference", "api_key")
-            set_gemini_auth_preference(gemini_pref)
-            vertex_project = await get_preference_value(db, "gemini_vertex_project", "")
-            set_gemini_vertex_project(vertex_project)
-            logger.info("Loaded auth preferences: gemini=%s, vertex_project=%s", gemini_pref, vertex_project)
-    except Exception as e:
-        logger.warning("Failed to load auth preferences at startup: %s", e)
-
     await start_usage_tracker()
     logger.info("Usage tracker started")
 

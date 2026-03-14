@@ -15,22 +15,21 @@ const baseCredential: Credential = {
 };
 
 const oauthProvider: ProviderInfo = {
-  id: "gemini",
-  name: "Gemini",
-  hint: "Google AI credentials",
+  id: "codex",
+  name: "Codex",
+  hint: "ChatGPT subscription OAuth",
   oauth: true,
-  supportsApiKey: true,
 };
 
 function renderCard(overrides: Partial<React.ComponentProps<typeof ProviderCard>> = {}) {
   return render(
     <ProviderCard
       provider={oauthProvider}
-      credentials={[baseCredential]}
+      credentials={[{ ...baseCredential, provider: "codex" }]}
       oauthStatus={{
-        provider: "gemini",
+        provider: "codex",
         oauth_status: "authenticated",
-        api_key_status: "configured",
+        api_key_status: "not_configured",
         preferred_auth: "oauth",
       }}
       healthData={undefined}
@@ -63,8 +62,8 @@ describe("ProviderCard", () => {
     const onDisconnectOAuth = vi.fn();
     renderCard({
       credentials: [
-        baseCredential,
-        { ...baseCredential, id: 202, credential_type: "oauth_token", value_masked: "oauth-****" },
+        { ...baseCredential, provider: "codex", credential_type: "oauth_token", value_masked: "oauth-****" },
+        { ...baseCredential, id: 202, provider: "codex", credential_type: "refresh_token", value_masked: "refresh-****" },
       ],
       onDisconnectOAuth,
     });

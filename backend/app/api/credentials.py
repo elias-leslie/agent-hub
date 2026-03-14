@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
+from app.services.system_credentials import is_system_credential_provider
 from app.storage.credentials import (
     EncryptionError,
     decrypt_value,
@@ -33,6 +34,17 @@ router = APIRouter()
 VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token", "account_id"}
 
 
+def _is_visible_credential_provider(provider: str) -> bool:
+    """Return whether a credential provider should be exposed via the public API."""
+    return not is_system_credential_provider(provider)
+
+
+def _require_visible_provider(provider: str) -> None:
+    """Block public CRUD access to hidden system-managed credential rows."""
+    if not _is_visible_credential_provider(provider):
+        raise HTTPException(status_code=404, detail="Credential not found")
+
+
 def mask_value(value: str) -> str:
     """Mask a credential value for display."""
     if len(value) <= 8:
@@ -44,7 +56,7 @@ def mask_value(value: str) -> str:
 class CredentialCreate(BaseModel):
     """Request body for creating a credential."""
 
-    provider: str = Field(..., max_length=50, description="Provider name (claude, codex, gemini, minimax, nvidia, openrouter, openai, xai, zhipu)")
+    provider: str = Field(..., max_length=100, description="Provider name (claude, codex, gemini, minimax, nvidia, openrouter, openai, xai, zhipu)")
     credential_type: str = Field(..., max_length=50, description="Type: api_key, oauth_token, refresh_token")
     value: str = Field(..., min_length=1, max_length=10000, description="Credential value (will be encrypted)")
 
@@ -89,6 +101,9 @@ async def create_credential(
     """Store a new encrypted credential."""
     from app.adapters.registry import list_providers
 
+    if is_system_credential_provider(request.provider):
+        raise HTTPException(status_code=400, detail="System-managed credential providers are not writable via this API")
+
     valid_providers = set(list_providers())
     if request.provider not in valid_providers:
         raise HTTPException(
@@ -130,6 +145,7 @@ async def list_credentials(
 ) -> CredentialListResponse:
     """List all credentials with masked values."""
     credentials = await list_credentials_async(db, provider=provider)
+    credentials = [cred for cred in credentials if _is_visible_credential_provider(cred.provider)]
 
     responses = []
     for cred in credentials:
@@ -218,6 +234,7 @@ async def get_credential(
     credential = await get_credential_by_id_async(db, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
+    _require_visible_provider(credential.provider)
 
     try:
         decrypted = decrypt_value(credential.value_encrypted)
@@ -245,6 +262,7 @@ async def update_credential(
     old_credential = await get_credential_by_id_async(db, credential_id)
     if not old_credential:
         raise HTTPException(status_code=404, detail="Credential not found")
+    _require_visible_provider(old_credential.provider)
 
     old_value: str | None
     try:
@@ -286,6 +304,7 @@ async def delete_credential(
     credential = await get_credential_by_id_async(db, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
+    _require_visible_provider(credential.provider)
 
     # Decrypt to get the actual value for targeted multi-cache removal
     try:
@@ -314,6 +333,7 @@ async def set_primary_credential(
     target = await get_credential_by_id_async(db, credential_id)
     if not target:
         raise HTTPException(status_code=404, detail="Credential not found")
+    _require_visible_provider(target.provider)
 
     if target.credential_type != "api_key":
         raise HTTPException(status_code=400, detail="Only api_key credentials can be made primary")

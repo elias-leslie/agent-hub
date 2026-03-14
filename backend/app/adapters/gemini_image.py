@@ -1,8 +1,6 @@
 """Gemini image generation adapter.
 
-Uses API key auth against generativelanguage.googleapis.com.  CloudCode PA
-(OAuth) does not support multi-modal output so image gen always goes
-through the public API.
+Uses API key auth against generativelanguage.googleapis.com.
 
 On rate-limit, automatically falls back through the model chain:
   gemini-3-pro-image-preview → gemini-3.1-flash-image-preview → gemini-2.5-flash-image
@@ -74,11 +72,9 @@ class GeminiImageAdapter(ImageAdapter):
 
     def __init__(self, api_key: str | None = None) -> None:
         resolved_key = resolve_api_key(api_key)
-        self._auth_mode, self._sdk_client, self._cc_client = (
-            _pick_image_auth(resolved_key, None, "api_key")
-        )
+        self._sdk_client = _make_image_client(resolved_key)
         self._last_api_key = resolved_key
-        logger.info("Gemini image adapter initialized with %s auth", self._auth_mode)
+        logger.info("Gemini image adapter initialized with api_key auth")
 
     @property
     def provider_name(self) -> str:
@@ -87,11 +83,10 @@ class GeminiImageAdapter(ImageAdapter):
     def _refresh_credentials(self) -> None:
         """Re-check CredentialManager for rotated API key."""
         try:
-            if self._auth_mode == "api_key":
-                fresh = resolve_api_key(None)
-                if fresh and fresh != self._last_api_key:
-                    self._sdk_client = make_sdk_client(fresh)
-                    self._last_api_key = fresh
+            fresh = resolve_api_key(None)
+            if fresh != self._last_api_key:
+                self._sdk_client = _make_image_client(fresh)
+                self._last_api_key = fresh
         except Exception:
             logger.debug("Gemini image API key refresh failed", exc_info=True)
 
@@ -145,7 +140,10 @@ class GeminiImageAdapter(ImageAdapter):
         self, prompt: str, model: str, size: str, style: str | None,
         reference_image: bytes | None = None, reference_mime_type: str = "image/png",
     ) -> ImageGenerationResult:
-        """Generate image using the GenAI SDK (API key / ADC)."""
+        """Generate image using the GenAI SDK (API key only)."""
+        if self._sdk_client is None:
+            raise ProviderError("Gemini API key is not configured", provider="gemini", retriable=False)
+
         # Build contents: if reference image provided, send as multimodal parts
         if reference_image:
             contents: list[types.Part] = [
@@ -170,20 +168,8 @@ class GeminiImageAdapter(ImageAdapter):
         return _build_result(part, model, size, style, prompt)
 
 
-def _pick_image_auth(
-    resolved_key: str | None,
-    oauth_data: dict[str, Any] | None,
-    preference: str,
-) -> tuple[str, Any, Any]:
-    """Select auth mode for image generation.
-
-    Returns (auth_mode, sdk_client_or_None, cloudcode_client_or_None).
-
-    Always prefers API key for image generation because the CloudCode PA
-    endpoint (cloudcode-pa.googleapis.com) does not support multi-modal
-    output (responseModalities: IMAGE) — it returns 400 "Multi-modal
-    output is not supported" for all models.
-    """
+def _make_image_client(resolved_key: str | None) -> Any | None:
+    """Create the SDK client used for Gemini image generation."""
     if resolved_key:
-        return "api_key", make_sdk_client(resolved_key), None
-    return "adc", make_sdk_client(), None
+        return make_sdk_client(resolved_key)
+    return None

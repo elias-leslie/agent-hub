@@ -34,10 +34,6 @@ OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 OPENAI_GPT_5_2 = "openai/gpt-5.2"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
-# CloudCode Claude models (Google CloudCode PA, zero-cost via Gemini OAuth)
-CC_CLAUDE_SONNET = "cloudcode/claude-sonnet-4-6"
-CC_CLAUDE_OPUS = "cloudcode/claude-opus-4-6-thinking"
-
 # Codex models (ChatGPT subscription via OAuth)
 CODEX_GPT_5_4 = "codex/gpt-5.4"
 CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
@@ -98,7 +94,6 @@ PROVIDER_NAMES: dict[str, str] = {
     "minimax": "MiniMax",
     "nvidia": "NVIDIA",
     "cloudflare": "Cloudflare",
-    "cloudcode": "CloudCode",
     "codex": "Codex",
 }
 
