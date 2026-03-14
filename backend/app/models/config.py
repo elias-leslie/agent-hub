@@ -14,7 +14,7 @@ class Credential(Base):
     __tablename__ = "credentials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    provider: Mapped[str] = mapped_column(String(20), index=True)  # claude, gemini
+    provider: Mapped[str] = mapped_column(String(100), index=True)  # claude, gemini, _system_internal
     credential_type: Mapped[str] = mapped_column(String(50))  # api_key, oauth_token, etc.
     value_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

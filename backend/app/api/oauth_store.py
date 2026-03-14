@@ -1,14 +1,9 @@
-"""Shared state store for pending OAuth flows and credential upsert helper."""
+"""Shared state store for pending OAuth flows."""
 
 from __future__ import annotations
 
 import asyncio
 import time
-
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.services.credential_manager import get_credential_manager
-from app.storage.credentials import store_credential_async
 
 # In-memory pending flow store (state -> flow data, TTL 10 min)
 _pending_flows: dict[str, dict[str, object]] = {}
@@ -70,23 +65,3 @@ def spawn_background_task(coro: asyncio.coroutines.Coroutine[object, object, Non
     task: asyncio.Task[None] = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
-
-
-async def upsert_credential(
-    db: AsyncSession,
-    provider: str,
-    credential_type: str,
-    value: str,
-) -> None:
-    """Store or update a credential in the DB and refresh the cache."""
-    from app.storage.credentials import list_credentials_async, update_credential_async
-
-    existing = await list_credentials_async(db, provider=provider)
-    for cred in existing:
-        if cred.credential_type == credential_type:
-            await update_credential_async(db, cred.id, value)
-            get_credential_manager().set(provider, credential_type, value)
-            return
-
-    await store_credential_async(db, provider=provider, credential_type=credential_type, value=value)
-    get_credential_manager().set(provider, credential_type, value)

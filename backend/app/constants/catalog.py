@@ -15,8 +15,6 @@ from app.constants.catalog_types import (
     ModelScores,
 )
 from app.constants.models import (
-    CC_CLAUDE_OPUS,
-    CC_CLAUDE_SONNET,
     CF_LLAMA_4_SCOUT,
     CF_MISTRAL_SMALL,
     CF_QWEN2_5_CODER,
@@ -50,7 +48,6 @@ from app.constants.models import (
 
 __all__ = [
     "CLAUDE_TO_GEMINI_MAP",
-    "CLOUDCODE_TO_CLAUDE_MAP",
     "CLOUDFLARE_TO_CLAUDE_MAP",
     "CODEX_TO_CLAUDE_MAP",
     "GEMINI_TO_CLAUDE_MAP",
@@ -63,7 +60,6 @@ __all__ = [
     "OPENAI_TO_CLAUDE_MAP",
     "SCORE_WEIGHTS",
     "VALID_CLAUDE_MODELS",
-    "VALID_CLOUDCODE_MODELS",
     "VALID_CLOUDFLARE_MODELS",
     "VALID_CODEX_MODELS",
     "VALID_GEMINI_MODELS",
@@ -98,6 +94,12 @@ MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {e.id: e for e in MODEL_CATALOG}
 
 # Derived from catalog
 MODEL_ALIASES: dict[str, str] = {e.alias: e.id for e in MODEL_CATALOG}
+MODEL_ALIASES.update({
+    "cc/sonnet": CLAUDE_SONNET,
+    "cc/opus": CLAUDE_OPUS,
+    "cloudcode/claude-sonnet-4-6": CLAUDE_SONNET,
+    "cloudcode/claude-opus-4-6-thinking": CLAUDE_OPUS,
+})
 
 
 def resolve_model(alias: str) -> str:
@@ -136,7 +138,6 @@ VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
 VALID_MINIMAX_MODELS = _models_for_provider("minimax")
 VALID_NVIDIA_MODELS = _models_for_provider("nvidia")
 VALID_CLOUDFLARE_MODELS = _models_for_provider("cloudflare")
-VALID_CLOUDCODE_MODELS = _models_for_provider("cloudcode")
 
 # ---------------------------------------------------------------------------
 # Model tier mappings for fallback routing
@@ -196,9 +197,4 @@ CLOUDFLARE_TO_CLAUDE_MAP: dict[str, str] = {
     CF_QWQ_32B: CLAUDE_SONNET,
     CF_MISTRAL_SMALL: CLAUDE_HAIKU,
     CF_QWEN2_5_CODER: CLAUDE_SONNET,
-}
-
-CLOUDCODE_TO_CLAUDE_MAP: dict[str, str] = {
-    CC_CLAUDE_SONNET: CLAUDE_SONNET,
-    CC_CLAUDE_OPUS: CLAUDE_OPUS,
 }

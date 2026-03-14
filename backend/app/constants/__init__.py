@@ -9,7 +9,6 @@ from __future__ import annotations
 # Re-export catalog structures and functions
 from app.constants.catalog import (
     CLAUDE_TO_GEMINI_MAP,
-    CLOUDCODE_TO_CLAUDE_MAP,
     CODEX_TO_CLAUDE_MAP,
     GEMINI_TO_CLAUDE_MAP,
     MINIMAX_TO_CLAUDE_MAP,
@@ -21,7 +20,6 @@ from app.constants.catalog import (
     OPENAI_TO_CLAUDE_MAP,
     SCORE_WEIGHTS,
     VALID_CLAUDE_MODELS,
-    VALID_CLOUDCODE_MODELS,
     VALID_CODEX_MODELS,
     VALID_GEMINI_MODELS,
     VALID_MINIMAX_MODELS,
@@ -40,8 +38,6 @@ from app.constants.catalog import (
 
 # Re-export model ID constants
 from app.constants.models import (
-    CC_CLAUDE_OPUS,
-    CC_CLAUDE_SONNET,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
@@ -97,13 +93,10 @@ from app.constants.subtask_types import (
 DEFAULT_RATE_LIMIT_TPM = 100_000
 
 __all__ = [
-    "CC_CLAUDE_OPUS",
-    "CC_CLAUDE_SONNET",
     "CLAUDE_HAIKU",
     "CLAUDE_OPUS",
     "CLAUDE_SONNET",
     "CLAUDE_TO_GEMINI_MAP",
-    "CLOUDCODE_TO_CLAUDE_MAP",
     "CODEX_GPT_5_1",
     "CODEX_GPT_5_1_MINI",
     "CODEX_GPT_5_2",
@@ -153,7 +146,6 @@ __all__ = [
     "SUBTASK_TYPE_DESCRIPTIONS",
     "VALID_AGENT_TYPES",
     "VALID_CLAUDE_MODELS",
-    "VALID_CLOUDCODE_MODELS",
     "VALID_CODEX_MODELS",
     "VALID_GEMINI_MODELS",
     "VALID_MINIMAX_MODELS",

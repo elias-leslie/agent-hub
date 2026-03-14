@@ -1,4 +1,4 @@
-"""SDK streaming path for the Gemini adapter (api_key / ADC mode)."""
+"""SDK streaming path for the Gemini adapter."""
 
 import asyncio
 import logging
@@ -6,12 +6,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters._errors_types import ProviderError
-from app.adapters._gemini_cloudcode_ops import (
-    _GENERATE_MAX_RETRIES,
-    _compute_retry_delay,
-    _get_quota_info,
-    _is_retryable_error,
-)
 from app.adapters.base import StreamEvent
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_utils import (
@@ -21,6 +15,58 @@ from app.adapters.gemini_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+_GENERATE_MAX_RETRIES = 4
+_GENERATE_RETRY_BASE_DELAY = 2.0
+_GENERATE_RETRY_MAX_DELAY = 90.0
+_RETRYABLE_STATUSES: frozenset[int] = frozenset({429, 500, 502, 503, 504})
+_RETRYABLE_KEYWORDS = (
+    "resource exhausted",
+    "rate limit",
+    "overloaded",
+    "service unavailable",
+    "deadline_exceeded",
+    "http 429",
+    "http 500",
+    "http 502",
+    "http 503",
+    "http 504",
+)
+
+
+def _is_retryable_error(text: str) -> bool:
+    """Check if an error string indicates a retryable condition."""
+    lower = text.lower()
+    return any(kw in lower for kw in _RETRYABLE_KEYWORDS)
+
+
+def _compute_retry_delay(exc: Exception, attempt: int) -> float:
+    """Compute delay before next retry, preferring any server hint."""
+    from app.adapters.errors import extract_retry_delay
+
+    server_delay = extract_retry_delay(exc)
+    if server_delay is not None and server_delay > 0:
+        return min(server_delay, _GENERATE_RETRY_MAX_DELAY)
+    return min(_GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY)
+
+
+def _get_quota_info(exc: Exception | None) -> str:
+    """Extract quota details string for diagnostic logging."""
+    if exc is None:
+        return ""
+    try:
+        from app.adapters.gemini_errors import extract_gemini_quota_details
+
+        quota = extract_gemini_quota_details(exc)
+        if quota.get("quota_metric"):
+            return (
+                f" [metric={quota.get('quota_metric')}"
+                f" limit={quota.get('quota_limit', '?')}"
+                f" consumer={quota.get('consumer', '?')}]"
+            )
+    except Exception:
+        logger.debug("Failed to extract quota details from error", exc_info=True)
+    return ""
 
 
 def _collect_usage(last_chunk: Any, total_content: str) -> tuple[int, int]:

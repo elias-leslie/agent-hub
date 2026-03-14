@@ -12,7 +12,6 @@ from app.api.complete.turn_budget import resolve_tool_max_turns
         ("codex", 1, 20),
         ("openai", 7, 20),
         ("gemini", 1, 5),
-        ("cloudcode", 3, 5),
         ("unknown", 9, 9),
     ],
 )

@@ -205,7 +205,7 @@ class TestGeminiCredentialResolution:
 
     @patch("app.adapters.gemini_adapter_settings.genai")
     def test_falls_back_to_adc_when_cm_empty(self, mock_genai: MagicMock) -> None:
-        """Falls back to ADC when CM has no key (no error raised)."""
+        """Missing Gemini API keys should leave the adapter unconfigured."""
         from app.adapters.gemini import GeminiAdapter
 
         cm = CredentialManager.get_instance()
@@ -213,8 +213,10 @@ class TestGeminiCredentialResolution:
         # No key in cache
 
         try:
-            adapter = GeminiAdapter()
-            assert adapter._auth_mode == "adc"
+            with patch("app.adapters.gemini.resolve_api_keys", return_value=[]):
+                adapter = GeminiAdapter()
+            assert adapter._api_keys == []
+            assert adapter._client is None
         finally:
             CredentialManager.reset()
 
@@ -227,5 +229,5 @@ class TestCredentialsAPIValidation:
         from app.adapters.registry import list_providers
 
         providers = set(list_providers())
-        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu", "cloudcode", "nvidia", "cloudflare"}
+        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu", "nvidia", "cloudflare"}
         assert expected == providers

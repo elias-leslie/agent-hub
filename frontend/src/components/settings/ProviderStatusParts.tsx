@@ -147,6 +147,12 @@ export function AuthBadges({
 // ---------------------------------------------------------------------------
 
 export function HealthMetricsStrip({ health }: { health: NonNullable<ProviderHealthData["health"]> }) {
+  const isLatencyOnlySlow =
+    health.state === "degraded"
+    && health.availability >= 1
+    && health.consecutive_failures === 0
+    && !health.last_error;
+
   const stateColors: Record<string, string> = {
     healthy: "text-emerald-400",
     degraded: "text-amber-400",
@@ -178,7 +184,7 @@ export function HealthMetricsStrip({ health }: { health: NonNullable<ProviderHea
       {/* State indicator */}
       <span className={cn("font-semibold uppercase tracking-wider", stateColors[health.state])}>
         <Activity className="h-2.5 w-2.5 inline mr-0.5 -mt-px" />
-        {stateLabels[health.state] ?? health.state}
+        {isLatencyOnlySlow ? "Slow" : (stateLabels[health.state] ?? health.state)}
       </span>
 
       <span className="text-slate-600">|</span>
@@ -238,7 +244,7 @@ export function TimestampRow({
       {authSince && (
         <span className="flex items-center gap-0.5">
           <Clock className="h-2.5 w-2.5" />
-          Authenticated {timeAgo(authSince)}
+          Credentials updated {timeAgo(authSince)}
         </span>
       )}
       {/* For Claude with valid OAuth but no DB credential, show token expiry instead */}

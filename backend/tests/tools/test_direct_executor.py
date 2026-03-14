@@ -113,6 +113,31 @@ class TestDirectToolExecutor:
         written_file = tmp_path / "subdir" / "nested" / "file.txt"
         assert written_file.exists()
 
+    @pytest.mark.asyncio
+    async def test_write_file_blocks_sensitive_content(
+        self,
+        executor: DirectToolExecutor,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        async def _fake_scan(path: str, content: str, **_: object) -> str | None:
+            if "ghp_" in content:
+                return "Secret-like credential detected by gitleaks"
+            return None
+
+        monkeypatch.setattr(
+            "app.services.tools.direct_executor_core.scan_runtime_sensitive_content",
+            _fake_scan,
+        )
+
+        result = await executor.write_file(
+            "blocked.txt",
+            "TOKEN=ghp_FAKE_TEST_TOKEN_DO_NOT_USE",
+        )
+
+        assert result == "Error: Write blocked: Secret-like credential detected by gitleaks"
+        assert not (tmp_path / "blocked.txt").exists()
+
 
 class TestDirectToolHandler:
     """Tests for DirectToolHandler."""

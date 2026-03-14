@@ -11,6 +11,7 @@ from app.main import app
 from tests.conftest import APITestClient
 
 TEST_KEY = Fernet.generate_key().decode()
+SYSTEM_PROVIDER = "_system_internal"
 
 
 @pytest.fixture
@@ -94,6 +95,20 @@ class TestCreateCredential:
         assert response.status_code == 400
         assert "Invalid provider" in response.json()["message"]
 
+    def test_create_credential_rejects_system_provider(self, client):
+        """System-managed credential namespaces should not be writable via public API."""
+        response = client.post(
+            "/api/credentials",
+            json={
+                "provider": SYSTEM_PROVIDER,
+                "credential_type": "client_secret",
+                "value": "secret",
+            },
+        )
+
+        assert response.status_code == 400
+        assert "System-managed credential providers" in response.json()["message"]
+
     def test_create_credential_invalid_type(self, client):
         """Test validation error for invalid credential type."""
         response = client.post(
@@ -163,6 +178,37 @@ class TestListCredentials:
         assert "****" in data["credentials"][0]["value_masked"]
         assert data["total"] == 1
 
+    def test_list_credentials_hides_system_managed_rows(self, client, mock_db_session):
+        """Hidden system credentials should not leak through the public listing API."""
+        fernet = Fernet(TEST_KEY.encode())
+
+        visible = MagicMock()
+        visible.id = 1
+        visible.provider = "gemini"
+        visible.credential_type = "api_key"
+        visible.value_encrypted = fernet.encrypt(b"AIzaVisibleCredential")
+        visible.created_at = datetime.now(UTC)
+        visible.updated_at = datetime.now(UTC)
+
+        hidden = MagicMock()
+        hidden.id = 2
+        hidden.provider = SYSTEM_PROVIDER
+        hidden.credential_type = "client_secret"
+        hidden.value_encrypted = fernet.encrypt(b"super-secret")
+        hidden.created_at = datetime.now(UTC)
+        hidden.updated_at = datetime.now(UTC)
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [visible, hidden]
+        mock_db_session.execute.return_value = mock_result
+
+        response = client.get("/api/credentials")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert [cred["provider"] for cred in data["credentials"]] == ["gemini"]
+        assert data["total"] == 1
+
     def test_list_credentials_filter_by_provider(self, client, mock_db_session):
         """Test filtering by provider."""
         mock_result = MagicMock()
@@ -206,6 +252,18 @@ class TestGetCredential:
         mock_db_session.get.return_value = None
 
         response = client.get("/api/credentials/999")
+
+        assert response.status_code == 404
+        assert response.json()["message"] == "Credential not found"
+
+    def test_get_credential_hides_system_provider(self, client, mock_db_session):
+        """System-managed credential rows should look missing to public consumers."""
+        mock_credential = MagicMock()
+        mock_credential.id = 1
+        mock_credential.provider = SYSTEM_PROVIDER
+        mock_db_session.get.return_value = mock_credential
+
+        response = client.get("/api/credentials/1")
 
         assert response.status_code == 404
         assert response.json()["message"] == "Credential not found"
@@ -256,6 +314,7 @@ class TestDeleteCredential:
         """Test successfully deleting a credential."""
         mock_credential = MagicMock()
         mock_credential.id = 1
+        mock_credential.provider = "claude"
         mock_db_session.get.return_value = mock_credential
 
         response = client.delete("/api/credentials/1")

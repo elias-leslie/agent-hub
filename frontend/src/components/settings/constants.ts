@@ -9,7 +9,6 @@ export interface ProviderInfo {
   name: string;
   hint: string;
   oauth?: boolean;
-  supportsApiKey?: boolean;
   /** Multiple credential fields (e.g., account_id + api_key). When set, overrides the default single API key form. */
   credentialFields?: CredentialField[];
 }
@@ -17,12 +16,7 @@ export interface ProviderInfo {
 const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, "id">> = {
   claude: { name: "Claude", hint: "Anthropic — browser OAuth", oauth: true },
   codex: { name: "Codex", hint: "ChatGPT subscription OAuth", oauth: true },
-  gemini: {
-    name: "Gemini",
-    hint: "Google AI — OAuth or API key",
-    oauth: true,
-    supportsApiKey: true,
-  },
+  gemini: { name: "Gemini", hint: "Google AI API key" },
   openai: { name: "OpenAI", hint: "OpenAI platform API key" },
   openrouter: { name: "OpenRouter", hint: "OpenRouter API key" },
   xai: { name: "xAI", hint: "xAI (Grok) API key" },
@@ -60,11 +54,21 @@ export function getProviderInfo(providerId: string): ProviderInfo {
 }
 
 export function listKnownProviderIds(): string[] {
-  return Object.keys(PROVIDER_METADATA);
+  return filterVisibleSettingsProviders(Object.keys(PROVIDER_METADATA));
 }
 
 export function isOAuthProvider(providerId: string): boolean {
   return Boolean(PROVIDER_METADATA[providerId]?.oauth);
+}
+
+export function isVisibleSettingsProvider(providerId: string): boolean {
+  return providerId !== "cloudcode" && providerId !== "antigravity" && !providerId.startsWith("_");
+}
+
+export function filterVisibleSettingsProviders(providerIds: Iterable<string>): string[] {
+  return Array.from(new Set(providerIds))
+    .filter(isVisibleSettingsProvider)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {

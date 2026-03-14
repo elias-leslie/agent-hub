@@ -9,8 +9,6 @@ from app.constants.catalog_types import (
     ModelScores,
 )
 from app.constants.models import (
-    CC_CLAUDE_OPUS,
-    CC_CLAUDE_SONNET,
     CF_FLUX_1_SCHNELL,
     CF_FLUX_2_DEV,
     CF_LEONARDO_LUCID,
@@ -516,22 +514,5 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium",
         capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
         release_date="2025-01-01", family="leonardo",
-    ),
-    # --- CloudCode Claude (2) — Claude via Google CloudCode PA, zero-cost ---
-    ModelEntry(
-        id=CC_CLAUDE_SONNET, alias="cc/sonnet", name="Claude Sonnet 4.6 (CC)",
-        hint="Free Sonnet", provider="cloudcode",
-        scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
-        cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=16384),
-        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-sonnet",
-    ),
-    ModelEntry(
-        id=CC_CLAUDE_OPUS, alias="cc/opus", name="Claude Opus 4.6 Thinking (CC)",
-        hint="Free Opus", provider="cloudcode",
-        scores=ModelScores(coding=80, reasoning=91, planning=70, tool_use=75, instruction=85, design=70),
-        cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="slow",
-        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=32768),
-        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-opus",
     ),
 ]

@@ -21,6 +21,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, cast
 
+from app.services.tools._sensitive_content import scan_runtime_sensitive_content
+
 logger = logging.getLogger(__name__)
 
 # Directories where writes are always allowed regardless of worktree boundary.
@@ -103,6 +105,28 @@ def _deny_output(reason: str) -> Any:
     )
 
 
+def _extract_runtime_content(tool_name: str, tool_input: dict[str, Any]) -> str:
+    if tool_name == "Write":
+        value = tool_input.get("content", "")
+        return value if isinstance(value, str) else ""
+    if tool_name == "Edit":
+        value = tool_input.get("new_string") or tool_input.get("replacement") or ""
+        return value if isinstance(value, str) else ""
+    if tool_name == "MultiEdit":
+        edits = tool_input.get("edits", [])
+        if not isinstance(edits, list):
+            return ""
+        parts: list[str] = []
+        for edit in edits:
+            if not isinstance(edit, dict):
+                continue
+            new_string = edit.get("new_string") or edit.get("replacement") or ""
+            if isinstance(new_string, str):
+                parts.append(new_string)
+        return "\n".join(parts)
+    return ""
+
+
 def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict[str, list[Any]]:
     """Build SDK PreToolUse hook for write boundary enforcement.
 
@@ -143,15 +167,26 @@ def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict
             return {}
 
         resolved = Path(path).resolve()
-        if resolved.is_relative_to(boundary):
-            return {}
-        if any(resolved.is_relative_to(a) for a in _WRITE_ALLOWLIST):
-            return {}
+        if not resolved.is_relative_to(boundary) and not any(
+            resolved.is_relative_to(a) for a in _WRITE_ALLOWLIST
+        ):
+            logger.info(
+                "Boundary hook DENY: %s on %s (boundary=%s)", tool_name, path, boundary,
+            )
+            return _deny_output(f"Write blocked: {path} is outside worktree boundary {boundary}")
 
-        logger.info(
-            "Boundary hook DENY: %s on %s (boundary=%s)", tool_name, path, boundary,
+        content = _extract_runtime_content(tool_name, tool_input)
+        block_reason = await scan_runtime_sensitive_content(
+            str(resolved),
+            content,
+            repo_root=str(boundary),
+            tool_name=tool_name,
         )
-        return _deny_output(f"Write blocked: {path} is outside worktree boundary {boundary}")
+        if block_reason:
+            logger.info("Boundary hook DENY: sensitive content in %s", path)
+            return _deny_output(f"Write blocked: {block_reason}")
+
+        return {}
 
     return {
         "PreToolUse": [
