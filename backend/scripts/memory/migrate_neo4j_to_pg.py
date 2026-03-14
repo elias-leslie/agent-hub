@@ -23,8 +23,8 @@ import json
 import logging
 import sys
 import uuid as _uuid
-from pathlib import Path
 from datetime import UTC, datetime
+from pathlib import Path
 
 from neo4j import AsyncGraphDatabase
 from sqlalchemy import text
