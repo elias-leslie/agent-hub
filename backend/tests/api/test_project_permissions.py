@@ -115,7 +115,7 @@ class TestGetPermission:
     @pytest.mark.asyncio
     async def test_returns_permission_for_existing_project(self, client):
         ac, _ = client
-        perm = _make_perm("summitflow", "write", True, 9, 17, "/home/kasadis/summitflow")
+        perm = _make_perm("summitflow", "write", True, 9, 17, "/home/testuser/summitflow")
         with patch(
             "app.api.project_permissions.get_project_permission",
             new_callable=AsyncMock,
@@ -129,7 +129,7 @@ class TestGetPermission:
             assert data["auto_exec_enabled"] is True
             assert data["execution_start_hour"] == 9
             assert data["execution_end_hour"] == 17
-            assert data["root_path"] == "/home/kasadis/summitflow"
+            assert data["root_path"] == "/home/testuser/summitflow"
 
     @pytest.mark.asyncio
     async def test_returns_404_for_unknown_project(self, client):

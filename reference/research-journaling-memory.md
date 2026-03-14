@@ -22,7 +22,7 @@ The fix is a band-aid cap. The deeper questions are:
 
 Explore these two reference codebases and report on their memory/journaling architecture:
 
-### 1. `/home/kasadis/references/openclaw`
+### 1. `$HOME/references/openclaw`
 - How does it handle agent memory persistence?
 - Does it have a journaling system? If so, how are entries stored, retrieved, and pruned?
 - How is memory injected into prompts? (system message? user message? separate context?)
@@ -30,7 +30,7 @@ Explore these two reference codebases and report on their memory/journaling arch
 - How does it handle memory relevance/decay over time?
 - Look at: AGENTS.md, CLAUDE.md, any memory/context/journal related code
 
-### 2. `/home/kasadis/references/Auto-Claude`
+### 2. `$HOME/references/Auto-Claude`
 - Same questions as above
 - How does it maintain continuity across sessions?
 - Does it distinguish between types of memory (episodic, semantic, procedural)?

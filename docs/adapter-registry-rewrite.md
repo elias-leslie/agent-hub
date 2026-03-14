@@ -2,7 +2,7 @@
 
 **Status**: Research / Planning
 **Date**: 2026-02-20
-**Reference**: pi-mono at `/home/kasadis/references/pi-mono/packages/ai/src/`
+**Reference**: pi-mono at `$HOME/references/pi-mono/packages/ai/src/`
 
 ---
 
@@ -484,27 +484,27 @@ def transform_messages(messages: list[Message], target_model: Model) -> list[Mes
 ## Files to Read Before Starting
 
 ### Pi-mono Reference (key patterns)
-- `/home/kasadis/references/pi-mono/packages/ai/src/api-registry.ts` — registry mechanics
-- `/home/kasadis/references/pi-mono/packages/ai/src/types.ts` — unified types
-- `/home/kasadis/references/pi-mono/packages/ai/src/stream.ts` — public streaming API
-- `/home/kasadis/references/pi-mono/packages/ai/src/providers/anthropic.ts` — full provider impl
-- `/home/kasadis/references/pi-mono/packages/ai/src/providers/transform-messages.ts` — cross-provider transform
-- `/home/kasadis/references/pi-mono/packages/ai/src/utils/event-stream.ts` — async event stream
+- `$HOME/references/pi-mono/packages/ai/src/api-registry.ts` — registry mechanics
+- `$HOME/references/pi-mono/packages/ai/src/types.ts` — unified types
+- `$HOME/references/pi-mono/packages/ai/src/stream.ts` — public streaming API
+- `$HOME/references/pi-mono/packages/ai/src/providers/anthropic.ts` — full provider impl
+- `$HOME/references/pi-mono/packages/ai/src/providers/transform-messages.ts` — cross-provider transform
+- `$HOME/references/pi-mono/packages/ai/src/utils/event-stream.ts` — async event stream
 
 ### Current Codebase (what gets replaced)
-- `/home/kasadis/agent-hub/backend/app/adapters/base.py` — current ABC
-- `/home/kasadis/agent-hub/backend/app/adapters/types.py` — current types
-- `/home/kasadis/agent-hub/backend/app/adapters/claude.py` — dual-mode adapter
-- `/home/kasadis/agent-hub/backend/app/adapters/gemini.py` — dual-mode adapter
-- `/home/kasadis/agent-hub/backend/app/adapters/openai_compat.py` — good pattern to preserve
-- `/home/kasadis/agent-hub/backend/app/api/complete/tool_router.py` — hard-coded routing
-- `/home/kasadis/agent-hub/backend/app/api/complete/tool_claude_processor.py` — Claude event processor
-- `/home/kasadis/agent-hub/backend/app/api/complete/tool_gemini_processor.py` — Gemini event processor
-- `/home/kasadis/agent-hub/backend/app/api/complete/tool_handler_utils.py` — per-provider tool loops
-- `/home/kasadis/agent-hub/backend/app/adapters/helpers_adapters.py` — factory dict
+- `$HOME/agent-hub/backend/app/adapters/base.py` — current ABC
+- `$HOME/agent-hub/backend/app/adapters/types.py` — current types
+- `$HOME/agent-hub/backend/app/adapters/claude.py` — dual-mode adapter
+- `$HOME/agent-hub/backend/app/adapters/gemini.py` — dual-mode adapter
+- `$HOME/agent-hub/backend/app/adapters/openai_compat.py` — good pattern to preserve
+- `$HOME/agent-hub/backend/app/api/complete/tool_router.py` — hard-coded routing
+- `$HOME/agent-hub/backend/app/api/complete/tool_claude_processor.py` — Claude event processor
+- `$HOME/agent-hub/backend/app/api/complete/tool_gemini_processor.py` — Gemini event processor
+- `$HOME/agent-hub/backend/app/api/complete/tool_handler_utils.py` — per-provider tool loops
+- `$HOME/agent-hub/backend/app/adapters/helpers_adapters.py` — factory dict
 
 ### Related (affected by changes)
-- `/home/kasadis/agent-hub/backend/app/api/complete/tool_handlers.py` — calls tool loops
-- `/home/kasadis/agent-hub/backend/app/api/complete/_core_helpers.py` — calls route_tool_execution
-- `/home/kasadis/agent-hub/backend/app/services/provider_chain.py` — fallback chain
-- `/home/kasadis/agent-hub/backend/app/services/agent_routing.py` — model → provider resolution
+- `$HOME/agent-hub/backend/app/api/complete/tool_handlers.py` — calls tool loops
+- `$HOME/agent-hub/backend/app/api/complete/_core_helpers.py` — calls route_tool_execution
+- `$HOME/agent-hub/backend/app/services/provider_chain.py` — fallback chain
+- `$HOME/agent-hub/backend/app/services/agent_routing.py` — model → provider resolution

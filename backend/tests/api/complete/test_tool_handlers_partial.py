@@ -651,7 +651,7 @@ async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer()
             temperature=0.25,
             tools=[],
             tool_catalog=None,
-            working_dir="/home/kasadis/agent-hub",
+            working_dir="/home/testuser/agent-hub",
             permission_config=None,
             db=db,
             session=session,
@@ -668,7 +668,7 @@ async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer()
     assert result is tool_result
     assert mock_finalize.await_args.kwargs["adapter"] is adapter
     assert mock_finalize.await_args.kwargs["temperature"] == 0.25
-    assert mock_finalize.await_args.kwargs["working_dir"] == "/home/kasadis/agent-hub"
+    assert mock_finalize.await_args.kwargs["working_dir"] == "/home/testuser/agent-hub"
     assert mock_finalize.await_args.kwargs["base_messages"][0].role == "user"
     assert mock_finalize.await_args.kwargs["base_messages"][0].content == "hello"
 

@@ -20,7 +20,7 @@ This caused a `ModuleNotFoundError` on uvicorn worker respawn, crashing the Summ
 
 ### 0. Full Plan Review — Verify Every Workstream Was Completed
 
-Read the full implementation plan at **`/home/kasadis/.claude/plans/vivid-crunching-clover.md`** end-to-end. For each of the 11 workstreams, verify:
+Read the full implementation plan at **`$HOME/.claude/plans/vivid-crunching-clover.md`** end-to-end. For each of the 11 workstreams, verify:
 
 1. **Every file listed in the plan was actually modified** — read each file and confirm the described changes exist
 2. **Every behavioral change described actually works** — don't just check the code exists, test it

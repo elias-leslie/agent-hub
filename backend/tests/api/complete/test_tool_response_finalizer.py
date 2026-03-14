@@ -52,7 +52,7 @@ async def test_finalize_response_requests_final_closeout_for_placeholder_tool_su
         adapter=adapter,
         base_messages=[Message(role="user", content="Do a minimal coordination check.")],
         temperature=0.0,
-        working_dir="/home/kasadis/agent-hub",
+        working_dir="/home/testuser/agent-hub",
         tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0", "Bash: OVERLAPS[0]"],
     )
 

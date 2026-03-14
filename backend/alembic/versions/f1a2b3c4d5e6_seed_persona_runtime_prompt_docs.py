@@ -135,7 +135,7 @@ WAKE_GUIDANCE_PROMPT = """Operational notes:
 - Never pass `st sessions list` output `session_id` values to `st session-events`; they are ST session ids, not Agent Hub session ids.
 - Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID from Agent Hub context or heartbeat results.
 - If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on; do not probe ST internal worktree paths trying to force more context.
-- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect `/home/kasadis/.local/share/st/worktrees/...` or other external ST internals unless the prompt explicitly requires it.
+- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect `$HOME/.local/share/st/worktrees/...` or other external ST internals unless the prompt explicitly requires it.
 - If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only; do not `cd`, `git -C`, or run validation commands against that external path.
 - Treat task ids as opaque: if you are given `task-e0e03239`, use exactly `task-e0e03239` in `st context` / `st session-events -T`; do not strip the `task-` prefix.
 - Use `st context <task-id>` only when you have a real task id.

@@ -20,37 +20,37 @@
       "id": "ac-1",
       "criterion": "Duplicate golden standards are detected and merged during storage (>85% similarity triggers LLM disambiguation)",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_canonical_clustering.py -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_canonical_clustering.py -v"
     },
     {
       "id": "ac-2",
       "criterion": "loaded_count increments on every context injection, persisted to Neo4j",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_loaded_count_increment -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_loaded_count_increment -v"
     },
     {
       "id": "ac-3",
       "criterion": "Citation parsing extracts [M:uuid8] and [G:uuid8] IDs from LLM responses",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_citation_parser.py -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_citation_parser.py -v"
     },
     {
       "id": "ac-4",
       "criterion": "referenced_count increments only for cited rules, not all loaded rules",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_referenced_count_increment -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_referenced_count_increment -v"
     },
     {
       "id": "ac-5",
       "criterion": "Positive feedback increments success_count for referenced rules via feedback attribution",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_feedback_attribution.py -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_feedback_attribution.py -v"
     },
     {
       "id": "ac-6",
       "criterion": "utility_score (success/referenced ratio) is computed and used in retrieval sorting",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_utility_scoring.py -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/services/memory/tests/test_utility_scoring.py -v"
     },
     {
       "id": "ac-7",
@@ -68,7 +68,7 @@
       "id": "ac-9",
       "criterion": "Historical usage data stored in PostgreSQL usage_stats table for time-series analytics",
       "verify_by": "test",
-      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/storage/tests/test_usage_stats.py -v"
+      "verify_command": "cd $PROJECT_ROOT/backend && .venv/bin/pytest app/storage/tests/test_usage_stats.py -v"
     }
   ],
   "decisions": [
@@ -140,8 +140,8 @@
     ],
     "testing_strategy": "Unit tests for each new module (clustering, tracking, parsing). Integration tests for end-to-end flow. Manual verification for UI changes using browser-automation skill.",
     "references": [
-      {"title": "Automaker context-loader.ts", "url": "file:///home/kasadis/agent-hub/references/automaker/libs/utils/src/context-loader.ts"},
-      {"title": "Auto-Claude pr_review_engine.py", "url": "file:///home/kasadis/agent-hub/references/Auto-Claude/apps/backend/runners/github/services/pr_review_engine.py"},
+      {"title": "Automaker context-loader.ts", "url": "file://$PROJECT_ROOT/references/automaker/libs/utils/src/context-loader.ts"},
+      {"title": "Auto-Claude pr_review_engine.py", "url": "file://$PROJECT_ROOT/references/Auto-Claude/apps/backend/runners/github/services/pr_review_engine.py"},
       {"title": "Gemini consultation on storage", "url": "session://2026-01-19/gemini-storage-recommendation"},
       {"title": "Gemini consultation on dedup", "url": "session://2026-01-19/gemini-dedup-recommendation"}
     ]
