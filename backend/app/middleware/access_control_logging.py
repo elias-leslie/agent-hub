@@ -68,11 +68,29 @@ async def log_rejection(
     source_path: str | None,
     rejection_reason: str,
 ) -> None:
-    """Log a rejected request."""
+    """Log a rejected request.
+
+    For unknown/unregistered clients (client_not_found), the client_id is set
+    to NULL in the DB to avoid FK constraint violations, and the unknown ID is
+    emitted via structured logging for observability.
+    """
     import time
 
+    # When client is not found, the raw client_id is not in the clients table
+    # and would violate the request_logs FK constraint.  Log it structurally
+    # and store NULL in the DB row.
+    db_client_id: str | None = client_id
+    if rejection_reason == "client_not_found":
+        logger.warning(
+            "Rejected request from unknown client_id=%s endpoint=%s method=%s",
+            client_id,
+            path,
+            method,
+        )
+        db_client_id = None
+
     await log_request(
-        client_id=client_id,
+        client_id=db_client_id,
         request_source=request_source,
         endpoint=path,
         method=method,
