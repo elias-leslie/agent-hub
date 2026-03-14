@@ -121,7 +121,7 @@ class TestDirectToolExecutor:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         async def _fake_scan(path: str, content: str, **_: object) -> str | None:
-            if "ghp_" in content:
+            if "SIMULATED_SECRET_TOKEN" in content:
                 return "Secret-like credential detected by gitleaks"
             return None
 
@@ -132,7 +132,7 @@ class TestDirectToolExecutor:
 
         result = await executor.write_file(
             "blocked.txt",
-            "TOKEN=ghp_FAKE_TEST_TOKEN_DO_NOT_USE",
+            "TOKEN=SIMULATED_SECRET_TOKEN_123",
         )
 
         assert result == "Error: Write blocked: Secret-like credential detected by gitleaks"
