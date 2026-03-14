@@ -57,7 +57,7 @@ class EpisodeValidator:
     ]
     IMPERATIVE_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"^\*\*[^*\n][^*\n]{0,78}\*\*:\s*"
-        r"(?:Use|Never|Always|Check|Follow|Avoid|Run|Keep|Prefer|Treat|Record|Verify|Fix|Delete|Remove|Commit|Push|Restart|Rebuild)\b"
+        r"(?:Use|Never|Always|Check|Follow|Avoid|Run|Keep|Prefer|Treat|Record|Verify|Fix|Delete|Remove|Commit|Push|Restart|Rebuild|File|Store|Apply|Stop|Set|Add)\b"
     )
 
     @classmethod
