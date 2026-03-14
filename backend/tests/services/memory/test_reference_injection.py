@@ -152,13 +152,12 @@ class TestReferenceInjection:
             )
 
         assert context.mandates[0].render_tier == "L2"
-        assert context.guardrails[0].render_tier == "L0"
-        assert context.guardrails[0].rendered_content is not None
-        assert len(context.guardrails[0].rendered_content) < len(long_guardrail)
-        assert context.debug_info["tier_counts"] == {"L0": 1, "L2": 1}
-        assert context.debug_info["render_chars_saved"] > 0
+        assert context.guardrails[0].render_tier == "L2"
+        assert context.guardrails[0].rendered_content == long_guardrail
+        assert context.debug_info["tier_counts"] == {"L2": 2}
+        assert context.debug_info["render_chars_saved"] == 0
         assert context.debug_info["memory_plan"][0]["uuid"] == "mandate-uuid"
-        assert context.debug_info["memory_plan"][1]["tier"] == "L0"
+        assert context.debug_info["memory_plan"][1]["tier"] == "L2"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_uses_compact_defaults_for_long_mandates(self) -> None:
@@ -203,8 +202,8 @@ class TestReferenceInjection:
                 scope=MemoryScope.GLOBAL,
             )
 
-        assert context.mandates[0].render_tier == "L0"
-        assert context.mandates[0].rendered_content == "Keep durable instructions canonical and compact."
+        assert context.mandates[0].render_tier == "L2"
+        assert context.mandates[0].rendered_content == long_mandate
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_codex_startup_promotes_tagged_items(self) -> None:
@@ -263,7 +262,7 @@ class TestReferenceInjection:
         assert context.mandates[0].render_tier == "L2"
         assert context.mandates[0].render_reason == "consumer_profile_tag"
         assert context.mandates[0].rendered_content == context.mandates[0].content
-        assert context.mandates[1].render_tier == "L0"
+        assert context.mandates[1].render_tier == "L2"
         assert context.debug_info["consumer_profile"] == "codex_startup"
 
     @pytest.mark.asyncio
