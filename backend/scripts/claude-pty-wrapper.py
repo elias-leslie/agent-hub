@@ -14,10 +14,12 @@ import os
 import pty
 import re
 import select
+import shutil
 import signal
 import sys
+from pathlib import Path
 
-CLAUDE_CLI = os.environ.get("CLAUDE_CLI_PATH", "/home/kasadis/.local/bin/claude")
+CLAUDE_CLI = os.environ.get("CLAUDE_CLI_PATH") or shutil.which("claude") or str(Path.home() / ".local" / "bin" / "claude")
 BUFFER_SIZE = 4096
 DRAIN_TIMEOUT = 0.01
 SELECT_TIMEOUT = 0.1

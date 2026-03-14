@@ -100,7 +100,7 @@ Subtask ID: 1.1
 - Function works
 
 ## Repository path:
-/home/kasadis/summitflow/monkey-fight
+$HOME/monkey-fight
 
 Implement the required changes and return your evidence contract."""
 

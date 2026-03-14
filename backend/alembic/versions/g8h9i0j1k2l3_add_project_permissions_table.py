@@ -35,11 +35,11 @@ def _table_exists(conn: sa.Connection, table: str) -> bool:
 # Known project root paths (real projects only; utility scopes have no root)
 _PROJECT_SEEDS = [
     # (project_id, tier, auto_exec, start_hour, end_hour, root_path)
-    ("summitflow", "read", False, 0, 24, "/home/kasadis/summitflow"),
-    ("agent-hub", "read", False, 0, 24, "/home/kasadis/agent-hub"),
-    ("portfolio-ai", "read", False, 0, 24, "/home/kasadis/portfolio-ai"),
-    ("terminal", "read", False, 0, 24, "/home/kasadis/terminal"),
-    ("monkey-fight", "read", False, 0, 24, "/home/kasadis/monkey-fight"),
+    ("summitflow", "read", False, 0, 24, "$HOME/summitflow"),
+    ("agent-hub", "read", False, 0, 24, "$HOME/agent-hub"),
+    ("portfolio-ai", "read", False, 0, 24, "$HOME/portfolio-ai"),
+    ("terminal", "read", False, 0, 24, "$HOME/terminal"),
+    ("monkey-fight", "read", False, 0, 24, "$HOME/monkey-fight"),
     # Utility scopes — no root_path
     ("st-cli", "read", False, 0, 24, None),
     ("claude-consultation", "read", False, 0, 24, None),

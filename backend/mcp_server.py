@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -138,7 +139,7 @@ def sync_gemini_context():
     """Syncs the GEMINI.md context file on server startup."""
     import subprocess
 
-    script_path = "/home/kasadis/agent-hub/scripts/update_gemini_context.sh"
+    script_path = str(Path(__file__).resolve().parent.parent / "scripts" / "update_gemini_context.sh")
     try:
         # Run the sync script
         result = subprocess.run([script_path], capture_output=True, text=True)

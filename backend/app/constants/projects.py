@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +35,8 @@ _FALLBACK_PROJECT_IDS: frozenset[str] = frozenset({
 })
 
 _FALLBACK_ROOTS: dict[str, str] = {
-    "summitflow": "/home/kasadis/summitflow",
-    "agent-hub": "/home/kasadis/agent-hub",
-    "portfolio-ai": "/home/kasadis/portfolio-ai",
-    "terminal": "/home/kasadis/terminal",
-    "monkey-fight": "/home/kasadis/monkey-fight",
+    pid: str(Path.home() / pid)
+    for pid in ("summitflow", "agent-hub", "portfolio-ai", "terminal", "monkey-fight")
 }
 
 _cached_project_ids: frozenset[str] | None = None
