@@ -12,7 +12,11 @@ from .context_injector_blocks_helpers import (
     guardrail_episode_to_result,
     mandate_episode_to_result,
 )
-from .context_injector_queries import get_auto_inject_references, get_episodes_by_tier
+from .context_injector_queries import (
+    get_auto_inject_references,
+    get_episodes_by_tier,
+    get_pinned_episodes_by_tier,
+)
 from .repository import MemoryRepository, get_memory_repository
 from .service import MemoryScope, MemorySearchResult
 
@@ -80,6 +84,25 @@ async def get_auto_inject_references_as_search_results(
     results = [r for ep in episodes if (r := episode_to_result(ep))]
 
     logger.info("Auto-inject reference injection: %d included", len(results))
+    return results
+
+
+async def get_pinned_episodes_as_search_results(
+    tier: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[MemorySearchResult]:
+    """Get pinned episodes for a tier as search results.
+
+    These bypass narrower retrieval rules so pinning really means "always show"
+    whenever the memory system and that category are enabled.
+    """
+    episodes = await get_pinned_episodes_by_tier(tier, scope, scope_id)
+    logger.debug("Retrieved %d pinned %s episodes", len(episodes), tier)
+
+    results = [r for ep in episodes if (r := episode_to_result(ep))]
+
+    logger.info("Pinned %s injection: %d included", tier, len(results))
     return results
 
 

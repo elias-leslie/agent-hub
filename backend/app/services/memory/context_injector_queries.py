@@ -99,6 +99,33 @@ async def get_auto_inject_references(
         return []
 
 
+async def get_pinned_episodes_by_tier(
+    tier: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Get pinned episodes for a tier.
+
+    Pinned items should always be present in context whenever memory and the
+    corresponding category are enabled, even when they would not normally be
+    selected by a narrower retrieval path.
+    """
+    repo = get_memory_repository()
+    group_id = build_group_id(scope, scope_id)
+
+    try:
+        memories = await repo.list_by_scope_and_tier(
+            tier=tier,
+            pinned=True,
+            group_id=group_id,
+            status="active",
+        )
+        return [_memory_to_dict(m) for m in memories]
+    except Exception as e:
+        logger.warning("Failed to get pinned episodes for tier %s: %s", tier, e)
+        return []
+
+
 def _tokenize(text: str) -> set[str]:
     return {match.group(0) for match in _TOKEN_PATTERN.finditer(text.lower())}
 

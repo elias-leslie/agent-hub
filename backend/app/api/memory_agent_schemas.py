@@ -76,7 +76,13 @@ class SaveLearningRequest(BaseModel):
         description="Confidence level (0-100). 70+ is provisional, 90+ is canonical.",
     )
     context: str | None = Field(None, description="Optional context about the learning source")
-    pinned: bool = Field(False, description="Pin episode (always inject regardless of budget)")
+    pinned: bool = Field(
+        False,
+        description=(
+            "Pin episode (always include when memory and this episode's category are enabled, "
+            "regardless of budget)"
+        ),
+    )
     trigger_task_types: list[str] | None = Field(
         None, description="Task types that trigger this reference (e.g., ['database', 'memory'])"
     )

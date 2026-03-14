@@ -51,7 +51,11 @@ def plan_context_render_tiers(
 
 
 def demote_item_to_fit_budget(item: MemorySearchResult) -> bool:
-    """Demote an item one tier to reduce prompt footprint. Returns True when changed."""
+    """Demote a *reference* item one tier to reduce prompt footprint.
+
+    Only applicable to references — mandates and guardrails are always L2.
+    Returns True when changed.
+    """
     current_tier = item.render_tier or PROMPT_TIER_L2
     if current_tier == PROMPT_TIER_L2:
         _apply_render_tier(item, PROMPT_TIER_L1, _budget_reason(item.render_reason))
@@ -116,25 +120,18 @@ def _select_initial_tier(
 ) -> tuple[str, str]:
     if force_full_tags and force_full_tags.intersection(item.tags):
         return PROMPT_TIER_L2, "consumer_profile_tag"
-    query_overlap = _query_overlap(item, query_terms)
+
+    # Mandates and guardrails are instructions — always full text.
+    # Token budget is managed by episode count (target: 25-30 mandates),
+    # not by compressing instructions into useless summaries.
     if block == "mandate":
-        if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
-            return PROMPT_TIER_L2, "already_compact"
-        if query_overlap >= _QUERY_MATCH_THRESHOLD:
-            return PROMPT_TIER_L2, "query_match"
-        if item.pinned:
-            return PROMPT_TIER_L1, "pinned_overview"
-        return PROMPT_TIER_L0, "default_summary"
+        return PROMPT_TIER_L2, "mandate"
 
     if block == "guardrail":
-        if item.pinned:
-            return PROMPT_TIER_L2, "pinned_guardrail"
-        if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
-            return PROMPT_TIER_L2, "already_compact"
-        if query_overlap >= _QUERY_MATCH_THRESHOLD:
-            return PROMPT_TIER_L2, "query_match"
-        return PROMPT_TIER_L0, "default_summary"
+        return PROMPT_TIER_L2, "guardrail"
 
+    # References use progressive disclosure (query-dependent tiers).
+    query_overlap = _query_overlap(item, query_terms)
     if count_tokens(item.content) <= _FULL_TEXT_TOKEN_THRESHOLD:
         return PROMPT_TIER_L2, "already_compact"
     if query_overlap >= _QUERY_MATCH_THRESHOLD:

@@ -43,6 +43,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
+        pinned=ep.get("pinned", False),
         tags=_safe_tags(ep.get("tags")),
     )
 
@@ -60,7 +61,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
         logger.debug("Skipping mandate without content: %s", uuid[:8] if uuid else "?")
         return None
 
-    if uuid in demoted_uuids:
+    if uuid in demoted_uuids and not ep.get("pinned", False):
         logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
         return None
 
@@ -103,5 +104,6 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
+        pinned=ep.get("pinned", False),
         tags=_safe_tags(ep.get("tags")),
     )

@@ -49,7 +49,13 @@ class ProgressiveContext:
 
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
-    """Apply audience and exclude tag filters to context blocks in-place."""
+    """Apply audience and exclude tag filters to context blocks in-place.
+
+    Mandates and guardrails are universal instructions — all agents see all of
+    them regardless of audience_tags.  Only exclude_tags can remove them (e.g.
+    for deprecated episodes).  audience_tags filtering applies exclusively to
+    references, where role/domain-specific selection is appropriate.
+    """
     exclude_tags = memory_config.get("exclude_tags", [])
     audience_tags = memory_config.get("audience_tags", [])
     if exclude_tags:
@@ -57,8 +63,6 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
         context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
         context.reference = filter_by_tags(context.reference, [], exclude_tags)
     if audience_tags:
-        context.mandates = filter_by_tags(context.mandates, audience_tags, [])
-        context.guardrails = filter_by_tags(context.guardrails, audience_tags, [])
         context.reference = filter_by_tags(context.reference, audience_tags, [])
 
 
