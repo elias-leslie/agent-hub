@@ -35,7 +35,7 @@ from app.services.tools.tool_handler import (
 # Shared test fixtures
 # ---------------------------------------------------------------------------
 
-SANDBOX_DIR = "/home/kasadis/persona-sandbox"
+SANDBOX_DIR = "/home/testuser/persona-sandbox"
 
 
 def _make_persona(**overrides: Any) -> MagicMock:
@@ -823,7 +823,7 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x1",
                 name="read_file",
-                input={"path": "/home/kasadis/summitflow/src/main.py"},
+                input={"path": "/home/testuser/summitflow/src/main.py"},
             )
             decision = await hook(call)
 
@@ -842,7 +842,7 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x2",
                 name="read_file",
-                input={"path": "/home/kasadis/summitflow/src/main.py"},
+                input={"path": "/home/testuser/summitflow/src/main.py"},
             )
             decision = await hook(call)
 
@@ -861,7 +861,7 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x3",
                 name="write_file",
-                input={"path": "/home/kasadis/summitflow/src/main.py", "content": "hack"},
+                input={"path": "/home/testuser/summitflow/src/main.py", "content": "hack"},
             )
             decision = await hook(call)
 
@@ -880,7 +880,7 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x4",
                 name="write_file",
-                input={"path": "/home/kasadis/summitflow/src/main.py", "content": "ok"},
+                input={"path": "/home/testuser/summitflow/src/main.py", "content": "ok"},
             )
             decision = await hook(call)
 
@@ -912,7 +912,7 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x6",
                 name="bash",
-                input={"command": "cat /home/kasadis/summitflow/pyproject.toml"},
+                input={"command": "cat /home/testuser/summitflow/pyproject.toml"},
             )
             decision = await hook(call)
 

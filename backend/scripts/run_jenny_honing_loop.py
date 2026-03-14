@@ -46,7 +46,7 @@ from scripts.jenny_honing._constants import (
     DEFAULT_TIMEOUT_SECONDS,
     REQUEST_SOURCE,
 )
-from scripts.jenny_honing._experiment import _run_iteration
+from scripts.jenny_honing._experiment import _run_improvement_pass, _run_iteration  # noqa: F401
 from scripts.jenny_honing._models import _LoopState
 from scripts.jenny_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
 from scripts.run_jenny_model_benchmark import _parse_csv, _resolve_client_id

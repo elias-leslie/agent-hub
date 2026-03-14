@@ -616,7 +616,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "terminal",
                 "external_id": "task-999",
                 "current_branch": "task-999/main",
-                "working_dir": "/home/kasadis/.local/share/st/worktrees/terminal/task-999",
+                "working_dir": "/home/testuser/.local/share/st/worktrees/terminal/task-999",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -632,7 +632,7 @@ class TestGetWorkstreamInventory:
             result = await _get_workstream_inventory()
 
         assert "task-999" in result
-        assert "worktree=/home/kasadis/.local/share/st/worktrees/terminal/task-999" in result
+        assert "worktree=/home/testuser/.local/share/st/worktrees/terminal/task-999" in result
 
     @pytest.mark.asyncio
     async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:
