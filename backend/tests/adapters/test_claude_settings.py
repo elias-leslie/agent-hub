@@ -193,7 +193,7 @@ class TestBuildBoundaryHook:
     @pytest.mark.asyncio
     async def test_blocks_write_with_sensitive_content(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def _fake_scan(path: str, content: str, **_: Any) -> str | None:
-            if "ghp_" in content:
+            if "SIMULATED_SECRET_TOKEN" in content:
                 return "Secret-like credential detected by gitleaks"
             return None
 
@@ -208,7 +208,7 @@ class TestBuildBoundaryHook:
             "Write",
             {
                 "file_path": "/tmp/worktree/.env",
-                "content": "TOKEN=ghp_123456789012345678901234567890123456",
+                "content": "TOKEN=SIMULATED_SECRET_TOKEN_123",
             },
         )
         assert self._is_denied(result)
