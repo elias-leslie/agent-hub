@@ -2,8 +2,8 @@
 
 ## Reporting a Vulnerability
 
-Please report suspected vulnerabilities privately to
-`summitflow42@gmail.com`.
+Please report suspected vulnerabilities using
+[GitHub's private vulnerability reporting](https://github.com/summitflow-solutions/agent-hub/security/advisories/new).
 
 Include:
 
