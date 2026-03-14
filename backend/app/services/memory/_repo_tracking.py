@@ -131,11 +131,13 @@ class TrackingRepository:
         """Batch update memory properties. Each dict must have 'uuid' key."""
         results: dict[str, bool] = {}
         for upd in updates:
-            uid = upd.pop("uuid", None)
+            uid = upd.get("uuid")
             if not uid:
                 continue
+            # Build kwargs without 'uuid' — don't pop() since caller may read it after.
+            kwargs = {k: v for k, v in upd.items() if k != "uuid"}
             try:
-                ok = await self.update(uid, db=db, **upd)  # type: ignore[attr-defined]
+                ok = await self.update(uid, db=db, **kwargs)  # type: ignore[attr-defined]
                 results[uid] = ok
             except Exception as e:
                 logger.error("Batch update failed for %s: %s", uid[:8] if uid else "?", e)
