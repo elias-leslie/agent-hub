@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { fetchRequestLog, fetchMonitoringMetrics } from "@/lib/api";
 import { SortField, SortDirection } from "./types";
-import { formatNumber } from "./utils";
+import { formatLatency, formatNumber } from "./utils";
 import { MetricCard } from "./components/MetricCard";
 import { ToolTypeDistribution } from "./components/ToolTypeDistribution";
 import { TopTools } from "./components/TopTools";
@@ -183,7 +183,7 @@ export default function MonitoringRequestsPage() {
           />
           <MetricCard
             label="Avg Latency"
-            value={metricsLoading ? "..." : `${metrics?.summary.avg_latency_ms || 0}ms`}
+            value={metricsLoading ? "..." : formatLatency(metrics?.summary.avg_latency_ms ?? 0)}
             subtext="P50 response time"
             icon={Zap}
             status={latencyStatus}
