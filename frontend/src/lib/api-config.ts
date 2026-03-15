@@ -22,9 +22,9 @@ const SUMMITFLOW_API_DOMAIN = 'devapi.summitflow.dev'
  * @returns Base URL (empty for client-side same-origin, full URL for server-side)
  */
 export function getApiBaseUrl(): string {
-  // Server-side: use localhost directly (for server components, API routes)
+  // Server-side: use AGENT_HUB_API_URL env var (set by Docker compose) or localhost fallback
   if (typeof window === 'undefined') {
-    return `http://localhost:${PORTS.backend}`
+    return process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
   }
 
   // Client-side: use same-origin paths (Next.js rewrites handle proxying)
@@ -46,7 +46,8 @@ export function getApiBaseUrl(): string {
  */
 export function getWsUrl(path: string): string {
   if (typeof window === 'undefined') {
-    return `ws://localhost:${PORTS.backend}${path}`
+    const apiUrl = process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
+    return apiUrl.replace(/^http/, 'ws') + path
   }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -63,8 +64,8 @@ export function getWsUrl(path: string): string {
     return `${protocol}//${PROD_DOMAIN}${path}`
   }
 
-  // Fallback
-  return `ws://localhost:${PORTS.backend}${path}`
+  // Non-local hosts (e.g. Docker): same-origin WS
+  return `${protocol}//${window.location.host}${path}`
 }
 
 /**
@@ -78,7 +79,7 @@ export function getWsUrl(path: string): string {
  */
 export function getSseBaseUrl(): string {
   if (typeof window === 'undefined') {
-    return `http://localhost:${PORTS.backend}`
+    return process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
   }
 
   const host = window.location.hostname
@@ -86,6 +87,7 @@ export function getSseBaseUrl(): string {
     return `http://localhost:${PORTS.backend}`
   }
 
+  // Non-local hosts (e.g. Docker, production): same-origin
   return ''
 }
 
@@ -134,9 +136,9 @@ export async function fetchApi(url: string, options: RequestInit = {}): Promise<
  * @returns Base URL for SummitFlow API or null if not available
  */
 export function getSummitFlowApiUrl(): string | null {
-  // Server-side: use localhost directly
+  // Server-side: use env var or localhost fallback
   if (typeof window === 'undefined') {
-    return `http://localhost:${PORTS.summitflow}`
+    return process.env.SUMMITFLOW_API_URL || `http://localhost:${PORTS.summitflow}`
   }
 
   const host = window.location.hostname
@@ -152,6 +154,6 @@ export function getSummitFlowApiUrl(): string | null {
     return '/summitflow-api'
   }
 
-  // Fallback: SummitFlow not available in unknown environments
-  return null
+  // Non-local hosts (e.g. Docker): use same-origin
+  return '/summitflow-api'
 }

@@ -94,6 +94,11 @@ Options:
   -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai, terminal, hatchet)
   --help, -h                Show this help
 
+Dump Commands:
+  dump schema [file]        Dump schema (DDL only) to file or stdout
+  dump data [file]          Dump full database (schema + data) to file or stdout
+  dump all-schemas <dir>    Dump schemas for all projects to a directory
+
 Examples:
   db tables                         # List tables in current project
   db tables --counts                # List with row counts
@@ -662,6 +667,56 @@ COMMAND="${1:-tables}"
 shift || true
 
 # Execute command
+cmd_dump() {
+    local subcmd="${1:-schema}"
+    shift 2>/dev/null || true
+
+    case "$subcmd" in
+        schema)
+            local db_url
+            db_url=$(get_db_url "$PROJECT_NAME")
+            local outfile="${1:-}"
+            if [[ -n "$outfile" ]]; then
+                pg_dump "$db_url" --schema-only --no-owner --no-acl > "$outfile" 2>&1
+                echo -e "${GREEN}Schema dumped:${NC} $outfile ($(wc -l < "$outfile") lines)"
+            else
+                pg_dump "$db_url" --schema-only --no-owner --no-acl 2>&1
+            fi
+            ;;
+        data)
+            local db_url
+            db_url=$(get_db_url "$PROJECT_NAME")
+            local outfile="${1:-}"
+            if [[ -n "$outfile" ]]; then
+                pg_dump "$db_url" --no-owner --no-acl > "$outfile" 2>&1
+                echo -e "${GREEN}Full dump:${NC} $outfile ($(wc -l < "$outfile") lines)"
+            else
+                pg_dump "$db_url" --no-owner --no-acl 2>&1
+            fi
+            ;;
+        all-schemas)
+            local outdir="${1:-.}"
+            mkdir -p "$outdir"
+            for proj in summitflow agent-hub portfolio-ai; do
+                local url="${DB_URLS[$proj]}"
+                if [[ -z "$url" ]]; then continue; fi
+                local fname="$outdir/${proj}-schema.sql"
+                pg_dump "$url" --schema-only --no-owner --no-acl > "$fname" 2>&1
+                local lines
+                lines=$(wc -l < "$fname")
+                if [[ "$lines" -gt 1 ]]; then
+                    echo -e "${GREEN}$proj:${NC} $fname ($lines lines)"
+                else
+                    echo -e "${RED}$proj:${NC} dump failed — $(head -1 "$fname")"
+                fi
+            done
+            ;;
+        *)
+            error "Unknown dump subcommand: $subcmd. Use: schema, data, all-schemas"
+            ;;
+    esac
+}
+
 case "$COMMAND" in
     tables)
         cmd_tables "$@"
@@ -692,6 +747,9 @@ case "$COMMAND" in
         ;;
     migrate|migrations|mig)
         cmd_migrate "$@"
+        ;;
+    dump)
+        cmd_dump "$@"
         ;;
     *)
         error "Unknown command: $COMMAND. Use 'db --help' for usage."

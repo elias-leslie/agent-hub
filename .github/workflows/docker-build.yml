@@ -1,0 +1,76 @@
+name: Build & Push Docker Images
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag override'
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  pack-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+      - name: Pack workspace packages
+        run: |
+          mkdir -p /tmp/workspace-packages
+          for pkg in chat-ui push-client passport-client; do
+            if [ -d "packages/$pkg" ]; then
+              cd "packages/$pkg"
+              pnpm pack --pack-destination /tmp/workspace-packages
+              cd -
+            fi
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workspace-packages
+          path: /tmp/workspace-packages/*.tgz
+
+  build:
+    needs: pack-workspace
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - component: backend
+            dockerfile: docker/backend.Dockerfile
+            image-suffix: api
+            needs-packages: false
+          - component: frontend
+            dockerfile: docker/frontend.Dockerfile
+            image-suffix: web
+            needs-packages: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: matrix.needs-packages
+        uses: actions/download-artifact@v4
+        with:
+          name: workspace-packages
+          path: docker/workspace-packages
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/summitflow-solutions/agent-hub-${{ matrix.image-suffix }}:latest
+            ghcr.io/summitflow-solutions/agent-hub-${{ matrix.image-suffix }}:${{ inputs.tag || github.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
