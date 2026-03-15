@@ -6,23 +6,48 @@ const SUMMITFLOW_API_URL =
   process.env.SUMMITFLOW_API_URL || 'http://localhost:8001'
 
 const nextConfig: NextConfig = {
-  // Proxy /api/* to backend server-to-server to avoid CORS issues with CF Access
-  // In production: browser requests agent.summitflow.dev/api/* (same-origin)
-  // Next.js rewrites proxy to backend (server-to-server, no CORS)
+  output: 'standalone',
+  // Proxy API requests through route handlers for auth header injection.
+  // /api/proxy/* is handled by the auth proxy route handler (injects X-Client-Id).
+  // Direct /api/* rewrites can't inject headers, so we use beforeFiles to
+  // route through the proxy handler first.
   async rewrites() {
-    return [
-      // Agent Hub backend API (same-origin for CF Access compatibility)
-      {
-        source: '/api/:path*',
-        destination: `${AGENT_HUB_API_URL}/api/:path*`,
-      },
-      // SummitFlow API proxy (cross-project calls via same-origin)
-      // Handles /summitflow-api/api/* -> SummitFlow backend /api/*
-      {
-        source: '/summitflow-api/api/:path*',
-        destination: `${SUMMITFLOW_API_URL}/api/:path*`,
-      },
-    ]
+    return {
+      // beforeFiles: WebSocket-capable paths must go directly to the backend
+      // (route handlers can't proxy WebSocket upgrades).
+      beforeFiles: [
+        // WebSocket: session events
+        {
+          source: '/api/events',
+          destination: `${AGENT_HUB_API_URL}/api/events`,
+        },
+        // WebSocket: voice transcription
+        {
+          source: '/api/voice/:path*',
+          destination: `${AGENT_HUB_API_URL}/api/voice/:path*`,
+        },
+        // SSE: chat completion streaming (buffered by Next.js otherwise)
+        {
+          source: '/api/complete',
+          destination: `${AGENT_HUB_API_URL}/api/complete`,
+        },
+      ],
+      // afterFiles: existing file-based routes (e.g. /api/memory/*) resolve first,
+      // then unmatched /api/* requests go through the auth proxy handler.
+      afterFiles: [
+        {
+          source: '/api/:path((?!proxy/).*)',
+          destination: '/api/proxy/:path*',
+        },
+      ],
+      fallback: [
+        // SummitFlow API proxy (cross-project calls via same-origin)
+        {
+          source: '/summitflow-api/api/:path*',
+          destination: `${SUMMITFLOW_API_URL}/api/:path*`,
+        },
+      ],
+    }
   },
 
   // PWA headers for service worker and manifest

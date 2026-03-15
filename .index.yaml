@@ -1,0 +1,154 @@
+project: agent-hub
+generated_at: 2026-03-15 16:45 UTC
+environment:
+  python_version: '>=3.13'
+  venv_path: backend/.venv
+  package_manager: npm
+services:
+  backend_port: 8003
+  frontend_port: 3003
+  infrastructure:
+    postgres: 5432
+    redis: 6379
+urls:
+  frontend: http://localhost:8002
+  api: http://localhost:8003/api
+cli:
+  common_commands:
+  - 'st complete --agent <slug> <prompt>  # Route to agent'
+  - 'st memory save <content>  # Save learning to memory'
+  - 'st memory search <query>  # Semantic search'
+explorer:
+  scan_status: completed
+  last_completed_scan: '2026-03-15T16:30:38.303976+00:00'
+  last_scan_type: file
+  entry_counts:
+    architecture: 1
+    dependency: 100
+    endpoint: 28
+    file: 1773
+    page: 26
+    table: 35
+    task: 10
+  symbol_count: 9456
+  stale_metadata_count: 0
+pages:
+- / (app)
+- /access-control (access-control)
+- /access-control/budgets (budgets)
+- /access-control/clients (clients)
+- /access-control/clients/:id (clients/:id)
+- /access-control/clients/new (new)
+- /access-control/permissions (permissions)
+- /admin (admin)
+- /agents (agents)
+- /agents/:slug (agents/:slug)
+- /agents/:slug/analytics (analytics)
+- /agents/:slug/chat (chat)
+- /chat (chat)
+- /dashboard (dashboard)
+- /embed (embed)
+- /memory (memory)
+- /models (models)
+- /monitoring/requests (requests)
+- /persona (persona)
+- /persona/analytics (analytics)
+- /persona/settings (settings)
+- /prompts (prompts)
+- /prompts/:slug (prompts/:slug)
+- /prompts/new (new)
+- /sessions (sessions)
+- /sessions/:id (sessions/:id)
+endpoints:
+- DELETE /admin/request-audit (clear_request_audit)
+- DELETE /admin/unknown-callers (clear_unknown_callers)
+- DELETE /push/subscriptions (unsubscribe)
+- GET /admin/db/tables/{table_name}/count (get_table_count)
+- GET /admin/db/tables/{table_name}/sample (get_table_sample)
+- GET /agents/{slug}/versions (get_agent_versions)
+- GET /analytics/tier-changes (get_tier_changes)
+- GET /analytics/top-memories (get_top_memories_endpoint)
+- GET /capture/stream (capture_stream)
+- GET /continuity (get_continuity_context)
+- GET /episode/{episode_id}/citations (get_episode_citations)
+- GET /episode/{episode_id}/similar (get_similar_episodes)
+- GET /llm-config (get_llm_config)
+- GET /metrics (metrics)
+- GET /projects/{project_id}/budget (get_project_budget)
+- GET /push/vapid-key (get_vapid_key)
+- GET /scopes (list_memory_scopes)
+- GET /sessions-with-memory (get_sessions_with_memory_endpoint)
+- GET /status/cache (status_cache_info)
+- GET /timeline (get_timeline)
+- POST /models/sync (sync_models)
+- POST /push/send (send_notification)
+- POST /push/subscriptions (subscribe)
+- POST /sessions/{session_id}/analyze (analyze_session)
+- POST /sessions/{session_id}/summarize (summarize_session)
+- POST /sessions/{session_id}/task-outcome (report_task_outcome)
+- POST /task-outcome (report_task_outcome_by_task)
+- PUT /prompts/agents/{agent_slug}/assignments/{prompt_slug} (update_assignment_endpoint)
+tables:
+- agent_benchmark_attempts
+- agent_benchmark_experiments
+- agent_benchmark_runs
+- agent_performance_logs
+- agent_prompts
+- agent_regression_clusters
+- agent_versions
+- agents
+- api_keys
+- client_controls
+- clients
+- cost_logs
+- credentials
+- feedback_items
+- feedback_votes
+- memories
+- memory_injection_metrics
+- memory_revisions
+- memory_settings
+- model_enrichments
+- persona
+- persona_scheduled_jobs
+- project_permissions
+- prompt_revisions
+- prompts
+- push_subscriptions
+- request_logs
+- session_events
+- session_summary_segments
+- sessions
+- tier_change_log
+- truncation_events
+- usage_stats
+- user_preferences
+- webhook_subscriptions
+tasks:
+- coderabbit_daily_review_task (cron(0 19 * * *))
+- feedback_cleanup_task (cron(30 3 * * *))
+- memory_cleanup_task (cron(0 3 * * 0))
+- model_enrichment_sync_task (cron(0 6 * * *))
+- persona_heartbeat_task (cron(*/5 * * * *))
+- persona_scheduler_task (cron(* * * * *))
+- session_cleanup_task (cron(*/5 * * * *))
+- session_reaper_task (cron(*/15 * * * *))
+- site_health_check_task (cron(30 14 * * 1-5))
+- tier_optimizer_task (cron(0 2 * * *))
+folders:
+  (root): 31 files - tests
+  .claude: 3 files
+  .dev-tools: 17 files - tests
+  .github: 2 files
+  .qna-session: 1 files
+  .st: 1 files
+  backend: 1096 files - api, components, services, tests
+  docker: 7 files
+  docs: 5 files
+  examples: 6 files
+  frontend: 470 files - api, components, tests
+  packages: 110 files - components, tests
+  prompts: 2 files
+  reference: 3 files
+  scripts: 17 files - services, tests
+  skills: 2 files
