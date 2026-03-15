@@ -452,6 +452,7 @@ def apply_live_activity_heartbeat(
     live_activity["last_heartbeat_at"] = heartbeat_at
     live_activity["last_event_at"] = heartbeat_at
     live_activity["last_model_activity_at"] = heartbeat_at
+    live_activity["termination_reason"] = None
     live_activity["status"] = status or str(live_activity.get("status") or "active")
     live_activity["phase"] = phase or str(live_activity.get("phase") or "waiting_for_model")
     if summary is not None:
