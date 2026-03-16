@@ -104,10 +104,6 @@ class _ServiceCrudMixin:
         """Get multiple episodes in a single query for efficient batch retrieval."""
         return await crud.batch_get_episode_details(episode_uuids)
 
-    async def cleanup_orphaned_edges(self) -> dict[str, Any]:
-        """Clean up edges with stale episode references (no-op in PostgreSQL)."""
-        return await cleanup_ops.cleanup_orphaned(self._group_id)  # type: ignore[attr-defined]
-
     async def cleanup_stale_memories(self, ttl_days: int = 30) -> dict[str, Any]:
         """Clean up memories that haven't been accessed within TTL period."""
         return await cleanup_ops.cleanup_stale(self._group_id, ttl_days)  # type: ignore[attr-defined]

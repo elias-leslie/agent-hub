@@ -10,7 +10,6 @@ specialized submodules.
 
 # Re-export cleanup operations
 from .cleanup_operations import (
-    cleanup_orphaned_edges,
     cleanup_stale_memories,
 )
 
@@ -32,7 +31,6 @@ from .tracking_operations import (
 
 __all__ = [
     "batch_get_episodes",
-    "cleanup_orphaned_edges",
     "cleanup_stale_memories",
     "fetch_episodes_filtered",
     "get_episode",

@@ -22,7 +22,6 @@ from .memory_schemas_bulk import (
     BulkDeleteRequest,
     BulkDeleteResponse,
     CleanupResponse,
-    OrphanedCleanupResponse,
 )
 
 # Re-export episode CRUD schemas
@@ -67,7 +66,6 @@ __all__ = [
     "MemoryRestoreRequest",
     "MemoryRevisionListResponse",
     "MemoryRevisionResponse",
-    "OrphanedCleanupResponse",
     "PhaseTriggeredReferenceItem",
     "PhaseTriggeredReferencesResponse",
     "RateEpisodeRequest",
