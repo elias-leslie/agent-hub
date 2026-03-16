@@ -78,7 +78,7 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
 @hatchet.task(
     name="session-reaper",
     input_validator=BaseModel,
-    on_crons=["*/15 * * * *"],
+    on_crons=["*/30 * * * *"],
     execution_timeout="30s",
 )
 async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:

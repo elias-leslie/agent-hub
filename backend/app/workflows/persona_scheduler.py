@@ -162,7 +162,7 @@ async def _execute_push(job: Any) -> str:
 @hatchet.task(
     name="persona-scheduler",
     input_validator=BaseModel,
-    on_crons=["* * * * *"],
+    on_crons=["*/5 * * * *"],
     execution_timeout="7200s",
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",

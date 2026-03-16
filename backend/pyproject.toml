@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     # Database
     "sqlalchemy>=2.0.0",
+    "alembic>=1.16.0",
     # HTTP client
     "httpx>=0.28.0",
     # Background tasks
@@ -46,7 +47,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "alembic>=1.16.0",
     # Testing - Core
     "pytest>=9.0.0",
     "pytest-asyncio>=1.0.0",
