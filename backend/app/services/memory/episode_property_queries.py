@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.services.memory.memory_utils import resolve_uuid_prefix
 from app.services.memory.repository import MemoryRepository, get_memory_repository
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,8 @@ async def get_episode_properties(
     """
     repo = get_memory_repository()
     try:
-        return await repo.get_as_dict(episode_uuid)
+        resolved = await resolve_uuid_prefix(episode_uuid)
+        return await repo.get_as_dict(resolved)
     except Exception as e:
         logger.error("Failed to get properties for %s: %s", episode_uuid[:8], e)
         return None
@@ -110,7 +112,8 @@ async def get_episode_tags(
     """
     repo = get_memory_repository()
     try:
-        data = await repo.get_as_dict(episode_uuid)
+        resolved = await resolve_uuid_prefix(episode_uuid)
+        data = await repo.get_as_dict(resolved)
         if data is None:
             return []
         return data.get("tags") or []
