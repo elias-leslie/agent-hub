@@ -9,6 +9,7 @@ Provides a single endpoint that aggregates all dashboard metrics from:
 - truncation_events: Truncation rate
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
@@ -19,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models import CostLog, MemoryInjectionMetric, RequestLog, Session, TruncationEvent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -155,8 +158,7 @@ async def get_dashboard_stats(
             p50_latency = float(perc_row.p50 or 0)
             p95_latency = float(perc_row.p95 or 0)
         except Exception:
-            # Fallback if percentile_cont not available
-            pass
+            logger.debug("percentile_cont query failed, using defaults", exc_info=True)
 
     requests = RequestMetrics(
         total_requests=total_requests,
