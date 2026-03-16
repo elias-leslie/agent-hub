@@ -76,3 +76,4 @@ tasks/continuation/
 # Checkpoint data
 .st/
 .summitflow/
+.index.yaml
