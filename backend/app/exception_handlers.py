@@ -51,11 +51,17 @@ def setup_exception_handlers(app: FastAPI) -> None:
     async def _http(request: Request, exc: HTTPException) -> JSONResponse:
         if isinstance(exc.detail, dict):
             payload = dict(exc.detail)
+            # Extract message — support both flat {"message": ...} and
+            # nested OpenAI-style {"error": {"message": ...}} structures.
+            error_field = payload.get("error", "http_error")
+            message = payload.get("message")
+            if not message and isinstance(error_field, dict):
+                message = error_field.get("message", "HTTP Error")
             return JSONResponse(
                 status_code=exc.status_code,
                 content={
-                    "error": str(payload.get("error", "http_error")),
-                    "message": str(payload.get("message", "HTTP Error")),
+                    "error": str(error_field) if not isinstance(error_field, dict) else str(error_field.get("type", "http_error")),
+                    "message": str(message or "HTTP Error"),
                     "details": payload.get("details", []),
                     **({"hint": payload["hint"]} if "hint" in payload else {}),
                 },
