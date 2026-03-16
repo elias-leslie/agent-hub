@@ -90,6 +90,7 @@ export interface ProviderCardProps {
   isManualPasteActive?: boolean;
   onManualExchange?: (input: string) => Promise<void> | void;
   onCancelManualPaste?: () => void;
+  preferredAuth?: "oauth" | "api_key";
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
   vertexProject?: string;
   onVertexProjectChange?: (project: string) => void;

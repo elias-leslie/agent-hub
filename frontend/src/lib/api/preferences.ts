@@ -11,6 +11,7 @@ export interface UserPreferences {
   tone: "professional" | "friendly" | "technical";
   default_model: string;
   codex_auth_preference?: "oauth" | "api_key";
+  claude_auth_preference?: "oauth" | "api_key";
 }
 
 export async function fetchUserPreferences(): Promise<UserPreferences> {

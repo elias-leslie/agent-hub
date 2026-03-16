@@ -42,6 +42,7 @@ export function ProviderCard({
   isManualPasteActive,
   onManualExchange,
   onCancelManualPaste,
+  preferredAuth: preferredAuthProp,
   onPreferenceChange,
   vertexProject,
   onVertexProjectChange,
@@ -68,7 +69,7 @@ export function ProviderCard({
     oauthStatus && !isClaudeStatus(oauthStatus) ? oauthStatus : null;
   const hasOAuthToken = oauthActive === "active";
   const hasApiKey = providerStatus?.api_key_status === "configured" || isConfigured;
-  const preferredAuth = providerStatus?.preferred_auth ?? "api_key";
+  const preferredAuth = preferredAuthProp ?? providerStatus?.preferred_auth ?? "oauth";
   const hasBothCredentials = hasOAuthToken && hasApiKey;
 
   // Health-aware styling

@@ -1,4 +1,4 @@
-"""Direct Anthropic API helpers for Claude adapter (OAuth token path)."""
+"""Direct Anthropic API helpers for Claude adapter (OAuth token and API key paths)."""
 
 import asyncio
 import json
@@ -15,6 +15,10 @@ from app.adapters.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Required beta headers for OAuth token authentication.
+# Without these, the Anthropic API rejects OAuth tokens with 401.
+OAUTH_BETA_HEADERS = "claude-code-20250219,oauth-2025-04-20"
 
 # Anthropic API valid fields per content block type.
 # Extra fields (tool_name, thought_signature) added by the shared streaming
@@ -91,14 +95,61 @@ def apply_cache_control(
     ]
 
 
-async def ensure_valid_token() -> str:
-    """Get a valid OAuth access token, refreshing if needed.
+async def resolve_direct_credentials() -> tuple[str, str]:
+    """Resolve credentials for the direct Anthropic API.
 
-    Returns the access token string.
+    Returns (credential_value, credential_type) where credential_type is
+    ``"oauth_token"`` or ``"api_key"``.
+
+    Resolution order: user preference > oauth_token > api_key.
     """
     from app.services.credential_manager import get_credential_manager
 
     cm = get_credential_manager()
+    has_oauth = cm.get("claude", "oauth_token") is not None
+    has_api_key = cm.get_api_key("claude") is not None
+
+    if not has_oauth and not has_api_key:
+        raise ProviderError(
+            "No Claude credentials available (need OAuth token or API key)",
+            provider="claude",
+            retriable=False,
+        )
+
+    # Determine preferred auth method
+    preferred = "oauth"
+    if has_oauth and has_api_key:
+        try:
+            from app.api.preferences import get_preference_value
+            from app.db import async_session
+
+            async with async_session() as db:
+                preferred = await get_preference_value(db, "claude_auth_preference", "oauth")
+        except Exception:
+            logger.debug("Could not read claude_auth_preference, defaulting to oauth")
+
+    if preferred == "api_key" and has_api_key:
+        return cm.get_api_key("claude"), "api_key"  # type: ignore[return-value]
+    if has_oauth:
+        token = await _ensure_valid_oauth_token(cm)
+        return token, "oauth_token"
+    # Only API key available
+    return cm.get_api_key("claude"), "api_key"  # type: ignore[return-value]
+
+
+async def ensure_valid_token() -> str:
+    """Get a valid OAuth access token, refreshing if needed.
+
+    Returns the access token string.  Kept for backward compatibility.
+    """
+    from app.services.credential_manager import get_credential_manager
+
+    cm = get_credential_manager()
+    return await _ensure_valid_oauth_token(cm)
+
+
+async def _ensure_valid_oauth_token(cm: Any) -> str:
+    """Get a valid OAuth access token from the credential manager."""
     token_json = cm.get("claude", "oauth_token")
     if not token_json:
         raise ProviderError(
@@ -163,6 +214,37 @@ async def _refresh_token(cm: Any, data: dict[str, Any]) -> str:
     return new_creds.access_token
 
 
+def _build_client(credential: str, credential_type: str) -> Any:
+    """Build an AsyncAnthropic client with the appropriate auth method."""
+    import anthropic
+
+    if credential_type == "api_key":
+        return anthropic.AsyncAnthropic(api_key=credential)
+    # OAuth token — requires beta headers
+    return anthropic.AsyncAnthropic(
+        auth_token=credential,
+        default_headers={"anthropic-beta": OAUTH_BETA_HEADERS},
+    )
+
+
+def _resolve_model(model: str, credential_type: str, api_model_map: dict[str, str]) -> str:
+    """Resolve model ID appropriate for the credential type.
+
+    OAuth tokens require short model names (e.g. ``claude-sonnet-4-6``).
+    API keys accept both short and dated names (e.g. ``claude-sonnet-4-6-20250514``).
+    """
+    if credential_type == "api_key":
+        return api_model_map.get(model, model)
+    # OAuth: use the model name as-is if it's already a full name without date,
+    # otherwise map short names to their full (undated) form.
+    OAUTH_MODEL_MAP: dict[str, str] = {
+        "opus": "claude-opus-4-6",
+        "sonnet": "claude-sonnet-4-6",
+        "haiku": "claude-haiku-4-5",
+    }
+    return OAUTH_MODEL_MAP.get(model, model)
+
+
 def _build_create_kwargs(
     api_model: str,
     api_messages: list[dict[str, Any]],
@@ -220,12 +302,10 @@ async def complete_direct(
     cache_retention: str = "none",
     **kwargs: Any,
 ) -> CompletionResult:
-    """Complete using direct Anthropic API with OAuth token."""
-    import anthropic
-
+    """Complete using direct Anthropic API with OAuth token or API key."""
     start_time = time.time()
-    token = await ensure_valid_token()
-    api_model = api_model_map.get(model, model)
+    credential, cred_type = await resolve_direct_credentials()
+    api_model = _resolve_model(model, cred_type, api_model_map)
 
     system_text, api_messages = convert_messages(messages)
     create_kwargs = _build_create_kwargs(
@@ -233,7 +313,7 @@ async def complete_direct(
         max_tokens or 4096, temperature, cache_retention,
     )
 
-    client = anthropic.AsyncAnthropic(auth_token=token)
+    client = _build_client(credential, cred_type)
     try:
         response = await client.messages.create(**create_kwargs)
         return _parse_completion_response(response, api_model, provider_name, start_time)
@@ -289,11 +369,9 @@ async def stream_direct(
     cache_retention: str = "none",
     **kwargs: Any,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream using direct Anthropic API with OAuth token."""
-    import anthropic
-
-    token = await ensure_valid_token()
-    api_model = api_model_map.get(model, model)
+    """Stream using direct Anthropic API with OAuth token or API key."""
+    credential, cred_type = await resolve_direct_credentials()
+    api_model = _resolve_model(model, cred_type, api_model_map)
 
     system_text, api_messages = convert_messages(messages)
     create_kwargs = _build_create_kwargs(
@@ -316,7 +394,7 @@ async def stream_direct(
 
     abort_event: asyncio.Event | None = kwargs.get("abort_event")
 
-    client = anthropic.AsyncAnthropic(auth_token=token)
+    client = _build_client(credential, cred_type)
     try:
         async for event in _stream_events(client, create_kwargs, abort_event):
             yield event
