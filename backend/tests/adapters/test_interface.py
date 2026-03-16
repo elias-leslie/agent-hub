@@ -119,15 +119,16 @@ class TestErrorHandling:
         assert issubclass(AuthenticationError, ProviderError)
 
     def test_claude_adapter_raises_without_cli(self):
-        """ClaudeAdapter should raise ValueError if Claude CLI and OAuth token are missing."""
+        """ClaudeAdapter should raise ValueError if Claude CLI, OAuth token, and API key are all missing."""
         from unittest.mock import MagicMock, patch
 
         mock_cm = MagicMock()
         mock_cm.get.return_value = None
+        mock_cm.get_api_key.return_value = None
         with (
             patch("app.adapters.claude.shutil.which", return_value=None),
             patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
-            pytest.raises(ValueError, match="Claude adapter requires either"),
+            pytest.raises(ValueError, match="Claude adapter requires"),
         ):
             ClaudeAdapter()
 

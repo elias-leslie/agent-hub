@@ -232,6 +232,10 @@ class TestPersonaHeartbeatTask:
                 new_callable=AsyncMock,
             ) as mock_set_running,
             patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_skip",
+                new_callable=AsyncMock,
+            ) as mock_skip,
+            patch(
                 "app.workflows.persona_heartbeat._execute_heartbeat",
                 new_callable=AsyncMock,
             ) as mock_execute,
@@ -242,6 +246,7 @@ class TestPersonaHeartbeatTask:
         assert result["error"] == _build_runtime_warning("claude/unknown-no-tools")
         mock_set_running.assert_not_awaited()
         mock_execute.assert_not_awaited()
+        mock_skip.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_manual_heartbeat_skips_when_persona_is_paused(self):

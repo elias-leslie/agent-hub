@@ -34,7 +34,7 @@ PROJECT_NAME=$(basename "$PROJECT_DIR")
 # Source credentials from ~/.env.local
 if [[ -f ~/.env.local ]]; then
     # shellcheck disable=SC1090
-    source <(grep -E '^(DATABASE_URL|AGENT_HUB_DB_URL|PORTFOLIO_AI_DB_URL|TERMINAL_DB_URL|HATCHET_DATABASE_URL)=' ~/.env.local)
+    source <(grep -E '^(DATABASE_URL|AGENT_HUB_DB_URL|PORTFOLIO_AI_DB_URL|PORTFOLIO_DB_URL|TERMINAL_DB_URL|HATCHET_DATABASE_URL)=' ~/.env.local)
 fi
 
 # Database connection strings from environment
@@ -486,13 +486,40 @@ run_alembic() {
     db_url=$(get_db_url "$PROJECT_NAME")
 
     # Prefer project venv alembic so migrations run with project-local deps.
-    local alembic_cmd=("alembic")
     if [[ -x "$alembic_dir/.venv/bin/alembic" ]]; then
-        alembic_cmd=("$alembic_dir/.venv/bin/alembic")
+        (cd "$alembic_dir" && DATABASE_URL="$db_url" "$alembic_dir/.venv/bin/alembic" "$@") 2>&1
+        return $?
     fi
 
-    # cd is required so alembic can find the app modules
-    (cd "$alembic_dir" && DATABASE_URL="$db_url" "${alembic_cmd[@]}" "$@") 2>&1
+    # Host alembic on PATH
+    if command -v alembic &>/dev/null; then
+        (cd "$alembic_dir" && DATABASE_URL="$db_url" alembic "$@") 2>&1
+        return $?
+    fi
+
+    # Docker fallback: source config and look up container name
+    local config_file="$HOME/summitflow/scripts/lib/dev-standards-config.sh"
+    if [[ -f "$config_file" ]]; then
+        # shellcheck disable=SC1090
+        source "$config_file"
+        local container=""
+        for mapping in "${DOCKER_SERVICE_MAP[@]}"; do
+            local name="${mapping%%:*}"
+            local cname="${mapping#*:}"
+            if [[ "$name" == "$PROJECT_NAME" ]]; then
+                container="$cname"
+                break
+            fi
+        done
+
+        if [[ -n "$container" ]] && docker inspect "$container" &>/dev/null; then
+            echo -e "${YELLOW}(using Docker container: $container)${NC}" >&2
+            docker exec -w /app "$container" alembic "$@" 2>&1
+            return $?
+        fi
+    fi
+
+    error "No alembic binary found on host and no Docker container available for $PROJECT_NAME"
 }
 
 cmd_migrate() {

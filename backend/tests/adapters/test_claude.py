@@ -40,12 +40,13 @@ class TestClaudeAdapter:
             assert adapter.auth_mode == "cli"
 
     def test_init_no_cli_raises(self, mock_no_cli: None) -> None:
-        """Test that missing Claude CLI and no OAuth token raises ValueError."""
+        """Test that missing Claude CLI, no OAuth token, and no API key raises ValueError."""
         mock_cm = MagicMock()
         mock_cm.get.return_value = None
+        mock_cm.get_api_key.return_value = None
         with (
             patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
-            pytest.raises(ValueError, match="Claude adapter requires either"),
+            pytest.raises(ValueError, match="Claude adapter requires"),
         ):
             ClaudeAdapter()
 
@@ -60,9 +61,10 @@ class TestClaudeAdapter:
             assert result is True
 
     def test_health_check_no_cli(self, mock_no_cli: None) -> None:
-        """Test that initialization fails without CLI and no token."""
+        """Test that initialization fails without CLI, no token, and no API key."""
         mock_cm = MagicMock()
         mock_cm.get.return_value = None
+        mock_cm.get_api_key.return_value = None
         with (
             patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
             pytest.raises(ValueError),
