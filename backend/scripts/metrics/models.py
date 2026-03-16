@@ -1,6 +1,6 @@
 """Data models for baseline metrics collection."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -48,7 +48,7 @@ class BaselineReport:
     total_injections: int
     variant_metrics: dict[str, VariantMetrics]
     daily_counts: dict[str, int]  # date_str -> count
-    query_distribution: dict[str, int]  # query category -> count
+    query_distribution: dict[str, int] = field(default_factory=dict)
 
 
 def calculate_citation_rate(loaded: int, cited: int) -> float:
