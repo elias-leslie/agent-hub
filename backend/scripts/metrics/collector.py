@@ -60,7 +60,6 @@ async def collect_metrics(days: int = 7) -> BaselineReport:
         total_injections=len(records),
         variant_metrics=variant_metrics,
         daily_counts=dict(daily_counts),
-        query_distribution={},  # TODO: implement query categorization
     )
 
 

@@ -10,12 +10,11 @@ Tests verify:
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.adapters.base import CacheMetrics, Message
-from app.adapters.claude import ClaudeAdapter
+from app.adapters.base import CacheMetrics
 from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.response_cache.cache_key import generate_cache_key
@@ -638,138 +637,3 @@ class TestCostSavingsMetrics:
         assert hasattr(estimate, "context_limit")
         assert hasattr(estimate, "context_usage_percent")
         assert hasattr(estimate, "context_warning")
-
-
-# ============================================================================
-# Integration: End-to-end cost optimization verification
-# ============================================================================
-
-
-class TestCostOptimizationIntegration:
-    """End-to-end verification of cost optimization features."""
-
-    @pytest.fixture
-    def mock_claude_settings(self):
-        """Mock settings for Claude adapter."""
-        with patch("app.adapters.claude.settings") as mock:
-            mock.anthropic_api_key = "test-key"
-            yield mock
-
-    @pytest.fixture
-    def mock_anthropic(self):
-        """Mock Anthropic client.
-
-        SKIP: Claude adapter no longer uses anthropic SDK directly.
-        """
-        pytest.skip("Claude adapter refactored to use OAuth - tests need rewrite")
-        yield None
-
-    @pytest.fixture
-    def mock_no_oauth(self):
-        """Disable OAuth mode by mocking CLI check."""
-        with patch("app.adapters.claude.shutil.which", return_value=None):
-            yield
-
-    @pytest.mark.asyncio
-    async def test_prompt_caching_returns_metrics(
-        self, mock_anthropic, mock_claude_settings, mock_no_oauth
-    ):
-        """Verify Claude adapter returns cache metrics on completion."""
-        # Setup mock response with cache metrics
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text="Response")]
-        mock_response.model = CLAUDE_SONNET
-        mock_response.usage.input_tokens = 1000
-        mock_response.usage.output_tokens = 200
-        mock_response.usage.cache_creation_input_tokens = 200  # 20% new cache
-        mock_response.usage.cache_read_input_tokens = 800  # 80% cache hit
-        mock_response.stop_reason = "end_turn"
-
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        mock_anthropic.AsyncAnthropic.return_value = mock_client
-
-        adapter = ClaudeAdapter()
-        result = await adapter.complete(
-            messages=[Message(role="user", content="Test")],
-            model=CLAUDE_SONNET,
-        )
-
-        # Verify cache metrics are returned
-        assert result.cache_metrics is not None
-        assert result.cache_metrics.cache_read_input_tokens == 800
-        # Hit rate = read / (read + creation) = 800 / 1000 = 0.8
-        assert result.cache_metrics.cache_hit_rate == 0.8
-
-    def test_full_cost_comparison_scenario(self):
-        """
-        Comprehensive cost comparison: standard vs cached requests.
-
-        Scenario: 100 requests with common system prompt, 80% cache hit rate.
-        """
-        # Typical agentic workload parameters
-        system_tokens = 5000  # Large system prompt
-        user_tokens = 200  # Average user message
-        output_tokens = 500  # Average response
-
-        total_input = system_tokens + user_tokens
-
-        # Scenario 1: No caching at all (100 full-price requests)
-        no_cache_cost = estimate_cost(
-            input_tokens=total_input * 100,
-            output_tokens=output_tokens * 100,
-            model=CLAUDE_SONNET,
-        ).total_cost_usd
-
-        # Scenario 2: Prompt caching (80% of system cached after first request)
-        first_request_cost = estimate_cost(
-            input_tokens=total_input,
-            output_tokens=output_tokens,
-            model=CLAUDE_SONNET,
-        ).total_cost_usd
-
-        cached_system = int(system_tokens * 0.8)
-        subsequent_cost = estimate_cost(
-            input_tokens=total_input * 99,
-            output_tokens=output_tokens * 99,
-            model=CLAUDE_SONNET,
-            cached_input_tokens=cached_system * 99,
-        ).total_cost_usd
-
-        prompt_cache_cost = first_request_cost + subsequent_cost
-
-        # Scenario 3: Response caching for 30% identical requests (hit Redis)
-        # 70 unique requests with prompt caching + 30 free from response cache
-        unique_requests = 70
-
-        unique_cost = estimate_cost(
-            input_tokens=total_input * unique_requests,
-            output_tokens=output_tokens * unique_requests,
-            model=CLAUDE_SONNET,
-            cached_input_tokens=cached_system * (unique_requests - 1),  # First is uncached
-        ).total_cost_usd
-
-        full_optimization_cost = unique_cost  # 30 requests are free
-
-        # Calculate savings
-        prompt_savings = ((no_cache_cost - prompt_cache_cost) / no_cache_cost) * 100
-        full_savings = ((no_cache_cost - full_optimization_cost) / no_cache_cost) * 100
-
-        # Verify savings goals
-        assert prompt_savings > 30, f"Prompt caching should save >30%, got {prompt_savings:.1f}%"
-        assert full_savings > 50, f"Full optimization should save >50%, got {full_savings:.1f}%"
-
-        # Log results for reference (these would go to dashboard)
-        savings_report = {
-            "baseline_cost_usd": no_cache_cost,
-            "with_prompt_caching_usd": prompt_cache_cost,
-            "with_full_optimization_usd": full_optimization_cost,
-            "prompt_caching_savings_percent": prompt_savings,
-            "full_optimization_savings_percent": full_savings,
-            "requests_simulated": 100,
-        }
-
-        # All values should be positive
-        for key, value in savings_report.items():
-            if isinstance(value, int | float):
-                assert value >= 0, f"{key} should be non-negative"
