@@ -117,15 +117,19 @@ class TestParseMentionNoMatch:
         model, _ = parse_mention("@unknownprovider/some-model Hello")
         assert model is None
 
-    def test_bare_provider_not_matched(self) -> None:
-        """Bare provider names like @claude should not resolve to a model."""
-        model, _ = parse_mention("@claude Say hello")
-        assert model is None
+    def test_bare_provider_resolves_to_default(self) -> None:
+        """Bare provider names like @claude resolve to the default model."""
+        model, cleaned = parse_mention("@claude Say hello")
+        assert model is not None
+        assert "sonnet" in model or "claude" in model
+        assert cleaned == "Say hello"
 
-    def test_bare_nvidia_not_matched(self) -> None:
-        """Bare provider names like @nvidia should not resolve to a model."""
-        model, _ = parse_mention("@nvidia Describe this")
-        assert model is None
+    def test_bare_gemini_resolves_to_default(self) -> None:
+        """Bare provider names like @gemini resolve to the default model."""
+        model, cleaned = parse_mention("@gemini Describe this")
+        assert model is not None
+        assert "flash" in model or "gemini" in model
+        assert cleaned == "Describe this"
 
 
 class TestParseMentionMultimodal:
