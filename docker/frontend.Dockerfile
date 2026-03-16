@@ -43,6 +43,9 @@ RUN pnpm build
 # ── Stage 2: Runner ──────────────────────────────────────────────
 FROM node:20-slim
 
+# Create non-root user for runtime
+RUN useradd -m -s /bin/bash appuser
+
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -54,6 +57,10 @@ ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
+
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 3003
 

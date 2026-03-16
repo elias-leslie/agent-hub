@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-03-15 17:16 UTC
+generated_at: 2026-03-16 01:30 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -20,13 +20,13 @@ cli:
   - 'st memory search <query>  # Semantic search'
 explorer:
   scan_status: completed
-  last_completed_scan: '2026-03-15T17:00:39.397608+00:00'
+  last_completed_scan: '2026-03-16T01:15:28.769676+00:00'
   last_scan_type: file
   entry_counts:
     architecture: 1
-    dependency: 100
+    dependency: 45
     endpoint: 28
-    file: 1773
+    file: 1745
     page: 26
     table: 35
     task: 10
@@ -136,17 +136,15 @@ tasks:
 - site_health_check_task (cron(30 14 * * 1-5))
 - tier_optimizer_task (cron(0 2 * * *))
 folders:
-  (root): 31 files - tests
+  (root): 27 files - tests
   .claude: 3 files
-  .dev-tools: 17 files - tests
   .github: 2 files
   .qna-session: 1 files
-  .st: 1 files
-  backend: 1096 files - api, components, services, tests
+  backend: 1092 files - api, components, services, tests
   docker: 7 files
   docs: 5 files
   examples: 6 files
-  frontend: 470 files - api, components, tests
+  frontend: 468 files - api, components, tests
   packages: 110 files - components, tests
   prompts: 2 files
   reference: 3 files

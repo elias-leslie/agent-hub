@@ -54,6 +54,12 @@ COPY --from=builder /app/alembic ./alembic
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
 
+# Create non-root user for runtime
+RUN useradd -m -s /bin/bash appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
 EXPOSE 8003
 ENV PORT=8003
 

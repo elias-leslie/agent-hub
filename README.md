@@ -206,11 +206,12 @@ pip install agent-hub-client  # from packages/agent-hub-client
 
 ## Services
 
-Managed via systemd user services:
+All services run as Docker containers via the shared SummitFlow Compose file (`~/summitflow/docker/compose/docker-compose.yml`, `--profile agent-hub` or `--profile full`).
 
 ```bash
-scripts/status.sh     # Check service status
-scripts/restart.sh    # Restart all services
+scripts/rebuild.sh            # Full rebuild and restart (auto-detects Docker)
+scripts/rebuild.sh --restart  # Restart only
+scripts/rebuild.sh --status   # Check service health
 ```
 
 ## Testing
