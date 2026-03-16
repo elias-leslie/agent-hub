@@ -21,7 +21,6 @@ from .memory_schemas import (
     BulkDeleteResponse,
     CleanupResponse,
     EpisodeDetailResponse,
-    OrphanedCleanupResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,16 +129,3 @@ async def cleanup_stale_memories(
         raise HTTPException(status_code=500, detail=f"Cleanup failed: {e}") from e
 
 
-@router.post("/cleanup-orphaned", response_model=OrphanedCleanupResponse)
-async def cleanup_orphaned_edges() -> OrphanedCleanupResponse:
-    """Clean up orphaned edge references from deleted episodes."""
-    from app.services.memory import get_memory_service
-    from app.services.memory.service import MemoryScope
-
-    try:
-        memory = get_memory_service(MemoryScope.GLOBAL, None)
-        result = await memory.cleanup_orphaned_edges()
-        return OrphanedCleanupResponse(**result)
-    except Exception as e:
-        logger.exception("Orphaned edge cleanup failed")
-        raise HTTPException(status_code=500, detail=f"Orphaned cleanup failed: {e}") from e
