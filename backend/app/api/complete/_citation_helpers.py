@@ -164,11 +164,30 @@ async def _store_cite_event(
     agent_id: str | None,
     model_used: str | None,
 ) -> None:
-    """Store a memory cite event in the database."""
+    """Store a memory cite event, deduplicating against already-cited UUIDs."""
+    from app.models.session import SessionEvent, SessionEventType
     from app.services.event_storage import store_memory_cite_event
 
+    # Dedup: query existing memory_cite events for this session
+    existing_query = (
+        select(SessionEvent.tool_input)
+        .where(
+            SessionEvent.session_id == session_id,
+            SessionEvent.event_type == SessionEventType.MEMORY_CITE,
+        )
+    )
+    rows = await db.execute(existing_query)
+    already_cited: set[str] = set()
+    for (tool_input,) in rows:
+        if isinstance(tool_input, dict):
+            already_cited.update(tool_input.get("uuids", []))
+
+    new_uuids = [u for u in cited_uuids if u not in already_cited]
+    if not new_uuids:
+        return
+
     await store_memory_cite_event(
-        db, session_id, cited_uuids, agent_id=agent_id, model_used=model_used
+        db, session_id, new_uuids, agent_id=agent_id, model_used=model_used
     )
 
 
