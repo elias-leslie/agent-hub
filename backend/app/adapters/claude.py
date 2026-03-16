@@ -65,7 +65,7 @@ class ClaudeAdapter(ProviderAdapter):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize Claude adapter.
 
-        Accepts if EITHER CLI or OAuth token is available.
+        Accepts if ANY of CLI, OAuth token, or API key is available.
 
         Args:
             **kwargs: Ignored (for backward compatibility).
@@ -76,16 +76,19 @@ class ClaudeAdapter(ProviderAdapter):
 
         cm = get_credential_manager()
         self._has_oauth_token = cm.get("claude", "oauth_token") is not None
+        self._has_api_key = cm.get_api_key("claude") is not None
 
-        if not self._cli_path and not self._has_oauth_token:
+        if not self._cli_path and not self._has_oauth_token and not self._has_api_key:
             raise ValueError(
-                "Claude adapter requires either an OAuth token (via browser auth) "
-                "or the Claude CLI. Install CLI: npm install -g @anthropic-ai/claude-code"
+                "Claude adapter requires an OAuth token, API key, or the Claude CLI. "
+                "Install CLI: npm install -g @anthropic-ai/claude-code"
             )
 
         mode = []
         if self._has_oauth_token:
-            mode.append("direct API")
+            mode.append("direct API (OAuth)")
+        if self._has_api_key:
+            mode.append("direct API (API key)")
         if self._cli_path:
             mode.append(f"CLI ({self._cli_path})")
         logger.info("Claude adapter: %s", " + ".join(mode))
@@ -99,14 +102,15 @@ class ClaudeAdapter(ProviderAdapter):
         """Whether to use direct Anthropic API (vs CLI).
 
         Prefer CLI when available — it uses the Claude Agent SDK which handles
-        auth via the Max subscription. Direct API is only used as a fallback
-        when CLI is not installed.
+        auth via the Max subscription. Direct API is used as a fallback
+        when CLI is not installed but OAuth token or API key exists.
         """
         if self._cli_path:
             return False
         from app.services.credential_manager import get_credential_manager
 
-        return get_credential_manager().get("claude", "oauth_token") is not None
+        cm = get_credential_manager()
+        return cm.get("claude", "oauth_token") is not None or cm.get_api_key("claude") is not None
 
     @property
     def auth_mode(self) -> str:
@@ -121,15 +125,15 @@ class ClaudeAdapter(ProviderAdapter):
         return convert_messages(messages)
 
     async def health_check(self) -> bool:
-        """Check if Claude is reachable (either mode)."""
+        """Check if Claude is reachable (any mode)."""
         if self._use_direct_api:
             try:
-                from app.adapters.claude_direct import ensure_valid_token
+                from app.adapters.claude_direct import resolve_direct_credentials
 
-                await ensure_valid_token()
+                await resolve_direct_credentials()
                 return True
             except Exception:
-                logger.debug("Claude direct API token validation failed", exc_info=True)
+                logger.debug("Claude direct API credential validation failed", exc_info=True)
         return self._cli_path is not None
 
     async def complete(

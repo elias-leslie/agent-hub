@@ -14,7 +14,7 @@ export interface ProviderInfo {
 }
 
 const PROVIDER_METADATA: Record<string, Omit<ProviderInfo, "id">> = {
-  claude: { name: "Claude", hint: "Anthropic — browser OAuth", oauth: true },
+  claude: { name: "Claude", hint: "Anthropic — OAuth or API key", oauth: true },
   codex: { name: "Codex", hint: "ChatGPT subscription OAuth", oauth: true },
   gemini: { name: "Gemini", hint: "Google AI API key" },
   openai: { name: "OpenAI", hint: "OpenAI platform API key" },

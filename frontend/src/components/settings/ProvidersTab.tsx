@@ -33,6 +33,8 @@ export function ProvidersTab() {
     handleManualExchange,
     getOAuthStatus,
     getHealthData,
+    getPreferredAuth,
+    handlePreferenceChange,
     onDelete,
     onSetPrimaryCredential,
   } = useProvidersTab();
@@ -136,6 +138,12 @@ export function ProvidersTab() {
               onDeleteCredential={(credentialId) => {
                 onDelete([credentialId]);
               }}
+              preferredAuth={getPreferredAuth(provider.id)}
+              onPreferenceChange={
+                isOAuthProvider(provider.id)
+                  ? (pref) => handlePreferenceChange(provider.id, pref)
+                  : undefined
+              }
               onSetPrimaryCredential={
                 provider.id === "gemini"
                   ? (credentialId) => onSetPrimaryCredential(credentialId)

@@ -16,6 +16,7 @@ import {
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
+import { fetchUserPreferences, updateUserPreferences } from "@/lib/api/preferences";
 import {
   filterVisibleSettingsProviders,
   isOAuthProvider,
@@ -47,6 +48,17 @@ export function useProvidersTab() {
     queryKey: ["provider-status"],
     queryFn: () => fetchStatus(),
     refetchInterval: 30_000,
+  });
+  const { data: prefsData } = useQuery({
+    queryKey: ["user-preferences"],
+    queryFn: () => fetchUserPreferences(),
+  });
+  const prefsMut = useMutation({
+    mutationFn: (prefs: Parameters<typeof updateUserPreferences>[0]) => updateUserPreferences(prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["provider-status"] });
+    },
   });
 
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -268,6 +280,20 @@ export function useProvidersTab() {
     ...(statusData?.providers.map((p) => p.name) ?? []),
   ]);
 
+  function getPreferredAuth(providerId: string): "oauth" | "api_key" {
+    if (providerId === "claude") return (prefsData?.claude_auth_preference as "oauth" | "api_key") ?? "oauth";
+    if (providerId === "codex") return (prefsData?.codex_auth_preference as "oauth" | "api_key") ?? "oauth";
+    return "oauth";
+  }
+
+  function handlePreferenceChange(providerId: string, pref: "oauth" | "api_key") {
+    if (providerId === "claude") {
+      prefsMut.mutate({ claude_auth_preference: pref });
+    } else if (providerId === "codex") {
+      prefsMut.mutate({ codex_auth_preference: pref });
+    }
+  }
+
   return {
     isLoading,
     providerIds,
@@ -295,6 +321,8 @@ export function useProvidersTab() {
     handleManualExchange,
     getOAuthStatus,
     getHealthData,
+    getPreferredAuth,
+    handlePreferenceChange,
     onDelete: (ids: number[]) => deleteMut.mutate(ids),
     onSetPrimaryCredential: (credentialId: number) => setPrimaryMut.mutate(credentialId),
   };

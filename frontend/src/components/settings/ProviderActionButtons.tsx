@@ -85,21 +85,19 @@ export function ProviderActionButtons({
         )
       )}
 
-      {(!isOAuth || isConfigured) && (
-        <ApiKeyActions
-          provider={provider}
-          credentials={credentials}
-          isConfigured={isConfigured}
-          isOAuth={isOAuth}
-          isConfirmDelete={isConfirmDelete}
-          isDeletingThis={isDeletingThis}
-          onEdit={onEdit}
-          onAdd={onAdd}
-          onDeleteAll={onDeleteAll}
-          onConfirmDelete={onConfirmDelete}
-          onCancelDelete={onCancelDelete}
-        />
-      )}
+      <ApiKeyActions
+        provider={provider}
+        credentials={credentials}
+        isConfigured={isConfigured}
+        isOAuth={isOAuth}
+        isConfirmDelete={isConfirmDelete}
+        isDeletingThis={isDeletingThis}
+        onEdit={onEdit}
+        onAdd={onAdd}
+        onDeleteAll={onDeleteAll}
+        onConfirmDelete={onConfirmDelete}
+        onCancelDelete={onCancelDelete}
+      />
     </div>
   );
 }
@@ -214,29 +212,26 @@ function ApiKeyActions({
     );
   }
 
-  if (!isOAuth) {
-    return (
-      <div className="flex items-center gap-1.5 flex-wrap">
+  // Show "Add Key" for all unconfigured providers (including OAuth providers that also accept API keys)
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <button
+        onClick={onAdd}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {credentials.length > 0 ? "Update" : "Add Key"}
+      </button>
+      {/* Allow adding multiple keys for single-field providers like Gemini */}
+      {credentials.length > 0 && provider.id === "gemini" && (
         <button
           onClick={onAdd}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
-          {credentials.length > 0 ? "Update" : "Add Key"}
+          Add Another Key
         </button>
-        {/* Allow adding multiple keys for single-field providers like Gemini */}
-        {credentials.length > 0 && provider.id === "gemini" && (
-          <button
-            onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Another Key
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 }

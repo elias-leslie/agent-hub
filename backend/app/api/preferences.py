@@ -23,6 +23,10 @@ class PreferencesResponse(BaseModel):
         default="oauth",
         description="Codex auth preference: oauth or api_key",
     )
+    claude_auth_preference: str = Field(
+        default="oauth",
+        description="Claude auth preference: oauth or api_key",
+    )
 
 
 class PreferencesUpdate(BaseModel):
@@ -32,6 +36,11 @@ class PreferencesUpdate(BaseModel):
         default=None,
         pattern="^(oauth|api_key)$",
         description="Codex auth preference: oauth or api_key",
+    )
+    claude_auth_preference: str | None = Field(
+        default=None,
+        pattern="^(oauth|api_key)$",
+        description="Claude auth preference: oauth or api_key",
     )
 
 
@@ -65,8 +74,10 @@ async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResp
     """Get user preferences."""
     try:
         codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
+        claude_auth = await get_preference_value(db, "claude_auth_preference", "oauth")
         return PreferencesResponse(
             codex_auth_preference=codex_auth,
+            claude_auth_preference=claude_auth,
         )
     except Exception as e:
         logger.error(f"Failed to get preferences: {e}")
@@ -80,15 +91,20 @@ async def update_preferences(
 ) -> PreferencesResponse:
     """Update user preferences. Only provided fields are updated."""
     try:
+        from app.api.complete.helpers_adapters import invalidate_adapter
+
         if preferences.codex_auth_preference is not None:
             await set_preference_value(db, "codex_auth_preference", preferences.codex_auth_preference)
-            from app.api.complete.helpers_adapters import invalidate_adapter
-
             invalidate_adapter("codex")
+
+        if preferences.claude_auth_preference is not None:
+            await set_preference_value(db, "claude_auth_preference", preferences.claude_auth_preference)
+            invalidate_adapter("claude")
 
         # Return current state
         return PreferencesResponse(
             codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
+            claude_auth_preference=await get_preference_value(db, "claude_auth_preference", "oauth"),
         )
     except HTTPException:
         raise
