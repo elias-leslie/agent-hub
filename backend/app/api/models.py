@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -38,6 +39,7 @@ __all__ = [
     "router",
 ]
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -143,6 +145,7 @@ async def list_models() -> ModelsResponse:
         async with async_session() as db:
             enrichments = await get_all_enrichments(db)
     except Exception:
+        logger.warning("Failed to load model enrichments", exc_info=True)
         enrichments = {}
 
     models = [_build_model_info(e, enrichments.get(e.id)) for e in MODEL_CATALOG]
@@ -164,7 +167,7 @@ async def list_models() -> ModelsResponse:
             )
             last_model_review = row.scalar_one_or_none()
     except Exception:
-        pass
+        logger.debug("Failed to query last model review timestamp", exc_info=True)
 
     present_providers = {e.provider for e in MODEL_CATALOG}
     providers = {p: PROVIDER_NAMES.get(p, p.capitalize()) for p in sorted(present_providers)}
