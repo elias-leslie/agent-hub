@@ -95,6 +95,11 @@ MODEL_CATALOG_BY_ID: dict[str, ModelEntry] = {e.id: e for e in MODEL_CATALOG}
 # Derived from catalog
 MODEL_ALIASES: dict[str, str] = {e.alias: e.id for e in MODEL_CATALOG}
 MODEL_ALIASES.update({
+    # Bare provider names resolve to default model for that provider
+    "claude": CLAUDE_SONNET,
+    "gemini": GEMINI_FLASH,
+    "openai": OPENAI_GPT_5_2,
+    # CloudCode aliases
     "cc/sonnet": CLAUDE_SONNET,
     "cc/opus": CLAUDE_OPUS,
     "cloudcode/claude-sonnet-4-6": CLAUDE_SONNET,
