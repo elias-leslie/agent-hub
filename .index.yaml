@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-03-16 01:30 UTC
+generated_at: 2026-03-16 02:30 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -20,7 +20,7 @@ cli:
   - 'st memory search <query>  # Semantic search'
 explorer:
   scan_status: completed
-  last_completed_scan: '2026-03-16T01:15:28.769676+00:00'
+  last_completed_scan: '2026-03-16T02:15:28.595894+00:00'
   last_scan_type: file
   entry_counts:
     architecture: 1
