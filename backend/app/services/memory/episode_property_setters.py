@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.services.memory.memory_utils import resolve_uuid_prefix
 from app.services.memory.repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ async def _set_episode_property(
     """
     repo = get_memory_repository()
     try:
+        episode_uuid = await resolve_uuid_prefix(episode_uuid)
         result = await repo.update(
             episode_uuid,
             changed_by="api",
