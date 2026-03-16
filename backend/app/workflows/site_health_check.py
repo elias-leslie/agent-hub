@@ -26,14 +26,31 @@ from app.hatchet_app import hatchet
 
 logger = logging.getLogger(__name__)
 
-# Project → frontend port mapping (from service port map)
-FRONTEND_PORTS: dict[str, int] = {
-    "summitflow": 3001,
-    "agent-hub": 3003,
-    "portfolio-ai": 3000,
-    "terminal": 3002,
-    "monkey-fight": 4001,
+# Project → (Docker service name, port) mapping.
+# When running inside Docker, the worker reaches frontends via service names.
+# When running natively (systemd), localhost is used.
+_IN_DOCKER = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
+
+FRONTEND_SERVICES: dict[str, tuple[str, int]] = {
+    "summitflow": ("summitflow-web", 3001),
+    "agent-hub": ("agent-hub-web", 3003),
+    "portfolio-ai": ("portfolio-web", 3000),
+    "terminal": ("terminal-web", 3002),
+    "monkey-fight": ("monkey-fight", 4001),
 }
+
+# Legacy alias used by callers that only need the port
+FRONTEND_PORTS: dict[str, int] = {k: v[1] for k, v in FRONTEND_SERVICES.items()}
+
+
+def _get_frontend_url(project_id: str) -> str:
+    """Get the base URL for a project's frontend.
+
+    Uses Docker service names when running in a container, localhost otherwise.
+    """
+    service_name, port = FRONTEND_SERVICES[project_id]
+    host = service_name if _IN_DOCKER else "localhost"
+    return f"http://{host}:{port}"
 
 MAX_PAGES_PER_PROJECT = 5
 CHECK_TIMEOUT_PER_PROJECT = 180  # seconds (increased for multi-page)
@@ -317,7 +334,7 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
 
     Returns (findings_text, has_issues).
     """
-    url = f"http://localhost:{port}"
+    url = _get_frontend_url(project_id)
     page_paths = _get_page_paths(project_id)
 
     try:
@@ -402,7 +419,7 @@ async def single_project_health_check_task(
         return {"status": "skipped", "error": f"Unknown project: {project_id}"}
 
     # Poll for service readiness (up to 60s, 5s intervals)
-    url = f"http://localhost:{port}"
+    url = _get_frontend_url(project_id)
     ready = False
     for _ in range(12):
         try:
@@ -416,7 +433,7 @@ async def single_project_health_check_task(
         ctx.log(f"Service {project_id} not ready at {url} after 60s")
         return {"status": "error", "error": f"Service not ready: {url}"}
 
-    ctx.log(f"Checking {project_id} at localhost:{port}")
+    ctx.log(f"Checking {project_id} at {url}")
     findings, has_issues = await _check_project(project_id, port)
 
     if has_issues:
@@ -458,7 +475,7 @@ async def site_health_check_task(input: BaseModel, ctx: Context) -> dict[str, An
         projects_with_issues = 0
 
         for project_id, port in FRONTEND_PORTS.items():
-            ctx.log(f"Checking {project_id} at localhost:{port}")
+            ctx.log(f"Checking {project_id} at {_get_frontend_url(project_id)}")
             findings, has_issues = await _check_project(project_id, port)
             project_findings[project_id] = findings
             if has_issues:

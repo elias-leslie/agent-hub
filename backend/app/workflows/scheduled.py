@@ -53,7 +53,7 @@ class FeedbackCleanupResult(BaseModel):
 @hatchet.task(
     name="session-cleanup",
     input_validator=EmptyInput,
-    on_crons=["*/5 * * * *"],
+    on_crons=["*/15 * * * *"],
     execution_timeout="120s",
     concurrency=ConcurrencyExpression(
         expression="'session_cleanup'",
