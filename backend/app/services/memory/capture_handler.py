@@ -176,7 +176,7 @@ def _fire_sse_broadcast(
         )
         _schedule_background_task(stream.broadcast(capture_event))
     except Exception:
-        pass  # Never fail observation capture for SSE broadcast
+        logger.debug("SSE broadcast failed for observation capture", exc_info=True)
 
 
 def _apply_privacy_filters(

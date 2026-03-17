@@ -96,7 +96,7 @@ async def _store_partial_response(
             )
             await db.commit()
         except Exception:
-            pass
+            logger.debug("Failed to mark session completed after cancellation", exc_info=True)
 
 
 async def _rollback_after_cancellation(db: AsyncSession) -> None:

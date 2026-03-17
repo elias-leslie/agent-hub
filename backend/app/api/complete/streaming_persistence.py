@@ -140,7 +140,7 @@ def log_tool_audit(
         # Keep a reference to prevent premature garbage collection
         _ = task
     except RuntimeError:
-        pass
+        logger.debug("Could not schedule telemetry task (event loop closed)")
 
 
 async def _track_citations(session_id: str, accumulated_content: str) -> None:

@@ -36,7 +36,7 @@ async def list_models() -> str:
             async with async_session() as db:
                 enrichments = await get_all_enrichments(db)
         except Exception:
-            pass
+            logger.debug("Failed to load model enrichments", exc_info=True)
 
         lines = []
         for m in MODEL_CATALOG:
