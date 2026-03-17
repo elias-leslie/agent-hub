@@ -62,7 +62,7 @@ const agent: Agent = {
   name: "Persona",
   description: "Primary persona",
   system_prompt: "You are Persona.",
-  primary_model_id: "claude-sonnet-4-5",
+  primary_model_id: "claude-sonnet-4-6",
   fallback_models: [],
   escalation_model_id: null,
   strategies: {},
