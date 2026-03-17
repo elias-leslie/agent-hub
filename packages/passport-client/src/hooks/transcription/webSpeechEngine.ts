@@ -1,3 +1,5 @@
+/// <reference path="../../types/web-speech.d.ts" />
+
 import { useRef, useCallback } from 'react';
 import type { TranscriptionStatus, TranscriptionError } from './types'
 import { getSpeechRecognitionCtor, mapSpeechError } from './utils'

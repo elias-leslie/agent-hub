@@ -15,6 +15,8 @@ export function handleStreamEvent(
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
   setCurrentSessionId: React.Dispatch<React.SetStateAction<string | null>>,
 ): void {
+  const provider = data.provider as ChatMessage["agentProvider"];
+
   switch (data.type) {
     case "connected":
       if (data.session_id) {
@@ -48,7 +50,7 @@ export function handleStreamEvent(
               ...m,
               content: state.content,
               thinking: state.thinking || undefined,
-              agentProvider: data.provider,
+              agentProvider: provider,
               agentModel: data.model_display_name || data.model,
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
@@ -71,7 +73,7 @@ export function handleStreamEvent(
               ...m,
               content: state.content,
               thinking: state.thinking || undefined,
-              agentProvider: data.provider,
+              agentProvider: provider,
               agentModel: data.model,
               cancelled: true,
               inputTokens: data.input_tokens,

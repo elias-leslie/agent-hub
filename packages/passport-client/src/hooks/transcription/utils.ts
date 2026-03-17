@@ -1,3 +1,5 @@
+/// <reference path="../../types/web-speech.d.ts" />
+
 import type { TranscriptionEngine, TranscriptionError } from './types'
 
 // SSR-safe SpeechRecognition detection
