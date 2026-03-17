@@ -6,6 +6,8 @@ Wants=agent-hub-backend.service
 [Service]
 Type=simple
 WorkingDirectory=%h/agent-hub/frontend
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
 Environment="NODE_ENV=production"
 Environment="PORT=3003"
 Environment="AGENT_HUB_API_URL=http://localhost:8003"

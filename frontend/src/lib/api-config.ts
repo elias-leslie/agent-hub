@@ -99,11 +99,35 @@ export function buildApiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`
 }
 
-/**
- * Internal header for bypassing access control middleware.
- * The agent-hub dashboard is an internal service and doesn't need
- * client authentication for its own API calls.
- */
+function buildInternalHeaders(): Record<string, string> {
+  // Server-side calls may hit the backend directly, so attach the real
+  // internal/dashboard headers from the runtime environment. Client-side
+  // calls stay same-origin and rely on the Next proxy route instead.
+  if (typeof window !== 'undefined') {
+    return {}
+  }
+
+  const headers: Record<string, string> = {}
+  const internalSecret = process.env.INTERNAL_SERVICE_SECRET?.trim()
+  const dashboardClientId = process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim()
+  const dashboardRequestSource =
+    process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE?.trim() || 'agent-hub-dashboard'
+
+  if (internalSecret) {
+    headers['X-Agent-Hub-Internal'] = internalSecret
+  }
+  if (dashboardClientId) {
+    headers['X-Client-Id'] = dashboardClientId
+  }
+  if (dashboardRequestSource) {
+    headers['X-Request-Source'] = dashboardRequestSource
+  }
+
+  return headers
+}
+
+// Chat streaming still passes explicit headers to direct SSE/WS-facing paths.
+// Keep the legacy export for compatibility until that path is refactored.
 export const INTERNAL_HEADERS = {
   'X-Agent-Hub-Internal': 'agent-hub-internal-v1',
 }
@@ -118,7 +142,7 @@ export const INTERNAL_HEADERS = {
  */
 export async function fetchApi(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = {
-    ...INTERNAL_HEADERS,
+    ...buildInternalHeaders(),
     ...options.headers,
   }
   return fetch(url, { ...options, headers })
