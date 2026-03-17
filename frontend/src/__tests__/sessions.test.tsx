@@ -184,10 +184,10 @@ describe("SessionsPage", () => {
 
     await waitFor(() => {
       // Token pairs are displayed as "input / output" format
-      // First session: 1500 / 800 -> "1.5k / 800"
-      // Second session: 3200 / 1200 -> "3.2k / 1.2k"
-      expect(screen.getByText("1.5k / 800")).toBeInTheDocument();
-      expect(screen.getByText("3.2k / 1.2k")).toBeInTheDocument();
+      // First session: 1500 / 800 -> "1.5K / 800"
+      // Second session: 3200 / 1200 -> "3.2K / 1.2K"
+      expect(screen.getByText("1.5K / 800")).toBeInTheDocument();
+      expect(screen.getByText("3.2K / 1.2K")).toBeInTheDocument();
     });
   });
 
