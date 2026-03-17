@@ -6,6 +6,8 @@
  * non-React consumers (e.g., Phaser.js, vanilla DOM).
  */
 
+/// <reference path="../types/web-speech.d.ts" />
+
 import type { TranscriptionEngine, TranscriptionStatus, TranscriptionError } from '../hooks/transcription/types';
 import { getSpeechRecognitionCtor, resolveEngine, mapSpeechError } from '../hooks/transcription/utils';
 

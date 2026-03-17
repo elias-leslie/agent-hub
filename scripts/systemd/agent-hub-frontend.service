@@ -6,10 +6,11 @@ Wants=agent-hub-backend.service
 [Service]
 Type=simple
 WorkingDirectory=%h/agent-hub/frontend
-Environment="PATH=%h/.nvm/versions/node/v20.11.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="NODE_ENV=production"
 Environment="PORT=3003"
-ExecStart=/usr/bin/npm run start -- --hostname 0.0.0.0 --port 3003
+Environment="AGENT_HUB_API_URL=http://localhost:8003"
+Environment="SUMMITFLOW_API_URL=http://localhost:8001"
+ExecStart=/bin/bash -lc "pnpm start --hostname 0.0.0.0 --port 3003"
 TimeoutStopSec=10
 KillMode=mixed
 Restart=always

@@ -1,6 +1,7 @@
 [Unit]
 Description=Agent Hub Hatchet Worker
-After=network.target hatchet-engine.service
+After=network.target agent-hub-backend.service
+Wants=agent-hub-backend.service
 
 [Service]
 Type=simple
@@ -8,6 +9,9 @@ WorkingDirectory=%h/agent-hub/backend
 Environment="PATH=%h/.local/bin:%h/agent-hub/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="HOME=%h"
 EnvironmentFile=-%h/.env.local
+Environment="PYTHONUNBUFFERED=1"
+Environment="HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070"
+Environment="HATCHET_CLIENT_TLS_STRATEGY=none"
 ExecStart=%h/agent-hub/backend/.venv/bin/python -m app.worker
 Restart=always
 RestartSec=10
