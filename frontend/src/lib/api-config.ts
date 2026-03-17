@@ -11,8 +11,6 @@
 
 const PORTS = { frontend: 3003, backend: 8003, summitflow: 8001 }
 const PROD_DOMAIN = 'agent.summitflow.dev'
-const PROD_API_DOMAIN = 'agentapi.summitflow.dev'
-const SUMMITFLOW_API_DOMAIN = 'devapi.summitflow.dev'
 
 /**
  * Get the base URL for Agent Hub backend API calls.
