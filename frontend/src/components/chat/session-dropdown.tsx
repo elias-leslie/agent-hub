@@ -137,9 +137,8 @@ export function SessionDropdown({
       if (activeSessionId === sessionId) {
         onSelectSession(null);
       }
-    } catch {
-      setSessions((prev) => prev); // trigger re-render to restore UI
-      console.error("Failed to delete session", sessionId);
+    } catch (err) {
+      console.error("Failed to delete session", sessionId, err);
     }
   };
 

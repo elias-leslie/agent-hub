@@ -18,6 +18,7 @@ from app.adapters.claude_direct import (
 )
 from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_streaming import stream_oauth
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 
 logger = logging.getLogger(__name__)
 
@@ -36,22 +37,22 @@ class ClaudeAdapter(ProviderAdapter):
 
     # Model name mapping: full ID -> SDK short name (for CLI mode)
     MODEL_MAP: ClassVar[dict[str, str]] = {
-        "claude-opus-4-6": "opus",
-        "claude-sonnet-4-6": "sonnet",
-        "claude-haiku-4-5": "haiku",
+        CLAUDE_OPUS: "opus",
+        CLAUDE_SONNET: "sonnet",
+        CLAUDE_HAIKU: "haiku",
         "opus": "opus",
         "sonnet": "sonnet",
         "haiku": "haiku",
     }
 
-    # Full model IDs for the direct API
+    # Full model IDs for the direct API (dated versions for API key auth)
     API_MODEL_MAP: ClassVar[dict[str, str]] = {
-        "opus": "claude-opus-4-6-20250219",
-        "sonnet": "claude-sonnet-4-6-20250514",
-        "haiku": "claude-haiku-4-5-20251001",
-        "claude-opus-4-6": "claude-opus-4-6-20250219",
-        "claude-sonnet-4-6": "claude-sonnet-4-6-20250514",
-        "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+        "opus": f"{CLAUDE_OPUS}-20250219",
+        "sonnet": f"{CLAUDE_SONNET}-20250514",
+        "haiku": f"{CLAUDE_HAIKU}-20251001",
+        CLAUDE_OPUS: f"{CLAUDE_OPUS}-20250219",
+        CLAUDE_SONNET: f"{CLAUDE_SONNET}-20250514",
+        CLAUDE_HAIKU: f"{CLAUDE_HAIKU}-20251001",
     }
 
     # Anthropic API valid fields per content block type (kept for back-compat).

@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from app.constants.models import FAST_CLAUDE_MODEL
+
 if TYPE_CHECKING:
     from app.models import Session as DBSession
 
@@ -519,7 +521,7 @@ async def steer_consultation(
         async with async_session() as db:
             result = await complete_internal(
                 messages=[{"role": "user", "content": message}],
-                model="claude-haiku-4-5",
+                model=FAST_CLAUDE_MODEL,
                 provider="claude",
                 temperature=0.3,
                 project_id=project_id,

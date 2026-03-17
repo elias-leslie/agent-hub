@@ -97,6 +97,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                 await cm.load(db)
             return cm.get_api_key(self.provider_name)
         except Exception:
+            logger.debug("DB credential reload failed for %s", self.provider_name, exc_info=True)
             return None
 
     async def _refresh_credentials(self, *, allow_db_reload: bool = False) -> str | None:
@@ -114,7 +115,8 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                 logger.debug("%s: credential refreshed from cache", self.provider_name)
             return fresh
         except Exception:
-            return None  # keep using existing key
+            logger.debug("%s: credential refresh failed, keeping existing key", self.provider_name, exc_info=True)
+            return None
 
     @staticmethod
     def _is_auth_error(error: Exception) -> bool:

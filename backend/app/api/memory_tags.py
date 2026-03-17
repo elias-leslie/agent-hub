@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -74,6 +78,7 @@ async def bulk_tag_episodes_endpoint(body: BulkTagRequest) -> BulkTagResponse:
             else:
                 failed += 1
         except Exception:
+            logger.debug("Failed to update tags for episode %s", uuid, exc_info=True)
             failed += 1
 
     return BulkTagResponse(updated=updated, failed=failed)

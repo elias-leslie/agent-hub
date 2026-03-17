@@ -129,6 +129,7 @@ async def _sdk_query_messages(prompt: str | AsyncIterable[dict[str, Any]], optio
         from claude_agent_sdk._internal.query import Query
         from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
     except Exception:
+        logger.debug("Claude SDK internal imports unavailable, using public query API", exc_info=True)
         from claude_agent_sdk import query as sdk_query
 
         async for message in sdk_query(prompt=prompt, options=options):
@@ -373,6 +374,7 @@ async def _iterate_sdk_messages(
                     if resolved_stop_reason is not None:
                         message.stop_reason = resolved_stop_reason
                 except Exception:
+                    logger.debug("Failed to set finish_reason on SDK message, reconstructing", exc_info=True)
                     message = ResultMessage(
                         session_id=session_id,
                         subtype=getattr(message, "subtype", "success"),

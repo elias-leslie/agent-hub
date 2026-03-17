@@ -237,10 +237,12 @@ def _resolve_model(model: str, credential_type: str, api_model_map: dict[str, st
         return api_model_map.get(model, model)
     # OAuth: use the model name as-is if it's already a full name without date,
     # otherwise map short names to their full (undated) form.
+    from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
+
     OAUTH_MODEL_MAP: dict[str, str] = {
-        "opus": "claude-opus-4-6",
-        "sonnet": "claude-sonnet-4-6",
-        "haiku": "claude-haiku-4-5",
+        "opus": CLAUDE_OPUS,
+        "sonnet": CLAUDE_SONNET,
+        "haiku": CLAUDE_HAIKU,
     }
     return OAUTH_MODEL_MAP.get(model, model)
 
