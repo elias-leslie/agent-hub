@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.adapters.base import Message, ProviderError, RateLimitError
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_routing import (
     CompletionResult,
     MandateInjection,
@@ -41,7 +41,7 @@ def mock_agent() -> AgentDTO:
         description="A coding assistant",
         system_prompt="You are a helpful coding assistant.",
         primary_model_id=CLAUDE_SONNET,
-        fallback_models=[CLAUDE_HAIKU, "gemini-3-flash"],
+        fallback_models=[CLAUDE_HAIKU, GEMINI_FLASH],
         escalation_model_id=None,
         strategies={},
         temperature=0.7,
@@ -102,7 +102,7 @@ class TestGetProviderForModel:
         assert get_provider_for_model(CLAUDE_OPUS) == "claude"
 
     def test_gemini_model(self) -> None:
-        assert get_provider_for_model("gemini-3-flash") == "gemini"
+        assert get_provider_for_model(GEMINI_FLASH) == "gemini"
         assert get_provider_for_model("gemini-3-pro") == "gemini"
 
     def test_unknown_defaults_to_claude(self) -> None:
@@ -480,7 +480,7 @@ class TestCompleteWithFallback:
             id=3, slug="escalator", name="Escalator",
             description=None, system_prompt="Prompt.",
             primary_model_id=CLAUDE_HAIKU,
-            fallback_models=["gemini-3-flash"],
+            fallback_models=[GEMINI_FLASH],
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
@@ -566,7 +566,7 @@ class TestCompleteWithFallback:
             id=5, slug="all-fail", name="AllFail",
             description=None, system_prompt="Prompt.",
             primary_model_id=CLAUDE_HAIKU,
-            fallback_models=["gemini-3-flash"],
+            fallback_models=[GEMINI_FLASH],
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,

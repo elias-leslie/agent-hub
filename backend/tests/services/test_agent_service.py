@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_service import AgentDTO, AgentService, get_agent_service
 
 
@@ -44,7 +44,7 @@ class TestAgentService:
         agent.description = "Generates code"
         agent.system_prompt = "You are a coder."
         agent.primary_model_id = CLAUDE_SONNET
-        agent.fallback_models = ["gemini-3-flash"]
+        agent.fallback_models = [GEMINI_FLASH]
         agent.escalation_model_id = CLAUDE_OPUS
         agent.strategies = {}
         agent.temperature = 0.7
@@ -387,7 +387,7 @@ class TestAgentDTO:
             description="Desc",
             system_prompt="Prompt",
             primary_model_id=CLAUDE_SONNET,
-            fallback_models=["gemini-3-flash"],
+            fallback_models=[GEMINI_FLASH],
             escalation_model_id=CLAUDE_OPUS,
             strategies={"retry": True},
             temperature=0.5,

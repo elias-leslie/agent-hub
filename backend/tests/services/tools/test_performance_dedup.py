@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
+
 
 class TestPerformanceLogDedup:
     """Verify 24h dedup prevents duplicate performance log entries."""
@@ -28,7 +30,7 @@ class TestPerformanceLogDedup:
         with patch("app.db.async_session", return_value=mock_session_ctx):
             result = await log_agent_performance(
                 agent_slug="coder",
-                model_id="claude-sonnet-4-5",
+                model_id=CLAUDE_SONNET,
                 feedback_type="praise",
                 content="Great performance on task X",
             )
@@ -58,7 +60,7 @@ class TestPerformanceLogDedup:
         with patch("app.db.async_session", return_value=mock_session_ctx):
             result = await log_agent_performance(
                 agent_slug="coder",
-                model_id="claude-sonnet-4-5",
+                model_id=CLAUDE_SONNET,
                 feedback_type="praise",
                 content="Great performance on task Y",
             )
@@ -85,7 +87,7 @@ class TestPerformanceLogDedup:
         with patch("app.db.async_session", return_value=mock_session_ctx):
             result = await log_agent_performance(
                 agent_slug="coder",
-                model_id="claude-sonnet-4-5",
+                model_id=CLAUDE_SONNET,
                 feedback_type="friction",
                 content="Slow on task Z",
             )

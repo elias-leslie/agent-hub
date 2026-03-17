@@ -11,6 +11,7 @@ from app.api.complete.citation_tracker import (
     _extract_chat_summary,
     _track_inline_tags,
 )
+from app.constants.models import CLAUDE_SONNET
 
 # Matches the 120-char truncation in _extract_chat_summary
 MAX_SUMMARY_LENGTH = 120
@@ -98,7 +99,7 @@ class TestTrackInlineTagsSyntheticFallback:
                 new_callable=AsyncMock,
             ) as mock_synthetic,
         ):
-            await _track_inline_tags(content, db, "session-6", "coder", "claude-sonnet-4-5")
+            await _track_inline_tags(content, db, "session-6", "coder", CLAUDE_SONNET)
 
             mock_synthetic.assert_called_once_with(content, "session-6", db=db)
 
@@ -123,6 +124,6 @@ class TestTrackInlineTagsSyntheticFallback:
                 new_callable=AsyncMock,
             ) as mock_synthetic,
         ):
-            await _track_inline_tags(content, db, "session-7", "coder", "claude-sonnet-4-5")
+            await _track_inline_tags(content, db, "session-7", "coder", CLAUDE_SONNET)
 
             mock_synthetic.assert_not_called()

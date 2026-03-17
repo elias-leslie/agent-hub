@@ -1,5 +1,6 @@
 """Unit tests for SQLAlchemy models."""
 
+from app.constants.models import CLAUDE_SONNET
 from app.models import MemoryInjectionMetric, Session
 
 
@@ -115,7 +116,7 @@ class TestSessionWorkstreamLifecycle:
             id="test-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
         )
 
@@ -128,7 +129,7 @@ class TestSessionWorkstreamLifecycle:
             id="test-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
         )
 
@@ -142,7 +143,7 @@ class TestSessionWorkstreamLifecycle:
                 id=f"session-{status}",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 status="completed",
                 workstream_status=status,
             )
