@@ -30,10 +30,7 @@ from .base import Base
 
 
 class Memory(Base):
-    """Unified memory record — stores mandates, guardrails, references, feedback, journal, continuity.
-
-    Replaces Neo4j Episodic nodes with a PostgreSQL table + pgvector embeddings.
-    """
+    """Unified memory record — stores mandates, guardrails, references, feedback, journal, continuity."""
 
     __tablename__ = "memories"
 
@@ -61,7 +58,7 @@ class Memory(Base):
     )  # project_id when scope=project:<id>
     group_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True
-    )  # backward compat with Graphiti group_ids
+    )  # logical grouping (e.g. project, session)
     source: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )  # human, agent:<slug>, system:summarizer, chat, voice
