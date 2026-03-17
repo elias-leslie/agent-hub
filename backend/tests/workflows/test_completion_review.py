@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
+from app.services.persona_prompt_service import render_completion_review_rules
 from app.workflows._completion_review import _build_review_prompt
-from app.workflows._completion_review_rules import render_completion_review_rules
 from scripts.completion_review_benchmark_cases import get_completion_review_case_by_id
 
 

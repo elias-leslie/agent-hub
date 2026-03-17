@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.workflows._completion_review_rules import render_completion_review_rules
+from app.services.persona_prompt_service import render_completion_review_rules
 
 DEFAULT_COMPLETION_REVIEW_MODELS = [
     "codex/gpt-5.4",
