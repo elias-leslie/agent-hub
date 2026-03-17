@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.services.memory.learning_extractor import (
     ExtractionResult,
@@ -42,24 +42,12 @@ from .memory_agent_schemas import (
     SaveLearningRequest,
     SaveLearningResponse,
 )
+from .memory_dependencies import get_scope_params
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-
-def get_scope_params(
-    x_memory_scope: Annotated[str | None, Header()] = None,
-    x_scope_id: Annotated[str | None, Header()] = None,
-) -> tuple[MemoryScope, str | None]:
-    """Get scope parameters from headers (matching memory_dependencies.py convention)."""
-    scope = MemoryScope.GLOBAL
-    if x_memory_scope:
-        scope_value = x_memory_scope.lower()
-        valid_scopes = [s.value for s in MemoryScope]
-        if scope_value in valid_scopes:
-            scope = MemoryScope(scope_value)
-    return scope, x_scope_id
 
 
 @router.post("/record-discovery", response_model=RecordResponse)
