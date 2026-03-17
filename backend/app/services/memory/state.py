@@ -126,20 +126,15 @@ class MemoryState:
         """
         Load state from disk.
 
-        Also checks the legacy file path for backward compatibility.
-
         Args:
             session_id: If provided, only return state if session_id matches
 
         Returns:
             MemoryState if file exists (and session_id matches), None otherwise
         """
-        # Check both new and legacy file paths
-        legacy_file = Path.home() / ".agent-hub" / ".graphiti_state.json"
-        file_to_load = STATE_FILE if STATE_FILE.exists() else (legacy_file if legacy_file.exists() else None)
-
-        if file_to_load is None:
+        if not STATE_FILE.exists():
             return None
+        file_to_load = STATE_FILE
 
         try:
             with file_to_load.open() as f:
