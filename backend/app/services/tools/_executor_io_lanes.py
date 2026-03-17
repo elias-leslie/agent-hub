@@ -95,11 +95,7 @@ def _task_is_terminal(task_status: str | None) -> bool:
     return bool(task_status and task_status in _TERMINAL_TASK_STATUSES)
 
 
-def _st_cmd(subcommand: str, project_id: str | None = None) -> str:
-    """Build st CLI command with -P flag in correct position (before subcommand)."""
-    if project_id:
-        return f"st -P {shlex.quote(project_id)} {subcommand}"
-    return f"st {subcommand}"
+from app.services.tools._tool_constants import st_cmd as _st_cmd  # noqa: E402
 
 
 async def _get_task_status(

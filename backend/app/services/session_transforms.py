@@ -1,7 +1,6 @@
 """Session data transformations."""
 
 from collections import defaultdict
-from pathlib import Path
 from typing import Any
 
 from app.api.schemas.sessions import (
@@ -17,7 +16,7 @@ from app.models import Session
 from app.models.session import SessionEventType
 from app.services.agent_routing import get_provider_for_model
 from app.services.session_live_activity import build_live_activity_response
-from app.services.tools.project_env import detect_main_repo
+from app.services.tools.project_env import is_worktree_path
 
 _MESSAGE_TYPES = frozenset({
     SessionEventType.USER_MESSAGE,
@@ -113,13 +112,7 @@ def _worktree_path(session: Session) -> str | None:
     return _metadata_value(session, "worktree_path") or _metadata_value(session, "cwd")
 
 
-def _is_worktree(working_dir: str | None) -> bool:
-    if not working_dir:
-        return False
-    try:
-        return detect_main_repo(Path(working_dir).resolve()) is not None
-    except OSError:
-        return False
+_is_worktree = is_worktree_path
 
 
 def _tool_execution_from_event(evt: Any) -> ToolExecutionResponse:

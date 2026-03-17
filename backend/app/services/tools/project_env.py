@@ -60,6 +60,16 @@ def detect_main_repo(working_dir: Path) -> Path | None:
     return None
 
 
+def is_worktree_path(path: str | None) -> bool:
+    """Return True if the given path is inside a git worktree."""
+    if not path:
+        return False
+    try:
+        return detect_main_repo(Path(path).resolve()) is not None
+    except OSError:
+        return False
+
+
 def find_venv(working_dir: Path, main_repo: Path | None = None) -> Path | None:
     """Find the Python venv for a project directory.
 
