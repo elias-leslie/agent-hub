@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ from app.services.ownership_lanes import (
     infer_task_id,
 )
 from app.services.session_scope import merge_scope_paths, normalize_scope_paths
-from app.services.tools.project_env import detect_main_repo
+from app.services.tools.project_env import is_worktree_path
 
 _LOOKBACK_HOURS = 24
 # Align live-lane stale classification with completion-session cleanup so downstream
@@ -71,13 +70,7 @@ def _derive_ownership_kind(
     return "unscoped"
 
 
-def _is_worktree(worktree_path: str | None) -> bool:
-    if not worktree_path:
-        return False
-    try:
-        return detect_main_repo(Path(worktree_path).resolve()) is not None
-    except OSError:
-        return False
+_is_worktree = is_worktree_path
 
 
 async def _fetch_candidate_sessions(
