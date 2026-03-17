@@ -14,8 +14,8 @@ const agent: Agent = {
   id: 1,
   slug: "persona",
   name: "Persona",
-  primary_model_id: "claude-sonnet-4-5",
-  fallback_models: ["gemini-2.5-flash"],
+  primary_model_id: "claude-sonnet-4-6",
+  fallback_models: ["gemini-3-flash-preview"],
   updated_at: "2026-03-06T14:00:00Z",
 };
 
@@ -38,8 +38,8 @@ describe("agent analytics utils", () => {
     expect(analytics.errorRate).toBe(2.5);
     expect(analytics.requestsPerHour).toBe(2);
     expect(analytics.modelSummary).toEqual([
-      "claude-sonnet-4-5",
-      "gemini-2.5-flash",
+      "claude-sonnet-4-6",
+      "gemini-3-flash-preview",
     ]);
     expect(analytics.trend).toHaveLength(24);
   });

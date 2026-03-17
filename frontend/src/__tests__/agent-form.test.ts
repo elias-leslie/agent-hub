@@ -12,8 +12,8 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     name: "Persona",
     description: "Primary persona agent",
     system_prompt: "You are persona.",
-    primary_model_id: "claude-sonnet-4-5",
-    fallback_models: ["gemini-2.5-flash"],
+    primary_model_id: "claude-sonnet-4-6",
+    fallback_models: ["gemini-3-flash-preview"],
     escalation_model_id: null,
     strategies: {},
     temperature: 0.7,
@@ -40,7 +40,7 @@ describe("agent form helpers", () => {
     const formData = createAgentFormData(makeAgent());
 
     expect(formData.name).toBe("Persona");
-    expect(formData.primary_model_id).toBe("claude-sonnet-4-5");
+    expect(formData.primary_model_id).toBe("claude-sonnet-4-6");
     expect(formData.max_concurrency).toBe(4);
     expect(formData.daily_token_budget).toBe(200000);
     expect(formData.timeout_seconds).toBe(90);
