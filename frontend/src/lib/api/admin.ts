@@ -1,5 +1,7 @@
 // API functions for admin page
 
+import { fetchApi } from "@/lib/api-config";
+
 export interface ClientControl {
   client_name: string;
   enabled: boolean;
@@ -19,19 +21,19 @@ export interface BlockedRequest {
 }
 
 export async function fetchClients(): Promise<ClientControl[]> {
-  const res = await fetch("/api/admin/clients");
+  const res = await fetchApi("/api/admin/clients");
   const data = await res.json();
   return data.clients || [];
 }
 
 export async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
-  const res = await fetch("/api/admin/blocked-requests?limit=1000");
+  const res = await fetchApi("/api/admin/blocked-requests?limit=1000");
   const data = await res.json();
   return data.requests || [];
 }
 
 export async function disableClient(clientName: string, reason: string, disabledBy: string): Promise<void> {
-  await fetch(`/api/admin/clients/${clientName}/disable`, {
+  await fetchApi(`/api/admin/clients/${clientName}/disable`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reason, disabled_by: disabledBy }),
@@ -39,5 +41,5 @@ export async function disableClient(clientName: string, reason: string, disabled
 }
 
 export async function enableClient(clientName: string): Promise<void> {
-  await fetch(`/api/admin/clients/${clientName}/disable`, { method: "DELETE" });
+  await fetchApi(`/api/admin/clients/${clientName}/disable`, { method: "DELETE" });
 }

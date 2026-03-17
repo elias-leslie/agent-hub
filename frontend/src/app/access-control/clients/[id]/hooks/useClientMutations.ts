@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { buildApiUrl } from "@/lib/api-config";
+import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface ClientUpdateRequest {
   display_name?: string;
@@ -13,12 +13,9 @@ export function useClientMutations(clientId: string) {
 
   const suspendMutation = useMutation({
     mutationFn: async (reason: string) => {
-      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}/suspend`), {
+      const response = await fetchApi(buildApiUrl(`/access-control/clients/${clientId}/suspend`), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
       });
       if (!response.ok) throw new Error("Failed to suspend client");
@@ -31,11 +28,8 @@ export function useClientMutations(clientId: string) {
 
   const activateMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}/activate`), {
+      const response = await fetchApi(buildApiUrl(`/access-control/clients/${clientId}/activate`), {
         method: "POST",
-        headers: {
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-        },
       });
       if (!response.ok) throw new Error("Failed to activate client");
       return response.json();
@@ -47,12 +41,9 @@ export function useClientMutations(clientId: string) {
 
   const blockMutation = useMutation({
     mutationFn: async (reason: string) => {
-      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}/block`), {
+      const response = await fetchApi(buildApiUrl(`/access-control/clients/${clientId}/block`), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason }),
       });
       if (!response.ok) throw new Error("Failed to block client");
@@ -65,12 +56,9 @@ export function useClientMutations(clientId: string) {
 
   const updateMutation = useMutation({
     mutationFn: async (data: ClientUpdateRequest) => {
-      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}`), {
+      const response = await fetchApi(buildApiUrl(`/access-control/clients/${clientId}`), {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!response.ok) throw new Error("Failed to update client");

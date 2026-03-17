@@ -29,11 +29,7 @@ interface ClientResponse {
 }
 
 async function fetchClient(clientId: string): Promise<ClientResponse> {
-  const response = await fetchApi(buildApiUrl(`/api/access-control/clients/${clientId}`), {
-    headers: {
-      "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-    },
-  });
+  const response = await fetchApi(buildApiUrl(`/api/access-control/clients/${clientId}`));
   if (!response.ok) {
     throw new Error(`Failed to fetch client: ${response.statusText}`);
   }

@@ -1,5 +1,7 @@
 """Memory settings endpoints."""
 
+import logging
+
 from fastapi import APIRouter
 
 from app.services.memory.service import MemoryCategory
@@ -9,6 +11,8 @@ from app.services.memory.settings import (
 )
 
 from .memory_schemas import BudgetUsageResponse, SettingsResponse, SettingsUpdateRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -90,7 +94,7 @@ async def get_budget_usage() -> BudgetUsageResponse:
             if continuity_ctx.markdown:
                 continuity_tokens = count_tokens(continuity_ctx.markdown)
         except Exception:
-            pass
+            logger.debug("Failed to estimate continuity tokens", exc_info=True)
 
     # Get total counts from stats
     memory_svc = get_memory_service(MemoryScope.GLOBAL, None)
