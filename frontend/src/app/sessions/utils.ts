@@ -1,13 +1,8 @@
 import { getModelCost } from "@/lib/models";
 
 // Re-exported from canonical location
-export { formatRelativeTime } from "@/lib/formatters";
+export { formatRelativeTime, formatTokens } from "@/lib/formatters";
 
-export function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-  return tokens.toString();
-}
 
 export function formatTokenPair(input: number, output: number): string {
   if (input === 0 && output === 0) return "—";

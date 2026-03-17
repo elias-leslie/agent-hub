@@ -22,12 +22,19 @@ export interface ModelCapabilities {
   has_thinking: boolean;
   supports_pdf: boolean;
   supports_audio: boolean;
+  supports_tool_execution: boolean;
+  supports_verbosity: boolean;
+  supports_xhigh: boolean;
+  supports_session_cache: boolean;
   max_output_tokens: number;
 }
 
 export interface ModelEnrichment {
   ext_coding: number | null;
   ext_reasoning: number | null;
+  ext_tool_use: number | null;
+  ext_planning: number | null;
+  ext_instruction: number | null;
   ext_speed_tier: string | null;
   ext_input_per_m: number | null;
   ext_output_per_m: number | null;

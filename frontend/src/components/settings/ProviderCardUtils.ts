@@ -31,12 +31,8 @@ export function formatDuration(totalSeconds: number): string {
   return `${minutes}m`;
 }
 
-/** Format latency in ms to a readable string */
-export function formatLatency(ms: number): string {
-  if (ms < 1) return "<1ms";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
+// Re-exported from canonical location
+export { formatLatency } from "@/lib/formatters";
 
 // Magic string constants
 export const PROVIDER_ID_CLAUDE = "claude";
