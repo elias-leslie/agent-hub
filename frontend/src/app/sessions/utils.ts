@@ -1,7 +1,8 @@
 import { getModelCost } from "@/lib/models";
+import { formatRelativeTime, formatTokens } from "@/lib/formatters";
 
 // Re-exported from canonical location
-export { formatRelativeTime, formatTokens } from "@/lib/formatters";
+export { formatRelativeTime, formatTokens };
 
 
 export function formatTokenPair(input: number, output: number): string {
