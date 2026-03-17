@@ -10,6 +10,7 @@ import pytest
 
 from app.api.complete.tool_handler_utils import _ExecutionState, _run_tool_loop
 from app.api.complete.tool_handlers import _execute_and_handle_errors, _store_partial_response
+from app.constants.models import CLAUDE_SONNET
 
 
 def _mock_session() -> MagicMock:
@@ -38,7 +39,7 @@ class TestStorePartialResponse:
             "app.api.complete.tool_handlers.store_assistant_response",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _store_partial_response(mock_db, "session-123", session, state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-123", session, state, CLAUDE_SONNET)
 
             # Rollback called before storage to clear dirty transaction state
             mock_db.rollback.assert_called_once()
@@ -47,7 +48,7 @@ class TestStorePartialResponse:
             # Content should be joined
             assert call_kwargs[0][2] == "Hello, I found an issue with..."
             # Model passed through
-            assert call_kwargs[0][3] == "claude-sonnet-4-5"
+            assert call_kwargs[0][3] == CLAUDE_SONNET
             # Session marked as completed
             assert session.status == "completed"
             # db.commit() called after storage
@@ -69,7 +70,7 @@ class TestStorePartialResponse:
             "app.api.complete.tool_handlers.store_assistant_response",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _store_partial_response(mock_db, "session-456", session, state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-456", session, state, CLAUDE_SONNET)
 
             mock_db.rollback.assert_called_once()
             mock_store.assert_called_once()
@@ -93,7 +94,7 @@ class TestStorePartialResponse:
             side_effect=Exception("DB connection lost"),
         ):
             # Should not raise
-            await _store_partial_response(mock_db, "session-789", session, state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-789", session, state, CLAUDE_SONNET)
 
 
 @pytest.mark.asyncio

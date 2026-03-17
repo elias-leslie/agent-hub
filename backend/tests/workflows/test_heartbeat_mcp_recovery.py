@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.workflows._heartbeat_postprocess import (
     _retry_failed_mcp_tools,
 )
@@ -56,7 +57,7 @@ class TestDispatchAgentFireAndForget:
         """dispatch_agent resolves agent and calls dispatch_wake, not complete_internal."""
         mock_db = AsyncMock()
         mock_resolved = MagicMock()
-        mock_resolved.model = "claude-sonnet-4-5"
+        mock_resolved.model = CLAUDE_SONNET
         mock_resolved.provider = "claude"
         mock_resolved.agent.temperature = 0.7
         mock_resolved.agent.thinking_level = "medium"
@@ -78,7 +79,7 @@ class TestDispatchAgentFireAndForget:
 
         mock_wake.assert_called_once_with(
             agent_slug="git-agent",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             temperature=0.7,
             prompt="Fix the bug",
@@ -141,7 +142,7 @@ class TestDispatchAgentFireAndForget:
         """dispatch_agent must NOT call complete_internal (the whole point of this fix)."""
         mock_db = AsyncMock()
         mock_resolved = MagicMock()
-        mock_resolved.model = "claude-sonnet-4-5"
+        mock_resolved.model = CLAUDE_SONNET
         mock_resolved.provider = "claude"
         mock_resolved.agent.temperature = 0.7
         mock_resolved.agent.thinking_level = "medium"
@@ -178,7 +179,7 @@ class TestDispatchAgentFireAndForget:
     async def test_dispatch_agent_requires_explicit_mode_for_specialists(self):
         mock_db = AsyncMock()
         mock_resolved = MagicMock()
-        mock_resolved.model = "claude-sonnet-4-5"
+        mock_resolved.model = CLAUDE_SONNET
         mock_resolved.provider = "claude"
         mock_resolved.agent.temperature = 0.3
         mock_resolved.agent.thinking_level = "medium"
@@ -268,7 +269,7 @@ class TestRetryFailedMcpTools:
         tool_use_row = MagicMock()
         tool_use_row.tool_input = {
             "agent_slug": "git-agent",
-            "model_id": "claude-sonnet-4-5",
+            "model_id": CLAUDE_SONNET,
             "feedback_type": "praise",
             "content": "Fast execution",
         }
@@ -289,7 +290,7 @@ class TestRetryFailedMcpTools:
         assert retried == 1
         mock_perf.assert_awaited_once_with(
             agent_slug="git-agent",
-            model_id="claude-sonnet-4-5",
+            model_id=CLAUDE_SONNET,
             feedback_type="praise",
             content="Fast execution",
         )

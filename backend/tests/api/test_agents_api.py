@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_service import AgentDTO
 
 
@@ -27,7 +27,7 @@ def make_mock_dto(
         "description": "Generates code",
         "system_prompt": "You are a coder.",
         "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": ["gemini-3-flash"],
+        "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": None,
         "strategies": {},
         "temperature": 0.7,

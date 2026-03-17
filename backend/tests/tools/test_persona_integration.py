@@ -22,6 +22,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.models.persona import Persona
 from app.services.tools.base import ToolCall, ToolDecision
 from app.services.tools.direct_executor_core import DirectToolExecutor
@@ -503,7 +504,7 @@ class TestPersonaBashWorkflowGuards:
                 "log_agent_performance",
                 {
                     "agent_slug": "planner",
-                    "model_id": "claude-sonnet-4-5",
+                    "model_id": CLAUDE_SONNET,
                     "feedback_type": "praise",
                     "content": "Excellent planning output.",
                     "outcome": "success",
