@@ -9,15 +9,14 @@ Reference: pi-mono anthropic.ts
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import logging
-import os
 import time
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
 import httpx
+
+from app.adapters._oauth_pkce import generate_pkce
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +51,6 @@ class ClaudeOAuthCredentials:
 
 
 # ---------------------------------------------------------------------------
-# PKCE helpers
-# ---------------------------------------------------------------------------
-
-def _generate_pkce() -> tuple[str, str]:
-    """Generate a PKCE code verifier and S256 code challenge."""
-    verifier_bytes = os.urandom(32)
-    code_verifier = base64.urlsafe_b64encode(verifier_bytes).rstrip(b"=").decode("ascii")
-    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return code_verifier, code_challenge
-
-
-# ---------------------------------------------------------------------------
 # OAuth URL builder
 # ---------------------------------------------------------------------------
 
@@ -78,7 +64,7 @@ def create_claude_auth_flow() -> dict[str, str]:
 
     Returns a dict with keys: ``url``, ``state``, ``code_verifier``.
     """
-    code_verifier, code_challenge = _generate_pkce()
+    code_verifier, code_challenge = generate_pkce()
     # Per pi-mono: state == code_verifier
     state = code_verifier
 

@@ -72,6 +72,7 @@ def compute_next_run(
             import zoneinfo
             tz = zoneinfo.ZoneInfo(timezone)
         except Exception:
+            logger.debug("Invalid timezone %r, falling back to UTC", timezone, exc_info=True)
             import zoneinfo
             tz = zoneinfo.ZoneInfo("UTC")
 

@@ -268,6 +268,7 @@ async def update_credential(
     try:
         old_value = decrypt_value(old_credential.value_encrypted)
     except Exception:
+        logger.debug("Failed to decrypt old credential value for diff", exc_info=True)
         old_value = None
 
     try:

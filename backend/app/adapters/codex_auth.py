@@ -8,7 +8,6 @@ and refresh primitives.
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import logging
 import os
@@ -17,6 +16,8 @@ from dataclasses import dataclass
 from urllib.parse import urlencode
 
 import httpx
+
+from app.adapters._oauth_pkce import generate_pkce
 
 logger = logging.getLogger(__name__)
 
@@ -90,25 +91,6 @@ def extract_account_id(access_token: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# PKCE helpers
-# ---------------------------------------------------------------------------
-
-def _generate_pkce() -> tuple[str, str]:
-    """Generate a PKCE code verifier and S256 code challenge.
-
-    Returns:
-        (code_verifier, code_challenge)
-    """
-    verifier_bytes = os.urandom(32)
-    code_verifier = base64.urlsafe_b64encode(verifier_bytes).rstrip(b"=").decode("ascii")
-
-    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-    code_challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-    return code_verifier, code_challenge
-
-
-# ---------------------------------------------------------------------------
 # OAuth URL builder
 # ---------------------------------------------------------------------------
 
@@ -145,7 +127,7 @@ def create_auth_flow() -> dict[str, str]:
     exchange, and redirect the user to ``url``.
     """
     state = os.urandom(16).hex()
-    code_verifier, code_challenge = _generate_pkce()
+    code_verifier, code_challenge = generate_pkce()
     url = build_auth_url(state, code_challenge)
     return {
         "url": url,

@@ -22,6 +22,7 @@ import httpx
 
 from app.adapters._openai_compat_helpers import resolve_api_key
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
+from app.adapters.cloudflare import _resolve_account_id
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.constants.models import (
     CF_FLUX_1_SCHNELL,
@@ -49,20 +50,6 @@ _SD_IMG2IMG_MODELS = {"sd-xl-lightning", "sd-xl-base", "sd-v1.5-img2img", "dream
 # Ordered best quality → fastest. On rate-limit we walk down.
 _FALLBACK_CHAIN = [CF_FLUX_2_DEV, CF_FLUX_1_SCHNELL, CF_SD_XL_LIGHTNING]
 
-
-def _resolve_account_id() -> str:
-    """Resolve the Cloudflare account ID from CredentialManager."""
-    try:
-        from app.services.credential_manager import get_credential_manager
-
-        cm = get_credential_manager()
-        if cm.is_initialized:
-            account_id = cm.get("cloudflare", "account_id")
-            if account_id:
-                return account_id
-    except Exception:
-        logger.debug("Cloudflare image credential lookup failed", exc_info=True)
-    raise AuthenticationError("cloudflare")
 
 
 def _model_path(model: str) -> str:
