@@ -1,6 +1,5 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// FORMATTERS
-// ─────────────────────────────────────────────────────────────────────────────
+// Re-exported from canonical location
+export { formatLatency, formatNumber } from "@/lib/formatters";
 
 export function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -17,16 +16,4 @@ export function formatTime(dateStr: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-export function formatLatency(ms: number | null): string {
-  if (ms === null) return "-";
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-export function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return n.toLocaleString();
 }

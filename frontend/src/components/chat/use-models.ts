@@ -1,5 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api-config";
+import type { ModelCapabilities, ModelCost, ModelEnrichment } from "@/lib/models";
+
+export type { ModelCapabilities, ModelCost, ModelEnrichment };
 
 export interface ModelScores {
   coding: number;
@@ -9,34 +12,6 @@ export interface ModelScores {
   instruction: number;
   design: number;
   composite: number;
-}
-
-export interface ModelCost {
-  input_per_m: number;
-  output_per_m: number;
-}
-
-export interface ModelCapabilities {
-  can_generate_images: boolean;
-  has_vision: boolean;
-  can_edit_images: boolean;
-  has_thinking: boolean;
-  supports_pdf: boolean;
-  supports_audio: boolean;
-  max_output_tokens: number;
-}
-
-export interface ModelEnrichment {
-  ext_coding: number | null;
-  ext_reasoning: number | null;
-  ext_tool_use: number | null;
-  ext_planning: number | null;
-  ext_instruction: number | null;
-  ext_speed_tier: string | null;
-  ext_input_per_m: number | null;
-  ext_output_per_m: number | null;
-  source: string | null;
-  synced_at: string | null;
 }
 
 export interface ModelOption {

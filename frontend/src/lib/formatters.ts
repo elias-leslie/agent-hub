@@ -14,8 +14,16 @@ export function formatNumber(value: number): string {
   return value.toLocaleString();
 }
 
-export function formatLatency(ms: number): string {
-  return ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(1)}s`;
+export function formatLatency(ms: number | null): string {
+  if (ms === null) return "-";
+  if (ms < 1) return "<1ms";
+  return ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+export function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
+  return tokens.toString();
 }
 
 export function formatRelativeTime(dateStr: string | Date | null): string {
