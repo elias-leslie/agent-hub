@@ -307,7 +307,18 @@ class QueryRepository:
             ValueError: If prefix not found or ambiguous.
         """
         if "-" in prefix:
-            return prefix  # Already a full UUID
+            # Validate it looks like a real UUID before accepting
+            import re
+
+            if re.fullmatch(
+                r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                prefix,
+            ):
+                return prefix
+            raise ValueError(
+                f"Invalid UUID format: {prefix}. "
+                "Expected 8-char prefix or full UUID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+            )
 
         sql = text("""
             SELECT id::text AS full_uuid

@@ -21,8 +21,9 @@ async def handle_search_memory(
     memory: MemoryService,
     limit: int,
     min_score: float,
+    category: MemoryCategory | None = None,
 ) -> SearchResponse:
-    """Semantic search for relevant episodes and facts."""
+    """Hybrid search: semantic + text keyword matching across all scopes."""
     from .memory_schemas import SearchResponse
 
     try:
@@ -30,7 +31,8 @@ async def handle_search_memory(
             query=query,
             limit=limit,
             min_score=min_score,
-            all_groups=False,
+            all_groups=True,
+            category=category,
         )
         return SearchResponse(
             query=query,
@@ -54,7 +56,7 @@ async def handle_text_search_memory(
             query=query,
             limit=limit,
             category=category,
-            all_groups=False,
+            all_groups=True,
         )
         return MemoryListResult(
             episodes=episodes,
