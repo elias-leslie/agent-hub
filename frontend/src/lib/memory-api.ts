@@ -28,8 +28,5 @@ export {
 export {
   fetchMemoryStats,
   searchMemories,
-  fetchTimeline,
   fetchMemoryAnalytics,
-  generateSessionSummary,
-  fetchContinuityContext,
 } from "./memory/search";

@@ -1,19 +1,15 @@
 /**
  * Search and analytics API operations.
- * Handles search, timeline, analytics, continuity, stats, and session summaries.
+ * Handles search, analytics, and stats.
  */
 
 import { getApiBaseUrl } from "../api-config";
 import { buildHeaders, apiFetch } from "../memory-utils";
 import type {
   MemoryCategory,
-  MemoryScope,
   MemoryListResult,
   MemoryStats,
-  TimelineGroup,
   MemoryAnalyticsDashboard,
-  SessionSummary,
-  ContinuityContext,
 } from "../memory-types";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
@@ -56,26 +52,6 @@ export async function searchMemories(
   );
 }
 
-// Fetch timeline view of episodes
-export async function fetchTimeline(params?: {
-  groupId?: string;
-  scope?: MemoryScope;
-  category?: MemoryCategory;
-  limit?: number;
-}): Promise<TimelineGroup[]> {
-  const searchParams = new URLSearchParams();
-  if (params?.groupId) searchParams.set("group_id", params.groupId);
-  if (params?.scope) searchParams.set("scope", params.scope);
-  if (params?.category) searchParams.set("category", params.category);
-  if (params?.limit) searchParams.set("limit", params.limit.toString());
-
-  const url = searchParams.toString()
-    ? `${API_BASE}/memory/timeline?${searchParams}`
-    : `${API_BASE}/memory/timeline`;
-
-  return apiFetch(url, {}, "Timeline fetch failed");
-}
-
 // Fetch memory analytics
 export async function fetchMemoryAnalytics(params?: {
   groupId?: string;
@@ -96,29 +72,3 @@ export async function fetchMemoryAnalytics(params?: {
   return apiFetch(url, {}, "Memory analytics fetch failed");
 }
 
-// Generate session summary
-export async function generateSessionSummary(
-  sessionId: string,
-): Promise<SessionSummary> {
-  return apiFetch(
-    `${API_BASE}/memory/sessions/${sessionId}/summarize`,
-    { method: "POST" },
-    "Session summary generation failed",
-  );
-}
-
-// Fetch continuity context (cross-session context)
-export async function fetchContinuityContext(params?: {
-  projectId?: string;
-  days?: number;
-  maxSessions?: number;
-}): Promise<ContinuityContext> {
-  const searchParams = new URLSearchParams();
-  if (params?.projectId) searchParams.set("project_id", params.projectId);
-  if (params?.days) searchParams.set("days", params.days.toString());
-  if (params?.maxSessions) searchParams.set("max_sessions", params.maxSessions.toString());
-
-  const qs = searchParams.toString();
-  const url = `${API_BASE}/memory/continuity${qs ? `?${qs}` : ""}`;
-  return apiFetch(url, {}, "Continuity context fetch failed");
-}
