@@ -114,29 +114,19 @@ def _get_page_paths(project_id: str) -> list[str]:
     return paths[:MAX_PAGES_PER_PROJECT] if paths else ["/"]
 
 
-async def _capture_page(
-    url: str, page_path: str, is_first: bool
-) -> dict[str, str]:
-    """Navigate to a page, screenshot, and collect console data.
-
-    Returns dict with keys: path, screenshot_b64, errors, console.
-    The browser must already be open for the first page.
-    """
+async def _navigate_to_page(url: str, page_path: str) -> None:
+    """Clear previous page state and navigate to a new page."""
     page_url = url.rstrip("/") + page_path
+    with contextlib.suppress(Exception):
+        await _run_cmd("agent-browser", "errors", "--clear")
+    with contextlib.suppress(Exception):
+        await _run_cmd("agent-browser", "console", "--clear")
+    await _run_cmd("agent-browser", "open", page_url)
+    await _run_cmd("agent-browser", "wait", "--load", "networkidle", timeout=30)
 
-    # Navigate (first page is already loaded by the caller)
-    if not is_first:
-        # Clear console/errors from previous page
-        with contextlib.suppress(Exception):
-            await _run_cmd("agent-browser", "errors", "--clear")
-        with contextlib.suppress(Exception):
-            await _run_cmd("agent-browser", "console", "--clear")
 
-        await _run_cmd("agent-browser", "open", page_url)
-        await _run_cmd("agent-browser", "wait", "--load", "networkidle", timeout=30)
-
-    # Screenshot
-    screenshot_b64 = ""
+async def _take_screenshot() -> str:
+    """Take a browser screenshot and return its base64-encoded content."""
     screenshot_raw = await _run_cmd("agent-browser", "screenshot", "--json")
     try:
         screenshot_data = json.loads(screenshot_raw)
@@ -150,19 +140,36 @@ async def _capture_page(
 
     if screenshot_path:
         with contextlib.suppress(OSError):
-            screenshot_b64 = base64.b64encode(Path(screenshot_path).read_bytes()).decode()
+            return base64.b64encode(Path(screenshot_path).read_bytes()).decode()
+    return ""
 
-    # Console errors
+
+async def _collect_console_data() -> tuple[str, str]:
+    """Collect console errors and output from the browser."""
     try:
         errors = await _run_cmd("agent-browser", "errors", "--json")
     except Exception:
         errors = "No errors captured"
-
-    # Console output
     try:
         console = await _run_cmd("agent-browser", "console", "--json")
     except Exception:
         console = "No console output captured"
+    return errors, console
+
+
+async def _capture_page(
+    url: str, page_path: str, is_first: bool
+) -> dict[str, str]:
+    """Navigate to a page, screenshot, and collect console data.
+
+    Returns dict with keys: path, screenshot_b64, errors, console.
+    The browser must already be open for the first page.
+    """
+    if not is_first:
+        await _navigate_to_page(url, page_path)
+
+    screenshot_b64 = await _take_screenshot()
+    errors, console = await _collect_console_data()
 
     return {
         "path": page_path,
@@ -257,6 +264,50 @@ def build_user_content(
     return user_content
 
 
+def _findings_have_issues(content: str) -> bool:
+    """Return True if the analysis content indicates site issues."""
+    return bool(
+        re.search(
+            r"^(critical|warning|error|broken|failed to load)\b",
+            content,
+            re.IGNORECASE | re.MULTILINE,
+        )
+    )
+
+
+async def _try_model_analysis(
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    project_id: str,
+    db: Any,
+) -> tuple[str, bool] | None:
+    """Attempt analysis with a single model, return (content, has_issues) or None on failure."""
+    from app.adapters.registry import get_provider_for_model
+    from app.api.complete.core import complete_internal
+
+    try:
+        provider = get_provider_for_model(model)
+        result = await complete_internal(
+            messages=messages,
+            model=model,
+            provider=provider,
+            temperature=temperature,
+            project_id=project_id,
+            db=db,
+            agent_slug="site-checker",
+            request_source="site_health_check",
+            use_memory=False,
+            max_turns=1,
+            execute_tools=False,
+        )
+        content = result.content or ""
+        return content[:4000], _findings_have_issues(content)
+    except Exception as e:
+        logger.warning("Model %s failed for %s: %s", model, project_id, e)
+        return None
+
+
 async def analyze_captures(
     project_id: str,
     user_content: list[dict[str, Any]],
@@ -267,61 +318,25 @@ async def analyze_captures(
     (findings_text, has_issues). If all models fail, returns has_issues=True
     so the failure triggers investigation rather than being silently suppressed.
     """
-    from app.adapters.registry import get_provider_for_model
-    from app.api.complete.core import complete_internal
     from app.db import async_session
     from app.services.agent_routing_utils import resolve_agent
 
     try:
         async with async_session() as db:
             resolved = await resolve_agent("site-checker", db)
-
-            models = [resolved.model]
-            models.extend(resolved.agent.fallback_models or [])
-
-            system_prompt = (
-                resolved.agent.system_prompt
-                or "Analyze the screenshot and report issues."
-            )
+            models = [resolved.model, *(resolved.agent.fallback_models or [])]
+            system_prompt = resolved.agent.system_prompt or "Analyze the screenshot and report issues."
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ]
 
-            last_error: Exception | None = None
             for model in models:
-                try:
-                    provider = get_provider_for_model(model)
-                    result = await complete_internal(
-                        messages=messages,
-                        model=model,
-                        provider=provider,
-                        temperature=resolved.agent.temperature,
-                        project_id=project_id,
-                        db=db,
-                        agent_slug="site-checker",
-                        request_source="site_health_check",
-                        use_memory=False,
-                        max_turns=1,
-                        execute_tools=False,
-                    )
-                    content = result.content or ""
-                    has_issues = bool(
-                        re.search(
-                            r"^(critical|warning|error|broken|failed to load)\b",
-                            content,
-                            re.IGNORECASE | re.MULTILINE,
-                        )
-                    )
-                    return content[:4000], has_issues
-                except Exception as e:
-                    last_error = e
-                    logger.warning(
-                        "Model %s failed for %s: %s", model, project_id, e
-                    )
-                    continue
+                result = await _try_model_analysis(model, messages, resolved.agent.temperature, project_id, db)
+                if result is not None:
+                    return result
 
-            return f"All models failed for {project_id}: {last_error}", True
+            return f"All models failed for {project_id}", True
 
     except Exception as e:
         logger.warning("Site check analysis failed for %s: %s", project_id, e)
@@ -353,23 +368,16 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
     return await analyze_captures(project_id, user_content)
 
 
-async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
-    """Wake persona agent with site health findings for triage."""
-    from app.db import async_session
-    from app.services.agent_routing import get_provider_for_model
-    from app.services.agent_service import get_agent_service
-    from app.workflows.persona_wake import WakeInput, agent_wake_task
-
+def _build_findings_prompt(result: HealthCheckResult) -> str | None:
+    """Build a triage prompt from health check findings, or None if no actionable findings."""
     sections = []
     for project, findings in result.project_findings.items():
         if findings and not findings.startswith("Error"):
             sections.append(f"## {project}\n{findings[:2000]}")
-
     if not sections:
-        return
-
+        return None
     findings_text = "\n\n".join(sections)
-    prompt = (
+    return (
         f"Site health check completed. "
         f"{result.projects_with_issues} project(s) with issues "
         f"out of {result.projects_checked} checked.\n\n"
@@ -379,6 +387,18 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
         f"- For info items: note in journal if patterns emerge\n\n"
         f"Findings:\n{findings_text}"
     )
+
+
+async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
+    """Wake persona agent with site health findings for triage."""
+    from app.db import async_session
+    from app.services.agent_routing import get_provider_for_model
+    from app.services.agent_service import get_agent_service
+    from app.workflows.persona_wake import WakeInput, agent_wake_task
+
+    prompt = _build_findings_prompt(result)
+    if not prompt:
+        return
 
     async with async_session() as db:
         agent_service = get_agent_service()
@@ -407,6 +427,17 @@ class SingleProjectCheckInput(BaseModel):
     task_id: str | None = None
 
 
+async def _poll_service_ready(url: str, attempts: int = 12, interval: float = 5.0) -> bool:
+    """Poll a URL until it responds, returning True if ready within the timeout."""
+    for _ in range(attempts):
+        try:
+            await _run_cmd("curl", "-sf", "-o", "/dev/null", url, timeout=5)
+            return True
+        except Exception:
+            await asyncio.sleep(interval)
+    return False
+
+
 @hatchet.task(
     name="single-project-health-check",
     execution_timeout="300s",
@@ -422,18 +453,8 @@ async def single_project_health_check_task(
     if not port:
         return {"status": "skipped", "error": f"Unknown project: {project_id}"}
 
-    # Poll for service readiness (up to 60s, 5s intervals)
     url = _get_frontend_url(project_id)
-    ready = False
-    for _ in range(12):
-        try:
-            await _run_cmd("curl", "-sf", "-o", "/dev/null", url, timeout=5)
-            ready = True
-            break
-        except Exception:
-            await asyncio.sleep(5)
-
-    if not ready:
+    if not await _poll_service_ready(url):
         ctx.log(f"Service {project_id} not ready at {url} after 60s")
         return {"status": "error", "error": f"Service not ready: {url}"}
 
