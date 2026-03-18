@@ -1,17 +1,15 @@
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const AGENT_HUB_API_URL =
-  process.env.AGENT_HUB_API_URL || "http://localhost:8003";
-const BACKEND_URL = `${AGENT_HUB_API_URL}/api/memory/capture/stream`;
-const CLIENT_ID = process.env.AGENT_HUB_DASHBOARD_CLIENT_ID || "";
-const REQUEST_SOURCE =
-  process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE || "agent-hub-dashboard";
+import { getApiBaseUrl, buildInternalHeaders } from "@/lib/api-config";
+
+const BACKEND_URL = `${getApiBaseUrl()}/api/memory/capture/stream`;
 
 export async function GET(): Promise<Response> {
-  const headers: Record<string, string> = { Accept: "text/event-stream" };
-  if (CLIENT_ID) headers["X-Client-Id"] = CLIENT_ID;
-  if (REQUEST_SOURCE) headers["X-Request-Source"] = REQUEST_SOURCE;
+  const headers: Record<string, string> = {
+    Accept: "text/event-stream",
+    ...buildInternalHeaders(),
+  };
 
   const upstream = await fetch(BACKEND_URL, {
     headers,

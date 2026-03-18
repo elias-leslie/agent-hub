@@ -9,12 +9,7 @@
  * instead of directly to the backend.
  */
 
-const AGENT_HUB_API_URL =
-  process.env.AGENT_HUB_API_URL || 'http://localhost:8003'
-const CLIENT_ID = process.env.AGENT_HUB_DASHBOARD_CLIENT_ID || ''
-const REQUEST_SOURCE =
-  process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE || 'agent-hub-dashboard'
-const INTERNAL_SECRET = process.env.INTERNAL_SERVICE_SECRET || ''
+import { getApiBaseUrl, buildInternalHeaders } from '@/lib/api-config'
 
 const SSE_HEADERS: Record<string, string> = {
   'Cache-Control': 'no-cache, no-transform',
@@ -22,23 +17,15 @@ const SSE_HEADERS: Record<string, string> = {
   Connection: 'keep-alive',
 }
 
-function buildAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {}
-  if (INTERNAL_SECRET) headers['X-Agent-Hub-Internal'] = INTERNAL_SECRET
-  if (REQUEST_SOURCE) headers['X-Request-Source'] = REQUEST_SOURCE
-  if (CLIENT_ID) headers['X-Client-Id'] = CLIENT_ID
-  return headers
-}
-
 function buildUpstreamUrl(path: string[], searchParams?: string): string {
   const joined = path.join('/')
   const qs = searchParams ? `?${searchParams}` : ''
-  return `${AGENT_HUB_API_URL}/api/${joined}${qs}`
+  return `${getApiBaseUrl()}/api/${joined}${qs}`
 }
 
 type RouteContext = { params: Promise<{ path: string[] }> }
 
-const auth = buildAuthHeaders()
+const auth = buildInternalHeaders()
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { path } = await params
