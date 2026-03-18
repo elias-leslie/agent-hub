@@ -6,6 +6,7 @@ consistently and correctly.
 
 import inspect
 from typing import get_type_hints
+from unittest.mock import patch
 
 import pytest
 
@@ -132,7 +133,9 @@ class TestErrorHandling:
         ):
             ClaudeAdapter()
 
-    def test_gemini_adapter_falls_back_to_adc_without_api_key(self):
+    @patch("app.adapters.gemini.resolve_api_keys", return_value=[])
+    @patch("app.adapters.gemini.resolve_api_key", return_value=None)
+    def test_gemini_adapter_falls_back_to_adc_without_api_key(self, _mock_key, _mock_keys):
         """GeminiAdapter should stay unconfigured when no API key is present."""
         adapter = GeminiAdapter(api_key="")
         assert adapter._api_keys == []
