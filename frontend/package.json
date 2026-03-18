@@ -18,7 +18,6 @@
   "dependencies": {
     "@agent-hub/chat-ui": "workspace:*",
     "@agent-hub/passport-client": "workspace:*",
-    "@radix-ui/react-dialog": "^1.1.15",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-virtual": "^3.13.18",
     "clsx": "^2.1.1",
@@ -28,9 +27,7 @@
     "prismjs": "^1.30.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-markdown": "^10.1.0",
     "recharts": "^3.6.0",
-    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
