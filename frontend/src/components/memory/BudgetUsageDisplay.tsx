@@ -1,11 +1,11 @@
 import { Gauge } from "lucide-react";
-import type { BudgetUsage } from "@/lib/api/memory-settings";
+import type { MemoryBudgetUsage } from "@/lib/api/memory-settings";
 
 export function BudgetUsageDisplay({
   usage,
   continuityEnabled,
 }: {
-  usage: BudgetUsage;
+  usage: MemoryBudgetUsage;
   continuityEnabled?: boolean;
 }) {
   return (

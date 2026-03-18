@@ -15,7 +15,7 @@ export interface MemorySettings {
   continuity_max_sessions: number; // Max sessions in Recent Activity
 }
 
-export interface BudgetUsage {
+export interface MemoryBudgetUsage {
   mandates_tokens: number;
   guardrails_tokens: number;
   reference_tokens: number;
@@ -79,7 +79,7 @@ export async function updateSettings(
 /**
  * Get current rendered memory usage statistics.
  */
-export async function getBudgetUsage(): Promise<BudgetUsage> {
+export async function getBudgetUsage(): Promise<MemoryBudgetUsage> {
   const response = await fetchApi(`${API_BASE}/memory/budget-usage`);
   if (!response.ok) {
     throw new Error(`Failed to get budget usage: ${response.statusText}`);
