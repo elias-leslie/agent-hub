@@ -140,14 +140,6 @@ export interface UpdateEpisodePropertiesResponse {
   message: string;
 }
 
-// Timeline types
-export interface TimelineGroup {
-  label: string;
-  date_key: string;
-  episodes: MemoryEpisode[];
-  count: number;
-}
-
 // Analytics types
 export interface TierDistribution {
   tier: string;
@@ -286,23 +278,6 @@ export interface MemoryAnalyticsActivity {
 export interface MemoryAnalyticsDashboard {
   state: MemoryAnalyticsState;
   activity: MemoryAnalyticsActivity;
-}
-
-export interface SessionSummary {
-  session_id: string;
-  summary: string;
-  key_decisions: string[];
-  tools_used: string[];
-  files_modified: string[];
-  topics: string[];
-  generated_at: string;
-  episode_uuid: string | null;
-}
-
-export interface ContinuityContext {
-  markdown: string;
-  session_count: number;
-  days_covered: number;
 }
 
 export interface EpisodeCitation {
