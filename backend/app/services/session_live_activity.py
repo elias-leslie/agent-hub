@@ -187,6 +187,57 @@ def _synthetic_live_activity(session: Session) -> dict[str, Any] | None:
     }
 
 
+def _collect_anti_reap_signals(
+    response: dict[str, Any],
+    phase: str,
+    quiet_for: int | None,
+    *,
+    has_owner_lane: bool,
+    has_specialist_lane: bool,
+) -> list[str]:
+    signals: list[str] = []
+    if has_owner_lane:
+        signals.append("owner_lane")
+    if has_specialist_lane:
+        signals.append("specialist_lane")
+    if int(response.get("outstanding_tool_calls") or 0) > 0:
+        signals.append("outstanding_tool_calls")
+    if phase in _NON_REAPABLE_PHASES:
+        signals.append(f"phase_{phase}")
+    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
+        signals.append("recent_write_activity")
+    return signals
+
+
+def _collect_dead_signals(
+    response: dict[str, Any],
+    phase: str,
+    quiet_for: int | None,
+    last_heartbeat_age: int | None,
+) -> list[str]:
+    signals: list[str] = []
+    last_event_type = str(response.get("last_event_type") or "")
+    if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+        signals.append("no_model_activity_30m")
+    if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+        signals.append("no_structured_activity")
+    if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+        signals.append("heartbeat_only")
+    if response.get("termination_reason"):
+        signals.append("termination_signal")
+    if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
+        signals.append("heartbeat_missing")
+    elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
+        signals.append("heartbeat_absent_6h")
+    return signals
+
+
+_STRONG_DEAD_SIGNALS = {
+    "no_structured_activity", "heartbeat_only", "heartbeat_missing",
+    "heartbeat_absent_6h", "termination_signal",
+}
+
+
 def _apply_lifecycle_state(
     session: Session,
     response: dict[str, Any],
@@ -197,70 +248,123 @@ def _apply_lifecycle_state(
     quiet_for_seconds = response.get("quiet_for_seconds")
     quiet_for = quiet_for_seconds if isinstance(quiet_for_seconds, int) else None
     phase = str(response.get("phase") or "unknown")
-    last_event_type = str(response.get("last_event_type") or "")
-    outstanding_tool_calls = int(response.get("outstanding_tool_calls") or 0)
     last_heartbeat_age = _activity_age_seconds(response.get("last_heartbeat_at"))
 
+    anti_reap_signals = _collect_anti_reap_signals(
+        response, phase, quiet_for,
+        has_owner_lane=has_owner_lane, has_specialist_lane=has_specialist_lane,
+    )
     dead_signals: list[str] = []
-    anti_reap_signals: list[str] = []
     state = str(response.get("health") or response.get("status") or "idle")
 
-    if has_owner_lane:
-        anti_reap_signals.append("owner_lane")
-    if has_specialist_lane:
-        anti_reap_signals.append("specialist_lane")
-    if outstanding_tool_calls > 0:
-        anti_reap_signals.append("outstanding_tool_calls")
-    if phase in _NON_REAPABLE_PHASES:
-        anti_reap_signals.append(f"phase_{phase}")
-    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
-        anti_reap_signals.append("recent_write_activity")
-
     if session.status == "active":
-        if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-            dead_signals.append("no_model_activity_30m")
-        if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
-            dead_signals.append("no_structured_activity")
-        if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_only")
-        if response.get("termination_reason"):
-            dead_signals.append("termination_signal")
-        if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_missing")
-        elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_absent_6h")
-
+        dead_signals = _collect_dead_signals(response, phase, quiet_for, last_heartbeat_age)
         if dead_signals:
             state = "dead_candidate"
-
-        strong_dead_signals = {
-            "no_structured_activity",
-            "heartbeat_only",
-            "heartbeat_missing",
-            "heartbeat_absent_6h",
-            "termination_signal",
-        }
         if (
             quiet_for is not None
             and quiet_for >= _REAPABLE_AFTER_SECONDS
             and state == "dead_candidate"
             and not anti_reap_signals
-            and any(signal in strong_dead_signals for signal in dead_signals)
+            and any(s in _STRONG_DEAD_SIGNALS for s in dead_signals)
         ):
             state = "reapable"
 
-    reason_codes = [*dead_signals, *anti_reap_signals]
-    if not reason_codes:
-        reason_codes = [f"health_{state}"]
+    reason_codes = [*dead_signals, *anti_reap_signals] or [f"health_{state}"]
+    response.update({
+        "lifecycle_state": state,
+        "lifecycle_reason_codes": reason_codes,
+        "dead_signals": dead_signals,
+        "anti_reap_signals": anti_reap_signals,
+        "has_owner_lane": has_owner_lane,
+        "has_specialist_lane": has_specialist_lane,
+        "reapable": state == "reapable",
+        "reapable_reason": "+".join([*dead_signals, "no_lane"]) if state == "reapable" else None,
+    })
 
-    response["lifecycle_state"] = state
-    response["lifecycle_reason_codes"] = reason_codes
-    response["dead_signals"] = dead_signals
-    response["anti_reap_signals"] = anti_reap_signals
-    response["has_owner_lane"] = has_owner_lane
-    response["has_specialist_lane"] = has_specialist_lane
-    response["reapable"] = state == "reapable"
-    response["reapable_reason"] = "+".join([*dead_signals, "no_lane"]) if state == "reapable" else None
+
+def _handle_tool_use_event(
+    live_activity: dict[str, Any],
+    tool_name: str | None,
+    tool_input: dict[str, Any] | None,
+    now_iso: str,
+) -> None:
+    phase, summary = _tool_phase(tool_name, tool_input)
+    _mark_non_terminal_state(live_activity, phase=phase, summary=summary, now_iso=now_iso)
+    live_activity["current_tool_name"] = tool_name
+    live_activity["last_tool_name"] = tool_name
+    live_activity["last_tool_started_at"] = now_iso
+    live_activity["outstanding_tool_calls"] = max(
+        int(live_activity.get("outstanding_tool_calls") or 0) + 1, 1,
+    )
+    live_activity["tool_calls_count"] = int(live_activity.get("tool_calls_count") or 0) + 1
+    path = _path_from_tool_input(tool_input)
+    command = _command_from_tool_input(tool_input)
+    if phase == "reading_file":
+        live_activity["last_read_path"] = path
+    elif phase == "writing_file":
+        live_activity["last_write_path"] = path
+        _append_touched_file(live_activity, path)
+    if command:
+        live_activity["last_command"] = command
+        if phase == "running_validation":
+            live_activity["last_validation_command"] = command
+
+
+def _handle_tool_result_event(
+    live_activity: dict[str, Any],
+    tool_name: str | None,
+    tool_output: dict[str, Any] | None,
+    now_iso: str,
+) -> None:
+    is_error = bool(tool_output.get("is_error")) if isinstance(tool_output, dict) else False
+    resolved_tool = tool_name or live_activity.get("last_tool_name") or "unknown"
+    live_activity["phase"] = "waiting_for_model"
+    live_activity["status"] = "active"
+    live_activity["summary"] = (
+        f"Tool failed: {resolved_tool}" if is_error
+        else f"Waiting for model after {resolved_tool}"
+    )
+    live_activity["current_tool_name"] = None
+    live_activity["last_tool_name"] = tool_name or live_activity.get("last_tool_name")
+    live_activity["last_tool_finished_at"] = now_iso
+    live_activity["last_tool_error"] = is_error
+    live_activity["outstanding_tool_calls"] = max(
+        int(live_activity.get("outstanding_tool_calls") or 0) - 1, 0,
+    )
+    live_activity["stall_reason"] = None
+    live_activity["termination_reason"] = None
+    if isinstance(tool_output, dict):
+        exit_code = tool_output.get("exit_code")
+        if isinstance(exit_code, int):
+            live_activity["last_command_exit_code"] = exit_code
+
+
+def _handle_assistant_message_event(
+    live_activity: dict[str, Any],
+    content: str | None,
+    now_iso: str,
+) -> None:
+    summary = "Finalizing response"
+    if isinstance(content, str) and content.strip():
+        summary = f"Assistant responded: {content.strip()[:100]}"
+    _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
+    live_activity["current_tool_name"] = None
+    live_activity["outstanding_tool_calls"] = 0
+
+
+def _handle_error_event(
+    live_activity: dict[str, Any],
+    content: str | None,
+    now_iso: str,
+) -> None:
+    live_activity["phase"] = "error"
+    live_activity["status"] = "error"
+    live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
+    live_activity["termination_reason"] = content
+    live_activity["current_tool_name"] = None
+    live_activity["outstanding_tool_calls"] = 0
+    live_activity["last_model_activity_at"] = now_iso
 
 
 def update_live_activity_for_event(
@@ -284,79 +388,17 @@ def update_live_activity_for_event(
         live_activity["model_used"] = model_used
 
     if event_type == "memory_inject":
-        _mark_non_terminal_state(
-            live_activity,
-            phase="injecting_memory",
-            summary="Injecting memory context",
-            now_iso=now_iso,
-        )
+        _mark_non_terminal_state(live_activity, phase="injecting_memory", summary="Injecting memory context", now_iso=now_iso)
     elif event_type == "thinking":
-        _mark_non_terminal_state(
-            live_activity,
-            phase="planning",
-            summary="Model planning",
-            now_iso=now_iso,
-        )
+        _mark_non_terminal_state(live_activity, phase="planning", summary="Model planning", now_iso=now_iso)
     elif event_type == "tool_use":
-        phase, summary = _tool_phase(tool_name, tool_input)
-        _mark_non_terminal_state(live_activity, phase=phase, summary=summary, now_iso=now_iso)
-        live_activity["current_tool_name"] = tool_name
-        live_activity["last_tool_name"] = tool_name
-        live_activity["last_tool_started_at"] = now_iso
-        live_activity["outstanding_tool_calls"] = max(
-            int(live_activity.get("outstanding_tool_calls") or 0) + 1,
-            1,
-        )
-        live_activity["tool_calls_count"] = int(live_activity.get("tool_calls_count") or 0) + 1
-        path = _path_from_tool_input(tool_input)
-        command = _command_from_tool_input(tool_input)
-        if phase == "reading_file":
-            live_activity["last_read_path"] = path
-        elif phase == "writing_file":
-            live_activity["last_write_path"] = path
-            _append_touched_file(live_activity, path)
-        if command:
-            live_activity["last_command"] = command
-            if phase == "running_validation":
-                live_activity["last_validation_command"] = command
+        _handle_tool_use_event(live_activity, tool_name, tool_input, now_iso)
     elif event_type == "tool_result":
-        is_error = bool(tool_output.get("is_error")) if isinstance(tool_output, dict) else False
-        live_activity["phase"] = "waiting_for_model"
-        live_activity["status"] = "active"
-        live_activity["summary"] = (
-            f"Tool failed: {tool_name or live_activity.get('last_tool_name') or 'unknown'}"
-            if is_error
-            else f"Waiting for model after {tool_name or live_activity.get('last_tool_name') or 'tool'}"
-        )
-        live_activity["current_tool_name"] = None
-        live_activity["last_tool_name"] = tool_name or live_activity.get("last_tool_name")
-        live_activity["last_tool_finished_at"] = now_iso
-        live_activity["last_tool_error"] = is_error
-        live_activity["outstanding_tool_calls"] = max(
-            int(live_activity.get("outstanding_tool_calls") or 0) - 1,
-            0,
-        )
-        live_activity["stall_reason"] = None
-        live_activity["termination_reason"] = None
-        if isinstance(tool_output, dict):
-            exit_code = tool_output.get("exit_code")
-            if isinstance(exit_code, int):
-                live_activity["last_command_exit_code"] = exit_code
+        _handle_tool_result_event(live_activity, tool_name, tool_output, now_iso)
     elif event_type == "assistant_message":
-        summary = "Finalizing response"
-        if isinstance(content, str) and content.strip():
-            summary = f"Assistant responded: {content.strip()[:100]}"
-        _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
-        live_activity["current_tool_name"] = None
-        live_activity["outstanding_tool_calls"] = 0
+        _handle_assistant_message_event(live_activity, content, now_iso)
     elif event_type == "error":
-        live_activity["phase"] = "error"
-        live_activity["status"] = "error"
-        live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
-        live_activity["termination_reason"] = content
-        live_activity["current_tool_name"] = None
-        live_activity["outstanding_tool_calls"] = 0
-        live_activity["last_model_activity_at"] = now_iso
+        _handle_error_event(live_activity, content, now_iso)
 
     metadata["live_activity"] = live_activity
     session.provider_metadata = metadata
@@ -478,6 +520,64 @@ def apply_live_activity_heartbeat(
     session.provider_metadata = metadata
 
 
+def _classify_active_health(
+    response: dict[str, Any],
+    phase: str,
+    quiet_for_seconds: int | None,
+) -> tuple[str, bool, str | None]:
+    """Return (health, stalled, stall_reason) for an active session."""
+    if phase in _ACTIVE_PHASES:
+        post_tool_wait = (
+            phase == "waiting_for_model"
+            and response.get("last_event_type") == "tool_result"
+            and int(response.get("outstanding_tool_calls") or 0) == 0
+        )
+        stall_after = _POST_TOOL_STALL_AFTER_SECONDS if post_tool_wait else _STALL_AFTER_SECONDS
+        if quiet_for_seconds is not None and quiet_for_seconds >= stall_after:
+            reason = (
+                f"No model activity for {quiet_for_seconds}s after tool_result"
+                if post_tool_wait
+                else f"No model activity for {quiet_for_seconds}s while phase={phase}"
+            )
+            return "stalled", True, reason
+        if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
+            return "quiet", False, None
+        return "active", False, None
+
+    if phase == "unknown":
+        if quiet_for_seconds is not None and quiet_for_seconds >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+            return "stalled", True, f"No structured activity for {quiet_for_seconds}s"
+        if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
+            return "quiet", False, None
+        return "active", False, None
+
+    return "active", False, None
+
+
+def _apply_terminal_overrides(
+    response: dict[str, Any],
+    session: Session,
+    phase: str,
+    status: str,
+) -> str:
+    """Apply completed/failed overrides, return health string."""
+    if session.status == "completed":
+        response["status"] = "completed"
+        if phase in _ACTIVE_PHASES:
+            response["phase"] = "completed"
+        if status != "completed" and _summary_looks_active(response.get("summary")):
+            response["summary"] = "Session completed"
+        return "completed"
+    if session.status == "failed":
+        response["status"] = "failed"
+        if phase in _ACTIVE_PHASES:
+            response["phase"] = "failed"
+        if status not in {"failed", "error"} and _summary_looks_active(response.get("summary")):
+            response["summary"] = "Session failed"
+        return "failed"
+    return "idle"
+
+
 def build_live_activity_response(
     session: Session,
     *,
@@ -494,67 +594,18 @@ def build_live_activity_response(
     status = str(response.get("status") or ("active" if session.status == "active" else session.status))
     response["phase"] = phase
     response["status"] = status
-
-    last_activity = response.get("last_model_activity_at") or response.get("last_event_at")
-    quiet_for_seconds: int | None = None
-    if isinstance(last_activity, str):
-        try:
-            last_dt = datetime.fromisoformat(last_activity.replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=UTC)
-            quiet_for_seconds = max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
-        except ValueError:
-            quiet_for_seconds = None
-
+    quiet_for_seconds = _activity_age_seconds(
+        response.get("last_model_activity_at") or response.get("last_event_at"),
+    )
     response["quiet_for_seconds"] = quiet_for_seconds
-    health = "idle"
-    stalled = False
-    stall_reason = None
 
-    if session.status == "active" and phase in _ACTIVE_PHASES:
-        health = "active"
-        post_tool_wait = (
-            phase == "waiting_for_model"
-            and response.get("last_event_type") == "tool_result"
-            and int(response.get("outstanding_tool_calls") or 0) == 0
-        )
-        stall_after_seconds = (
-            _POST_TOOL_STALL_AFTER_SECONDS if post_tool_wait else _STALL_AFTER_SECONDS
-        )
-        if quiet_for_seconds is not None and quiet_for_seconds >= stall_after_seconds:
-            health = "stalled"
-            stalled = True
-            stall_reason = (
-                f"No model activity for {quiet_for_seconds}s after tool_result"
-                if post_tool_wait
-                else f"No model activity for {quiet_for_seconds}s while phase={phase}"
-            )
-        elif quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
-            health = "quiet"
-    elif session.status == "active" and phase == "unknown":
-        health = "active"
-        if quiet_for_seconds is not None and quiet_for_seconds >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
-            health = "stalled"
-            stalled = True
-            stall_reason = f"No structured activity for {quiet_for_seconds}s"
-        elif quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
-            health = "quiet"
+    if session.status == "active":
+        health, stalled, stall_reason = _classify_active_health(response, phase, quiet_for_seconds)
     elif status == "error":
-        health = "error"
-    elif session.status == "completed":
-        response["status"] = "completed"
-        if phase in _ACTIVE_PHASES:
-            response["phase"] = "completed"
-        if status != "completed" and _summary_looks_active(response.get("summary")):
-            response["summary"] = "Session completed"
-        health = "completed"
-    elif session.status == "failed":
-        response["status"] = "failed"
-        if phase in _ACTIVE_PHASES:
-            response["phase"] = "failed"
-        if status not in {"failed", "error"} and _summary_looks_active(response.get("summary")):
-            response["summary"] = "Session failed"
-        health = "failed"
+        health, stalled, stall_reason = "error", False, None
+    else:
+        health = _apply_terminal_overrides(response, session, phase, status)
+        stalled, stall_reason = False, None
 
     response["health"] = health
     response["stalled"] = stalled
@@ -562,9 +613,7 @@ def build_live_activity_response(
     response["files_touched"] = response.get("files_touched") or []
     response["last_heartbeat_at"] = response.get("last_heartbeat_at")
     _apply_lifecycle_state(
-        session,
-        response,
-        has_owner_lane=has_owner_lane,
-        has_specialist_lane=has_specialist_lane,
+        session, response,
+        has_owner_lane=has_owner_lane, has_specialist_lane=has_specialist_lane,
     )
     return response
