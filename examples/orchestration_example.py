@@ -1,4 +1,4 @@
-"""Orchestration example - multi-agent queries with tracing."""
+"""Orchestration example - multi-agent subagent spawning."""
 
 import asyncio
 
@@ -8,36 +8,35 @@ BASE_URL = "http://localhost:8003/api"
 
 
 async def main() -> None:
-    """Run an orchestrated query with tracing."""
+    """Run a subagent orchestration."""
     async with httpx.AsyncClient() as client:
-        # Start orchestrated query
+        # Spawn a subagent
         response = await client.post(
-            f"{BASE_URL}/orchestration/query",
+            f"{BASE_URL}/orchestration/subagent",
             json={
                 "prompt": "Analyze this code and suggest improvements",
-                "model": "claude-sonnet-4-6",
-                "provider": "claude",
-                "options": {
-                    "working_dir": ".",
-                    "max_turns": 5,
-                },
+                "agent_slug": "coder",
+                "parent_session_id": None,
             },
             timeout=120.0,
         )
         data = response.json()
-        print("Query completed")
+        print("Subagent completed")
         print(f"Response: {data.get('content', '')[:200]}...")
 
-        # Get trace if available
-        trace_id = data.get("trace_id")
-        if trace_id:
-            print(f"\nTrace ID: {trace_id}")
-            trace_response = await client.get(
-                f"{BASE_URL}/orchestration/traces/{trace_id}"
-            )
-            trace_data = trace_response.json()
-            print(f"Duration: {trace_data.get('duration_ms')}ms")
-            print(f"Spans: {trace_data.get('span_count')}")
+        # Run parallel execution
+        parallel_response = await client.post(
+            f"{BASE_URL}/orchestration/parallel",
+            json={
+                "tasks": [
+                    {"prompt": "Summarize the README", "agent_slug": "observer"},
+                    {"prompt": "List the main endpoints", "agent_slug": "observer"},
+                ],
+            },
+            timeout=120.0,
+        )
+        parallel_data = parallel_response.json()
+        print(f"\nParallel results: {len(parallel_data.get('results', []))} tasks completed")
 
 
 if __name__ == "__main__":
