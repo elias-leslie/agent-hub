@@ -10,11 +10,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.ownership_inventory import ActiveSpecialistSession, OwnershipOwner
-from app.services.tools._executor_consultation import (
-    _parse_specialist_dispatch_request,
-    _project_dispatch_overlap_block_reason,
-    inspect_session,
-    query_sessions,
+from app.services.tools._executor_consultation import inspect_session, query_sessions
+from app.services.tools._executor_dispatch import (
+    parse_specialist_dispatch_request as _parse_specialist_dispatch_request,
+)
+from app.services.tools._executor_dispatch import (
+    project_dispatch_overlap_block_reason as _project_dispatch_overlap_block_reason,
 )
 
 
