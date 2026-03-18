@@ -159,9 +159,14 @@ async def stream_oauth(
         if not got_done:
             yield _make_fallback_done(total_content)
     except asyncio.CancelledError:
-        logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
+        logger.warning("Claude SDK stream cancelled (cancel scope); emitting cancelled done")
         if not got_done:
-            yield _make_fallback_done(total_content)
+            yield StreamEvent(
+                type="done",
+                input_tokens=0,
+                output_tokens=len(total_content) // 4,
+                finish_reason="cancelled",
+            )
     except TimeoutError:
         logger.error("Claude OAuth stream timeout: request exceeded 300s")
         yield StreamEvent(type="error", error="Request timeout exceeded 300s")
