@@ -77,3 +77,7 @@ tasks/continuation/
 .st/
 .summitflow/
 .index.yaml
+
+# Generated strategy outputs
+backend/*_strategy.py
+backend/*_strategy.json

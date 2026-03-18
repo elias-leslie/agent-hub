@@ -30,15 +30,15 @@ from dotenv import load_dotenv
 
 load_dotenv(Path.home() / ".env.local")
 
-import anthropic
-from pydantic import BaseModel, Field
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+import anthropic  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+from sqlalchemy import select  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from app.config import get_settings
-from app.models import Credential
-from app.storage.credentials import decrypt_value
+from app.config import get_settings  # noqa: E402
+from app.models import Credential  # noqa: E402
+from app.storage.credentials import decrypt_value  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Full output Pydantic schema for the trading strategy config
@@ -209,7 +209,7 @@ def call_with_budget_retry(
     Execute an API call function with budget-aware retry.
     If 402 'can only afford X tokens' is returned, retries with affordable amount.
     """
-    for attempt in range(3):
+    for _attempt in range(3):
         try:
             return fn(model=model, max_tokens=max_tokens, **kwargs)
         except anthropic.APIStatusError as e:
