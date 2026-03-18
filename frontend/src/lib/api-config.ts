@@ -126,11 +126,11 @@ export function buildInternalHeaders(): Record<string, string> {
   return headers
 }
 
-// Chat streaming still passes explicit headers to direct SSE/WS-facing paths.
-// Keep the legacy export for compatibility until that path is refactored.
-export const INTERNAL_HEADERS = {
-  'X-Agent-Hub-Internal': 'agent-hub-internal-v1',
-}
+// Headers for direct SSE/WS connections that bypass the Next.js proxy.
+// On the server side, these include the internal auth header from env.
+// On the client side, SSE paths should be exempt from auth or routed
+// through the proxy.
+export const INTERNAL_HEADERS: Record<string, string> = buildInternalHeaders()
 
 /**
  * Fetch wrapper that includes internal authentication header.
