@@ -1,5 +1,7 @@
 """Completion API package."""
 
+from app.adapters.registry import clear_cache as clear_adapter_cache
+from app.adapters.registry import get_adapter
 from app.services.agent_routing import get_provider_for_model as get_provider
 
 from .async_endpoints import router as async_router
@@ -11,9 +13,7 @@ from .core import (
 from .endpoints import router
 from .event_helpers import save_events
 from .helpers import (
-    clear_adapter_cache,
     extract_text_content,
-    get_adapter,
     is_error_response,
     normalize_content_for_storage,
     parse_mention,

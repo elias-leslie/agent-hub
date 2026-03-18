@@ -9,9 +9,9 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.registry import get_adapter
 from app.services.response_cache import get_response_cache
 
-from .helpers import get_adapter
 from .multi_turn_executor import execute_multi_turn
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result

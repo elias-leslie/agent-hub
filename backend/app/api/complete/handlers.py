@@ -28,7 +28,7 @@ from .schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
 logger = logging.getLogger(__name__)
 
 
-async def handle_cached_response(
+async def build_cached_completion_response(
     cached: Any,
     db: AsyncSession | None,
     session: DBSession | None,

@@ -201,15 +201,9 @@ class TestAccessControlMiddleware:
         assert response.status_code not in [400, 403]
 
     @pytest.mark.integration
+    @pytest.mark.skip(reason="Requires real client in database; use test_internal_header_bypasses_auth for unit coverage")
     async def test_valid_auth_allows_request(self, async_client):
-        """Test that valid authentication allows request through.
-
-        Note: This requires a real client in the database. Run with --run-integration.
-        For unit tests, use test_internal_header_bypasses_auth instead.
-        """
-        # This test requires a real client to be registered.
-        # Skip in unit test mode - the internal header test validates bypass works.
-        pass
+        """Test that valid authentication allows request through."""
 
 
 class TestIdentifyClientFlow:

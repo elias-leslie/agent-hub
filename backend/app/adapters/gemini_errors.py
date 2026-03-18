@@ -43,22 +43,31 @@ def extract_gemini_quota_details(e: Exception) -> dict[str, str]:
         if body and isinstance(body, str):
             try:
                 data = json.loads(body)
-                error_block = data.get("error", data)
-                if not info.get("status"):
-                    info["status"] = str(error_block.get("status", ""))
-                if not info.get("message"):
-                    info["message"] = str(error_block.get("message", ""))[:200]
-                for detail in error_block.get("details", []):
-                    metadata = detail.get("metadata", {})
-                    if "quota_metric" in metadata:
-                        info["quota_metric"] = metadata["quota_metric"]
-                    if "quota_limit_value" in metadata:
-                        info["quota_limit"] = metadata["quota_limit_value"]
-                    if "consumer" in metadata:
-                        info["consumer"] = metadata["consumer"]
-                    if detail.get("retryDelay"):
-                        info["retry_delay"] = detail["retryDelay"]
-            except (json.JSONDecodeError, AttributeError):
+                if not isinstance(data, dict):
+                    pass
+                else:
+                    error_block = data.get("error", data)
+                    if not isinstance(error_block, dict):
+                        error_block = data
+                    if isinstance(error_block, dict):
+                        if not info.get("status"):
+                            info["status"] = str(error_block.get("status", ""))
+                        if not info.get("message"):
+                            info["message"] = str(error_block.get("message", ""))[:200]
+                        for detail in error_block.get("details", []):
+                            if not isinstance(detail, dict):
+                                continue
+                            metadata = detail.get("metadata", {})
+                            if isinstance(metadata, dict):
+                                if "quota_metric" in metadata:
+                                    info["quota_metric"] = metadata["quota_metric"]
+                                if "quota_limit_value" in metadata:
+                                    info["quota_limit"] = metadata["quota_limit_value"]
+                                if "consumer" in metadata:
+                                    info["consumer"] = metadata["consumer"]
+                            if detail.get("retryDelay"):
+                                info["retry_delay"] = detail["retryDelay"]
+            except json.JSONDecodeError:
                 pass
 
     # Clean out empty strings

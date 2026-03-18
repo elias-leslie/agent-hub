@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.adapters.base import Message
 
 from .turn_budget import resolve_tool_max_turns, uses_openai_compat_tool_loop
-
-if TYPE_CHECKING:
-    pass
 
 
 def build_event_stream(

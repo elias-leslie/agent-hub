@@ -140,8 +140,12 @@ async def _capture_page(
     screenshot_raw = await _run_cmd("agent-browser", "screenshot", "--json")
     try:
         screenshot_data = json.loads(screenshot_raw)
-        screenshot_path = screenshot_data.get("data", {}).get("path", "")
-    except (json.JSONDecodeError, AttributeError):
+        if isinstance(screenshot_data, dict):
+            data_block = screenshot_data.get("data", {})
+            screenshot_path = data_block.get("path", "") if isinstance(data_block, dict) else ""
+        else:
+            screenshot_path = ""
+    except json.JSONDecodeError:
         screenshot_path = ""
 
     if screenshot_path:

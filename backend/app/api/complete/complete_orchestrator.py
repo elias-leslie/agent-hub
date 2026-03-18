@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.complete.async_dispatch import dispatch_async_completion
-from app.api.complete.handlers import handle_cached_response
+from app.api.complete.handlers import build_cached_completion_response
 from app.api.complete.orchestration_helpers import (
     build_session_and_messages,
     execute_and_respond,
@@ -111,7 +111,7 @@ async def orchestrate_completion(
         await build_session_and_messages(request, provider, resolved_model, resolved_agent, mandate, db, client_id, source, skip_cache)
     )
     if cached:
-        return await handle_cached_response(
+        return await build_cached_completion_response(
             cached, db, session, session_id, request, resolved_model,
             ctx_info, memory_facts, is_new_session=is_new_session,
         )

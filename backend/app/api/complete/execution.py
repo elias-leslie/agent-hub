@@ -7,7 +7,8 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import CompletionResult, Message
-from app.api.complete.helpers import get_adapter, should_enable_thinking
+from app.adapters.registry import get_adapter
+from app.api.complete.helpers import should_enable_thinking
 from app.api.complete.schemas import (
     CompletionResponse,
     ContainerInfo,
