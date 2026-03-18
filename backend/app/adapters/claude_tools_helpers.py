@@ -417,42 +417,21 @@ async def _stream_sdk_messages(
     options: Any,
     provider_name: str,
 ) -> AsyncIterator[tuple[Any, str | None]]:
-    """Yield (message, session_id) pairs from claude_agent_sdk query."""
+    """Yield (message, session_id) pairs from claude_agent_sdk query.
+
+    Iterates the SDK directly in the calling task to preserve anyio's
+    task-local cancel-scope tracking.  The previous producer-task + queue
+    pattern broke this invariant, causing ``CancelScope._deliver_cancellation``
+    to spin at 100 % CPU when the stream was cancelled.
+    """
     async with _sdk_semaphore:
-        queue: asyncio.Queue[tuple[Any, str | None] | object] = asyncio.Queue()
-        producer_error: str | None = None
-
-        async def _produce() -> None:
-            nonlocal producer_error
-            iterator: Any = _iterate_sdk_messages(prompt, options, provider_name)
-            finished_normally = False
-            try:
-                async for item in iterator:
-                    await queue.put(item)
-                finished_normally = True
-            except Exception as e:
-                producer_error = f"Claude tool error: {e}"
-                logger.error(producer_error)
-            finally:
-                if not finished_normally:
-                    with suppress(asyncio.CancelledError):
-                        await _close_sdk_message_iter(iterator)
-                await queue.put(_STREAM_STOP)
-
-        producer_task = asyncio.create_task(_produce(), name="claude-sdk-tool-stream")
         try:
-            while True:
-                item = await queue.get()
-                if item is _STREAM_STOP:
-                    break
+            async for item in _iterate_sdk_messages(prompt, options, provider_name):
                 yield item
-            if producer_error is not None:
-                yield (ErrorMessage(error=producer_error), None)
-        finally:
-            if not producer_task.done():
-                producer_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await producer_task
+        except Exception as e:
+            error_msg = f"Claude tool error: {e}"
+            logger.error(error_msg)
+            yield (ErrorMessage(error=error_msg), None)
 
 
 async def complete_with_tools(

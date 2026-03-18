@@ -122,6 +122,14 @@ class EventStream[T, R]:
         Useful for adapting legacy ``stream()`` methods that return
         ``AsyncIterator[StreamEvent]`` into the dual-interface pattern.
 
+        .. warning::
+
+            The pump coroutine runs in a separate ``asyncio.Task``.  If the
+            source iterator is backed by an anyio cancel scope (e.g. the
+            Claude SDK), cancelling that task will break anyio's task-local
+            scope tracking and can cause ``_deliver_cancellation`` to spin.
+            Prefer direct iteration when the source uses anyio internally.
+
         Args:
             iterator: The async iterator to wrap.
             result_extractor: Optional callable ``(T) -> R | None`` that
