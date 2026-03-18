@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FeedbackItemCreate(BaseModel):
@@ -13,6 +13,14 @@ class FeedbackItemCreate(BaseModel):
         ..., description="Type: friction, idea, improvement, praise"
     )
     title: str = Field(..., max_length=200, description="Short descriptive title")
+
+    @field_validator("title")
+    @classmethod
+    def title_not_placeholder(cls, v: str) -> str:
+        stripped = v.strip().strip(".")
+        if not stripped or len(stripped) < 3:
+            raise ValueError("Title must be descriptive (at least 3 non-dot characters)")
+        return v
     description: str | None = Field(
         default=None, description="Detailed description of the feedback"
     )
