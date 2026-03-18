@@ -148,4 +148,5 @@ async def store_assistant_response(
         agent_id=agent_id,
         agent_name=agent_id,
     )
+    await db.commit()
     await publish_message(session_id, "assistant", content, estimated_tokens)
