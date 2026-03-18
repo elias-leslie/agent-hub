@@ -28,7 +28,8 @@ def mock_genai():
 class TestGeminiAdapter:
     """Tests for API-key-only Gemini adapter behavior."""
 
-    def test_init_with_api_key(self, mock_genai):
+    @patch("app.adapters.gemini.resolve_api_keys", return_value=[])
+    def test_init_with_api_key(self, _mock_keys, mock_genai):
         """Explicit API keys should build an SDK client immediately."""
         adapter = GeminiAdapter(api_key="custom-key")
 
@@ -55,7 +56,9 @@ class TestGeminiAdapter:
         finally:
             CredentialManager.reset()
 
-    def test_init_without_api_key_leaves_adapter_unconfigured(self):
+    @patch("app.adapters.gemini.resolve_api_keys", return_value=[])
+    @patch("app.adapters.gemini.resolve_api_key", return_value=None)
+    def test_init_without_api_key_leaves_adapter_unconfigured(self, _mock_key, _mock_keys):
         """No stored API key should leave Gemini unavailable until configured."""
         adapter = GeminiAdapter()
         assert adapter._api_keys == []

@@ -44,6 +44,10 @@ os.environ.setdefault(
 )
 os.environ.setdefault("HATCHET_CLIENT_TLS_STRATEGY", "none")
 
+# Internal service secret must match TEST_HEADERS for access control bypass.
+# Force override (load_dotenv may have already set a production value).
+os.environ["INTERNAL_SERVICE_SECRET"] = "agent-hub-internal-v1"
+
 # If TEST_AGENT_HUB_DB_URL is set, override AGENT_HUB_DB_URL BEFORE any app imports
 if _test_db_url:
     os.environ["AGENT_HUB_DB_URL"] = _test_db_url
