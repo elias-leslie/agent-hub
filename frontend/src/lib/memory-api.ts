@@ -19,9 +19,7 @@ export {
   updateEpisodeTier,
   updateEpisodeProperties,
   batchUpdateTier,
-  fetchEpisodeCitations,
   fetchSimilarEpisodes,
-  rateEpisode,
 } from "./memory/episodes";
 
 // Re-export search & analytics operations
