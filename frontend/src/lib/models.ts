@@ -342,47 +342,6 @@ export async function getModels(): Promise<CatalogModel[]> {
   return fetchPromise;
 }
 
-/** Get the last enrichment sync timestamp. */
-export function getLastSync(): string | null {
-  return cachedLastSync;
-}
-
-/** Invalidate the cached models (e.g., after config changes). */
-export function invalidateModelCache(): void {
-  cachedModels = null;
-  cachedLastSync = null;
-  fetchPromise = null;
-}
-
-// Build a name lookup from cached models + legacy display-only map
-const LEGACY_NAMES: Record<string, string> = {
-  "claude-sonnet-4-5": "Claude Sonnet 4.5",
-  "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-  "claude-opus-4-5": "Claude Opus 4.5",
-  "claude-opus-4-5-20250514": "Claude Opus 4.5",
-  "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
-};
-
-/** Format a model ID to a human-readable display name. */
-export function formatModelName(modelId?: string): string {
-  if (!modelId) return "Assistant";
-
-  // Check cached catalog first
-  if (cachedModels) {
-    const entry = cachedModels.find((m) => m.id === modelId);
-    if (entry) return entry.name;
-  }
-
-  // Static fallback lookup
-  const fallback = STATIC_FALLBACK.find((m) => m.id === modelId);
-  if (fallback) return fallback.name;
-
-  // Legacy display-only (old session data)
-  if (modelId in LEGACY_NAMES) return LEGACY_NAMES[modelId];
-
-  return modelId;
-}
-
 /** Get cost per 1M tokens for a model. */
 export function getModelCost(modelId: string): ModelCost {
   if (cachedModels) {
@@ -394,12 +353,3 @@ export function getModelCost(modelId: string): ModelCost {
   return { input_per_m: 2, output_per_m: 8 }; // reasonable default
 }
 
-/** Model alias map: alias → model ID, derived from catalog. */
-export function getModelAliases(): Record<string, { model: string; label: string }> {
-  const source = cachedModels || STATIC_FALLBACK;
-  const aliases: Record<string, { model: string; label: string }> = {};
-  for (const m of source) {
-    aliases[m.alias] = { model: m.id, label: m.name.split(" ").pop() || m.alias };
-  }
-  return aliases;
-}

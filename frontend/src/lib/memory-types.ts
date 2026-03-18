@@ -153,11 +153,6 @@ export interface ScopeDistribution {
   percentage: number;
 }
 
-export interface DailyTrend {
-  date: string;
-  count: number;
-}
-
 export interface TopMemory {
   uuid: string;
   content: string;
@@ -278,19 +273,6 @@ export interface MemoryAnalyticsActivity {
 export interface MemoryAnalyticsDashboard {
   state: MemoryAnalyticsState;
   activity: MemoryAnalyticsActivity;
-}
-
-export interface EpisodeCitation {
-  session_id: string | null;
-  project_id: string | null;
-  created_at: string | null;
-  variant: string;
-}
-
-export interface EpisodeCitationsResponse {
-  episode_uuid: string;
-  citations: EpisodeCitation[];
-  total: number;
 }
 
 export interface SimilarEpisode {

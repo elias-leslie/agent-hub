@@ -19,7 +19,6 @@ import type {
   UpdateTierResponse,
   UpdateEpisodePropertiesRequest,
   UpdateEpisodePropertiesResponse,
-  EpisodeCitationsResponse,
   SimilarEpisodesResponse,
 } from "../memory-types";
 
@@ -173,21 +172,6 @@ export async function batchUpdateTier(
   );
 }
 
-// Fetch citations for an episode
-export async function fetchEpisodeCitations(
-  episodeId: string,
-  limit?: number,
-): Promise<EpisodeCitationsResponse> {
-  const params = new URLSearchParams();
-  if (limit) params.set("limit", limit.toString());
-  const qs = params.toString();
-  return apiFetch(
-    `${API_BASE}/memory/episode/${episodeId}/citations${qs ? `?${qs}` : ""}`,
-    {},
-    "Citations fetch failed",
-  );
-}
-
 // Fetch similar episodes
 export async function fetchSimilarEpisodes(
   episodeId: string,
@@ -200,21 +184,5 @@ export async function fetchSimilarEpisodes(
     `${API_BASE}/memory/episode/${episodeId}/similar${qs ? `?${qs}` : ""}`,
     {},
     "Similar episodes fetch failed",
-  );
-}
-
-// Rate an episode (helpful/harmful)
-export async function rateEpisode(
-  uuid: string,
-  rating: "helpful" | "harmful",
-): Promise<{ success: boolean; uuid: string; rating: string; message: string }> {
-  return apiFetch(
-    `${API_BASE}/memory/episodes/${uuid}/rating`,
-    {
-      method: "POST",
-      headers: buildHeaders(undefined, "application/json"),
-      body: JSON.stringify({ rating }),
-    },
-    "Rate episode failed",
   );
 }

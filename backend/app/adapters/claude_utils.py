@@ -34,7 +34,6 @@ except ValueError:
     )
     MAX_CONCURRENT_SDK_SESSIONS = _MAX_CONCURRENT_SDK_SESSIONS_DEFAULT
 _sdk_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SDK_SESSIONS)
-_THINKING_LEVEL_TO_EFFORT = THINKING_LEVEL_TO_EFFORT  # legacy alias
 
 
 def _block_text(block: object) -> str:
