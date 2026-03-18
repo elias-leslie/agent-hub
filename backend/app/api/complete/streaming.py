@@ -10,8 +10,8 @@ from collections.abc import AsyncIterator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message
+from app.adapters.registry import get_adapter
 
-from .helpers import get_adapter
 from .schemas import MessageInput, StreamingChunk
 from .streaming_context import StreamContext
 from .streaming_persistence import build_done_sse

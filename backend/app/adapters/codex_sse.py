@@ -99,10 +99,12 @@ def handle_error_response(status_code: int, body_text: str) -> None:
     error_message = body_text
     try:
         data = json.loads(body_text)
-        err = data.get("error", {})
-        error_code = err.get("code") or err.get("type") or ""
-        error_message = err.get("message") or body_text
-    except (json.JSONDecodeError, AttributeError):
+        if isinstance(data, dict):
+            err = data.get("error", {})
+            if isinstance(err, dict):
+                error_code = err.get("code") or err.get("type") or ""
+                error_message = err.get("message") or body_text
+    except json.JSONDecodeError:
         pass
 
     if (

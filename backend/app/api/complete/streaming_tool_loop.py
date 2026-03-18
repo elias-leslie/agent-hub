@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
 
 from app.adapters.base import Message
 
@@ -17,9 +16,6 @@ from .streaming_tool_executor import (
     iter_unresolved_tools,
 )
 from .streaming_tool_messages import sse_for_simple_event
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

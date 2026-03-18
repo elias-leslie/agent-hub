@@ -9,7 +9,6 @@ from typing import Any
 import jsonschema
 
 from app.adapters.base import Message
-from app.api.complete.helpers_adapters import clear_adapter_cache, get_adapter  # noqa: F401
 from app.constants import MODEL_ALIASES, MODEL_CATALOG
 from app.constants.models import PROVIDER_NAMES
 
