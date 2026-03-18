@@ -99,7 +99,7 @@ export function buildApiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`
 }
 
-function buildInternalHeaders(): Record<string, string> {
+export function buildInternalHeaders(): Record<string, string> {
   // Server-side calls may hit the backend directly, so attach the real
   // internal/dashboard headers from the runtime environment. Client-side
   // calls stay same-origin and rely on the Next proxy route instead.
