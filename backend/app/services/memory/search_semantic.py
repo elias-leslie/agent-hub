@@ -1,7 +1,7 @@
 """
 Semantic search operations using PostgreSQL pgvector search.
 
-Handles semantic search with deduplication and validation.
+Handles hybrid search (semantic + text) with deduplication and validation.
 """
 
 import logging
@@ -9,10 +9,27 @@ from datetime import datetime
 from typing import Any
 
 from .embedder import get_embedder
-from .memory_models import MemoryScope, MemorySearchResult, MemorySource
-from .repository import get_memory_repository
+from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
+from .repository import TIER_REVERSE, get_memory_repository
 
 logger = logging.getLogger(__name__)
+
+# Text match bonus added to semantic score for keyword hits
+_TEXT_MATCH_BONUS = 0.20
+
+
+def _tier_to_category(result: dict[str, Any]) -> MemoryCategory | None:
+    """Derive MemoryCategory from the numeric tier column in a result dict."""
+    tier_val = result.get("tier")
+    if tier_val is None:
+        return None
+    tier_name = TIER_REVERSE.get(int(tier_val))
+    if tier_name is None:
+        return None
+    try:
+        return MemoryCategory(tier_name)
+    except ValueError:
+        return None
 
 
 def _create_search_result(
@@ -33,8 +50,10 @@ def _create_search_result(
         created_at=created_dt,
         facts=[content] if content else [],
         scope=scope,
+        category=_tier_to_category(result),
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],
+        summary=result.get("summary"),
     )
 
 
@@ -44,11 +63,13 @@ async def search_memory(
     query: str = "",
     limit: int = 10,
     min_score: float = 0.0,
+    category: str | None = None,
 ) -> list[MemorySearchResult]:
     """
-    Search memory for relevant episodes and facts.
+    Hybrid search: semantic similarity + text keyword matching.
 
-    Uses pgvector cosine similarity via MemoryRepository.
+    Runs both pgvector cosine similarity and ILIKE text search in parallel,
+    merges results with text matches boosted, deduplicates, and returns top N.
 
     Args:
         group_id: Group ID to search within (None = search all groups).
@@ -56,34 +77,75 @@ async def search_memory(
         query: Search query text.
         limit: Maximum number of results.
         min_score: Minimum relevance score threshold.
+        category: Optional tier filter (mandate, guardrail, reference).
     """
-    embedder = get_embedder()
-    query_vec = await embedder.embed(query)
+    from .repository import TIER_MAP
 
+    embedder = get_embedder()
     repo = get_memory_repository()
-    results = await repo.semantic_search(
+
+    tier_filter = TIER_MAP.get(category) if category else None
+
+    # Run semantic search
+    query_vec = await embedder.embed(query)
+    semantic_results = await repo.semantic_search(
         query_vec,
         group_id=group_id,
+        tier=tier_filter,
         limit=limit * 3,
         min_score=min_score,
     )
 
-    # Deduplicate and limit
+    # Run text search for keyword boosting
+    text_hit_uuids: set[str] = set()
+    text_matches: list[Any] = []
+    try:
+        text_matches = await repo.text_search(
+            query,
+            group_id=group_id,
+            category=category,
+            limit=limit * 3,
+        )
+        for mem in text_matches:
+            text_hit_uuids.add(str(mem.id))
+    except Exception:
+        logger.debug("Text search fallback failed, using semantic only", exc_info=True)
+
+    # Merge: boost semantic scores for text hits, collect text-only hits
+    best_scores: dict[str, tuple[float, dict[str, Any]]] = {}
+
+    for result in semantic_results:
+        uuid_str = str(result.get("id") or result.get("uuid", ""))
+        score = float(result.get("relevance_score", 0.0))
+        if uuid_str in text_hit_uuids:
+            score = min(score + _TEXT_MATCH_BONUS, 1.0)
+        if uuid_str not in best_scores or score > best_scores[uuid_str][0]:
+            result_copy = dict(result)
+            result_copy["relevance_score"] = score
+            best_scores[uuid_str] = (score, result_copy)
+
+    # Add text-only hits not in semantic results (with a base score)
+    for mem in text_matches:
+        uuid_str = str(mem.id)
+        if uuid_str not in best_scores:
+            from ._repo_helpers import to_dict
+
+            mem_dict = to_dict(mem)
+            mem_dict["relevance_score"] = _TEXT_MATCH_BONUS
+            best_scores[uuid_str] = (_TEXT_MATCH_BONUS, mem_dict)
+
+    # Sort by score descending, take top N
+    sorted_results = sorted(best_scores.values(), key=lambda x: x[0], reverse=True)
+
     search_results: list[MemorySearchResult] = []
-    seen_uuids: set[str] = set()
     valid_uuids: list[str] = []
 
-    for result in results:
-        uuid_str = str(result.get("id") or result.get("uuid", ""))
-        if uuid_str in seen_uuids:
-            continue
-
-        seen_uuids.add(uuid_str)
-        search_results.append(_create_search_result(result, scope))
-        valid_uuids.append(uuid_str)
-
+    for _score, result in sorted_results:
         if len(search_results) >= limit:
             break
+        sr = _create_search_result(result, scope)
+        search_results.append(sr)
+        valid_uuids.append(sr.uuid)
 
     if valid_uuids:
         await repo.increment_loaded(valid_uuids)

@@ -255,11 +255,15 @@ class TestReadUserContext:
 class TestMarkMemoryRelevant:
     """Tests for mark_memory_relevant tool."""
 
+    _full_uuid = "abc12345-0000-4000-8000-000000000000"
+    _resolve_patch = "app.services.memory.memory_utils.resolve_uuid_prefix"
+
     @pytest.mark.asyncio
     async def test_adds_tag(self):
         from app.services.tools._executor_persona import mark_memory_relevant
 
         with (
+            patch(self._resolve_patch, new_callable=AsyncMock, return_value=self._full_uuid),
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
                 new_callable=AsyncMock,
@@ -271,21 +275,24 @@ class TestMarkMemoryRelevant:
                 return_value=True,
             ) as mock_set,
         ):
-            result = await mark_memory_relevant("abc12345-uuid")
+            result = await mark_memory_relevant("abc12345")
 
         assert "marked as persona-relevant" in result
-        mock_set.assert_awaited_once_with("abc12345-uuid", ["persona-relevant"])
+        mock_set.assert_awaited_once_with(self._full_uuid, ["persona-relevant"])
 
     @pytest.mark.asyncio
     async def test_idempotent_when_already_tagged(self):
         from app.services.tools._executor_persona import mark_memory_relevant
 
-        with patch(
-            "app.services.memory.episode_property_queries.get_episode_tags",
-            new_callable=AsyncMock,
-            return_value=["persona-relevant"],
+        with (
+            patch(self._resolve_patch, new_callable=AsyncMock, return_value=self._full_uuid),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["persona-relevant"],
+            ),
         ):
-            result = await mark_memory_relevant("abc12345-uuid")
+            result = await mark_memory_relevant("abc12345")
 
         assert "already tagged" in result
 
@@ -294,11 +301,11 @@ class TestMarkMemoryRelevant:
         from app.services.tools._executor_persona import mark_memory_relevant
 
         with patch(
-            "app.services.memory.episode_property_queries.get_episode_tags",
+            self._resolve_patch,
             new_callable=AsyncMock,
             side_effect=Exception("Database error"),
         ):
-            result = await mark_memory_relevant("bad-uuid")
+            result = await mark_memory_relevant("abc12345")
 
         assert "Error" in result
 
@@ -310,7 +317,13 @@ class TestMarkMemoryIrrelevant:
     async def test_removes_tag(self):
         from app.services.tools._executor_persona import mark_memory_irrelevant
 
+        full_uuid = "abc12345-0000-4000-8000-000000000000"
         with (
+            patch(
+                "app.services.memory.memory_utils.resolve_uuid_prefix",
+                new_callable=AsyncMock,
+                return_value=full_uuid,
+            ),
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
                 new_callable=AsyncMock,
@@ -322,21 +335,28 @@ class TestMarkMemoryIrrelevant:
                 return_value=True,
             ) as mock_set,
         ):
-            result = await mark_memory_irrelevant("abc12345-uuid")
+            result = await mark_memory_irrelevant("abc12345")
 
         assert "Removed persona-relevant" in result
-        mock_set.assert_awaited_once_with("abc12345-uuid", ["other-tag"])
+        mock_set.assert_awaited_once_with(full_uuid, ["other-tag"])
 
     @pytest.mark.asyncio
     async def test_idempotent_when_not_tagged(self):
         from app.services.tools._executor_persona import mark_memory_irrelevant
 
-        with patch(
-            "app.services.memory.episode_property_queries.get_episode_tags",
-            new_callable=AsyncMock,
-            return_value=["other-tag"],
+        with (
+            patch(
+                "app.services.memory.memory_utils.resolve_uuid_prefix",
+                new_callable=AsyncMock,
+                return_value="abc12345-0000-4000-8000-000000000000",
+            ),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["other-tag"],
+            ),
         ):
-            result = await mark_memory_irrelevant("abc12345-uuid")
+            result = await mark_memory_irrelevant("abc12345")
 
         assert "not tagged as persona-relevant" in result
 
@@ -345,11 +365,11 @@ class TestMarkMemoryIrrelevant:
         from app.services.tools._executor_persona import mark_memory_irrelevant
 
         with patch(
-            "app.services.memory.episode_property_queries.get_episode_tags",
+            "app.services.memory.memory_utils.resolve_uuid_prefix",
             new_callable=AsyncMock,
             side_effect=Exception("Connection lost"),
         ):
-            result = await mark_memory_irrelevant("bad-uuid")
+            result = await mark_memory_irrelevant("abc12345")
 
         assert "Error" in result
 

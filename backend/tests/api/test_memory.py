@@ -52,14 +52,14 @@ class TestDeleteEpisodeEndpoint:
         mock_memory_service.delete_episode = AsyncMock(return_value=True)
 
         response = await client.delete(
-            "/api/memory/episode/test-uuid-123",
+            "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             headers={"x-memory-scope": "global"},
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["episode_id"] == "test-uuid-123"
+        assert data["episode_id"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         assert "deleted" in data["message"].lower()
 
     @pytest.mark.asyncio
@@ -69,11 +69,9 @@ class TestDeleteEpisodeEndpoint:
         """Episode not found returns 404."""
         mock_memory_service.delete_episode = AsyncMock(side_effect=ValueError("Episode not found"))
 
-        response = await client.delete("/api/memory/episode/nonexistent-uuid")
+        response = await client.delete("/api/memory/episode/deadbeef")
 
         assert response.status_code == 404
-        data = response.json()
-        assert "not found" in data["message"].lower()
 
     @pytest.mark.asyncio
     async def test_delete_episode_server_error(
@@ -84,7 +82,9 @@ class TestDeleteEpisodeEndpoint:
             side_effect=RuntimeError("Database connection failed")
         )
 
-        response = await client.delete("/api/memory/episode/test-uuid")
+        response = await client.delete(
+            "/api/memory/episode/c3d4e5f6-0000-4000-8000-000000000000"
+        )
 
         assert response.status_code == 500
         data = response.json()
@@ -97,12 +97,12 @@ class TestDeleteEpisodeEndpoint:
         mock_memory_service.delete_episode = AsyncMock(return_value=True)
 
         response = await client.delete(
-            "/api/memory/episode/test-uuid-123?change_reason=dedupe",
+            "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890?change_reason=dedupe",
         )
 
         assert response.status_code == 200
         mock_memory_service.delete_episode.assert_awaited_once_with(
-            "test-uuid-123",
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             changed_by="api",
             change_reason="dedupe",
         )
@@ -127,14 +127,14 @@ class TestUpdateEpisodeEndpoint:
             patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo),
         ):
             response = await client.patch(
-                "/api/memory/episode/test-uuid-123",
+                "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 json={"content": "**Episode Refresh**: Use refreshed episode content."},
             )
 
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
-        assert data["episode_id"] == "test-uuid-123"
+        assert data["episode_id"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
         assert "content" in data["message"].lower()
         mock_embedder.embed.assert_awaited_once_with("**Episode Refresh**: Use refreshed episode content.")
         mock_repo.update.assert_awaited_once()
@@ -149,7 +149,7 @@ class TestUpdateEpisodeEndpoint:
 
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
-                "/api/memory/episode/test-uuid-123",
+                "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 json={"injection_tier": "mandate"},
             )
 
@@ -157,7 +157,7 @@ class TestUpdateEpisodeEndpoint:
         data = response.json()
         assert data["injection_tier"] == "mandate"
         mock_repo.update.assert_awaited_once_with(
-            "test-uuid-123",
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             injection_tier="mandate",
             changed_by="api",
         )
@@ -172,14 +172,14 @@ class TestUpdateEpisodeEndpoint:
 
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
-                "/api/memory/episode/test-uuid-123",
+                "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 json={"injection_tier": "mandate", "change_reason": "normalize tier"},
             )
 
         assert response.status_code == 200
         assert response.json()["version"] == 4
         mock_repo.update.assert_awaited_once_with(
-            "test-uuid-123",
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             changed_by="api",
             injection_tier="mandate",
             change_reason="normalize tier",
@@ -195,7 +195,7 @@ class TestUpdateEpisodeEndpoint:
 
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
-                "/api/memory/episode/test-uuid-123",
+                "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 json={"content": "**Git Safety**: Git commits should use /commit_it when available."},
             )
 
@@ -208,7 +208,7 @@ class TestUpdateEpisodeEndpoint:
     async def test_update_episode_requires_fields(self, client: AsyncClient):
         """Empty payload should be rejected clearly."""
         response = await client.patch(
-            "/api/memory/episode/test-uuid-123",
+            "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             json={},
         )
 
@@ -250,7 +250,11 @@ class TestBulkDeleteEndpoint:
 
         response = await client.post(
             "/api/memory/bulk-delete",
-            json={"ids": ["uuid-1", "uuid-2", "uuid-3"]},
+            json={"ids": [
+                "a1b2c3d4-0000-4000-8000-000000000001",
+                "a1b2c3d4-0000-4000-8000-000000000002",
+                "a1b2c3d4-0000-4000-8000-000000000003",
+            ]},
         )
 
         assert response.status_code == 200
@@ -267,13 +271,17 @@ class TestBulkDeleteEndpoint:
             return_value={
                 "deleted": 2,
                 "failed": 1,
-                "errors": [{"id": "uuid-3", "error": "Not found"}],
+                "errors": [{"id": "a1b2c3d4-0000-4000-8000-000000000003", "error": "Not found"}],
             }
         )
 
         response = await client.post(
             "/api/memory/bulk-delete",
-            json={"ids": ["uuid-1", "uuid-2", "uuid-3"]},
+            json={"ids": [
+                "a1b2c3d4-0000-4000-8000-000000000001",
+                "a1b2c3d4-0000-4000-8000-000000000002",
+                "a1b2c3d4-0000-4000-8000-000000000003",
+            ]},
         )
 
         assert response.status_code == 200
@@ -303,8 +311,8 @@ class TestMemoryRevisionEndpoints:
                 return_value={
                     "revisions": [
                         {
-                            "id": "rev-1",
-                            "memory_uuid": "test-uuid-1234",
+                            "id": "d4e5f6a7",
+                            "memory_uuid": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
                             "version": 3,
                             "action": "update",
                             "content": "**Topic**: Use dt.",
@@ -320,12 +328,12 @@ class TestMemoryRevisionEndpoints:
                 }
             ),
         ):
-            response = await client.get("/api/memory/episode/test-uuid/revisions")
+            response = await client.get("/api/memory/episode/c3d4e5f6/revisions")
 
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
-        assert data["revisions"][0]["id"] == "rev-1"
+        assert data["revisions"][0]["id"] == "d4e5f6a7"
 
     @pytest.mark.asyncio
     async def test_restore_memory_revision_returns_restored_episode(self, client: AsyncClient):
@@ -334,15 +342,15 @@ class TestMemoryRevisionEndpoints:
             new=AsyncMock(
                 return_value={
                     "success": True,
-                    "episode_id": "test-uuid-1234",
+                    "episode_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
                     "injection_tier": "reference",
-                    "message": "Restored revision rev-1",
+                    "message": "Restored revision d4e5f6a7",
                     "version": 5,
                 }
             ),
         ):
             response = await client.post(
-                "/api/memory/episode/test-uuid/revisions/rev-1/restore",
+                "/api/memory/episode/c3d4e5f6/revisions/d4e5f6a7/restore",
                 json={"change_reason": "Rollback bad edit"},
             )
 

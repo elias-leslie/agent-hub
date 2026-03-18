@@ -22,11 +22,13 @@ class _ServiceSearchMixin:
         limit: int = 10,
         min_score: float = 0.0,
         all_groups: bool = False,
+        category: MemoryCategory | None = None,
     ) -> list[MemorySearchResult]:
-        """Semantic search for relevant episodes and facts."""
+        """Hybrid search: semantic + text keyword matching."""
         group_id = None if all_groups else self._group_id  # type: ignore[attr-defined]
+        cat_value = category.value if category else None
         return await search_ops.semantic_search(
-            group_id, self.scope, query, limit, min_score  # type: ignore[attr-defined]
+            group_id, self.scope, query, limit, min_score, cat_value  # type: ignore[attr-defined]
         )
 
     async def text_search(

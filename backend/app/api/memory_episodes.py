@@ -105,9 +105,10 @@ async def search_memory(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
     limit: Annotated[int, Query(ge=1, le=300, description="Max results")] = 10,
     min_score: Annotated[float, Query(ge=0.0, le=1.0, description="Minimum relevance score")] = 0.0,
+    category: Annotated[MemoryCategory | None, Query(description="Filter by tier")] = None,
 ) -> SearchResponse:
-    """Semantic/vector search for relevant episodes and facts."""
-    return await handle_search_memory(query, memory, limit, min_score)
+    """Hybrid search: semantic + text keyword matching across all scopes."""
+    return await handle_search_memory(query, memory, limit, min_score, category)
 
 
 @router.get("/text-search", response_model=MemoryListResult)

@@ -221,7 +221,13 @@ class TestAllPersonaToolsDispatch:
 
     @pytest.mark.asyncio
     async def test_mark_memory_relevant_dispatches(self, executor: DirectToolExecutor):
+        full_uuid = "abc12345-0000-4000-8000-000000000000"
         with (
+            patch(
+                "app.services.memory.memory_utils.resolve_uuid_prefix",
+                new_callable=AsyncMock,
+                return_value=full_uuid,
+            ),
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
                 new_callable=AsyncMock,
@@ -234,13 +240,19 @@ class TestAllPersonaToolsDispatch:
             ),
         ):
             result = await executor.dispatch(
-                "mark_memory_relevant", {"memory_uuid": "abc12345-uuid"}
+                "mark_memory_relevant", {"memory_uuid": "abc12345"}
             )
         assert "marked as persona-relevant" in result
 
     @pytest.mark.asyncio
     async def test_mark_memory_irrelevant_dispatches(self, executor: DirectToolExecutor):
+        full_uuid = "abc12345-0000-4000-8000-000000000000"
         with (
+            patch(
+                "app.services.memory.memory_utils.resolve_uuid_prefix",
+                new_callable=AsyncMock,
+                return_value=full_uuid,
+            ),
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
                 new_callable=AsyncMock,
@@ -253,7 +265,7 @@ class TestAllPersonaToolsDispatch:
             ),
         ):
             result = await executor.dispatch(
-                "mark_memory_irrelevant", {"memory_uuid": "abc12345-uuid"}
+                "mark_memory_irrelevant", {"memory_uuid": "abc12345"}
             )
         assert "Removed persona-relevant" in result
 

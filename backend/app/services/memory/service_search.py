@@ -26,9 +26,10 @@ async def semantic_search(
     query: str,
     limit: int,
     min_score: float,
+    category: str | None = None,
 ) -> list[MemorySearchResult]:
-    """Search memory for relevant episodes using semantic/vector search."""
-    return await search_memory(group_id, scope, query, limit, min_score)
+    """Hybrid search: semantic + text keyword matching."""
+    return await search_memory(group_id, scope, query, limit, min_score, category)
 
 
 async def text_search(
