@@ -112,7 +112,6 @@ export type {
 } from "./api/project-permissions";
 export {
   fetchProjectPermissions,
-  fetchProjectPermission,
   updateProjectPermission,
   fetchExecutionPermission,
 } from "./api/project-permissions";
@@ -124,7 +123,6 @@ export type {
   BudgetSettingsUpdate,
 } from "./api/budgets";
 export {
-  fetchProjectBudget,
   fetchAllProjectBudgets,
   updateBudgetSettings,
 } from "./api/budgets";

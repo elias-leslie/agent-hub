@@ -24,24 +24,36 @@ logger = logging.getLogger(__name__)
 class _CompletionCtx:
     """Groups completion call context to reduce argument passing."""
 
-    db: AsyncSession; session: Any; session_id: str; is_new_session: bool  # noqa: E702
-    messages_dict: list[dict[str, Any]]; user_messages_for_db: list[MessageInput]  # noqa: E702
-    model: str; temperature: float; provider: str; project_id: str  # noqa: E702
+    db: AsyncSession
+    session: Any
+    session_id: str
+    is_new_session: bool
+    messages_dict: list[dict[str, Any]]
+    user_messages_for_db: list[MessageInput]
+    model: str
+    temperature: float
+    provider: str
+    project_id: str
     tools: list[dict[str, Any]] | None = None
     working_dir: str | None = None
     permission_config: dict[str, Any] | None = None
     use_memory: bool = False
     memory_group_id: str | None = None
-    task_type: str | None = None; phase: str | None = None  # noqa: E702
+    task_type: str | None = None
+    phase: str | None = None
     memory_config: dict[str, Any] | None = None
-    current_branch: str | None = None; agent_slug: str | None = None  # noqa: E702
+    current_branch: str | None = None
+    agent_slug: str | None = None
     skip_cache: bool = False
     progress_callback: Callable[[AgentProgress], Any] | None = None
-    max_turns: int = 1; execute_tools: bool = False  # noqa: E702
-    enable_programmatic_tools: bool = False; defer_tool_loading: bool = False  # noqa: E702
+    max_turns: int = 1
+    execute_tools: bool = False
+    enable_programmatic_tools: bool = False
+    defer_tool_loading: bool = False
     enable_caching: bool = True
     cache_ttl: str = "ephemeral"
-    thinking_level: str | None = None; container_id: str | None = None  # noqa: E702
+    thinking_level: str | None = None
+    container_id: str | None = None
     response_format: dict[str, Any] | None = None
 
 

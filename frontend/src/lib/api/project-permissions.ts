@@ -39,16 +39,6 @@ export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
   return res.json();
 }
 
-export async function fetchProjectPermission(
-  projectId: string
-): Promise<ProjectPermission> {
-  const res = await fetchApi(
-    buildApiUrl(`/api/projects/${projectId}/permissions`)
-  );
-  if (!res.ok) throw new Error(`Failed to fetch permission for ${projectId}`);
-  return res.json();
-}
-
 export async function updateProjectPermission(
   projectId: string,
   update: ProjectPermissionUpdate
