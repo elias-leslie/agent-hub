@@ -81,3 +81,6 @@ tasks/continuation/
 # Generated strategy outputs
 backend/*_strategy.py
 backend/*_strategy.json
+
+# Benchmark/temp output
+backend/.tmp/
