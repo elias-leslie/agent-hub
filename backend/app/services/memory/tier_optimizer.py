@@ -37,7 +37,8 @@ HELPFUL_COUNT_THRESHOLD = 5
 DEMOTION_THRESHOLD = 0.15
 PROMOTION_THRESHOLD = 0.70
 
-_TierFn = Callable[[str], str | None]; _ApplyFn = Callable[[str, str, str], Coroutine[None, None, bool]]  # noqa: E702
+_TierFn = Callable[[str], str | None]
+_ApplyFn = Callable[[str, str, str], Coroutine[None, None, bool]]
 
 
 @dataclass
@@ -56,8 +57,12 @@ class TierCandidate:
 
 
 class _OptResult(TypedDict):
-    demotions: int; promotions: int; self_heals: int; errors: int  # noqa: E702
-    details: list[dict[str, object]]; lifecycle_update: dict[str, object]  # noqa: E702
+    demotions: int
+    promotions: int
+    self_heals: int
+    errors: int
+    details: list[dict[str, object]]
+    lifecycle_update: dict[str, object]
 
 
 async def _apply_tier_changes(

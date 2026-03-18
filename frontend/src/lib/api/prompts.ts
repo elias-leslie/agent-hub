@@ -143,13 +143,6 @@ export async function deletePrompt(slug: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete prompt");
 }
 
-export async function fetchRoles(): Promise<string[]> {
-  const res = await fetchApi("/api/prompts/roles");
-  if (!res.ok) throw new Error("Failed to fetch roles");
-  const data = await res.json();
-  return data.roles;
-}
-
 export async function fetchAgentPrompts(
   agentSlug: string
 ): Promise<AgentPromptAssignment[]> {

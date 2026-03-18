@@ -26,16 +26,6 @@ export interface BudgetSettingsUpdate {
   budget_alert_threshold?: number | null;
 }
 
-export async function fetchProjectBudget(
-  projectId: string
-): Promise<ProjectBudget> {
-  const res = await fetchApi(
-    buildApiUrl(`/api/projects/${projectId}/budget`)
-  );
-  if (!res.ok) throw new Error(`Failed to fetch budget for ${projectId}`);
-  return res.json();
-}
-
 export async function fetchAllProjectBudgets(): Promise<ProjectBudget[]> {
   const res = await fetchApi(buildApiUrl("/api/projects/budgets"));
   if (!res.ok) throw new Error("Failed to fetch project budgets");

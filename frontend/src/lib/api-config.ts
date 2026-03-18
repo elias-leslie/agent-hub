@@ -9,7 +9,7 @@
  * with Next.js server-side proxying to the backend. No cross-origin = no CORS.
  */
 
-const PORTS = { frontend: 3003, backend: 8003, summitflow: 8001 }
+const PORTS = { frontend: 3003, backend: 8003 }
 const PROD_DOMAIN = 'agent.summitflow.dev'
 
 /**
@@ -148,34 +148,3 @@ export async function fetchApi(url: string, options: RequestInit = {}): Promise<
   return fetch(url, { ...options, headers })
 }
 
-/**
- * Get the SummitFlow API base URL (external service).
- * Used for cross-project features like project list fetching.
- *
- * Uses same-origin routing via Next.js rewrites (/summitflow-api/* -> localhost:8001/api/*)
- * to avoid CORS issues with CF Access protected environments.
- *
- * @returns Base URL for SummitFlow API or null if not available
- */
-export function getSummitFlowApiUrl(): string | null {
-  // Server-side: use env var or localhost fallback
-  if (typeof window === 'undefined') {
-    return process.env.SUMMITFLOW_API_URL || `http://localhost:${PORTS.summitflow}`
-  }
-
-  const host = window.location.hostname
-
-  // Development: localhost or 127.0.0.1
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return `http://localhost:${PORTS.summitflow}`
-  }
-
-  // Production: use same-origin routing via Next.js rewrites
-  // Calls to /summitflow-api/* are proxied to localhost:8001/api/*
-  if (host === PROD_DOMAIN) {
-    return '/summitflow-api'
-  }
-
-  // Non-local hosts (e.g. Docker): use same-origin
-  return '/summitflow-api'
-}

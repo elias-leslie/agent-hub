@@ -114,7 +114,8 @@ async def manage_tasks(
         return await _handle_resolve_conflict(bash_fn, task_id, project_id)
     if action in {"reconcile", "retire_lane"}:
         err = _require_task_id(action, task_id)
-        if err: return err  # noqa: E701
+        if err:
+            return err
         handler = _reconcile_task_lane if action == "reconcile" else _retire_task_lane
         return await handler(bash_fn, task_id, project_id)
     if action in _SIMPLE_TASK_ACTIONS:
