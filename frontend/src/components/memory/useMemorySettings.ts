@@ -5,13 +5,13 @@ import {
   getBudgetUsage,
   getLLMConfig,
   type MemorySettings,
-  type BudgetUsage,
+  type MemoryBudgetUsage,
   type LLMConfig,
 } from "@/lib/api/memory-settings";
 
 export function useMemorySettings(isOpen: boolean, onClose: () => void) {
   const [settings, setSettings] = useState<MemorySettings | null>(null);
-  const [usage, setUsage] = useState<BudgetUsage | null>(null);
+  const [usage, setUsage] = useState<MemoryBudgetUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

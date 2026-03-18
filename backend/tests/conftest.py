@@ -64,7 +64,6 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from httpx import Response  # noqa: E402
 
-from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -287,29 +286,6 @@ def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None]:
         yield
 
 
-# Reusable mock fixtures for adapters
-@pytest.fixture
-def mock_claude_response() -> Any:
-    """Factory for creating mock Claude completion results."""
-    from app.adapters.base import CompletionResult
-
-    def _create(
-        content: str = "Mocked response",
-        model: str = CLAUDE_SONNET,
-        input_tokens: int = 10,
-        output_tokens: int = 5,
-    ) -> CompletionResult:
-        return CompletionResult(
-            content=content,
-            model=model,
-            provider="claude",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            finish_reason="end_turn",
-        )
-
-    return _create
-
 
 def create_mock_db_session() -> AsyncMock:
     """Create a mock database session with sensible defaults.
@@ -376,24 +352,3 @@ def mock_db_session() -> Generator[AsyncMock]:
     app.dependency_overrides[get_db] = _null_db
 
 
-@pytest.fixture
-def mock_gemini_response() -> Any:
-    """Factory for creating mock Gemini completion results."""
-    from app.adapters.base import CompletionResult
-
-    def _create(
-        content: str = "Mocked Gemini response",
-        model: str = GEMINI_FLASH,
-        input_tokens: int = 8,
-        output_tokens: int = 4,
-    ) -> CompletionResult:
-        return CompletionResult(
-            content=content,
-            model=model,
-            provider="gemini",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            finish_reason="STOP",
-        )
-
-    return _create

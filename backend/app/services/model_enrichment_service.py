@@ -44,13 +44,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# External data source URLs (re-exported for backwards compatibility)
-MODELS_DEV_URL = "https://models.dev/api.json"
-BENCHMARKS_URL = "https://cdn.jsdelivr.net/gh/arimxyer/models@main/data/benchmarks.json"
-BFCL_URL = "https://raw.githubusercontent.com/HuanzhiMao/BFCL-Result/main/2025-12-16/score/data_overall.csv"
-LIVEBENCH_URL = "https://raw.githubusercontent.com/LiveBench/livebench.github.io/main/public/table_2026_01_08.csv"
-
-_HTTP_TIMEOUT = 30.0
 _ARIMXYER_INDEX_SCALE = 57.0
 _LIVEBENCH_REASONING_TASKS = [
     "zebra_puzzle", "spatial", "connections", "consecutive_events",
