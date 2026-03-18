@@ -143,7 +143,12 @@ def log_tool_audit(
         logger.debug("Could not schedule telemetry task (event loop closed)")
 
 
-async def _track_citations(session_id: str, accumulated_content: str) -> None:
+async def _track_citations(
+    session_id: str,
+    accumulated_content: str,
+    agent_id: str | None = None,
+    model_used: str | None = None,
+) -> None:
     """Track inline tags (feedback, summaries, citations) in streaming content."""
     if not accumulated_content:
         return
@@ -184,6 +189,17 @@ async def _track_citations(session_id: str, accumulated_content: str) -> None:
             from app.services.memory.session_analysis import analyze_session
 
             await analyze_session(session_id, citation_prefixes=prefixes)
+
+            # Also persist memory_cite session events (parity with non-streaming path)
+            from app.db import async_session
+
+            from ._citation_helpers import _resolve_cited_uuids, _store_cite_event
+
+            cited_uuids = await _resolve_cited_uuids(accumulated_content, None)
+            if cited_uuids:
+                async with async_session() as db:
+                    await _store_cite_event(db, session_id, cited_uuids, agent_id, model_used)
+                    await db.commit()
     except Exception as exc:
         logger.warning("Streaming citation tracking failed: %s", exc)
 
@@ -205,7 +221,7 @@ async def _persist_completion(
         agent_used=ctx.agent_used,
         stream_start=ctx.stream_start,
     )
-    await _track_citations(ctx.session_id, accumulated_content)
+    await _track_citations(ctx.session_id, accumulated_content, ctx.agent_used, ctx.model_used)
     if ctx.is_new_session and ctx.is_one_shot:
         await close_one_shot_session(ctx.session_id)
 
