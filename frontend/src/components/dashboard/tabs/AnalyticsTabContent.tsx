@@ -1,6 +1,6 @@
 import { Layers, BarChart3, Activity } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { formatCurrency, formatNumber, formatLatency } from "@/lib/formatters";
+import { formatCurrency, formatNumber, formatLatency, formatModelName } from "@/lib/formatters";
 import type { CostAggregationResponse } from "@/lib/api";
 import type { DashboardStatsResponse } from "@/lib/api/dashboard";
 import { LatencyDistributionChart } from "./LatencyDistributionChart";
@@ -37,13 +37,13 @@ export function AnalyticsTabContent({
   })) || [];
 
   const barData = costsByModel?.aggregations.slice(0, 5).map((agg) => ({
-    model: agg.group_key.replace("claude-", "").replace("gemini-", "g-").slice(0, 10),
+    model: formatModelName(agg.group_key, 10),
     input: agg.input_tokens / 1000,
     output: agg.output_tokens / 1000,
   })) || [];
 
   const modelBreakdown = dashboardStats?.by_model?.slice(0, 10).map((m) => ({
-    model: m.model.replace("claude-", "").replace("gemini-", "g-").replace("minimax/", "").slice(0, 14),
+    model: formatModelName(m.model),
     requests: m.request_count,
     latency: m.avg_latency_ms,
   })) || [];
