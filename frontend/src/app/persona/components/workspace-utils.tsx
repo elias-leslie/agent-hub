@@ -103,17 +103,17 @@ export function humanizeTaskContextText(value: string): string {
     }
     if (line.startsWith("TITLE:")) { prettified.push(`Title: ${line.slice(6).trim()}`); continue; }
     if (line.startsWith("DESCRIPTION:")) { prettified.push(`Description: ${line.slice(12).trim()}`); continue; }
-    if (line.startsWith("OBJECTIVE:")) { prettified.push(`Objective: ${line.slice(10).trim()}`); continue; }
-    if (line.startsWith("SPIRIT_ANTI:")) { prettified.push(`Avoid: ${line.slice(12).trim()}`); continue; }
+    if (line.startsWith("OBJECTIVE:")) { prettified.push(`Description: ${line.slice(10).trim()}`); continue; }
+    if (line.startsWith("SPIRIT_ANTI:")) { continue; }  // Removed field
     if (line.startsWith("WORKFLOW:")) { prettified.push(`Workflow: ${line.slice(9).trim().replaceAll("|", " \u00b7 ")}`); continue; }
-    if (line.startsWith("CONSTRAINTS")) { const [, content = ""] = line.split(":", 2); prettified.push(`Constraints: ${content.replaceAll(" | ", "; ").trim()}`); continue; }
+    if (line.startsWith("CONSTRAINTS")) { continue; }  // Removed field
     if (line.startsWith("DONE_WHEN")) { const [, content = ""] = line.split(":", 2); prettified.push(`Done when: ${content.replaceAll(" | ", "; ").trim()}`); continue; }
     if (line.startsWith("COMPLETE_READY:")) { prettified.push(`Ready gates: ${line.slice(15).trim().replaceAll("|", " \u00b7 ")}`); continue; }
     if (line.startsWith("SYNC_SKIPS:")) { prettified.push(`Sync skips: ${line.slice(11).trim()}`); continue; }
     if (line.startsWith("LANE:")) { prettified.push(`Lane: ${line.slice(5).trim().replaceAll("|", " \u00b7 ")}`); continue; }
     if (line.startsWith("SPECIALISTS:")) { prettified.push(`Specialists: ${line.slice(12).trim().replaceAll("|", " \u00b7 ")}`); continue; }
-    if (line.startsWith("DECISIONS[")) { prettified.push("Decisions:"); continue; }
-    if (/^d\d+:/i.test(line)) { prettified.push(`- ${line.replace(/^d\d+:/i, "").replace("\u2192", " -> ").trim()}`); continue; }
+    if (line.startsWith("DECISIONS[")) { continue; }  // Removed field
+    if (/^d\d+:/i.test(line)) { continue; }  // Removed field (decision items)
     if (line.startsWith("SUBTASKS[")) { const [, content = ""] = line.split(":", 2); prettified.push(`Subtasks: ${content.trim()}`); continue; }
     if (/^\d+(\.\d+)?\s+_+/.test(line)) { prettified.push(line.replace(/_+/g, "").replace(/\s+/g, " ").trim()); continue; }
     prettified.push(line);

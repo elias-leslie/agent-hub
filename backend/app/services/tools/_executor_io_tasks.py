@@ -24,25 +24,23 @@ from app.services.tools._tool_constants import st_cmd as _st_cmd  # noqa: E402
 
 def _build_plan_json(
     title: str,
-    objective: str | None,
     description: str | None,
-    spirit_anti: str | None,
     done_when: list[str] | None,
     labels: str | None,
     complexity: str | None,
     subtasks: list[dict[str, object]] | None = None,
+    # Deprecated params — accepted but ignored for backwards compatibility
+    objective: str | None = None,
+    spirit_anti: str | None = None,
 ) -> str:
     """Write a plan JSON to a temp file and return its path."""
     plan: dict[str, object] = {
         "title": title,
-        "objective": objective or title,
         "complexity": complexity or "STANDARD",
         "autonomous": True,
     }
     if description:
         plan["description"] = description
-    if spirit_anti:
-        plan["spirit_anti"] = spirit_anti
     if done_when:
         plan["done_when"] = done_when
     if labels:
@@ -65,16 +63,17 @@ async def _handle_create(
     task_type: str,
     labels: str | None,
     project_id: str | None,
-    objective: str | None,
-    spirit_anti: str | None,
     done_when: list[str] | None,
     complexity: str | None,
     subtasks: list[dict[str, object]] | None = None,
+    # Deprecated params — accepted but ignored for backwards compatibility
+    objective: str | None = None,
+    spirit_anti: str | None = None,
 ) -> str:
     """Handle task creation — plan-based or basic."""
-    if objective or done_when or subtasks:
+    if done_when or subtasks:
         tmpfile = _build_plan_json(
-            title, objective, description, spirit_anti, done_when, labels, complexity,
+            title, description, done_when, labels, complexity,
             subtasks=subtasks,
         )
         cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)

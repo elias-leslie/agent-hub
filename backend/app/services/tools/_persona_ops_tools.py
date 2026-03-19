@@ -67,14 +67,6 @@ MANAGE_TASKS_TOOL = Tool(
                 "type": "string",
                 "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status, cleanup_worktrees, salvage_orphan, and smart_sync, not used by cleanup_all_safe, and recommended for finalize_merge",
             },
-            "objective": {
-                "type": "string",
-                "description": "Task objective / spirit.why (for create with intent)",
-            },
-            "spirit_anti": {
-                "type": "string",
-                "description": "What NOT to do (for create with intent)",
-            },
             "done_when": {
                 "type": "array",
                 "items": {"type": "string"},
