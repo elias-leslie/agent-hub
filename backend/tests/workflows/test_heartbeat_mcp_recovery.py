@@ -227,7 +227,7 @@ class TestDispatchAgentFireAndForget:
                 return_value=mock_resolved,
             ),
             patch(
-                "app.services.tools._executor_consultation._prepare_specialist_dispatch",
+                "app.services.tools._executor_consultation.prepare_specialist_dispatch",
                 new_callable=AsyncMock,
                 return_value=fake_plan,
             ),

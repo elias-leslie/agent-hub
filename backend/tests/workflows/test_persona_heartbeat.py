@@ -194,7 +194,7 @@ class TestPersonaHeartbeatTask:
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
-        assert result["error"] == _build_runtime_warning(CODEX_GPT_5_1_MINI)
+        assert result["error"] == f"runtime_incompatible: {_build_runtime_warning(CODEX_GPT_5_1_MINI)}"
         mock_set_running.assert_not_awaited()
         mock_skip.assert_awaited_once()
 
@@ -243,7 +243,7 @@ class TestPersonaHeartbeatTask:
             result = await _run_persona_heartbeat(HeartbeatInput(manual=True), ctx)
 
         assert result["status"] == "skipped"
-        assert result["error"] == _build_runtime_warning("claude/unknown-no-tools")
+        assert result["error"] == f"runtime_incompatible: {_build_runtime_warning('claude/unknown-no-tools')}"
         mock_set_running.assert_not_awaited()
         mock_execute.assert_not_awaited()
         mock_skip.assert_awaited_once()

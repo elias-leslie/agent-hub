@@ -31,7 +31,7 @@ class MinimaxAdapter(OpenAICompatibleAdapter):
         Only connection errors and auth failures indicate the service is down.
         """
         try:
-            self._refresh_credentials()
+            await self._refresh_credentials()
             await self._client.models.list()
             return True
         except Exception as e:
