@@ -1,7 +1,8 @@
 import type { NextConfig } from 'next'
+import { PORTS } from './src/lib/api-config'
 
 const AGENT_HUB_API_URL =
-  process.env.AGENT_HUB_API_URL || 'http://localhost:8003'
+  process.env.AGENT_HUB_API_URL || `http://localhost:${PORTS.backend}`
 const SUMMITFLOW_API_URL =
   process.env.SUMMITFLOW_API_URL || 'http://localhost:8001'
 

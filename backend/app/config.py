@@ -11,6 +11,16 @@ from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# ---------------------------------------------------------------------------
+# Port allocation — single source of truth for Agent Hub.
+# ---------------------------------------------------------------------------
+AGENT_HUB_BACKEND_PORT = 8003
+AGENT_HUB_FRONTEND_PORT = 3003
+# Peer frontend ports allowed for CORS
+SUMMITFLOW_FRONTEND_PORT = 3001
+PORTFOLIO_FRONTEND_PORT = 3000
+REDIS_PORT = 6379
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
@@ -26,7 +36,7 @@ class Settings(BaseSettings):
 
     # Server
     host: str = "127.0.0.1"
-    port: int = 8003
+    port: int = AGENT_HUB_BACKEND_PORT
     debug: bool = False
     log_level: str = "INFO"
 
@@ -42,7 +52,7 @@ class Settings(BaseSettings):
         return v
 
     # Redis
-    agent_hub_redis_url: str = "redis://localhost:6379/2"
+    agent_hub_redis_url: str = f"redis://localhost:{REDIS_PORT}/2"
 
     # Hatchet
     hatchet_client_token: str = ""
@@ -55,9 +65,9 @@ class Settings(BaseSettings):
 
     # CORS (comma-separated list via CORS_ORIGINS env var)
     cors_origins: list[str] = [
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:3003",
+        f"http://localhost:{PORTFOLIO_FRONTEND_PORT}",
+        f"http://localhost:{SUMMITFLOW_FRONTEND_PORT}",
+        f"http://localhost:{AGENT_HUB_FRONTEND_PORT}",
         "https://agent.summitflow.dev",
         "https://dev.summitflow.dev",
         "https://port.summitflow.dev",
