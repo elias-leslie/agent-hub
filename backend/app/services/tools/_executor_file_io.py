@@ -6,6 +6,7 @@ and proper error reporting.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 
@@ -38,7 +39,7 @@ async def read_file(
     if file_path.is_dir():
         return f"Error: Path is a directory: {path}"
 
-    try:
+    def _read() -> str:
         with open(file_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
@@ -57,6 +58,8 @@ async def read_file(
 
         return result or "(empty file)"
 
+    try:
+        return await asyncio.to_thread(_read)
     except Exception as e:
         return f"Error reading file: {e}"
 
@@ -73,11 +76,14 @@ async def write_file(
     if not _is_path_allowed(file_path, allowed_root, extra_roots=(working_dir,)):
         return f"Error: Path outside allowed project root: {path}"
 
-    try:
+    def _write() -> str:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
         return f"Successfully wrote {len(content)} bytes to {path}"
+
+    try:
+        return await asyncio.to_thread(_write)
     except Exception as e:
         return f"Error writing file: {e}"
 

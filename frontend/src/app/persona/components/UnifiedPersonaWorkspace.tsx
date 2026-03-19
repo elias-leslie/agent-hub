@@ -168,7 +168,7 @@ export function UnifiedPersonaWorkspace({
     toolsEnabled: true,
     apiConfig,
     loadInitialSession: false,
-  } as any);
+  });
 
   useEffect(() => {
     autoFollowRef.current = autoFollow;
