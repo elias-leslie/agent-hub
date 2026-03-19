@@ -29,6 +29,7 @@ from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryRevision
 from .model_enrichment import ModelEnrichment
+from .narration_tag import NarrationTag
 from .persona import Persona
 from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
@@ -66,6 +67,7 @@ __all__ = [
     "MemoryRevision",
     "MemorySettings",
     "ModelEnrichment",
+    "NarrationTag",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",

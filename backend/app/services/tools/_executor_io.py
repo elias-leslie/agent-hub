@@ -75,9 +75,10 @@ async def manage_tasks(
     task_id: str | None = None, title: str | None = None,
     description: str | None = None, priority: int = 2, task_type: str = "task",
     labels: str | None = None, project_id: str | None = None,
-    objective: str | None = None, spirit_anti: str | None = None,
     done_when: list[str] | None = None, complexity: str | None = None,
     subtasks: list[dict[str, object]] | None = None,
+    # Deprecated params — accepted but ignored for backwards compatibility
+    objective: str | None = None, spirit_anti: str | None = None,
 ) -> str:
     """Quick task operations via st CLI."""
     if action == "overview":
@@ -92,7 +93,7 @@ async def manage_tasks(
             return "Error: title required for create"
         return await _handle_create(
             bash_fn, title, description, priority, task_type,
-            labels, project_id, objective, spirit_anti, done_when, complexity,
+            labels, project_id, done_when, complexity,
             subtasks=subtasks,
         )
     if action == "dispatch":

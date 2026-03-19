@@ -21,6 +21,7 @@ from app.api.heartbeat import router as heartbeat_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
+from app.api.narration import router as narration_router
 from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.ownership import router as ownership_router
@@ -54,6 +55,7 @@ router.include_router(orchestration_router)  # Has its own prefix /orchestration
 router.include_router(memory_router)  # Has its own prefix /memory and tags
 router.include_router(agents_router)  # Has its own prefix /agents and tags
 router.include_router(models_router, tags=["models"])
+router.include_router(narration_router)  # Has its own prefix /narration and tags
 router.include_router(persona_router)  # Has its own prefix /persona and tags
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(prompts_router)  # Has its own prefix /prompts and tags

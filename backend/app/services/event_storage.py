@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent, SessionEventType
+from app.services.narration_extraction import extract_narration_from_event
 from app.services.session_live_activity import update_live_activity_for_event
 
 logger = logging.getLogger(__name__)
@@ -131,6 +132,20 @@ async def store_event(
         touched_at = datetime.now(UTC)
         parent_session.updated_at = touched_at
         parent_session.last_activity_at = touched_at
+
+    # Extract narration tags from assistant messages
+    if event_type == SessionEventType.ASSISTANT_MESSAGE and content:
+        try:
+            await extract_narration_from_event(
+                db,
+                session_id=session_id,
+                event_type=event_type,
+                content=content,
+                session=parent_session,
+            )
+        except Exception:
+            logger.debug("Failed to extract narration tags", exc_info=True)
+
     return event
 
 

@@ -161,15 +161,13 @@ def _make_manage_tasks_bound(bash_fn: Any, project_id: str | None) -> Any:
         task_type: str = "task",
         labels: str | None = None,
         project_id: str | None = bound_project_id,
-        objective: str | None = None,
-        spirit_anti: str | None = None,
         done_when: list[str] | None = None,
         complexity: str | None = None,
         subtasks: list[dict[str, object]] | None = None,
     ) -> str:
         return await manage_tasks(
             bash_fn, action, task_id, title, description, priority, task_type, labels,
-            project_id, objective, spirit_anti, done_when, complexity,
+            project_id, done_when=done_when, complexity=complexity,
             subtasks=subtasks,
         )
 
