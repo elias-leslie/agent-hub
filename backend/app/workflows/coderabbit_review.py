@@ -136,7 +136,7 @@ def _run_review(project_name: str, project_path: Path) -> tuple[str, int]:
 
 async def run_all_reviews() -> ReviewResult:
     """Run CodeRabbit reviews across all projects sequentially."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     project_summaries: dict[str, str] = {}
     total_findings = 0

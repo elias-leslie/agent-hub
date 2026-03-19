@@ -45,7 +45,7 @@ class EventStream[T, R]:
 
     def __init__(self) -> None:
         self._queue: asyncio.Queue[T | None] = asyncio.Queue()
-        self._result_future: asyncio.Future[R] = asyncio.get_event_loop().create_future()
+        self._result_future: asyncio.Future[R] = asyncio.get_running_loop().create_future()
         self._ended = False
 
     async def push(self, event: T) -> None:
@@ -138,7 +138,7 @@ class EventStream[T, R]:
         """
         stream: EventStream[T, R] = cls.__new__(cls)
         stream._queue = asyncio.Queue()
-        stream._result_future = asyncio.get_event_loop().create_future()
+        stream._result_future = asyncio.get_running_loop().create_future()
         stream._ended = False
 
         async def _pump() -> None:

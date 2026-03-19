@@ -106,7 +106,7 @@ async def run_callback_flow(
 
     Raises RuntimeError if port is in use, TimeoutError if no callback received.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     callback_future: asyncio.Future[tuple[str, str]] = loop.create_future()
 
     server = await start_callback_server(port, path, provider, callback_future)
