@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -20,9 +21,6 @@ from ._benchmark_config import (
     memory_state_descriptor,
     run_config_fingerprint,
 )
-
-
-import random
 
 
 def _round_metric(value: float | None, digits: int = 1) -> float | None:
