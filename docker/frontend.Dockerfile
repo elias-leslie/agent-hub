@@ -57,22 +57,21 @@ RUN node -e "\
   pkg.pnpm.overrides = { ...pkg.pnpm?.overrides, '@agent-hub/passport-client': 'file:/tmp/workspace-packages/agent-hub-passport-client-0.1.0.tgz' };\
   fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));"
 
-# Install dependencies in non-interactive mode for Docker builds
-RUN CI=true pnpm install --no-frozen-lockfile
+# Install dependencies and clean temp files in same layer
+RUN CI=true pnpm install --no-frozen-lockfile && \
+    rm -rf /tmp/workspace-packages
 
-# Build with standalone output
+# Build with standalone output, then prune pnpm store
 ENV NEXT_TELEMETRY_DISABLED=1
-# API URLs for Next.js rewrites (baked at build time)
 ARG AGENT_HUB_API_URL=http://agent-hub-api:8003
 ARG SUMMITFLOW_API_URL=http://summitflow-api:8001
 ENV AGENT_HUB_API_URL=${AGENT_HUB_API_URL}
 ENV SUMMITFLOW_API_URL=${SUMMITFLOW_API_URL}
-RUN pnpm build
+RUN pnpm build && pnpm store prune
 
 # ── Stage 2: Runner ──────────────────────────────────────────────
 FROM node:20-slim
 
-# Create non-root user for runtime
 RUN useradd -m -s /bin/bash appuser
 
 WORKDIR /app
@@ -82,12 +81,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3003
 ENV HOSTNAME=0.0.0.0
 
-# Copy standalone output
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-
-RUN chown -R appuser:appuser /app
+COPY --chown=appuser:appuser --from=builder /app/.next/standalone ./
+COPY --chown=appuser:appuser --from=builder /app/.next/static ./.next/static
+COPY --chown=appuser:appuser --from=builder /app/public ./public
 
 USER appuser
 
