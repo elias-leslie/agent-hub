@@ -1,6 +1,6 @@
 import { MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatRelativeTime } from "@/lib/formatters";
+import { formatRelativeTime, formatModelName } from "@/lib/formatters";
 import type { SessionListItem } from "@/lib/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export function SessionsTabContent({ sessions, isLoading }: { sessions: SessionL
                   {session.project_id}
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">
-                  {session.model.replace("claude-", "").replace("gemini-", "g-").slice(0, 12)}
+                  {formatModelName(session.model, 12)}
                 </span>
               </div>
               <div className="text-[11px] text-slate-400">

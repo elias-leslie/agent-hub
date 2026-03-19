@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Timer } from "lucide-react";
 import { fetchModelLatencyStats, type ModelLatencyStats } from "@/lib/api/dashboard";
+import { formatModelName } from "@/lib/formatters";
 
 export function LatencyDistributionChart() {
   const [stats, setStats] = useState<ModelLatencyStats[]>([]);
@@ -32,7 +33,7 @@ export function LatencyDistributionChart() {
   );
 
   const chartData = stats.slice(0, 10).map((s) => ({
-    model: s.model.replace("claude-", "c-").replace("gemini-", "g-").replace("models/", "").slice(0, 16),
+    model: formatModelName(s.model, 16),
     p50: Math.round(s.p50_ms),
     p95: Math.round(s.p95_ms),
     p99: Math.round(s.p99_ms),

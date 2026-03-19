@@ -26,6 +26,15 @@ export function formatTokens(tokens: number): string {
   return tokens.toString();
 }
 
+export function formatModelName(model: string, maxLength: number = 14): string {
+  return model
+    .replace("claude-", "")
+    .replace("gemini-", "g-")
+    .replace("minimax/", "")
+    .replace("models/", "")
+    .slice(0, maxLength);
+}
+
 export function formatRelativeTime(dateStr: string | Date | null): string {
   if (!dateStr) return "Never";
   const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
