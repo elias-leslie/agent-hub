@@ -9,7 +9,7 @@
  * with Next.js server-side proxying to the backend. No cross-origin = no CORS.
  */
 
-const PORTS = { frontend: 3003, backend: 8003 }
+export const PORTS = { frontend: 3003, backend: 8003 }
 const PROD_DOMAIN = 'agent.summitflow.dev'
 
 /**

@@ -4,11 +4,13 @@ from pathlib import Path
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from app.config import AGENT_HUB_BACKEND_PORT
+
 # Initialize FastMCP server
 mcp = FastMCP("agent-hub")
 
 # Configuration
-AGENT_HUB_API = os.getenv("AGENT_HUB_API", "http://localhost:8003/api")
+AGENT_HUB_API = os.getenv("AGENT_HUB_API", f"http://localhost:{AGENT_HUB_BACKEND_PORT}/api")
 DEFAULT_TIMEOUT = 30.0
 
 
