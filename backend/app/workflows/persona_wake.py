@@ -36,6 +36,7 @@ class WakeInput(BaseModel):
     parent_session_id: str | None = None
     current_branch: str | None = None
     working_dir: str | None = None
+    task_id: str | None = None
 
 
 class WakeResult(BaseModel):
@@ -56,8 +57,10 @@ async def _build_wake_prompt(prompt: str) -> str:
     return f"{wake_guidance}\nTask:\n{prompt}" if prompt else wake_guidance.strip()
 
 
-def _wake_external_id(ctx: Context) -> str | None:
-    """Build a stable external_id so replayed Hatchet step runs are idempotent."""
+def _wake_external_id(ctx: Context, task_id: str | None = None) -> str | None:
+    """Build external_id: prefer task_id for narration linkage, fall back to step_run_id."""
+    if task_id:
+        return task_id
     return f"wake-step:{ctx.step_run_id}" if getattr(ctx, "step_run_id", None) else None
 
 
@@ -108,7 +111,10 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             ).model_dump()
 
     memory_group = f"{input.project_id}:wake:{input.event_type}"
-    external_id = _wake_external_id(ctx)
+    external_id = _wake_external_id(ctx, task_id=input.task_id)
+
+    # Hatchet step-run dedup ID (only used for replay detection, not as external_id)
+    step_dedup_id = f"wake-step:{ctx.step_run_id}" if getattr(ctx, "step_run_id", None) else None
 
     # Resolve max_turns: explicit > persona limit > 200 fallback
     from app.services._persona_crud import get_persona_limit
@@ -117,7 +123,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
     async with async_session() as db:
         existing = await _find_existing_wake_session(
             db,
-            external_id=external_id,
+            external_id=step_dedup_id,
             project_id=input.project_id,
             agent_slug=input.agent_slug,
         )
@@ -206,6 +212,7 @@ def dispatch_wake(
     parent_session_id: str | None = None,
     current_branch: str | None = None,
     working_dir: str | None = None,
+    task_id: str | None = None,
 ) -> None:
     """Dispatch a wake workflow via Hatchet (fire-and-forget)."""
     wake_input = WakeInput(
@@ -221,6 +228,7 @@ def dispatch_wake(
         parent_session_id=parent_session_id,
         current_branch=current_branch,
         working_dir=working_dir,
+        task_id=task_id,
     )
     agent_wake_task.run_no_wait(wake_input)
     logger.info("Dispatched wake workflow for %s/%s", agent_slug, event_type)
