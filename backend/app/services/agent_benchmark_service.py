@@ -19,8 +19,10 @@ from app.models import AgentBenchmarkExperiment, AgentBenchmarkRun
 # Re-exports (preserve public API for all importers)
 # ---------------------------------------------------------------------------
 from ._benchmark_config import capture_benchmark_config_snapshot  # noqa: F401
-from ._benchmark_dashboard import get_agent_benchmark_dashboard  # noqa: F401
-from ._benchmark_dashboard import summarize_benchmark_experiment  # noqa: F401
+from ._benchmark_dashboard import (
+    get_agent_benchmark_dashboard,  # noqa: F401
+    summarize_benchmark_experiment,
+)
 from ._benchmark_persistence import persist_benchmark_payload  # noqa: F401
 from ._benchmark_persistence import (  # noqa: F401
     should_update_regression_clusters as _should_update_regression_clusters,
