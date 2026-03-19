@@ -180,6 +180,7 @@ class TestGeminiCredentialResolution:
 
         cm = CredentialManager.get_instance()
         cm._cache["gemini:api_key"] = "from-cm"
+        cm._multi_cache["gemini:api_key"] = ["from-cm"]
         cm._initialized = True
 
         try:
@@ -195,6 +196,7 @@ class TestGeminiCredentialResolution:
 
         cm = CredentialManager.get_instance()
         cm._cache["gemini:api_key"] = "from-cm"
+        cm._multi_cache["gemini:api_key"] = ["from-cm"]
         cm._initialized = True
 
         try:

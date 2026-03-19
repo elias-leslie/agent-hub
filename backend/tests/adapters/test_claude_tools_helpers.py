@@ -491,7 +491,7 @@ async def test_stream_sdk_messages_closes_sdk_iterator_on_producer_task(
 
     iterator = iterator_holder["iterator"]
     assert iterator.owner_task is not None
-    assert iterator.owner_task is not asyncio.current_task()
+    assert iterator.owner_task is asyncio.current_task()
     assert iterator.closed_by is iterator.owner_task
 
 

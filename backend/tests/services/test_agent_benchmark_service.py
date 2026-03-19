@@ -322,7 +322,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         yield mock_db
 
     with (
-        patch("app.services.agent_benchmark_service.async_session", _session),
+        patch("app.services._benchmark_config.async_session", _session),
         patch(
             "app.services.persona_document_prompt_service.get_persona_personality_document",
             new=AsyncMock(return_value=persona.personality),
@@ -332,7 +332,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
             new=AsyncMock(return_value=persona.user_context),
         ),
         patch(
-            "app.services.agent_benchmark_service.collect_runtime_prompt_sections",
+            "app.services._benchmark_config.collect_runtime_prompt_sections",
             new=AsyncMock(
                 return_value=[
                     SimpleNamespace(
@@ -351,7 +351,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
                 ]
             ),
         ),
-        patch("app.services.agent_benchmark_service._task_prompt_slugs", return_value=[]),
+        patch("app.services._benchmark_config._task_prompt_slugs", return_value=[]),
     ):
         snapshot = await capture_benchmark_config_snapshot("persona", task_type="heartbeat")
 

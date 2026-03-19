@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterable, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 from contextlib import suppress
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -404,7 +404,7 @@ async def _iterate_sdk_messages(
     prompt: str | Any,
     options: Any,
     provider_name: str,
-) -> AsyncIterator[tuple[Any, str | None]]:
+) -> AsyncGenerator[tuple[Any, str | None]]:
     """Core message-processing loop over the claude_agent_sdk query iterator."""
     session_id: str | None = None
     done_emitted = False
@@ -481,13 +481,16 @@ async def _stream_sdk_messages(
     to spin at 100 % CPU when the stream was cancelled.
     """
     async with _sdk_semaphore:
+        inner_iter = _iterate_sdk_messages(prompt, options, provider_name)
         try:
-            async for item in _iterate_sdk_messages(prompt, options, provider_name):
+            async for item in inner_iter:
                 yield item
         except Exception as e:
             error_msg = f"Claude tool error: {e}"
             logger.error(error_msg)
             yield (ErrorMessage(error=error_msg), None)
+        finally:
+            await inner_iter.aclose()
 
 
 def _build_tool_infra(
