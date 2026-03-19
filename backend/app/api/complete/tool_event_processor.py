@@ -31,6 +31,31 @@ def _process_text_block(block: Any, content_parts: list[str]) -> None:
         content_parts.append(text)
 
 
+async def _extract_narration_from_text(
+    text: str, db: AsyncSession, session_id: str,
+) -> None:
+    """Extract narration tags from intermediate text blocks during tool loops.
+
+    The normal narration pipeline only fires on stored assistant_message events,
+    but during multi-turn tool execution, text blocks are accumulated without
+    being stored as events. This extracts P tags inline so they aren't lost.
+    """
+    if "[[P:" not in text:
+        return
+    try:
+        from app.models import SessionEventType
+        from app.services.narration_extraction import extract_narration_from_event
+
+        await extract_narration_from_event(
+            db,
+            session_id=session_id,
+            event_type=SessionEventType.ASSISTANT_MESSAGE,
+            content=text,
+        )
+    except Exception:
+        logger.debug("Failed to extract narration from tool-loop text", exc_info=True)
+
+
 async def _process_thinking_block(
     block: Any,
     thinking_parts: list[str],
@@ -115,6 +140,9 @@ async def _process_assistant_event(
         block_type = getattr(block, "type", None)
         if block_type == "text":
             _process_text_block(block, content_parts)
+            text = getattr(block, "text", "")
+            if text and "[[P:" in text:
+                await _extract_narration_from_text(text, db, session_id)
         elif block_type == "thinking":
             await _process_thinking_block(
                 block, thinking_parts, db, session_id, model_used, agent_id,

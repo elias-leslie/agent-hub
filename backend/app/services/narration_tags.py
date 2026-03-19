@@ -10,7 +10,7 @@ import re
 from typing import NamedTuple
 
 NARRATION_TAG_PATTERN = re.compile(
-    r"\[\[P:(?P<tag_type>[a-z_]+):(?P<content>[^\]]+)\]\]"
+    r"\[\[P:(?P<tag_type>[a-z_]+):(?P<content>.+?)\]\]"
 )
 
 VALID_TAG_TYPES = frozenset(

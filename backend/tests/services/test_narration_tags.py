@@ -71,8 +71,16 @@ class TestParseNarrationTags:
         result = parse_narration_tags(text)
         assert result == []
 
-    def test_nested_brackets_not_matched(self) -> None:
+    def test_nested_brackets_matched(self) -> None:
         text = "[[P:started:content with [inner] brackets]]"
         result = parse_narration_tags(text)
-        # The ] in [inner] terminates the regex match — no valid tag extracted
-        assert len(result) == 0
+        assert len(result) == 1
+        assert result[0].content == "content with [inner] brackets"
+
+    def test_content_with_mandate_citations(self) -> None:
+        """P tags with [M:uuid] citations in content should parse correctly."""
+        text = "[[P:started:Reviewing tasks. Applied: [M:b901dcc9] [M:7c8fd20b]]]"
+        result = parse_narration_tags(text)
+        assert len(result) == 1
+        assert result[0].tag_type == "started"
+        assert "[M:b901dcc9]" in result[0].content
