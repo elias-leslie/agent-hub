@@ -22,6 +22,16 @@ class JennyHoningIteration:
     candidate_run_ids: list[str] | None = None
     experiment_key: str | None = None
     experiment_summary: dict[str, Any] | None = None
+    review_benchmark_id: str | None = None
+    review_top_model: str | None = None
+    review_top_score: float | None = None
+    review_failing_attempts: int | None = None
+    review_failure_clusters: list[dict[str, Any]] | None = None
+    review_persistent_failure_clusters: list[dict[str, Any]] | None = None
+    review_baseline_run_ids: list[str] | None = None
+    review_candidate_run_ids: list[str] | None = None
+    review_experiment_key: str | None = None
+    review_experiment_summary: dict[str, Any] | None = None
     rollback_applied: bool = False
     improvement_session_id: str | None = None
     improvement_tools: list[str] | None = None
@@ -41,6 +51,15 @@ class JennyMutableState:
     escalation_model_id: str | None
     temperature: float
     thinking_level: str | None
+    supervisor_primary_model_id: str | None = None
+    supervisor_fallback_models: list[str] = field(default_factory=list)
+    supervisor_escalation_model_id: str | None = None
+    supervisor_temperature: float | None = None
+    supervisor_thinking_level: str | None = None
+    completion_review_prompt: str | None = None
+    completion_review_prompt_revision_id: str | None = None
+    completion_review_rules: str | None = None
+    completion_review_rules_revision_id: str | None = None
 
 
 @dataclass
@@ -52,6 +71,9 @@ class _LoopState:
     previous_best_score: float | None = None
     previous_failing_attempts: int | None = None
     previous_clusters: list[dict[str, Any]] | None = None
+    previous_review_best_score: float | None = None
+    previous_review_failing_attempts: int | None = None
+    previous_review_clusters: list[dict[str, Any]] | None = None
 
     def to_result(self) -> dict[str, Any]:
         return {

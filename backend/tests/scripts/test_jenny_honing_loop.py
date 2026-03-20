@@ -8,6 +8,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from scripts.completion_review_benchmark_eval import (
+    CompletionReviewBenchmarkAttempt,
+    CompletionReviewBenchmarkRun,
+    summarize_completion_review_attempts,
+)
 from scripts.jenny_benchmark_eval import (
     JennyBenchmarkAttempt,
     JennyBenchmarkRun,
@@ -214,6 +219,55 @@ def _benchmark_run(benchmark_id: str, attempts: list[JennyBenchmarkAttempt]) -> 
     )
 
 
+def _review_passing_attempt(case_id: str) -> CompletionReviewBenchmarkAttempt:
+    return CompletionReviewBenchmarkAttempt(
+        model_id="claude-opus-4-6",
+        case_id=case_id,
+        run_number=1,
+        latency_ms=450,
+        composite_score=100.0,
+        correctness_score=1.0,
+        passed=True,
+        turns=1,
+        tool_calls_count=0,
+        total_tokens=40,
+    )
+
+
+def _review_failing_attempt(case_id: str) -> CompletionReviewBenchmarkAttempt:
+    return CompletionReviewBenchmarkAttempt(
+        model_id="claude-opus-4-6",
+        case_id=case_id,
+        run_number=1,
+        latency_ms=450,
+        composite_score=40.0,
+        correctness_score=0.4,
+        passed=False,
+        failure_kind="model",
+        failure_detail="wrong_review_decision",
+        turns=1,
+        tool_calls_count=0,
+        total_tokens=40,
+    )
+
+
+def _review_benchmark_run(
+    benchmark_id: str,
+    attempts: list[CompletionReviewBenchmarkAttempt],
+) -> CompletionReviewBenchmarkRun:
+    return CompletionReviewBenchmarkRun(
+        benchmark_id=benchmark_id,
+        project_id="agent-hub",
+        models=["claude-opus-4-6"],
+        case_ids=sorted({attempt.case_id for attempt in attempts}),
+        runs_per_case=1,
+        started_at="2026-03-11T00:00:00+00:00",
+        completed_at="2026-03-11T00:01:00+00:00",
+        attempts=attempts,
+        summaries=summarize_completion_review_attempts(attempts),
+    )
+
+
 @pytest.mark.asyncio
 async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() -> None:
     client = _FakeImprovementClient()
@@ -229,6 +283,8 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
             iteration=1,
             run=run,
             previous_clusters=None,
+            review_run=None,
+            previous_review_clusters=None,
             timeout_seconds=5.0,
             working_root=Path("/tmp/jenny-honing-test"),
         )
@@ -245,6 +301,34 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     assert client.kwargs is not None
     assert client.kwargs["use_memory"] is False
     assert client.kwargs["agent_slug"] == "persona"
+
+
+def test_build_honing_prompt_includes_completion_review_surface() -> None:
+    run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
+    review_run = _review_benchmark_run(
+        "review-1",
+        [_review_failing_attempt("review_recent_progress_patience")],
+    )
+
+    prompt = build_honing_prompt(
+        run,
+        iteration=2,
+        review_run=review_run,
+        previous_review_clusters=[
+            {
+                "case_id": "review_recent_progress_patience",
+                "failure_detail": "wrong_review_decision",
+                "count": 1,
+                "models": ["claude-opus-4-6"],
+                "avg_score": 40.0,
+            }
+        ],
+    )
+
+    assert "Completion-review benchmark ranking" in prompt
+    assert "Completion-review failure clusters" in prompt
+    assert "Persistent completion-review clusters from the previous iteration" in prompt
+    assert "completion-review-prompt" in prompt
 
 
 @pytest.mark.asyncio
@@ -278,7 +362,7 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
         ),
         patch(
             "scripts.jenny_honing._experiment.persist_benchmark_payload",
-            new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4"]),
+            new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
             "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
@@ -342,7 +426,7 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
         ),
         patch(
             "scripts.jenny_honing._experiment.persist_benchmark_payload",
-            new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4"]),
+            new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
             "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
@@ -374,3 +458,103 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
     assert result["honed"] is True
     assert result["iterations"][0]["rollback_applied"] is False
     mock_restore.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_honing_loop_rolls_back_when_completion_review_surface_regresses() -> None:
+    baseline_run = _benchmark_run("baseline-1", [_failing_attempt("session_patience_quiet")])
+    extra_baseline_run = _benchmark_run("baseline-2", [_failing_attempt("session_patience_quiet")])
+    candidate_run_1 = _benchmark_run("candidate-1", [_passing_attempt("session_patience_quiet")])
+    candidate_run_2 = _benchmark_run("candidate-2", [_passing_attempt("session_patience_quiet")])
+    review_baseline_run = _review_benchmark_run(
+        "review-baseline-1",
+        [_review_passing_attempt("review_recent_progress_patience")],
+    )
+    review_extra_baseline_run = _review_benchmark_run(
+        "review-baseline-2",
+        [_review_passing_attempt("review_recent_progress_patience")],
+    )
+    review_candidate_run_1 = _review_benchmark_run(
+        "review-candidate-1",
+        [_review_failing_attempt("review_recent_progress_patience")],
+    )
+    review_candidate_run_2 = _review_benchmark_run(
+        "review-candidate-2",
+        [_review_failing_attempt("review_recent_progress_patience")],
+    )
+
+    with (
+        patch("scripts.run_jenny_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
+        patch(
+            "scripts.run_jenny_honing_loop._resolve_client_id",
+            new=AsyncMock(return_value="client-1"),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment._capture_jenny_mutable_state",
+            new=AsyncMock(return_value=SimpleNamespace()),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment.run_benchmark",
+            new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment.run_completion_review_benchmark",
+            new=AsyncMock(
+                side_effect=[
+                    review_baseline_run,
+                    review_extra_baseline_run,
+                    review_candidate_run_1,
+                    review_candidate_run_2,
+                ]
+            ),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment._run_improvement_pass",
+            new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment.capture_benchmark_config_snapshot",
+            new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment.persist_benchmark_payload",
+            new=AsyncMock(return_value="run-id"),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
+            new=AsyncMock(
+                side_effect=[
+                    {"decision": "promote", "decision_reason": "candidate_outperforms_baseline"},
+                    {"decision": "rollback", "decision_reason": "completion_review_regression"},
+                ]
+            ),
+        ),
+        patch(
+            "scripts.jenny_honing._experiment._restore_jenny_mutable_state",
+            new=AsyncMock(),
+        ) as mock_restore,
+    ):
+        result = await run_honing_loop(
+            models=["codex/gpt-5.4"],
+            case_ids=["session_patience_quiet"],
+            runs_per_case=1,
+            reviewer_models=["claude-opus-4-6"],
+            reviewer_case_ids=["review_recent_progress_patience"],
+            reviewer_runs_per_case=1,
+            project_id="agent-hub",
+            working_root=Path("/tmp/jenny-honing-test"),
+            output_dir=Path("/tmp/jenny-honing-test/reports"),
+            seed=42,
+            timeout_seconds=5.0,
+            client_id="client-1",
+            use_memory=False,
+            benchmark_task_type="heartbeat",
+            max_iterations=1,
+            cohort_repetitions=2,
+            base_url="http://localhost:8003",
+            persist_results=True,
+        )
+
+    assert result["iterations"][0]["rollback_applied"] is True
+    assert result["iterations"][0]["review_experiment_summary"]["decision"] == "rollback"
+    mock_restore.assert_awaited_once()
