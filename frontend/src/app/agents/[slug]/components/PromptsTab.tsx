@@ -247,7 +247,7 @@ export function PromptsTab({
               Workflow Prompt Docs
             </h3>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Jenny-specific workflow prompts that are used outside the ordered system prompt stack.
+              Persona-specific workflow prompts that are used outside the ordered system prompt stack.
             </p>
           </div>
           <div className="space-y-3">

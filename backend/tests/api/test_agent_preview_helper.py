@@ -113,7 +113,7 @@ async def test_build_agent_preview_adds_task_prompt_as_user_section() -> None:
     agent = AgentDTO(
         id=1,
         slug="persona",
-        name="Jenny",
+        name="Persona",
         description=None,
         system_prompt="legacy system prompt",
         primary_model_id="claude-sonnet-4-6",
@@ -338,7 +338,7 @@ async def test_build_agent_preview_truncates_memory_query_like_runtime_injection
     agent = AgentDTO(
         id=1,
         slug="persona",
-        name="Jenny",
+        name="Persona",
         description=None,
         system_prompt="legacy system prompt",
         primary_model_id="claude-sonnet-4-6",

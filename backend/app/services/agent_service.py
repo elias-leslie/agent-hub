@@ -9,6 +9,7 @@ Provides:
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +29,7 @@ from app.services.agent_crud import (
 )
 from app.services.agent_dto import AgentDTO
 from app.services.owned_prompt_service import sync_agent_system_prompt
+from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.prompt_catalog import build_agent_system_prompt_slug
 from app.services.prompt_service import get_prompt_by_slug
 
@@ -51,11 +53,21 @@ class AgentService:
             return prompt.content.strip()
         return agent.system_prompt
 
+    async def _apply_display_name_overrides(self, db: AsyncSession, dto: AgentDTO) -> AgentDTO:
+        """Resolve shared display names from their live authority rows."""
+        if dto.slug != PERSONA_SLUG:
+            return dto
+
+        display_name = await get_persona_display_name(db, fallback=dto.name)
+        if display_name == dto.name:
+            return dto
+        return replace(dto, name=display_name)
+
     async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
         """Get agent by slug with caching."""
         cached = await self._cache.get(slug)
         if cached:
-            return cached
+            return await self._apply_display_name_overrides(db, cached)
 
         agent = await get_agent_by_slug(db, slug, active_only=True)
 
@@ -64,6 +76,7 @@ class AgentService:
                 agent,
                 system_prompt_override=await self._resolve_system_prompt(db, agent),
             )
+            dto = await self._apply_display_name_overrides(db, dto)
             await self._cache.set(dto)
             return dto
 
@@ -74,10 +87,11 @@ class AgentService:
         agent = await get_agent_by_id(db, agent_id)
         if not agent:
             return None
-        return AgentDTO.from_model(
+        dto = AgentDTO.from_model(
             agent,
             system_prompt_override=await self._resolve_system_prompt(db, agent),
         )
+        return await self._apply_display_name_overrides(db, dto)
 
     async def list_agents(
         self,
@@ -92,13 +106,14 @@ class AgentService:
         agents = await list_agents_query(
             db, active_only=active_only, coding_only=coding_only, limit=limit, offset=offset
         )
-        return [
+        dtos = [
             AgentDTO.from_model(
                 agent,
                 system_prompt_override=await self._resolve_system_prompt(db, agent),
             )
             for agent in agents
         ]
+        return [await self._apply_display_name_overrides(db, dto) for dto in dtos]
 
     async def create(
         self,

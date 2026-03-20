@@ -1,4 +1,4 @@
-"""Tests for Jenny model benchmark helpers."""
+"""Tests for persona model benchmark helpers."""
 
 from __future__ import annotations
 
@@ -8,24 +8,25 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from scripts.jenny_benchmark_cases import (
-    DEFAULT_JENNY_BENCHMARK_MODELS,
+from scripts.persona_benchmark_cases import (
+    DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_case_by_id,
-    get_jenny_benchmark_cases,
+    get_persona_benchmark_cases,
     prepare_case_workspace,
+    suggest_suite_id,
 )
-from scripts.jenny_benchmark_eval import (
-    JennyBenchmarkAttempt,
+from scripts.persona_benchmark_eval import (
+    PersonaBenchmarkAttempt,
     classify_failure,
     parse_benchmark_json,
     score_attempt,
     summarize_attempts,
 )
-from scripts.jenny_benchmark_report import generate_markdown_report
+from scripts.persona_benchmark_report import generate_markdown_report
 
 
 def test_default_model_roster_includes_seven_configured_candidates() -> None:
-    assert DEFAULT_JENNY_BENCHMARK_MODELS == [
+    assert DEFAULT_PERSONA_BENCHMARK_MODELS == [
         "codex/gpt-5.4",
         "codex/gpt-5.3-codex",
         "codex/gpt-5.3-codex-spark",
@@ -56,6 +57,20 @@ def test_workspace_case_prompt_limits_search_scope() -> None:
     assert "Use `monitor` for an existing same-task work lane" in prompt
 
 
+def test_suggest_suite_id_uses_shared_case_family() -> None:
+    suite_id = suggest_suite_id(
+        ["session_patience_quiet", "session_patience_recent_progress", "stalled_session_reconcile"]
+    )
+
+    assert suite_id == "persona-suite-session-patience"
+
+
+def test_suggest_suite_id_returns_none_for_mixed_case_families() -> None:
+    suite_id = suggest_suite_id(["ready_task_dispatch", "feedback_triage_hotspot"])
+
+    assert suite_id is None
+
+
 def test_parse_benchmark_json_strips_code_fences() -> None:
     parsed, error = parse_benchmark_json(
         """```json
@@ -80,6 +95,18 @@ def test_parse_benchmark_json_extracts_fenced_json_after_preamble() -> None:
     assert error is None
     assert parsed is not None
     assert parsed["case_id"] == "ready_task_dispatch"
+
+
+def test_parse_benchmark_json_strips_leading_narration_tags() -> None:
+    parsed, error = parse_benchmark_json(
+        """[[P:started:reviewing benchmark scenario]][[P:decision:reconcile now]]
+{"case_id":"feedback_triage_hotspot","primary_action":"reconcile","should_dispatch":false,"should_close":false,"confidence":"high","summary":"Reconcile the operating checklist before dispatching new work."}"""
+    )
+
+    assert error is None
+    assert parsed is not None
+    assert parsed["case_id"] == "feedback_triage_hotspot"
+    assert parsed["primary_action"] == "reconcile"
 
 
 def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
@@ -114,10 +141,10 @@ def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
 
 
 def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
-    from scripts.jenny_benchmark_eval import JennyBenchmarkRun
-    from scripts.run_jenny_model_benchmark import build_persistence_payload
+    from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+    from scripts.run_persona_model_benchmark import build_persistence_payload
 
-    attempt = JennyBenchmarkAttempt(
+    attempt = PersonaBenchmarkAttempt(
         model_id="codex/gpt-5.4",
         case_id="session_patience_quiet",
         run_number=1,
@@ -148,8 +175,8 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
         output_tokens=20,
         total_tokens=120,
     )
-    run = JennyBenchmarkRun(
-        benchmark_id="jenny-benchmark-aaaa1111",
+    run = PersonaBenchmarkRun(
+        benchmark_id="persona-benchmark-aaaa1111",
         project_id="agent-hub",
         models=["codex/gpt-5.4"],
         case_ids=["session_patience_quiet"],
@@ -163,7 +190,7 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     payload = build_persistence_payload(
         run,
         agent_slug="persona",
-        suite_id="jenny-patience",
+        suite_id="persona-patience",
         run_kind="benchmark",
         use_memory=True,
         seed=42,
@@ -178,15 +205,15 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
             },
         },
         experiment={
-            "experiment_key": "jenny-patience-ab",
-            "name": "Jenny patience A/B",
+            "experiment_key": "persona-patience-ab",
+            "name": "Persona patience A/B",
             "cohort": "candidate",
             "min_runs_per_cohort": 4,
         },
     )
 
-    assert payload["benchmark_id"] == "jenny-benchmark-aaaa1111"
-    assert payload["suite_id"] == "jenny-patience"
+    assert payload["benchmark_id"] == "persona-benchmark-aaaa1111"
+    assert payload["suite_id"] == "persona-patience"
     assert payload["run_kind"] == "benchmark"
     assert payload["attempt_count"] == 1
     assert payload["passed_attempt_count"] == 1
@@ -194,10 +221,20 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     assert payload["pass_rate"] == 100.0
     assert payload["config_snapshot"]["thinking_level"] == "medium"
     assert payload["config_snapshot"]["benchmark_task_type"] == "heartbeat"
-    assert payload["experiment"]["experiment_key"] == "jenny-patience-ab"
+    assert payload["experiment"]["experiment_key"] == "persona-patience-ab"
     assert payload["experiment"]["cohort"] == "candidate"
     assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
     assert payload["attempts"][0]["primary_action"] == "wait"
+
+
+def test_derive_suite_id_prefers_family_name_for_related_cases() -> None:
+    from scripts.run_persona_model_benchmark import derive_suite_id
+
+    suite_id = derive_suite_id(
+        ["session_patience_recent_progress", "stalled_session_reconcile", "session_patience_quiet"]
+    )
+
+    assert suite_id == "persona-suite-session-patience"
 
 
 def test_score_attempt_fails_when_tool_requirement_missing() -> None:
@@ -385,7 +422,7 @@ def test_precision_live_lookup_accepts_bound_shared_summary_language() -> None:
         content=(
             '{"case_id":"precision_search_live_lookup","primary_action":"dispatch",'
             '"should_dispatch":true,"should_close":false,'
-            '"confidence":"high","summary":"precision_code_search already exists and is bound in Agent Hub\'s shared executor registry for project-scoped/persona use, so Jenny should dispatch follow-on adoption work rather than block on core tool implementation."}'
+            '"confidence":"high","summary":"precision_code_search already exists and is bound in Agent Hub\'s shared executor registry for project-scoped/persona use, so the persona should dispatch follow-on adoption work rather than block on core tool implementation."}'
         ),
         session_id="sess-6",
         provider="codex",
@@ -453,7 +490,7 @@ def test_classify_failure_marks_authentication_failures_as_infra() -> None:
 
 def test_summarize_attempts_ranks_by_score_then_reliability() -> None:
     attempts = [
-        JennyBenchmarkAttempt(
+        PersonaBenchmarkAttempt(
             model_id="model-a",
             case_id="c1",
             run_number=1,
@@ -466,7 +503,7 @@ def test_summarize_attempts_ranks_by_score_then_reliability() -> None:
             tool_calls_count=0,
             used_tool_names=[],
         ),
-        JennyBenchmarkAttempt(
+        PersonaBenchmarkAttempt(
             model_id="model-b",
             case_id="c1",
             run_number=1,
@@ -491,7 +528,7 @@ def test_summarize_attempts_ranks_by_score_then_reliability() -> None:
 
 def test_generate_markdown_report_includes_ranking_table() -> None:
     attempts = [
-        JennyBenchmarkAttempt(
+        PersonaBenchmarkAttempt(
             model_id="model-a",
             case_id="c1",
             run_number=1,
@@ -506,9 +543,9 @@ def test_generate_markdown_report_includes_ranking_table() -> None:
         )
     ]
     summaries = summarize_attempts(attempts)
-    from scripts.jenny_benchmark_eval import JennyBenchmarkRun
+    from scripts.persona_benchmark_eval import PersonaBenchmarkRun
 
-    run = JennyBenchmarkRun(
+    run = PersonaBenchmarkRun(
         benchmark_id="bench-1",
         project_id="persona-sandbox",
         models=["model-a"],
@@ -522,14 +559,14 @@ def test_generate_markdown_report_includes_ranking_table() -> None:
 
     report = generate_markdown_report(run)
 
-    assert "# Jenny Model Benchmark" in report
+    assert "# Persona Model Benchmark" in report
     assert "| Rank | Model | Avg Score |" in report
     assert "`model-a`" in report
     assert "precision_code_search" in report
 
 
 async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
-    from scripts.run_jenny_model_benchmark import _run_one_attempt
+    from scripts.run_persona_model_benchmark import _run_one_attempt
 
     captured_kwargs: dict[str, object] = {}
 
@@ -555,7 +592,7 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             )
 
     with patch(
-        "scripts.run_jenny_model_benchmark._fetch_used_tool_names",
+        "scripts.run_persona_model_benchmark._fetch_used_tool_names",
         new=AsyncMock(return_value=[]),
     ):
         attempt = await _run_one_attempt(
@@ -592,7 +629,7 @@ def test_precision_search_case_prompt_requires_specific_tool() -> None:
 
 
 def test_validate_case_project_requirements_rejects_wrong_project() -> None:
-    from scripts.run_jenny_model_benchmark import _validate_case_project_requirements
+    from scripts.run_persona_model_benchmark import _validate_case_project_requirements
 
     with pytest.raises(ValueError, match="precision_search_live_lookup"):
         _validate_case_project_requirements(["precision_search_live_lookup"], "persona-sandbox")
@@ -776,7 +813,7 @@ def test_review_request_accepts_review_only_summary_language() -> None:
 
 
 def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
-    case_ids = [case.case_id for case in get_jenny_benchmark_cases()]
+    case_ids = [case.case_id for case in get_persona_benchmark_cases()]
 
     assert case_ids == [
         "ready_task_dispatch",

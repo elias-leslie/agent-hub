@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import {
   Loader2,
   Settings,
-  BarChart3,
   AlertCircle,
   HeartPulse,
   PauseCircle,
@@ -15,6 +14,7 @@ import {
   Bot,
   Square,
   MessageSquarePlus,
+  FlaskConical,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
@@ -26,6 +26,7 @@ import { useHeartbeat } from "./hooks/useHeartbeat";
 import { usePersonaRuntime } from "./hooks/usePersonaRuntime";
 import { UnifiedPersonaWorkspace } from "./components/UnifiedPersonaWorkspace";
 import { useToastActions } from "@/components/error/toast";
+import { getPersonaDisplayName } from "./utils/displayName";
 
 function formatRuntimeLabel(
   phase: string | undefined,
@@ -76,15 +77,16 @@ function PersonaContent() {
     ? `Last: ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
     : "Never run";
   const executionState = persona?.execution_state ?? "active";
-  const jennyPaused = executionState === "paused";
+  const personaName = getPersonaDisplayName(persona?.name);
+  const personaPaused = executionState === "paused";
   const autoRunDisabled = (persona?.heartbeat_interval_minutes ?? 0) === 0;
   const heartbeatSummary = isHeartbeatRunning
-    ? "Jenny is actively working"
-    : jennyPaused
-      ? "Jenny is paused"
+    ? `${personaName} is actively working`
+    : personaPaused
+      ? `${personaName} is paused`
       : autoRunDisabled
         ? "Auto-run is disabled"
-      : heartbeatStatus?.last_run
+        : heartbeatStatus?.last_run
         ? `Last heartbeat ${formatDistanceToNow(new Date(heartbeatStatus.last_run), {
             addSuffix: true,
           })}`
@@ -96,12 +98,12 @@ function PersonaContent() {
     || runtime.primarySession?.live_activity?.last_tool_name;
   const touchedFiles = runtime.primarySession?.live_activity?.files_touched?.slice(-3) || [];
 
-  const handleJennyPauseResume = async () => {
-    if (jennyPaused) {
+  const handlePersonaPauseResume = async () => {
+    if (personaPaused) {
       updatePersona({
         execution_state: "active",
       });
-      toast.success("Jenny resumed");
+      toast.success(`${personaName} resumed`);
       return;
     }
 
@@ -112,11 +114,11 @@ function PersonaContent() {
     if (runtime.primarySession) {
       const cancelled = await runtime.stopCurrentStream();
       if (cancelled) {
-        toast.success("Jenny paused and live stream stopped");
+        toast.success(`${personaName} paused and live stream stopped`);
         return;
       }
     }
-    toast.success("Jenny paused");
+    toast.success(`${personaName} paused`);
   };
 
   const handleStopCurrentStream = async () => {
@@ -124,12 +126,15 @@ function PersonaContent() {
     if (result.cancelled > 0) {
       toast.success(
         result.attempted > 1
-          ? `Stopped ${result.cancelled} active Jenny sessions`
-          : "Stopped active Jenny work",
+          ? `Stopped ${result.cancelled} active ${personaName} sessions`
+          : `Stopped active ${personaName} work`,
       );
       return;
     }
-    toast.warning("No active work was cancellable", "Jenny may be idle or already between turns.");
+    toast.warning(
+      "No active work was cancellable",
+      `${personaName} may be idle or already between turns.`,
+    );
   };
 
   if (personaLoading) {
@@ -162,11 +167,11 @@ function PersonaContent() {
 
             <div className="flex items-center gap-1">
               <Link
-                href="/persona/analytics"
+                href="/persona/arena"
                 className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                title="Jenny analytics"
+                title={`Open ${personaName} Arena`}
               >
-                <BarChart3 className="h-5 w-5" />
+                <FlaskConical className="h-5 w-5" />
               </Link>
               <Link
                 href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
@@ -190,30 +195,34 @@ function PersonaContent() {
             </span>
 
             <button
-              onClick={handleJennyPauseResume}
+              onClick={handlePersonaPauseResume}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                jennyPaused
+                personaPaused
                   ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800"
                   : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
               )}
-              title={jennyPaused ? "Resume Jenny" : "Pause Jenny and stop live work if active"}
+              title={
+                personaPaused
+                  ? `Resume ${personaName}`
+                  : `Pause ${personaName} and stop live work if active`
+              }
             >
-              {jennyPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
-              {jennyPaused ? "Resume Jenny" : "Pause Jenny"}
+              {personaPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
+              {personaPaused ? `Resume ${personaName}` : `Pause ${personaName}`}
             </button>
 
             <button
               onClick={triggerHeartbeat}
-              disabled={isHeartbeatRunning || jennyPaused}
+              disabled={isHeartbeatRunning || personaPaused}
               aria-busy={isHeartbeatRunning}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
-                isHeartbeatRunning || jennyPaused
+                isHeartbeatRunning || personaPaused
                   ? "text-rose-500 dark:text-rose-400 cursor-not-allowed"
                   : "bg-sky-50 text-sky-700 ring-1 ring-sky-200 hover:bg-sky-100 dark:bg-sky-950/30 dark:text-sky-300 dark:ring-sky-800",
               )}
-              title={jennyPaused ? "Resume Jenny to run a heartbeat" : heartbeatTooltip}
+              title={personaPaused ? `Resume ${personaName} to run a heartbeat` : heartbeatTooltip}
             >
               <HeartPulse
                 className={cn(
@@ -233,7 +242,7 @@ function PersonaContent() {
                   ? "cursor-not-allowed bg-slate-100 text-slate-400 dark:bg-slate-900 dark:text-slate-600"
                   : "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
               )}
-              title="Best-effort stop for Jenny and any active spawned work"
+              title={`Best-effort stop for ${personaName} and any active spawned work`}
             >
               <Square className="h-3.5 w-3.5" />
               {runtime.stoppingSessionId ? "Stopping..." : "Stop active work"}
@@ -242,7 +251,7 @@ function PersonaContent() {
             <button
               onClick={handleNewSession}
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-              title="Start a new Jenny thread"
+              title={`Start a new ${personaName} thread`}
             >
               <MessageSquarePlus className="h-3.5 w-3.5" />
               New thread
@@ -252,7 +261,7 @@ function PersonaContent() {
           <div className="grid gap-2 text-xs text-slate-600 dark:text-slate-300 md:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
               <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-                Jenny Is Doing
+                {personaName} Is Doing
               </div>
               <div className="mt-1 text-sm font-medium text-slate-800 dark:text-slate-100">
                 {liveSummary}
@@ -305,6 +314,7 @@ function PersonaContent() {
         {persona ? (
           <UnifiedPersonaWorkspace
             agentSlug={persona.agent_slug}
+            personaName={personaName}
             activeSessionId={activeSessionId}
             sidebarRefreshTrigger={sidebarRefreshTrigger}
             runtimeSyncKey={runtime.runtimeSyncKey}

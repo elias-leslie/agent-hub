@@ -188,7 +188,7 @@ class TestInjectAgentMandates:
         persona_agent = AgentDTO(
             id=9,
             slug="persona",
-            name="Jenny",
+            name="Persona",
             description=None,
             system_prompt="Legacy persona system prompt",
             primary_model_id=CLAUDE_SONNET,
@@ -220,7 +220,7 @@ class TestInjectAgentMandates:
             ) as build_prompt_context,
             patch(
                 "app.services.persona_service.get_persona_context_for_agent",
-                new=AsyncMock(return_value="<personality>Jenny</personality>"),
+                new=AsyncMock(return_value="<personality>Persona</personality>"),
             ),
         ):
             result = await inject_agent_mandates(
@@ -231,7 +231,7 @@ class TestInjectAgentMandates:
 
         assert result.system_content == (
             "<persona_system>core</persona_system>\n\n"
-            "<persona_context>\n<personality>Jenny</personality>\n</persona_context>"
+            "<persona_context>\n<personality>Persona</personality>\n</persona_context>"
         )
         build_prompt_context.assert_awaited_once_with(
             mock_db,

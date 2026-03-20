@@ -1,4 +1,4 @@
-"""Tests for prompt-backed Jenny heartbeat instruction updates."""
+"""Tests for prompt-backed persona heartbeat instruction updates."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class TestPersonaInstructionService:
             slug="persona-heartbeat-instructions",
             name="Persona Heartbeat Instructions",
             content="Old heartbeat text",
-            description="Jenny guidance",
+            description="Persona guidance",
             is_global=False,
             enabled=True,
             exclude_agents=[],

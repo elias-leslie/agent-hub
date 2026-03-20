@@ -30,7 +30,7 @@ def _make_persona(**overrides) -> MagicMock:
     defaults = {
         "id": 1,
         "agent_id": 10,
-        "name": "Jenny",
+        "name": "Persona",
         "personality": "I am a helpful assistant.",
         "user_profile": None,
         "heartbeat_instructions": "Check system health.",
@@ -97,7 +97,7 @@ class TestGetPersona:
         result = await get_persona(db)
 
         assert result is persona
-        assert result.name == "Jenny"
+        assert result.name == "Persona"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_empty(self):
@@ -218,43 +218,43 @@ class TestOnboardingBootstrapTemplates:
 
     @pytest.mark.asyncio
     async def test_bootstrap_includes_persona_name(self):
-        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
-        assert "Jenny" in result
+        result = await render_persona_onboarding_bootstrap("Persona", has_prior_context=False)
+        assert "Persona" in result
         assert "Structured Onboarding" in result
 
     @pytest.mark.asyncio
     async def test_bootstrap_with_prior_context_adds_note(self):
-        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=True)
+        result = await render_persona_onboarding_bootstrap("Persona", has_prior_context=True)
         assert "Previous user context exists" in result
         assert "read_user_context" in result
 
     @pytest.mark.asyncio
     async def test_bootstrap_without_prior_context_no_note(self):
-        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
+        result = await render_persona_onboarding_bootstrap("Persona", has_prior_context=False)
         assert "Previous user context exists" not in result
 
     @pytest.mark.asyncio
     async def test_bootstrap_mentions_submit_onboarding(self):
-        result = await render_persona_onboarding_bootstrap("Jenny", has_prior_context=False)
+        result = await render_persona_onboarding_bootstrap("Persona", has_prior_context=False)
         assert "submit_onboarding" in result
 
     @pytest.mark.asyncio
     async def test_continuation_includes_persona_name(self):
-        result = await render_persona_onboarding_continuation("Jenny")
-        assert "Jenny" in result
+        result = await render_persona_onboarding_continuation("Persona")
+        assert "Persona" in result
         assert "Continuation" in result
         assert "read_user_context" in result
 
     @pytest.mark.asyncio
     async def test_continuation_mentions_submit_onboarding(self):
-        result = await render_persona_onboarding_continuation("Jenny")
+        result = await render_persona_onboarding_continuation("Persona")
         assert "submit_onboarding" in result
 
     @pytest.mark.asyncio
     async def test_custom_name_injected(self):
         result = await render_persona_onboarding_bootstrap("Aria", has_prior_context=False)
         assert "Aria" in result
-        assert "Jenny" not in result
+        assert "Persona" not in result
 
 
 class TestGetPersonaContextForAgent:
@@ -309,7 +309,7 @@ class TestGetPersonaContextForAgent:
         result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert result is not None
-        assert '<identity name="Jenny" />' in result
+        assert '<identity name="Persona" />' in result
 
     @pytest.mark.asyncio
     async def test_personality_section_present_when_set(self):
@@ -733,7 +733,7 @@ class TestGetOrCreatePersona:
 
         mock_agent = MagicMock()
         mock_agent.id = 10
-        mock_agent.name = "Jenny"
+        mock_agent.name = "Persona"
         mock_agent.slug = "persona"
 
         with patch("app.services.agent_service.get_agent_service") as mock_get_svc:

@@ -172,7 +172,7 @@ export function usePersonaRuntime(): PersonaRuntimeState {
       setActiveChildSessions(childSessions);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Jenny runtime");
+      setError(err instanceof Error ? err.message : "Failed to load persona runtime");
     } finally {
       setLoading(false);
     }

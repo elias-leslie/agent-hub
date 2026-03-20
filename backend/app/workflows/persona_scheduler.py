@@ -169,7 +169,7 @@ async def _execute_push(job: Any) -> str:
         expression="'persona_scheduler'",
         max_runs=1,
         # Scheduler jobs can invoke full persona completions that exceed one minute.
-        # Drop overlapping cron ticks instead of cancelling live Jenny work mid-run.
+        # Drop overlapping cron ticks instead of cancelling live persona work mid-run.
         limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )

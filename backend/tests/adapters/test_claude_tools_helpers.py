@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import sys
 import types
+from unittest.mock import AsyncMock
 
 import pytest
 
-from app.adapters.claude_tools_helpers import _stream_sdk_messages
+from app.adapters.claude_tools_helpers import _close_internal_query, _stream_sdk_messages
 
 
 class ResultMessage:
@@ -493,6 +494,25 @@ async def test_stream_sdk_messages_closes_sdk_iterator_on_producer_task(
     assert iterator.owner_task is not None
     assert iterator.owner_task is asyncio.current_task()
     assert iterator.closed_by is iterator.owner_task
+
+
+@pytest.mark.asyncio
+async def test_close_internal_query_skips_query_close_from_foreign_task() -> None:
+    query_obj = AsyncMock()
+    transport = AsyncMock()
+    owner_task = asyncio.create_task(asyncio.sleep(0))
+    try:
+        await _close_internal_query(
+            query_obj,
+            transport,
+            connected=True,
+            owner_task=owner_task,
+        )
+    finally:
+        await owner_task
+
+    query_obj.close.assert_not_awaited()
+    transport.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

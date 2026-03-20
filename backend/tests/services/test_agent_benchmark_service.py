@@ -30,7 +30,7 @@ def _make_run(
         config_snapshot=config_snapshot or {"primary_model_id": "codex/gpt-5.4", "thinking_level": "medium"},
         completed_at=datetime.fromisoformat(completed_at),
         models=["codex/gpt-5.4"],
-        case_ids=["jenny-patience"],
+        case_ids=["persona-patience"],
         runs_per_case=1,
         use_memory=False,
         run_kind="benchmark",
@@ -39,9 +39,9 @@ def _make_run(
 
 def _make_experiment(**overrides) -> SimpleNamespace:
     defaults = {
-        "experiment_key": "jenny-patience-ab",
-        "name": "Jenny patience harness A/B",
-        "suite_id": "jenny-patience",
+        "experiment_key": "persona-patience-ab",
+        "name": "Persona patience harness A/B",
+        "suite_id": "persona-patience",
         "status": "open",
         "hypothesis": "Candidate harness should reduce false redispatches.",
         "baseline_label": "baseline",

@@ -16,7 +16,7 @@ def _make_persona(**overrides) -> MagicMock:
     defaults = {
         "id": 1,
         "agent_id": 10,
-        "name": "Jenny",
+        "name": "Persona",
         "personality": "I'm a helpful assistant.",
         "heartbeat_instructions": None,
         "user_context": "User prefers concise answers.",

@@ -1,4 +1,4 @@
-"""Failure cluster analysis for the Jenny honing loop."""
+"""Failure cluster analysis for the persona honing loop."""
 from __future__ import annotations
 
 from typing import Any

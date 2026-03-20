@@ -57,7 +57,7 @@ def _get_redis() -> aioredis.Redis:
 # Tier → tool mapping (cumulative)
 # ---------------------------------------------------------------------------
 
-# Persona-internal tools that modify Jenny's own config, not the project.
+# Persona-internal tools that modify persona-owned config, not the project.
 # Always allowed regardless of project tier (except "off").
 _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "read_personality",
@@ -75,9 +75,9 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "manage_feedback",
 })
 
-# Persona-operational tools — Jenny's agency capabilities that don't modify
+# Persona-operational tools — the persona's agency capabilities that don't modify
 # project code. Task management, scheduling, notifications, and consultation
-# steering. Tier-exempt so Jenny can operate during heartbeat/scheduler
+# steering. Tier-exempt so the persona can operate during heartbeat/scheduler
 # workflows regardless of the project's read/write tier.
 _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_tasks",

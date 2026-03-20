@@ -95,6 +95,40 @@ async def _close_sdk_message_iter(message_iter: Any) -> None:
         await message_iter.aclose()
 
 
+async def _close_internal_query(
+    query_obj: Any | None,
+    transport: Any,
+    *,
+    connected: bool,
+    owner_task: asyncio.Task[Any] | None,
+) -> None:
+    """Close the Claude SDK query only from its owner task.
+
+    The SDK's internal Query owns an anyio cancel scope that must be exited
+    from the same task that entered it. Async-generator shutdown can run from a
+    different task during cancellation, so we skip Query.close() in that case
+    and fall back to best-effort transport shutdown instead.
+    """
+    if query_obj is None:
+        if connected and hasattr(transport, "close"):
+            await transport.close()
+        return
+
+    current_task = asyncio.current_task()
+    if owner_task is None or current_task is owner_task:
+        await query_obj.close()
+        return
+
+    logger.warning(
+        "Skipping Claude Query.close() from foreign task: owner=%s current=%s",
+        owner_task,
+        current_task,
+    )
+    if connected and hasattr(transport, "close"):
+        with suppress(Exception):
+            await transport.close()
+
+
 def _convert_hooks_to_internal_format(hooks: dict[str, list[Any]]) -> dict[str, list[dict[str, Any]]]:
     """Convert HookMatcher structures to the SDK Query internal format."""
     internal_hooks: dict[str, list[dict[str, Any]]] = {}
@@ -162,6 +196,7 @@ async def _sdk_query_via_internal_api(
     transport = SubprocessCLITransport(prompt=prompt, options=options)
     query_obj: Any | None = None
     connected = False
+    owner_task = asyncio.current_task()
     try:
         await transport.connect()
         connected = True
@@ -188,10 +223,12 @@ async def _sdk_query_via_internal_api(
             if message is not None:
                 yield message
     finally:
-        if query_obj is not None:
-            await query_obj.close()
-        elif connected:
-            await transport.close()
+        await _close_internal_query(
+            query_obj,
+            transport,
+            connected=connected,
+            owner_task=owner_task,
+        )
 
 
 async def _sdk_query_messages(prompt: str | AsyncIterable[dict[str, Any]], options: Any) -> AsyncIterator[Any]:

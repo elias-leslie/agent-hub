@@ -1,26 +1,29 @@
 import Link from "next/link";
-import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, BarChart3 } from "lucide-react";
+import { ArrowLeft, Loader2, CheckCircle2, AlertCircle, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getPersonaDisplayName } from "../../utils/displayName";
 
 interface PersonaSettingsHeaderProps {
+  personaName?: string;
   hasChanges: boolean;
   isSaving: boolean;
   saveSuccess: boolean;
   saveError: boolean;
   onSave: () => void;
   backHref?: string;
-  analyticsHref?: string;
 }
 
 export function PersonaSettingsHeader({
+  personaName,
   hasChanges,
   isSaving,
   saveSuccess,
   saveError,
   onSave,
   backHref = "/persona",
-  analyticsHref = "/persona/analytics",
 }: PersonaSettingsHeaderProps) {
+  const displayName = getPersonaDisplayName(personaName);
+
   return (
     <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20">
       <div className="flex items-center justify-between px-4 h-14">
@@ -39,11 +42,11 @@ export function PersonaSettingsHeader({
 
         <div className="flex items-center gap-3">
           <Link
-            href={analyticsHref}
+            href="/persona/arena"
             className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="Open Jenny analytics"
+            title={`Open ${displayName} Arena`}
           >
-            <BarChart3 className="h-4.5 w-4.5" />
+            <FlaskConical className="h-4.5 w-4.5" />
           </Link>
           {saveSuccess && !hasChanges && (
             <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">

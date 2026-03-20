@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run live Jenny benchmark cases across multiple candidate models."""
+"""Run live persona benchmark cases across multiple candidate models."""
 # ruff: noqa: E402
 
 from __future__ import annotations
@@ -19,14 +19,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-VENV_PYTHON = ROOT / "backend" / ".venv" / "bin" / "python"
+VENV_DIR = ROOT / "backend" / ".venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
 
 if (
     VENV_PYTHON.exists()
-    and Path(sys.executable).resolve() != VENV_PYTHON.resolve()
-    and os.environ.get("JENNY_BENCHMARK_NO_REEXEC") != "1"
+    and Path(sys.prefix).resolve() != VENV_DIR.resolve()
+    and os.environ.get("PERSONA_BENCHMARK_NO_REEXEC") != "1"
 ):
-    os.environ["JENNY_BENCHMARK_NO_REEXEC"] = "1"
+    os.environ["PERSONA_BENCHMARK_NO_REEXEC"] = "1"
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
 
 sys.path.insert(0, str(ROOT))
@@ -43,19 +44,21 @@ from app.services.agent_benchmark_service import (
     get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
 )
-from scripts.jenny_benchmark_cases import (
-    DEFAULT_JENNY_BENCHMARK_MODELS,
+from scripts.persona_benchmark_cases import (
+    DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_case_by_id,
-    get_jenny_benchmark_cases,
+    get_persona_benchmark_cases,
     prepare_case_workspace,
+    suggest_suite_id,
 )
-from scripts.jenny_benchmark_eval import (
-    JennyBenchmarkAttempt,
-    JennyBenchmarkRun,
+from scripts.persona_benchmark_eval import (
+    PersonaBenchmarkAttempt,
+    PersonaBenchmarkRun,
     score_attempt,
     summarize_attempts,
 )
-from scripts.jenny_benchmark_report import generate_markdown_report
+from scripts.persona_benchmark_report import generate_markdown_report
+from scripts.persona_display import load_persona_display_name
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,17 +71,17 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 _AGENT_SLUG = "persona"
-_BENCHMARK_ID_PREFIX = "jenny-benchmark"
-_CLIENT_NAME = "jenny-model-benchmark"
-_REQUEST_SOURCE = "backend/scripts/run_jenny_model_benchmark.py"
-_CLI_COMMAND = "run_jenny_model_benchmark"
+_BENCHMARK_ID_PREFIX = "persona-benchmark"
+_CLIENT_NAME = "persona-model-benchmark"
+_REQUEST_SOURCE = "backend/scripts/run_persona_model_benchmark.py"
+_CLI_COMMAND = "run_persona_model_benchmark"
 _MEMORY_GROUP_PREFIX = "benchmark:"
 _DEFAULT_BASE_URL = "http://localhost:8003"
 _DEFAULT_PROJECT_ID = "agent-hub"
 _SUITE_ID_PREFIX = "benchmark-suite-"
 _RUN_KIND = "benchmark"
 _STATUS_COMPLETED = "completed"
-_DEFAULT_WORKING_ROOT = str(ROOT / "backend" / ".tmp" / "jenny-model-benchmark")
+_DEFAULT_WORKING_ROOT = str(ROOT / "backend" / ".tmp" / "persona-model-benchmark")
 
 _BENCHMARK_RESPONSE_SCHEMA = {
     "type": "object",
@@ -113,6 +116,8 @@ def derive_suite_id(case_ids: list[str]) -> str:
     normalized = sorted(set(case_ids))
     if len(normalized) == 1:
         return normalized[0]
+    if family_suite_id := suggest_suite_id(normalized):
+        return family_suite_id
     digest = hashlib.sha256(",".join(normalized).encode("utf-8")).hexdigest()[:8]
     return f"{_SUITE_ID_PREFIX}{digest}"
 
@@ -161,7 +166,7 @@ def _normalize_attempt(attempt: dict) -> dict:
 
 
 def build_persistence_payload(
-    run: JennyBenchmarkRun,
+    run: PersonaBenchmarkRun,
     *,
     agent_slug: str,
     suite_id: str,
@@ -302,13 +307,14 @@ async def _run_one_attempt(
     use_memory: bool,
     memory_group_id: str,
     task_type: str,
-) -> JennyBenchmarkAttempt:
+    persona_name: str = "Persona",
+) -> PersonaBenchmarkAttempt:
     case = get_case_by_id(case_id)
     workdir = working_root / benchmark_id / model_id.replace("/", "__") / case.case_id / f"run-{run_number}"
     if case.fixture_files:
         prepare_case_workspace(case, workdir)
 
-    message_content = f"@{model_id}\n{case.build_prompt()}"
+    message_content = f"@{model_id}\n{case.build_prompt(persona_name)}"
     started = time.perf_counter()
     try:
         response = await client.complete(
@@ -352,8 +358,9 @@ async def _execute_attempt_loop(
     use_memory: bool,
     memory_group_id: str,
     task_type: str,
-) -> list[JennyBenchmarkAttempt]:
-    attempts: list[JennyBenchmarkAttempt] = []
+    persona_name: str,
+) -> list[PersonaBenchmarkAttempt]:
+    attempts: list[PersonaBenchmarkAttempt] = []
     for index, (model_id, case_id, run_number) in enumerate(order, start=1):
         logger.info("[%d/%d] model=%s case=%s run=%d", index, len(order), model_id, case_id, run_number)
         attempt = await _run_one_attempt(
@@ -362,6 +369,7 @@ async def _execute_attempt_loop(
             working_root=working_root, timeout_seconds=timeout_seconds,
             keep_workdirs=keep_workdirs, use_memory=use_memory,
             memory_group_id=memory_group_id, task_type=task_type,
+            persona_name=persona_name,
         )
         attempts.append(attempt)
         logger.info(
@@ -387,13 +395,14 @@ async def run_benchmark(
     use_memory: bool,
     memory_group_id: str | None,
     task_type: str = "wake",
-) -> JennyBenchmarkRun:
+) -> PersonaBenchmarkRun:
     benchmark_id = f"{_BENCHMARK_ID_PREFIX}-{uuid.uuid4().hex[:8]}"
     started_at = datetime.now(UTC).isoformat()
     _validate_case_project_requirements(case_ids, project_id)
     order = _build_attempt_order(models, case_ids, runs_per_case, seed)
     resolved_client_id = await _resolve_client_id(client_id, project_id)
     resolved_memory_group_id = memory_group_id or f"{_MEMORY_GROUP_PREFIX}{benchmark_id}"
+    persona_name = await load_persona_display_name()
 
     async with AsyncAgentHubClient(
         base_url=base_url,
@@ -407,11 +416,12 @@ async def run_benchmark(
             working_root=working_root, timeout_seconds=timeout_seconds,
             keep_workdirs=keep_workdirs, use_memory=use_memory,
             memory_group_id=resolved_memory_group_id, task_type=task_type,
+            persona_name=persona_name,
         )
 
     completed_at = datetime.now(UTC).isoformat()
     summaries = summarize_attempts(attempts)
-    return JennyBenchmarkRun(
+    return PersonaBenchmarkRun(
         benchmark_id=benchmark_id, project_id=project_id, models=models,
         case_ids=case_ids, runs_per_case=runs_per_case,
         started_at=started_at, completed_at=completed_at,
@@ -420,7 +430,7 @@ async def run_benchmark(
 
 
 def _print_dry_run(models: list[str], case_ids: list[str], runs_per_case: int, seed: int) -> None:
-    print("Jenny model benchmark dry run")
+    print("Persona model benchmark dry run")
     print("")
     print("Models:")
     for model in models:
@@ -437,7 +447,7 @@ def _print_dry_run(models: list[str], case_ids: list[str], runs_per_case: int, s
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run Jenny benchmark cases across model candidates")
+    parser = argparse.ArgumentParser(description="Run persona benchmark cases across model candidates")
     parser.add_argument("--agent-slug", default=_AGENT_SLUG, help="Agent slug to attribute benchmark history to")
     parser.add_argument("--models", help="Comma-separated model ids to test")
     parser.add_argument("--cases", help="Comma-separated benchmark case ids to run")
@@ -452,7 +462,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-json", help="Write full JSON result to this path")
     parser.add_argument("--output-md", help="Write markdown report to this path")
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
-    parser.add_argument("--use-memory", action="store_true", help="Enable Jenny memory injection for full-context benchmark runs")
+    parser.add_argument("--use-memory", action="store_true", help="Enable persona memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
     parser.add_argument("--task-type", default="wake", choices=("wake", "heartbeat"), help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context")
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
@@ -505,7 +515,7 @@ def _print_experiment_summary(summary: dict) -> None:
 
 
 async def _persist_run(
-    run: JennyBenchmarkRun,
+    run: PersonaBenchmarkRun,
     args: argparse.Namespace,
     case_ids: list[str],
 ) -> str | None:
@@ -535,7 +545,7 @@ async def _persist_run(
 
 
 def _write_outputs(
-    run: JennyBenchmarkRun,
+    run: PersonaBenchmarkRun,
     args: argparse.Namespace,
     case_ids: list[str],
     persisted_run_id: str | None,
@@ -558,8 +568,8 @@ def _write_outputs(
 
 async def main() -> None:
     args = _build_parser().parse_args()
-    models = _parse_csv(args.models, DEFAULT_JENNY_BENCHMARK_MODELS)
-    case_ids = _parse_csv(args.cases, [case.case_id for case in get_jenny_benchmark_cases()])
+    models = _parse_csv(args.models, DEFAULT_PERSONA_BENCHMARK_MODELS)
+    case_ids = _parse_csv(args.cases, [case.case_id for case in get_persona_benchmark_cases()])
 
     if args.dry_run:
         _print_dry_run(models, case_ids, args.runs_per_case, args.seed)
@@ -573,7 +583,7 @@ async def main() -> None:
         client_id=args.client_id, use_memory=args.use_memory,
         memory_group_id=args.memory_group_id, task_type=args.task_type,
     )
-    report = generate_markdown_report(run)
+    report = generate_markdown_report(run, persona_name=await load_persona_display_name())
     persisted_run_id: str | None = None
     if not args.no_persist:
         persisted_run_id = await _persist_run(run, args, case_ids)

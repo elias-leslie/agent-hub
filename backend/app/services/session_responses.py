@@ -13,6 +13,7 @@ from app.services.ownership_inventory import (
     query_project_active_specialists,
     query_project_ownership,
 )
+from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.session_tokens import calculate_agent_token_breakdown
 from app.services.session_transforms import (
     _effective_model,
@@ -40,7 +41,13 @@ async def _resolve_agent_display_names(
     result = await db.execute(
         select(Agent.slug, Agent.name).where(Agent.slug.in_(slugs))
     )
-    return {row.slug: row.name for row in result.all()}
+    names = {row.slug: row.name for row in result.all()}
+    if PERSONA_SLUG in slugs:
+        names[PERSONA_SLUG] = await get_persona_display_name(
+            db,
+            fallback=names.get(PERSONA_SLUG),
+        )
+    return names
 
 
 async def build_project_lane_session_ids(

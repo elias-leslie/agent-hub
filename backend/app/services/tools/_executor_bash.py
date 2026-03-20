@@ -10,6 +10,11 @@ import asyncio
 import logging
 from pathlib import Path
 
+from app.services.persona_policy import (
+    command_hits_persona_git_publish_policy,
+    get_persona_git_publish_block_reason,
+)
+
 logger = logging.getLogger(__name__)
 
 # Maximum output size to return
@@ -42,12 +47,6 @@ BLOCKED_COMMANDS = frozenset(
     }
 )
 
-_PERSONA_BLOCKED_SUBSTRINGS = (
-    "git commit",
-    "git push ",
-)
-
-
 def is_blocked_command(command: str) -> bool:
     """Check if command is blocked for safety."""
     command_lower = command.lower().strip()
@@ -55,17 +54,12 @@ def is_blocked_command(command: str) -> bool:
 
 
 def get_persona_block_reason(command: str, agent_slug: str | None) -> str | None:
-    """Return a Jenny-specific block reason for commands we never want in Bash."""
+    """Return a persona-specific block reason for commands we never want in Bash."""
     if agent_slug != "persona":
         return None
 
-    command_lower = command.lower().strip()
-    if any(blocked in command_lower for blocked in _PERSONA_BLOCKED_SUBSTRINGS):
-        return (
-            "Jenny must not use raw git commit/push from Bash. "
-            "Use manage_tasks(action='smart_sync', project_id='...') for coherent publish debt, "
-            "or the canonical commit.sh flow only when direct code intervention is operationally required."
-        )
+    if command_hits_persona_git_publish_policy(command):
+        return get_persona_git_publish_block_reason()
     return None
 
 

@@ -21,6 +21,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, cast
 
+from app.services.persona_policy import (
+    command_hits_persona_git_publish_policy,
+    get_persona_git_publish_block_reason,
+)
 from app.services.tools._sensitive_content import scan_runtime_sensitive_content
 
 logger = logging.getLogger(__name__)
@@ -30,12 +34,6 @@ _WRITE_ALLOWLIST: tuple[Path, ...] = (
     Path("/tmp"),
     Path.home() / ".claude",
 )
-_PERSONA_BLOCKED_BASH_SUBSTRINGS = (
-    "git commit",
-    "git push ",
-)
-
-
 def build_boundary_settings(working_dir: str) -> dict[str, Any]:
     """Build a Claude Code settings dict restricting writes to *working_dir*.
 
@@ -147,16 +145,9 @@ def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict
         if tool_name == "Bash" and agent_slug == "persona":
             tool_input = input_data.get("tool_input", {})
             command = tool_input.get("command", "")
-            if isinstance(command, str) and any(
-                blocked in command.lower().strip()
-                for blocked in _PERSONA_BLOCKED_BASH_SUBSTRINGS
-            ):
+            if isinstance(command, str) and command_hits_persona_git_publish_policy(command):
                 logger.info("Boundary hook DENY: Bash workflow policy for persona (%s)", command)
-                return _deny_output(
-                    "Jenny must not use raw git commit/push from Bash. "
-                    "Use manage_tasks(action='smart_sync', project_id='...') for coherent publish debt, "
-                    "or the canonical commit.sh flow only when direct code intervention is operationally required."
-                )
+                return _deny_output(get_persona_git_publish_block_reason())
 
         if tool_name not in ("Write", "Edit", "MultiEdit"):
             return {}

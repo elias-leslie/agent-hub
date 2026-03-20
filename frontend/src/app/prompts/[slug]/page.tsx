@@ -288,7 +288,7 @@ export default function PromptEditPage() {
               className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
             />
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Saved with every update and restore so Jenny and benchmark runs can
+              Saved with every update and restore so Arena and benchmark runs can
               attribute regressions to prompt changes.
             </p>
           </div>

@@ -1,4 +1,4 @@
-"""Prompt-backed storage for Jenny's editable document prompts."""
+"""Prompt-backed storage for the persona's editable document prompts."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Integration tests for Jenny persona — tools, permissions, sandbox, and providers.
+"""Integration tests for the persona agent — tools, permissions, sandbox, and providers.
 
 Verifies the full persona pipeline is functional:
 1. All persona tools dispatch correctly via DirectToolExecutor
@@ -44,7 +44,7 @@ def _make_persona(**overrides: Any) -> MagicMock:
     defaults = {
         "id": 1,
         "agent_id": 10,
-        "name": "Jenny",
+        "name": "Persona",
         "personality": "I'm a helpful assistant.",
         "heartbeat_instructions": None,
         "user_context": "User prefers concise answers.",
@@ -427,7 +427,7 @@ class TestAllPersonaToolsDispatch:
 
 
 class TestPersonaBashWorkflowGuards:
-    """Verify Jenny-specific workflow restrictions in Bash execution."""
+    """Verify persona workflow restrictions in Bash execution."""
 
     @pytest.fixture
     def executor(self, tmp_path: Path) -> DirectToolExecutor:
@@ -569,12 +569,12 @@ class TestPersonaSandboxWorkingDir:
     async def test_write_and_read_file(self, executor: DirectToolExecutor):
         test_file = str(executor.working_dir / "test.txt")
         write_result = await executor.dispatch(
-            "write_file", {"path": test_file, "content": "hello from jenny"}
+            "write_file", {"path": test_file, "content": "hello from persona"}
         )
         assert "Error" not in write_result or "wrote" in write_result.lower()
 
         read_result = await executor.dispatch("read_file", {"path": test_file})
-        assert "hello from jenny" in read_result
+        assert "hello from persona" in read_result
 
     @pytest.mark.asyncio
     async def test_bash_echo_works(self, executor: DirectToolExecutor):

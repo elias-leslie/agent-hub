@@ -1,4 +1,4 @@
-"""Tests for the Jenny honing loop helpers."""
+"""Tests for the persona honing loop helpers."""
 
 from __future__ import annotations
 
@@ -13,20 +13,20 @@ from scripts.completion_review_benchmark_eval import (
     CompletionReviewBenchmarkRun,
     summarize_completion_review_attempts,
 )
-from scripts.jenny_benchmark_eval import (
-    JennyBenchmarkAttempt,
-    JennyBenchmarkRun,
+from scripts.persona_benchmark_eval import (
+    PersonaBenchmarkAttempt,
+    PersonaBenchmarkRun,
     summarize_attempts,
 )
-from scripts.run_jenny_honing_loop import (
+from scripts.run_persona_honing_loop import (
     _run_improvement_pass,
     build_honing_prompt,
     run_honing_loop,
 )
 
 
-def _make_run(attempts: list[JennyBenchmarkAttempt]) -> JennyBenchmarkRun:
-    return JennyBenchmarkRun(
+def _make_run(attempts: list[PersonaBenchmarkAttempt]) -> PersonaBenchmarkRun:
+    return PersonaBenchmarkRun(
         benchmark_id="bench-hone",
         project_id="agent-hub",
         models=["codex/gpt-5.4", "claude-sonnet-4-6"],
@@ -42,7 +42,7 @@ def _make_run(attempts: list[JennyBenchmarkAttempt]) -> JennyBenchmarkRun:
 def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> None:
     run = _make_run(
         [
-            JennyBenchmarkAttempt(
+            PersonaBenchmarkAttempt(
                 model_id="codex/gpt-5.4",
                 case_id="feedback_triage_hotspot",
                 run_number=1,
@@ -57,7 +57,7 @@ def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> 
                 tool_calls_count=1,
                 used_tool_names=["review_agent_performance"],
             ),
-            JennyBenchmarkAttempt(
+            PersonaBenchmarkAttempt(
                 model_id="claude-sonnet-4-6",
                 case_id="performance_review_honing",
                 run_number=1,
@@ -87,7 +87,7 @@ def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> 
 def test_build_honing_prompt_handles_clean_run() -> None:
     run = _make_run(
         [
-            JennyBenchmarkAttempt(
+            PersonaBenchmarkAttempt(
                 model_id="codex/gpt-5.4",
                 case_id="feedback_triage_hotspot",
                 run_number=1,
@@ -111,7 +111,7 @@ def test_build_honing_prompt_handles_clean_run() -> None:
 def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
     run = _make_run(
         [
-            JennyBenchmarkAttempt(
+            PersonaBenchmarkAttempt(
                 model_id="codex/gpt-5.4",
                 case_id="session_patience_recent_progress",
                 run_number=1,
@@ -171,8 +171,8 @@ class _FakeImprovementClient:
         )
 
 
-def _passing_attempt(case_id: str) -> JennyBenchmarkAttempt:
-    return JennyBenchmarkAttempt(
+def _passing_attempt(case_id: str) -> PersonaBenchmarkAttempt:
+    return PersonaBenchmarkAttempt(
         model_id="codex/gpt-5.4",
         case_id=case_id,
         run_number=1,
@@ -187,8 +187,8 @@ def _passing_attempt(case_id: str) -> JennyBenchmarkAttempt:
     )
 
 
-def _failing_attempt(case_id: str) -> JennyBenchmarkAttempt:
-    return JennyBenchmarkAttempt(
+def _failing_attempt(case_id: str) -> PersonaBenchmarkAttempt:
+    return PersonaBenchmarkAttempt(
         model_id="codex/gpt-5.4",
         case_id=case_id,
         run_number=1,
@@ -205,8 +205,8 @@ def _failing_attempt(case_id: str) -> JennyBenchmarkAttempt:
     )
 
 
-def _benchmark_run(benchmark_id: str, attempts: list[JennyBenchmarkAttempt]) -> JennyBenchmarkRun:
-    return JennyBenchmarkRun(
+def _benchmark_run(benchmark_id: str, attempts: list[PersonaBenchmarkAttempt]) -> PersonaBenchmarkRun:
+    return PersonaBenchmarkRun(
         benchmark_id=benchmark_id,
         project_id="agent-hub",
         models=["codex/gpt-5.4"],
@@ -274,7 +274,7 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
 
     with patch(
-        "scripts.jenny_honing._experiment._fetch_used_tool_names",
+        "scripts.persona_honing._experiment._fetch_used_tool_names",
         new=AsyncMock(return_value=["read_heartbeat_instructions"]),
     ):
         session_id, content, tools, parsed = await _run_improvement_pass(
@@ -286,7 +286,7 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
             review_run=None,
             previous_review_clusters=None,
             timeout_seconds=5.0,
-            working_root=Path("/tmp/jenny-honing-test"),
+            working_root=Path("/tmp/persona-honing-test"),
         )
 
     assert session_id == "sess-improve"
@@ -339,37 +339,37 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
     candidate_run_2 = _benchmark_run("candidate-2", [_failing_attempt("session_patience_quiet")])
 
     with (
-        patch("scripts.run_jenny_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
+        patch("scripts.run_persona_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
         patch(
-            "scripts.run_jenny_honing_loop._resolve_client_id",
+            "scripts.run_persona_honing_loop._resolve_client_id",
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.jenny_honing._experiment._capture_jenny_mutable_state",
+            "scripts.persona_honing._experiment._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.jenny_honing._experiment.run_benchmark",
+            "scripts.persona_honing._experiment.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
-            "scripts.jenny_honing._experiment._run_improvement_pass",
+            "scripts.persona_honing._experiment._run_improvement_pass",
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.jenny_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.jenny_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._experiment.persist_benchmark_payload",
             new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
-            "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
+            "scripts.persona_honing._experiment.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(return_value={"decision": "rollback", "decision_reason": "candidate_underperforms_baseline"}),
         ),
         patch(
-            "scripts.jenny_honing._experiment._restore_jenny_mutable_state",
+            "scripts.persona_honing._experiment._restore_persona_mutable_state",
             new=AsyncMock(),
         ) as mock_restore,
     ):
@@ -378,8 +378,8 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             case_ids=["session_patience_quiet"],
             runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/jenny-honing-test"),
-            output_dir=Path("/tmp/jenny-honing-test/reports"),
+            working_root=Path("/tmp/persona-honing-test"),
+            output_dir=Path("/tmp/persona-honing-test/reports"),
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",
@@ -403,37 +403,37 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
     candidate_run_2 = _benchmark_run("candidate-2", [_passing_attempt("session_patience_quiet")])
 
     with (
-        patch("scripts.run_jenny_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
+        patch("scripts.run_persona_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
         patch(
-            "scripts.run_jenny_honing_loop._resolve_client_id",
+            "scripts.run_persona_honing_loop._resolve_client_id",
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.jenny_honing._experiment._capture_jenny_mutable_state",
+            "scripts.persona_honing._experiment._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.jenny_honing._experiment.run_benchmark",
+            "scripts.persona_honing._experiment.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
-            "scripts.jenny_honing._experiment._run_improvement_pass",
+            "scripts.persona_honing._experiment._run_improvement_pass",
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.jenny_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.jenny_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._experiment.persist_benchmark_payload",
             new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
-            "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
+            "scripts.persona_honing._experiment.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(return_value={"decision": "promote", "decision_reason": "candidate_outperforms_baseline"}),
         ),
         patch(
-            "scripts.jenny_honing._experiment._restore_jenny_mutable_state",
+            "scripts.persona_honing._experiment._restore_persona_mutable_state",
             new=AsyncMock(),
         ) as mock_restore,
     ):
@@ -442,8 +442,8 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
             case_ids=["session_patience_quiet"],
             runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/jenny-honing-test"),
-            output_dir=Path("/tmp/jenny-honing-test/reports"),
+            working_root=Path("/tmp/persona-honing-test"),
+            output_dir=Path("/tmp/persona-honing-test/reports"),
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",
@@ -484,21 +484,21 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
     )
 
     with (
-        patch("scripts.run_jenny_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
+        patch("scripts.run_persona_honing_loop.AsyncAgentHubClient", return_value=_FakeClient()),
         patch(
-            "scripts.run_jenny_honing_loop._resolve_client_id",
+            "scripts.run_persona_honing_loop._resolve_client_id",
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.jenny_honing._experiment._capture_jenny_mutable_state",
+            "scripts.persona_honing._experiment._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.jenny_honing._experiment.run_benchmark",
+            "scripts.persona_honing._experiment.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
-            "scripts.jenny_honing._experiment.run_completion_review_benchmark",
+            "scripts.persona_honing._experiment.run_completion_review_benchmark",
             new=AsyncMock(
                 side_effect=[
                     review_baseline_run,
@@ -509,19 +509,19 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             ),
         ),
         patch(
-            "scripts.jenny_honing._experiment._run_improvement_pass",
+            "scripts.persona_honing._experiment._run_improvement_pass",
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.jenny_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.jenny_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._experiment.persist_benchmark_payload",
             new=AsyncMock(return_value="run-id"),
         ),
         patch(
-            "scripts.jenny_honing._experiment.get_benchmark_experiment_summary_by_key",
+            "scripts.persona_honing._experiment.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(
                 side_effect=[
                     {"decision": "promote", "decision_reason": "candidate_outperforms_baseline"},
@@ -530,7 +530,7 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             ),
         ),
         patch(
-            "scripts.jenny_honing._experiment._restore_jenny_mutable_state",
+            "scripts.persona_honing._experiment._restore_persona_mutable_state",
             new=AsyncMock(),
         ) as mock_restore,
     ):
@@ -542,8 +542,8 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             reviewer_case_ids=["review_recent_progress_patience"],
             reviewer_runs_per_case=1,
             project_id="agent-hub",
-            working_root=Path("/tmp/jenny-honing-test"),
-            output_dir=Path("/tmp/jenny-honing-test/reports"),
+            working_root=Path("/tmp/persona-honing-test"),
+            output_dir=Path("/tmp/persona-honing-test/reports"),
             seed=42,
             timeout_seconds=5.0,
             client_id="client-1",

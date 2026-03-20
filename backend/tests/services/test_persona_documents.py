@@ -53,7 +53,7 @@ def test_split_legacy_user_context_extracts_profile_and_notes() -> None:
 
 
 def test_split_legacy_user_context_returns_original_text_when_no_profile_sections() -> None:
-    profile, notes = split_legacy_user_context("Jenny should keep responses concise.")
+    profile, notes = split_legacy_user_context("Persona should keep responses concise.")
 
     assert profile is None
-    assert notes == "Jenny should keep responses concise."
+    assert notes == "Persona should keep responses concise."

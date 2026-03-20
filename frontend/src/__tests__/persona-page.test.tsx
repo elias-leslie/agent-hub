@@ -49,7 +49,7 @@ vi.mock("@/app/persona/components/UnifiedPersonaWorkspace", () => ({
 vi.mock("@/app/persona/hooks/usePersona", () => ({
   usePersona: () => ({
     persona: {
-      name: "Jenny",
+      name: "Avery",
       agent_slug: "persona",
       heartbeat_interval_minutes: 60,
       execution_state: "active",
@@ -119,10 +119,10 @@ describe("PersonaPage", () => {
     expect(screen.getByText("dt -q -d")).toBeInTheDocument();
   });
 
-  it("pauses Jenny from the main workspace header", async () => {
+  it("pauses the persona from the main workspace header", async () => {
     render(<PersonaPage />);
 
-    fireEvent.click(await screen.findByText("Pause Jenny"));
+    fireEvent.click(await screen.findByText("Pause Avery"));
 
     expect(mockUpdatePersona).toHaveBeenCalledWith({
       execution_state: "paused",
@@ -146,10 +146,10 @@ describe("PersonaPage", () => {
     expect(mockHandleNewSession).toHaveBeenCalledTimes(1);
   });
 
-  it("exposes Jenny analytics from the workspace header", async () => {
+  it("exposes Arena from the workspace header", async () => {
     render(<PersonaPage />);
 
-    const analyticsLink = await screen.findByTitle("Jenny analytics");
-    expect(analyticsLink).toHaveAttribute("href", "/persona/analytics");
+    const arenaLink = await screen.findByTitle("Open Avery Arena");
+    expect(arenaLink).toHaveAttribute("href", "/persona/arena");
   });
 });

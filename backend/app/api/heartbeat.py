@@ -179,7 +179,7 @@ async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> H
     if not onboarding_complete:
         raise HTTPException(status_code=400, detail="Persona onboarding not complete")
     if await get_persona_execution_state() == "paused":
-        raise HTTPException(status_code=409, detail="Jenny is paused")
+        raise HTTPException(status_code=409, detail="Persona is paused")
 
     # Check project permissions
     permission_project = target_project_id or HEARTBEAT_PROJECT

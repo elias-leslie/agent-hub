@@ -89,9 +89,11 @@ import {
   PulseOverviewPanels,
   RoutineHeartbeatGroup,
 } from "./workspace-cards";
+import { getPersonaDisplayName, getPersonaPossessive } from "../utils/displayName";
 
 interface UnifiedPersonaWorkspaceProps {
   agentSlug: string;
+  personaName?: string;
   activeSessionId: string | null;
   sidebarRefreshTrigger: number;
   runtimeSyncKey: string;
@@ -102,6 +104,7 @@ interface UnifiedPersonaWorkspaceProps {
 
 export function UnifiedPersonaWorkspace({
   agentSlug,
+  personaName,
   activeSessionId,
   sidebarRefreshTrigger,
   runtimeSyncKey,
@@ -133,6 +136,8 @@ export function UnifiedPersonaWorkspace({
   const [sessionEventDetails, setSessionEventDetails] = useState<Record<string, SessionEventDetailsState>>({});
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [firstUnreadItemId, setFirstUnreadItemId] = useState<string | null>(null);
+  const personaDisplayName = getPersonaDisplayName(personaName);
+  const personaPossessive = getPersonaPossessive(personaName);
   const scrollRef = useRef<HTMLDivElement>(null);
   const autoFollowRef = useRef(true);
   const initialViewportTimeoutRef = useRef<number | null>(null);
@@ -961,7 +966,7 @@ export function UnifiedPersonaWorkspace({
                 setSearch(event.target.value);
                 setAnchorEntryId(null);
               }}
-              placeholder="Search Jenny's history, task IDs, files, agents..."
+              placeholder={`Search ${personaPossessive} history, task IDs, files, agents...`}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700"
             />
           </div>
@@ -1336,7 +1341,7 @@ export function UnifiedPersonaWorkspace({
             {status !== "idle" && (
               <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-300">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Jenny is responding
+                {personaDisplayName} is responding
               </span>
             )}
           </div>

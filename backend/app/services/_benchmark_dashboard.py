@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -245,6 +246,28 @@ async def _query_model_performance(
     return list((await db.execute(stmt)).all())
 
 
+async def _query_case_attempts(
+    db: AsyncSession, agent_slug: str, cutoff: datetime, suite_id: str | None,
+) -> list[Any]:
+    stmt = (
+        select(
+            AgentBenchmarkAttempt,
+            AgentBenchmarkRun.suite_id,
+            AgentBenchmarkRun.completed_at,
+        )
+        .join(AgentBenchmarkRun, AgentBenchmarkRun.id == AgentBenchmarkAttempt.benchmark_run_id)
+        .where(
+            AgentBenchmarkAttempt.agent_slug == agent_slug,
+            AgentBenchmarkRun.completed_at.is_not(None),
+            AgentBenchmarkRun.completed_at >= cutoff,
+        )
+        .order_by(AgentBenchmarkRun.completed_at.desc(), AgentBenchmarkAttempt.created_at.desc())
+    )
+    if suite_id:
+        stmt = stmt.where(AgentBenchmarkRun.suite_id == suite_id)
+    return list((await db.execute(stmt)).all())
+
+
 async def _query_experiment_summaries(
     db: AsyncSession, agent_slug: str, suite_id: str | None,
 ) -> list[dict[str, Any]]:
@@ -381,6 +404,154 @@ def _format_model_performance(model_rows: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _format_suites(
+    runs: list[AgentBenchmarkRun],
+    open_clusters: list[AgentRegressionCluster],
+) -> list[dict[str, Any]]:
+    regressions_by_suite = defaultdict(int)
+    for cluster in open_clusters:
+        regressions_by_suite[cluster.suite_id] += 1
+
+    rollups: dict[str, dict[str, Any]] = {}
+    for run in runs:
+        suite = rollups.setdefault(
+            run.suite_id,
+            {
+                "suite_id": run.suite_id,
+                "run_count": 0,
+                "score_values": [],
+                "attempt_count": 0,
+                "passed_attempt_count": 0,
+                "latest_completed_at": run.completed_at,
+                "tracked_models": set(),
+                "case_ids": set(),
+                "run_kinds": set(),
+            },
+        )
+        suite["run_count"] += 1
+        suite["attempt_count"] += int(run.attempt_count or 0)
+        suite["passed_attempt_count"] += int(run.passed_attempt_count or 0)
+        if run.avg_score is not None:
+            suite["score_values"].append(float(run.avg_score))
+        if run.completed_at and (
+            suite["latest_completed_at"] is None
+            or run.completed_at > suite["latest_completed_at"]
+        ):
+            suite["latest_completed_at"] = run.completed_at
+        suite["tracked_models"].update(str(model) for model in (run.models or []) if model)
+        suite["case_ids"].update(str(case_id) for case_id in (run.case_ids or []) if case_id)
+        if run.run_kind:
+            suite["run_kinds"].add(str(run.run_kind))
+
+    formatted = []
+    for suite in rollups.values():
+        attempts = int(suite["attempt_count"] or 0)
+        passed = int(suite["passed_attempt_count"] or 0)
+        score_values = list(suite["score_values"])
+        formatted.append(
+            {
+                "suite_id": suite["suite_id"],
+                "run_count": int(suite["run_count"] or 0),
+                "avg_score": _round_metric(_sample_mean(score_values)) if score_values else None,
+                "pass_rate": round((passed / attempts) * 100, 1) if attempts else 0.0,
+                "open_regressions": int(regressions_by_suite.get(suite["suite_id"], 0)),
+                "latest_completed_at": (
+                    suite["latest_completed_at"].isoformat()
+                    if suite["latest_completed_at"]
+                    else None
+                ),
+                "tracked_models": sorted(suite["tracked_models"]),
+                "case_ids": sorted(suite["case_ids"]),
+                "run_kinds": sorted(suite["run_kinds"]),
+            }
+        )
+
+    return sorted(
+        formatted,
+        key=lambda suite: (
+            -(suite["open_regressions"]),
+            -(suite["avg_score"] if suite["avg_score"] is not None else -1.0),
+            suite["latest_completed_at"] or "",
+        ),
+        reverse=False,
+    )
+
+
+def _format_cases(
+    case_rows: list[Any],
+    open_clusters: list[AgentRegressionCluster],
+) -> list[dict[str, Any]]:
+    regressions_by_case = defaultdict(int)
+    latest_failure_by_case: dict[str, str] = {}
+    for cluster in open_clusters:
+        regressions_by_case[cluster.case_id] += 1
+        latest_failure_by_case.setdefault(cluster.case_id, cluster.failure_detail)
+
+    rollups: dict[str, dict[str, Any]] = {}
+    for attempt, suite_id, completed_at in case_rows:
+        case = rollups.setdefault(
+            attempt.case_id,
+            {
+                "case_id": attempt.case_id,
+                "attempts": 0,
+                "passed": 0,
+                "score_values": [],
+                "latest_completed_at": completed_at,
+                "tracked_models": set(),
+                "suite_ids": set(),
+                "latest_failure_detail": latest_failure_by_case.get(attempt.case_id),
+            },
+        )
+        case["attempts"] += 1
+        case["passed"] += 1 if attempt.passed else 0
+        case["score_values"].append(float(attempt.composite_score or 0.0))
+        if completed_at and (
+            case["latest_completed_at"] is None
+            or completed_at > case["latest_completed_at"]
+        ):
+            case["latest_completed_at"] = completed_at
+        if attempt.model_id:
+            case["tracked_models"].add(str(attempt.model_id))
+        if suite_id:
+            case["suite_ids"].add(str(suite_id))
+        if not case["latest_failure_detail"] and attempt.failure_detail:
+            case["latest_failure_detail"] = attempt.failure_detail
+
+    formatted = []
+    for case in rollups.values():
+        attempts = int(case["attempts"] or 0)
+        passed = int(case["passed"] or 0)
+        score_values = list(case["score_values"])
+        formatted.append(
+            {
+                "case_id": case["case_id"],
+                "attempts": attempts,
+                "pass_rate": round((passed / attempts) * 100, 1) if attempts else 0.0,
+                "avg_score": _round_metric(_sample_mean(score_values)) if score_values else None,
+                "open_regressions": int(regressions_by_case.get(case["case_id"], 0)),
+                "latest_completed_at": (
+                    case["latest_completed_at"].isoformat()
+                    if case["latest_completed_at"]
+                    else None
+                ),
+                "latest_failure_detail": case["latest_failure_detail"],
+                "tracked_models": sorted(case["tracked_models"]),
+                "suite_ids": sorted(case["suite_ids"]),
+            }
+        )
+
+    return sorted(
+        formatted,
+        key=lambda case: (
+            -(case["open_regressions"]),
+            case["avg_score"] if case["avg_score"] is not None else 999.0,
+            -(case["attempts"]),
+            case["latest_completed_at"] or "",
+        ),
+        reverse=False,
+    )[:20]
+
+
 async def get_agent_benchmark_dashboard(
     db: AsyncSession,
     agent_slug: str,
@@ -395,6 +566,7 @@ async def get_agent_benchmark_dashboard(
     runs = await _query_recent_runs(db, agent_slug, cutoff, suite_id)
     open_clusters = await _query_open_clusters(db, agent_slug, suite_id)
     model_rows = await _query_model_performance(db, agent_slug, cutoff, suite_id)
+    case_rows = await _query_case_attempts(db, agent_slug, cutoff, suite_id)
     experiment_summaries = await _query_experiment_summaries(db, agent_slug, suite_id)
     limited_runs = runs[:limit]
 
@@ -405,5 +577,7 @@ async def get_agent_benchmark_dashboard(
         "recent_runs": _format_recent_runs(limited_runs),
         "open_regressions": _format_regressions(open_clusters),
         "model_performance": _format_model_performance(model_rows),
+        "suites": _format_suites(runs, open_clusters),
+        "cases": _format_cases(case_rows, open_clusters),
         "experiments": experiment_summaries,
     }

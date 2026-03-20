@@ -1,4 +1,4 @@
-"""Dataclasses for the Jenny honing loop."""
+"""Dataclasses for the persona honing loop."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -6,7 +6,7 @@ from typing import Any
 
 
 @dataclass
-class JennyHoningIteration:
+class PersonaHoningIteration:
     """One benchmark + self-improvement cycle."""
 
     iteration: int
@@ -43,7 +43,7 @@ class JennyHoningIteration:
 
 
 @dataclass
-class JennyMutableState:
+class PersonaMutableState:
     heartbeat_instructions: str
     heartbeat_revision_id: str | None
     primary_model_id: str
@@ -66,7 +66,7 @@ class JennyMutableState:
 class _LoopState:
     """Mutable state threaded through honing loop iterations."""
 
-    iterations: list[JennyHoningIteration] = field(default_factory=list)
+    iterations: list[PersonaHoningIteration] = field(default_factory=list)
     honed: bool = False
     previous_best_score: float | None = None
     previous_failing_attempts: int | None = None

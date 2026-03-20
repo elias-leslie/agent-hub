@@ -20,7 +20,7 @@ def _make_prompt(**overrides: object) -> Prompt:
         slug="persona-heartbeat-instructions",
         name="Persona Heartbeat Instructions",
         content="Initial heartbeat instructions",
-        description="Jenny guidance",
+        description="Persona guidance",
         is_global=False,
         enabled=True,
         exclude_agents=[],

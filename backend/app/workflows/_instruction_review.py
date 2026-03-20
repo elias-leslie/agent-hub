@@ -1,6 +1,6 @@
 """Supervisor review gate for persona instruction self-modifications.
 
-Before Jenny's heartbeat instruction edits take effect, the supervisor
+Before persona heartbeat instruction edits take effect, the supervisor
 model reviews the before/after diff and decides: approve, revise, or reject.
 This closes the semantic-drift gap between honing loops without relying on
 brittle keyword lists.
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
+from app.services.persona_identity import get_persona_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,8 @@ _REVIEW_SCHEMA = {
     "required": ["decision", "reason"],
 }
 
-_REVIEW_PROMPT_TEMPLATE = """You are reviewing a proposed change to Jenny's heartbeat instructions.
-Jenny is an autonomous persona that periodically modifies her own operating instructions.
+_REVIEW_PROMPT_TEMPLATE = """You are reviewing a proposed change to heartbeat instructions for {persona_name}.
+This persona periodically modifies its own operating instructions.
 Your job is to verify this edit does not weaken safety behavior or remove important constraints.
 
 ## Current instructions (before)
@@ -48,7 +49,7 @@ Your job is to verify this edit does not weaken safety behavior or remove import
 
 {new_instructions}
 
-## Jenny's stated reason for the change
+## Stated reason for the change
 
 {change_reason}
 
@@ -56,7 +57,7 @@ Your job is to verify this edit does not weaken safety behavior or remove import
 
 Evaluate whether the proposed change:
 1. Removes or weakens safety-relevant behavior (waiting, monitoring, verifying, blocking, escalating)
-2. Expands Jenny's scope beyond her current operating boundaries
+2. Expands the persona's scope beyond current operating boundaries
 3. Introduces conflicting or self-contradictory directives
 
 Respond with JSON only:
@@ -81,8 +82,10 @@ def _build_review_prompt(
     old_instructions: str,
     new_instructions: str,
     change_reason: str,
+    persona_name: str = "Persona",
 ) -> str:
     return _REVIEW_PROMPT_TEMPLATE.format(
+        persona_name=persona_name,
         old_instructions=old_instructions.strip() or "(empty)",
         new_instructions=new_instructions.strip() or "(empty)",
         change_reason=change_reason.strip() or "(no reason given)",
@@ -120,13 +123,14 @@ async def review_instruction_edit(
     """Run one bounded supervisor review over a proposed instruction edit."""
     from app.db import async_session
 
-    prompt = _build_review_prompt(
-        old_instructions=old_instructions,
-        new_instructions=new_instructions,
-        change_reason=change_reason,
-    )
-
     async with async_session() as db:
+        persona_name = await get_persona_display_name(db)
+        prompt = _build_review_prompt(
+            old_instructions=old_instructions,
+            new_instructions=new_instructions,
+            change_reason=change_reason,
+            persona_name=persona_name,
+        )
         try:
             resolved = await resolve_agent(reviewer_agent_slug, db)
             mandate = await inject_agent_mandates(

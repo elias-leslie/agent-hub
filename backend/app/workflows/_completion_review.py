@@ -86,7 +86,7 @@ async def review_persona_completion(
     parent_session_id: str | None = None,
     reviewer_agent_slug: str = "supervisor",
 ) -> CompletionReviewOutcome:
-    """Run one bounded supervisor review over a finished Jenny session."""
+    """Run one bounded supervisor review over a finished persona session."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
 

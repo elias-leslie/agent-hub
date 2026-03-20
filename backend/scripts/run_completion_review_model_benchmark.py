@@ -16,11 +16,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-VENV_PYTHON = ROOT / "backend" / ".venv" / "bin" / "python"
+VENV_DIR = ROOT / "backend" / ".venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
 
 if (
     VENV_PYTHON.exists()
-    and Path(sys.executable).resolve() != VENV_PYTHON.resolve()
+    and Path(sys.prefix).resolve() != VENV_DIR.resolve()
     and os.environ.get("COMPLETION_REVIEW_BENCHMARK_NO_REEXEC") != "1"
 ):
     os.environ["COMPLETION_REVIEW_BENCHMARK_NO_REEXEC"] = "1"
@@ -49,7 +50,11 @@ from scripts.completion_review_benchmark_eval import (
     score_completion_review_attempt,
     summarize_completion_review_attempts,
 )
-from scripts.run_jenny_model_benchmark import _fetch_used_tool_names, _parse_csv, _resolve_client_id
+from scripts.run_persona_model_benchmark import (
+    _fetch_used_tool_names,
+    _parse_csv,
+    _resolve_client_id,
+)
 
 logging.basicConfig(
     level=logging.INFO,

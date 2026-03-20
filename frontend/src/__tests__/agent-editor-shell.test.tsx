@@ -52,7 +52,7 @@ const agent: Agent = {
 };
 
 describe("agent editor shell", () => {
-  it("links the header chat and analytics actions to dedicated agent routes", () => {
+  it("links the header chat and Arena actions to dedicated agent routes", () => {
     render(
       <AgentEditorHeader
         agent={agent}
@@ -69,9 +69,9 @@ describe("agent editor shell", () => {
       "href",
       "/agents/coder/chat",
     );
-    expect(screen.getByRole("link", { name: "Analytics" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Arena" })).toHaveAttribute(
       "href",
-      "/agents/coder/analytics",
+      "/agents/coder/arena",
     );
     expect(screen.getByRole("button", { name: "Back to agents" })).toBeInTheDocument();
   });

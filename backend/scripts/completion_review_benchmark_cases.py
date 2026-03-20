@@ -36,7 +36,7 @@ class CompletionReviewBenchmarkCase:
     async def build_prompt(self) -> str:
         return (
             f"Benchmark case id: {self.case_id}\n"
-            "You are the bounded supervisor completion reviewer for Jenny.\n"
+            "You are the bounded supervisor completion reviewer for the persona.\n"
             "Judge only whether the finished session should be accepted as complete, "
             "continued with one focused follow-up, or escalated for ambiguity.\n\n"
             f"{await render_completion_review_rules(header='Decision rules')}\n\n"
@@ -69,7 +69,7 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
         CompletionReviewBenchmarkCase(
             case_id="review_recent_progress_patience",
             name="Recent Progress Patience",
-            description="Reviewer should tell Jenny to continue when a quiet active session still has recent progress.",
+            description="Reviewer should tell the persona to continue when a quiet active session still has recent progress.",
             heartbeat_output="HEARTBEAT_OK — No follow-up required.",
             cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0",
             workstream_inventory=(

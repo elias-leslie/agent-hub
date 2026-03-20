@@ -293,7 +293,7 @@ async def _fetch_active_sessions_section() -> str:
 async def _fetch_recently_completed_sessions_section() -> str:
     """Show recently completed agent sessions with their summaries.
 
-    Gives Jenny automatic visibility into what dispatched agents accomplished.
+    Gives the persona automatic visibility into what dispatched agents accomplished.
     """
     try:
         from sqlalchemy import and_, select

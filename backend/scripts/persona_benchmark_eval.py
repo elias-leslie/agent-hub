@@ -1,4 +1,4 @@
-"""Parsing, scoring, and aggregation for Jenny model benchmark runs."""
+"""Parsing, scoring, and aggregation for persona model benchmark runs."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from scripts.jenny_benchmark_cases import JennyBenchmarkCase
+from scripts.persona_benchmark_cases import PersonaBenchmarkCase
 
 _INFRA_FAILURE_MARKERS = (
     "authentication failed",
@@ -36,7 +36,7 @@ _VALID_CONFIDENCE = {"low", "medium", "high"}
 
 
 @dataclass
-class JennyBenchmarkAttempt:
+class PersonaBenchmarkAttempt:
     """One benchmark attempt for one case on one model."""
 
     model_id: str
@@ -72,7 +72,7 @@ class JennyBenchmarkAttempt:
 
 
 @dataclass
-class JennyBenchmarkSummary:
+class PersonaBenchmarkSummary:
     """Aggregated benchmark result for a single model."""
 
     model_id: str
@@ -89,7 +89,7 @@ class JennyBenchmarkSummary:
 
 
 @dataclass
-class JennyBenchmarkRun:
+class PersonaBenchmarkRun:
     """Complete benchmark output across all models and cases."""
 
     benchmark_id: str
@@ -99,8 +99,8 @@ class JennyBenchmarkRun:
     runs_per_case: int
     started_at: str
     completed_at: str
-    attempts: list[JennyBenchmarkAttempt]
-    summaries: list[JennyBenchmarkSummary]
+    attempts: list[PersonaBenchmarkAttempt]
+    summaries: list[PersonaBenchmarkSummary]
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize complete run to dict."""
@@ -138,21 +138,47 @@ def _extract_fenced_json_block(content: str) -> str | None:
     return match.group(1).strip()
 
 
+def _strip_leading_narration_tags(content: str) -> str:
+    """Remove leading [[P:...]] narration tags emitted during task execution."""
+    remaining = content.lstrip()
+    while remaining.startswith("[[P:"):
+        end = remaining.find("]]")
+        if end == -1:
+            break
+        remaining = remaining[end + 2 :].lstrip()
+    return remaining
+
+
+def _load_first_json_object(content: str) -> dict[str, Any]:
+    """Decode the first JSON object in a response, tolerating light preamble."""
+    decoder = json.JSONDecoder()
+    stripped = content.strip()
+    parsed, _ = decoder.raw_decode(stripped)
+    if isinstance(parsed, dict):
+        return parsed
+
+    brace_index = stripped.find("{")
+    if brace_index <= 0:
+        raise json.JSONDecodeError("Expected JSON object", stripped, 0)
+    reparsed, _ = decoder.raw_decode(stripped[brace_index:])
+    if not isinstance(reparsed, dict):
+        raise json.JSONDecodeError("Top-level value must be an object", stripped, brace_index)
+    return reparsed
+
+
 def parse_benchmark_json(content: str) -> tuple[dict[str, Any] | None, str | None]:
     """Parse the model output as JSON."""
-    cleaned = strip_markdown_fences(content)
+    cleaned = strip_markdown_fences(_strip_leading_narration_tags(content))
     try:
-        parsed = json.loads(cleaned)
+        parsed = _load_first_json_object(cleaned)
     except json.JSONDecodeError as exc:
         fenced_json = _extract_fenced_json_block(content)
         if fenced_json is None:
             return None, f"invalid_json: {exc}"
         try:
-            parsed = json.loads(fenced_json)
+            parsed = _load_first_json_object(_strip_leading_narration_tags(fenced_json))
         except json.JSONDecodeError as fenced_exc:
             return None, f"invalid_json: {fenced_exc}"
-    if not isinstance(parsed, dict):
-        return None, "invalid_json: top-level value must be an object"
     return parsed, None
 
 
@@ -197,7 +223,7 @@ def _normalize_tool_name(tool_name: str) -> str:
     return normalized
 
 
-def _summary_term_present(case: JennyBenchmarkCase, term: str, summary: str) -> bool:
+def _summary_term_present(case: PersonaBenchmarkCase, term: str, summary: str) -> bool:
     if term in summary:
         return True
     for alternative in case.summary_term_alternatives.get(term, ()):
@@ -208,7 +234,7 @@ def _summary_term_present(case: JennyBenchmarkCase, term: str, summary: str) -> 
 
 def score_attempt(
     *,
-    case: JennyBenchmarkCase,
+    case: PersonaBenchmarkCase,
     model_id: str,
     run_number: int,
     latency_ms: int,
@@ -224,9 +250,9 @@ def score_attempt(
     output_tokens: int,
     total_tokens: int,
     failure_detail: str | None = None,
-) -> JennyBenchmarkAttempt:
+) -> PersonaBenchmarkAttempt:
     """Turn one live completion into a scored benchmark attempt."""
-    attempt = JennyBenchmarkAttempt(
+    attempt = PersonaBenchmarkAttempt(
         model_id=model_id,
         case_id=case.case_id,
         run_number=run_number,
@@ -310,18 +336,18 @@ def score_attempt(
     return attempt
 
 
-def summarize_attempts(attempts: list[JennyBenchmarkAttempt]) -> list[JennyBenchmarkSummary]:
+def summarize_attempts(attempts: list[PersonaBenchmarkAttempt]) -> list[PersonaBenchmarkSummary]:
     """Aggregate attempts into per-model summaries."""
-    grouped: dict[str, list[JennyBenchmarkAttempt]] = {}
+    grouped: dict[str, list[PersonaBenchmarkAttempt]] = {}
     for attempt in attempts:
         grouped.setdefault(attempt.model_id, []).append(attempt)
 
-    summaries: list[JennyBenchmarkSummary] = []
+    summaries: list[PersonaBenchmarkSummary] = []
     for model_id, model_attempts in grouped.items():
         infra_failures = sum(1 for attempt in model_attempts if attempt.failure_kind == "infra")
         model_failures = sum(1 for attempt in model_attempts if attempt.failure_kind == "model")
         summaries.append(
-            JennyBenchmarkSummary(
+            PersonaBenchmarkSummary(
                 model_id=model_id,
                 attempts=len(model_attempts),
                 pass_rate=sum(1 for attempt in model_attempts if attempt.passed) / len(model_attempts),
