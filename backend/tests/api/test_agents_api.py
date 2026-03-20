@@ -547,6 +547,104 @@ class TestAgentBenchmarkDashboardEndpoint:
             assert response.status_code == 404
 
 
+class TestAgentBenchmarkRunDetailEndpoint:
+    """Tests for individual benchmark run drill-down endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_get_benchmark_run_detail_returns_attempts(self, api_client):
+        """Test fetching a single benchmark run with its attempts."""
+        mock_dto = make_mock_dto()
+        from app.api.schemas.agent_schemas import AgentBenchmarkRunDetail
+
+        run_detail = AgentBenchmarkRunDetail(
+            run_id="run-1",
+            benchmark_id="persona-benchmark-aaaa1111",
+            suite_id="persona-patience",
+            run_kind="benchmark",
+            started_at="2026-03-11T11:40:00Z",
+            completed_at="2026-03-11T12:00:00Z",
+            avg_score=94.2,
+            pass_rate=75.0,
+            attempt_count=2,
+            passed_attempt_count=1,
+            infra_failure_count=0,
+            models=["codex/gpt-5.4"],
+            case_ids=["session_patience_quiet"],
+            attempts=[
+                {
+                    "id": "att-1",
+                    "model_id": "codex/gpt-5.4",
+                    "case_id": "session_patience_quiet",
+                    "case_name": "Quiet Session Patience",
+                    "run_number": 1,
+                    "passed": True,
+                    "composite_score": 100.0,
+                    "correctness_score": 1.0,
+                    "primary_action": "wait",
+                    "confidence": "high",
+                    "summary": "Session is healthy, waiting.",
+                    "latency_ms": 2400,
+                    "total_tokens": 1500,
+                },
+                {
+                    "id": "att-2",
+                    "model_id": "codex/gpt-5.4",
+                    "case_id": "session_patience_quiet",
+                    "case_name": "Quiet Session Patience",
+                    "run_number": 2,
+                    "passed": False,
+                    "composite_score": 85.0,
+                    "correctness_score": 0.75,
+                    "primary_action": "reconcile",
+                    "confidence": "medium",
+                    "summary": "Session seems stalled.",
+                    "failure_kind": "model",
+                    "failure_detail": "wrong_fields: primary_action",
+                    "latency_ms": 3200,
+                    "total_tokens": 1800,
+                },
+            ],
+        )
+
+        with (
+            patch("app.api.agents.get_agent_service") as mock_get_service,
+            patch("app.api.agents.get_agent_benchmark_run") as mock_get_run,
+        ):
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+            mock_get_run.return_value = run_detail
+
+            response = api_client.get("/api/agents/coder/benchmarks/run-1")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["run_id"] == "run-1"
+            assert len(data["attempts"]) == 2
+            assert data["attempts"][0]["passed"] is True
+            assert data["attempts"][0]["case_name"] == "Quiet Session Patience"
+            assert data["attempts"][1]["failure_detail"] == "wrong_fields: primary_action"
+            mock_get_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_benchmark_run_detail_returns_404_for_missing_run(self, api_client):
+        """Test 404 when benchmark run doesn't exist."""
+        mock_dto = make_mock_dto()
+
+        with (
+            patch("app.api.agents.get_agent_service") as mock_get_service,
+            patch("app.api.agents.get_agent_benchmark_run") as mock_get_run,
+        ):
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+            mock_get_run.return_value = None
+
+            response = api_client.get("/api/agents/coder/benchmarks/nonexistent")
+
+            assert response.status_code == 404
+
+
 class TestAgentVersionsEndpoint:
     """Tests for agent version history endpoint."""
 

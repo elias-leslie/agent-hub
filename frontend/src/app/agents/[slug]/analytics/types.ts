@@ -114,6 +114,7 @@ export interface AgentBenchmarkSuiteSummary {
 
 export interface AgentBenchmarkCaseSummary {
   case_id: string;
+  case_name: string | null;
   attempts: number;
   pass_rate: number;
   avg_score: number | null;
@@ -156,6 +157,48 @@ export interface AgentBenchmarkExperimentSummary {
   pass_rate_delta: AgentBenchmarkDeltaSummary;
   updated_at: string | null;
   created_at: string | null;
+}
+
+export interface AgentBenchmarkAttemptDetail {
+  id: string;
+  model_id: string;
+  case_id: string;
+  case_name: string | null;
+  run_number: number;
+  passed: boolean;
+  composite_score: number;
+  correctness_score: number;
+  primary_action: string | null;
+  confidence: string | null;
+  summary: string | null;
+  failure_kind: string | null;
+  failure_detail: string | null;
+  infra_failure: boolean;
+  tool_requirement_met: boolean;
+  latency_ms: number;
+  total_tokens: number;
+  turns: number;
+  tool_calls_count: number;
+  fallback_used: boolean;
+  provider: string | null;
+  effective_model: string | null;
+}
+
+export interface AgentBenchmarkRunDetail {
+  run_id: string;
+  benchmark_id: string;
+  suite_id: string;
+  run_kind: string;
+  started_at: string;
+  completed_at: string | null;
+  avg_score: number | null;
+  pass_rate: number | null;
+  attempt_count: number;
+  passed_attempt_count: number;
+  infra_failure_count: number;
+  models: string[];
+  case_ids: string[];
+  attempts: AgentBenchmarkAttemptDetail[];
 }
 
 export interface AgentBenchmarkDashboard {

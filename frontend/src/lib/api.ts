@@ -82,7 +82,7 @@ export {
 } from "./api/preferences";
 
 // Re-export all agents-related exports (list & metrics)
-export { fetchAgents, fetchAgentBenchmarkDashboard, fetchAgentMetrics } from "./api/agents";
+export { fetchAgents, fetchAgentBenchmarkDashboard, fetchAgentBenchmarkRunDetail, fetchAgentMetrics } from "./api/agents";
 
 // Re-export all agent-detail-related exports
 export {

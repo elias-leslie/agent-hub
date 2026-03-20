@@ -3,26 +3,13 @@ import { FlaskConical, Orbit, Sparkles } from "lucide-react";
 
 import type { AgentBenchmarkDashboard } from "../types";
 import { ChartCard } from "./ChartCard";
+import { formatPercent, formatScore } from "@/app/arena/utils";
 
 interface ArenaPreviewCardProps {
   dashboard: AgentBenchmarkDashboard;
   slug: string;
   ctaLabel?: string | null;
   compact?: boolean;
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "Pending";
-  }
-  return `${value.toFixed(1)}%`;
-}
-
-function formatScore(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "Pending";
-  }
-  return value.toFixed(1);
 }
 
 export function ArenaPreviewCard({
@@ -93,7 +80,7 @@ export function ArenaPreviewCard({
             </div>
             {ctaLabel ? (
               <Link
-                href={slug === "persona" ? "/persona/arena" : `/agents/${slug}/arena`}
+                href={`/arena/${slug}`}
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500"
               >
                 {ctaLabel}

@@ -298,6 +298,7 @@ class AgentBenchmarkCaseSummary(BaseModel):
     """One benchmark case summarized across persisted attempts."""
 
     case_id: str
+    case_name: str | None = None
     attempts: int = 0
     pass_rate: float = 0.0
     avg_score: float | None = None
@@ -346,6 +347,52 @@ class AgentBenchmarkExperimentSummary(BaseModel):
     pass_rate_delta: AgentBenchmarkDeltaSummary
     updated_at: str | None = None
     created_at: str | None = None
+
+
+class AgentBenchmarkAttemptDetail(BaseModel):
+    """One scored benchmark attempt inside a persisted run."""
+
+    id: str
+    model_id: str
+    case_id: str
+    case_name: str | None = None
+    run_number: int = 0
+    passed: bool = False
+    composite_score: float = 0.0
+    correctness_score: float = 0.0
+    primary_action: str | None = None
+    confidence: str | None = None
+    summary: str | None = None
+    failure_kind: str | None = None
+    failure_detail: str | None = None
+    infra_failure: bool = False
+    tool_requirement_met: bool = True
+    latency_ms: int = 0
+    total_tokens: int = 0
+    turns: int = 0
+    tool_calls_count: int = 0
+    fallback_used: bool = False
+    provider: str | None = None
+    effective_model: str | None = None
+
+
+class AgentBenchmarkRunDetail(BaseModel):
+    """One benchmark run with its individual attempt results."""
+
+    run_id: str
+    benchmark_id: str
+    suite_id: str
+    run_kind: str
+    started_at: str
+    completed_at: str | None = None
+    avg_score: float | None = None
+    pass_rate: float | None = None
+    attempt_count: int = 0
+    passed_attempt_count: int = 0
+    infra_failure_count: int = 0
+    models: list[str] = Field(default_factory=list)
+    case_ids: list[str] = Field(default_factory=list)
+    attempts: list[AgentBenchmarkAttemptDetail] = Field(default_factory=list)
 
 
 class AgentBenchmarkDashboard(BaseModel):

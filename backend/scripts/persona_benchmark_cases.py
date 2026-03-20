@@ -162,7 +162,7 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             },
             required_summary_terms=("progress", "monitor"),
             summary_term_alternatives={
-                "monitor": ("supervise", "supervising"),
+                "monitor": ("supervise", "supervising", "watch", "observe", "track"),
             },
         ),
         PersonaBenchmarkCase(
@@ -230,6 +230,9 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
                 "should_close": False,
             },
             required_summary_terms=("progress", "wait"),
+            summary_term_alternatives={
+                "wait": ("patience", "patient", "intervene", "interrupt"),
+            },
         ),
         PersonaBenchmarkCase(
             case_id="stalled_session_reconcile",
@@ -486,6 +489,11 @@ def get_case_by_id(case_id: str) -> PersonaBenchmarkCase:
         if case.case_id == case_id:
             return case
     raise KeyError(f"Unknown persona benchmark case: {case_id}")
+
+
+def get_case_name_map() -> dict[str, str]:
+    """Return a mapping of case_id -> human-readable name for all known cases."""
+    return {case.case_id: case.name for case in get_persona_benchmark_cases()}
 
 
 def suggest_suite_id(case_ids: list[str]) -> str | None:
