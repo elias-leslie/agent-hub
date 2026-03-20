@@ -1,10 +1,10 @@
-"""Magic string constants for the Jenny honing loop."""
+"""Magic string constants for the persona honing loop."""
 from __future__ import annotations
 
 # Agent Hub client identity
-CLIENT_NAME = "jenny-honing-loop"
-REQUEST_SOURCE = "backend/scripts/run_jenny_honing_loop.py"
-CLI_COMMAND = "run_jenny_honing_loop"
+CLIENT_NAME = "persona-honing-loop"
+REQUEST_SOURCE = "backend/scripts/run_persona_honing_loop.py"
+CLI_COMMAND = "run_persona_honing_loop"
 
 # Benchmark run kinds
 RUN_KIND_HONING_ITERATION = "honing_iteration"

@@ -280,6 +280,34 @@ class AgentBenchmarkModelSummary(BaseModel):
     latest_completed_at: str | None = None
 
 
+class AgentBenchmarkSuiteSummary(BaseModel):
+    """One benchmark suite summarized for Arena views."""
+
+    suite_id: str
+    run_count: int = 0
+    avg_score: float | None = None
+    pass_rate: float = 0.0
+    open_regressions: int = 0
+    latest_completed_at: str | None = None
+    tracked_models: list[str] = Field(default_factory=list)
+    case_ids: list[str] = Field(default_factory=list)
+    run_kinds: list[str] = Field(default_factory=list)
+
+
+class AgentBenchmarkCaseSummary(BaseModel):
+    """One benchmark case summarized across persisted attempts."""
+
+    case_id: str
+    attempts: int = 0
+    pass_rate: float = 0.0
+    avg_score: float | None = None
+    open_regressions: int = 0
+    latest_completed_at: str | None = None
+    latest_failure_detail: str | None = None
+    tracked_models: list[str] = Field(default_factory=list)
+    suite_ids: list[str] = Field(default_factory=list)
+
+
 class AgentBenchmarkExperimentArmSummary(BaseModel):
     """One cohort inside a controlled benchmark experiment."""
 
@@ -329,4 +357,6 @@ class AgentBenchmarkDashboard(BaseModel):
     recent_runs: list[AgentBenchmarkRunSummary] = Field(default_factory=list)
     open_regressions: list[AgentRegressionClusterSummary] = Field(default_factory=list)
     model_performance: list[AgentBenchmarkModelSummary] = Field(default_factory=list)
+    suites: list[AgentBenchmarkSuiteSummary] = Field(default_factory=list)
+    cases: list[AgentBenchmarkCaseSummary] = Field(default_factory=list)
     experiments: list[AgentBenchmarkExperimentSummary] = Field(default_factory=list)

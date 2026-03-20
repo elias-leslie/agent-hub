@@ -57,3 +57,47 @@ async def test_finalize_completion_result_tracks_effective_model_and_fallback_re
     assert mock_observability.await_args.kwargs["orchestration_path"] == "single_turn"
     assert mock_observability.await_args.kwargs["provider"] == "codex"
     assert mock_log_tokens.await_args.args[2] == "codex/gpt-5.4"
+
+
+@pytest.mark.asyncio
+async def test_finalize_completion_result_resets_db_state_for_error_results() -> None:
+    db = AsyncMock()
+    session = SimpleNamespace(
+        status="active",
+        session_type="completion",
+        provider="claude",
+        model="claude/opus-4-6",
+        models_used=[],
+        providers_used=[],
+        provider_metadata={},
+    )
+
+    with (
+        patch(
+            "app.api.complete.result_finalizer.persist_execution_observability",
+            new_callable=AsyncMock,
+        ),
+        patch("app.api.complete.result_finalizer.log_token_usage", new_callable=AsyncMock),
+        patch("app.api.complete.result_finalizer.publish_complete", new_callable=AsyncMock),
+        patch("app.api.complete.result_finalizer.estimate_cost", return_value=MagicMock(total_cost_usd=0.0)),
+    ):
+        await finalize_completion_result(
+            db=db,
+            session=session,
+            session_id="sess-err",
+            requested_model="claude/opus-4-6",
+            effective_model="claude/opus-4-6",
+            provider="claude",
+            total_input_tokens=10,
+            total_output_tokens=20,
+            is_new_session=True,
+            final_result=None,
+            execution_status="error",
+            execution_error="tool loop cancelled",
+        )
+
+    db.rollback.assert_awaited_once()
+    db.refresh.assert_awaited_once_with(session)
+    db.commit.assert_awaited_once()
+    assert session.status == "completed"
+    assert session.health_detail == "completed"

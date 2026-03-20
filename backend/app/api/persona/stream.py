@@ -600,13 +600,13 @@ async def _fetch_sessions(
 async def get_persona_stream(
     db: AsyncSession = Depends(get_db),
     time_range: str = Query(default="24h", description="Time range: 6h, 24h, 7d, 30d, all"),
-    search: str | None = Query(default=None, description="Search across Jenny messages and activity"),
+    search: str | None = Query(default=None, description="Search across persona messages and activity"),
     focus_session_id: str | None = Query(default=None, description="Center the response around a specific session"),
     anchor_entry_id: str | None = Query(default=None, description="Center the response around a specific entry"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=300),
 ) -> PersonaStreamResponse:
-    """Return the unified Jenny stream: chat messages, heartbeats, and child runs."""
+    """Return the unified persona stream: chat messages, heartbeats, and child runs."""
     search_term = search.strip() if search else None
     parsed_search = _parse_search(search_term)
     hours = 0 if search_term else HOURS_MAP.get(time_range, 24)

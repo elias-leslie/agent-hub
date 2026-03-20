@@ -17,11 +17,12 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-VENV_PYTHON = ROOT / "backend" / ".venv" / "bin" / "python"
+VENV_DIR = ROOT / "backend" / ".venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
 
 if (
     VENV_PYTHON.exists()
-    and Path(sys.executable).resolve() != VENV_PYTHON.resolve()
+    and Path(sys.prefix).resolve() != VENV_DIR.resolve()
     and os.environ.get("MEMORY_PATH_REGRESSION_NO_REEXEC") != "1"
 ):
     os.environ["MEMORY_PATH_REGRESSION_NO_REEXEC"] = "1"

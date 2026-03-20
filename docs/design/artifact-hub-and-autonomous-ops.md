@@ -248,7 +248,7 @@ POST   /api/artifacts/upload                    # Simplified upload — file + o
 
 **Default seeded permissions:**
 ```
--- Jenny (persona) and core agents get full write access
++- Persona and core agents get full write access
 (NULL, NULL, 'agent', 'persona',    'write')
 (NULL, NULL, 'agent', 'coder',      'write')
 (NULL, NULL, 'agent', 'critic',     'write')
@@ -461,7 +461,7 @@ idea-researcher        claude-sonnet-4.6    Deep-dive research on specific ideas
 ```
 
 **Existing agents that participate in business ops (no changes needed):**
-- `persona` (Jenny) — orchestrator, dispatches to specialists
+- `persona` (display-name configurable) — orchestrator, dispatches to specialists
 - `equity-analyst` — portfolio/investment research
 - `critic` — reviews and critiques any agent's output
 - `supervisor` — completion review
@@ -471,10 +471,10 @@ idea-researcher        claude-sonnet-4.6    Deep-dive research on specific ideas
 
 ### 3.2 Coordination Model
 
-Jenny (persona) is the orchestrator. She doesn't do the research herself — she dispatches to specialists and reviews their output.
+The persona agent is the orchestrator. It does not do the research itself; it dispatches to specialists and reviews their output.
 
 ```
-Jenny's Heartbeat (every 60 min by default)
+Persona heartbeat (every 60 min by default)
 │
 ├── Check business ops schedule (see §5)
 │   ├── Is market research due? → Dispatch market-researcher
@@ -485,13 +485,13 @@ Jenny's Heartbeat (every 60 min by default)
 │
 ├── Review completed specialist outputs
 │   ├── Critic agent audits quality
-│   ├── Jenny decides: promote / revise / archive
+│   ├── Persona decides: promote / revise / archive
 │   └── Results stored as artifacts in the Hub
 │
 └── Escalate if needed (see §6)
 ```
 
-**Dispatch mechanism:** Jenny uses `complete_internal()` with the appropriate `agent_slug` to invoke specialists. Each specialist produces structured output stored as an artifact. Jenny then reviews via the existing supervisor/critic pipeline.
+**Dispatch mechanism:** The persona uses `complete_internal()` with the appropriate `agent_slug` to invoke specialists. Each specialist produces structured output stored as an artifact. The persona then reviews via the existing supervisor/critic pipeline.
 
 ### 3.3 The Autoresearch Loop (Adapted for Business)
 
@@ -538,7 +538,7 @@ Jenny's Heartbeat (every 60 min by default)
 - Instead of a 5-minute training run → agents execute structured research (bounded to ~10 minutes per hypothesis)
 - Instead of `val_bpb` → multi-dimensional quality scores
 - Instead of git keep/discard → artifact promotion/archival in the Hub
-- Instead of running indefinitely → runs on Jenny's heartbeat schedule (configurable cadence)
+- Instead of running indefinitely → runs on the persona heartbeat schedule (configurable cadence)
 
 ---
 
@@ -686,7 +686,7 @@ Both feed results into the Artifact Hub for human review. Both use the same scor
 
 ### 5.1 Schedule Design
 
-All autonomous ops run via Jenny's existing infrastructure: **Hatchet cron tasks** + **`persona_scheduled_jobs`** table.
+All autonomous ops run via the persona's existing infrastructure: **Hatchet cron tasks** + **`persona_scheduled_jobs`** table.
 
 ```
 Job Name                    Cadence         Payload Type    Agent(s) Involved
@@ -748,7 +748,7 @@ BUSINESS_OPS_SCHEDULE = [
 ```
 Triggers:
 ├── Scheduled (cron)          — recurring ops on cadence above
-├── Heartbeat-initiated       — Jenny checks for due work during regular heartbeat
+├── Heartbeat-initiated       — Persona checks for due work during regular heartbeat
 ├── Human-initiated           — you submit an idea, request research, or trigger manually
 ├── Event-driven (future)     — webhook triggers (e.g., competitor releases new feature)
 └── Experiment loop           — autonomous iteration on active experiments
@@ -919,7 +919,7 @@ Each idea is scored (0.0 to 1.0) on:
 
 ### 8.2 What Already Works (No Gaps)
 
-- Agent orchestration (Jenny + heartbeat + scheduler + Hatchet)
+- Agent orchestration (persona + heartbeat + scheduler + Hatchet)
 - Agent dispatch and completion (`complete_internal()`)
 - Multi-agent review pipeline (supervisor + critic)
 - Benchmark infrastructure (runs, experiments, attempts, regression clusters)
@@ -980,7 +980,7 @@ This is the single most important gap for autonomous business ops. Without web a
 - [ ] Seed scheduled jobs for recurring business ops
 - [ ] Implement escalation artifact flow + push notification triggers
 
-**Value delivered:** Jenny autonomously runs market research, generates ideas, and stores structured outputs.
+**Value delivered:** The persona autonomously runs market research, generates ideas, and stores structured outputs.
 
 ### Phase 4: Autoresearch Loop (Weeks 7-8)
 **Goal:** The autonomous experiment loop is running and producing validated ideas.
@@ -1046,7 +1046,7 @@ This is the single most important gap for autonomous business ops. Without web a
 ┌─────────────────────┐                ┌──────────────────────────┐
 │  Agent Workflows     │                │  Autonomous Business Ops │
 │                      │                │                          │
-│  create_artifact     │                │  Jenny orchestrates:     │
+│  create_artifact     │                │  Persona orchestrates:   │
 │  search_artifacts    │                │  ├─ market-researcher    │
 │  get_artifact        │                │  ├─ business-developer   │
 │  update_artifact     │                │  ├─ strategist           │

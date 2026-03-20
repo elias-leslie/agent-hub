@@ -108,6 +108,66 @@ async def test_execute_agent_loop_routes_tools_with_resolved_turn_budget() -> No
 
 
 @pytest.mark.asyncio
+async def test_execute_agent_loop_propagates_tool_error_outcome_to_finalizer() -> None:
+    tool_result = dict(
+        content="tool loop failed cleanly",
+        model="codex/gpt-5.4",
+        provider="codex",
+        input_tokens=2,
+        output_tokens=3,
+        finish_reason="error",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
+        thinking_tokens=None,
+        tool_calls_count=2,
+        status="error",
+        error="tool loop cancelled",
+        container_id=None,
+        progress_log=[],
+        model_used="claude/opus-4-6",
+        fallback_used=True,
+        fallback_reason="primary provider failed",
+        turns=1,
+    )
+    built = {
+        "content": "tool loop failed cleanly",
+        "model": "codex/gpt-5.4",
+        "provider": "codex",
+        "input_tokens": 2,
+        "output_tokens": 3,
+        "finish_reason": "error",
+        "session_id": "sess-1",
+        "memory_uuids": [],
+        "cited_uuids": [],
+    }
+
+    with (
+        patch(
+            "app.api.complete.agent_loop.route_tool_execution",
+            new=AsyncMock(return_value=tool_result),
+        ),
+        patch(
+            "app.api.complete.agent_loop.finalize_completion_result",
+            new=AsyncMock(),
+        ) as mock_finalize,
+        patch(
+            "app.api.complete.agent_loop.build_completion_result",
+            return_value=built,
+        ),
+    ):
+        result = await execute_agent_loop(_request(), should_execute_tools=True)
+
+    assert isinstance(result, CompletionInternalResult)
+    assert mock_finalize.await_args.args[4] == "claude/opus-4-6"
+    assert mock_finalize.await_args.kwargs["execution_status"] == "error"
+    assert mock_finalize.await_args.kwargs["execution_error"] == "tool loop cancelled"
+    assert mock_finalize.await_args.kwargs["fallback_used"] is True
+    assert mock_finalize.await_args.kwargs["fallback_reason"] == "primary provider failed"
+    assert mock_finalize.await_args.kwargs["orchestration_path"] == "tool_loop"
+
+
+@pytest.mark.asyncio
 async def test_execute_agent_loop_finalizes_multi_turn_results() -> None:
     final_result = SimpleNamespace(
         model_used="codex/gpt-5.4",

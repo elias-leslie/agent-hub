@@ -11,9 +11,9 @@ from .base import Base
 
 
 class AgentPerformanceLog(Base):
-    """Tracks agent/model performance for Jenny's autonomous model management.
+    """Tracks agent/model performance for persona-directed model management.
 
-    Each row represents one performance observation — filed by Jenny (persona),
+    Each row represents one performance observation filed by the persona,
     system automation, or human override. Provides dimensional queryability
     for agent x model x task_type x outcome analysis.
     """
@@ -40,7 +40,7 @@ class AgentPerformanceLog(Base):
     turns: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Content
-    content: Mapped[str] = mapped_column(Text)  # Jenny's observation text
+    content: Mapped[str] = mapped_column(Text)  # Persona-authored or system-authored observation text
 
     # Provenance
     session_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

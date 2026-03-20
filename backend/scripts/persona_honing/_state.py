@@ -1,4 +1,4 @@
-"""Jenny mutable state capture and restore."""
+"""Persona mutable state capture and restore."""
 from __future__ import annotations
 
 from app.db import async_session
@@ -15,8 +15,8 @@ from app.services.prompt_service import (
     restore_prompt_revision,
     update_prompt,
 )
-from scripts.jenny_honing._constants import CHANGED_BY
-from scripts.jenny_honing._models import JennyMutableState
+from scripts.persona_honing._constants import CHANGED_BY
+from scripts.persona_honing._models import PersonaMutableState
 
 
 async def _prompt_state(db, prompt_slug: str) -> tuple[str | None, str | None]:
@@ -28,7 +28,7 @@ async def _prompt_state(db, prompt_slug: str) -> tuple[str | None, str | None]:
     )
 
 
-async def _capture_jenny_mutable_state(agent_slug: str) -> JennyMutableState:
+async def _capture_persona_mutable_state(agent_slug: str) -> PersonaMutableState:
     async with async_session() as db:
         heartbeat_instructions = await get_persona_heartbeat_instructions(db) or ""
         revisions = await list_prompt_revisions(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG, limit=1)
@@ -46,7 +46,7 @@ async def _capture_jenny_mutable_state(agent_slug: str) -> JennyMutableState:
             db,
             COMPLETION_REVIEW_RULES_PROMPT_SLUG
         )
-        return JennyMutableState(
+        return PersonaMutableState(
             heartbeat_instructions=heartbeat_instructions,
             heartbeat_revision_id=heartbeat_revision_id,
             primary_model_id=agent.primary_model_id,
@@ -102,9 +102,9 @@ async def _restore_prompt_content(
         )
 
 
-async def _restore_jenny_mutable_state(
+async def _restore_persona_mutable_state(
     agent_slug: str,
-    state: JennyMutableState,
+    state: PersonaMutableState,
     *,
     reason: str,
 ) -> None:

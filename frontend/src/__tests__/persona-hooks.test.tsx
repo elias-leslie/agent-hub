@@ -62,7 +62,7 @@ describe("usePersona", () => {
     const secondSave = deferred<Response>();
 
     vi.mocked(fetchApi)
-      .mockResolvedValueOnce(jsonResponse({ name: "Jenny" }))
+      .mockResolvedValueOnce(jsonResponse({ name: "Persona" }))
       .mockReturnValueOnce(firstSave.promise)
       .mockReturnValueOnce(secondSave.promise);
 
@@ -71,7 +71,7 @@ describe("usePersona", () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByTestId("persona-name")).toHaveTextContent("Jenny");
+    expect(screen.getByTestId("persona-name")).toHaveTextContent("Persona");
 
     fireEvent.click(screen.getByText("Alpha"));
     expect(screen.getByTestId("autosave-status")).toHaveTextContent("scheduled");
@@ -105,14 +105,14 @@ describe("usePersona", () => {
   });
 
   it("cancels a pending autosave when the component unmounts", async () => {
-    vi.mocked(fetchApi).mockResolvedValueOnce(jsonResponse({ name: "Jenny" }));
+    vi.mocked(fetchApi).mockResolvedValueOnce(jsonResponse({ name: "Persona" }));
 
     const { unmount } = render(<PersonaHarness />);
 
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByTestId("persona-name")).toHaveTextContent("Jenny");
+    expect(screen.getByTestId("persona-name")).toHaveTextContent("Persona");
 
     fireEvent.click(screen.getByText("Alpha"));
     unmount();
@@ -126,7 +126,7 @@ describe("usePersona", () => {
 
   it("surfaces autosave errors after a failed save", async () => {
     vi.mocked(fetchApi)
-      .mockResolvedValueOnce(jsonResponse({ name: "Jenny" }))
+      .mockResolvedValueOnce(jsonResponse({ name: "Persona" }))
       .mockResolvedValueOnce(jsonResponse({ detail: "bad" }, 500));
 
     render(<PersonaHarness />);

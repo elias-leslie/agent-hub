@@ -73,7 +73,7 @@ function jsonResponse(data: unknown, status = 200) {
 
 const basePersona: Persona = {
   id: 1,
-  name: "Jenny",
+  name: "Persona",
   personality: "Helpful",
   user_profile: null,
   heartbeat_instructions: "Check systems",
@@ -293,14 +293,15 @@ describe("persona settings tabs", () => {
       />,
     );
 
-    expect(screen.getByText("Heartbeat is currently off, so Jenny is not autonomously driving work.")).toBeInTheDocument();
+    expect(screen.getByText("Heartbeat is currently off, so Persona is not autonomously driving work.")).toBeInTheDocument();
     expect(screen.getByText("Heartbeat requires tool execution, but codex/gpt-5.1-codex-mini does not support tools.")).toBeInTheDocument();
     expect(screen.getByText("Tools: not supported")).toBeInTheDocument();
   });
 
-  it("links Persona settings back to Jenny analytics", () => {
+  it("links Persona settings back to Arena", () => {
     render(
       <PersonaSettingsHeader
+        personaName="Avery"
         hasChanges={false}
         isSaving={false}
         saveSuccess={false}
@@ -309,6 +310,6 @@ describe("persona settings tabs", () => {
       />,
     );
 
-    expect(screen.getByTitle("Open Jenny analytics")).toHaveAttribute("href", "/persona/analytics");
+    expect(screen.getByTitle("Open Avery Arena")).toHaveAttribute("href", "/persona/arena");
   });
 });

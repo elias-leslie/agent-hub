@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,14 @@ if TYPE_CHECKING:
     from app.models import Session as DBSession
 
 logger = logging.getLogger(__name__)
+
+
+async def _reset_error_session_state(db: AsyncSession, session: DBSession) -> None:
+    """Clear failed transactions before touching ORM attributes on an error result path."""
+    with suppress(Exception):
+        await db.rollback()
+    with suppress(Exception):
+        await db.refresh(session)
 
 
 async def finalize_completion_result(
@@ -55,6 +64,9 @@ async def finalize_completion_result(
         final_result: Optional final result with cache metrics
         project_id: Optional project ID for budget tracking
     """
+    if execution_status == "error":
+        await _reset_error_session_state(db, session)
+
     # Log token usage and publish completion
     apply_execution_metadata(
         session,

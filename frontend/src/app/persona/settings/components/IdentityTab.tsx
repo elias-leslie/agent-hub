@@ -41,7 +41,7 @@ const USER_PROFILE_FIELDS = [
   ["user_identity", "User Identity", "Name, preferred address, identity notes"],
   ["work_context", "Work Context", "Role, projects, goals, operating environment"],
   ["communication_style", "Communication Style", "Tone, directness, verbosity, feedback style"],
-  ["autonomy_level", "Autonomy Level", "What Jenny should decide alone vs escalate"],
+  ["autonomy_level", "Autonomy Level", "What this persona should decide alone vs escalate"],
   ["notification_preferences", "Notification Preferences", "Push thresholds, quiet hours, urgency rules"],
   ["timezone", "Timezone", "Canonical timezone, e.g. America/New_York"],
   ["working_schedule", "Working Schedule", "Hours, availability, focus windows"],
@@ -169,7 +169,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               User Profile
             </h3>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              Structured user preferences Jenny can rely on consistently at runtime.
+              Structured user preferences this persona can rely on consistently at runtime.
             </p>
           </div>
           <div className="grid gap-4">

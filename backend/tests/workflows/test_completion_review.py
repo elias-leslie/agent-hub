@@ -25,7 +25,7 @@ def _mock_completion_review_prompts():
             )
         if slug == "completion-review-prompt":
             return (
-                "You are performing a bounded completion review for a finished Jenny persona session.\n\n"
+                "You are performing a bounded completion review for a finished persona session.\n\n"
                 "{review_rules}\n\n"
                 "<heartbeat_output>\n{completion_content}\n</heartbeat_output>\n\n"
                 "<cleanup_status>\n{cleanup_status}\n</cleanup_status>\n\n"

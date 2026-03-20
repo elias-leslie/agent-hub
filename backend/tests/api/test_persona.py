@@ -22,7 +22,7 @@ def _make_persona(**overrides) -> MagicMock:
     defaults = {
         "id": 1,
         "agent_id": 10,
-        "name": "Jenny",
+        "name": "Persona",
         "personality": "I'm a helpful AI.",
         "heartbeat_instructions": "Check health.",
         "user_context": "User likes brevity.",
@@ -84,7 +84,7 @@ class TestGetPersonaEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == 1
-        assert data["name"] == "Jenny"
+        assert data["name"] == "Persona"
         assert data["personality"] == "I'm a helpful AI."
         assert data["version"] == 2
         assert data["agent_slug"] == "persona"
@@ -149,7 +149,17 @@ class TestUpdatePersonaEndpoint:
     def test_partial_update(self, api_client, mock_db_session):
         persona = _make_persona(version=2)
 
-        with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
+        with (
+            patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock,
+            patch(
+                "app.api.persona.sync_persona_name_to_agent",
+                new=AsyncMock(),
+            ) as mock_sync_name,
+            patch("app.api.persona.get_agent_service") as mock_get_agent_service,
+        ):
+            mock_service = MagicMock()
+            mock_service.invalidate_slug = AsyncMock()
+            mock_get_agent_service.return_value = mock_service
             mock.return_value = persona
             response = api_client.put(
                 "/api/persona",
@@ -161,6 +171,8 @@ class TestUpdatePersonaEndpoint:
         assert data["name"] == "Aria"
         assert data["greeting"] == "Howdy!"
         assert data["version"] == 3  # incremented
+        mock_sync_name.assert_awaited_once_with(mock_db_session, persona)
+        mock_service.invalidate_slug.assert_awaited_once_with("persona")
 
     def test_version_increments(self, api_client, mock_db_session):
         persona = _make_persona(version=5)

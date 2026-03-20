@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class PersonaUserProfile(BaseModel):
-    """Structured user-profile fields Jenny can rely on at runtime."""
+    """Structured user-profile fields the persona can rely on at runtime."""
 
     user_identity: str | None = Field(default=None, max_length=2000)
     work_context: str | None = Field(default=None, max_length=2000)
@@ -132,7 +132,7 @@ class ActivityResponse(BaseModel):
 
 
 class PersonaStreamEntry(BaseModel):
-    """Single item in Jenny's unified chronological stream."""
+    """Single item in the persona's unified chronological stream."""
 
     id: str
     entry_type: str
@@ -207,7 +207,7 @@ class PersonaStreamResponse(BaseModel):
 
 
 class PersonaStreamMatch(BaseModel):
-    """Search match metadata for jumping through Jenny history."""
+    """Search match metadata for jumping through persona history."""
 
     entry_id: str
     session_id: str
@@ -217,7 +217,7 @@ class PersonaStreamMatch(BaseModel):
 
 
 class PersonaPulseMetric(BaseModel):
-    """Single metric shown in Jenny's pulse strip."""
+    """Single metric shown in the persona pulse strip."""
 
     key: str
     label: str
@@ -226,7 +226,7 @@ class PersonaPulseMetric(BaseModel):
 
 
 class PersonaIssueGroup(BaseModel):
-    """Repeated issue fingerprint aggregated across Jenny sessions."""
+    """Repeated issue fingerprint aggregated across persona sessions."""
 
     fingerprint: str
     title: str
@@ -259,7 +259,7 @@ class PersonaAgentScorecard(BaseModel):
 
 
 class PersonaPulseSummary(BaseModel):
-    """Pulse snapshot for the current Jenny history window."""
+    """Pulse snapshot for the current persona history window."""
 
     metrics: list[PersonaPulseMetric] = Field(default_factory=list)
     issue_groups: list[PersonaIssueGroup] = Field(default_factory=list)

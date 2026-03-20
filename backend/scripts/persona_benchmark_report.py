@@ -1,15 +1,16 @@
-"""Report rendering for Jenny model benchmark runs."""
+"""Report rendering for persona model benchmark runs."""
 
 from __future__ import annotations
 
-from scripts.jenny_benchmark_eval import JennyBenchmarkAttempt, JennyBenchmarkRun
+from scripts.persona_benchmark_eval import PersonaBenchmarkAttempt, PersonaBenchmarkRun
+from scripts.persona_display import normalize_persona_name
 
 
 def _format_pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def _render_attempt_detail(attempt: JennyBenchmarkAttempt) -> str:
+def _render_attempt_detail(attempt: PersonaBenchmarkAttempt) -> str:
     outcome = "PASS" if attempt.passed else (attempt.failure_kind or "failed").upper()
     used_tools = ", ".join(attempt.used_tool_names)
     return (
@@ -20,10 +21,15 @@ def _render_attempt_detail(attempt: JennyBenchmarkAttempt) -> str:
     )
 
 
-def generate_markdown_report(run: JennyBenchmarkRun) -> str:
+def generate_markdown_report(
+    run: PersonaBenchmarkRun,
+    *,
+    persona_name: str = "Persona",
+) -> str:
     """Render a full markdown report for a benchmark run."""
+    display_name = normalize_persona_name(persona_name)
     lines = [
-        "# Jenny Model Benchmark",
+        f"# {display_name} Model Benchmark",
         "",
         f"**Benchmark ID:** `{run.benchmark_id}`",
         f"**Project ID:** `{run.project_id}`",

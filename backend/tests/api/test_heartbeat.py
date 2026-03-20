@@ -405,7 +405,7 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 409
-        assert "paused" in response.json()["message"].lower()
+        assert response.json()["message"] == "Persona is paused"
 
     def test_heartbeat_trigger_rejects_unknown_target_project(self, api_client):
         with patch(

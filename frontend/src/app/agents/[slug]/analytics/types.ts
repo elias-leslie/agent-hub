@@ -100,6 +100,30 @@ export interface AgentBenchmarkModelSummary {
   latest_completed_at: string | null;
 }
 
+export interface AgentBenchmarkSuiteSummary {
+  suite_id: string;
+  run_count: number;
+  avg_score: number | null;
+  pass_rate: number;
+  open_regressions: number;
+  latest_completed_at: string | null;
+  tracked_models: string[];
+  case_ids: string[];
+  run_kinds: string[];
+}
+
+export interface AgentBenchmarkCaseSummary {
+  case_id: string;
+  attempts: number;
+  pass_rate: number;
+  avg_score: number | null;
+  open_regressions: number;
+  latest_completed_at: string | null;
+  latest_failure_detail: string | null;
+  tracked_models: string[];
+  suite_ids: string[];
+}
+
 export interface AgentBenchmarkExperimentArmSummary {
   label: string;
   run_count: number;
@@ -141,5 +165,7 @@ export interface AgentBenchmarkDashboard {
   recent_runs: AgentBenchmarkRunSummary[];
   open_regressions: AgentRegressionClusterSummary[];
   model_performance: AgentBenchmarkModelSummary[];
+  suites: AgentBenchmarkSuiteSummary[];
+  cases: AgentBenchmarkCaseSummary[];
   experiments: AgentBenchmarkExperimentSummary[];
 }

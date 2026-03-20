@@ -1,7 +1,7 @@
 """Post-heartbeat lifecycle — guaranteed summaries and format validation.
 
-Runs after complete_internal() returns, ensuring outcomes that Jenny's voluntary
-behavior alone cannot guarantee.
+Runs after complete_internal() returns, ensuring outcomes that persona behavior
+alone cannot guarantee.
 """
 
 from __future__ import annotations

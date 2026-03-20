@@ -48,7 +48,7 @@ class TestHeartbeatRuntimeInfo:
             provider,
             0.7,
             "medium",
-            "You are Jenny",
+            "You are Persona",
             None,
         )
 
@@ -76,7 +76,7 @@ class TestHeartbeatRuntimeInfo:
             "codex",
             0.7,
             "medium",
-            "You are Jenny",
+            "You are Persona",
             None,
         )
 
@@ -113,7 +113,7 @@ class TestHeartbeatRuntimeInfo:
             patch(
                 "app.workflows.persona_heartbeat._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=(model_id, provider, 0.7, "medium", "You are Jenny", None),
+                return_value=(model_id, provider, 0.7, "medium", "You are Persona", None),
             ),
         ):
             runtime = await get_heartbeat_runtime_info()
@@ -449,7 +449,7 @@ class TestHeartbeatCompletionRouting:
             patch(
                 "app.workflows.persona_heartbeat._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=(model_id, provider, 0.7, "medium", "You are Jenny", None),
+                return_value=(model_id, provider, 0.7, "medium", "You are Persona", None),
             ),
             patch(
                 "app.services.persona_service.get_persona",
@@ -509,7 +509,7 @@ class TestHeartbeatCompletionRouting:
             patch(
                 "app.workflows.persona_heartbeat._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=(model_id, provider, 0.25, "high", "You are Jenny", {"mode": "auto"}),
+                return_value=(model_id, provider, 0.25, "high", "You are Persona", {"mode": "auto"}),
             ),
             patch(
                 "app.services.persona_service.get_persona",
@@ -532,7 +532,7 @@ class TestHeartbeatCompletionRouting:
         assert model_review_due is True
         kwargs = mock_complete.await_args.kwargs
         assert kwargs["messages"] == [
-            {"role": "system", "content": "You are Jenny"},
+            {"role": "system", "content": "You are Persona"},
             {"role": "user", "content": "Compare providers"},
         ]
         assert kwargs["model"] == model_id
@@ -573,7 +573,7 @@ class TestHeartbeatCompletionRouting:
             patch(
                 "app.workflows.persona_heartbeat._resolve_persona",
                 new_callable=AsyncMock,
-                return_value=("claude-sonnet-4-6", "claude", 0.2, "medium", "You are Jenny", {"mode": "auto"}),
+                return_value=("claude-sonnet-4-6", "claude", 0.2, "medium", "You are Persona", {"mode": "auto"}),
             ) as mock_resolve_persona,
             patch(
                 "app.services.persona_service.get_persona",

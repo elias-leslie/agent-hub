@@ -397,7 +397,7 @@ class TestAgentBenchmarkDashboardEndpoint:
                 {
                     "run_id": "run-1",
                     "completed_at": "2026-03-11T12:00:00Z",
-                    "suite_id": "jenny-patience",
+                    "suite_id": "persona-patience",
                     "run_kind": "benchmark",
                     "avg_score": 94.2,
                     "pass_rate": 75.0,
@@ -408,8 +408,8 @@ class TestAgentBenchmarkDashboardEndpoint:
             "recent_runs": [
                 {
                     "run_id": "run-1",
-                    "benchmark_id": "jenny-benchmark-aaaa1111",
-                    "suite_id": "jenny-patience",
+                    "benchmark_id": "persona-benchmark-aaaa1111",
+                    "suite_id": "persona-patience",
                     "run_kind": "benchmark",
                     "started_at": "2026-03-11T11:40:00Z",
                     "completed_at": "2026-03-11T12:00:00Z",
@@ -427,7 +427,7 @@ class TestAgentBenchmarkDashboardEndpoint:
             "open_regressions": [
                 {
                     "regression_key": "session_patience_quiet::wrong_fields: should_dispatch",
-                    "suite_id": "jenny-patience",
+                    "suite_id": "persona-patience",
                     "case_id": "session_patience_quiet",
                     "failure_detail": "wrong_fields: should_dispatch",
                     "status": "open",
@@ -449,11 +449,37 @@ class TestAgentBenchmarkDashboardEndpoint:
                     "latest_completed_at": "2026-03-11T12:00:00Z",
                 }
             ],
+            "suites": [
+                {
+                    "suite_id": "persona-patience",
+                    "run_count": 3,
+                    "avg_score": 94.2,
+                    "pass_rate": 75.0,
+                    "open_regressions": 2,
+                    "latest_completed_at": "2026-03-11T12:00:00Z",
+                    "tracked_models": ["codex/gpt-5.4", "claude-sonnet-4-6"],
+                    "case_ids": ["session_patience_quiet"],
+                    "run_kinds": ["benchmark"],
+                }
+            ],
+            "cases": [
+                {
+                    "case_id": "session_patience_quiet",
+                    "attempts": 12,
+                    "pass_rate": 75.0,
+                    "avg_score": 94.2,
+                    "open_regressions": 2,
+                    "latest_completed_at": "2026-03-11T12:00:00Z",
+                    "latest_failure_detail": "wrong_fields: should_dispatch",
+                    "tracked_models": ["codex/gpt-5.4"],
+                    "suite_ids": ["persona-patience"],
+                }
+            ],
             "experiments": [
                 {
-                    "experiment_key": "jenny-patience-ab",
-                    "name": "Jenny patience A/B",
-                    "suite_id": "jenny-patience",
+                    "experiment_key": "persona-patience-ab",
+                    "name": "Persona patience A/B",
+                    "suite_id": "persona-patience",
                     "status": "open",
                     "decision": "hold",
                     "decision_reason": "underpowered",
@@ -502,8 +528,10 @@ class TestAgentBenchmarkDashboardEndpoint:
             data = response.json()
             assert data["agent_slug"] == "coder"
             assert data["overview"]["total_runs"] == 3
+            assert data["suites"][0]["suite_id"] == "persona-patience"
+            assert data["cases"][0]["case_id"] == "session_patience_quiet"
             assert data["open_regressions"][0]["case_id"] == "session_patience_quiet"
-            assert data["experiments"][0]["experiment_key"] == "jenny-patience-ab"
+            assert data["experiments"][0]["experiment_key"] == "persona-patience-ab"
             mock_get_dashboard.assert_awaited_once()
 
     @pytest.mark.asyncio

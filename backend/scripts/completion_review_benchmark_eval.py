@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from scripts.completion_review_benchmark_cases import CompletionReviewBenchmarkCase
-from scripts.jenny_benchmark_eval import classify_failure
+from scripts.persona_benchmark_eval import classify_failure
 
 _VALID_DECISIONS = {"complete", "continue", "escalate"}
 _VALID_CONFIDENCE = {"low", "medium", "high"}

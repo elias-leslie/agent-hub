@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.config import settings
 from app.models import Agent
 from app.models.prompt import Prompt
+from app.services.persona_identity import DEFAULT_PERSONA_DISPLAY_NAME, PERSONA_SLUG
 from app.services.prompt_catalog import build_agent_system_prompt_slug
 
 logging.basicConfig(level=logging.INFO)
@@ -44,6 +45,8 @@ def _serialize_agent(agent: Agent, system_prompt_override: str | None) -> dict:
         value = getattr(agent, field, None)
         if field == "system_prompt" and system_prompt_override is not None:
             value = system_prompt_override
+        if field == "name" and agent.slug == PERSONA_SLUG:
+            value = DEFAULT_PERSONA_DISPLAY_NAME
         if value is not None:
             data[field] = value
     return data

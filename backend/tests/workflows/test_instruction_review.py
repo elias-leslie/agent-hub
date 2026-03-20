@@ -37,6 +37,15 @@ class TestBuildReviewPrompt:
         assert "(empty)" in result
         assert "New instructions here." in result
 
+    def test_uses_generic_persona_language(self):
+        result = _build_review_prompt(
+            old_instructions="Wait before acting.",
+            new_instructions="Act immediately.",
+            change_reason="Testing generic copy.",
+        )
+        assert "Jenny" not in result
+        assert "persona" in result.lower()
+
 
 # ── response parser ──
 

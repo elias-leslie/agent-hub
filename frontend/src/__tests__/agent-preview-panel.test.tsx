@@ -6,7 +6,7 @@ import type { AgentPreview, PreviewScenario } from "@/app/agents/[slug]/types";
 
 const preview: AgentPreview = {
   slug: "persona",
-  name: "Jenny",
+  name: "Persona",
   combined_prompt: "<system>system only</system>",
   full_context: "<system>system only</system>\n\n<task>Do the heartbeat</task>",
   memory_query: "heartbeat project state",

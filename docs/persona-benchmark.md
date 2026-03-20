@@ -1,6 +1,6 @@
-# Jenny Model Benchmark
+# Persona Arena Benchmark
 
-This benchmark profiles Jenny against a fixed seven-model roster:
+This benchmark profiles the persona against a fixed seven-model roster:
 
 - `codex/gpt-5.4`
 - `codex/gpt-5.3-codex`
@@ -14,9 +14,9 @@ Direct `openai/*` models are excluded from the default roster in this environmen
 
 ## Goal
 
-Measure Jenny on real governance-style work instead of static catalog scores alone.
+Measure the persona on real governance-style work instead of static catalog scores alone.
 
-The battery focuses on behaviors Jenny is expected to get right:
+The battery focuses on behaviors the persona is expected to get right:
 
 - dispatch a ready task
 - avoid same-task duplicate dispatch
@@ -31,19 +31,19 @@ The battery focuses on behaviors Jenny is expected to get right:
 Use:
 
 ```bash
-python backend/scripts/run_jenny_model_benchmark.py --dry-run
-python backend/scripts/run_jenny_model_benchmark.py \
+python backend/scripts/run_persona_model_benchmark.py --dry-run
+python backend/scripts/run_persona_model_benchmark.py \
   --runs-per-case 3 \
   --project-id agent-hub \
-  --output-json /tmp/jenny-benchmark.json \
-  --output-md /tmp/jenny-benchmark.md
+  --output-json /tmp/persona-benchmark.json \
+  --output-md /tmp/persona-benchmark.md
 ```
 
 Defaults:
 
 - project id: `agent-hub`
 - attempt order: shuffled with seed `42`
-- temp workspaces: `backend/.tmp/jenny-model-benchmark`
+- temp workspaces: `backend/.tmp/persona-model-benchmark`
 - client id: auto-resolved from `AGENT_HUB_CLIENT_ID` or the first active local client with access to the target project
 
 The live Precision Code Search benchmark case requires an indexed real project context. It is included in the default battery, so the default benchmark project is now `agent-hub` rather than `persona-sandbox`.
@@ -73,18 +73,18 @@ Infra failures are tracked separately so transport problems do not get mistaken 
 
 Current home:
 
-- `http://localhost:3003/agents/persona/analytics`
+- `http://localhost:3003/persona/arena`
 
 Placement rule:
 
-- Jenny-specific observability belongs in the Persona/Jenny area, not the public Agents list.
-- The backend/storage model should stay agent/model agnostic even when the first rich UX is Jenny/persona-specific.
+- Arena is the umbrella evaluation surface, and the persona gets the first rich view there.
+- The backend/storage model should stay agent/model agnostic even when the first rich UX is persona-first.
 
 Why:
 
-- Jenny/Persona is hidden from the normal Agents section by design.
-- Most benchmark-driven tuning decisions are currently about Jenny's prompts, model assignment, heartbeat harness, and supervisory behavior.
-- The storage and API need to be reusable for other agents later, but the first operator UX should match where Jenny is already managed.
+- The persona is hidden from the normal Agents section by design.
+- Most benchmark-driven tuning decisions are currently about the persona's prompts, model assignment, heartbeat harness, and supervisory behavior.
+- The storage and API need to be reusable for other agents later, but the first operator UX should match where the persona is already managed.
 
 ## Lean Plan
 
@@ -92,24 +92,24 @@ Current state:
 
 - benchmark runs, attempts, config snapshots, and open regression clusters are now persisted
 - repeated baseline-vs-candidate experiments are now tracked as first-class records
-- the Persona/Jenny analytics page renders benchmark KPIs, trendlines, recent runs, open regressions, and model performance
-- the Persona/Jenny analytics page also renders benchmark experiment status, decision, and cohort deltas
+- the Arena runtime/overview surface renders benchmark KPIs, trendlines, recent runs, open regressions, and model performance
+- the Arena experiments view renders benchmark experiment status, decision, and cohort deltas
 - one-shot benchmarks and honing iterations can write into the same history model
 - Persona heartbeat now has a bounded supervisor completion-review stage after deterministic residue checks, so “false complete” behavior can be measured and corrected without a second open-ended loop
 
 Next tasks:
 
-1. Keep the Persona analytics page as the primary Jenny benchmark dashboard.
-2. Add benchmark run drill-down from Persona analytics into per-attempt detail and failure-cluster history.
+1. Keep Arena as the primary persona benchmark dashboard.
+2. Add benchmark run drill-down from Arena into per-attempt detail and failure-cluster history.
 3. Add controlled A/B workflow support:
    - fixed `suite_id`
    - baseline vs candidate labels
    - enough repeated runs to compare changes statistically instead of reacting to a single run
    - conservative promote/hold/rollback decisions with visible reasons such as `underpowered`, `mixed_config`, or `candidate_underperforms_baseline`
-4. Add explicit rollout/rollback rules for Jenny prompt and model changes:
+4. Add explicit rollout/rollback rules for persona prompt and model changes:
    - no prompt/model adoption without benchmark comparison against the last known-good baseline
    - auto-flag regressions when a candidate underperforms baseline on the same suite
-5. Extend the benchmark suite beyond current Jenny supervision cases where needed:
+5. Extend the benchmark suite beyond current persona supervision cases where needed:
    - long-running patience/focus
    - closeout completeness
    - supervisor completion-review quality (`false_complete`, `false_continue`, `residue_catch_rate`)
@@ -121,18 +121,18 @@ Next tasks:
    - compare baseline vs candidate
    - print open regression clusters
 7. Add a global benchmark index later, only when cross-agent comparison becomes valuable enough:
-   - keep agent-local UX first
-   - add global rollup after multiple agents have real suites
+- keep agent-local UX first
+- add global rollup after multiple agents have real suites
 
 Scope rule:
 
 - platform: agent/model agnostic
-- benchmark content: Jenny/persona first
-- UI: Persona/Jenny first, global rollup later
+- benchmark content: persona first
+- UI: Arena first, global rollup later
 
 ## Closed Loop
 
-Jenny should not "improve herself" by free-form prompt edits alone.
+The persona should not "improve itself" by free-form prompt edits alone.
 
 The intended loop is:
 

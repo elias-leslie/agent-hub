@@ -24,7 +24,7 @@ async def _get_persona_agent(db: AsyncSession) -> Agent:
 
 
 async def get_persona_heartbeat_instructions(db: AsyncSession) -> str | None:
-    """Return the canonical prompt-backed heartbeat instructions for Jenny."""
+    """Return the canonical prompt-backed heartbeat instructions for the persona."""
     if db is None or not hasattr(db, "execute"):
         return None
     prompt = await get_prompt_by_slug(db, PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_SLUG)

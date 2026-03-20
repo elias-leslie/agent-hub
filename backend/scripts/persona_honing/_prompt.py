@@ -1,12 +1,12 @@
-"""Jenny honing prompt construction."""
+"""Persona honing prompt construction."""
 from __future__ import annotations
 
 import json
 from typing import Any
 
 from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
-from scripts.jenny_benchmark_eval import JennyBenchmarkRun
-from scripts.jenny_honing._clusters import (
+from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+from scripts.persona_honing._clusters import (
     _diff_failure_clusters,
     _group_failures,
     _render_cluster_block,
@@ -37,7 +37,7 @@ _REFERENCE_NOTES = [
 
 
 def build_honing_prompt(
-    run: JennyBenchmarkRun,
+    run: PersonaBenchmarkRun,
     iteration: int,
     previous_clusters: list[dict[str, Any]] | None = None,
     review_run: CompletionReviewBenchmarkRun | None = None,
@@ -89,7 +89,7 @@ def build_honing_prompt(
         )
 
     return (
-        f"You are Jenny reviewing your own benchmark results for honing iteration {iteration}.\n\n"
+        f"You are the persona reviewing your own benchmark results for honing iteration {iteration}.\n\n"
         "Your job is to improve your own operating model only where the evidence justifies it.\n"
         "Stay inside persona-internal adaptation work: heartbeat instructions, model review, "
         "performance logging, and durable memory. Do not create or dispatch project tasks.\n\n"
@@ -107,7 +107,7 @@ def build_honing_prompt(
         f"{reference_block}\n\n"
         "Required behavior:\n"
         "- Diagnose the canonical layer first: heartbeat instructions, memory retrieval, observability, or model config.\n"
-        "- When reviewing your own performance history, use agent_slug=\"persona\" rather than the display name Jenny.\n"
+        "- When reviewing your own performance history, use agent_slug=\"persona\" rather than a display name string.\n"
         "- If you change heartbeat instructions, read them first and make a small targeted edit.\n"
         "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
         "- Treat completion-review regressions as first-class evidence; inspect completion-review-prompt, completion-review-rules, or supervisor model config when reviewer cases fail.\n"

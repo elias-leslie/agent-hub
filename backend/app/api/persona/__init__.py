@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.agent_service import get_agent_service
 from app.services.persona_document_prompt_service import (
     clear_persona_user_context_document,
     migrate_legacy_user_context_to_profile,
@@ -15,6 +16,7 @@ from app.services.persona_document_prompt_service import (
     set_persona_user_context_document,
 )
 from app.services.persona_documents import normalize_user_profile
+from app.services.persona_identity import PERSONA_SLUG, sync_persona_name_to_agent
 from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
@@ -104,8 +106,13 @@ async def update_persona(
     for field, value in update_data.items():
         setattr(persona, field, value)
 
+    if "name" in update_data:
+        await sync_persona_name_to_agent(db, persona)
+
     persona.version += 1
     await commit_and_refresh(db, persona)
+    if "name" in update_data:
+        await get_agent_service().invalidate_slug(PERSONA_SLUG)
 
     logger.info("Persona updated: fields=%s", list(update_data.keys()))
     return await persona_to_response(
@@ -118,8 +125,8 @@ async def update_persona(
 async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
     """Reset onboarding so bootstrap instructions are injected on next conversation.
 
-    Clears prompt-backed user context and resets onboarding_attempts so Jenny starts truly
-    fresh — no stale context that could make her act mid-onboarding.
+    Clears prompt-backed user context and resets onboarding_attempts so the persona starts
+    truly fresh, with no stale context that could make it act mid-onboarding.
     """
     persona = await get_or_create_persona(db)
     persona.onboarding_complete = False

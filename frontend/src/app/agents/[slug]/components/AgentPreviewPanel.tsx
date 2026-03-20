@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -145,6 +145,9 @@ export function AgentPreviewPanel({
   projectOptions,
 }: AgentPreviewPanelProps) {
   const [copied, setCopied] = useState(false);
+  const projectScopeId = useId();
+  const phaseHintId = useId();
+  const promptInputId = useId();
   const warnings = buildWarnings(previewMode, scenario);
   const promptInputConfig = getPromptInputConfig(previewMode);
   const memoryDebug = preview?.memory_debug ?? {};
@@ -200,11 +203,13 @@ export function AgentPreviewPanel({
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1.5">
+        <label htmlFor={projectScopeId} className="space-y-1.5">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
             Project Scope
           </span>
           <select
+            id={projectScopeId}
+            aria-label="Project Scope"
             value={scenario.projectId}
             onChange={(event) => onScenarioChange({ projectId: event.target.value })}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
@@ -218,11 +223,13 @@ export function AgentPreviewPanel({
           </select>
         </label>
 
-        <label className="space-y-1.5">
+        <label htmlFor={phaseHintId} className="space-y-1.5">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
             {getPhaseLabel(previewMode)}
           </span>
           <input
+            id={phaseHintId}
+            aria-label={getPhaseLabel(previewMode)}
             value={scenario.phase}
             onChange={(event) => onScenarioChange({ phase: event.target.value })}
             placeholder="Optional"
@@ -232,11 +239,13 @@ export function AgentPreviewPanel({
       </div>
 
       {previewMode !== "heartbeat" ? (
-        <label className="space-y-1.5">
+        <label htmlFor={promptInputId} className="space-y-1.5">
           <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
             {promptInputConfig.label}
           </span>
           <textarea
+            id={promptInputId}
+            aria-label={promptInputConfig.label}
             value={scenario.promptInput}
             onChange={(event) => onScenarioChange({ promptInput: event.target.value })}
             rows={4}

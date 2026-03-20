@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run iterative Jenny benchmark passes and prompt Jenny to self-correct between runs."""
+"""Run iterative persona benchmark passes and prompt the persona to self-correct between runs."""
 # ruff: noqa: E402
 
 from __future__ import annotations
@@ -13,16 +13,17 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-VENV_PYTHON = ROOT / "backend" / ".venv" / "bin" / "python"
-DEFAULT_WORKING_ROOT = ROOT / "backend" / ".tmp" / "jenny-honing-loop"
+VENV_DIR = ROOT / "backend" / ".venv"
+VENV_PYTHON = VENV_DIR / "bin" / "python"
+DEFAULT_WORKING_ROOT = ROOT / "backend" / ".tmp" / "persona-honing-loop"
 DEFAULT_OUTPUT_DIR = DEFAULT_WORKING_ROOT / "reports"
 
 if (
     VENV_PYTHON.exists()
-    and Path(sys.executable).resolve() != VENV_PYTHON.resolve()
-    and os.environ.get("JENNY_HONING_NO_REEXEC") != "1"
+    and Path(sys.prefix).resolve() != VENV_DIR.resolve()
+    and os.environ.get("PERSONA_HONING_NO_REEXEC") != "1"
 ):
-    os.environ["JENNY_HONING_NO_REEXEC"] = "1"
+    os.environ["PERSONA_HONING_NO_REEXEC"] = "1"
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), __file__, *sys.argv[1:]])
 
 sys.path.insert(0, str(ROOT))
@@ -35,8 +36,11 @@ from scripts.completion_review_benchmark_cases import (
     DEFAULT_COMPLETION_REVIEW_MODELS,
     get_default_completion_review_case_ids,
 )
-from scripts.jenny_benchmark_cases import DEFAULT_JENNY_BENCHMARK_MODELS, get_jenny_benchmark_cases
-from scripts.jenny_honing._constants import (
+from scripts.persona_benchmark_cases import (
+    DEFAULT_PERSONA_BENCHMARK_MODELS,
+    get_persona_benchmark_cases,
+)
+from scripts.persona_honing._constants import (
     CLI_COMMAND,
     CLIENT_NAME,
     DEFAULT_AGENT_SLUG,
@@ -50,17 +54,17 @@ from scripts.jenny_honing._constants import (
     DEFAULT_TIMEOUT_SECONDS,
     REQUEST_SOURCE,
 )
-from scripts.jenny_honing._experiment import _run_improvement_pass, _run_iteration  # noqa: F401
-from scripts.jenny_honing._models import _LoopState
-from scripts.jenny_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
-from scripts.run_jenny_model_benchmark import _parse_csv, _resolve_client_id
+from scripts.persona_honing._experiment import _run_improvement_pass, _run_iteration  # noqa: F401
+from scripts.persona_honing._models import _LoopState
+from scripts.persona_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
+from scripts.run_persona_model_benchmark import _parse_csv, _resolve_client_id
 
 LoopResult = dict[str, Any]
 
 
 class HoningLoopParser(argparse.ArgumentParser):
     def __init__(self) -> None:
-        super().__init__(description="Run iterative Jenny benchmark + self-honing passes")
+        super().__init__(description="Run iterative persona benchmark + self-honing passes")
         self._add_arguments()
 
     def _add_arguments(self) -> None:
@@ -237,7 +241,7 @@ async def run_honing_loop(
 
 
 def _parse_case_ids(cases_csv: str | None) -> list[str]:
-    all_case_ids = [case.case_id for case in get_jenny_benchmark_cases()]
+    all_case_ids = [case.case_id for case in get_persona_benchmark_cases()]
     return _parse_csv(cases_csv, all_case_ids)
 
 
@@ -251,7 +255,7 @@ def _result_output_path(output_json: str | None) -> Path | None:
 
 async def _run_from_args(args: argparse.Namespace) -> LoopResult:
     return await run_honing_loop(
-        models=_parse_csv(args.models, DEFAULT_JENNY_BENCHMARK_MODELS),
+        models=_parse_csv(args.models, DEFAULT_PERSONA_BENCHMARK_MODELS),
         case_ids=_parse_case_ids(args.cases),
         runs_per_case=args.runs_per_case,
         reviewer_models=_parse_csv(args.reviewer_models, DEFAULT_COMPLETION_REVIEW_MODELS),

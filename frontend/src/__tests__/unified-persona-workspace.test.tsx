@@ -586,8 +586,8 @@ describe("UnifiedPersonaWorkspace", () => {
         root_causes: ["context"],
         primary_root_cause: "context",
         title: "Completed with warnings",
-        summary: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Jenny dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm Jenny still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use Jenny on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
-        detail: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Jenny dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm Jenny still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use Jenny on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
+        summary: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Persona dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm the persona still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use the persona on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
+        detail: `[{'type': 'text', 'text': "TASK:task-605a52fc|pending|P2|task|STANDARD\\nTITLE:Live validation: Persona dispatch judgment after workflow cleanup\\nDESCRIPTION:Temporary validation task to confirm the persona still reaches a clear readiness judgment after the latest workflow fixes.\\nOBJECTIVE:Use the persona on a temporary validation task and confirm the current task surfaces still lead to a clear dispatch judgment without extra friction."}]`,
         fingerprint: "warning:task-605a52fc",
       },
       {
@@ -626,7 +626,7 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getAllByText("Completed with warnings")).toHaveLength(1);
     expect(screen.getAllByText(/Task task-605a52fc/i)).toHaveLength(1);
     expect(screen.queryByText(/\[\{'type': 'text'/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Title: Live validation: Jenny dispatch judgment after workflow cleanup/i)).toBeInTheDocument();
+    expect(screen.getByText(/Title: Live validation: Persona dispatch judgment after workflow cleanup/i)).toBeInTheDocument();
   });
 
   it("renders stream items in chronological order with newest at the bottom", async () => {
@@ -806,9 +806,12 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(screen.getByText("pause that task")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Search Jenny's history, task IDs, files, agents..."), {
-      target: { value: "active work" },
-    });
+    fireEvent.change(
+      screen.getByPlaceholderText(/Search .* history, task IDs, files, agents\.\.\./i),
+      {
+        target: { value: "active work" },
+      },
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/1 of 1 matches/)).toBeInTheDocument();
