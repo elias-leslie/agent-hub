@@ -112,10 +112,10 @@ async def _build_dispatch_warning(
             )
         if project_id:
             cleanup_status = cleanup_status or await bash_fn(_st_cmd("cleanup status", project_id))
-            if " finalize:" in cleanup_status or " conflicts:" in cleanup_status:
+            if " finalize:" in cleanup_status:
                 warnings.append(
-                    "WARNING: unresolved merge/conflict residue detected in cleanup status. "
-                    "Prefer finalize_merge or reconcile before dispatching more low-confidence work."
+                    "WARNING: merge-ready residue detected in cleanup status. "
+                    "Prefer finalize_merge, reconcile, or cleanup_worktrees when convenient."
                 )
         return "\n\n".join(warnings) + ("\n\n" if warnings else "")
     except Exception:
@@ -133,7 +133,9 @@ async def _cleanup_dispatch_block_reason(
         cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
     except Exception:
         return (None, None)
-    if " finalize:" in cleanup_status or " conflicts:" in cleanup_status or " review:" in cleanup_status:
+    # Plain finalize residue means a merge-ready branch exists, which should warn
+    # but not freeze unrelated dispatches across the whole project.
+    if " conflicts:" in cleanup_status or " review:" in cleanup_status:
         actionable = build_actionable_cleanup_summary(cleanup_status)
         detail = f"\n\n{actionable}" if actionable else ""
         return (

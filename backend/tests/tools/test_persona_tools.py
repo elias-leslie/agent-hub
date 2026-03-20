@@ -886,6 +886,30 @@ class TestManageTasks:
         assert mock_bash.await_count == 3
 
     @pytest.mark.asyncio
+    async def test_dispatch_allows_finalize_only_cleanup_residue_with_warning(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:2 dirty:0 orphan:0 prunable:0 tasks:task-old finalize:task-old",
+                "[]",
+                '{"task_id":"42","status":"queued"}',
+            ]
+        )
+
+        result = await manage_tasks(
+            mock_bash,
+            action="dispatch",
+            task_id="42",
+            project_id="agent-hub",
+        )
+
+        assert "WARNING: merge-ready residue detected in cleanup status." in result
+        assert '"status":"queued"' in result
+        assert mock_bash.await_count == 3
+
+    @pytest.mark.asyncio
     async def test_dispatch_blocks_when_same_task_has_fresh_active_session(self):
         from app.services.tools._executor_io import manage_tasks
 
