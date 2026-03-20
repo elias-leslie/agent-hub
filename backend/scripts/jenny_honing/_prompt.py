@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
 from scripts.jenny_benchmark_eval import JennyBenchmarkRun
 from scripts.jenny_honing._clusters import (
     _diff_failure_clusters,
@@ -39,6 +40,8 @@ def build_honing_prompt(
     run: JennyBenchmarkRun,
     iteration: int,
     previous_clusters: list[dict[str, Any]] | None = None,
+    review_run: CompletionReviewBenchmarkRun | None = None,
+    previous_review_clusters: list[dict[str, Any]] | None = None,
     max_failures: int = 6,
 ) -> str:
     """Build the persona self-improvement prompt for one benchmark run."""
@@ -61,6 +64,29 @@ def build_honing_prompt(
     resolved_block = _render_cluster_block(
         resolved_clusters[:max_failures], "Resolved clusters since the previous iteration",
     )
+    review_ranking_block = "- not run"
+    review_failure_block = "Completion-review failure clusters:\n- not run"
+    review_persistent_block = "Persistent completion-review clusters from the previous iteration:\n- not run"
+    if review_run is not None:
+        review_ranking_lines = [
+            f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
+            f"pass_rate={s.pass_rate:.1f} avg_turns={s.avg_turns:.2f}"
+            for i, s in enumerate(review_run.summaries[:3], start=1)
+        ]
+        review_ranking_block = "\n".join(review_ranking_lines) if review_ranking_lines else "- none"
+        review_clusters = _group_failures(review_run.attempts)
+        review_persistent_clusters, _, _ = _diff_failure_clusters(
+            previous_review_clusters,
+            review_clusters,
+        )
+        review_failure_block = _render_cluster_block(
+            review_clusters[:max_failures],
+            "Completion-review failure clusters",
+        )
+        review_persistent_block = _render_cluster_block(
+            review_persistent_clusters[:max_failures],
+            "Persistent completion-review clusters from the previous iteration",
+        )
 
     return (
         f"You are Jenny reviewing your own benchmark results for honing iteration {iteration}.\n\n"
@@ -73,6 +99,10 @@ def build_honing_prompt(
         f"{persistent_block}\n\n"
         f"{new_block}\n\n"
         f"{resolved_block}\n\n"
+        "Completion-review benchmark ranking:\n"
+        f"{review_ranking_block}\n\n"
+        f"{review_failure_block}\n\n"
+        f"{review_persistent_block}\n\n"
         "Reference heuristics to borrow when relevant:\n"
         f"{reference_block}\n\n"
         "Required behavior:\n"
@@ -80,6 +110,8 @@ def build_honing_prompt(
         "- When reviewing your own performance history, use agent_slug=\"persona\" rather than the display name Jenny.\n"
         "- If you change heartbeat instructions, read them first and make a small targeted edit.\n"
         "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
+        "- Treat completion-review regressions as first-class evidence; inspect completion-review-prompt, completion-review-rules, or supervisor model config when reviewer cases fail.\n"
+        "- Keep reviewer edits small and targeted; do not rewrite working reviewer behavior because of one ambiguous case.\n"
         "- Log a performance observation if the benchmark exposed a real recurring issue or confirmed an improvement.\n"
         "- Save durable memory only for reusable cross-session lessons.\n"
         "- Do not add speculative retry/safety mechanisms without demonstrated need.\n\n"

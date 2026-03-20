@@ -3,14 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from scripts.jenny_benchmark_eval import JennyBenchmarkAttempt
-
 
 def _cluster_key(cluster: dict[str, Any]) -> tuple[str, str]:
     return (str(cluster.get("case_id", "")), str(cluster.get("failure_detail", "")))
 
 
-def _group_failures(attempts: list[JennyBenchmarkAttempt]) -> list[dict[str, Any]]:
+def _group_failures(attempts: list[Any]) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for attempt in attempts:
         if attempt.passed:

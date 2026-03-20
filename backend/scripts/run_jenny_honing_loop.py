@@ -31,6 +31,10 @@ sys.path.insert(0, str(ROOT / "packages" / "agent-hub-client"))
 
 from agent_hub import AsyncAgentHubClient
 
+from scripts.completion_review_benchmark_cases import (
+    DEFAULT_COMPLETION_REVIEW_MODELS,
+    get_default_completion_review_case_ids,
+)
 from scripts.jenny_benchmark_cases import DEFAULT_JENNY_BENCHMARK_MODELS, get_jenny_benchmark_cases
 from scripts.jenny_honing._constants import (
     CLI_COMMAND,
@@ -63,6 +67,9 @@ class HoningLoopParser(argparse.ArgumentParser):
         self.add_argument("--models", help="Comma-separated model ids to test")
         self.add_argument("--cases", help="Comma-separated benchmark case ids to run")
         self.add_argument("--runs-per-case", type=int, default=DEFAULT_RUNS_PER_CASE)
+        self.add_argument("--reviewer-models", help="Comma-separated reviewer model ids to test")
+        self.add_argument("--reviewer-cases", help="Comma-separated completion-review case ids to run")
+        self.add_argument("--reviewer-runs-per-case", type=int, default=DEFAULT_RUNS_PER_CASE)
         self.add_argument("--project-id", default=DEFAULT_PROJECT_ID)
         self.add_argument("--working-root", default=str(DEFAULT_WORKING_ROOT))
         self.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
@@ -82,6 +89,7 @@ class HoningLoopParser(argparse.ArgumentParser):
         self.add_argument("--suite-id")
         self.add_argument("--agent-slug", default=DEFAULT_AGENT_SLUG)
         self.add_argument("--no-persist", action="store_true")
+        self.add_argument("--disable-completion-review", action="store_true")
 
 
 def _flush_output_json(path: Path, loop_state: _LoopState) -> None:
@@ -94,6 +102,9 @@ def _build_iteration_kwargs(
     models: list[str],
     case_ids: list[str],
     runs_per_case: int,
+    reviewer_models: list[str] | None,
+    reviewer_case_ids: list[str] | None,
+    reviewer_runs_per_case: int,
     project_id: str,
     working_root: Path,
     output_dir: Path,
@@ -106,11 +117,15 @@ def _build_iteration_kwargs(
     base_url: str,
     agent_slug: str,
     persist_results: bool,
+    disable_completion_review: bool,
 ) -> dict[str, Any]:
     return {
         "models": models,
         "case_ids": case_ids,
         "runs_per_case": runs_per_case,
+        "reviewer_models": reviewer_models,
+        "reviewer_case_ids": reviewer_case_ids,
+        "reviewer_runs_per_case": reviewer_runs_per_case,
         "project_id": project_id,
         "working_root": working_root,
         "output_dir": output_dir,
@@ -123,6 +138,7 @@ def _build_iteration_kwargs(
         "base_url": base_url,
         "agent_slug": agent_slug,
         "persist_results": persist_results,
+        "disable_completion_review": disable_completion_review,
     }
 
 
@@ -179,6 +195,10 @@ async def run_honing_loop(
     suite_id: str | None = None,
     agent_slug: str = DEFAULT_AGENT_SLUG,
     persist_results: bool = True,
+    disable_completion_review: bool = False,
+    reviewer_models: list[str] | None = None,
+    reviewer_case_ids: list[str] | None = None,
+    reviewer_runs_per_case: int = DEFAULT_RUNS_PER_CASE,
 ) -> LoopResult:
     """Run benchmark/improve cycles until honed or the iteration cap is hit."""
     resolved_client_id = await _resolve_client_id(client_id, project_id)
@@ -187,6 +207,9 @@ async def run_honing_loop(
         models=models,
         case_ids=case_ids,
         runs_per_case=runs_per_case,
+        reviewer_models=reviewer_models,
+        reviewer_case_ids=reviewer_case_ids,
+        reviewer_runs_per_case=reviewer_runs_per_case,
         project_id=project_id,
         working_root=working_root,
         output_dir=output_dir,
@@ -199,6 +222,7 @@ async def run_honing_loop(
         base_url=base_url,
         agent_slug=agent_slug,
         persist_results=persist_results,
+        disable_completion_review=disable_completion_review,
     )
     async with _build_client(base_url, resolved_client_id) as client:
         await _run_iterations(
@@ -217,6 +241,10 @@ def _parse_case_ids(cases_csv: str | None) -> list[str]:
     return _parse_csv(cases_csv, all_case_ids)
 
 
+def _parse_reviewer_case_ids(cases_csv: str | None) -> list[str]:
+    return _parse_csv(cases_csv, get_default_completion_review_case_ids())
+
+
 def _result_output_path(output_json: str | None) -> Path | None:
     return Path(output_json) if output_json else None
 
@@ -226,6 +254,9 @@ async def _run_from_args(args: argparse.Namespace) -> LoopResult:
         models=_parse_csv(args.models, DEFAULT_JENNY_BENCHMARK_MODELS),
         case_ids=_parse_case_ids(args.cases),
         runs_per_case=args.runs_per_case,
+        reviewer_models=_parse_csv(args.reviewer_models, DEFAULT_COMPLETION_REVIEW_MODELS),
+        reviewer_case_ids=_parse_reviewer_case_ids(args.reviewer_cases),
+        reviewer_runs_per_case=args.reviewer_runs_per_case,
         project_id=args.project_id,
         working_root=Path(args.working_root),
         output_dir=Path(args.output_dir),
@@ -241,6 +272,7 @@ async def _run_from_args(args: argparse.Namespace) -> LoopResult:
         suite_id=args.suite_id,
         agent_slug=args.agent_slug,
         persist_results=not args.no_persist,
+        disable_completion_review=args.disable_completion_review,
     )
 
 
