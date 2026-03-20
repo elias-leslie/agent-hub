@@ -167,9 +167,9 @@ function PersonaContent() {
 
             <div className="flex items-center gap-1">
               <Link
-                href="/persona/arena"
+                href="/arena/persona"
                 className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-                title={`Open ${personaName} Arena`}
+                title="View in Arena"
               >
                 <FlaskConical className="h-5 w-5" />
               </Link>

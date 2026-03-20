@@ -470,6 +470,39 @@ def test_score_attempt_accepts_signal_summary_alternative() -> None:
     assert attempt.failure_detail is None
 
 
+def test_score_attempt_accepts_wait_alternative_intervene() -> None:
+    """Regression test: 'intervene' in summary should satisfy the 'wait' term."""
+    case = get_case_by_id("session_patience_recent_progress")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="claude-opus-4-6",
+        run_number=1,
+        latency_ms=9000,
+        content=(
+            '{"case_id":"session_patience_recent_progress","primary_action":"wait",'
+            '"should_dispatch":false,"should_close":false,'
+            '"confidence":"high","summary":"Session is active with recent progress '
+            'and only 2.5 minutes of quiet while composing its next step '
+            '\\u2014 no reason to intervene."}'
+        ),
+        session_id="sess-wait",
+        provider="claude",
+        effective_model="claude-opus-4-6",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=80,
+        output_tokens=30,
+        total_tokens=110,
+    )
+
+    assert attempt.passed is True
+    assert attempt.correctness_score == 1.0
+    assert attempt.failure_detail is None
+
+
 def test_classify_failure_marks_internal_server_errors_as_infra() -> None:
     infra, kind = classify_failure(
         'Server error: {"error":"internal_server_error","message":"An unexpected error occurred","details":[]}'

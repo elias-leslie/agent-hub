@@ -9,11 +9,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard
+from app.api.helpers.agent_benchmarks import get_agent_benchmark_dashboard, get_agent_benchmark_run
 from app.api.helpers.agent_metrics import compute_agent_metrics
 from app.api.helpers.agent_preview import build_agent_preview
 from app.api.schemas.agent_schemas import (
     AgentBenchmarkDashboard,
+    AgentBenchmarkRunDetail,
     AgentCreateRequest,
     AgentListResponse,
     AgentMetrics,
@@ -314,6 +315,25 @@ async def get_agent_benchmarks(
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
     return await get_agent_benchmark_dashboard(db, agent.slug, days=days, limit=limit, suite_id=suite_id)
+
+
+@router.get("/{slug}/benchmarks/{run_id}", response_model=AgentBenchmarkRunDetail)
+async def get_agent_benchmark_run_detail(
+    slug: str,
+    run_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentBenchmarkRunDetail:
+    """Get one benchmark run with individual attempt results for drill-down."""
+    service = get_agent_service()
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    result = await get_agent_benchmark_run(db, agent.slug, run_id)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Benchmark run '{run_id}' not found")
+    return result
 
 
 @router.get("/{slug}/versions")

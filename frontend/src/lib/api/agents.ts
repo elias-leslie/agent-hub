@@ -8,7 +8,7 @@ import type {
   AgentMetrics,
   AgentMetricsResponse,
 } from "@/app/agents/lib/types";
-import type { AgentBenchmarkDashboard } from "@/app/agents/[slug]/analytics/types";
+import type { AgentBenchmarkDashboard, AgentBenchmarkRunDetail } from "@/app/agents/[slug]/analytics/types";
 
 export async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   const params = new URLSearchParams();
@@ -50,6 +50,17 @@ export async function fetchAgentBenchmarkDashboard(
   const res = await fetchApi(`/api/agents/${slug}/benchmarks?${params}`);
   if (!res.ok) {
     throw new Error("Failed to fetch benchmark dashboard");
+  }
+  return res.json();
+}
+
+export async function fetchAgentBenchmarkRunDetail(
+  slug: string,
+  runId: string,
+): Promise<AgentBenchmarkRunDetail> {
+  const res = await fetchApi(`/api/agents/${slug}/benchmarks/${runId}`);
+  if (!res.ok) {
+    throw new Error("Failed to fetch benchmark run details");
   }
   return res.json();
 }

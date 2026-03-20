@@ -481,6 +481,10 @@ def _format_cases(
     case_rows: list[Any],
     open_clusters: list[AgentRegressionCluster],
 ) -> list[dict[str, Any]]:
+    from scripts.persona_benchmark_cases import get_case_name_map
+
+    case_names = get_case_name_map()
+
     regressions_by_case = defaultdict(int)
     latest_failure_by_case: dict[str, str] = {}
     for cluster in open_clusters:
@@ -525,6 +529,7 @@ def _format_cases(
         formatted.append(
             {
                 "case_id": case["case_id"],
+                "case_name": case_names.get(case["case_id"]),
                 "attempts": attempts,
                 "pass_rate": round((passed / attempts) * 100, 1) if attempts else 0.0,
                 "avg_score": _round_metric(_sample_mean(score_values)) if score_values else None,
@@ -550,6 +555,74 @@ def _format_cases(
         ),
         reverse=False,
     )[:20]
+
+
+async def get_agent_benchmark_run_detail(
+    db: AsyncSession,
+    agent_slug: str,
+    run_id: str,
+) -> dict[str, Any] | None:
+    """Return one benchmark run with its individual attempt results."""
+    from scripts.persona_benchmark_cases import get_case_name_map
+
+    stmt = select(AgentBenchmarkRun).where(
+        AgentBenchmarkRun.id == run_id,
+        AgentBenchmarkRun.agent_slug == agent_slug,
+    )
+    run = (await db.execute(stmt)).scalars().first()
+    if not run:
+        return None
+
+    attempts_stmt = (
+        select(AgentBenchmarkAttempt)
+        .where(AgentBenchmarkAttempt.benchmark_run_id == run_id)
+        .order_by(AgentBenchmarkAttempt.case_id, AgentBenchmarkAttempt.model_id, AgentBenchmarkAttempt.run_number)
+    )
+    attempts = list((await db.execute(attempts_stmt)).scalars().all())
+    case_names = get_case_name_map()
+
+    return {
+        "run_id": run.id,
+        "benchmark_id": run.benchmark_id,
+        "suite_id": run.suite_id,
+        "run_kind": run.run_kind,
+        "started_at": run.started_at.isoformat(),
+        "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+        "avg_score": _round_metric(run.avg_score),
+        "pass_rate": _round_metric(run.pass_rate),
+        "attempt_count": int(run.attempt_count or 0),
+        "passed_attempt_count": int(run.passed_attempt_count or 0),
+        "infra_failure_count": int(run.infra_failure_count or 0),
+        "models": list(run.models or []),
+        "case_ids": list(run.case_ids or []),
+        "attempts": [
+            {
+                "id": attempt.id,
+                "model_id": attempt.model_id,
+                "case_id": attempt.case_id,
+                "case_name": case_names.get(attempt.case_id),
+                "run_number": attempt.run_number,
+                "passed": attempt.passed,
+                "composite_score": float(attempt.composite_score or 0.0),
+                "correctness_score": float(attempt.correctness_score or 0.0),
+                "primary_action": attempt.primary_action,
+                "confidence": attempt.confidence,
+                "summary": attempt.summary,
+                "failure_kind": attempt.failure_kind,
+                "failure_detail": attempt.failure_detail,
+                "infra_failure": attempt.infra_failure,
+                "tool_requirement_met": attempt.tool_requirement_met,
+                "latency_ms": int(attempt.latency_ms or 0),
+                "total_tokens": int(attempt.total_tokens or 0),
+                "turns": int(attempt.turns or 0),
+                "tool_calls_count": int(attempt.tool_calls_count or 0),
+                "fallback_used": attempt.fallback_used,
+                "provider": attempt.provider,
+                "effective_model": attempt.effective_model,
+            }
+            for attempt in attempts
+        ],
+    }
 
 
 async def get_agent_benchmark_dashboard(

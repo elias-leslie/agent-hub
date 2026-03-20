@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { AgentArenaDashboard } from "@/app/agents/[slug]/arena/components/AgentArenaDashboard";
-
-export default function PersonaArenaPage() {
-  return <AgentArenaDashboard slug="persona" backHref="/persona" />;
+export default function PersonaArenaRedirect() {
+  redirect("/arena/persona");
 }

@@ -9,6 +9,7 @@ import {
   ScrollText,
   Cpu,
   User,
+  FlaskConical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -37,6 +38,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Monitoring",
     icon: Activity,
     description: "Requests & metrics",
+  },
+  {
+    href: "/arena",
+    label: "Arena",
+    icon: FlaskConical,
+    description: "Benchmark command center",
   },
   {
     href: "/sessions",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -17,7 +17,7 @@ import {
   Trophy,
 } from "lucide-react";
 
-import { fetchAgent, fetchAgentBenchmarkDashboard, fetchAgentMetrics } from "@/lib/api";
+import { fetchAgent, fetchAgentBenchmarkDashboard, fetchAgentBenchmarkRunDetail, fetchAgentMetrics } from "@/lib/api";
 import { BenchmarkExperimentSection } from "@/app/agents/[slug]/analytics/components/BenchmarkExperimentSection";
 import { BenchmarkTrendSection } from "@/app/agents/[slug]/analytics/components/BenchmarkTrendSection";
 import { ChartCard } from "@/app/agents/[slug]/analytics/components/ChartCard";
@@ -25,14 +25,23 @@ import { ChartSection } from "@/app/agents/[slug]/analytics/components/ChartSect
 import { KPICard } from "@/app/agents/[slug]/analytics/components/KPICard";
 import { metricsToAnalytics } from "@/app/agents/[slug]/analytics/utils";
 import type {
+  AgentBenchmarkAttemptDetail,
   AgentBenchmarkCaseSummary,
   AgentBenchmarkDashboard,
   AgentBenchmarkModelSummary,
+  AgentBenchmarkRunDetail,
   AgentBenchmarkRunSummary,
   AgentRegressionClusterSummary,
   AgentBenchmarkSuiteSummary,
 } from "@/app/agents/[slug]/analytics/types";
 import { ArenaPreviewCard } from "@/app/agents/[slug]/analytics/components/ArenaPreviewCard";
+import {
+  deriveArenaStatus,
+  formatArenaLabel,
+  formatPercent,
+  formatRelativeTime,
+  formatScore,
+} from "@/app/arena/utils";
 
 import { ArenaHeader, type ArenaView } from "./ArenaHeader";
 
@@ -44,83 +53,12 @@ interface AgentArenaDashboardProps {
   initialView?: ArenaView;
 }
 
-function formatRelativeTime(iso: string | null | undefined) {
-  if (!iso) {
-    return "No completed runs yet";
-  }
-  const value = new Date(iso).getTime();
-  if (Number.isNaN(value)) {
-    return "Unknown";
-  }
-  const diffMs = Date.now() - value;
-  const diffHours = Math.max(Math.round(diffMs / (1000 * 60 * 60)), 0);
-  if (diffHours < 1) {
-    return "Less than an hour ago";
-  }
-  if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  }
-  const diffDays = Math.round(diffHours / 24);
-  if (diffDays < 30) {
-    return `${diffDays}d ago`;
-  }
-  return new Date(iso).toLocaleDateString();
-}
-
-function formatArenaLabel(value: string | null | undefined) {
-  if (!value) {
-    return "Unknown";
-  }
-  return value.replace(/\bjenny\b/gi, "persona");
-}
-
 function toSortableTime(iso: string | null | undefined) {
   if (!iso) {
     return 0;
   }
   const value = new Date(iso).getTime();
   return Number.isNaN(value) ? 0 : value;
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "Pending";
-  }
-  return `${value.toFixed(1)}%`;
-}
-
-function formatScore(value: number | null | undefined) {
-  if (value === null || value === undefined) {
-    return "Pending";
-  }
-  return value.toFixed(1);
-}
-
-function deriveArenaStatus(benchmarkDashboard: AgentBenchmarkDashboard) {
-  const { avg_score: avgScore, pass_rate: passRate, open_regressions: regressions } =
-    benchmarkDashboard.overview;
-  if (regressions >= 3 || passRate < 60) {
-    return {
-      label: "Regression pressure",
-      tone:
-        "bg-rose-100 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
-      detail: "Arena is catching active failures that still need reduction before trust increases.",
-    };
-  }
-  if (regressions > 0 || avgScore < 90) {
-    return {
-      label: "Under watch",
-      tone:
-        "bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
-      detail: "Core behavior is mostly intact, but there are still open weaknesses in the benchmark battery.",
-    };
-  }
-  return {
-    label: "Stable",
-    tone:
-      "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800",
-    detail: "Recent runs are holding their ground with low regression pressure and solid benchmark scores.",
-  };
 }
 
 function sortModels(models: AgentBenchmarkModelSummary[]) {
@@ -194,6 +132,31 @@ export function AgentArenaDashboard({
 }: AgentArenaDashboardProps) {
   const [windowDays, setWindowDays] = useState<ArenaWindow>(30);
   const [activeView, setActiveView] = useState<ArenaView>(initialView);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
+  const [runDetail, setRunDetail] = useState<AgentBenchmarkRunDetail | null>(null);
+  const [runDetailLoading, setRunDetailLoading] = useState(false);
+
+  const handleRunClick = useCallback(
+    async (runId: string) => {
+      if (expandedRunId === runId) {
+        setExpandedRunId(null);
+        setRunDetail(null);
+        return;
+      }
+      setExpandedRunId(runId);
+      setRunDetail(null);
+      setRunDetailLoading(true);
+      try {
+        const detail = await fetchAgentBenchmarkRunDetail(slug, runId);
+        setRunDetail(detail);
+      } catch {
+        setRunDetail(null);
+      } finally {
+        setRunDetailLoading(false);
+      }
+    },
+    [expandedRunId, slug],
+  );
 
   const {
     data: agent,
@@ -411,6 +374,74 @@ export function AgentArenaDashboard({
     );
   }
 
+  function renderAttemptRow(attempt: AgentBenchmarkAttemptDetail) {
+    return (
+      <div
+        key={attempt.id}
+        className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${attempt.passed ? "bg-emerald-50 dark:bg-emerald-950/20" : "bg-rose-50 dark:bg-rose-950/20"}`}
+      >
+        <span className={`h-2 w-2 rounded-full ${attempt.passed ? "bg-emerald-500" : "bg-rose-500"}`} />
+        <span className="min-w-0 flex-1 truncate font-medium text-slate-900 dark:text-slate-100">
+          {attempt.case_name ?? attempt.case_id}
+        </span>
+        <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+          {attempt.model_id}
+        </span>
+        <span className="shrink-0 w-12 text-right font-semibold text-slate-900 dark:text-slate-100">
+          {attempt.composite_score.toFixed(0)}
+        </span>
+        <span className="shrink-0 w-16 text-right text-xs text-slate-500 dark:text-slate-400">
+          {attempt.latency_ms}ms
+        </span>
+      </div>
+    );
+  }
+
+  function renderRunDrillDown() {
+    if (!expandedRunId) return null;
+    if (runDetailLoading) {
+      return (
+        <div className="mt-3 flex items-center justify-center py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+        </div>
+      );
+    }
+    if (!runDetail) return null;
+
+    const failedAttempts = runDetail.attempts.filter((a) => !a.passed);
+    const passedAttempts = runDetail.attempts.filter((a) => a.passed);
+
+    return (
+      <div className="mt-3 space-y-1.5">
+        {failedAttempts.length > 0 ? (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+              Failed ({failedAttempts.length})
+            </p>
+            {failedAttempts.map((attempt) => (
+              <div key={attempt.id}>
+                {renderAttemptRow(attempt)}
+                {attempt.failure_detail ? (
+                  <p className="ml-5 mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                    {attempt.failure_detail}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </>
+        ) : null}
+        {passedAttempts.length > 0 ? (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+              Passed ({passedAttempts.length})
+            </p>
+            {passedAttempts.map(renderAttemptRow)}
+          </>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderRecentRunsCard(title = "Recent runs") {
     return (
       <ChartCard title={title}>
@@ -418,10 +449,16 @@ export function AgentArenaDashboard({
           <p className="text-sm text-slate-500 dark:text-slate-400">No persisted runs yet.</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
-            {recentRuns.map((run) => (
+            {recentRuns.map((run) => {
+              const isExpanded = expandedRunId === run.run_id;
+              return (
               <article
                 key={run.run_id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50"
+                role="button"
+                tabIndex={0}
+                onClick={() => void handleRunClick(run.run_id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void handleRunClick(run.run_id); }}
+                className={`cursor-pointer rounded-2xl border px-4 py-4 transition-colors ${isExpanded ? "border-cyan-300 bg-cyan-50/50 dark:border-cyan-800 dark:bg-cyan-950/20" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -467,8 +504,11 @@ export function AgentArenaDashboard({
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   Cases: {run.case_ids.join(", ")}
                 </p>
+
+                {isExpanded ? renderRunDrillDown() : null}
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
       </ChartCard>
@@ -614,8 +654,13 @@ export function AgentArenaDashboard({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        {caseSummary.case_id}
+                        {caseSummary.case_name ?? caseSummary.case_id}
                       </p>
+                      {caseSummary.case_name ? (
+                        <p className="mt-0.5 text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                          {caseSummary.case_id}
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         {caseSummary.suite_ids.map((suiteId) => formatArenaLabel(suiteId)).join(", ")} · {caseSummary.attempts} attempts
                       </p>
@@ -729,15 +774,24 @@ export function AgentArenaDashboard({
               <p className="text-sm text-slate-500 dark:text-slate-400">No model data yet.</p>
             ) : (
               <div className="space-y-3">
-                {sortedModels.map((model, index) => (
+                {sortedModels.map((model, index) => {
+                  const isPrimary = model.model_id === primaryModel;
+                  return (
                   <article
                     key={model.model_id}
-                    className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/50"
+                    className={`flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 ${isPrimary ? "border-cyan-200 bg-cyan-50/60 dark:border-cyan-900 dark:bg-cyan-950/20" : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50"}`}
                   >
                     <div className="min-w-0">
-                      <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                        Rank {index + 1}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                          Rank {index + 1}
+                        </p>
+                        {isPrimary ? (
+                          <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-700 ring-1 ring-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:ring-cyan-800">
+                            primary
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                         {model.model_id}
                       </p>
@@ -754,7 +808,8 @@ export function AgentArenaDashboard({
                       </p>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </ChartCard>

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import AgentArenaPage from "@/app/agents/[slug]/arena/page";
+import { AgentArenaDashboard } from "@/app/agents/[slug]/arena/components/AgentArenaDashboard";
 import type { Agent } from "@/app/agents/[slug]/types";
 
 vi.mock("next/navigation", () => ({
@@ -79,7 +79,7 @@ const agent: Agent = {
   updated_at: "2026-03-06T14:00:00Z",
 };
 
-function renderPage() {
+function renderDashboard() {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -90,12 +90,12 @@ function renderPage() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <AgentArenaPage />
+      <AgentArenaDashboard slug="persona" backHref="/arena" />
     </QueryClientProvider>,
   );
 }
 
-describe("AgentArenaPage", () => {
+describe("AgentArenaDashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchAgent).mockResolvedValue(agent);
@@ -122,7 +122,7 @@ describe("AgentArenaPage", () => {
       experiments: [],
     });
 
-    renderPage();
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText("Runtime metrics unavailable")).toBeInTheDocument();
@@ -161,7 +161,7 @@ describe("AgentArenaPage", () => {
       experiments: [],
     });
 
-    renderPage();
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText("Arena is ready for the first benchmark battery.")).toBeInTheDocument();
@@ -263,6 +263,7 @@ describe("AgentArenaPage", () => {
       cases: [
         {
           case_id: "session_patience_quiet",
+          case_name: "Quiet Session Patience",
           attempts: 12,
           pass_rate: 75,
           avg_score: 94.2,
@@ -311,7 +312,7 @@ describe("AgentArenaPage", () => {
       ],
     });
 
-    renderPage();
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText("benchmark trend")).toBeInTheDocument();

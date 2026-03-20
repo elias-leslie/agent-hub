@@ -1,10 +1,10 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useParams } from "next/navigation";
-import { AgentArenaDashboard } from "./components/AgentArenaDashboard";
-
-export default function AgentArenaPage() {
-  const params = useParams();
-  const slug = params.slug as string;
-  return <AgentArenaDashboard slug={slug} />;
+export default async function AgentArenaRedirect({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  redirect(`/arena/${slug}`);
 }

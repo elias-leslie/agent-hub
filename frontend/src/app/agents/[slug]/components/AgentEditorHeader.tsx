@@ -85,7 +85,7 @@ export function AgentEditorHeader({
               Chat
             </Link>
             <Link
-              href={`/agents/${agent.slug}/arena`}
+              href={`/arena/${agent.slug}`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               <FlaskConical className="h-3.5 w-3.5" />
