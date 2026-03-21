@@ -154,101 +154,103 @@ class TestGetCommandRedirect:
                 },
             ],
         }
-        f = tmp_path / "tool-registry.json"
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir()
+        f = lib_dir / "tool-registry.json"
         f.write_text(json.dumps(registry))
         return f
 
     def test_blocks_raw_pytest(self, registry_file: Path) -> None:
         """Test that raw pytest is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("pytest tests/")
             assert result is not None
             assert "dt pytest" in result
 
     def test_blocks_venv_pytest(self, registry_file: Path) -> None:
         """Test that .venv/bin/pytest is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect(".venv/bin/pytest -v")
             assert result is not None
             assert "dt pytest" in result
 
     def test_blocks_python_m_pytest(self, registry_file: Path) -> None:
         """Test that python -m pytest is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("python -m pytest tests/")
             assert result is not None
 
     def test_blocks_raw_ruff(self, registry_file: Path) -> None:
         """Test that raw ruff is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("ruff check .")
             assert result is not None
             assert "dt ruff" in result
 
     def test_blocks_raw_types(self, registry_file: Path) -> None:
         """Test that raw mypy is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("mypy app/")
             assert result is not None
             assert "dt types" in result
 
     def test_blocks_psql(self, registry_file: Path) -> None:
         """Test that raw psql is redirected to db CLI."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("psql -U postgres summitflow")
             assert result is not None
             assert "db" in result
 
     def test_blocks_systemctl_restart(self, registry_file: Path) -> None:
         """Test that systemctl restart is redirected."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("systemctl --user restart summitflow")
             assert result is not None
             assert "restart.sh" in result
 
     def test_allows_dt_wrapper(self, registry_file: Path) -> None:
         """Test that dt commands are allowed."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             assert get_command_redirect("dt pytest tests/") is None
 
     def test_allows_st_wrapper(self, registry_file: Path) -> None:
         """Test that st commands are allowed."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             assert get_command_redirect("st task list") is None
 
     def test_allows_db_wrapper(self, registry_file: Path) -> None:
         """Test that db commands are allowed."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             assert get_command_redirect("db tables --counts") is None
 
     def test_allows_restart_sh(self, registry_file: Path) -> None:
         """Test that restart.sh is allowed."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             assert get_command_redirect("restart.sh") is None
 
     def test_allows_unrelated_command(self, registry_file: Path) -> None:
         """Test that unrelated commands pass through."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             assert get_command_redirect("echo hello") is None
             assert get_command_redirect("git status") is None
             assert get_command_redirect("ls -la") is None
 
     def test_blocks_chained_raw_command(self, registry_file: Path) -> None:
         """Test that raw commands after && are caught."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             result = get_command_redirect("echo done && pytest tests/")
             assert result is not None
 
     def test_allows_tool_name_in_string(self, registry_file: Path) -> None:
         """Test that tool names in echo strings are not blocked."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
             # 'pytest' appears in an echo string, not as a command
             assert get_command_redirect("echo 'run pytest later'") is None
 
     def test_fallback_when_registry_missing(self, tmp_path: Path) -> None:
         """Test graceful fallback when registry file doesn't exist."""
         missing = tmp_path / "nonexistent.json"
-        with patch("app.services.tools.registry.REGISTRY_PATH", missing):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=missing.parent):
             # Should not crash, just return None (allow all)
             assert get_command_redirect("pytest tests/") is None
 
@@ -289,9 +291,11 @@ class TestGetRegistry:
             ],
             "service_redirects": [],
         }
-        f = tmp_path / "tool-registry.json"
+        lib_dir = tmp_path / "lib"
+        lib_dir.mkdir()
+        f = lib_dir / "tool-registry.json"
         f.write_text(json.dumps(registry))
-        with patch("app.services.tools.registry.REGISTRY_PATH", f):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=f.parent.parent):
             result = get_registry()
             assert result is not None
             assert result["version"] == 1
@@ -300,5 +304,5 @@ class TestGetRegistry:
 
     def test_returns_none_when_missing(self, tmp_path: Path) -> None:
         """Test get_registry returns None when file missing."""
-        with patch("app.services.tools.registry.REGISTRY_PATH", tmp_path / "nope.json"):
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=tmp_path):
             assert get_registry() is None

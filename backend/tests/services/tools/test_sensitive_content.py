@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -54,6 +55,6 @@ class TestScanRuntimeSensitiveContent:
     async def test_returns_none_when_scanner_missing(self, monkeypatch):
         from app.services.tools import _sensitive_content
 
-        monkeypatch.setattr(_sensitive_content, "_SCANNER", _sensitive_content.Path("/nonexistent/scanner.py"))
+        monkeypatch.setattr(_sensitive_content, "resolve_summitflow_scripts_dir", lambda: Path("/nonexistent"))
         result = await scan_runtime_sensitive_content("/tmp/test.py", "content")
         assert result is None

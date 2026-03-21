@@ -524,7 +524,9 @@ run_alembic() {
     fi
 
     # Docker fallback: source config and look up container name
-    local config_file="$HOME/summitflow/scripts/lib/dev-standards-config.sh"
+    local summitflow_root
+    summitflow_root="$(resolve_project_root summitflow || true)"
+    local config_file="${summitflow_root:+$summitflow_root/scripts/lib/dev-standards-config.sh}"
     if [[ -f "$config_file" ]]; then
         # shellcheck disable=SC1090
         source "$config_file"

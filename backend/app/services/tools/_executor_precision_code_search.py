@@ -9,11 +9,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.core.project_roots import resolve_summitflow_scripts_dir
+
 DEFAULT_PRECISION_SEARCH_BUDGET = 1200
-PRECISION_SEARCH_SCRIPT = Path(os.environ.get(
-    "PRECISION_SEARCH_SCRIPT",
-    str(Path.home() / "summitflow" / "scripts" / "precision-code-search.py"),
-))
+
+
+def _resolve_precision_search_script() -> Path:
+    override = os.environ.get("PRECISION_SEARCH_SCRIPT", "").strip()
+    if override:
+        return Path(override).expanduser().resolve()
+
+    scripts_dir = resolve_summitflow_scripts_dir()
+    if scripts_dir is None:
+        return Path("precision-code-search.py")
+    return scripts_dir / "precision-code-search.py"
+
+
+PRECISION_SEARCH_SCRIPT = _resolve_precision_search_script()
 
 
 def _error_payload(message: str, **extra: object) -> str:
