@@ -52,6 +52,15 @@ def _serialize_agent(agent: Agent, system_prompt_override: str | None) -> dict:
     return data
 
 
+def _normalized_seed_payload(seed_data: dict) -> dict:
+    """Return a comparable seed payload without timestamp churn."""
+    metadata = seed_data.get("_metadata", {})
+    normalized_metadata = {k: v for k, v in metadata.items() if k != "generated_at"}
+    normalized = dict(seed_data)
+    normalized["_metadata"] = normalized_metadata
+    return normalized
+
+
 async def export_seeds(db: AsyncSession) -> dict:
     """Export all active agents and their prompts to a seed-compatible structure."""
     # Fetch all active agents
@@ -94,7 +103,20 @@ async def main() -> None:
     async with session_factory() as db:
         seed_data = await export_seeds(db)
 
-    SEED_FILE.write_text(json.dumps(seed_data, indent=2, ensure_ascii=False) + "\n")
+    if SEED_FILE.exists():
+        try:
+            existing_data = json.loads(SEED_FILE.read_text())
+        except json.JSONDecodeError:
+            existing_data = None
+        else:
+            if _normalized_seed_payload(existing_data) == _normalized_seed_payload(seed_data):
+                existing_generated_at = existing_data.get("_metadata", {}).get("generated_at")
+                if existing_generated_at:
+                    seed_data["_metadata"]["generated_at"] = existing_generated_at
+
+    rendered = json.dumps(seed_data, indent=2, ensure_ascii=False) + "\n"
+    if not SEED_FILE.exists() or SEED_FILE.read_text() != rendered:
+        SEED_FILE.write_text(rendered)
     logger.info(
         "Exported %d agents to %s",
         seed_data["_metadata"]["agent_count"],

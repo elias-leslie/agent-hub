@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from scripts.export_seeds import _serialize_agent
+from scripts.export_seeds import _normalized_seed_payload, _serialize_agent
 
 
 def test_serialize_agent_normalizes_persona_name_for_seed_defaults() -> None:
@@ -47,3 +47,26 @@ def test_serialize_agent_keeps_non_persona_names() -> None:
     exported = _serialize_agent(agent, None)
 
     assert exported["name"] == "Code Generator"
+
+
+def test_normalized_seed_payload_ignores_generated_at() -> None:
+    original = {
+        "_metadata": {
+            "generated_at": "2026-03-21T04:30:31.838573+00:00",
+            "generator": "scripts/export_seeds.py",
+            "agent_count": 36,
+        },
+        "agents": [{"slug": "persona"}],
+        "deactivate_slugs": ["worker"],
+    }
+    regenerated = {
+        "_metadata": {
+            "generated_at": "2026-03-22T01:02:03.000000+00:00",
+            "generator": "scripts/export_seeds.py",
+            "agent_count": 36,
+        },
+        "agents": [{"slug": "persona"}],
+        "deactivate_slugs": ["worker"],
+    }
+
+    assert _normalized_seed_payload(original) == _normalized_seed_payload(regenerated)

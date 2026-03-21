@@ -5,7 +5,7 @@ Wants=agent-hub-backend.service
 
 [Service]
 Type=simple
-WorkingDirectory=%h/agent-hub/frontend
+WorkingDirectory=__PROJECT_ROOT__/frontend
 Environment="HOME=%h"
 EnvironmentFile=-%h/.env.local
 Environment="NODE_ENV=production"
