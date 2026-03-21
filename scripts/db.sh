@@ -30,6 +30,7 @@ set -o pipefail
 # Project detection
 PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 PROJECT_NAME=$(basename "$PROJECT_DIR")
+WORKSPACES_ROOT="${ST_WORKSPACES_ROOT:-/srv/workspaces}"
 
 # Source credentials from ~/.env.local
 if [[ -f ~/.env.local ]]; then
@@ -46,12 +47,37 @@ declare -A DB_URLS=(
     ["hatchet"]="${HATCHET_DATABASE_URL:-postgresql://db_admin@localhost:5432/hatchet?sslmode=disable}"
 )
 
+resolve_project_root() {
+    local project="$1"
+
+    if command -v st >/dev/null 2>&1; then
+        local root
+        root="$(ST_PROGRESS_ONLY=1 st projects root "$project" 2>/dev/null | head -n 1 | tr -d '\r')"
+        if [[ -n "$root" && -d "$root" ]]; then
+            printf '%s\n' "$root"
+            return 0
+        fi
+    fi
+
+    if [[ -d "$WORKSPACES_ROOT/projects/$project" ]]; then
+        printf '%s\n' "$WORKSPACES_ROOT/projects/$project"
+        return 0
+    fi
+
+    if [[ -d "$HOME/$project" ]]; then
+        printf '%s\n' "$HOME/$project"
+        return 0
+    fi
+
+    return 1
+}
+
 # Alembic directories per project
 declare -A ALEMBIC_DIRS=(
-    ["summitflow"]="$HOME/summitflow/backend"
-    ["agent-hub"]="$HOME/agent-hub/backend"
-    ["portfolio-ai"]="$HOME/portfolio-ai/backend"
-    ["terminal"]="$HOME/terminal"
+    ["summitflow"]="$(resolve_project_root summitflow)/backend"
+    ["agent-hub"]="$(resolve_project_root agent-hub)/backend"
+    ["portfolio-ai"]="$(resolve_project_root portfolio-ai)/backend"
+    ["terminal"]="$(resolve_project_root terminal)"
 )
 
 # Colors
