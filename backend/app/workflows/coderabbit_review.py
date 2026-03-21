@@ -15,17 +15,18 @@ from typing import Any
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
+from app.core.project_roots import resolve_project_root
 from app.hatchet_app import hatchet
 
 logger = logging.getLogger(__name__)
 
-REVIEW_PROJECTS: dict[str, Path] = {
-    "summitflow": Path.home() / "summitflow",
-    "agent-hub": Path.home() / "agent-hub",
-    "terminal": Path.home() / "terminal",
-    "portfolio-ai": Path.home() / "portfolio-ai",
-    "monkey-fight": Path.home() / "monkey-fight",
-}
+REVIEW_PROJECT_IDS = (
+    "summitflow",
+    "agent-hub",
+    "terminal",
+    "portfolio-ai",
+    "monkey-fight",
+)
 
 SHA_MARKER = ".dev-tools/coderabbit-last-reviewed.sha"
 REVIEW_TIMEOUT_PER_PROJECT = 300  # 5 min
@@ -142,7 +143,8 @@ async def run_all_reviews() -> ReviewResult:
     total_findings = 0
     projects_reviewed = 0
 
-    for name, path in REVIEW_PROJECTS.items():
+    for name in REVIEW_PROJECT_IDS:
+        path = resolve_project_root(name) or Path(f"/missing/{name}")
         findings, count = await loop.run_in_executor(
             None, _run_review, name, path,
         )

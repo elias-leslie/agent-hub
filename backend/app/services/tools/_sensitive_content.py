@@ -5,11 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from pathlib import Path
+
+from app.core.project_roots import resolve_summitflow_scripts_dir
 
 logger = logging.getLogger(__name__)
-
-_SCANNER = Path.home() / "summitflow" / "scripts" / "lib" / "sensitive_scan.py"
 _DEFAULT_BLOCK_REASON = "sensitive content requires review"
 
 
@@ -49,11 +48,17 @@ async def scan_runtime_sensitive_content(
     if not path and not content:
         return None
 
-    if not _SCANNER.exists():
-        logger.warning("Sensitive-content scanner missing at %s; skipping runtime scan", _SCANNER)
+    scripts_dir = resolve_summitflow_scripts_dir()
+    if scripts_dir is None:
+        logger.warning("Shared SummitFlow scripts root is unavailable; skipping runtime scan")
         return None
 
-    cmd = ["python3", str(_SCANNER), "--mode", "runtime", "--json", "--path", path]
+    scanner = scripts_dir / "lib" / "sensitive_scan.py"
+    if not scanner.exists():
+        logger.warning("Sensitive-content scanner missing at %s; skipping runtime scan", scanner)
+        return None
+
+    cmd = ["python3", str(scanner), "--mode", "runtime", "--json", "--path", path]
     if repo_root:
         cmd.extend(["--repo-root", repo_root])
     if tool_name:

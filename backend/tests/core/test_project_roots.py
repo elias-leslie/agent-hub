@@ -1,0 +1,52 @@
+"""Tests for canonical project root resolution helpers."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+from app.core.project_roots import resolve_project_root, resolve_summitflow_scripts_dir
+
+
+def test_resolve_project_root_prefers_env_override(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("SUMMITFLOW_ROOT", str(tmp_path))
+    resolve_project_root.cache_clear()
+
+    resolved = resolve_project_root("summitflow")
+
+    assert resolved == tmp_path.resolve()
+
+
+def test_resolve_summitflow_scripts_dir_uses_rebuild_path(tmp_path: Path, monkeypatch) -> None:
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    (scripts_dir / "rebuild.sh").write_text("#!/usr/bin/env bash\n")
+    monkeypatch.delenv("SUMMITFLOW_SCRIPTS_DIR", raising=False)
+    monkeypatch.delenv("SUMMITFLOW_ROOT", raising=False)
+    resolve_project_root.cache_clear()
+    resolve_summitflow_scripts_dir.cache_clear()
+
+    with (
+        patch("app.core.project_roots.resolve_project_root", return_value=None),
+        patch("app.core.project_roots.shutil.which", return_value=str(scripts_dir / "rebuild.sh")),
+    ):
+        resolved = resolve_summitflow_scripts_dir()
+
+    assert resolved == scripts_dir.resolve()
+
+
+def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
+    resolve_project_root.cache_clear()
+
+    with (
+        patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
+        patch(
+            "app.core.project_roots.subprocess.run",
+            return_value=SimpleNamespace(returncode=0, stdout=str(tmp_path), stderr=""),
+        ),
+        patch("pathlib.Path.exists", return_value=True),
+    ):
+        resolved = resolve_project_root("terminal")
+
+    assert resolved == tmp_path.resolve()

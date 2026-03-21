@@ -15,10 +15,9 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
-logger = logging.getLogger(__name__)
+from app.core.project_roots import resolve_summitflow_scripts_dir
 
-# Canonical registry location — summitflow/scripts/lib is the shared scripts root
-REGISTRY_PATH = Path.home() / "summitflow" / "scripts" / "lib" / "tool-registry.json"
+logger = logging.getLogger(__name__)
 
 # Module-level cache (loaded once at first use)
 _cached_registry: dict[str, Any] | None = None
@@ -35,7 +34,13 @@ def _load_registry(path: Path | None = None) -> dict[str, Any] | None:
     Returns:
         Parsed registry dict, or None if file missing/invalid.
     """
-    target = path or REGISTRY_PATH
+    target = path
+    if target is None:
+        scripts_dir = resolve_summitflow_scripts_dir()
+        if scripts_dir is None:
+            logger.warning("Shared SummitFlow scripts root is unavailable; tool redirects disabled")
+            return None
+        target = scripts_dir / "lib" / "tool-registry.json"
     try:
         if not target.exists():
             logger.warning("Tool registry not found: %s", target)
