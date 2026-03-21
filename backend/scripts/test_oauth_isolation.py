@@ -34,6 +34,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, query
 from claude_agent_sdk.types import AssistantMessage, TextBlock
 
+MONKEY_FIGHT_ROOT = Path(__file__).resolve().parents[3] / "monkey-fight"
+
 
 @dataclass
 class TestResult:
@@ -83,7 +85,7 @@ RULES:
 4. Minimal changes only - do not over-engineer"""
 
 # SummitFlow's EXACT user prompt template (from agent_hub.py:317-358)
-SUMMITFLOW_USER_PROMPT = """# Task: Implement feature X
+SUMMITFLOW_USER_PROMPT = f"""# Task: Implement feature X
 
 Project: monkey-fight
 Subtask ID: 1.1
@@ -100,7 +102,7 @@ Subtask ID: 1.1
 - Function works
 
 ## Repository path:
-$HOME/monkey-fight
+{MONKEY_FIGHT_ROOT}
 
 Implement the required changes and return your evidence contract."""
 
