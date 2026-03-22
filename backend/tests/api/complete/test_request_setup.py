@@ -29,6 +29,7 @@ def _request() -> SimpleNamespace:
     return SimpleNamespace(
         use_memory=True,
         memory_group_id="project:agent-hub",
+        memory_variant_override=None,
         task_type=None,
         phase=None,
         project_id="agent-hub",
@@ -95,6 +96,7 @@ async def test_inject_memory_skips_when_enabled_false() -> None:
 @pytest.mark.asyncio
 async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     request = _request()
+    request.memory_variant_override = "MINIMAL"
     db = AsyncMock()
 
     with (
@@ -128,6 +130,7 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     assert injected_count == 3
     assert loaded == ["11111111-1111-1111-1111-111111111111"]
     mock_inject.assert_awaited_once()
+    assert mock_inject.await_args.kwargs["variant"] == "MINIMAL"
     mock_track.assert_awaited_once_with(["11111111-1111-1111-1111-111111111111"])
     mock_store.assert_awaited_once()
     assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]

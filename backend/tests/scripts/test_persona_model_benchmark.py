@@ -640,12 +640,14 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             keep_workdirs=False,
             use_memory=False,
             memory_group_id="benchmark:bench-1",
+            memory_variant_override="MINIMAL",
             task_type="heartbeat",
         )
 
     assert attempt.passed is True
     assert captured_kwargs["enable_caching"] is False
     assert captured_kwargs["skip_cache"] is True
+    assert captured_kwargs["memory_variant_override"] == "MINIMAL"
     assert captured_kwargs["task_type"] == "heartbeat"
     assert captured_kwargs["disable_agent_fallbacks"] is True
     assert captured_kwargs["response_format"]["type"] == "json_object"

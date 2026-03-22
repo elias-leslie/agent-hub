@@ -114,6 +114,37 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             },
         ),
         PersonaBenchmarkCase(
+            case_id="scope_conflict_shared_plumbing",
+            family="dispatch-readiness",
+            name="Scope Conflict Shared Plumbing",
+            description="Block dispatch when a live lane is actively touching shared infrastructure paths.",
+            scenario=(
+                "TASK: task-1010\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "objective=Add a new API endpoint for session export.\n"
+                "active_lane_for_different_task=yes\n"
+                "active_lane_task=task-2020\n"
+                "active_lane_scope_paths=backend/alembic/versions/, backend/app/models/session.py\n"
+                "active_lane_note=Specialist is mid-migration adding columns to the sessions table.\n"
+                "scope_overlap_risk=high (both tasks touch session model and may need schema changes)\n"
+                "cleanup_status=clean\n"
+                "question=Should the persona dispatch task-1010 now or block until the active migration work lands?\n"
+            ),
+            expected={
+                "case_id": "scope_conflict_shared_plumbing",
+                "primary_action": "block",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_summary_terms=("migration", "conflict"),
+            summary_term_alternatives={
+                "migration": ("schema", "alembic", "shared", "plumbing"),
+                "conflict": ("overlap", "risk", "collision", "unsafe"),
+            },
+        ),
+        PersonaBenchmarkCase(
             case_id="same_task_overlap",
             family="dispatch-readiness",
             name="Same Task Overlap",
@@ -163,6 +194,35 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             required_summary_terms=("progress", "monitor"),
             summary_term_alternatives={
                 "monitor": ("supervise", "supervising", "watch", "observe", "track"),
+            },
+        ),
+        PersonaBenchmarkCase(
+            case_id="snapshot_recover_not_rollback",
+            family="followthrough",
+            name="Snapshot Recover Not Rollback",
+            description="Prefer non-destructive snapshot recovery over destructive rollback when a lane goes sideways.",
+            scenario=(
+                "TASK: task-5050\n"
+                "status=in_progress\n"
+                "priority=P1\n"
+                "lane_status=stuck\n"
+                "lane_note=Specialist committed broken migrations and the lane is now failing all tests.\n"
+                "snapshot_available=yes\n"
+                "snapshot_source=auto-baseline (created at lane start via st claim)\n"
+                "recovery_options=st recover (creates sibling lane from snapshot, preserves broken lane for inspection) "
+                "or st rollback (destructively replaces current lane with snapshot, loses broken state for diagnosis).\n"
+                "uncommitted_work=no (all work committed before failure)\n"
+                "question=Should the persona use recover or rollback to restore the lane?\n"
+            ),
+            expected={
+                "case_id": "snapshot_recover_not_rollback",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_summary_terms=("recover",),
+            summary_term_alternatives={
+                "recover": ("recovery", "sibling", "non-destructive", "preserve"),
             },
         ),
         PersonaBenchmarkCase(
@@ -231,7 +291,7 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             },
             required_summary_terms=("progress", "wait"),
             summary_term_alternatives={
-                "wait": ("patience", "patient", "intervene", "interrupt"),
+                "wait": ("patience", "patient", "intervene", "interrupt", "no intervention", "let it"),
             },
         ),
         PersonaBenchmarkCase(
@@ -346,6 +406,9 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             max_turns=8,
             execute_tools=True,
             required_summary_terms=("shared",),
+            summary_term_alternatives={
+                "shared": ("standard", "common", "wired", "registered"),
+            },
             required_project_id="agent-hub",
         ),
         PersonaBenchmarkCase(
@@ -398,6 +461,7 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             required_summary_terms=("dead", "cleanup"),
             summary_term_alternatives={
                 "dead": ("unused", "orphaned"),
+                "cleanup": ("remove", "removal", "delete", "clean up", "clean"),
             },
         ),
         PersonaBenchmarkCase(

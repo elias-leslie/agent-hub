@@ -50,29 +50,32 @@ export interface ArenaStatus {
   detail: string;
 }
 
+const STATUS_TONES = {
+  regression: "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800",
+  watch: "bg-amber-950/30 text-amber-300 ring-1 ring-amber-800",
+  stable: "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800",
+} as const;
+
 export function deriveArenaStatus(benchmarkDashboard: AgentBenchmarkDashboard): ArenaStatus {
   const { avg_score: avgScore, pass_rate: passRate, open_regressions: regressions } =
     benchmarkDashboard.overview;
   if (regressions >= 3 || passRate < 60) {
     return {
       label: "Regression pressure",
-      tone:
-        "bg-rose-100 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
+      tone: STATUS_TONES.regression,
       detail: "Arena is catching active failures that still need reduction before trust increases.",
     };
   }
   if (regressions > 0 || avgScore < 90) {
     return {
       label: "Under watch",
-      tone:
-        "bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
+      tone: STATUS_TONES.watch,
       detail: "Core behavior is mostly intact, but there are still open weaknesses in the benchmark battery.",
     };
   }
   return {
     label: "Stable",
-    tone:
-      "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800",
+    tone: STATUS_TONES.stable,
     detail: "Recent runs are holding their ground with low regression pressure and solid benchmark scores.",
   };
 }

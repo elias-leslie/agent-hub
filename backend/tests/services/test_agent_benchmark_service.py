@@ -11,6 +11,7 @@ import pytest
 from app.services.agent_benchmark_service import (
     _should_update_regression_clusters,
     capture_benchmark_config_snapshot,
+    memory_state_descriptor,
     summarize_benchmark_experiment,
 )
 
@@ -362,3 +363,47 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
     assert snapshot["completion_reviewer"]["agent_slug"] == "supervisor"
     assert snapshot["completion_reviewer"]["primary_model_id"] == "claude-opus-4-6"
     assert snapshot["persona_documents"]["user_profile"]["field_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_capture_benchmark_config_snapshot_includes_memory_variant_override() -> None:
+    agent = SimpleNamespace(
+        id=17,
+        slug="coder",
+        version=7,
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=["claude-sonnet-4-6"],
+        escalation_model_id=None,
+        thinking_level="medium",
+        temperature=0.3,
+    )
+    memory_revision = SimpleNamespace(
+        id=42,
+        created_at=datetime.fromisoformat("2026-03-12T08:00:00+00:00"),
+        memory_uuid="mem-uuid-001",
+    )
+    mock_db = AsyncMock()
+    mock_db.scalar = AsyncMock(side_effect=[agent, memory_revision, 5])
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with (
+        patch("app.services._benchmark_config.async_session", _session),
+        patch(
+            "app.services._benchmark_config.collect_runtime_prompt_sections",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch("app.services._benchmark_config._task_prompt_slugs", return_value=[]),
+    ):
+        snapshot = await capture_benchmark_config_snapshot(
+            "coder",
+            task_type="wake",
+            memory_variant_override="MINIMAL",
+        )
+
+    assert snapshot["memory_state"]["variant_override"] == "MINIMAL"
+    assert memory_state_descriptor(snapshot) == "2026-03-12T08:00:00+00:00:42:MINIMAL"

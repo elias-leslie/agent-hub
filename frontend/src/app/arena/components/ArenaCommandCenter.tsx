@@ -6,7 +6,6 @@ import {
   Activity,
   AlertTriangle,
   FlaskConical,
-  Loader2,
   Radar,
   Sparkles,
   Trophy,
@@ -61,22 +60,50 @@ function deriveSystemStatus(kpis: AggregateKPIs) {
   if (kpis.totalRegressions >= 5 || (kpis.avgPassRate !== null && kpis.avgPassRate < 60)) {
     return {
       label: "Regression pressure",
-      tone: "bg-rose-100 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
+      tone: "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800",
       detail: "Multiple agents are under active regression pressure. Prioritize the worst-first cards below.",
     };
   }
   if (kpis.totalRegressions > 0 || (kpis.avgScore !== null && kpis.avgScore < 90)) {
     return {
       label: "Under watch",
-      tone: "bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
+      tone: "bg-amber-950/30 text-amber-300 ring-1 ring-amber-800",
       detail: "System is mostly stable but some agents have open regressions or soft scores.",
     };
   }
   return {
     label: "Stable",
-    tone: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800",
+    tone: "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800",
     detail: "All agents are holding steady with low regression pressure and solid benchmark scores.",
   };
+}
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+      <div className="flex items-center gap-3">
+        <div className="h-4 w-4 rounded bg-slate-800 animate-shimmer" />
+        <div className="h-4 w-32 rounded bg-slate-800 animate-shimmer" />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="h-8 rounded bg-slate-800/60 animate-shimmer" />
+        <div className="h-8 rounded bg-slate-800/60 animate-shimmer" />
+      </div>
+      <div className="mt-3 h-3 w-24 rounded bg-slate-800/40 animate-shimmer" />
+    </div>
+  );
+}
+
+function SkeletonKPI() {
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+      <div className="flex items-center gap-2">
+        <div className="h-4 w-4 rounded bg-slate-800 animate-shimmer" />
+        <div className="h-3 w-20 rounded bg-slate-800 animate-shimmer" />
+      </div>
+      <div className="mt-3 h-7 w-16 rounded bg-slate-800/60 animate-shimmer" />
+    </div>
+  );
 }
 
 export function ArenaCommandCenter() {
@@ -137,29 +164,63 @@ export function ArenaCommandCenter() {
 
   if (allLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] dark:bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+      <div className="min-h-screen bg-slate-950">
+        <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+        <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 lg:px-8">
+            <div className="flex items-center gap-3">
+              <FlaskConical className="h-5 w-5 text-amber-500" />
+              <h1 className="text-lg font-bold tracking-tight text-slate-100">Arena</h1>
+              <span className="rounded bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-200 ring-1 ring-amber-900">
+                Command Center
+              </span>
+            </div>
+          </div>
+        </header>
+        <main className="relative mx-auto max-w-7xl p-6 lg:p-8">
+          <div className="rounded-[20px] border border-slate-800 bg-slate-900/60 p-6 lg:p-8">
+            <div className="h-5 w-48 rounded bg-slate-800 animate-shimmer" />
+            <div className="mt-4 h-9 w-96 rounded bg-slate-800/60 animate-shimmer" />
+            <div className="mt-3 h-4 w-80 rounded bg-slate-800/40 animate-shimmer" />
+          </div>
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SkeletonKPI />
+            <SkeletonKPI />
+            <SkeletonKPI />
+            <SkeletonKPI />
+          </div>
+          <div className="mt-8">
+            <div className="h-4 w-32 rounded bg-slate-800 animate-shimmer" />
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_30%,#f8fafc_100%)] dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="min-h-screen bg-slate-950">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 lg:px-8">
           <div className="flex items-center gap-3">
-            <FlaskConical className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-            <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            <FlaskConical className="h-5 w-5 text-amber-500" />
+            <h1 className="text-lg font-bold tracking-tight text-slate-100">
               Arena
             </h1>
-            <span className="rounded bg-cyan-50 px-2 py-0.5 text-xs font-semibold text-cyan-700 ring-1 ring-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-200 dark:ring-cyan-900">
+            <span className="rounded bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-200 ring-1 ring-amber-900">
               Command Center
             </span>
           </div>
           <select
             value={windowDays}
             onChange={(e) => setWindowDays(Number(e.target.value) as ArenaWindow)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500/40 dark:border-slate-700 dark:bg-slate-800"
+            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           >
             <option value="7">Last 7 days</option>
             <option value="30">Last 30 days</option>
@@ -168,22 +229,21 @@ export function ArenaCommandCenter() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl p-6 lg:p-8">
+      <main className="relative mx-auto max-w-7xl p-6 lg:p-8">
         {/* Hero section */}
-        <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/70 bg-white/90 p-6 shadow-sm dark:border-cyan-900/40 dark:bg-slate-900/90 lg:p-8">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_34%)]" />
-          <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,rgba(148,163,184,0.16)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.16)_1px,transparent_1px)] [background-size:28px_28px]" />
+        <section className="relative overflow-hidden rounded-[20px] border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-sm lg:p-8">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,oklch(0.75_0.18_55_/_0.08),transparent_38%),radial-gradient(circle_at_bottom_right,oklch(0.7_0.17_155_/_0.06),transparent_34%)]" />
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-100">
+              <div className="inline-flex items-center gap-2 rounded-full bg-amber-950/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
                 <FlaskConical className="h-3.5 w-3.5" />
                 Arena Command Center
               </div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50 lg:text-4xl">
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-50 lg:text-4xl">
                 Cross-agent benchmark health at a glance.
               </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
                 Aggregate stability, regressions, and score trends across every agent in the system.
                 Drill into any agent for the full Arena field report.
               </p>
@@ -195,24 +255,24 @@ export function ArenaCommandCenter() {
                   <Radar className="h-3.5 w-3.5" />
                   {systemStatus.label}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:ring-slate-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-700">
                   <Activity className="h-3.5 w-3.5" />
                   {agentsWithData.length} agents reporting
                 </span>
               </div>
             </div>
 
-            <div className="relative grid gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-950/60 xl:w-[360px]">
+            <div className="relative grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 xl:w-[360px]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                     System status
                   </p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                  <p className="mt-2 text-sm text-slate-200">
                     {systemStatus.detail}
                   </p>
                 </div>
-                <Sparkles className="h-5 w-5 text-cyan-500" />
+                <Sparkles className="h-5 w-5 text-amber-500" />
               </div>
             </div>
           </div>
@@ -220,39 +280,39 @@ export function ArenaCommandCenter() {
 
         {/* Aggregate KPIs */}
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
               <FlaskConical className="h-4 w-4 text-blue-500" />
               Total Runs
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
               {aggregate.totalRuns}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
               <Trophy className="h-4 w-4 text-emerald-500" />
               System Avg Score
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
               {formatScore(aggregate.avgScore)}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
               <Activity className="h-4 w-4 text-amber-500" />
               System Pass Rate
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
               {formatPercent(aggregate.avgPassRate)}
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm px-5 py-4">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-slate-400">
               <AlertTriangle className="h-4 w-4 text-rose-500" />
               Total Regressions
             </div>
-            <p className="mt-2 text-2xl font-semibold text-slate-950 dark:text-slate-50">
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
               {aggregate.totalRegressions}
             </p>
           </div>
@@ -261,7 +321,7 @@ export function ArenaCommandCenter() {
         {/* Agent card grid */}
         {agentsWithData.length > 0 && (
           <div className="mt-8">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
               Agents — worst-first
             </h3>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -280,22 +340,22 @@ export function ArenaCommandCenter() {
         {/* Agents without data */}
         {agentsWithoutData.length > 0 && (
           <div className="mt-8">
-            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">
               Awaiting benchmark data
             </h3>
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {agentsWithoutData.map((agent) => (
                 <div
                   key={agent.slug}
-                  className="rounded-2xl border border-dashed border-slate-300 bg-white/60 p-5 dark:border-slate-700 dark:bg-slate-900/60"
+                  className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-5"
                 >
                   <div className="flex items-center gap-2">
-                    <FlaskConical className="h-4 w-4 text-slate-400" />
-                    <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                    <FlaskConical className="h-4 w-4 text-slate-500" />
+                    <h4 className="text-sm font-semibold text-slate-300">
                       {agent.name}
                     </h4>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-xs text-slate-400">
                     No benchmark history yet. Run a benchmark battery to populate Arena data.
                   </p>
                 </div>
@@ -306,8 +366,8 @@ export function ArenaCommandCenter() {
 
         {agents.length === 0 && !agentsLoading && (
           <div className="mt-12 text-center">
-            <FlaskConical className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600" />
-            <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+            <FlaskConical className="mx-auto h-10 w-10 text-slate-600" />
+            <p className="mt-3 text-sm text-slate-400">
               No agents found. Create an agent to start building Arena benchmark history.
             </p>
           </div>
