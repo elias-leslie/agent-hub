@@ -13,6 +13,7 @@ from app.services.memory.variants import (
     ScoringWeights,
     TierMultipliers,
     assign_variant,
+    get_variant_config,
 )
 
 
@@ -103,6 +104,8 @@ class TestVariantConfig:
         assert config.variant == MemoryVariant.BASELINE
         assert config.min_relevance_threshold == 0.35
         assert config.golden_standard_min_similarity == 0.25
+        assert config.max_reference_items == 6
+        assert config.max_query_selected_references == 3
 
     def test_enhanced_config(self):
         """Test ENHANCED variant config has higher semantic weight."""
@@ -117,6 +120,8 @@ class TestVariantConfig:
         assert config.variant == MemoryVariant.MINIMAL
         assert config.min_relevance_threshold == 0.50
         assert config.min_relevance_threshold > ENHANCED_CONFIG.min_relevance_threshold
+        assert config.max_reference_items == 2
+        assert config.max_query_selected_references == 1
 
     def test_aggressive_config(self):
         """Test AGGRESSIVE variant config has lowest threshold."""
@@ -124,12 +129,22 @@ class TestVariantConfig:
         assert config.variant == MemoryVariant.AGGRESSIVE
         assert config.min_relevance_threshold == 0.25
         assert config.min_relevance_threshold < BASELINE_CONFIG.min_relevance_threshold
+        assert config.max_reference_items == 8
+        assert config.max_query_selected_references == 5
 
     def test_all_configs_in_variant_configs_dict(self):
         """Test all variants have configs in VARIANT_CONFIGS."""
         for variant in MemoryVariant:
             assert variant in VARIANT_CONFIGS
             assert VARIANT_CONFIGS[variant].variant == variant
+
+    def test_get_variant_config_defaults_to_baseline(self):
+        config = get_variant_config()
+        assert config is BASELINE_CONFIG
+
+    def test_get_variant_config_accepts_string(self):
+        config = get_variant_config("MINIMAL")
+        assert config is MINIMAL_CONFIG
 
 
 

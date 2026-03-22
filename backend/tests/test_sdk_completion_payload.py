@@ -57,6 +57,17 @@ def test_build_completion_payload_includes_skip_cache_flag() -> None:
     assert payload["skip_cache"] is True
 
 
+def test_build_completion_payload_includes_memory_variant_override() -> None:
+    payload = _build_completion_payload(
+        messages=[{"role": "user", "content": "Review AAPL"}],
+        project_id="portfolio-ai",
+        agent_slug="equity-analyst",
+        memory_variant_override="MINIMAL",
+    )
+
+    assert payload["memory_variant_override"] == "MINIMAL"
+
+
 def test_build_completion_payload_includes_response_format_and_disable_fallbacks() -> None:
     payload = _build_completion_payload(
         messages=[{"role": "user", "content": "Review AAPL"}],

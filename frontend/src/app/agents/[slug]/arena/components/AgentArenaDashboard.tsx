@@ -125,6 +125,52 @@ function sortCases(cases: AgentBenchmarkCaseSummary[]) {
   });
 }
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div className={`rounded bg-slate-800 animate-shimmer ${className}`} />;
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-950">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+      <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+        <div className="px-6 lg:px-8 py-3">
+          <div className="flex items-center gap-4">
+            <SkeletonBlock className="h-8 w-8" />
+            <SkeletonBlock className="h-5 w-40" />
+            <SkeletonBlock className="h-5 w-16" />
+          </div>
+          <div className="mt-3 flex gap-1">
+            <SkeletonBlock className="h-8 w-20" />
+            <SkeletonBlock className="h-8 w-16" />
+            <SkeletonBlock className="h-8 w-20" />
+            <SkeletonBlock className="h-8 w-28" />
+          </div>
+        </div>
+      </div>
+      <main className="relative mx-auto max-w-7xl p-6 lg:p-8">
+        <div className="rounded-[20px] border border-slate-800 bg-slate-900/60 p-6 lg:p-8">
+          <SkeletonBlock className="h-5 w-24" />
+          <SkeletonBlock className="mt-4 h-10 w-[28rem]" />
+          <SkeletonBlock className="mt-3 h-4 w-96" />
+          <div className="mt-5 flex gap-2">
+            <SkeletonBlock className="h-7 w-28" />
+            <SkeletonBlock className="h-7 w-36" />
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <SkeletonBlock className="h-3 w-24" />
+              <SkeletonBlock className="mt-3 h-7 w-16" />
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export function AgentArenaDashboard({
   slug,
   backHref,
@@ -247,11 +293,11 @@ export function AgentArenaDashboard({
       return (
         <div className="mt-6">
           <ChartCard title="Runtime view">
-            <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-6 py-10 text-center dark:border-amber-900 dark:bg-amber-950/20">
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="rounded-2xl border border-dashed border-amber-900 bg-amber-950/20 px-6 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-100">
                 Runtime metrics unavailable
               </p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              <p className="mt-2 text-sm text-slate-400">
                 {runtimeErrorMessage ?? "No runtime metrics are available for this agent yet."}
               </p>
             </div>
@@ -295,11 +341,11 @@ export function AgentArenaDashboard({
             <ChartSection trend={analytics.trend} />
           ) : (
             <ChartCard title="Activity window">
-              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-900/40">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-10 text-center">
+                <p className="text-sm font-medium text-slate-100">
                   No recent runtime activity
                 </p>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-2 text-sm text-slate-400">
                   This agent has not handled any requests in the last 24 hours yet.
                 </p>
               </div>
@@ -311,20 +357,20 @@ export function AgentArenaDashboard({
           <ChartCard title="24h Throughput">
             <div className="space-y-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Requests</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Requests</span>
+                <span className="font-semibold text-slate-100">
                   {analytics.totalRequests}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Requests / hour</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Requests / hour</span>
+                <span className="font-semibold text-slate-100">
                   {analytics.requestsPerHour}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500 dark:text-slate-400">Tokens</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Tokens</span>
+                <span className="font-semibold text-slate-100">
                   {analytics.totalTokens.toLocaleString()}
                 </span>
               </div>
@@ -336,9 +382,9 @@ export function AgentArenaDashboard({
               {analytics.modelSummary.map((model) => (
                 <div
                   key={model}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700"
+                  className="flex items-center justify-between rounded-lg border border-slate-700 px-3 py-2 text-sm"
                 >
-                  <span className="break-all text-slate-600 dark:text-slate-300">
+                  <span className="break-all text-slate-300">
                     {model}
                   </span>
                   <Sigma className="h-4 w-4 text-slate-400" />
@@ -350,20 +396,20 @@ export function AgentArenaDashboard({
           <ChartCard title="Freshness">
             <div className="space-y-4 text-sm">
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Metrics basis</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Metrics basis</span>
+                <span className="font-semibold text-slate-100">
                   24h aggregate
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Agent updated</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Agent updated</span>
+                <span className="font-semibold text-slate-100">
                   {new Date(analytics.lastUpdatedAt).toLocaleString()}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-slate-500 dark:text-slate-400">Primary model</span>
-                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                <span className="text-slate-400">Primary model</span>
+                <span className="font-semibold text-slate-100">
                   {primaryModel ?? "Unassigned"}
                 </span>
               </div>
@@ -378,19 +424,19 @@ export function AgentArenaDashboard({
     return (
       <div
         key={attempt.id}
-        className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${attempt.passed ? "bg-emerald-50 dark:bg-emerald-950/20" : "bg-rose-50 dark:bg-rose-950/20"}`}
+        className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${attempt.passed ? "bg-emerald-950/20" : "bg-rose-950/20"}`}
       >
         <span className={`h-2 w-2 rounded-full ${attempt.passed ? "bg-emerald-500" : "bg-rose-500"}`} />
-        <span className="min-w-0 flex-1 truncate font-medium text-slate-900 dark:text-slate-100">
+        <span className="min-w-0 flex-1 truncate font-medium text-slate-100">
           {attempt.case_name ?? attempt.case_id}
         </span>
-        <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">
+        <span className="shrink-0 text-xs text-slate-400">
           {attempt.model_id}
         </span>
-        <span className="shrink-0 w-12 text-right font-semibold text-slate-900 dark:text-slate-100">
+        <span className="shrink-0 w-12 text-right font-semibold text-slate-100">
           {attempt.composite_score.toFixed(0)}
         </span>
-        <span className="shrink-0 w-16 text-right text-xs text-slate-500 dark:text-slate-400">
+        <span className="shrink-0 w-16 text-right text-xs text-slate-400">
           {attempt.latency_ms}ms
         </span>
       </div>
@@ -415,14 +461,14 @@ export function AgentArenaDashboard({
       <div className="mt-3 space-y-1.5">
         {failedAttempts.length > 0 ? (
           <>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-rose-400">
               Failed ({failedAttempts.length})
             </p>
             {failedAttempts.map((attempt) => (
               <div key={attempt.id}>
                 {renderAttemptRow(attempt)}
                 {attempt.failure_detail ? (
-                  <p className="ml-5 mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                  <p className="ml-5 mt-1 text-[11px] text-rose-400">
                     {attempt.failure_detail}
                   </p>
                 ) : null}
@@ -432,7 +478,7 @@ export function AgentArenaDashboard({
         ) : null}
         {passedAttempts.length > 0 ? (
           <>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
               Passed ({passedAttempts.length})
             </p>
             {passedAttempts.map(renderAttemptRow)}
@@ -446,7 +492,7 @@ export function AgentArenaDashboard({
     return (
       <ChartCard title={title}>
         {recentRuns.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">No persisted runs yet.</p>
+          <p className="text-sm text-slate-400">No persisted runs yet.</p>
         ) : (
           <div className="grid gap-4 lg:grid-cols-2">
             {recentRuns.map((run) => {
@@ -458,22 +504,23 @@ export function AgentArenaDashboard({
                 tabIndex={0}
                 onClick={() => void handleRunClick(run.run_id)}
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") void handleRunClick(run.run_id); }}
-                className={`cursor-pointer rounded-2xl border px-4 py-4 transition-colors ${isExpanded ? "border-cyan-300 bg-cyan-50/50 dark:border-cyan-800 dark:bg-cyan-950/20" : "border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950/50 dark:hover:border-slate-700"}`}
+                aria-expanded={isExpanded}
+                className={`cursor-pointer rounded-2xl border px-4 py-4 transition-colors ${isExpanded ? "border-amber-800 bg-amber-950/20" : "border-slate-800 bg-slate-950/50 hover:border-slate-700"}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <p className="text-sm font-semibold text-slate-100">
                         {formatArenaLabel(run.suite_id)}
                       </p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
                       {run.run_kind}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-semibold text-slate-950 dark:text-slate-50">
+                    <p className="text-lg font-semibold text-slate-50">
                       {formatScore(run.avg_score)}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-400">
                       {formatPercent(run.pass_rate)}
                     </p>
                   </div>
@@ -481,27 +528,27 @@ export function AgentArenaDashboard({
 
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
                       Attempts
                     </dt>
-                    <dd className="mt-1 font-medium text-slate-900 dark:text-slate-100">
+                    <dd className="mt-1 font-medium text-slate-100">
                       {run.passed_attempt_count}/{run.attempt_count}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
                       Infra failures
                     </dt>
-                    <dd className="mt-1 font-medium text-slate-900 dark:text-slate-100">
+                    <dd className="mt-1 font-medium text-slate-100">
                       {run.infra_failure_count}
                     </dd>
                   </div>
                 </dl>
 
-                <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-4 text-xs text-slate-400">
                   Models: {run.models.join(", ")}
                 </p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-xs text-slate-400">
                   Cases: {run.case_ids.join(", ")}
                 </p>
 
@@ -519,11 +566,11 @@ export function AgentArenaDashboard({
     return (
       <ChartCard title="Regression watchlist">
         {regressions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-5 py-8 text-center dark:border-emerald-900 dark:bg-emerald-950/20">
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <div className="rounded-2xl border border-dashed border-emerald-900 bg-emerald-950/20 px-5 py-8 text-center">
+            <p className="text-sm font-semibold text-slate-100">
               No open regression clusters
             </p>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-sm text-slate-400">
               Arena is currently tracking clean recent benchmark history for this agent.
             </p>
           </div>
@@ -532,22 +579,22 @@ export function AgentArenaDashboard({
             {regressions.map((regression) => (
               <article
                 key={regression.regression_key}
-                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-900 dark:bg-rose-950/20"
+                className="rounded-2xl border border-rose-900 bg-rose-950/20 px-4 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    <p className="text-sm font-semibold text-slate-100">
                       {regression.case_id}
                     </p>
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                    <p className="mt-1 text-xs text-slate-300">
                       {regression.failure_detail}
                     </p>
                   </div>
-                  <span className="rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-200 dark:bg-slate-900 dark:text-rose-300 dark:ring-rose-900">
+                  <span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-semibold text-rose-300 ring-1 ring-rose-900">
                     {regression.occurrence_count} hits
                   </span>
                 </div>
-                <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                <p className="mt-3 text-xs text-slate-400">
                   {formatArenaLabel(regression.suite_id)} · models {regression.affected_models.join(", ")}
                 </p>
               </article>
@@ -563,20 +610,19 @@ export function AgentArenaDashboard({
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <ChartCard title="Suite board">
           {sortedSuites.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-400">
               No suite history yet. Arena needs a benchmark battery before it can score stability by suite.
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {sortedSuites.map((suite) => {
-                const tone =
-                  suite.open_regressions > 0 || (suite.avg_score ?? 100) < 90
-                    ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20"
-                    : "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20";
-                const badgeTone =
-                  suite.open_regressions > 0
-                    ? "bg-rose-100 text-rose-700 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-900"
-                    : "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900";
+                const hasIssues = suite.open_regressions > 0 || (suite.avg_score ?? 100) < 90;
+                const tone = hasIssues
+                  ? "border-amber-900 bg-amber-950/20"
+                  : "border-emerald-900 bg-emerald-950/20";
+                const badgeTone = suite.open_regressions > 0
+                  ? "bg-rose-950/30 text-rose-300 ring-rose-900"
+                  : "bg-emerald-950/30 text-emerald-300 ring-emerald-900";
 
                 return (
                   <article
@@ -585,10 +631,10 @@ export function AgentArenaDashboard({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        <p className="text-sm font-semibold text-slate-100">
                           {formatArenaLabel(suite.suite_id)}
                         </p>
-                        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+                        <p className="mt-1 text-xs text-slate-300">
                           {suite.run_count} runs · {suite.case_ids.length} cases ·{" "}
                           {suite.run_kinds.join(", ") || "benchmark"}
                         </p>
@@ -604,32 +650,32 @@ export function AgentArenaDashboard({
 
                     <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
                       <div>
-                        <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <dt className="text-xs uppercase tracking-wide text-slate-400">
                           Score
                         </dt>
-                        <dd className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                        <dd className="mt-1 font-semibold text-slate-100">
                           {formatScore(suite.avg_score)}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <dt className="text-xs uppercase tracking-wide text-slate-400">
                           Pass rate
                         </dt>
-                        <dd className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                        <dd className="mt-1 font-semibold text-slate-100">
                           {formatPercent(suite.pass_rate)}
                         </dd>
                       </div>
                       <div>
-                        <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <dt className="text-xs uppercase tracking-wide text-slate-400">
                           Last run
                         </dt>
-                        <dd className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                        <dd className="mt-1 font-semibold text-slate-100">
                           {formatRelativeTime(suite.latest_completed_at)}
                         </dd>
                       </div>
                     </dl>
 
-                    <p className="mt-4 text-xs text-slate-500 dark:text-slate-400">
+                    <p className="mt-4 text-xs text-slate-400">
                       Models: {suite.tracked_models.join(", ") || "Pending"}
                     </p>
                   </article>
@@ -641,7 +687,7 @@ export function AgentArenaDashboard({
 
         <ChartCard title="Case watchlist">
           {sortedCases.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-400">
               No case-level evidence yet. Once attempts are persisted, Arena will rank brittle cases here.
             </p>
           ) : (
@@ -649,43 +695,43 @@ export function AgentArenaDashboard({
               {sortedCases.map((caseSummary) => (
                 <article
                   key={caseSummary.case_id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/50"
+                  className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-3"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <p className="text-sm font-semibold text-slate-100">
                         {caseSummary.case_name ?? caseSummary.case_id}
                       </p>
                       {caseSummary.case_name ? (
-                        <p className="mt-0.5 text-[11px] font-mono text-slate-400 dark:text-slate-500">
+                        <p className="mt-0.5 text-[11px] font-mono text-slate-500">
                           {caseSummary.case_id}
                         </p>
                       ) : null}
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 text-xs text-slate-400">
                         {caseSummary.suite_ids.map((suiteId) => formatArenaLabel(suiteId)).join(", ")} · {caseSummary.attempts} attempts
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">
+                      <p className="text-sm font-semibold text-slate-50">
                         {formatScore(caseSummary.avg_score)}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="text-xs text-slate-400">
                         {formatPercent(caseSummary.pass_rate)}
                       </p>
                     </div>
                   </div>
 
                   {caseSummary.latest_failure_detail ? (
-                    <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">
+                    <p className="mt-3 text-xs text-slate-300">
                       {caseSummary.latest_failure_detail}
                     </p>
                   ) : null}
 
                   <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium">
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700">
+                    <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-200 ring-1 ring-slate-700">
                       {caseSummary.open_regressions} open regressions
                     </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700">
+                    <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-200 ring-1 ring-slate-700">
                       {formatRelativeTime(caseSummary.latest_completed_at)}
                     </span>
                   </div>
@@ -704,11 +750,11 @@ export function AgentArenaDashboard({
         <>
           <div className="mt-6">
             <ChartCard title="Arena evidence">
-              <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-6 py-10 text-center dark:border-amber-900 dark:bg-amber-950/20">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div className="rounded-2xl border border-dashed border-amber-900 bg-amber-950/20 px-6 py-10 text-center">
+                <p className="text-sm font-semibold text-slate-100">
                   Arena benchmark history unavailable
                 </p>
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-2 text-sm text-slate-400">
                   {benchmarkErrorMessage ?? "No benchmark history is available for this agent yet."}
                 </p>
               </div>
@@ -771,7 +817,7 @@ export function AgentArenaDashboard({
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <ChartCard title="Model leaderboard">
             {sortedModels.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">No model data yet.</p>
+              <p className="text-sm text-slate-400">No model data yet.</p>
             ) : (
               <div className="space-y-3">
                 {sortedModels.map((model, index) => {
@@ -779,31 +825,31 @@ export function AgentArenaDashboard({
                   return (
                   <article
                     key={model.model_id}
-                    className={`flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 ${isPrimary ? "border-cyan-200 bg-cyan-50/60 dark:border-cyan-900 dark:bg-cyan-950/20" : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50"}`}
+                    className={`flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 ${isPrimary ? "border-amber-900 bg-amber-950/20" : "border-slate-800 bg-slate-950/50"}`}
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
                           Rank {index + 1}
                         </p>
                         {isPrimary ? (
-                          <span className="rounded-full bg-cyan-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-700 ring-1 ring-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:ring-cyan-800">
+                          <span className="rounded-full bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-300 ring-1 ring-amber-800">
                             primary
                           </span>
                         ) : null}
                       </div>
-                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      <p className="truncate text-sm font-semibold text-slate-100">
                         {model.model_id}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      <p className="mt-1 text-xs text-slate-400">
                         {model.attempts} attempts · last seen {formatRelativeTime(model.latest_completed_at)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-semibold text-slate-950 dark:text-slate-50">
+                      <p className="text-lg font-semibold text-slate-50">
                         {formatScore(model.avg_score)}
                       </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                      <p className="text-xs text-slate-400">
                         pass {formatPercent(model.pass_rate)}
                       </p>
                     </div>
@@ -820,32 +866,32 @@ export function AgentArenaDashboard({
         <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <ChartCard title="Runtime pulse">
             {runtimeErrorMessage || !analytics ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-400">
                 {runtimeErrorMessage ?? "Runtime metrics are unavailable."}
               </p>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Requests</span>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="text-slate-400">Requests</span>
+                  <span className="font-semibold text-slate-100">
                     {analytics.totalRequests}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Success rate</span>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="text-slate-400">Success rate</span>
+                  <span className="font-semibold text-slate-100">
                     {analytics.successRate}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Average latency</span>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="text-slate-400">Average latency</span>
+                  <span className="font-semibold text-slate-100">
                     {analytics.avgLatencyMs} ms
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">Primary model</span>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                  <span className="text-slate-400">Primary model</span>
+                  <span className="font-semibold text-slate-100">
                     {primaryModel ?? "Unassigned"}
                   </span>
                 </div>
@@ -866,7 +912,7 @@ export function AgentArenaDashboard({
       return (
         <div className="mt-6">
           <ChartCard title="Experiments">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-400">
               {benchmarkErrorMessage ?? "No benchmark experiments are available."}
             </p>
           </ChartCard>
@@ -881,7 +927,7 @@ export function AgentArenaDashboard({
             <BenchmarkExperimentSection experiments={benchmarkDashboard.experiments} />
           ) : (
             <ChartCard title="Experiments">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-400">
                 No persisted experiments yet. Arena will surface cohort comparisons here once runs are being promoted or held.
               </p>
             </ChartCard>
@@ -910,23 +956,20 @@ export function AgentArenaDashboard({
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] dark:bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   if (error) {
     const errorMessage = error instanceof Error ? error.message : "Failed to load Arena";
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] px-6 dark:bg-slate-950">
-        <div className="max-w-md rounded-3xl border border-rose-200 bg-white/90 p-8 text-center shadow-sm dark:border-rose-900 dark:bg-slate-900/90">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+        <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+        <div className="relative max-w-md rounded-2xl border border-rose-900 bg-slate-900/90 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
-          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <p className="text-sm font-semibold text-slate-100">
             Arena unavailable
           </p>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">{errorMessage}</p>
+          <p className="mt-2 text-sm text-slate-400">{errorMessage}</p>
         </div>
       </div>
     );
@@ -934,17 +977,20 @@ export function AgentArenaDashboard({
 
   if (!agent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_100%)] dark:bg-slate-950">
-        <div className="text-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+        <div className="relative text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
-          <p className="text-sm text-slate-600 dark:text-slate-400">Agent not found</p>
+          <p className="text-sm text-slate-400">Agent not found</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef6ff_30%,#f8fafc_100%)] dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-950">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+
       <ArenaHeader
         agentName={agent.name}
         slug={slug}
@@ -957,72 +1003,71 @@ export function AgentArenaDashboard({
         isRefreshing={isRefreshing}
       />
 
-      <main className="mx-auto max-w-7xl p-6 lg:p-8">
-        <section className="relative overflow-hidden rounded-[28px] border border-cyan-200/70 bg-white/90 p-6 shadow-sm dark:border-cyan-900/40 dark:bg-slate-900/90 lg:p-8">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.14),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.12),transparent_34%)]" />
-          <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:linear-gradient(to_right,rgba(148,163,184,0.16)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.16)_1px,transparent_1px)] [background-size:28px_28px]" />
+      <main className="relative mx-auto max-w-7xl p-6 lg:p-8">
+        <section className="relative overflow-hidden rounded-[20px] border border-slate-800 bg-slate-900/60 p-6 backdrop-blur-sm lg:p-8">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,oklch(0.75_0.18_55_/_0.08),transparent_38%),radial-gradient(circle_at_bottom_right,oklch(0.7_0.17_155_/_0.06),transparent_34%)]" />
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200 dark:bg-cyan-950/60 dark:text-cyan-100">
+              <div className="inline-flex items-center gap-2 rounded-full bg-amber-950/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
                 <FlaskConical className="h-3.5 w-3.5" />
                 Arena
               </div>
-              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950 dark:text-slate-50 lg:text-4xl">
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-50 lg:text-4xl">
                 Benchmark the agent, not the story about the agent.
               </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
                 Arena turns benchmark history into a readable field report: stability, runtime health,
                 controlled experiments, and the regressions still shaping trust.
               </p>
 
               <div className="mt-5 flex flex-wrap gap-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${status?.tone ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${status?.tone ?? "bg-slate-800 text-slate-200"}`}>
                   <Radar className="h-3.5 w-3.5" />
                   {status?.label ?? "Collecting evidence"}
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:ring-slate-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-700">
                   <Orbit className="h-3.5 w-3.5" />
                   {benchmarkDashboard?.overview.tracked_models.length ?? 0} tracked models
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:ring-slate-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-700">
                   <Activity className="h-3.5 w-3.5" />
                   {trackedSuiteCount} active suites
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800/80 dark:text-slate-200 dark:ring-slate-700">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-800/80 px-3 py-1 text-xs font-medium text-slate-200 ring-1 ring-slate-700">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   {pressuredCaseCount} pressured cases
                 </span>
               </div>
             </div>
 
-            <div className="relative grid gap-3 rounded-2xl border border-slate-200/80 bg-slate-50/90 p-4 dark:border-slate-800 dark:bg-slate-950/60 xl:w-[360px]">
+            <div className="relative grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 xl:w-[360px]">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
                     Field status
                   </p>
-                  <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+                  <p className="mt-2 text-sm text-slate-200">
                     {status?.detail ?? "Arena is waiting for benchmark evidence before it can judge stability or regression pressure."}
                   </p>
                 </div>
-                <Sparkles className="h-5 w-5 text-cyan-500" />
+                <Sparkles className="h-5 w-5 text-amber-500" />
               </div>
 
               <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                  <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl bg-slate-900 px-3 py-2 ring-1 ring-slate-800">
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">
                     Last run
                   </dt>
-                  <dd className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  <dd className="mt-1 font-semibold text-slate-100">
                     {formatRelativeTime(benchmarkDashboard?.overview.latest_completed_at)}
                   </dd>
                 </div>
-                <div className="rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-                  <dt className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                <div className="rounded-xl bg-slate-900 px-3 py-2 ring-1 ring-slate-800">
+                  <dt className="text-xs uppercase tracking-wide text-slate-400">
                     Best model
                   </dt>
-                  <dd className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  <dd className="mt-1 font-semibold text-slate-100">
                     {bestModel?.model_id ?? primaryModel ?? "Pending"}
                   </dd>
                 </div>
@@ -1035,7 +1080,7 @@ export function AgentArenaDashboard({
 
         <div className="mt-6">
           <ChartCard title="Arena loop">
-            <div className="flex flex-col gap-3 text-sm text-slate-600 dark:text-slate-300 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 text-sm text-slate-300 lg:flex-row lg:items-center lg:justify-between">
               <p className="max-w-3xl">
                 Arena is where benchmark suites, experiments, regressions, and runtime evidence stay visible enough to guide real prompt, harness, and model decisions instead of anecdotal tuning.
               </p>
@@ -1044,7 +1089,7 @@ export function AgentArenaDashboard({
                 onClick={() =>
                   setActiveView(activeView === "runtime" ? "overview" : "runtime")
                 }
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:bg-slate-700"
               >
                 {activeView === "runtime" ? "Return to overview" : "View runtime lens"}
               </button>

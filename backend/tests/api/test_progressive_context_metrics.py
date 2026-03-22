@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.api.memory_agent_context_builder import build_progressive_context_with_variant
 from app.api.memory_agent_handlers import build_progressive_context_response
 from app.services.memory.context_builder import ProgressiveContext
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
@@ -150,3 +151,36 @@ class TestProgressiveContextMetrics:
 
             # track_and_record_metrics is always called (it handles empty internally)
             mock_track.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_build_progressive_context_with_variant_passes_assigned_variant_to_builder() -> None:
+    ctx = ProgressiveContext()
+
+    with (
+        patch(
+            "app.api.memory_agent_context_builder.assign_variant",
+            return_value="MINIMAL",
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.build_progressive_context",
+            new_callable=AsyncMock,
+            return_value=ctx,
+        ) as mock_build,
+    ):
+        built, variant = await build_progressive_context_with_variant(
+            query="test query",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+            include_global=True,
+            task_type=None,
+            phase=None,
+            variant_override=None,
+            external_id="task-123",
+            project_id="agent-hub",
+            consumer_profile=None,
+        )
+
+    assert built is ctx
+    assert variant == "MINIMAL"
+    assert mock_build.await_args.kwargs["variant"] == "MINIMAL"

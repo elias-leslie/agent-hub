@@ -371,6 +371,49 @@ class TestReferenceInjection:
         assert context.reference == []
         assert context.debug_info["reference_count"] == 0
 
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_applies_variant_reference_limits(self) -> None:
+        refs = [
+            _reference_result("ref-1-0000-0000-0000-000000000001", "**Ref 1**", 0.45),
+            _reference_result("ref-2-0000-0000-0000-000000000002", "**Ref 2**", 0.82),
+            _reference_result("ref-3-0000-0000-0000-000000000003", "**Ref 3**", 0.71),
+            _reference_result("ref-4-0000-0000-0000-000000000004", "**Ref 4**", 0.93),
+        ]
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], refs)),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            minimal = await build_progressive_context(
+                query="reference selection",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                variant="MINIMAL",
+            )
+            aggressive = await build_progressive_context(
+                query="reference selection",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                variant="AGGRESSIVE",
+            )
+
+        assert [item.uuid for item in minimal.reference] == [
+            "ref-4-0000-0000-0000-000000000004",
+            "ref-2-0000-0000-0000-000000000002",
+        ]
+        assert [item.uuid for item in aggressive.reference] == [item.uuid for item in refs]
+
     def test_format_progressive_context_renders_selected_references_without_passive_index(self) -> None:
         context = type("Ctx", (), {})()
         context.mandates = []
