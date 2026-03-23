@@ -1,11 +1,10 @@
 """Tool handling and helpers for Claude adapter — permission checking, MCP, and SDK tool execution."""
 
 import asyncio
-import json
 import logging
-from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
 from app.adapters._claude_result_metadata import (
@@ -22,6 +21,11 @@ from app.adapters.claude_tools_permissions import (
 )
 from app.adapters.claude_tools_permissions import (
     normalize_tool_name as _normalize_tool_name_impl,
+)
+from app.adapters.claude_tools_sdk_query import (
+    _close_internal_query,  # re-exported: tests import from this module
+    _close_sdk_message_iter,
+    _sdk_query_messages,
 )
 from app.adapters.claude_utils import (
     _sdk_semaphore,
@@ -43,6 +47,9 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
 }
 
 _STREAM_STOP = object()  # Sentinel: async iteration exhausted
+
+# Silence unused-import lint — _close_internal_query is re-exported for callers
+__all__ = ["_close_internal_query"]
 
 
 @dataclass
@@ -87,172 +94,6 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
 def _normalize_tool_name(name: str) -> str:
     """Normalize SDK tool names for permission hooks."""
     return _normalize_tool_name_impl(name)
-
-
-async def _close_sdk_message_iter(message_iter: Any) -> None:
-    """Close the SDK iterator on the same task that consumed it."""
-    if hasattr(message_iter, "aclose"):
-        await message_iter.aclose()
-
-
-async def _close_internal_query(
-    query_obj: Any | None,
-    transport: Any,
-    *,
-    connected: bool,
-    owner_task: asyncio.Task[Any] | None,
-) -> None:
-    """Close the Claude SDK query only from its owner task.
-
-    The SDK's internal Query owns an anyio cancel scope that must be exited
-    from the same task that entered it. Async-generator shutdown can run from a
-    different task during cancellation, so we skip Query.close() in that case
-    and fall back to best-effort transport shutdown instead.
-    """
-    if query_obj is None:
-        if connected and hasattr(transport, "close"):
-            await transport.close()
-        return
-
-    current_task = asyncio.current_task()
-    if owner_task is None or current_task is owner_task:
-        await query_obj.close()
-        return
-
-    logger.warning(
-        "Skipping Claude Query.close() from foreign task: owner=%s current=%s",
-        owner_task,
-        current_task,
-    )
-    if connected and hasattr(transport, "close"):
-        with suppress(Exception):
-            await transport.close()
-
-
-def _convert_hooks_to_internal_format(hooks: dict[str, list[Any]]) -> dict[str, list[dict[str, Any]]]:
-    """Convert HookMatcher structures to the SDK Query internal format."""
-    internal_hooks: dict[str, list[dict[str, Any]]] = {}
-    for event, matchers in hooks.items():
-        internal_hooks[event] = []
-        for matcher in matchers:
-            internal_matcher: dict[str, Any] = {
-                "matcher": matcher.matcher if hasattr(matcher, "matcher") else None,
-                "hooks": matcher.hooks if hasattr(matcher, "hooks") else [],
-            }
-            if hasattr(matcher, "timeout") and matcher.timeout is not None:
-                internal_matcher["timeout"] = matcher.timeout
-            internal_hooks[event].append(internal_matcher)
-    return internal_hooks
-
-
-def _extract_sdk_mcp_servers(options: Any) -> dict[str, Any]:
-    """Extract SDK-type MCP server instances from options."""
-    sdk_mcp_servers: dict[str, Any] = {}
-    if getattr(options, "mcp_servers", None) and isinstance(options.mcp_servers, dict):
-        for name, config in options.mcp_servers.items():
-            if isinstance(config, dict) and config.get("type") == "sdk":
-                sdk_mcp_servers[name] = config["instance"]
-    return sdk_mcp_servers
-
-
-def _extract_agents_dict(options: Any) -> dict[str, dict[str, Any]] | None:
-    """Convert options.agents to plain dicts, dropping None values."""
-    if not getattr(options, "agents", None):
-        return None
-    return {
-        name: {k: v for k, v in asdict(agent_def).items() if v is not None}
-        for name, agent_def in options.agents.items()
-    }
-
-
-async def _send_prompt_to_transport(
-    prompt: str | AsyncIterable[dict[str, Any]],
-    transport: Any,
-    query_obj: Any,
-) -> None:
-    """Write prompt into the transport or start streaming input on the query."""
-    if isinstance(prompt, str):
-        user_message = {
-            "type": "user",
-            "session_id": "",
-            "message": {"role": "user", "content": prompt},
-            "parent_tool_use_id": None,
-        }
-        await transport.write(json.dumps(user_message) + "\n")
-        await transport.end_input()
-    elif isinstance(prompt, AsyncIterable) and query_obj._tg:
-        query_obj._tg.start_soon(query_obj.stream_input, prompt)
-
-
-async def _sdk_query_via_internal_api(
-    prompt: str | AsyncIterable[dict[str, Any]],
-    options: Any,
-) -> AsyncIterator[Any]:
-    """Yield parsed messages using the Claude SDK internal Query API."""
-    from claude_agent_sdk._internal.message_parser import parse_message
-    from claude_agent_sdk._internal.query import Query
-    from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
-
-    transport = SubprocessCLITransport(prompt=prompt, options=options)
-    query_obj: Any | None = None
-    connected = False
-    owner_task = asyncio.current_task()
-    try:
-        await transport.connect()
-        connected = True
-
-        query_obj = Query(
-            transport=transport,
-            is_streaming_mode=True,
-            can_use_tool=getattr(options, "can_use_tool", None),
-            hooks=(
-                _convert_hooks_to_internal_format(options.hooks)
-                if getattr(options, "hooks", None)
-                else None
-            ),
-            sdk_mcp_servers=_extract_sdk_mcp_servers(options),
-            agents=_extract_agents_dict(options),
-        )
-
-        await query_obj.start()
-        await query_obj.initialize()
-        await _send_prompt_to_transport(prompt, transport, query_obj)
-
-        async for data in query_obj.receive_messages():
-            message = parse_message(data)
-            if message is not None:
-                yield message
-    finally:
-        await _close_internal_query(
-            query_obj,
-            transport,
-            connected=connected,
-            owner_task=owner_task,
-        )
-
-
-async def _sdk_query_messages(prompt: str | AsyncIterable[dict[str, Any]], options: Any) -> AsyncIterator[Any]:
-    """Yield parsed Claude SDK messages while owning Query lifecycle in this task."""
-    if not hasattr(options, "cli_path") or not hasattr(options, "system_prompt"):
-        from claude_agent_sdk import query as sdk_query
-
-        message_iter = sdk_query(prompt=prompt, options=options).__aiter__()
-        try:
-            async for message in message_iter:
-                yield message
-        finally:
-            await _close_sdk_message_iter(message_iter)
-        return
-
-    try:
-        async for message in _sdk_query_via_internal_api(prompt, options):
-            yield message
-    except ImportError:
-        logger.debug("Claude SDK internal imports unavailable, using public query API", exc_info=True)
-        from claude_agent_sdk import query as sdk_query
-
-        async for message in sdk_query(prompt=prompt, options=options):
-            yield message
 
 
 def _build_can_use_tool(
@@ -314,29 +155,12 @@ def _resolve_can_use_tool(
     )
 
 
-async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
-    if idle_timeout is None:
-        return await anext(message_iter)
-    try:
-        async with asyncio.timeout(idle_timeout):
-            return await anext(message_iter)
-    except TimeoutError as exc:
-        logger.warning("Claude SDK timed out after post-tool stall; skipping explicit iterator close")
-        raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s") from exc
-
-
-def _message_has_tool_use(message: Any) -> bool:
-    for block in getattr(message, "content", []) or []:
-        if extract_block_content(block)["type"] == "tool_use":
-            return True
-    return False
-
-
-def _message_has_tool_result(message: Any) -> bool:
-    for block in getattr(message, "content", []) or []:
-        if extract_block_content(block)["type"] == "tool_result":
-            return True
-    return False
+def _message_has_block_type(message: Any, block_type: str) -> bool:
+    """Return True if any content block in message matches block_type."""
+    return any(
+        extract_block_content(b)["type"] == block_type
+        for b in getattr(message, "content", []) or []
+    )
 
 
 async def _fetch_next_or_stop(
@@ -344,25 +168,19 @@ async def _fetch_next_or_stop(
     idle_timeout: float | None,
     provider_name: str,
 ) -> Any:
-    """Fetch next message, return _STREAM_STOP on exhaustion, raise ProviderError on timeout."""
+    """Fetch next message; return _STREAM_STOP on exhaustion, raise ProviderError on timeout."""
     try:
-        return await _next_message(message_iter, idle_timeout)
+        if idle_timeout is None:
+            return await anext(message_iter)
+        async with asyncio.timeout(idle_timeout):
+            return await anext(message_iter)
     except StopAsyncIteration:
         return _STREAM_STOP
     except TimeoutError as exc:
-        logger.error(str(exc))
-        raise ProviderError(str(exc), provider=provider_name, retriable=True) from exc
-
-
-def _resolve_idle_timeout(
-    saw_payload: bool,
-    pending_tool_calls: int,
-    done_emitted: bool,
-) -> float | None:
-    """Return idle timeout if post-tool watchdog should be active, else None."""
-    if saw_payload and pending_tool_calls == 0 and not done_emitted:
-        return _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
-    return None
+        logger.warning("Claude SDK timed out after post-tool stall; skipping explicit iterator close")
+        msg = f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s"
+        logger.error(msg)
+        raise ProviderError(msg, provider=provider_name, retriable=True) from exc
 
 
 def _log_idle_watchdog_transition(
@@ -430,9 +248,9 @@ def _resolve_result_message(
 
 def _update_tool_call_count(message: Any, pending_tool_calls: int) -> int:
     """Track pending tool calls based on tool_use / tool_result blocks."""
-    if _message_has_tool_use(message):
+    if _message_has_block_type(message, "tool_use"):
         pending_tool_calls += 1
-    if _message_has_tool_result(message):
+    if _message_has_block_type(message, "tool_result"):
         pending_tool_calls = max(0, pending_tool_calls - 1)
     return pending_tool_calls
 
@@ -454,7 +272,11 @@ async def _iterate_sdk_messages(
     message_iter = _sdk_query_messages(prompt, options).__aiter__()
     try:
         while True:
-            idle_timeout = _resolve_idle_timeout(saw_payload, pending_tool_calls, done_emitted)
+            idle_timeout = (
+                _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
+                if saw_payload and pending_tool_calls == 0 and not done_emitted
+                else None
+            )
             idle_watch_armed = _log_idle_watchdog_transition(
                 idle_timeout, idle_watch_armed, session_id, pending_tool_calls, done_emitted,
             )
