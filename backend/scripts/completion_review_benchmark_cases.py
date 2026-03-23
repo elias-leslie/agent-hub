@@ -116,12 +116,19 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
         CompletionReviewBenchmarkCase(
             case_id="review_ambiguous_conflict",
             name="Ambiguous Conflict",
-            description="Reviewer should escalate contradictory evidence instead of guessing.",
+            description=(
+                "Reviewer should escalate when all three signals disagree: heartbeat claims clean, "
+                "cleanup says salvage needed, workstream says task is active with progress. "
+                "No single concrete follow-up can be derived."
+            ),
             heartbeat_output="HEARTBEAT_OK — All residue resolved.",
             cleanup_status="ACTIONABLE-CLEANUP[1]\n- agent-hub | salvage | task-999",
-            workstream_inventory='- task-999 | state=completed_ready_for_closure | next=manage_tasks(action="done")',
+            workstream_inventory=(
+                "- task-999 | state=active_running_task | recent_progress=yes | "
+                "health=active | quiet_for_seconds=60 | next=inspect_existing_lane"
+            ),
             expected_decision="escalate",
-            expected_focus_terms=("contradiction",),
+            expected_focus_terms=("contradict|conflict|ambig",),
             reviewer_invoked=False,
         ),
     ]
