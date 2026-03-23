@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
@@ -296,32 +297,44 @@ async def append_normalized_events(
     if len(request.events) == 1:
         event = request.events[0]
         if event.turn is None and event.sequence is None:
-            stored_event = await store_event(
-                db=db,
-                session_id=session_id,
-                event_type=event.event_type,
-                role=event.role,
-                content=event.content,
-                tool_name=event.tool_name,
-                tool_input=event.tool_input,
-                tool_output=event.tool_output,
-                tokens=event.tokens,
-                duration_ms=event.duration_ms,
-                model_used=event.model_used,
-                agent_id=event.agent_id,
-                agent_name=event.agent_name,
-                session=session,
-            )
-            await db.flush()
-            await db.commit()
-            return AppendNormalizedEventsResult(
-                session_id=session_id,
-                events_appended=1,
-                events_skipped=0,
-                last_turn=stored_event.turn,
-                last_sequence=stored_event.sequence,
-                event_ids=[str(stored_event.id)],
-            )
+            try:
+                stored_event = await store_event(
+                    db=db,
+                    session_id=session_id,
+                    event_type=event.event_type,
+                    role=event.role,
+                    content=event.content,
+                    tool_name=event.tool_name,
+                    tool_input=event.tool_input,
+                    tool_output=event.tool_output,
+                    tokens=event.tokens,
+                    duration_ms=event.duration_ms,
+                    model_used=event.model_used,
+                    agent_id=event.agent_id,
+                    agent_name=event.agent_name,
+                    session=session,
+                )
+                await db.flush()
+                await db.commit()
+                return AppendNormalizedEventsResult(
+                    session_id=session_id,
+                    events_appended=1,
+                    events_skipped=0,
+                    last_turn=stored_event.turn,
+                    last_sequence=stored_event.sequence,
+                    event_ids=[str(stored_event.id)],
+                )
+            except IntegrityError:
+                await db.rollback()
+                current_turn = await get_max_turn(db, session_id) or 1
+                current_seq = await get_max_sequence(db, session_id, current_turn)
+                return AppendNormalizedEventsResult(
+                    session_id=session_id,
+                    events_appended=0,
+                    events_skipped=1,
+                    last_turn=current_turn,
+                    last_sequence=current_seq,
+                )
 
     current_turn = await get_max_turn(db, session_id) or 1
     sequence_cache: dict[int, int] = {}
