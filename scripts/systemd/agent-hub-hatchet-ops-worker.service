@@ -1,0 +1,29 @@
+[Unit]
+Description=Agent Hub Hatchet Ops Worker
+After=network.target agent-hub-backend.service
+Wants=agent-hub-backend.service
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__/backend
+Environment="PATH=%h/bin:%h/.local/bin:__SUMMITFLOW_ROOT__/backend/.venv/bin:__PROJECT_ROOT__/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
+Environment="PYTHONUNBUFFERED=1"
+Environment="HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070"
+Environment="HATCHET_CLIENT_TLS_STRATEGY=none"
+Environment="AGENT_HUB_WORKER_ROLE=ops"
+Environment="AGENT_HUB_HOST_SERVICE=agent-hub-hatchet-ops-worker.service"
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.worker_ops
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-hatchet-ops-worker
+
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

@@ -64,6 +64,63 @@ class TestDirectToolExecutor:
         assert "blocked" in result.lower()
 
     @pytest.mark.asyncio
+    async def test_bash_allows_safe_agent_hub_rebuild_from_agent_worker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AGENT_HUB_HOST_SERVICE", "agent-hub-hatchet-agent-worker.service")
+        executor = DirectToolExecutor(str(tmp_path))
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+            return_value="ok",
+        ) as mock_run:
+            result = await executor.bash("rebuild.sh agent-hub")
+
+        assert result == "ok"
+        mock_run.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_bash_blocks_rebuild_that_restarts_hosting_agent_worker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AGENT_HUB_HOST_SERVICE", "agent-hub-hatchet-agent-worker.service")
+        executor = DirectToolExecutor(str(tmp_path))
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+        ) as mock_run:
+            result = await executor.bash("rebuild.sh agent-hub --include-all-workers")
+
+        assert "runtime safety" in result.lower()
+        assert "hosting worker service" in result.lower()
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bash_blocks_rebuild_that_restarts_hosting_ops_worker(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("AGENT_HUB_HOST_SERVICE", "agent-hub-hatchet-ops-worker.service")
+        executor = DirectToolExecutor(str(tmp_path))
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+        ) as mock_run:
+            result = await executor.bash("rebuild.sh agent-hub")
+
+        assert "runtime safety" in result.lower()
+        assert "hosting worker service" in result.lower()
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_bash_uses_working_dir(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
         """Test that bash runs in the correct working directory."""
         result = await executor.bash("pwd")

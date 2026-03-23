@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -91,6 +92,64 @@ class _RootsProxy(dict):
 
 
 KNOWN_ROOTS: dict[str, str] = _RootsProxy()
+
+_AGENT_HUB_DEFAULT_RESTART_WORKERS = frozenset({
+    "agent-hub-hatchet-ops-worker.service",
+})
+_AGENT_HUB_ALL_RESTART_WORKERS = frozenset({
+    *_AGENT_HUB_DEFAULT_RESTART_WORKERS,
+    "agent-hub-hatchet-agent-worker.service",
+})
+_DIRECT_SYSTEMCTL_SERVICE_RE = re.compile(
+    r"(^|[;&|]\s*)(?:sudo\s+)?systemctl\s+(?:--user\s+)?"
+    r"(?:restart|stop|start|kill|try-restart|reload-or-restart)\s+(?P<unit>\S+)",
+)
+
+
+def _normalize_shell_command(command: str) -> str:
+    return re.sub(r"\s+", " ", command.strip().lower())
+
+
+def _self_hosting_restart_block_reason(command: str, env: dict[str, str]) -> str | None:
+    """Return a block reason when a command would restart its hosting worker."""
+    host_service = env.get("AGENT_HUB_HOST_SERVICE", "").strip().lower()
+    if not host_service:
+        return None
+
+    normalized = _normalize_shell_command(command)
+    systemctl_match = _DIRECT_SYSTEMCTL_SERVICE_RE.search(normalized)
+    if systemctl_match and systemctl_match.group("unit").lower() == host_service:
+        return (
+            f"Do not restart the hosting worker service ({host_service}) from inside the active "
+            "session. Run that restart from outside the worker after the current work is drained."
+        )
+
+    is_agent_hub_rebuild = (
+        "agent-hub" in normalized
+        and ("rebuild.sh" in normalized or "restart.sh" in normalized)
+    )
+    if not is_agent_hub_rebuild:
+        return None
+
+    restarted_workers = (
+        _AGENT_HUB_ALL_RESTART_WORKERS
+        if "--include-all-workers" in normalized
+        else _AGENT_HUB_DEFAULT_RESTART_WORKERS
+    )
+    if host_service not in restarted_workers:
+        return None
+
+    if "--include-all-workers" in normalized:
+        return (
+            f"`rebuild.sh agent-hub --include-all-workers` would restart the hosting worker service "
+            f"({host_service}). Use `rebuild.sh agent-hub` for safe backend/frontend + ops rebuilds, "
+            "and restart the agent worker separately from outside active execution."
+        )
+
+    return (
+        f"`rebuild.sh agent-hub` would restart the hosting worker service ({host_service}). "
+        "Run it from outside the active worker so the current execution is not terminated mid-task."
+    )
 
 
 def _is_blocked_command(command: str) -> bool:
@@ -204,6 +263,10 @@ class DirectToolExecutor:
         """Execute a bash command with environment inheritance."""
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
+
+        self_hosting_block_reason = _self_hosting_restart_block_reason(command, self._env)
+        if self_hosting_block_reason:
+            return f"Error: Command blocked for runtime safety: {self_hosting_block_reason}"
 
         redirect = _get_command_redirect(command)
         if redirect:

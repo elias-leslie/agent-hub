@@ -1,5 +1,5 @@
 [Unit]
-Description=Agent Hub Hatchet Worker
+Description=Agent Hub Hatchet Agent Worker
 After=network.target agent-hub-backend.service
 Wants=agent-hub-backend.service
 
@@ -12,12 +12,14 @@ EnvironmentFile=-%h/.env.local
 Environment="PYTHONUNBUFFERED=1"
 Environment="HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070"
 Environment="HATCHET_CLIENT_TLS_STRATEGY=none"
-ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.worker
+Environment="AGENT_HUB_WORKER_ROLE=agents"
+Environment="AGENT_HUB_HOST_SERVICE=agent-hub-hatchet-agent-worker.service"
+ExecStart=__PROJECT_ROOT__/backend/.venv/bin/python -m app.worker_agents
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=agent-hub-hatchet-worker
+SyslogIdentifier=agent-hub-hatchet-agent-worker
 
 KillMode=control-group
 KillSignal=SIGTERM
