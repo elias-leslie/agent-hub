@@ -124,7 +124,9 @@ export function humanizeTaskContextText(value: string): string {
 export function prettifyDisplayText(value: string): string {
   const extracted = extractWrappedTextPayload(value);
   const base = extracted ?? value;
-  return humanizeTaskContextText(unescapeDisplayText(base).trim());
+  // Strip [[P:type:content]] narration tags — they're shown separately in the narration timeline
+  const stripped = base.replace(/\[\[P:[a-z_]+:[^\]]*\]\]/g, "").replace(/\n{3,}/g, "\n\n");
+  return humanizeTaskContextText(unescapeDisplayText(stripped).trim());
 }
 
 export function addUniqueText(target: string[], seen: Set<string>, value: string | null | undefined): void {
