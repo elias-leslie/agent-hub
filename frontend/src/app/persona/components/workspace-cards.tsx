@@ -63,8 +63,10 @@ function cleanSummary(text: string | null | undefined): string {
     .replace(NARRATION_TAG_RE, "")
     .replace(APPLIED_CITATION_RE, "")
     .replace(FEEDBACK_RE, "")
-    .replace(SUMMARY_RE, "");
-  // Clean orphaned bracket fragments left after tag stripping (e.g. "[…" or "[ ")
+    .replace(SUMMARY_RE, "")
+    // Strip internal heartbeat prefixes
+    .replace(/^HEARTBEAT_(?:OK|ACTION)\s*[—–\-]?\s*/i, "");
+  // Clean orphaned bracket fragments left after tag stripping
   cleaned = cleaned
     .replace(/\[…/g, "")
     .replace(/^\[+\s*$/g, "")
