@@ -15,8 +15,9 @@ from app.models import (
     AgentBenchmarkRun,
     AgentRegressionCluster,
 )
+from app.services.benchmark_aggregation import aggregate_attempts
 
-from .agent_benchmark_service import summarize_benchmark_experiment
+from ._benchmark_dashboard import summarize_benchmark_experiment
 
 
 def should_update_regression_clusters(
@@ -169,6 +170,11 @@ def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, s
     return grouped
 
 
+def _has_scored_attempts(attempts: list[dict[str, Any]]) -> bool:
+    """Return True when a run payload contains at least one non-infra attempt."""
+    return aggregate_attempts(attempts).scored_attempts > 0
+
+
 async def _update_regression_clusters(
     db: AsyncSession,
     run: AgentBenchmarkRun,
@@ -283,7 +289,10 @@ async def _persist_benchmark_payload(db: AsyncSession, payload: dict[str, Any]) 
     for attempt_payload in attempts:
         db.add(_make_attempt(run, attempt_payload))
 
-    if should_update_regression_clusters(experiment_cohort=experiment_cohort, metadata=metadata):
+    if (
+        should_update_regression_clusters(experiment_cohort=experiment_cohort, metadata=metadata)
+        and _has_scored_attempts(attempts)
+    ):
         grouped = _group_attempt_failures(attempts)
         await _update_regression_clusters(db, run, grouped)
 

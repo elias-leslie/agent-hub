@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-import statistics
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.benchmark_aggregation import aggregate_attempts
 from scripts.completion_review_benchmark_cases import CompletionReviewBenchmarkCase
-from scripts.persona_benchmark_eval import classify_failure
+from scripts.persona_benchmark_eval import classify_failure, normalize_attempt_identity
 
 _VALID_DECISIONS = {"complete", "continue", "escalate"}
 _VALID_CONFIDENCE = {"low", "medium", "high"}
@@ -166,6 +166,12 @@ def score_completion_review_attempt(
     total_tokens: int,
     failure_detail: str | None = None,
 ) -> CompletionReviewBenchmarkAttempt:
+    provider, effective_model, requested_model = normalize_attempt_identity(
+        model_id=model_id,
+        provider=provider,
+        effective_model=effective_model,
+        requested_model=model_id,
+    )
     attempt = CompletionReviewBenchmarkAttempt(
         model_id=model_id,
         case_id=case.case_id,
@@ -174,7 +180,7 @@ def score_completion_review_attempt(
         session_id=session_id,
         provider=provider,
         effective_model=effective_model,
-        requested_model=model_id,
+        requested_model=requested_model,
         content=content,
         fallback_used=fallback_used,
         turns=turns,
@@ -237,23 +243,17 @@ def summarize_completion_review_attempts(
 
     summaries: list[CompletionReviewBenchmarkSummary] = []
     for model_id, model_attempts in grouped.items():
-        pass_rate = (sum(1 for attempt in model_attempts if attempt.passed) / len(model_attempts)) * 100
+        aggregate = aggregate_attempts(model_attempts)
         summaries.append(
             CompletionReviewBenchmarkSummary(
                 model_id=model_id,
                 attempts=len(model_attempts),
-                pass_rate=round(pass_rate, 1),
-                avg_composite_score=round(
-                    statistics.mean(attempt.composite_score for attempt in model_attempts), 1
-                ),
-                avg_correctness_score=round(
-                    statistics.mean(attempt.correctness_score for attempt in model_attempts), 3
-                ),
-                avg_latency_ms=round(statistics.mean(attempt.latency_ms for attempt in model_attempts), 1),
-                avg_total_tokens=round(
-                    statistics.mean(attempt.total_tokens for attempt in model_attempts), 1
-                ),
-                avg_turns=round(statistics.mean(attempt.turns for attempt in model_attempts), 2),
+                pass_rate=aggregate.pass_rate or 0.0,
+                avg_composite_score=aggregate.avg_score or 0.0,
+                avg_correctness_score=aggregate.avg_correctness_score or 0.0,
+                avg_latency_ms=aggregate.avg_latency_ms or 0.0,
+                avg_total_tokens=aggregate.avg_total_tokens or 0.0,
+                avg_turns=aggregate.avg_turns or 0.0,
             )
         )
     summaries.sort(key=lambda summary: (-summary.avg_composite_score, -summary.pass_rate, summary.model_id))

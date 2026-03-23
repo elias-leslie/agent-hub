@@ -32,6 +32,12 @@ from app.services.tools._executor_file_io import (
     write_file as _write_file,
 )
 from app.services.tools._executor_registry import build_tool_registry
+from app.services.tools._executor_web import (
+    fetch_web_page as _fetch_web_page,
+)
+from app.services.tools._executor_web import (
+    search_web as _search_web,
+)
 from app.services.tools._sensitive_content import scan_runtime_sensitive_content
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
@@ -111,7 +117,7 @@ class DirectToolExecutor:
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
         "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
-        "precision_code_search", "tool_search",
+        "precision_code_search", "search_web", "fetch_web_page", "tool_search",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
@@ -174,6 +180,12 @@ class DirectToolExecutor:
             return await self.consult_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "question", "context")})
         if name == "dispatch_agent":
             return await self.dispatch_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "task", "project_id", "max_turns")})
+        if name == "search_web":
+            return await self.search_web(**{k: v for k, v in args.items() if k in ("query", "max_results", "search_type", "timelimit")})
+        if name == "fetch_web_page":
+            return await self.fetch_web_page(
+                **{k: v for k, v in args.items() if k in ("url", "max_chars", "focus_query")}
+            )
         if name == "tool_search":
             return await self.tool_search(**{k: v for k, v in args.items() if k in ("query", "limit")})
 
@@ -225,7 +237,7 @@ class DirectToolExecutor:
 
     async def dispatch_agent(
         self, agent_slug: str, task: str,
-        project_id: str | None = None, max_turns: int = 25,
+        project_id: str | None = None, max_turns: int | None = None,
     ) -> str:
         """Dispatch an agent with full tool access to perform a task."""
         from app.services.tools._executor_consultation import dispatch_agent as _dispatch
@@ -237,6 +249,34 @@ class DirectToolExecutor:
             task,
             max_turns,
             parent_session_id=self._session_id,
+        )
+
+    async def search_web(
+        self,
+        query: str,
+        max_results: int = 5,
+        search_type: str = "text",
+        timelimit: str | None = None,
+    ) -> str:
+        """Search the public web."""
+        return await _search_web(
+            query=query,
+            max_results=max_results,
+            search_type=search_type,
+            timelimit=timelimit,
+        )
+
+    async def fetch_web_page(
+        self,
+        url: str,
+        max_chars: int = 12000,
+        focus_query: str | None = None,
+    ) -> str:
+        """Fetch a webpage and extract readable content."""
+        return await _fetch_web_page(
+            url=url,
+            max_chars=max_chars,
+            focus_query=focus_query,
         )
 
     async def tool_search(self, query: str, limit: int = 8) -> str:

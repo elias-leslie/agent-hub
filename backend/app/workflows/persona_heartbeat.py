@@ -239,7 +239,7 @@ async def _resolve_completion_context(
             db, project_id=execution_project,
         )
         persona = await get_persona(db)
-        max_turns = get_persona_limit(persona, "max_turns") or 200
+        max_turns = get_persona_limit(persona, "max_turns")
     return model, provider, temperature, thinking_level, system_content, agent_memory_config, max_turns
 
 

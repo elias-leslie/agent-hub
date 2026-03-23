@@ -25,6 +25,7 @@ The battery focuses on behaviors the persona is expected to get right:
 - reconcile genuinely stalled sessions
 - inspect workspace files with tools before deciding
 - use `precision_code_search` for real code-navigation lookup when the task calls for it
+- use the shared public-web research stack when external validation is required
 
 ## Runner
 
@@ -64,6 +65,12 @@ Composite score:
 
 - 85% decision correctness
 - 15% tool-use compliance for tool-required cases
+
+Ranking and experiment tie-breaks:
+
+- correctness and pass rate stay primary
+- when those are tied or statistically non-inferior, fewer tool calls win before token and turn count
+- infra-only failures are excluded from those efficiency aggregates so broken transport does not masquerade as efficiency
 
 Tool-use compliance now supports specific-tool enforcement. Generic workspace cases still only require that some tool was used. Precision coverage can require the exact `precision_code_search` tool name, and a correct JSON answer still fails if that tool was not used.
 

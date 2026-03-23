@@ -146,13 +146,13 @@ async def run_turn_loop(
 ) -> None:
     """Run the multi-turn loop, updating state in place.
 
-    Turn timeline (for max_turns=200):
-        1-99:    Normal execution
-        100:     Checkpoint #1 (soft_limit)
-        125-175: Checkpoints #2-#4
-        200:     Wrap-up message — stop new work, commit, summarize
-        201-220: Grace period (agent wraps up)
-        220:     Hard stop — loop terminates
+    Turn timeline (for max_turns=500):
+        1-249:   Normal execution
+        250:     Checkpoint #1 (soft_limit)
+        312-436: Checkpoints #2-#4
+        500:     Wrap-up message — stop new work, commit, summarize
+        501-550: Grace period (agent wraps up)
+        550:     Hard stop — loop terminates
     """
     for turn in range(1, cfg.hard_cap + 1):
         # Wrap-up takes priority over checkpoint at the same turn

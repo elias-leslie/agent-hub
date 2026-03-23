@@ -43,7 +43,6 @@ class TestBuildRequestBody:
                 "description": "Read a file",
                 "parameters": {"type": "object", "properties": {"path": {"type": "string"}}},
             },
-            {"type": "web_search_preview"},
         ]
         assert body["tool_choice"] == "auto"
         assert body["parallel_tool_calls"] is True

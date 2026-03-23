@@ -175,18 +175,31 @@ class TestStandardTools:
         assert "write_file" in names
         assert "consult_agent" in names
         assert "precision_code_search" in names
+        assert "search_web" in names
+        assert "fetch_web_page" in names
 
     def test_consult_agent_description_prefers_direct_sources_for_exact_facts(self) -> None:
         """Consultation should be framed as advice, not a shortcut around direct lookup."""
         tools = {tool.name: tool for tool in get_standard_tools()}
+        bash_tool = tools["bash"]
         consult_tool = tools["consult_agent"]
+        fetch_tool = tools["fetch_web_page"]
+        search_tool = tools["search_web"]
 
         assert "expert review" in consult_tool.description
+        assert "read-only research tools" in consult_tool.description
+        assert "`search_web`" in consult_tool.description
         assert "Do not use it for exact rule text" in consult_tool.description
         assert "`st memory get/search`" in consult_tool.description
         assert consult_tool.usage_examples == [
             "Ask the reviewer agent for risk-focused feedback after inspecting the code.",
         ]
+        assert "Do not use bash/curl" in bash_tool.description
+        assert "`web-research ...`" in bash_tool.description
+        assert "Prefer this over bash/curl" in search_tool.description
+        assert "Prefer this over bash/curl" in fetch_tool.description
+        assert "focus_query" in fetch_tool.input_schema["properties"]
+        assert "large pages" in fetch_tool.input_schema["properties"]["focus_query"]["description"]
 
     def test_create_handler_with_workdir(self, tmp_path: Path) -> None:
         """Test handler creation with working directory."""
@@ -266,6 +279,50 @@ class TestDispatch:
         )
         assert "project_id context" in result
 
+    @pytest.mark.asyncio
+    async def test_dispatch_search_web(self, executor: DirectToolExecutor) -> None:
+        with patch(
+            "app.services.tools.direct_executor_core._search_web",
+            new_callable=AsyncMock,
+            return_value='{"results": []}',
+        ) as mock_search:
+            result = await executor.dispatch(
+                "search_web",
+                {"query": "agent frameworks", "max_results": 3, "bogus": "ignored"},
+            )
+
+        assert result == '{"results": []}'
+        mock_search.assert_awaited_once_with(
+            query="agent frameworks",
+            max_results=3,
+            search_type="text",
+            timelimit=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_fetch_web_page(self, executor: DirectToolExecutor) -> None:
+        with patch(
+            "app.services.tools.direct_executor_core._fetch_web_page",
+            new_callable=AsyncMock,
+            return_value='{"title": "Example"}',
+        ) as mock_fetch:
+            result = await executor.dispatch(
+                "fetch_web_page",
+                {
+                    "url": "https://example.com",
+                    "max_chars": 5000,
+                    "focus_query": "pricing api limits",
+                    "bogus": "ignored",
+                },
+            )
+
+        assert result == '{"title": "Example"}'
+        mock_fetch.assert_awaited_once_with(
+            url="https://example.com",
+            max_chars=5000,
+            focus_query="pricing api limits",
+        )
+
 
 class TestConsultAgent:
     """Tests for consult_agent tool."""
@@ -309,7 +366,7 @@ class TestConsultAgent:
             "summitflow",
             "debugger",
             "Advance stale state recovery",
-            25,
+            None,
             parent_session_id="parent-session-789",
         )
 

@@ -6,10 +6,30 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from app.api.complete._session_helpers import update_session_metadata
 from app.api.complete.handler_helpers import save_and_track
 from app.api.complete.schemas import CompletionRequest, MessageInput
+
+
+def test_completion_request_accepts_high_turn_budgets() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hello")],
+        project_id="test-project",
+        max_turns=5000,
+    )
+
+    assert request.max_turns == 5000
+
+
+def test_completion_request_rejects_non_positive_turn_budgets() -> None:
+    with pytest.raises(ValidationError):
+        CompletionRequest(
+            messages=[MessageInput(role="user", content="hello")],
+            project_id="test-project",
+            max_turns=0,
+        )
 
 
 @pytest.mark.asyncio

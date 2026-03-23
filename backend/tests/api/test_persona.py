@@ -9,7 +9,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
+from app.api.persona.schemas import PersonaUpdate
 from app.db import get_db
 from app.main import app
 from app.models.persona import Persona
@@ -66,6 +68,20 @@ def _patch_persona_prompt_documents(persona: MagicMock):
         ),
     ):
         yield
+
+
+class TestPersonaSchemaValidation:
+    """Tests for persona API schema validation."""
+
+    def test_persona_update_accepts_positive_max_turns(self) -> None:
+        update = PersonaUpdate(limits={"max_turns": 750})
+
+        assert update.limits is not None
+        assert update.limits.max_turns == 750
+
+    def test_persona_update_rejects_zero_max_turns(self) -> None:
+        with pytest.raises(ValidationError):
+            PersonaUpdate(limits={"max_turns": 0})
 
 
 class TestGetPersonaEndpoint:

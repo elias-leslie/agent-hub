@@ -4,7 +4,11 @@ import logging
 import os
 from typing import Any
 
-from app.adapters._claude_constants import DEFAULT_ALLOWED_CLI_TOOLS, THINKING_LEVEL_TO_EFFORT
+from app.adapters._claude_constants import (
+    DEFAULT_ALLOWED_CLI_TOOLS,
+    DEFAULT_DISALLOWED_CLI_TOOLS,
+    THINKING_LEVEL_TO_EFFORT,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -125,6 +129,7 @@ def build_sdk_options(
     thinking_level: str | None = None,
     max_turns: int | None = None,
     allowed_tools: list[str] | None = None,
+    disallowed_tools: list[str] | None = None,
     system_prompt: str | None = None,
     agent_slug: str | None = None,
 ) -> tuple[Any, bool]:
@@ -166,4 +171,9 @@ def build_sdk_options(
         _set_streaming_prompt_timeouts(sdk_opts)
 
     sdk_opts["allowed_tools"] = allowed_tools or list(DEFAULT_ALLOWED_CLI_TOOLS)
+    sdk_opts["disallowed_tools"] = (
+        list(disallowed_tools)
+        if disallowed_tools is not None
+        else list(DEFAULT_DISALLOWED_CLI_TOOLS)
+    )
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt

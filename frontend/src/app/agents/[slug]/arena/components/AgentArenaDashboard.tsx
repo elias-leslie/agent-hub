@@ -71,6 +71,18 @@ function sortModels(models: AgentBenchmarkModelSummary[]) {
     if (passDelta !== 0) {
       return passDelta;
     }
+    const toolDelta = (a.avg_tool_calls ?? Number.POSITIVE_INFINITY) - (b.avg_tool_calls ?? Number.POSITIVE_INFINITY);
+    if (toolDelta !== 0) {
+      return toolDelta;
+    }
+    const tokenDelta = (a.avg_total_tokens ?? Number.POSITIVE_INFINITY) - (b.avg_total_tokens ?? Number.POSITIVE_INFINITY);
+    if (tokenDelta !== 0) {
+      return tokenDelta;
+    }
+    const turnDelta = (a.avg_turns ?? Number.POSITIVE_INFINITY) - (b.avg_turns ?? Number.POSITIVE_INFINITY);
+    if (turnDelta !== 0) {
+      return turnDelta;
+    }
     return b.attempts - a.attempts;
   });
 }
@@ -843,6 +855,9 @@ export function AgentArenaDashboard({
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
                         {model.attempts} attempts · last seen {formatRelativeTime(model.latest_completed_at)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {model.avg_tool_calls ?? "—"} avg tools · {model.avg_total_tokens ?? "—"} avg tokens
                       </p>
                     </div>
                     <div className="text-right">

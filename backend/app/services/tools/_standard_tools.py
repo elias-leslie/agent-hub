@@ -5,6 +5,12 @@ from __future__ import annotations
 from app.services.tools._executor_precision_code_search import (
     DEFAULT_PRECISION_SEARCH_BUDGET,
 )
+from app.services.tools._executor_web import (
+    DEFAULT_WEB_FETCH_MAX_CHARS,
+    DEFAULT_WEB_SEARCH_RESULTS,
+    MAX_WEB_FETCH_MAX_CHARS,
+    MAX_WEB_SEARCH_RESULTS,
+)
 from app.services.tools._tool_constants import DEFAULT_READ_LIMIT, DEFAULT_TIMEOUT
 from app.services.tools.base import Tool
 
@@ -12,7 +18,11 @@ BASH_TOOL = Tool(
     name="bash",
     description=(
         "Execute a bash command in the working directory. "
-        "Use for running tests, git operations, or system commands."
+        "Use for running tests, git operations, or system commands. "
+        "Do not use bash/curl for ordinary public-web research when "
+        "`search_web` or `fetch_web_page` can do the job. If a bash-capable "
+        "agent needs the centralized web stack from shell, call "
+        "`web-research ...`."
     ),
     input_schema={
         "type": "object",
@@ -87,12 +97,13 @@ WRITE_FILE_TOOL = Tool(
 CONSULT_AGENT_TOOL = Tool(
     name="consult_agent",
     description=(
-        "Consult another agent for text-only advice (no tool execution). Use when you "
-        "need expert review, a second opinion, or strategic guidance after checking "
-        "direct sources first. Do not use it for exact rule text or file/project facts "
-        "you can retrieve with `st memory get/search`, `read_file`, or search tools. "
-        "Your agent roster shows available agents. "
-        "Use consult_agent for advice; use dispatch_agent to run an agent with full tool access."
+        "Consult another agent for expert review, a second opinion, or strategic guidance. "
+        "Consultations can use read-only research tools such as `read_file`, "
+        "`precision_code_search`, `search_web`, and `fetch_web_page`, but not bash, writes, "
+        "or autonomous dispatch. Check direct sources first. Do not use it for exact rule text "
+        "or file/project facts you can retrieve with `st memory get/search`, `read_file`, or "
+        "search tools. Your agent roster shows available agents. Use consult_agent for bounded "
+        "advice; use dispatch_agent to run an agent with full tool access."
     ),
     input_schema={
         "type": "object",
@@ -145,12 +156,100 @@ PRECISION_CODE_SEARCH_TOOL = Tool(
     usage_examples=["Look up `get_file_tree` before reading whole files."],
 )
 
+SEARCH_WEB_TOOL = Tool(
+    name="search_web",
+    description=(
+        "Search the public web for current information and candidate sources. "
+        "Use this for research, inspiration, or to find pages to inspect before "
+        "calling `fetch_web_page`. Prefer this over bash/curl or provider-native "
+        "web tools for ordinary public-web research."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Search query for the public web.",
+            },
+            "max_results": {
+                "type": "integer",
+                "description": (
+                    "Maximum number of results to return "
+                    f"(default {DEFAULT_WEB_SEARCH_RESULTS}, max {MAX_WEB_SEARCH_RESULTS})."
+                ),
+                "default": DEFAULT_WEB_SEARCH_RESULTS,
+            },
+            "search_type": {
+                "type": "string",
+                "description": "Search scope: `text` for general search or `news` for recent news.",
+                "enum": ["text", "news"],
+                "default": "text",
+            },
+            "timelimit": {
+                "type": "string",
+                "description": "Optional time filter: `d`, `w`, `m`, or `y`.",
+                "enum": ["d", "w", "m", "y"],
+            },
+        },
+        "required": ["query"],
+    },
+    category="web",
+    search_keywords=["internet research", "browse web", "current information", "find sources"],
+    usage_examples=[
+        "Search for recent competitor launches before comparing their landing pages.",
+    ],
+)
+
+FETCH_WEB_PAGE_TOOL = Tool(
+    name="fetch_web_page",
+    description=(
+        "Fetch a webpage and extract readable content. "
+        "Use this after `search_web` or when you already have a URL and need the page text. "
+        "Prefer this over bash/curl for public webpage retrieval. For large pages, "
+        "pass `focus_query` to return the most relevant sections."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "HTTP or HTTPS URL to fetch.",
+            },
+            "max_chars": {
+                "type": "integer",
+                "description": (
+                    "Maximum number of content characters to return "
+                    f"(default {DEFAULT_WEB_FETCH_MAX_CHARS}, max {MAX_WEB_FETCH_MAX_CHARS})."
+                ),
+                "default": DEFAULT_WEB_FETCH_MAX_CHARS,
+            },
+            "focus_query": {
+                "type": "string",
+                "description": (
+                    "Optional research question or target topic for large pages. "
+                    "When provided, the tool focuses the response on the most relevant sections "
+                    "before truncation."
+                ),
+            },
+        },
+        "required": ["url"],
+    },
+    category="web",
+    search_keywords=["open url", "read webpage", "extract article", "fetch site content"],
+    usage_examples=[
+        "Fetch the top result from `search_web` to inspect the actual article text.",
+        "Use `focus_query` when a long page only matters for one topic or field.",
+    ],
+)
+
 STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,
     WRITE_FILE_TOOL,
     CONSULT_AGENT_TOOL,
     PRECISION_CODE_SEARCH_TOOL,
+    SEARCH_WEB_TOOL,
+    FETCH_WEB_PAGE_TOOL,
 ]
 
 

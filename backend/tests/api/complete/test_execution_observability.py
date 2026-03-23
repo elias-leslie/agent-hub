@@ -28,7 +28,7 @@ def test_build_execution_observability_uses_tool_budget_and_max_turn_stop_reason
 
     assert execution["orchestration_path"] == "tool_loop"
     assert execution["requested_max_turns"] == 1
-    assert execution["effective_turn_budget"] == 20
+    assert execution["effective_turn_budget"] == 3
     assert execution["terminal_stop_reason"] == "max_turns"
     assert execution["agent_slug"] == "refactor"
     assert execution["client_id"] == "client-1"

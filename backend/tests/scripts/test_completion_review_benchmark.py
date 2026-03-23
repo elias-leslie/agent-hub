@@ -90,6 +90,10 @@ def test_build_persistence_payload_maps_decision_into_attempt_record() -> None:
 
     assert payload["avg_score"] == 100.0
     assert payload["pass_rate"] == 100.0
+    assert payload["metadata"]["reviewer_role"] is True
+    assert payload["metadata"]["efficiency"]["avg_total_tokens"] == 180.0
+    assert payload["metadata"]["efficiency"]["avg_turns"] == 1.0
+    assert payload["metadata"]["efficiency"]["avg_tool_calls"] == 0.0
     assert payload["attempts"][0]["primary_action"] == "complete"
     assert payload["attempts"][0]["summary"] == "No cleanup or workstream residue remains."
 
@@ -118,6 +122,9 @@ def test_score_completion_review_attempt_classifies_infra_failures() -> None:
 
     assert attempt.infra_failure is True
     assert attempt.failure_kind == "infra"
+    assert attempt.provider == "codex"
+    assert attempt.effective_model == "codex/gpt-5.4"
+    assert attempt.requested_model == "codex/gpt-5.4"
 
 
 def test_score_completion_review_attempt_accepts_monitor_as_recent_progress_follow_through() -> None:
@@ -146,6 +153,121 @@ def test_score_completion_review_attempt_accepts_monitor_as_recent_progress_foll
 
     assert attempt.passed is True
     assert attempt.failure_detail is None
+
+
+def test_completion_review_summary_ignores_infra_failures() -> None:
+    case = get_completion_review_case_by_id("review_true_complete_clean")
+    failed = score_completion_review_attempt(
+        case=case,
+        model_id="claude-sonnet-4-6",
+        run_number=1,
+        latency_ms=1000,
+        content="",
+        session_id=None,
+        provider=None,
+        effective_model=None,
+        fallback_used=False,
+        turns=0,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+        failure_detail="All connection attempts failed",
+    )
+    passed = score_completion_review_attempt(
+        case=case,
+        model_id="claude-sonnet-4-6",
+        run_number=2,
+        latency_ms=900,
+        content=(
+            '{"case_id":"review_true_complete_clean","decision":"complete","confidence":"high",'
+            '"reason":"Cleanup is clean and there is no residue.","focus":"complete cleanup"}'
+        ),
+        session_id="sess-2",
+        provider="claude",
+        effective_model="claude-sonnet-4-6",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=120,
+        output_tokens=60,
+        total_tokens=180,
+    )
+
+    summary = summarize_completion_review_attempts([failed, passed])[0]
+    assert summary.avg_composite_score == 100.0
+    assert summary.pass_rate == 100.0
+
+
+def test_completion_review_persistence_payload_ignores_infra_failures() -> None:
+    case = get_completion_review_case_by_id("review_true_complete_clean")
+    failed = score_completion_review_attempt(
+        case=case,
+        model_id="claude-opus-4-6",
+        run_number=1,
+        latency_ms=900,
+        content="",
+        session_id=None,
+        provider=None,
+        effective_model=None,
+        fallback_used=False,
+        turns=0,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+        failure_detail="All connection attempts failed",
+    )
+    passed = score_completion_review_attempt(
+        case=case,
+        model_id="claude-opus-4-6",
+        run_number=2,
+        latency_ms=900,
+        content=(
+            '{"case_id":"review_true_complete_clean","decision":"complete","confidence":"medium",'
+            '"reason":"No cleanup or workstream residue remains.","focus":"complete"}'
+        ),
+        session_id="sess-2",
+        provider="claude",
+        effective_model="claude-opus-4-6",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=120,
+        output_tokens=60,
+        total_tokens=180,
+    )
+    run = CompletionReviewBenchmarkRun(
+        benchmark_id="review-bench-2",
+        project_id="persona-sandbox",
+        models=["claude-opus-4-6"],
+        case_ids=[case.case_id],
+        runs_per_case=1,
+        started_at="2026-03-11T00:00:00+00:00",
+        completed_at="2026-03-11T00:01:00+00:00",
+        attempts=[failed, passed],
+        summaries=summarize_completion_review_attempts([failed, passed]),
+    )
+
+    payload = build_persistence_payload(
+        run,
+        agent_slug="supervisor",
+        suite_id="completion-review-suite",
+        run_kind="completion_review_benchmark",
+        use_memory=False,
+        seed=42,
+    )
+
+    assert payload["avg_score"] == 100.0
+    assert payload["pass_rate"] == 100.0
+    assert payload["metadata"]["efficiency"]["avg_total_tokens"] == 180.0
+    assert payload["metadata"]["efficiency"]["avg_turns"] == 1.0
+    assert payload["metadata"]["efficiency"]["avg_tool_calls"] == 0.0
+    assert payload["infra_failure_count"] == 1
 
 
 def test_default_completion_review_suite_matches_live_reviewer_path() -> None:

@@ -28,7 +28,7 @@ const DEFAULT_LIMITS: Record<string, { label: string; description: string; value
     label: "Max turns",
     description:
       "Maximum agent turns per execution. Soft limit at 50%, checkpoints every 25%, wrap-up at limit, grace period for cleanup.",
-    value: 200,
+    value: 500,
   },
 };
 
@@ -223,9 +223,9 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 value={getLimitValue(key)}
                 onChange={(e) => {
                   const v = Number.parseInt(e.target.value, 10);
-                  if (!Number.isNaN(v) && v >= 0) handleLimitChange(key, v);
+                  if (!Number.isNaN(v) && v >= 1) handleLimitChange(key, v);
                 }}
-                min={0}
+                min={1}
                 placeholder={String(config.value)}
                 className="w-full px-3 py-1.5 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               />

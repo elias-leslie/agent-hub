@@ -14,17 +14,24 @@ from app.services.persona_document_prompt_service import get_persona_personality
 logger = logging.getLogger(__name__)
 
 # Default limits — only max_turns is user-configurable.
-# Other operational constants are hardcoded where used.
 DEFAULT_LIMITS: dict[str, int] = {
-    "max_turns": 200,
+    "max_turns": 500,
 }
 
 
 def get_persona_limit(persona: Persona | None, key: str) -> int:
     """Get a configurable limit, falling back to defaults."""
+    default = DEFAULT_LIMITS.get(key, 0)
     if persona and persona.limits and key in persona.limits:
-        return int(persona.limits[key])
-    return DEFAULT_LIMITS.get(key, 0)
+        raw_value = persona.limits[key]
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return default
+        if key == "max_turns" and value < 1:
+            return default
+        return value
+    return default
 
 
 async def get_persona(db: AsyncSession) -> Persona | None:

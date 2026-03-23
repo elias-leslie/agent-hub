@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class TurnLoopConfig:
     """Config shared across all turns in a multi-turn loop.
 
-    Set max_turns (user's limit, e.g. 200).  Derived checkpoint fields
+    Set max_turns (user's limit, e.g. 500).  Derived checkpoint fields
     are computed automatically in __post_init__:
         soft_limit        = max_turns // 2          (checkpoint start)
         checkpoint_interval = soft_limit // 4       (~4 checkpoints)
@@ -81,7 +81,7 @@ class TurnLoopConfig:
         else:
             self.soft_limit = self.max_turns // 2
             self.checkpoint_interval = max(self.soft_limit // 4, 1)
-            grace = min(math.ceil(self.max_turns * 0.1), 25)
+            grace = math.ceil(self.max_turns * 0.1)
             self.wrapup_turn = self.max_turns
             self.hard_cap = self.max_turns + grace
 

@@ -68,6 +68,12 @@ class TestBuildBoundarySettings:
         allow = settings["permissions"]["allow"]
         assert "mcp__*(*)" in allow
 
+    def test_claude_native_web_tools_not_allowed(self) -> None:
+        settings = self._build("/tmp/worktree")
+        allow = settings["permissions"]["allow"]
+        assert "WebFetch(*)" not in allow
+        assert "WebSearch(*)" not in allow
+
     def test_resolves_symlinks(self) -> None:
         """Path should be resolved (no symlinks in allow patterns)."""
         settings = self._build("/tmp/worktree")

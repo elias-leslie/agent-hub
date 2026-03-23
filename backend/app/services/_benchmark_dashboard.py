@@ -16,6 +16,11 @@ from app.models import (
     AgentBenchmarkRun,
     AgentRegressionCluster,
 )
+from app.services.benchmark_aggregation import (
+    EFFICIENCY_METADATA_KEY,
+    run_has_scored_attempts,
+    run_scored_attempt_count,
+)
 
 from ._benchmark_config import (
     heartbeat_prompt_descriptor,
@@ -65,17 +70,69 @@ def _bootstrap_mean_delta(
     }
 
 
+def _run_metadata_dict(run: Any) -> dict[str, Any]:
+    raw = run.get("run_metadata") if isinstance(run, dict) else getattr(run, "run_metadata", None)
+    if not isinstance(raw, dict):
+        raw = run.get("metadata") if isinstance(run, dict) else getattr(run, "metadata", None)
+    return dict(raw or {}) if isinstance(raw, dict) else {}
+
+
+def _run_efficiency_metric(run: Any, metric_name: str) -> float | None:
+    efficiency = _run_metadata_dict(run).get(EFFICIENCY_METADATA_KEY)
+    if not isinstance(efficiency, dict):
+        return None
+    value = efficiency.get(metric_name)
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _quality_is_non_inferior(
+    score_delta: dict[str, float | None],
+    pass_rate_delta: dict[str, float | None],
+) -> bool:
+    score_low = score_delta.get("ci_low")
+    pass_low = pass_rate_delta.get("ci_low")
+    if score_low is None or pass_low is None:
+        return False
+    return float(score_low) >= -0.5 and float(pass_low) >= -1.0
+
+
+def _quality_is_not_superior(
+    score_delta: dict[str, float | None],
+    pass_rate_delta: dict[str, float | None],
+) -> bool:
+    score_high = score_delta.get("ci_high")
+    pass_high = pass_rate_delta.get("ci_high")
+    if score_high is None or pass_high is None:
+        return False
+    return float(score_high) <= 0.5 and float(pass_high) <= 1.0
+
+
 def _summarize_experiment_arm(
     runs: list[AgentBenchmarkRun],
     *,
     label: str,
 ) -> dict[str, Any]:
-    scores = [float(run.avg_score or 0.0) for run in runs]
-    pass_rates = [float(run.pass_rate or 0.0) for run in runs]
-    fingerprints = sorted({run_config_fingerprint(run) for run in runs})
+    scored_runs = [run for run in runs if run_has_scored_attempts(run)]
+    scores = [float(run.avg_score) for run in scored_runs if run.avg_score is not None]
+    pass_rates = [float(run.pass_rate) for run in scored_runs if run.pass_rate is not None]
+    avg_tool_calls = [
+        metric for run in scored_runs
+        if (metric := _run_efficiency_metric(run, "avg_tool_calls")) is not None
+    ]
+    avg_total_tokens = [
+        metric for run in scored_runs
+        if (metric := _run_efficiency_metric(run, "avg_total_tokens")) is not None
+    ]
+    avg_turns = [
+        metric for run in scored_runs
+        if (metric := _run_efficiency_metric(run, "avg_turns")) is not None
+    ]
+    fingerprints = sorted({run_config_fingerprint(run) for run in scored_runs})
 
     prompt_version_set: set[str] = set()
-    for run in runs:
+    for run in scored_runs:
         cs = dict(run.config_snapshot or {})
         ps = cs.get("prompt_stack")
         if isinstance(ps, dict):
@@ -92,20 +149,27 @@ def _summarize_experiment_arm(
     prompt_versions = sorted(prompt_version_set)
 
     latest_completed = max(
-        (run.completed_at for run in runs if run.completed_at is not None),
+        (run.completed_at for run in scored_runs if run.completed_at is not None),
         default=None,
     )
     return {
         "label": label,
-        "run_count": len(runs),
+        "run_count": len(scored_runs),
+        "infra_only_run_count": len(runs) - len(scored_runs),
         "avg_score": _round_metric(_sample_mean(scores)) if scores else None,
         "avg_pass_rate": _round_metric(_sample_mean(pass_rates)) if pass_rates else None,
+        "avg_tool_calls": _round_metric(_sample_mean(avg_tool_calls), 2) if avg_tool_calls else None,
+        "avg_total_tokens": _round_metric(_sample_mean(avg_total_tokens), 1) if avg_total_tokens else None,
+        "avg_turns": _round_metric(_sample_mean(avg_turns), 2) if avg_turns else None,
         "config_fingerprints": fingerprints,
         "config_stable": len(fingerprints) <= 1,
         "prompt_versions": prompt_versions,
         "latest_completed_at": latest_completed.isoformat() if latest_completed else None,
         "_scores": scores,
         "_pass_rates": pass_rates,
+        "_avg_tool_calls": avg_tool_calls,
+        "_avg_total_tokens": avg_total_tokens,
+        "_avg_turns": avg_turns,
     }
 
 
@@ -114,6 +178,7 @@ def _decide_experiment_outcome(
     candidate: dict[str, Any],
     score_delta: dict[str, float | None],
     pass_rate_delta: dict[str, float | None],
+    tool_call_delta: dict[str, float | None],
     min_runs: int,
 ) -> tuple[str, str]:
     if min(baseline["run_count"], candidate["run_count"]) < min_runs:
@@ -142,6 +207,18 @@ def _decide_experiment_outcome(
         )
     ):
         return "rollback", "candidate_underperforms_baseline"
+    if (
+        _quality_is_non_inferior(score_delta, pass_rate_delta)
+        and tool_call_delta["ci_high"] is not None
+        and float(tool_call_delta["ci_high"]) < 0.0
+    ):
+        return "promote", "candidate_matches_quality_with_fewer_tool_calls"
+    if (
+        _quality_is_not_superior(score_delta, pass_rate_delta)
+        and tool_call_delta["ci_low"] is not None
+        and float(tool_call_delta["ci_low"]) > 0.0
+    ):
+        return "rollback", "candidate_matches_quality_with_more_tool_calls"
     return "hold", "no_clear_winner"
 
 
@@ -169,10 +246,14 @@ def summarize_benchmark_experiment(
         baseline["_pass_rates"], candidate["_pass_rates"],
         seed_material=f"{experiment.experiment_key}:pass_rate",
     )
+    tool_call_delta = _bootstrap_mean_delta(
+        baseline["_avg_tool_calls"], candidate["_avg_tool_calls"],
+        seed_material=f"{experiment.experiment_key}:tool_calls",
+    )
 
     min_runs = int(experiment.min_runs_per_cohort or 3)
     decision, reason = _decide_experiment_outcome(
-        baseline, candidate, score_delta, pass_rate_delta, min_runs,
+        baseline, candidate, score_delta, pass_rate_delta, tool_call_delta, min_runs,
     )
 
     return {
@@ -188,6 +269,7 @@ def summarize_benchmark_experiment(
         "candidate": {k: v for k, v in candidate.items() if not k.startswith("_")},
         "score_delta": score_delta,
         "pass_rate_delta": pass_rate_delta,
+        "tool_call_delta": tool_call_delta,
         "updated_at": experiment.updated_at.isoformat() if experiment.updated_at else None,
         "created_at": experiment.created_at.isoformat() if experiment.created_at else None,
     }
@@ -202,6 +284,7 @@ async def _query_recent_runs(
             AgentBenchmarkRun.agent_slug == agent_slug,
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
+            AgentBenchmarkRun.attempt_count > AgentBenchmarkRun.infra_failure_count,
         )
         .order_by(AgentBenchmarkRun.completed_at.desc())
     )
@@ -236,16 +319,19 @@ async def _query_model_performance(
             func.avg(AgentBenchmarkAttempt.composite_score),
             func.sum(func.cast(AgentBenchmarkAttempt.passed, Integer)),
             func.avg(AgentBenchmarkAttempt.latency_ms),
+            func.avg(AgentBenchmarkAttempt.total_tokens),
+            func.avg(AgentBenchmarkAttempt.turns),
+            func.avg(AgentBenchmarkAttempt.tool_calls_count),
             func.max(AgentBenchmarkRun.completed_at),
         )
         .join(AgentBenchmarkRun, AgentBenchmarkRun.id == AgentBenchmarkAttempt.benchmark_run_id)
         .where(
             AgentBenchmarkAttempt.agent_slug == agent_slug,
+            AgentBenchmarkAttempt.infra_failure.is_(False),
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
         )
         .group_by(AgentBenchmarkAttempt.model_id)
-        .order_by(func.avg(AgentBenchmarkAttempt.composite_score).desc())
     )
     if suite_id:
         stmt = stmt.where(AgentBenchmarkRun.suite_id == suite_id)
@@ -264,6 +350,7 @@ async def _query_case_attempts(
         .join(AgentBenchmarkRun, AgentBenchmarkRun.id == AgentBenchmarkAttempt.benchmark_run_id)
         .where(
             AgentBenchmarkAttempt.agent_slug == agent_slug,
+            AgentBenchmarkAttempt.infra_failure.is_(False),
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
         )
@@ -311,10 +398,11 @@ async def _query_experiment_summaries(
 
 
 def _build_overview(runs: list[AgentBenchmarkRun], open_clusters_count: int) -> dict[str, Any]:
-    total_attempts = sum(int(run.attempt_count or 0) for run in runs)
+    total_attempts = sum(run_scored_attempt_count(run) for run in runs)
     total_passed = sum(int(run.passed_attempt_count or 0) for run in runs)
+    score_values = [float(run.avg_score) for run in runs if run.avg_score is not None]
     avg_score = (
-        round(sum(float(run.avg_score or 0.0) for run in runs) / len(runs), 1) if runs else 0.0
+        round(sum(score_values) / len(score_values), 1) if score_values else 0.0
     )
     pass_rate = round((total_passed / total_attempts) * 100, 1) if total_attempts else 0.0
 
@@ -397,17 +485,39 @@ def _format_regressions(clusters: list[AgentRegressionCluster]) -> list[dict[str
 
 
 def _format_model_performance(model_rows: list[Any]) -> list[dict[str, Any]]:
-    return [
+    formatted = [
         {
             "model_id": str(row[0]),
             "attempts": int(row[1] or 0),
             "avg_score": _round_metric(row[2]),
             "pass_rate": round((int(row[3] or 0) / int(row[1] or 1)) * 100, 1) if row[1] else 0.0,
             "avg_latency_ms": _round_metric(row[4]),
-            "latest_completed_at": row[5].isoformat() if row[5] else None,
+            "avg_total_tokens": _round_metric(row[5]),
+            "avg_turns": _round_metric(row[6], 2),
+            "avg_tool_calls": _round_metric(row[7], 2),
+            "latest_completed_at": row[8].isoformat() if row[8] else None,
         }
         for row in model_rows
     ]
+    def _sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+        latest_completed_at = row["latest_completed_at"]
+        latest_timestamp = (
+            -datetime.fromisoformat(latest_completed_at).timestamp()
+            if latest_completed_at
+            else float("inf")
+        )
+        return (
+            -(row["avg_score"] if row["avg_score"] is not None else -1.0),
+            -row["pass_rate"],
+            row["avg_tool_calls"] if row["avg_tool_calls"] is not None else float("inf"),
+            row["avg_total_tokens"] if row["avg_total_tokens"] is not None else float("inf"),
+            row["avg_turns"] if row["avg_turns"] is not None else float("inf"),
+            -row["attempts"],
+            latest_timestamp,
+            row["model_id"],
+        )
+
+    return sorted(formatted, key=_sort_key)
 
 
 def _format_suites(
@@ -435,7 +545,7 @@ def _format_suites(
             },
         )
         suite["run_count"] += 1
-        suite["attempt_count"] += int(run.attempt_count or 0)
+        suite["attempt_count"] += run_scored_attempt_count(run)
         suite["passed_attempt_count"] += int(run.passed_attempt_count or 0)
         if run.avg_score is not None:
             suite["score_values"].append(float(run.avg_score))

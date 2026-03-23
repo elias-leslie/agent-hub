@@ -37,6 +37,8 @@ class TestTierTools:
         assert "read_file" in tools
         assert "consult_agent" in tools
         assert "precision_code_search" in tools
+        assert "search_web" in tools
+        assert "fetch_web_page" in tools
         # Should NOT have write tools
         assert "write_file" not in tools
         assert "bash" not in tools
@@ -218,6 +220,28 @@ class TestCheckToolAllowed:
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "tool_search")
+            assert allowed is True
+            assert reason == "allowed"
+
+    @pytest.mark.asyncio
+    async def test_search_web_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "search_web")
+            assert allowed is True
+            assert reason == "allowed"
+
+    @pytest.mark.asyncio
+    async def test_fetch_web_page_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "fetch_web_page")
             assert allowed is True
             assert reason == "allowed"
 

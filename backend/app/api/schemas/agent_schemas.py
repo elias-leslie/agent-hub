@@ -277,6 +277,9 @@ class AgentBenchmarkModelSummary(BaseModel):
     avg_score: float | None = None
     pass_rate: float = 0.0
     avg_latency_ms: float | None = None
+    avg_total_tokens: float | None = None
+    avg_turns: float | None = None
+    avg_tool_calls: float | None = None
     latest_completed_at: str | None = None
 
 
@@ -316,6 +319,9 @@ class AgentBenchmarkExperimentArmSummary(BaseModel):
     run_count: int = 0
     avg_score: float | None = None
     avg_pass_rate: float | None = None
+    avg_total_tokens: float | None = None
+    avg_turns: float | None = None
+    avg_tool_calls: float | None = None
     config_fingerprints: list[str] = Field(default_factory=list)
     config_stable: bool = True
     prompt_versions: list[str] = Field(default_factory=list)
@@ -345,6 +351,7 @@ class AgentBenchmarkExperimentSummary(BaseModel):
     candidate: AgentBenchmarkExperimentArmSummary
     score_delta: AgentBenchmarkDeltaSummary
     pass_rate_delta: AgentBenchmarkDeltaSummary
+    tool_call_delta: AgentBenchmarkDeltaSummary
     updated_at: str | None = None
     created_at: str | None = None
 

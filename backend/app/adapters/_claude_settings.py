@@ -65,9 +65,6 @@ def build_boundary_settings(working_dir: str) -> dict[str, Any]:
                 f"Edit({home_claude}/**)",
                 # Bash: unrestricted (impractical to parse)
                 "Bash(*)",
-                # Web: unrestricted
-                "WebFetch(*)",
-                "WebSearch(*)",
                 # MCP tools: unrestricted (custom tools already gated by DirectToolHandler)
                 "mcp__*(*)",
             ],

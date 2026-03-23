@@ -151,9 +151,10 @@ def _build_sse_response(
     is_new_session: bool,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
-    tools = provision_standard_tools(
+    provisioned_tools = provision_standard_tools(
         request.execute_tools, None, agent_slug=agent_used, project_id=request.project_id,
-    ) or None
+    )
+    tools = provisioned_tools.loaded_tools or None
     return StreamingResponse(
         stream_completion(
             messages=messages,
@@ -170,6 +171,7 @@ def _build_sse_response(
             is_one_shot=not request.session_id,
             tools=tools,
             project_id=request.project_id,
+            max_tool_turns=request.max_turns,
             working_dir=request.working_dir,
         ),
         media_type="text/event-stream",

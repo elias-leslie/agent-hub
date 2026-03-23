@@ -44,6 +44,7 @@ from app.services.agent_benchmark_service import (
     get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
 )
+from app.services.benchmark_aggregation import aggregate_attempts, merge_efficiency_metadata
 from app.services.memory.settings import set_active_memory_variant
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
@@ -180,11 +181,7 @@ def build_persistence_payload(
 ) -> dict[str, object]:
     """Normalize a benchmark run into the persisted DB payload shape."""
     attempts = [a.to_dict() for a in run.attempts]
-    n = len(attempts)
-    passed = sum(1 for a in run.attempts if a.passed)
-    infra_failures = sum(1 for a in run.attempts if a.infra_failure)
-    avg_score = round(sum(float(a.composite_score) for a in run.attempts) / n, 1) if n else 0.0
-    pass_rate = round((passed / n) * 100, 1) if n else 0.0
+    aggregate = aggregate_attempts(run.attempts)
     return {
         "benchmark_id": run.benchmark_id,
         "agent_slug": agent_slug,
@@ -197,13 +194,13 @@ def build_persistence_payload(
         "runs_per_case": run.runs_per_case,
         "use_memory": use_memory,
         "seed": seed,
-        "avg_score": avg_score,
-        "pass_rate": pass_rate,
-        "attempt_count": n,
-        "passed_attempt_count": passed,
-        "infra_failure_count": infra_failures,
+        "avg_score": aggregate.avg_score,
+        "pass_rate": aggregate.pass_rate,
+        "attempt_count": aggregate.total_attempts,
+        "passed_attempt_count": aggregate.passed_attempt_count,
+        "infra_failure_count": aggregate.infra_failure_count,
         "config_snapshot": dict(config_snapshot or {}),
-        "metadata": dict(metadata or {}),
+        "metadata": merge_efficiency_metadata(metadata, aggregate),
         "experiment": dict(experiment) if experiment else None,
         "started_at": run.started_at,
         "completed_at": run.completed_at,

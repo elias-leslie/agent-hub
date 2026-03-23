@@ -37,7 +37,7 @@ def test_build_event_stream_floors_openai_compat_tool_turns(monkeypatch) -> None
     )
 
     assert stream is sentinel.stream
-    assert captured["args"][6] == 20
+    assert captured["args"][6] == 3
 
 
 @pytest.mark.asyncio

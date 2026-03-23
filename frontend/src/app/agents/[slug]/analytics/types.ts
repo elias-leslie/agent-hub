@@ -97,6 +97,9 @@ export interface AgentBenchmarkModelSummary {
   avg_score: number | null;
   pass_rate: number;
   avg_latency_ms: number | null;
+  avg_total_tokens: number | null;
+  avg_turns: number | null;
+  avg_tool_calls: number | null;
   latest_completed_at: string | null;
 }
 
@@ -130,6 +133,9 @@ export interface AgentBenchmarkExperimentArmSummary {
   run_count: number;
   avg_score: number | null;
   avg_pass_rate: number | null;
+  avg_total_tokens: number | null;
+  avg_turns: number | null;
+  avg_tool_calls: number | null;
   config_fingerprints: string[];
   config_stable: boolean;
   prompt_versions: string[];
@@ -155,6 +161,7 @@ export interface AgentBenchmarkExperimentSummary {
   candidate: AgentBenchmarkExperimentArmSummary;
   score_delta: AgentBenchmarkDeltaSummary;
   pass_rate_delta: AgentBenchmarkDeltaSummary;
+  tool_call_delta: AgentBenchmarkDeltaSummary;
   updated_at: string | null;
   created_at: string | null;
 }
