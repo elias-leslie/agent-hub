@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.services.benchmark_aggregation import aggregate_attempts
 
-from ._benchmark_dashboard import summarize_benchmark_experiment
+from ._benchmark_dashboard import benchmark_signal_run_clause, summarize_benchmark_experiment
 
 
 def should_update_regression_clusters(
@@ -249,6 +249,7 @@ async def _refresh_experiment_decision(
             select(AgentBenchmarkRun).where(
                 AgentBenchmarkRun.experiment_id == experiment.id,
                 AgentBenchmarkRun.completed_at.is_not(None),
+                benchmark_signal_run_clause(AgentBenchmarkRun),
             )
         )
     ).scalars().all()

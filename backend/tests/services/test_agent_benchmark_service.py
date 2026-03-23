@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.services._benchmark_dashboard import is_signal_run_kind
 from app.services._benchmark_persistence import (
@@ -17,6 +18,7 @@ from app.services._benchmark_persistence import (
 from app.services.agent_benchmark_service import (
     _should_update_regression_clusters,
     capture_benchmark_config_snapshot,
+    get_benchmark_experiment_summary_by_key,
     memory_state_descriptor,
     summarize_benchmark_experiment,
 )
@@ -416,6 +418,34 @@ def test_summarize_benchmark_experiment_ignores_infra_only_runs() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_benchmark_experiment_summary_by_key_filters_to_signal_runs() -> None:
+    experiment = _make_experiment(id="exp-1")
+    mock_db = AsyncMock()
+    run_result = MagicMock()
+    run_result.scalars.return_value.all.return_value = []
+    mock_db.scalar = AsyncMock(return_value=experiment)
+    mock_db.execute.return_value = run_result
+
+    with patch(
+        "app.services.agent_benchmark_service.summarize_benchmark_experiment",
+        return_value={"decision": "hold"},
+    ) as mock_summarize:
+        await get_benchmark_experiment_summary_by_key(mock_db, experiment.experiment_key)
+
+    stmt = mock_db.execute.await_args.args[0]
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+
+    assert "agent_benchmark_runs.completed_at IS NOT NULL" in sql
+    assert "agent_benchmark_runs.run_kind" in sql
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in compiled.params.values()
+    )
+    mock_summarize.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_refresh_experiment_decision_closes_finished_experiments() -> None:
     experiment = _make_experiment(status="open", decision="hold", decision_reason=None, evidence={})
     mock_db = AsyncMock()
@@ -439,6 +469,92 @@ async def test_refresh_experiment_decision_closes_finished_experiments() -> None
 
     assert experiment.decision == "promote"
     assert experiment.status == "closed"
+
+
+@pytest.mark.asyncio
+async def test_refresh_experiment_decision_filters_to_signal_runs() -> None:
+    experiment = _make_experiment(status="open", decision="hold", decision_reason=None, evidence={})
+    mock_db = AsyncMock()
+    run_result = MagicMock()
+    run_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = run_result
+
+    with patch(
+        "app.services._benchmark_persistence.summarize_benchmark_experiment",
+        return_value={
+            "decision": "hold",
+            "decision_reason": "underpowered",
+            "baseline": {},
+            "candidate": {},
+            "score_delta": {"mean_delta": 0.0},
+            "pass_rate_delta": {"mean_delta": 0.0},
+            "min_runs_per_cohort": 3,
+        },
+    ):
+        await _refresh_experiment_decision(mock_db, experiment)
+
+    stmt = mock_db.execute.await_args.args[0]
+    compiled = stmt.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+
+    assert "agent_benchmark_runs.completed_at IS NOT NULL" in sql
+    assert "agent_benchmark_runs.run_kind" in sql
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in compiled.params.values()
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_agent_benchmark_dashboard_scopes_open_clusters_and_experiments_to_requested_window() -> None:
+    from app.services.agent_benchmark_service import get_agent_benchmark_dashboard
+
+    mock_db = AsyncMock()
+    runs_result = MagicMock()
+    runs_result.scalars.return_value.all.return_value = []
+    clusters_result = MagicMock()
+    clusters_result.scalars.return_value.all.return_value = []
+    model_result = MagicMock()
+    model_result.all.return_value = []
+    case_result = MagicMock()
+    case_result.all.return_value = []
+    experiments_result = MagicMock()
+    experiments_result.all.return_value = []
+    mock_db.execute.side_effect = [
+        runs_result,
+        clusters_result,
+        model_result,
+        case_result,
+        experiments_result,
+    ]
+
+    await get_agent_benchmark_dashboard(mock_db, "persona", days=7, suite_id="persona-suite")
+
+    cluster_stmt = mock_db.execute.await_args_list[1].args[0]
+    experiment_stmt = mock_db.execute.await_args_list[4].args[0]
+    cluster_compiled = cluster_stmt.compile(dialect=postgresql.dialect())
+    experiment_compiled = experiment_stmt.compile(dialect=postgresql.dialect())
+    cluster_sql = str(cluster_compiled)
+    experiment_sql = str(experiment_compiled)
+
+    assert "JOIN agent_benchmark_runs" in cluster_sql
+    assert "agent_regression_clusters.last_seen_at >=" in cluster_sql
+    assert "agent_benchmark_runs.run_kind" in cluster_sql
+    assert "persona-suite" in cluster_compiled.params.values()
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in cluster_compiled.params.values()
+    )
+
+    assert "JOIN agent_benchmark_runs" in experiment_sql
+    assert "agent_benchmark_runs.completed_at >=" in experiment_sql
+    assert "agent_benchmark_runs.run_kind" in experiment_sql
+    assert "max(agent_benchmark_runs.completed_at)" in experiment_sql
+    assert "persona-suite" in experiment_compiled.params.values()
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in experiment_compiled.params.values()
+    )
 
 
 @pytest.mark.asyncio
