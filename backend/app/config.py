@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     hatchet_client_token: str = ""
     hatchet_client_tls_strategy: str = "none"
 
+    # Shared browser / web research infrastructure
+    sf_browser_host: str = "192.168.8.234"
+    web_search_searxng_url: str = ""
+    web_fetch_browser_cdp_url: str = ""
+
     # Security
     agent_hub_encryption_key: str = ""  # Fernet key for credential encryption
     agent_hub_secret_key: str = ""  # Session secret
