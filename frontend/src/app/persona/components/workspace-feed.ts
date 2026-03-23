@@ -2,8 +2,8 @@ import type { ChatMessage } from "@agent-hub/chat-ui";
 import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
 import type { FeedItem, FeedChildRun, FeedAnchor, FeedMessage, FeedHeartbeat } from "./workspace-types";
 
-const NARRATION_TAG_RE = /\[\[P:[a-z_]+:[^\]]*\]?\]?/g;
-const APPLIED_CITATION_RE = /\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g;
+const NARRATION_TAG_RE = /\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g;
+const APPLIED_CITATION_RE = /\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g;
 const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g;
 const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g;
 

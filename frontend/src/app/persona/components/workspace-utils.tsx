@@ -126,8 +126,8 @@ export function prettifyDisplayText(value: string): string {
   const base = extracted ?? value;
   // Strip observability tags — shown separately in narration timeline
   const stripped = base
-    .replace(/\[\[P:[a-z_]+:[^\]]*\]?\]?/g, "")
-    .replace(/\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g, "")
+    .replace(/\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g, "")
+    .replace(/\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g, "")
     .replace(/\[\[F:[^\]]*\]?\]?/g, "")
     .replace(/\[\[S:[^\]]*\]?\]?/g, "")
     .replace(/\n{3,}/g, "\n\n");
