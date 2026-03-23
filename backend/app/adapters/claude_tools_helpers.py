@@ -519,15 +519,21 @@ async def _stream_sdk_messages(
     """
     async with _sdk_semaphore:
         inner_iter = _iterate_sdk_messages(prompt, options, provider_name)
+        exhausted = False
         try:
             async for item in inner_iter:
                 yield item
+            exhausted = True
         except Exception as e:
             error_msg = f"Claude tool error: {e}"
             logger.error(error_msg)
             yield (ErrorMessage(error=error_msg), None)
         finally:
-            await inner_iter.aclose()
+            # Avoid a redundant async-generator close after natural exhaustion.
+            # Claude SDK iterator unwind can inject cancellation into the current
+            # task, which then corrupts downstream final response persistence.
+            if not exhausted:
+                await inner_iter.aclose()
 
 
 def _build_tool_infra(

@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.narration_tag import NarrationTag
+
+_NARRATION_TAG_UNIQUE_CONSTRAINT = "uq_narration_tags_task_session_type_content"
+
+
+def _unique_tag_values(tags: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Preserve order while collapsing duplicate narration tags."""
+    return list(dict.fromkeys(tags))
 
 
 async def insert_narration_tag(
@@ -23,8 +31,13 @@ async def insert_narration_tag(
         tag_type=tag_type,
         content=content,
     )
-    db.add(tag)
-    await db.flush()
+    stmt = insert(NarrationTag).values(
+        task_id=task_id,
+        session_id=session_id,
+        tag_type=tag_type,
+        content=content,
+    ).on_conflict_do_nothing(constraint=_NARRATION_TAG_UNIQUE_CONSTRAINT)
+    await db.execute(stmt)
     return tag
 
 
@@ -39,6 +52,7 @@ async def insert_narration_tags_bulk(
 
     tags is a list of (tag_type, content) tuples.
     """
+    unique_tags = _unique_tag_values(tags)
     rows = [
         NarrationTag(
             task_id=task_id,
@@ -46,10 +60,23 @@ async def insert_narration_tags_bulk(
             tag_type=tag_type,
             content=content,
         )
-        for tag_type, content in tags
+        for tag_type, content in unique_tags
     ]
-    db.add_all(rows)
-    await db.flush()
+    if not rows:
+        return []
+
+    stmt = insert(NarrationTag).values(
+        [
+            {
+                "task_id": task_id,
+                "session_id": session_id,
+                "tag_type": tag_type,
+                "content": content,
+            }
+            for tag_type, content in unique_tags
+        ]
+    ).on_conflict_do_nothing(constraint=_NARRATION_TAG_UNIQUE_CONSTRAINT)
+    await db.execute(stmt)
     return rows
 
 

@@ -92,6 +92,7 @@ async def _run_tool_loop(
     tool_use_id_to_name: dict[str, str] = {}
 
     terminal_error_message: str | None = None
+    exhausted = False
 
     try:
         async for event, _session_id in event_stream:
@@ -123,8 +124,12 @@ async def _run_tool_loop(
                 )
             elif getattr(event, "type", None) == "tool_result":
                 await update_session_health(db, session_id, "calling_model", commit=True)
+        exhausted = True
     finally:
-        if hasattr(event_stream, "aclose"):
+        # Only force-close provider streams when the loop exits early. Redundant
+        # close after natural exhaustion can re-enter provider cleanup on a
+        # foreign task and inject cancellation into the caller.
+        if hasattr(event_stream, "aclose") and not exhausted:
             await event_stream.aclose()
 
     if terminal_error_message:

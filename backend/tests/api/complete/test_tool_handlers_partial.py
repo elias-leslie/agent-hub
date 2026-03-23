@@ -152,7 +152,53 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
     assert result.error == "claude tool failed"
     assert stream_state["natural_end"] is True
     assert stream_state["closed_early"] is False
-    assert fake_stream.closed is True
+    assert fake_stream.closed is False
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_does_not_reclose_exhausted_stream() -> None:
+    state = _ExecutionState(agent_slug="persona", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __init__(self) -> None:
+            self.aclose_calls = 0
+
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(type="result", result="done", finish_reason="end_turn"), None
+
+        async def aclose(self) -> None:
+            self.aclose_calls += 1
+
+    fake_stream = FakeEventStream()
+
+    with patch(
+        "app.api.complete.tool_handler_utils.build_event_stream",
+        return_value=fake_stream,
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-789",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert fake_stream.aclose_calls == 0
 
 
 @pytest.mark.asyncio
