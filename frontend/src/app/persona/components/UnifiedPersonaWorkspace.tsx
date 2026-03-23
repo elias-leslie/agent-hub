@@ -16,10 +16,11 @@ import {
   ArrowDown,
   ArrowUp,
   CircleDot,
+  Filter,
   Loader2,
-  Radio,
+  MessageSquarePlus,
   Search,
-  Sparkles,
+  X,
 } from "lucide-react";
 import {
   MessageBubble,
@@ -28,7 +29,6 @@ import {
   type ChatMessage,
 } from "@agent-hub/chat-ui";
 
-import { SessionDropdown } from "@/components/chat/session-dropdown";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { cn } from "@/lib/utils";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
@@ -41,6 +41,7 @@ import {
 } from "@/lib/api/persona-stream";
 import type { SessionEvent as LiveSessionEvent, TimelineEvent } from "@/types/events";
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
+import { useNarrationTags } from "../hooks/useNarrationTags";
 import {
   entryHasPulseTag,
   filterModeToPulseTag,
@@ -68,23 +69,17 @@ import {
 import { isChildRunItem, canAnchorChildRuns, buildLocalFeedMessages, buildRemoteFeedItems } from "./workspace-feed";
 import {
   DateDivider,
-  ExpandableText,
   HighlightedText,
   TimelineTimestamp,
-  entryStatusClasses,
   formatDayLabel,
   formatTimeLabel,
-  heartbeatIsImportant,
-  isGenericStatusText,
   isNearBottom,
   shortenText,
-  shouldRenderPulseSummary,
 } from "./workspace-utils";
 import { mergeEventPreviews, buildLivePreview, liveSummaryFromEvent, liveStatusFromEvent, isRoutineHeartbeatBlock } from "./workspace-live-events";
 import {
   ChildRunCard,
   ChildRunStack,
-  EntryIssueSummary,
   HeartbeatCard,
   PulseOverviewPanels,
   RoutineHeartbeatGroup,
@@ -116,6 +111,8 @@ export function UnifiedPersonaWorkspace({
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [showFilters, setShowFilters] = useState(false);
+  const { narrationCache, fetchNarrationTags } = useNarrationTags();
   const [autoFollow, setAutoFollow] = useState(true);
   const deferredSearch = useDeferredValue(search);
   const [entries, setEntries] = useState<PersonaStreamEntry[]>([]);
@@ -867,10 +864,13 @@ export function UnifiedPersonaWorkspace({
     setAutoFollow(false);
   };
 
-  const toggleExpanded = (entryId: string, sessionId?: string) => {
+  const toggleExpanded = (entryId: string, sessionId?: string, externalId?: string) => {
     const willExpand = !expandedEntryIds[entryId];
     if (willExpand && sessionId) {
       void loadSessionEventDetails(sessionId);
+    }
+    if (willExpand && externalId) {
+      void fetchNarrationTags(externalId);
     }
     setExpandedEntryIds((current) => ({
       ...current,
@@ -947,18 +947,11 @@ export function UnifiedPersonaWorkspace({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <div className="border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-        <div className="flex flex-wrap items-center gap-2">
-          <SessionDropdown
-            activeSessionId={selectedSessionId}
-            onSelectSession={handleSessionJump}
-            onNewSession={onNewSession}
-            projectId={PROJECT_ID}
-            agentSlug={agentSlug}
-            refreshTrigger={sidebarRefreshTrigger}
-          />
-          <div className="relative min-w-[18rem] flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      {/* ── Compact toolbar ── */}
+      <div className="border-b border-slate-800 bg-slate-950/90 backdrop-blur px-4 py-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             <input
               id={searchInputId}
               value={search}
@@ -966,103 +959,97 @@ export function UnifiedPersonaWorkspace({
                 setSearch(event.target.value);
                 setAnchorEntryId(null);
               }}
-              placeholder={`Search ${personaPossessive} history, task IDs, files, agents...`}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-sm text-slate-700 outline-none transition focus:border-sky-300 focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-sky-700"
+              placeholder="Search history, tasks, files, agents..."
+              className="w-full rounded-lg border border-slate-800 bg-slate-900 py-1.5 pl-8 pr-3 text-xs text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-slate-600 focus:bg-slate-900/80"
             />
           </div>
           <TimeRangeDropdown value={timeRange} onChange={setTimeRange} />
           <button
             type="button"
-            onClick={() => {
-              setAutoFollow((value) => {
-                const next = !value;
-                if (next) {
-                  window.setTimeout(() => {
-                    scrollToBottom("smooth");
-                    setIsAtBottom(true);
-                    markLatestAsRead();
-                  }, 0);
-                }
-                return next;
-              });
-            }}
+            onClick={() => setShowFilters((v) => !v)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition",
-              autoFollow
-                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800"
-                : "bg-slate-100 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700",
+              "inline-flex items-center gap-1 rounded-lg p-1.5 text-xs transition",
+              showFilters || filterMode !== "all"
+                ? "bg-amber-950/30 text-amber-300"
+                : "text-slate-500 hover:bg-slate-800 hover:text-slate-300",
             )}
+            title="Toggle filters"
           >
-            <Radio className="h-4 w-4" />
-            {autoFollow ? "Auto-follow on" : "Auto-follow off"}
+            <Filter className="h-3.5 w-3.5" />
           </button>
         </div>
-        <div className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
-          Search everything, or use prefixes like <span className="font-semibold">task:</span>, <span className="font-semibold">file:</span>, <span className="font-semibold">agent:</span>, <span className="font-semibold">status:</span>, and <span className="font-semibold">project:</span>.
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {([
-            ["all", "All"],
-            ["messages", "Messages"],
-            ["work", "Work"],
-            ["heartbeats", "Heartbeats"],
-            ["friction", "Friction"],
-            ["errors", "Errors"],
-            ["warnings", "Warnings"],
-            ["stalled", "Stalled"],
-            ["drift", "Drift"],
-            ["tool_friction", "Tool Friction"],
-            ["retries", "Retries"],
-            ["recovered", "Recovered"],
-            ["escalations", "Escalations"],
-          ] as Array<[FilterMode, string]>).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setFilterMode(value)}
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition",
-                filterMode === value
-                  ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800",
-              )}
-            >
-              {label}
-              <span className="opacity-70">{filterCounts[value]}</span>
-            </button>
-          ))}
-        </div>
+
+        {/* Active filter indicator */}
+        {filterMode !== "all" && !showFilters && (
+          <div className="mt-1.5 flex items-center gap-2">
+            <span className="text-[10px] text-slate-500">Showing:</span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-200">
+              {filterMode} ({filterCounts[filterMode]})
+              <button type="button" onClick={() => setFilterMode("all")} className="ml-0.5 text-slate-500 hover:text-slate-300">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Collapsible filter pills */}
+        {showFilters && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 pb-1">
+            {([
+              ["all", "All"],
+              ["messages", "Messages"],
+              ["work", "Work"],
+              ["heartbeats", "Heartbeats"],
+              ...(filterCounts.friction > 0 ? [["friction", "Friction"]] : []),
+              ...(filterCounts.errors > 0 ? [["errors", "Errors"]] : []),
+              ...(filterCounts.warnings > 0 ? [["warnings", "Warnings"]] : []),
+              ...(filterCounts.stalled > 0 ? [["stalled", "Stalled"]] : []),
+              ...(filterCounts.drift > 0 ? [["drift", "Drift"]] : []),
+              ...(filterCounts.tool_friction > 0 ? [["tool_friction", "Tool Friction"]] : []),
+              ...(filterCounts.retries > 0 ? [["retries", "Retries"]] : []),
+              ...(filterCounts.recovered > 0 ? [["recovered", "Recovered"]] : []),
+              ...(filterCounts.escalations > 0 ? [["escalations", "Escalations"]] : []),
+            ] as Array<[FilterMode, string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => { setFilterMode(value); setShowFilters(false); }}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                  filterMode === value
+                    ? "bg-slate-100 text-slate-900"
+                    : "bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+                )}
+              >
+                {label}
+                {value !== "all" && <span className="opacity-60">{filterCounts[value]}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Search results bar */}
         {deferredSearch.trim() && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400">
             <span>
               {matchCount === 0
                 ? `No matches for "${deferredSearch.trim()}"`
-                : `${Math.max(activeSearchMatch, 0) + 1} of ${matchCount} matches for "${deferredSearch.trim()}"`}
+                : `${Math.max(activeSearchMatch, 0) + 1} of ${matchCount} matches`}
             </span>
             {matchCount > 0 && (
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => jumpToSearchMatch(-1)}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => jumpToSearchMatch(-1)} className="rounded p-1 hover:bg-slate-800">
                   <ArrowUp className="h-3.5 w-3.5" />
-                  Prev match
                 </button>
-                <button
-                  type="button"
-                  onClick={() => jumpToSearchMatch(1)}
-                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                >
+                <button type="button" onClick={() => jumpToSearchMatch(1)} className="rounded p-1 hover:bg-slate-800">
                   <ArrowDown className="h-3.5 w-3.5" />
-                  Next match
                 </button>
               </div>
             )}
           </div>
         )}
         {deferredSearch.trim() && visibleSearchMatches.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {visibleSearchMatches.map((match) => (
               <button
                 key={match.entry_id}
@@ -1073,16 +1060,16 @@ export function UnifiedPersonaWorkspace({
                   setAutoFollow(false);
                 }}
                 className={cn(
-                  "max-w-full rounded-2xl border px-3 py-2 text-left text-xs transition",
+                  "max-w-full rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition",
                   match.entry_id === activeMatchId
-                    ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-900",
+                    ? "border-amber-700 bg-amber-950/30 text-amber-100"
+                    : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700",
                 )}
               >
-                <div className="font-semibold uppercase tracking-[0.14em] text-[10px] opacity-70">
+                <span className="font-medium uppercase tracking-wide text-[10px] opacity-70">
                   {formatTimeLabel(new Date(match.timestamp))} · {match.entry_type}
-                </div>
-                <HighlightedText text={shortenText(match.snippet, 90)} className="mt-1 block" />
+                </span>
+                <HighlightedText text={shortenText(match.snippet, 90)} className="mt-0.5 block" />
               </button>
             ))}
           </div>
@@ -1090,7 +1077,7 @@ export function UnifiedPersonaWorkspace({
       </div>
 
       <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="mx-auto max-w-4xl">
+        <div className="mx-auto max-w-3xl">
           <PulseOverviewPanels
             visiblePulseMetrics={visiblePulseMetrics}
             pulse={pulse}
@@ -1100,22 +1087,22 @@ export function UnifiedPersonaWorkspace({
         </div>
 
         {(error || chatError) && (
-          <div className="mb-4 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300">
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-rose-900 bg-rose-950/30 px-3 py-2 text-sm text-rose-300">
             <AlertCircle className="h-4 w-4" />
             {error || chatError}
           </div>
         )}
 
         {loading && entries.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-slate-400">
+          <div className="flex items-center justify-center py-20 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" />
           </div>
         ) : groupedItems.length === 0 ? (
-          <div className="py-20 text-center text-slate-500 dark:text-slate-400">
-            No stream entries yet.
+          <div className="py-20 text-center text-slate-500">
+            No activity yet.
           </div>
         ) : (
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-3xl">
             <div
               className="relative w-full"
               style={renderVirtualRows ? { height: `${virtualizer.getTotalSize()}px` } : undefined}
@@ -1146,14 +1133,14 @@ export function UnifiedPersonaWorkspace({
                     >
                       <div
                         data-testid="new-activity-separator"
-                        className="flex items-center gap-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-600 dark:text-sky-300"
+                        className="flex items-center gap-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-400"
                       >
-                        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-900" />
+                        <div className="h-px flex-1 bg-sky-900" />
                         <span className="inline-flex items-center gap-1">
-                          <CircleDot className="h-3.5 w-3.5" />
-                          New since you scrolled away
+                          <CircleDot className="h-3 w-3" />
+                          New activity
                         </span>
-                        <div className="h-px flex-1 bg-sky-200 dark:bg-sky-900" />
+                        <div className="h-px flex-1 bg-sky-900" />
                       </div>
                     </div>
                   );
@@ -1173,8 +1160,13 @@ export function UnifiedPersonaWorkspace({
                         activeSessionId={selectedSessionId}
                         activeIssueTag={activeIssueTag}
                         expandedEntryIds={expandedEntryIds}
-                        onToggleEntry={toggleExpanded}
+                        onToggleEntry={(entryId, sessionId) => {
+                          const entry = row.block.items.find((it) => it.anchorItem.id === entryId);
+                          toggleExpanded(entryId, sessionId, entry?.anchorItem.entry.external_id ?? undefined);
+                        }}
                         sessionEventDetails={sessionEventDetails}
+                        narrationCache={narrationCache}
+                        onFetchNarration={fetchNarrationTags}
                       />
                     </div>
                   );
@@ -1205,9 +1197,9 @@ export function UnifiedPersonaWorkspace({
                         data-timestamp={item.timestamp.toISOString()}
                         className={cn(
                           "flex items-start gap-3",
-                          selected && "rounded-2xl bg-sky-50/40 px-2 py-1 dark:bg-sky-950/10",
-                          matched && "rounded-2xl px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
-                          activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                          selected && "rounded-lg bg-sky-950/10 px-2 py-1",
+                          matched && "rounded-lg px-2 py-1 ring-1 ring-amber-800",
+                          activeMatched && "ring-2 ring-amber-500",
                         )}
                       >
                         <TimelineTimestamp timestamp={item.timestamp} />
@@ -1224,10 +1216,15 @@ export function UnifiedPersonaWorkspace({
                               activeSessionId={selectedSessionId}
                               activeIssueTag={activeIssueTag}
                               expandedEntryIds={expandedEntryIds}
-                              onToggle={toggleExpanded}
+                              onToggle={(entryId, sessionId) => {
+                                const cr = row.childRuns.find((c) => c.id === entryId);
+                                toggleExpanded(entryId, sessionId, cr?.entry.external_id ?? undefined);
+                              }}
                               matchedIds={matchedIds}
                               activeMatchId={activeMatchId}
                               sessionEventDetails={sessionEventDetails}
+                              narrationCache={narrationCache}
+                              onFetchNarration={fetchNarrationTags}
                             />
                           )}
                         </div>
@@ -1247,8 +1244,11 @@ export function UnifiedPersonaWorkspace({
                             activeIssueTag={activeIssueTag}
                             selected={selected}
                             expanded={!!expandedEntryIds[item.id]}
-                            onToggle={() => toggleExpanded(item.id, item.sessionId)}
+                            onToggle={() => toggleExpanded(item.id, item.sessionId, item.entry.external_id ?? undefined)}
                             details={sessionEventDetails[item.sessionId]}
+                            narrationTags={item.entry.external_id ? narrationCache[item.entry.external_id]?.tags : undefined}
+                            narrationLoading={item.entry.external_id ? narrationCache[item.entry.external_id]?.loading : undefined}
+                            narrationError={item.entry.external_id ? narrationCache[item.entry.external_id]?.error : undefined}
                           />
                         </div>
                       </div>
@@ -1267,8 +1267,11 @@ export function UnifiedPersonaWorkspace({
                             activeIssueTag={activeIssueTag}
                             selected={selected}
                             expanded={!!expandedEntryIds[item.id]}
-                            onToggle={() => toggleExpanded(item.id, item.sessionId)}
+                            onToggle={() => toggleExpanded(item.id, item.sessionId, item.entry.external_id ?? undefined)}
                             details={sessionEventDetails[item.sessionId]}
+                            narrationTags={item.entry.external_id ? narrationCache[item.entry.external_id]?.tags : undefined}
+                            narrationLoading={item.entry.external_id ? narrationCache[item.entry.external_id]?.loading : undefined}
+                            narrationError={item.entry.external_id ? narrationCache[item.entry.external_id]?.error : undefined}
                           />
                           {row.childRuns.length > 0 && (
                             <ChildRunStack
@@ -1276,10 +1279,15 @@ export function UnifiedPersonaWorkspace({
                               activeSessionId={selectedSessionId}
                               activeIssueTag={activeIssueTag}
                               expandedEntryIds={expandedEntryIds}
-                              onToggle={toggleExpanded}
+                              onToggle={(entryId, sessionId) => {
+                                const cr = row.childRuns.find((c) => c.id === entryId);
+                                toggleExpanded(entryId, sessionId, cr?.entry.external_id ?? undefined);
+                              }}
                               matchedIds={matchedIds}
                               activeMatchId={activeMatchId}
                               sessionEventDetails={sessionEventDetails}
+                              narrationCache={narrationCache}
+                              onFetchNarration={fetchNarrationTags}
                             />
                           )}
                         </div>
@@ -1303,7 +1311,7 @@ export function UnifiedPersonaWorkspace({
                     }
                     setPage((value) => value + 1);
                   }}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
                 >
                   Load older entries
                 </button>
@@ -1323,7 +1331,7 @@ export function UnifiedPersonaWorkspace({
               setIsAtBottom(true);
               markLatestAsRead();
             }}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-lg transition hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-900 shadow-lg transition hover:bg-white"
           >
             <ArrowDown className="h-4 w-4" />
             {newActivityCount > 0 ? `${newActivityCount} new ${newActivityCount === 1 ? "item" : "items"} · Jump to latest` : "Jump to latest"}
@@ -1331,19 +1339,25 @@ export function UnifiedPersonaWorkspace({
         </div>
       )}
 
-      <div className="border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-        <div className="mx-auto max-w-4xl">
-          <div className="mb-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="inline-flex items-center gap-1">
-              <Sparkles className="h-3.5 w-3.5" />
-              Composer is attached to {activeSessionId ? `session ${activeSessionId.slice(0, 8)}` : "a new thread"}
-            </span>
-            {status !== "idle" && (
-              <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-300">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {personaDisplayName} is responding
-              </span>
-            )}
+      <div className="border-t border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-500">
+            <div className="flex items-center gap-2">
+              {status !== "idle" && (
+                <span className="inline-flex items-center gap-1 text-amber-300">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {personaDisplayName} is responding
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onNewSession}
+              className="inline-flex items-center gap-1 text-slate-500 transition hover:text-slate-300"
+            >
+              <MessageSquarePlus className="h-3 w-3" />
+              New thread
+            </button>
           </div>
           <MessageInput
             onSend={sendMessage}
