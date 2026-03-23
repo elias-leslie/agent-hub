@@ -104,22 +104,22 @@ export function rootCauseLabel(rootCause: string): string {
 export function pulseTagClasses(tag: string): string {
   switch (tag) {
     case "friction":
-      return "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900";
+      return "bg-slate-200 text-slate-900";
     case "error":
-      return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+      return "bg-rose-950/40 text-rose-300";
     case "warning":
     case "stalled":
     case "escalation":
-      return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+      return "bg-amber-950/40 text-amber-300";
     case "instruction_drift":
-      return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
+      return "bg-fuchsia-950/40 text-fuchsia-300";
     case "tool_friction":
     case "retries":
-      return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+      return "bg-sky-950/40 text-sky-300";
     case "recovered":
-      return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+      return "bg-emerald-950/40 text-emerald-300";
     default:
-      return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+      return "bg-slate-800 text-slate-300";
   }
 }
 
