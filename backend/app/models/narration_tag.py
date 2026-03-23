@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -32,6 +32,13 @@ class NarrationTag(Base):
         Index("ix_narration_tags_task_created", "task_id", "created_at"),
         Index("ix_narration_tags_session", "session_id"),
         Index("ix_narration_tags_type", "tag_type"),
+        UniqueConstraint(
+            "task_id",
+            "session_id",
+            "tag_type",
+            "content",
+            name="uq_narration_tags_task_session_type_content",
+        ),
     )
 
     def __repr__(self) -> str:

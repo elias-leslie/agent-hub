@@ -450,6 +450,40 @@ async def test_stream_sdk_messages_closes_cleanly_when_consumer_stops_early(
 
 
 @pytest.mark.asyncio
+async def test_stream_sdk_messages_does_not_reclose_after_natural_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.adapters import claude_tools_helpers as helpers
+
+    class InnerIter:
+        def __init__(self) -> None:
+            self.aclose_calls = 0
+            self._done = False
+
+        def __aiter__(self) -> InnerIter:
+            return self
+
+        async def __anext__(self):
+            if self._done:
+                raise StopAsyncIteration
+            self._done = True
+            return ResultMessage(), "sdk-session-1"
+
+        async def aclose(self) -> None:
+            self.aclose_calls += 1
+
+    inner = InnerIter()
+    monkeypatch.setattr(helpers, "_iterate_sdk_messages", lambda prompt, options, provider_name: inner)
+
+    seen = []
+    async for message, session_id in helpers._stream_sdk_messages("prompt", object(), "claude"):
+        seen.append((type(message).__name__, session_id))
+
+    assert seen == [("ResultMessage", "sdk-session-1")]
+    assert inner.aclose_calls == 0
+
+
+@pytest.mark.asyncio
 async def test_stream_sdk_messages_closes_sdk_iterator_on_producer_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

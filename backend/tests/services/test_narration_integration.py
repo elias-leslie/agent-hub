@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 from app.models import SessionEventType
 from app.models.narration_tag import NarrationTag as NarrationTagModel
 from app.services.narration_extraction import extract_narration_from_event
-from app.storage.narration_tags import get_narration_tags_for_task
+from app.storage.narration_tags import get_narration_tags_for_task, insert_narration_tags_bulk
 
 TASK_ID = "test-task-narration"
 SESSION_ID = "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb"
@@ -56,16 +57,19 @@ class TestNarrationPipelineIntegration:
         )
 
         assert count == 2
-        # Verify bulk insert was called via db.add_all + flush
-        assert db.add_all.called
-        tags_added = db.add_all.call_args[0][0]
-        assert len(tags_added) == 2
-        assert tags_added[0].tag_type == "started"
-        assert tags_added[0].content == "Implementing feature"
-        assert tags_added[1].tag_type == "modified"
-        assert tags_added[1].content == "api/endpoint.py"
-        assert all(t.task_id == TASK_ID for t in tags_added)
-        assert all(t.session_id == SESSION_ID for t in tags_added)
+        assert db.execute.await_count == 2
+        statement = db.execute.await_args.args[0]
+        compiled = str(statement.compile(dialect=postgresql.dialect()))
+        assert "ON CONFLICT ON CONSTRAINT" in compiled
+        assert "uq_narration_tags_task_session_type_content" in compiled
+        assert compiled.endswith("DO NOTHING")
+        rows = statement.compile(dialect=postgresql.dialect()).params
+        assert rows["task_id_m0"] == TASK_ID
+        assert rows["session_id_m0"] == SESSION_ID
+        assert rows["tag_type_m0"] == "started"
+        assert rows["content_m0"] == "Implementing feature"
+        assert rows["tag_type_m1"] == "modified"
+        assert rows["content_m1"] == "api/endpoint.py"
 
     @pytest.mark.anyio
     async def test_extract_skips_non_assistant_event(self) -> None:
@@ -111,11 +115,39 @@ class TestNarrationPipelineIntegration:
             session=session,
         )
         assert count == 2
+        assert db.execute.await_count == 1
         # Should NOT have queried for session — it was provided
-        # Only call should be flush from insert_narration_tags_bulk
+        # Only DB interaction should be the insert statement itself.
         assert not any(
             "Session" in str(call) for call in db.execute.call_args_list
         )
+
+    @pytest.mark.anyio
+    async def test_bulk_insert_dedupes_duplicate_tags(self) -> None:
+        """Bulk narration insert should collapse duplicates and ignore re-insert conflicts."""
+        db = AsyncMock()
+
+        rows = await insert_narration_tags_bulk(
+            db,
+            task_id=TASK_ID,
+            session_id=SESSION_ID,
+            tags=[
+                ("found", "same"),
+                ("found", "same"),
+                ("tested", "unique"),
+            ],
+        )
+
+        assert len(rows) == 2
+        statement = db.execute.await_args.args[0]
+        compiled = str(statement.compile(dialect=postgresql.dialect()))
+        assert "ON CONFLICT ON CONSTRAINT" in compiled
+        assert compiled.endswith("DO NOTHING")
+        params = statement.compile(dialect=postgresql.dialect()).params
+        assert params["tag_type_m0"] == "found"
+        assert params["content_m0"] == "same"
+        assert params["tag_type_m1"] == "tested"
+        assert params["content_m1"] == "unique"
 
     @pytest.mark.anyio
     async def test_get_narration_tags_returns_stored_tags(self) -> None:
