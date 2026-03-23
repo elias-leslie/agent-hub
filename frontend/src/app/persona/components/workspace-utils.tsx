@@ -149,11 +149,11 @@ export function isNearBottom(container: HTMLDivElement): boolean {
 }
 
 export function eventToneClasses(eventType: string): string {
-  if (eventType === "error") return "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300";
-  if (eventType === "tool_result") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300";
-  if (eventType === "tool_use") return "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300";
-  if (eventType === "thinking") return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-900 dark:bg-fuchsia-950/30 dark:text-fuchsia-300";
-  return "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950/50 dark:text-slate-300";
+  if (eventType === "error") return "border-rose-900 bg-rose-950/30 text-rose-300";
+  if (eventType === "tool_result") return "border-emerald-900 bg-emerald-950/30 text-emerald-300";
+  if (eventType === "tool_use") return "border-sky-900 bg-sky-950/30 text-sky-300";
+  if (eventType === "thinking") return "border-fuchsia-900 bg-fuchsia-950/30 text-fuchsia-300";
+  return "border-slate-800 bg-slate-950/50 text-slate-300";
 }
 
 export function eventSummaryLabel(eventType: string): string {
@@ -168,44 +168,44 @@ export function eventSummaryLabel(eventType: string): string {
 }
 
 export function eventAccentClasses(eventType: string): string {
-  if (eventType === "error") return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
-  if (eventType === "tool_result") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (eventType === "tool_use") return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-  if (eventType === "assistant_message") return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
-  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+  if (eventType === "error") return "bg-rose-950/40 text-rose-300";
+  if (eventType === "tool_result") return "bg-emerald-950/40 text-emerald-300";
+  if (eventType === "tool_use") return "bg-sky-950/40 text-sky-300";
+  if (eventType === "assistant_message") return "bg-fuchsia-950/40 text-fuchsia-300";
+  return "bg-slate-800 text-slate-300";
 }
 
 export function badgeToneClasses(tone: PreviewBadge["tone"] = "neutral"): string {
-  if (tone === "danger") return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
-  if (tone === "warning") return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  if (tone === "success") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (tone === "info") return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+  if (tone === "danger") return "bg-rose-950/40 text-rose-300";
+  if (tone === "warning") return "bg-amber-950/40 text-amber-300";
+  if (tone === "success") return "bg-emerald-950/40 text-emerald-300";
+  if (tone === "info") return "bg-sky-950/40 text-sky-300";
+  return "bg-slate-800 text-slate-300";
 }
 
 export function entryStatusClasses(status: string): string {
   const normalized = status.toLowerCase();
-  if (normalized === "failed" || normalized === "error") return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
-  if (normalized === "completed") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
-  if (normalized === "active") return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-  if (normalized === "paused") return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-  return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+  if (normalized === "failed" || normalized === "error") return "bg-rose-950/40 text-rose-300";
+  if (normalized === "completed") return "bg-emerald-950/40 text-emerald-300";
+  if (normalized === "active") return "bg-sky-950/40 text-sky-300";
+  if (normalized === "paused") return "bg-amber-950/40 text-amber-300";
+  return "bg-slate-800 text-slate-300";
 }
 
 export function outcomeToneClasses(hasErrors: boolean): string {
   return hasErrors
-    ? "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300"
-    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+    ? "bg-rose-950/40 text-rose-300"
+    : "bg-emerald-950/40 text-emerald-300";
 }
 
 export function rootCauseClasses(rootCause: string): string {
   switch (rootCause) {
-    case "workflow": return "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-950/40 dark:text-fuchsia-300";
-    case "tool": return "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
-    case "context": return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
-    case "infra": return "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
-    case "prompt": return "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
-    default: return "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300";
+    case "workflow": return "bg-fuchsia-950/40 text-fuchsia-300";
+    case "tool": return "bg-sky-950/40 text-sky-300";
+    case "context": return "bg-amber-950/40 text-amber-300";
+    case "infra": return "bg-rose-950/40 text-rose-300";
+    case "prompt": return "bg-violet-950/40 text-violet-300";
+    default: return "bg-slate-800 text-slate-300";
   }
 }
 
@@ -273,12 +273,12 @@ export function heartbeatIsImportant(entry: { summary_oneliner?: string | null; 
 
 export function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 py-4">
-      <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
-      <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+    <div className="flex items-center gap-3 py-3">
+      <div className="h-px flex-1 bg-slate-800" />
+      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-600">
         {label}
       </span>
-      <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+      <div className="h-px flex-1 bg-slate-800" />
     </div>
   );
 }
@@ -290,7 +290,7 @@ export function TimelineTimestamp({ timestamp }: { timestamp: Date }) {
     <time
       dateTime={timestamp.toISOString()}
       title={title}
-      className="shrink-0 pt-2 text-[11px] font-medium tabular-nums tracking-[0.08em] text-slate-400 dark:text-slate-500"
+      className="shrink-0 pt-2 text-[10px] font-medium tabular-nums tracking-[0.08em] text-slate-500"
     >
       {label}
     </time>
@@ -300,13 +300,13 @@ export function TimelineTimestamp({ timestamp }: { timestamp: Date }) {
 function highlightKeywordClass(token: string): string {
   const normalized = token.toLowerCase();
   if (["error", "failed", "failure", "blocked"].includes(normalized))
-    return "rounded-md bg-rose-100 px-1 py-0.5 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300";
+    return "rounded-md bg-rose-950/40 px-1 py-0.5 text-rose-300";
   if (["warning", "warn", "paused"].includes(normalized))
-    return "rounded-md bg-amber-100 px-1 py-0.5 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
+    return "rounded-md bg-amber-950/40 px-1 py-0.5 text-amber-300";
   if (["success", "succeeded", "completed", "ok"].includes(normalized))
-    return "rounded-md bg-emerald-100 px-1 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300";
+    return "rounded-md bg-emerald-950/40 px-1 py-0.5 text-emerald-300";
   if (["running", "working", "active"].includes(normalized))
-    return "rounded-md bg-sky-100 px-1 py-0.5 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300";
+    return "rounded-md bg-sky-950/40 px-1 py-0.5 text-sky-300";
   return "";
 }
 
@@ -351,7 +351,7 @@ export function ExpandableText({
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
-        className="mt-1 inline-flex items-center rounded-full border border-slate-200 px-2.5 py-0.5 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        className="mt-1 inline-flex items-center rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
       >
         {expanded ? "Less" : "More"}
       </button>
