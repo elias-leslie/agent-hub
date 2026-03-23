@@ -101,6 +101,7 @@ def format_progressive_context(
         parts.append(REFERENCE_DIRECTIVE)
         parts.append(
             "- Likely direct fits for this task. Use `st memory get <uuid8>` before broad search if one may affect behavior."
+            "\n- When a reference informs your work, cite it inline as [R:uuid8] so the system can measure reference quality."
         )
         for r in context.reference:
             parts.append(_format_memory_item(r, "R", include_citations))
