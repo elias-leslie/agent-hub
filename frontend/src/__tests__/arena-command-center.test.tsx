@@ -40,6 +40,7 @@ describe("ArenaCommandCenter", () => {
         avg_score: 91.2,
         avg_pass_rate: 77,
         total_regressions: 3,
+        regressions_by_category: { behavior: 3 },
       },
       scheduled_jobs: [
         {
