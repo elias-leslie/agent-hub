@@ -417,7 +417,7 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             name="Web Research Stack Lookup",
             description="Use the shared web research tools to validate markdown-first retrieval before deciding.",
             scenario=(
-                "Use search_web and fetch_web_page before answering.\n"
+                "Use `research_web` for the common one-call path, or `search_web` plus `fetch_web_page` if you need manual control.\n"
                 "TASK: task-7788\n"
                 "status=pending\n"
                 "priority=P1\n"

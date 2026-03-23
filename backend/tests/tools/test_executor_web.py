@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.services.tools import _executor_web
-from app.services.tools._executor_web import fetch_web_page, search_web
+from app.services.tools._executor_web import fetch_web_page, research_web, search_web
 
 
 class _FakeResponse:
@@ -311,3 +311,122 @@ class TestFetchWebPage:
 
         payload = json.loads(result)
         assert "http://" in payload["error"]
+
+
+class TestResearchWeb:
+    @pytest.mark.asyncio
+    async def test_returns_search_and_page_payload(self) -> None:
+        with (
+            patch(
+                "app.services.tools._executor_web.search_web",
+                new_callable=AsyncMock,
+                return_value=json.dumps(
+                    {
+                        "query": "Cloudflare Markdown for Agents",
+                        "provider": "searxng",
+                        "result_count": 1,
+                        "results": [
+                            {
+                                "rank": 1,
+                                "title": "Markdown for Agents",
+                                "url": "https://blog.cloudflare.com/markdown-for-agents/",
+                            }
+                        ],
+                    }
+                ),
+            ) as mock_search,
+            patch(
+                "app.services.tools._executor_web.fetch_web_page",
+                new_callable=AsyncMock,
+                return_value=json.dumps(
+                    {
+                        "url": "https://blog.cloudflare.com/markdown-for-agents/",
+                        "final_url": "https://blog.cloudflare.com/markdown-for-agents/",
+                        "fetch_backend": "direct",
+                        "format": "markdown",
+                        "content": "# Markdown for Agents\n\nAgent-friendly markdown output.",
+                    }
+                ),
+            ) as mock_fetch,
+        ):
+            result = await research_web("Cloudflare Markdown for Agents")
+
+        payload = json.loads(result)
+        assert payload["query"] == "Cloudflare Markdown for Agents"
+        assert payload["selected_result"]["rank"] == 1
+        assert payload["selected_result"]["url"] == "https://blog.cloudflare.com/markdown-for-agents/"
+        assert payload["focus_query"] == "Cloudflare Markdown for Agents"
+        assert payload["page"]["fetch_backend"] == "direct"
+        mock_search.assert_awaited_once_with(
+            query="Cloudflare Markdown for Agents",
+            max_results=5,
+            search_type="text",
+            timelimit=None,
+        )
+        mock_fetch.assert_awaited_once_with(
+            url="https://blog.cloudflare.com/markdown-for-agents/",
+            max_chars=12000,
+            focus_query="Cloudflare Markdown for Agents",
+        )
+
+    @pytest.mark.asyncio
+    async def test_returns_unfetched_payload_when_search_has_no_results(self) -> None:
+        with patch(
+            "app.services.tools._executor_web.search_web",
+            new_callable=AsyncMock,
+            return_value=json.dumps(
+                {
+                    "query": "no matches",
+                    "provider": "searxng",
+                    "result_count": 0,
+                    "results": [],
+                }
+            ),
+        ) as mock_search:
+            result = await research_web("no matches")
+
+        payload = json.loads(result)
+        assert payload["query"] == "no matches"
+        assert payload["fetched"] is False
+        assert payload["selected_result"] is None
+        assert payload["message"] == "No search results to fetch."
+        mock_search.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_surfaces_fetch_step_failure_with_search_context(self) -> None:
+        with (
+            patch(
+                "app.services.tools._executor_web.search_web",
+                new_callable=AsyncMock,
+                return_value=json.dumps(
+                    {
+                        "query": "Cloudflare Markdown for Agents",
+                        "provider": "searxng",
+                        "result_count": 1,
+                        "results": [
+                            {
+                                "rank": 1,
+                                "title": "Markdown for Agents",
+                                "url": "https://blog.cloudflare.com/markdown-for-agents/",
+                            }
+                        ],
+                    }
+                ),
+            ),
+            patch(
+                "app.services.tools._executor_web.fetch_web_page",
+                new_callable=AsyncMock,
+                return_value=json.dumps(
+                    {
+                        "error": "fetch_web_page request failed",
+                        "url": "https://blog.cloudflare.com/markdown-for-agents/",
+                    }
+                ),
+            ),
+        ):
+            result = await research_web("Cloudflare Markdown for Agents")
+
+        payload = json.loads(result)
+        assert payload["error"] == "research_web fetch step failed"
+        assert payload["selected_result"]["rank"] == 1
+        assert payload["page"]["error"] == "fetch_web_page request failed"

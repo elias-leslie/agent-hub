@@ -872,6 +872,7 @@ class TestSteerConsultation:
             "fetch_web_page",
             "precision_code_search",
             "read_file",
+            "research_web",
             "search_web",
         }
         assert kwargs["permission_config"]["mode"] == "granular"
@@ -921,6 +922,7 @@ class TestSteerConsultation:
             "fetch_web_page",
             "precision_code_search",
             "read_file",
+            "research_web",
             "search_web",
         }
         assert kwargs["permission_config"]["mode"] == "granular"

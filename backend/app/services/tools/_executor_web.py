@@ -69,6 +69,16 @@ def _error_payload(message: str, **extra: object) -> str:
     return _json_payload({"error": message, **extra})
 
 
+def _decode_payload(payload: str, *, source: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source} returned invalid JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{source} returned a non-object JSON payload")
+    return parsed
+
+
 def _normalize_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
@@ -490,6 +500,125 @@ async def search_web(
     return _json_payload(payload)
 
 
+async def research_web(
+    query: str,
+    max_results: int = DEFAULT_WEB_SEARCH_RESULTS,
+    result_index: int = 1,
+    search_type: str = "text",
+    timelimit: str | None = None,
+    max_chars: int = DEFAULT_WEB_FETCH_MAX_CHARS,
+    focus_query: str | None = None,
+) -> str:
+    """Search the web, choose one result, and fetch readable content."""
+    normalized_query = _normalize_whitespace(query)
+    if not normalized_query:
+        return _error_payload("research_web requires a non-empty query")
+    if result_index < 1:
+        return _error_payload(
+            "research_web result_index must be at least 1",
+            result_index=result_index,
+        )
+
+    search_payload_raw = await search_web(
+        query=normalized_query,
+        max_results=max_results,
+        search_type=search_type,
+        timelimit=timelimit,
+    )
+    try:
+        search_payload = _decode_payload(search_payload_raw, source="search_web")
+    except ValueError as exc:
+        return _error_payload("research_web could not decode search step payload", detail=str(exc))
+
+    if "error" in search_payload:
+        return _json_payload(
+            {
+                "error": "research_web search step failed",
+                "query": normalized_query,
+                "search": search_payload,
+            }
+        )
+
+    raw_results = search_payload.get("results")
+    if not isinstance(raw_results, list):
+        return _error_payload(
+            "research_web search step returned an invalid results payload",
+            query=normalized_query,
+        )
+    if not raw_results:
+        return _json_payload(
+            {
+                "query": normalized_query,
+                "search": search_payload,
+                "selected_result": None,
+                "fetched": False,
+                "message": "No search results to fetch.",
+            }
+        )
+    if result_index > len(raw_results):
+        return _error_payload(
+            "research_web result_index exceeds available search results",
+            query=normalized_query,
+            result_index=result_index,
+            available_results=len(raw_results),
+        )
+
+    selected_result = raw_results[result_index - 1]
+    if not isinstance(selected_result, dict):
+        return _error_payload(
+            "research_web selected result is malformed",
+            query=normalized_query,
+            result_index=result_index,
+        )
+
+    selected_url = str(selected_result.get("url") or "").strip()
+    if not selected_url:
+        return _error_payload(
+            "research_web selected result is missing a URL",
+            query=normalized_query,
+            result_index=result_index,
+        )
+
+    effective_focus_query = _normalize_whitespace(focus_query or normalized_query)
+    page_payload_raw = await fetch_web_page(
+        url=selected_url,
+        max_chars=max_chars,
+        focus_query=effective_focus_query,
+    )
+    try:
+        page_payload = _decode_payload(page_payload_raw, source="fetch_web_page")
+    except ValueError as exc:
+        return _error_payload(
+            "research_web could not decode fetch step payload",
+            detail=str(exc),
+            query=normalized_query,
+            selected_result=selected_result,
+        )
+
+    if "error" in page_payload:
+        return _json_payload(
+            {
+                "error": "research_web fetch step failed",
+                "query": normalized_query,
+                "search": search_payload,
+                "selected_result": selected_result,
+                "focus_query": effective_focus_query,
+                "page": page_payload,
+            }
+        )
+
+    return _json_payload(
+        {
+            "query": normalized_query,
+            "search": search_payload,
+            "selected_result": selected_result,
+            "focus_query": effective_focus_query,
+            "page": page_payload,
+            "fetched": True,
+        }
+    )
+
+
 def _extract_markdown_payload(html: str, url: str) -> tuple[dict[str, Any], str]:
     import trafilatura
 
@@ -750,5 +879,6 @@ __all__ = [
     "MAX_WEB_FETCH_MAX_CHARS",
     "MAX_WEB_SEARCH_RESULTS",
     "fetch_web_page",
+    "research_web",
     "search_web",
 ]

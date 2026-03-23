@@ -100,6 +100,7 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
     "consult_agent",
     "precision_code_search",
+    "research_web",
     "search_web",
     "fetch_web_page",
     "tool_search",

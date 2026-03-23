@@ -15,6 +15,9 @@ from scripts.persona_benchmark_cases import PersonaBenchmarkCase
 
 _VALID_ACTIONS = {"dispatch", "monitor", "block", "wait", "reconcile"}
 _VALID_CONFIDENCE = {"low", "medium", "high"}
+_IMPLIED_TOOL_COVERAGE: dict[str, frozenset[str]] = {
+    "research_web": frozenset({"research_web", "search_web", "fetch_web_page"}),
+}
 
 
 @dataclass
@@ -217,6 +220,13 @@ def _normalize_tool_name(tool_name: str) -> str:
     return normalized
 
 
+def _expand_tool_coverage(tool_names: set[str]) -> set[str]:
+    expanded = set(tool_names)
+    for tool_name in list(tool_names):
+        expanded.update(_IMPLIED_TOOL_COVERAGE.get(tool_name, ()))
+    return expanded
+
+
 def normalize_attempt_identity(
     *,
     model_id: str,
@@ -326,10 +336,11 @@ def score_attempt(
     used_tool_name_set = {
         _normalize_tool_name(tool_name) for tool_name in attempt.used_tool_names if tool_name
     }
+    covered_tool_name_set = _expand_tool_coverage(used_tool_name_set)
     required_tool_name_set = {
         _normalize_tool_name(tool_name) for tool_name in case.required_tool_names if tool_name
     }
-    specific_tool_requirement_met = required_tool_name_set.issubset(used_tool_name_set)
+    specific_tool_requirement_met = required_tool_name_set.issubset(covered_tool_name_set)
     attempt.tool_requirement_met = generic_tool_requirement_met and specific_tool_requirement_met
     tool_score = 1.0 if attempt.tool_requirement_met else 0.0
     attempt.composite_score = round((attempt.correctness_score * 0.85 + tool_score * 0.15) * 100, 1)
@@ -339,7 +350,7 @@ def score_attempt(
         if not generic_tool_requirement_met:
             attempt.failure_detail = "required_tool_call_missing"
         elif not specific_tool_requirement_met:
-            missing_tools = sorted(required_tool_name_set - used_tool_name_set)
+            missing_tools = sorted(required_tool_name_set - covered_tool_name_set)
             attempt.failure_detail = f"required_tools_missing: {', '.join(missing_tools)}"
         elif field_mismatches:
             attempt.failure_detail = f"wrong_fields: {', '.join(field_mismatches)}"
