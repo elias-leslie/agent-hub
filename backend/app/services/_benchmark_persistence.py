@@ -152,6 +152,8 @@ def _group_attempt_failures(attempts: list[dict[str, Any]]) -> dict[tuple[str, s
     for attempt in attempts:
         if attempt.get("passed"):
             continue
+        if attempt.get("infra_failure") or str(attempt.get("failure_kind") or "") == "infra":
+            continue
         case_id = str(attempt.get("case_id") or "")
         failure_detail = str(attempt.get("failure_detail") or "failed")
         key = (case_id, failure_detail)
@@ -245,8 +247,10 @@ async def _refresh_experiment_decision(
         )
     ).scalars().all()
     summary = summarize_benchmark_experiment(experiment, list(exp_runs))
-    experiment.decision = str(summary["decision"])
+    decision = str(summary["decision"])
+    experiment.decision = decision
     experiment.decision_reason = summary["decision_reason"]
+    experiment.status = "closed" if decision in {"promote", "rollback"} else "open"
     experiment.evidence = {
         "baseline": summary["baseline"],
         "candidate": summary["candidate"],

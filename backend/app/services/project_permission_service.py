@@ -69,9 +69,11 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "submit_onboarding",
     "mark_memory_relevant",
     "mark_memory_irrelevant",
+    "manage_memory_tags",
     "manage_model_config",
     "log_agent_performance",
     "review_agent_performance",
+    "review_improvement_signals",
     "manage_feedback",
 })
 
@@ -98,6 +100,7 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
     "consult_agent",
     "precision_code_search",
+    "tool_search",
     "read_personality",
     "read_user_context",
     "list_scheduled_jobs",
@@ -110,6 +113,7 @@ _WRITE_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
     "write_user_context",
     "mark_memory_relevant",
     "mark_memory_irrelevant",
+    "manage_memory_tags",
     "submit_onboarding",
 })
 

@@ -36,7 +36,7 @@ def resolve_project_root(project_id: str) -> Path | None:
                 check=False,
                 timeout=5,
             )
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             result = None
         if result and result.returncode == 0:
             resolved = Path(result.stdout.strip()).expanduser().resolve()

@@ -149,6 +149,7 @@ async def inject_memory(
                 messages=messages_dict,
                 scope=scope,
                 scope_id=scope_id,
+                variant=request.memory_variant_override,
                 task_type=request.task_type,
                 phase=request.phase,
                 session_id=session_id,

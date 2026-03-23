@@ -9,27 +9,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.benchmark_failure_classification import classify_benchmark_failure_detail
 from scripts.persona_benchmark_cases import PersonaBenchmarkCase
-
-_INFRA_FAILURE_MARKERS = (
-    "authentication failed",
-    "check credentials",
-    "api key not configured",
-    "internal_server_error",
-    "unexpected error occurred",
-    "no response returned",
-    "upstream connect error",
-    "remote connection failure",
-    "transport failure",
-    "connection reset",
-    "timed out",
-    "timeout",
-    "connection refused",
-    "503",
-    "502",
-    "rate limit",
-    "claude sdk stalled after tool_result",
-)
 
 _VALID_ACTIONS = {"dispatch", "monitor", "block", "wait", "reconcile"}
 _VALID_CONFIDENCE = {"low", "medium", "high"}
@@ -138,14 +119,28 @@ def _extract_fenced_json_block(content: str) -> str | None:
     return match.group(1).strip()
 
 
+_LEADING_APPLIED_CITATIONS_RE = re.compile(
+    r"^(?:Applied:\s*(?:\[[MGR]:[^\]]+\]\s*)+)+"
+)
+
+
 def _strip_leading_narration_tags(content: str) -> str:
     """Remove leading [[P:...]] narration tags emitted during task execution."""
     remaining = content.lstrip()
-    while remaining.startswith("[[P:"):
-        end = remaining.find("]]")
-        if end == -1:
-            break
-        remaining = remaining[end + 2 :].lstrip()
+    while remaining:
+        if remaining.startswith("[[P:"):
+            end = remaining.find("]]")
+            if end == -1:
+                break
+            remaining = remaining[end + 2 :].lstrip()
+            continue
+
+        citation_match = _LEADING_APPLIED_CITATIONS_RE.match(remaining)
+        if citation_match:
+            remaining = remaining[citation_match.end() :].lstrip()
+            continue
+
+        break
     return remaining
 
 
@@ -153,9 +148,12 @@ def _load_first_json_object(content: str) -> dict[str, Any]:
     """Decode the first JSON object in a response, tolerating light preamble."""
     decoder = json.JSONDecoder()
     stripped = content.strip()
-    parsed, _ = decoder.raw_decode(stripped)
-    if isinstance(parsed, dict):
-        return parsed
+    try:
+        parsed, _ = decoder.raw_decode(stripped)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
 
     brace_index = stripped.find("{")
     if brace_index <= 0:
@@ -207,12 +205,7 @@ def validate_benchmark_shape(parsed: dict[str, Any]) -> tuple[bool, str | None]:
 
 def classify_failure(detail: str | None) -> tuple[bool, str | None]:
     """Classify a failure as infra or model-quality related."""
-    if not detail:
-        return False, None
-    lower = detail.lower()
-    if any(marker in lower for marker in _INFRA_FAILURE_MARKERS):
-        return True, "infra"
-    return False, "model"
+    return classify_benchmark_failure_detail(detail)
 
 
 def _normalize_tool_name(tool_name: str) -> str:

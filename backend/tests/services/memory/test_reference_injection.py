@@ -414,6 +414,72 @@ class TestReferenceInjection:
         ]
         assert [item.uuid for item in aggressive.reference] == [item.uuid for item in refs]
 
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_scores_wake_references_by_variant(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        refs = [
+            MemorySearchResult(
+                uuid="high-score-ref",
+                content="Recent high-signal wake guidance.",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.85,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+                loaded_count=12,
+                referenced_count=9,
+                confidence=90.0,
+            ),
+            MemorySearchResult(
+                uuid="borderline-ref",
+                content="Borderline wake guidance that should only survive looser variants.",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.25,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+                loaded_count=0,
+                referenced_count=0,
+                confidence=55.0,
+            ),
+        ]
+
+        selector = AsyncMock(return_value=[])
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], refs)),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=selector,
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            minimal = await build_progressive_context(
+                query="wake benchmark reference scoring",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                task_type="wake",
+                variant="MINIMAL",
+            )
+            aggressive = await build_progressive_context(
+                query="wake benchmark reference scoring",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                task_type="wake",
+                variant="AGGRESSIVE",
+            )
+
+        selector.assert_not_awaited()
+        assert [item.uuid for item in minimal.reference] == ["high-score-ref"]
+        assert [item.uuid for item in aggressive.reference] == [
+            "high-score-ref",
+            "borderline-ref",
+        ]
+
     def test_format_progressive_context_renders_selected_references_without_passive_index(self) -> None:
         context = type("Ctx", (), {})()
         context.mandates = []

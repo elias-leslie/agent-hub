@@ -29,6 +29,7 @@ class PersonaScheduledJob(Base):
     Payload types:
     - "agent_turn": inject message as user input to complete_internal
     - "push": send a push notification directly
+    - "self_honing": run Jenny's scheduled self-honing loop directly
     """
 
     __tablename__ = "persona_scheduled_jobs"
@@ -45,7 +46,7 @@ class PersonaScheduledJob(Base):
     schedule_timezone: Mapped[str] = mapped_column(String(50), default="UTC", server_default="UTC")
     payload_type: Mapped[str] = mapped_column(
         String(20), default="agent_turn", server_default="agent_turn"
-    )  # agent_turn / push
+    )  # agent_turn / push / self_honing
     payload_message: Mapped[str] = mapped_column(Text, nullable=False)
     payload_title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     delivery: Mapped[str] = mapped_column(

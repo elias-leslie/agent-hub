@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.workflows.persona_scheduler import compute_next_run
 
@@ -75,3 +79,69 @@ class TestComputeNextRun:
         """Unknown schedule_type returns None."""
         result = compute_next_run("unknown", "value")
         assert result is None
+
+
+@pytest.mark.asyncio
+async def test_execute_self_honing_skips_when_persona_or_supervisor_is_active():
+    from app.workflows.persona_scheduler import _execute_self_honing
+
+    job = SimpleNamespace(name="Nightly self-honing")
+
+    with (
+        patch(
+            "app.workflows.persona_scheduler.query_active_sessions",
+            new=AsyncMock(return_value=[{"session_id": "sess-1", "agent_slug": "persona"}]),
+        ),
+        patch(
+            "app.workflows.persona_scheduler.run_honing_loop",
+            new=AsyncMock(),
+        ) as mock_honing,
+    ):
+        result = await _execute_self_honing(job)
+
+    assert "Skipped" in result
+    assert "persona" in result
+    mock_honing.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_path):
+    from app.workflows.persona_scheduler import _execute_self_honing
+
+    job = SimpleNamespace(name="Nightly self-honing")
+
+    with (
+        patch(
+            "app.workflows.persona_scheduler.query_active_sessions",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.workflows.persona_scheduler._resolve_self_honing_models",
+            new=AsyncMock(return_value=(["codex/gpt-5.4"], ["claude-sonnet-4-6"])),
+        ),
+        patch(
+            "app.workflows.persona_scheduler.run_honing_loop",
+            new=AsyncMock(
+                return_value={
+                    "honed": True,
+                    "completed_iterations": 1,
+                    "iterations": [
+                        {
+                            "benchmark_id": "persona-benchmark-1234abcd",
+                            "failing_attempts": 0,
+                        }
+                    ],
+                }
+            ),
+        ) as mock_honing,
+        patch(
+            "app.workflows.persona_scheduler._scheduled_self_honing_paths",
+            return_value=(tmp_path / "work", tmp_path / "reports", tmp_path / "result.json"),
+        ),
+    ):
+        result = await _execute_self_honing(job)
+
+    assert "Self-honing completed" in result
+    assert "honed=True" in result
+    assert "persona-benchmark-1234abcd" in result
+    mock_honing.assert_awaited_once()

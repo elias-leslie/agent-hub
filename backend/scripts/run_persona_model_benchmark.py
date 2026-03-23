@@ -44,6 +44,7 @@ from app.services.agent_benchmark_service import (
     get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
 )
+from app.services.memory.settings import set_active_memory_variant
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_case_by_id,
@@ -306,6 +307,7 @@ async def _run_one_attempt(
     keep_workdirs: bool,
     use_memory: bool,
     memory_group_id: str,
+    memory_variant_override: str | None,
     task_type: str,
     persona_name: str = "Persona",
 ) -> PersonaBenchmarkAttempt:
@@ -326,6 +328,7 @@ async def _run_one_attempt(
             skip_cache=True,
             use_memory=use_memory,
             memory_group_id=memory_group_id,
+            memory_variant_override=memory_variant_override,
             max_turns=case.max_turns,
             working_dir=str(workdir) if case.fixture_files else None,
             execute_tools=case.execute_tools,
@@ -357,6 +360,7 @@ async def _execute_attempt_loop(
     keep_workdirs: bool,
     use_memory: bool,
     memory_group_id: str,
+    memory_variant_override: str | None,
     task_type: str,
     persona_name: str,
 ) -> list[PersonaBenchmarkAttempt]:
@@ -368,7 +372,8 @@ async def _execute_attempt_loop(
             model_id=model_id, case_id=case_id, run_number=run_number,
             working_root=working_root, timeout_seconds=timeout_seconds,
             keep_workdirs=keep_workdirs, use_memory=use_memory,
-            memory_group_id=memory_group_id, task_type=task_type,
+            memory_group_id=memory_group_id, memory_variant_override=memory_variant_override,
+            task_type=task_type,
             persona_name=persona_name,
         )
         attempts.append(attempt)
@@ -394,6 +399,7 @@ async def run_benchmark(
     client_id: str | None,
     use_memory: bool,
     memory_group_id: str | None,
+    memory_variant_override: str | None = None,
     task_type: str = "wake",
 ) -> PersonaBenchmarkRun:
     benchmark_id = f"{_BENCHMARK_ID_PREFIX}-{uuid.uuid4().hex[:8]}"
@@ -415,7 +421,9 @@ async def run_benchmark(
             client, order, benchmark_id=benchmark_id, project_id=project_id,
             working_root=working_root, timeout_seconds=timeout_seconds,
             keep_workdirs=keep_workdirs, use_memory=use_memory,
-            memory_group_id=resolved_memory_group_id, task_type=task_type,
+            memory_group_id=resolved_memory_group_id,
+            memory_variant_override=memory_variant_override,
+            task_type=task_type,
             persona_name=persona_name,
         )
 
@@ -464,12 +472,22 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--keep-workdirs", action="store_true", help="Keep temporary workspaces")
     parser.add_argument("--use-memory", action="store_true", help="Enable persona memory injection for full-context benchmark runs")
     parser.add_argument("--memory-group-id", help="Explicit memory group id to use when memory injection is enabled")
+    parser.add_argument(
+        "--memory-variant-override",
+        choices=("BASELINE", "ENHANCED", "MINIMAL", "AGGRESSIVE"),
+        help="Override the memory injection variant for controlled benchmark experiments",
+    )
     parser.add_argument("--task-type", default="wake", choices=("wake", "heartbeat"), help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context")
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
     parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
     parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")
     parser.add_argument("--experiment-hypothesis", help="Short hypothesis being tested")
     parser.add_argument("--min-runs-per-cohort", type=int, default=3, help="Minimum repeated runs required before experiment decisions can promote or rollback")
+    parser.add_argument(
+        "--promote-on-win",
+        action="store_true",
+        help="When the candidate cohort wins an experiment, promote its memory variant to production",
+    )
     parser.add_argument("--no-persist", action="store_true", help="Skip saving results to the benchmark history tables")
     parser.add_argument("--dry-run", action="store_true", help="Print roster and exit")
     return parser
@@ -514,12 +532,33 @@ def _print_experiment_summary(summary: dict) -> None:
     )
 
 
+async def _maybe_promote_memory_variant(
+    args: argparse.Namespace,
+    summary: dict[str, object] | None,
+) -> None:
+    """Promote a winning candidate variant into the global memory settings row."""
+    if (
+        not args.promote_on_win
+        or args.experiment_cohort != "candidate"
+        or not args.memory_variant_override
+        or not summary
+        or summary.get("decision") != "promote"
+    ):
+        return
+    await set_active_memory_variant(args.memory_variant_override)
+    logger.info("Promoted active memory variant to %s", args.memory_variant_override)
+
+
 async def _persist_run(
     run: PersonaBenchmarkRun,
     args: argparse.Namespace,
     case_ids: list[str],
 ) -> str | None:
-    config_snapshot = await capture_benchmark_config_snapshot(args.agent_slug, task_type=args.task_type)
+    config_snapshot = await capture_benchmark_config_snapshot(
+        args.agent_slug,
+        task_type=args.task_type,
+        memory_variant_override=args.memory_variant_override,
+    )
     if config_snapshot is not None:
         config_snapshot = {**config_snapshot, "benchmark_task_type": args.task_type}
     suite_id = args.suite_id or derive_suite_id(case_ids)
@@ -541,6 +580,7 @@ async def _persist_run(
             summary = await get_benchmark_experiment_summary_by_key(db, args.experiment_key)
         if summary:
             _print_experiment_summary(summary)
+            await _maybe_promote_memory_variant(args, summary)
     return persisted_run_id
 
 
@@ -581,7 +621,9 @@ async def main() -> None:
         seed=args.seed, timeout_seconds=args.timeout_seconds,
         keep_workdirs=args.keep_workdirs, base_url=args.base_url,
         client_id=args.client_id, use_memory=args.use_memory,
-        memory_group_id=args.memory_group_id, task_type=args.task_type,
+        memory_group_id=args.memory_group_id,
+        memory_variant_override=args.memory_variant_override,
+        task_type=args.task_type,
     )
     report = generate_markdown_report(run, persona_name=await load_persona_display_name())
     persisted_run_id: str | None = None

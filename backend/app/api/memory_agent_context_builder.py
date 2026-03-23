@@ -3,8 +3,10 @@
 import logging
 import time
 
-from app.services.memory.context_injector import ProgressiveContext
+from app.services.memory.context_injector import ProgressiveContext, build_progressive_context
 from app.services.memory.service import MemoryScope
+from app.services.memory.settings import get_memory_settings
+from app.services.memory.variants import assign_variant
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +24,14 @@ async def build_progressive_context_with_variant(
     consumer_profile: str | None,
 ) -> tuple[ProgressiveContext, str]:
     """Build progressive context and assign variant."""
-    from app.services.memory.context_injector import build_progressive_context
-    from app.services.memory.variants import assign_variant
-
+    settings = await get_memory_settings()
     assigned_variant = assign_variant(
         external_id=external_id,
         project_id=project_id or scope_id,
         variant_override=variant_override,
+        active_variant=settings.active_variant,
     )
+    variant_value = getattr(assigned_variant, "value", str(assigned_variant))
 
     context = await build_progressive_context(
         query=query,
@@ -39,10 +41,11 @@ async def build_progressive_context_with_variant(
         task_type=task_type,
         phase=phase,
         consumer_profile=consumer_profile,
+        variant=variant_value,
     )
 
-    context.debug_info["variant"] = assigned_variant.value
-    return context, assigned_variant.value
+    context.debug_info["variant"] = variant_value
+    return context, variant_value
 
 
 async def build_continuity_markdown(

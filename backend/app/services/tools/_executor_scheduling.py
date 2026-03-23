@@ -11,6 +11,8 @@ from app.models.persona_scheduled_job import PersonaScheduledJob
 
 logger = logging.getLogger(__name__)
 
+_VALID_PAYLOAD_TYPES = frozenset({"agent_turn", "push", "self_honing"})
+
 
 async def schedule_job(
     name: str,
@@ -24,6 +26,11 @@ async def schedule_job(
     """Create a scheduled job for the persona."""
     if schedule_type not in ("at", "every", "cron"):
         return f"Error: Invalid schedule_type '{schedule_type}'. Must be at/every/cron."
+    if payload_type not in _VALID_PAYLOAD_TYPES:
+        return (
+            f"Error: Invalid payload_type '{payload_type}'. "
+            "Must be agent_turn/push/self_honing."
+        )
 
     try:
         from app.db import async_session
@@ -95,7 +102,7 @@ async def list_scheduled_jobs(include_disabled: bool = False) -> str:
                 runs += f"/{job.max_runs}"
             lines.append(
                 f"- **{job.name}** (id={job.id})\n"
-                f"  {job.schedule_type}={job.schedule_value} | "
+                f"  {job.schedule_type}={job.schedule_value} | type={job.payload_type} | "
                 f"next={next_str} | runs={runs} | {status}"
             )
 

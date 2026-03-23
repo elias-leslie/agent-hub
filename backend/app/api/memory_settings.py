@@ -32,6 +32,7 @@ async def get_settings() -> SettingsResponse:
             enabled=settings.enabled,
             continuity_enabled=settings.continuity_enabled,
             continuity_max_sessions=settings.continuity_max_sessions,
+            active_variant=settings.active_variant,
         )
 
 
@@ -44,16 +45,20 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
     from app.db import async_session
 
     async with async_session() as db:
-        settings = await update_memory_settings(
-            db,
-            enabled=request.enabled,
-            continuity_enabled=request.continuity_enabled,
-            continuity_max_sessions=request.continuity_max_sessions,
-        )
+        update_kwargs: dict[str, object] = {
+            "enabled": request.enabled,
+            "continuity_enabled": request.continuity_enabled,
+            "continuity_max_sessions": request.continuity_max_sessions,
+        }
+        if "active_variant" in request.model_fields_set:
+            update_kwargs["active_variant"] = request.active_variant
+
+        settings = await update_memory_settings(db, **update_kwargs)
         return SettingsResponse(
             enabled=settings.enabled,
             continuity_enabled=settings.continuity_enabled,
             continuity_max_sessions=settings.continuity_max_sessions,
+            active_variant=settings.active_variant,
         )
 
 

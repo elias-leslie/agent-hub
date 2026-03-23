@@ -25,6 +25,7 @@ async def log_agent_performance(
     output_tokens: int | None = None,
     tool_calls_count: int | None = None,
     turns: int | None = None,
+    logged_by: str = "persona",
 ) -> str:
     """Log a performance observation for an agent/model combination."""
     if feedback_type not in VALID_FEEDBACK_TYPES:
@@ -46,7 +47,7 @@ async def log_agent_performance(
         from app.models.agent_performance_log import AgentPerformanceLog
 
         async with async_session() as db:
-            # 24h dedup: skip if identical (agent, model, feedback_type) logged recently
+            # 24h dedup: skip only exact duplicate observations, not distinct issues.
             cutoff = datetime.now(UTC) - timedelta(hours=24)
             existing = await db.execute(
                 select(AgentPerformanceLog.id)
@@ -54,6 +55,7 @@ async def log_agent_performance(
                     AgentPerformanceLog.agent_slug == agent_slug,
                     AgentPerformanceLog.model_id == model_id,
                     AgentPerformanceLog.feedback_type == feedback_type,
+                    AgentPerformanceLog.content == content,
                     AgentPerformanceLog.created_at > cutoff,
                 )
                 .limit(1)
@@ -78,7 +80,7 @@ async def log_agent_performance(
                 turns=turns,
                 content=content,
                 session_id=session_id,
-                logged_by="persona",
+                logged_by=logged_by,
             )
 
             db.add(log)
@@ -191,3 +193,28 @@ async def review_agent_performance(
     except Exception as e:
         logger.exception("review_agent_performance failed")
         return f"Error reviewing performance: {e}"
+
+
+async def review_improvement_signals(
+    project_id: str | None = None,
+    primary_agent_slug: str = "persona",
+    days_back: int = 7,
+    include_team: bool = True,
+    max_agents: int = 4,
+    max_references: int = 6,
+) -> str:
+    """Review combined performance, benchmark, and memory signals."""
+    try:
+        from app.services.improvement_signals import build_improvement_signal_digest
+
+        return await build_improvement_signal_digest(
+            project_id=project_id,
+            primary_agent_slug=primary_agent_slug,
+            days_back=days_back,
+            include_team=include_team,
+            max_agents=max_agents,
+            max_reference_items=max_references,
+        )
+    except Exception as e:
+        logger.exception("review_improvement_signals failed")
+        return f"Error reviewing improvement signals: {e}"

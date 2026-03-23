@@ -18,7 +18,10 @@ from app.models import AgentBenchmarkExperiment, AgentBenchmarkRun
 # ---------------------------------------------------------------------------
 # Re-exports (preserve public API for all importers)
 # ---------------------------------------------------------------------------
-from ._benchmark_config import capture_benchmark_config_snapshot  # noqa: F401
+from ._benchmark_config import (
+    capture_benchmark_config_snapshot,  # noqa: F401
+    memory_state_descriptor,  # noqa: F401
+)
 from ._benchmark_dashboard import (
     get_agent_benchmark_dashboard,  # noqa: F401
     summarize_benchmark_experiment,

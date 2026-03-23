@@ -42,7 +42,11 @@ def memory_state_descriptor(config_snapshot: dict[str, Any]) -> str | None:
     latest_revision_at = memory_state.get("latest_revision_at")
     if not latest_revision_id or not latest_revision_at:
         return None
-    return f"{latest_revision_at}:{latest_revision_id}"
+    descriptor = f"{latest_revision_at}:{latest_revision_id}"
+    variant_override = memory_state.get("variant_override")
+    if variant_override:
+        descriptor = f"{descriptor}:{variant_override}"
+    return descriptor
 
 
 def normalize_config_snapshot_for_fingerprint(value: Any) -> Any:
@@ -181,14 +185,18 @@ async def _capture_prompt_stack(
     return stack
 
 
-async def _capture_memory_state(db: AsyncSession) -> dict[str, Any]:
+async def _capture_memory_state(
+    db: AsyncSession,
+    *,
+    memory_variant_override: str | None = None,
+) -> dict[str, Any]:
     latest_memory_revision = await db.scalar(
         select(MemoryRevision).order_by(MemoryRevision.created_at.desc())
     )
     active_memory_count = await db.scalar(
         select(func.count()).select_from(Memory).where(Memory.status == "active")
     )
-    return {
+    snapshot = {
         "latest_revision_id": latest_memory_revision.id if latest_memory_revision else None,
         "latest_revision_at": (
             latest_memory_revision.created_at.isoformat()
@@ -198,12 +206,16 @@ async def _capture_memory_state(db: AsyncSession) -> dict[str, Any]:
         "latest_memory_uuid": latest_memory_revision.memory_uuid if latest_memory_revision else None,
         "active_count": int(active_memory_count or 0),
     }
+    if memory_variant_override:
+        snapshot["variant_override"] = memory_variant_override
+    return snapshot
 
 
 async def capture_benchmark_config_snapshot(
     agent_slug: str,
     *,
     task_type: str | None = None,
+    memory_variant_override: str | None = None,
 ) -> dict[str, Any]:
     """Capture the live agent/model/prompt state for a benchmark run."""
     async with async_session() as db:
@@ -222,7 +234,10 @@ async def capture_benchmark_config_snapshot(
         }
 
         snapshot["prompt_stack"] = await _capture_prompt_stack(db, agent, task_type)
-        snapshot["memory_state"] = await _capture_memory_state(db)
+        snapshot["memory_state"] = await _capture_memory_state(
+            db,
+            memory_variant_override=memory_variant_override,
+        )
 
         if agent_slug == "persona":
             snapshot.update(await _capture_persona_snapshot(db, agent))

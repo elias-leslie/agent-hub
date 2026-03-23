@@ -20,6 +20,7 @@ DEFAULT_MAX_GUARDRAILS = 0  # 0 = unlimited
 DEFAULT_REFERENCE_INDEX_ENABLED = True  # TOON compressed reference index
 DEFAULT_CONTINUITY_ENABLED = True
 DEFAULT_CONTINUITY_MAX_SESSIONS = 5
+_UNSET = object()
 
 
 @dataclass
@@ -34,6 +35,7 @@ class MemorySettingsDTO:
     reference_index_enabled: bool = True
     continuity_enabled: bool = True
     continuity_max_sessions: int = 5
+    active_variant: str | None = None
 
 
 def _defaults_dto() -> MemorySettingsDTO:
@@ -45,6 +47,7 @@ def _defaults_dto() -> MemorySettingsDTO:
         reference_index_enabled=DEFAULT_REFERENCE_INDEX_ENABLED,
         continuity_enabled=DEFAULT_CONTINUITY_ENABLED,
         continuity_max_sessions=DEFAULT_CONTINUITY_MAX_SESSIONS,
+        active_variant=None,
     )
 
 
@@ -57,6 +60,7 @@ def _orm_to_dto(s: MemorySettings) -> MemorySettingsDTO:
         reference_index_enabled=getattr(s, "reference_index_enabled", DEFAULT_REFERENCE_INDEX_ENABLED),
         continuity_enabled=getattr(s, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED),
         continuity_max_sessions=getattr(s, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS),
+        active_variant=getattr(s, "active_variant", None),
     )
 
 
@@ -95,7 +99,15 @@ def _create_settings_row(updates: dict[str, object]) -> MemorySettings:
         reference_index_enabled=updates["reference_index_enabled"] if updates["reference_index_enabled"] is not None else d.reference_index_enabled,
         continuity_enabled=updates["continuity_enabled"] if updates["continuity_enabled"] is not None else d.continuity_enabled,
         continuity_max_sessions=updates["continuity_max_sessions"] if updates["continuity_max_sessions"] is not None else d.continuity_max_sessions,
+        active_variant=d.active_variant
+        if updates["active_variant"] is _UNSET
+        else updates["active_variant"],
     )
+
+
+def _should_apply_update(value: object) -> bool:
+    """Return whether a partial settings value should be applied."""
+    return value is not None and value is not _UNSET
 
 
 async def update_memory_settings(
@@ -109,6 +121,7 @@ async def update_memory_settings(
     reference_index_enabled: bool | None = None,
     continuity_enabled: bool | None = None,
     continuity_max_sessions: int | None = None,
+    active_variant: str | None | object = _UNSET,
 ) -> MemorySettingsDTO:
     """Upsert memory settings (creates the row if it doesn't exist).
 
@@ -119,6 +132,7 @@ async def update_memory_settings(
         max_mandates=max_mandates, max_guardrails=max_guardrails,
         reference_index_enabled=reference_index_enabled,
         continuity_enabled=continuity_enabled, continuity_max_sessions=continuity_max_sessions,
+        active_variant=active_variant,
     )
     result = await db.execute(select(MemorySettings).where(MemorySettings.id == 1))
     settings = result.scalar_one_or_none()
@@ -128,7 +142,7 @@ async def update_memory_settings(
         db.add(settings)
     else:
         for field, value in updates.items():
-            if value is not None:
+            if _should_apply_update(value):
                 setattr(settings, field, value)
 
     await db.commit()
@@ -140,3 +154,10 @@ async def update_memory_settings(
         getattr(settings, "continuity_enabled", True),
     )
     return _orm_to_dto(settings)
+
+
+async def set_active_memory_variant(active_variant: str | None) -> MemorySettingsDTO:
+    """Set or clear the globally active memory variant."""
+    async for session in get_db():
+        return await update_memory_settings(session, active_variant=active_variant)
+    return _defaults_dto()

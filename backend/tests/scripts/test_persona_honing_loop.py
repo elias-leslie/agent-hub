@@ -82,6 +82,9 @@ def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> 
     assert "Auto-Claude inspiration" in prompt
     assert "OpenClaw inspiration" in prompt
     assert "Do not create or dispatch project tasks." in prompt
+    assert "memory routing" in prompt
+    assert "manage_memory_tags" in prompt
+    assert "rebuild.sh" in prompt
 
 
 def test_build_honing_prompt_handles_clean_run() -> None:
@@ -273,9 +276,15 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     client = _FakeImprovementClient()
     run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
 
-    with patch(
-        "scripts.persona_honing._experiment._fetch_used_tool_names",
-        new=AsyncMock(return_value=["read_heartbeat_instructions"]),
+    with (
+        patch(
+            "scripts.persona_honing._experiment._fetch_used_tool_names",
+            new=AsyncMock(return_value=["read_heartbeat_instructions"]),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._load_recent_improvement_signals",
+            new=AsyncMock(return_value="## Repeated issues\n- persona [2x]: missed rebuild.sh"),
+        ),
     ):
         session_id, content, tools, parsed = await _run_improvement_pass(
             client=client,
@@ -301,6 +310,8 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     assert client.kwargs is not None
     assert client.kwargs["use_memory"] is False
     assert client.kwargs["agent_slug"] == "persona"
+    assert "Recent improvement signals" in client.kwargs["messages"][0]["content"]
+    assert "missed rebuild.sh" in client.kwargs["messages"][0]["content"]
 
 
 def test_build_honing_prompt_includes_completion_review_surface() -> None:
@@ -329,6 +340,87 @@ def test_build_honing_prompt_includes_completion_review_surface() -> None:
     assert "Completion-review failure clusters" in prompt
     assert "Persistent completion-review clusters from the previous iteration" in prompt
     assert "completion-review-prompt" in prompt
+
+
+def test_build_honing_prompt_includes_recent_improvement_signals() -> None:
+    run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
+
+    prompt = build_honing_prompt(
+        run,
+        iteration=2,
+        improvement_signals=(
+            "# Improvement Signals\n\n"
+            "## Repeated issues\n"
+            "- persona [2x]: Heartbeat self-reflection signals: missing HEARTBEAT_OK/HEARTBEAT_ACTION prefix\n"
+        ),
+    )
+
+    assert "Recent improvement signals" in prompt
+    assert "Heartbeat self-reflection signals" in prompt
+    assert "benchmark coverage gap" in prompt
+
+
+def test_parse_improvement_content_tolerates_narration_and_citations() -> None:
+    from scripts.persona_honing._prompt import _parse_improvement_content
+
+    parsed = _parse_improvement_content(
+        """[[P:started:reviewing improvement output]] Applied: [M:b901dcc9]
+{"summary":"tightened benchmark phrasing","changes_applied":["logged performance note"],"next_focus":["rerun benchmark"],"durable_learning_saved":false}"""
+    )
+
+    assert parsed == {
+        "summary": "tightened benchmark phrasing",
+        "changes_applied": ["logged performance note"],
+        "next_focus": ["rerun benchmark"],
+        "durable_learning_saved": False,
+    }
+
+
+@pytest.mark.asyncio
+async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> None:
+    from scripts.persona_honing._experiment import _persist_iteration_record
+
+    benchmark_run = _benchmark_run("persona-benchmark-abc12345", [_failing_attempt("memory_routing_reconsideration")])
+    record = SimpleNamespace(
+        review_benchmark_id=None,
+        review_top_model=None,
+        review_top_score=None,
+        review_failing_attempts=None,
+        review_failure_clusters=None,
+        review_persistent_failure_clusters=None,
+        review_experiment_key=None,
+        review_experiment_summary=None,
+        persisted_run_id=None,
+    )
+    captured_payload: dict[str, object] = {}
+
+    async def _capture(payload: dict[str, object]) -> str:
+        captured_payload.update(payload)
+        return "run-iteration-1"
+
+    with patch(
+        "scripts.persona_honing._experiment.persist_benchmark_payload",
+        new=AsyncMock(side_effect=_capture),
+    ):
+        await _persist_iteration_record(
+            record=record,
+            benchmark_run=benchmark_run,
+            config_snapshot={"primary_model_id": "codex/gpt-5.4"},
+            suite_name="persona-suite-self-correction",
+            agent_slug="persona",
+            use_memory=True,
+            seed=42,
+            iteration=2,
+            report_path="/tmp/report.md",
+            failure_clusters=[],
+            persistent_clusters=[],
+            stop_reason=None,
+            persist_results=True,
+        )
+
+    assert captured_payload["benchmark_id"] == "persona-benchmark-abc12345-iter-2"
+    assert captured_payload["metadata"]["source_benchmark_id"] == "persona-benchmark-abc12345"
+    assert record.persisted_run_id == "run-iteration-1"
 
 
 @pytest.mark.asyncio

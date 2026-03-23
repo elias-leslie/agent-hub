@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.workflows._heartbeat_postprocess import (
+    _build_performance_observation,
     _detect_followup_reason,
     _ensure_session_summary,
     _extract_synthetic_summary,
@@ -25,6 +26,10 @@ def _make_result(**overrides):
         "tool_calls_count": 5,
         "status": "success",
         "error": None,
+        "model": "codex/gpt-5.4",
+        "model_used": None,
+        "input_tokens": 1200,
+        "output_tokens": 400,
     }
     defaults.update(overrides)
     mock = MagicMock()
@@ -124,6 +129,37 @@ class TestDetectFollowupReason:
         )
 
         assert reason is None
+
+
+class TestBuildPerformanceObservation:
+    def test_returns_none_for_clean_heartbeat(self) -> None:
+        observation = _build_performance_observation(
+            result=_make_result(),
+            format_ok=True,
+            followup_reason=None,
+            completion_review=MagicMock(used=True, decision="complete", reason="Looks good."),
+        )
+
+        assert observation is None
+
+    def test_captures_format_followup_and_review_issues(self) -> None:
+        observation = _build_performance_observation(
+            result=_make_result(content="Routine sweep complete.", error=None),
+            format_ok=False,
+            followup_reason="cleanup_actionable",
+            completion_review=MagicMock(
+                used=True,
+                decision="continue",
+                reason="A quiet lane still needs one more pass.",
+            ),
+        )
+
+        assert observation is not None
+        assert observation["feedback_type"] == "friction"
+        assert observation["outcome"] == "partial"
+        assert "missing HEARTBEAT_OK/HEARTBEAT_ACTION prefix" in observation["content"]
+        assert "post-run residue detected: cleanup_actionable" in observation["content"]
+        assert "completion review requested continue" in observation["content"]
 
 
 class TestEnsureSessionSummary:
@@ -479,6 +515,67 @@ class TestPostprocessHeartbeat:
             note="A quiet active lane still needs one more inspect/poll step.",
             parent_session_id="sess-test-123",
         )
+
+    @pytest.mark.asyncio
+    async def test_pipeline_logs_system_performance_signal_for_review_followup(self) -> None:
+        result = _make_result(content="HEARTBEAT_OK — Routine sweep complete.")
+
+        with (
+            patch(
+                "app.workflows._heartbeat_postprocess._ensure_session_summary",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._retry_failed_mcp_tools",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
+            patch(
+                "app.workflows._heartbeat_redis.record_heartbeat_metrics",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_cleanup_status_summary",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._get_workstream_inventory",
+                new_callable=AsyncMock,
+                return_value="",
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess.review_persona_completion",
+                new_callable=AsyncMock,
+                return_value=MagicMock(
+                    used=True,
+                    decision="continue",
+                    reason="A quiet active lane still needs one more inspect/poll step.",
+                    session_id="review-sess-3",
+                    reviewer_agent_slug="supervisor",
+                    reviewer_model_id="claude-opus-4-6",
+                ),
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess._dispatch_followup_wake",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows._heartbeat_postprocess.log_agent_performance",
+                new_callable=AsyncMock,
+            ) as mock_log,
+        ):
+            await postprocess_heartbeat(result, 60)
+
+        mock_log.assert_awaited_once()
+        _, kwargs = mock_log.await_args
+        assert kwargs["agent_slug"] == "persona"
+        assert kwargs["feedback_type"] == "friction"
+        assert kwargs["logged_by"] == "system"
+        assert kwargs["task_type"] == "heartbeat"
+        assert "completion review requested continue" in kwargs["content"]
 
 
 class TestMaybeReviewCompletion:

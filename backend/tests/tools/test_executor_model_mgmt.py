@@ -8,7 +8,12 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.tools._executor_model_mgmt import get_model_details, update_agent_model
+from app.services.tools._executor_model_mgmt import (
+    get_agent_details,
+    get_model_details,
+    update_agent_memory,
+    update_agent_model,
+)
 
 
 def _mock_async_session(mock_db: AsyncMock):
@@ -98,3 +103,114 @@ async def test_update_agent_model_preserves_distinct_prefixed_model_ids() -> Non
     assert "primary_model=codex/gpt-5.2" in result
     kwargs = service.update.await_args.kwargs
     assert kwargs["primary_model_id"] == "codex/gpt-5.2"
+
+
+@pytest.mark.anyio
+async def test_get_agent_details_includes_memory_config() -> None:
+    mock_db = AsyncMock()
+    agent = SimpleNamespace(
+        slug="debugger",
+        name="Debugger",
+        description="Investigates tricky failures.",
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=["claude-sonnet-4-6"],
+        escalation_model_id=None,
+        temperature=0.2,
+        thinking_level="high",
+        is_coding_agent=True,
+        is_active=True,
+        version=4,
+        memory_config={"include_references": True, "audience_tags": ["debugger-relevant"]},
+    )
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch("app.services.agent_service.get_agent_service") as mock_get_service,
+    ):
+        service = mock_get_service.return_value
+        service.get_by_slug = AsyncMock(return_value=agent)
+
+        result = await get_agent_details("debugger")
+
+    assert "Debugger" in result
+    assert "debugger-relevant" in result
+    assert '"include_references": true' in result
+
+
+@pytest.mark.anyio
+async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
+    mock_db = AsyncMock()
+    agent = SimpleNamespace(
+        id="agent-1",
+        memory_config={
+            "include_references": False,
+            "audience_tags": ["old-tag"],
+            "exclude_tags": ["deprecated"],
+        },
+    )
+    updated = SimpleNamespace(version=9)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch("app.services.agent_service.get_agent_service") as mock_get_service,
+    ):
+        service = mock_get_service.return_value
+        service.get_by_slug = AsyncMock(return_value=agent)
+        service.update = AsyncMock(return_value=updated)
+
+        result = await update_agent_memory(
+            agent_slug="persona",
+            memory_config_patch={
+                "include_references": True,
+                "query_reference_selection_enabled": True,
+            },
+            add_audience_tags=["persona-relevant", "memory-routing"],
+            remove_audience_tags=["old-tag"],
+            clear_audience_tags=False,
+            add_exclude_tags=["archive"],
+            remove_exclude_tags=["deprecated"],
+            clear_exclude_tags=False,
+            change_reason="route project references",
+        )
+
+    assert "Agent 'persona' memory updated (version 9)." in result
+    kwargs = service.update.await_args.kwargs
+    assert kwargs["changed_by"] == "persona"
+    assert kwargs["memory_config"] == {
+        "include_references": True,
+        "query_reference_selection_enabled": True,
+        "audience_tags": ["persona-relevant", "memory-routing"],
+        "exclude_tags": ["archive"],
+    }
+
+
+@pytest.mark.anyio
+async def test_update_agent_memory_returns_noop_when_patch_is_effectively_empty() -> None:
+    mock_db = AsyncMock()
+    agent = SimpleNamespace(
+        id="agent-1",
+        memory_config={"include_references": True, "audience_tags": ["persona-relevant"]},
+    )
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch("app.services.agent_service.get_agent_service") as mock_get_service,
+    ):
+        service = mock_get_service.return_value
+        service.get_by_slug = AsyncMock(return_value=agent)
+        service.update = AsyncMock()
+
+        result = await update_agent_memory(
+            agent_slug="persona",
+            memory_config_patch={"include_references": True},
+            add_audience_tags=["persona-relevant"],
+            remove_audience_tags=None,
+            clear_audience_tags=False,
+            add_exclude_tags=None,
+            remove_exclude_tags=None,
+            clear_exclude_tags=False,
+            change_reason="no actual change",
+        )
+
+    assert "No memory config changes required" in result
+    service.update.assert_not_awaited()

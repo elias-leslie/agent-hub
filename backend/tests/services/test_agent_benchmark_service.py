@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services._benchmark_persistence import (
+    _group_attempt_failures,
+    _refresh_experiment_decision,
+)
 from app.services.agent_benchmark_service import (
     _should_update_regression_clusters,
     capture_benchmark_config_snapshot,
@@ -40,6 +44,7 @@ def _make_run(
 
 def _make_experiment(**overrides) -> SimpleNamespace:
     defaults = {
+        "id": 1,
         "experiment_key": "persona-patience-ab",
         "name": "Persona patience harness A/B",
         "suite_id": "persona-patience",
@@ -65,6 +70,7 @@ def test_summarize_benchmark_experiment_holds_when_underpowered() -> None:
     summary = summarize_benchmark_experiment(experiment, runs)
 
     assert summary["decision"] == "hold"
+    assert summary["status"] == "open"
     assert summary["decision_reason"] == "underpowered"
     assert summary["baseline"]["run_count"] == 1
     assert summary["candidate"]["run_count"] == 1
@@ -117,6 +123,7 @@ def test_summarize_benchmark_experiment_promotes_clear_candidate_win() -> None:
     summary = summarize_benchmark_experiment(experiment, runs)
 
     assert summary["decision"] == "promote"
+    assert summary["status"] == "closed"
     assert summary["decision_reason"] == "candidate_outperforms_baseline"
     assert summary["score_delta"]["mean_delta"] and summary["score_delta"]["mean_delta"] > 0
     assert summary["pass_rate_delta"]["mean_delta"] and summary["pass_rate_delta"]["mean_delta"] > 0
@@ -136,6 +143,7 @@ def test_summarize_benchmark_experiment_rolls_back_clear_candidate_loss() -> Non
     summary = summarize_benchmark_experiment(experiment, runs)
 
     assert summary["decision"] == "rollback"
+    assert summary["status"] == "closed"
     assert summary["decision_reason"] == "candidate_underperforms_baseline"
     assert summary["score_delta"]["mean_delta"] and summary["score_delta"]["mean_delta"] < 0
 
@@ -271,6 +279,57 @@ def test_should_update_regression_clusters_honors_explicit_override() -> None:
         experiment_cohort="candidate",
         metadata={"update_regression_clusters": True},
     ) is True
+
+
+def test_group_attempt_failures_skips_infra_failures() -> None:
+    grouped = _group_attempt_failures([
+        {
+            "case_id": "precision_search_architecture",
+            "failure_detail": "All connection attempts failed",
+            "failure_kind": "infra",
+            "infra_failure": True,
+            "passed": False,
+            "composite_score": 0.0,
+            "model_id": "codex/gpt-5.4",
+        },
+        {
+            "case_id": "precision_search_architecture",
+            "failure_detail": "wrong_fields: should_dispatch",
+            "failure_kind": "model",
+            "infra_failure": False,
+            "passed": False,
+            "composite_score": 20.0,
+            "model_id": "codex/gpt-5.4",
+        },
+    ])
+
+    assert list(grouped) == [("precision_search_architecture", "wrong_fields: should_dispatch")]
+
+
+@pytest.mark.asyncio
+async def test_refresh_experiment_decision_closes_finished_experiments() -> None:
+    experiment = _make_experiment(status="open", decision="hold", decision_reason=None, evidence={})
+    mock_db = AsyncMock()
+    run_result = MagicMock()
+    run_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = run_result
+
+    with patch(
+        "app.services._benchmark_persistence.summarize_benchmark_experiment",
+        return_value={
+            "decision": "promote",
+            "decision_reason": "candidate_outperforms_baseline",
+            "baseline": {},
+            "candidate": {},
+            "score_delta": {"mean_delta": 2.0},
+            "pass_rate_delta": {"mean_delta": 5.0},
+            "min_runs_per_cohort": 3,
+        },
+    ):
+        await _refresh_experiment_decision(mock_db, experiment)
+
+    assert experiment.decision == "promote"
+    assert experiment.status == "closed"
 
 
 @pytest.mark.asyncio

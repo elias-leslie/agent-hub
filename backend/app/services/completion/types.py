@@ -29,6 +29,7 @@ class CompletionOptions:
     # Memory options
     use_memory: bool = False
     memory_group_id: str | None = None
+    memory_variant_override: str | None = None
     store_as_episode: bool = False  # Store conversation in memory after completion
 
     # Caching

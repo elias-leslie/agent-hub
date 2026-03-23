@@ -11,6 +11,81 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _normalize_tags(tags: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for tag in tags or []:
+        cleaned = tag.strip()
+        if cleaned and cleaned not in normalized:
+            normalized.append(cleaned)
+    return normalized
+
+
+def _format_tags(tags: list[str]) -> str:
+    return ", ".join(tags) if tags else "(none)"
+
+
+async def _load_memory_tags(memory_uuid: str) -> tuple[str, list[str]]:
+    from app.services.memory.episode_property_queries import get_episode_tags
+    from app.services.memory.memory_utils import resolve_uuid_prefix
+
+    resolved_uuid = await resolve_uuid_prefix(memory_uuid)
+    current_tags = _normalize_tags(await get_episode_tags(resolved_uuid))
+    return resolved_uuid, current_tags
+
+
+async def _persist_memory_tags(memory_uuid: str, tags: list[str]) -> bool:
+    from app.services.memory.episode_property_setters import set_episode_tags
+
+    return await set_episode_tags(memory_uuid, tags)
+
+
+async def manage_memory_tags(
+    action: str,
+    memory_uuid: str | None,
+    tags: list[str] | None,
+) -> str:
+    """Inspect or mutate tags on a memory episode."""
+    if not memory_uuid:
+        return "Error: memory_uuid required for manage_memory_tags"
+
+    normalized_tags = _normalize_tags(tags)
+
+    try:
+        resolved_uuid, current_tags = await _load_memory_tags(memory_uuid)
+
+        if action == "get_tags":
+            return f"Memory {resolved_uuid[:8]} tags: {_format_tags(current_tags)}"
+
+        if action not in {"add_tags", "remove_tags"}:
+            return (
+                f"Error: Unknown action '{action}'. "
+                "Use get_tags/add_tags/remove_tags."
+            )
+
+        if not normalized_tags:
+            return f"Error: tags required for {action}"
+
+        updated_tags = list(current_tags)
+        if action == "add_tags":
+            for tag in normalized_tags:
+                if tag not in updated_tags:
+                    updated_tags.append(tag)
+        else:
+            remove_set = set(normalized_tags)
+            updated_tags = [tag for tag in updated_tags if tag not in remove_set]
+
+        if updated_tags == current_tags:
+            return f"Memory {resolved_uuid[:8]} tags unchanged: {_format_tags(current_tags)}"
+
+        success = await _persist_memory_tags(resolved_uuid, updated_tags)
+        if success:
+            return f"Updated tags for memory {resolved_uuid[:8]}: {_format_tags(updated_tags)}"
+        return f"Failed to update tags for memory {resolved_uuid[:8]}"
+    except Exception as e:
+        logger.exception("manage_memory_tags failed")
+        return f"Error managing memory tags: {e}"
+
+
 async def read_personality() -> str:
     """Read the persona's current personality document."""
     try:
@@ -225,18 +300,13 @@ async def write_heartbeat_instructions(heartbeat_instructions: str, reason: str)
 async def mark_memory_relevant(memory_uuid: str) -> str:
     """Add 'persona-relevant' tag to a memory episode."""
     try:
-        from app.services.memory.episode_property_queries import get_episode_tags
-        from app.services.memory.episode_property_setters import set_episode_tags
-        from app.services.memory.memory_utils import resolve_uuid_prefix
-
-        memory_uuid = await resolve_uuid_prefix(memory_uuid)
-        current_tags = await get_episode_tags(memory_uuid)
+        memory_uuid, current_tags = await _load_memory_tags(memory_uuid)
         tag = "persona-relevant"
         if tag in current_tags:
             return f"Memory {memory_uuid[:8]} already tagged as persona-relevant"
 
         current_tags.append(tag)
-        success = await set_episode_tags(memory_uuid, current_tags)
+        success = await _persist_memory_tags(memory_uuid, current_tags)
         if success:
             return f"Memory {memory_uuid[:8]} marked as persona-relevant"
         return f"Failed to tag memory {memory_uuid[:8]}"
@@ -248,18 +318,13 @@ async def mark_memory_relevant(memory_uuid: str) -> str:
 async def mark_memory_irrelevant(memory_uuid: str) -> str:
     """Remove 'persona-relevant' tag from a memory episode."""
     try:
-        from app.services.memory.episode_property_queries import get_episode_tags
-        from app.services.memory.episode_property_setters import set_episode_tags
-        from app.services.memory.memory_utils import resolve_uuid_prefix
-
-        memory_uuid = await resolve_uuid_prefix(memory_uuid)
-        current_tags = await get_episode_tags(memory_uuid)
+        memory_uuid, current_tags = await _load_memory_tags(memory_uuid)
         tag = "persona-relevant"
         if tag not in current_tags:
             return f"Memory {memory_uuid[:8]} is not tagged as persona-relevant"
 
         current_tags.remove(tag)
-        success = await set_episode_tags(memory_uuid, current_tags)
+        success = await _persist_memory_tags(memory_uuid, current_tags)
         if success:
             return f"Removed persona-relevant tag from memory {memory_uuid[:8]}"
         return f"Failed to update tags for memory {memory_uuid[:8]}"

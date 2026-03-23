@@ -110,6 +110,7 @@ class MemorySettings(Base):
     continuity_max_sessions: Mapped[int] = mapped_column(
         Integer, default=5, server_default="5"
     )
+    active_variant: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

@@ -139,6 +139,11 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Memory group ID for isolation (defaults to project_id)",
     )
+    memory_variant_override: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Optional memory injection variant override for experiments (e.g., BASELINE, MINIMAL).",
+    )
     task_type: str | None = Field(
         default=None,
         description="Task type for triggered reference injection (e.g., 'database', 'frontend', 'backend')",

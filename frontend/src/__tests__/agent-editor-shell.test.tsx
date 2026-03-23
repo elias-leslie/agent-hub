@@ -71,7 +71,7 @@ describe("agent editor shell", () => {
     );
     expect(screen.getByRole("link", { name: "Arena" })).toHaveAttribute(
       "href",
-      "/agents/coder/arena",
+      "/arena/coder",
     );
     expect(screen.getByRole("button", { name: "Back to agents" })).toBeInTheDocument();
   });

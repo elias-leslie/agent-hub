@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.services.memory.variants import MemoryVariant
+
 
 class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
@@ -9,6 +11,10 @@ class SettingsResponse(BaseModel):
     enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
     continuity_enabled: bool = Field(True, description="Include Recent Activity block")
     continuity_max_sessions: int = Field(5, description="Max sessions in Recent Activity")
+    active_variant: MemoryVariant | None = Field(
+        None,
+        description="Production default memory variant (null falls back to deterministic assignment)",
+    )
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -18,6 +24,10 @@ class SettingsUpdateRequest(BaseModel):
     continuity_enabled: bool | None = Field(None, description="Include Recent Activity block")
     continuity_max_sessions: int | None = Field(
         None, ge=1, le=20, description="Max sessions in Recent Activity"
+    )
+    active_variant: MemoryVariant | None = Field(
+        None,
+        description="Production default memory variant. Send null to clear.",
     )
 
 
