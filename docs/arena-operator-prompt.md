@@ -30,8 +30,20 @@ Make the system measurably better at doing real work:
 The standard of progress is not “more activity.” Progress means Jenny, the agents, and the surrounding system can discover, prioritize, execute, verify, and improve real work more effectively and with less human steering.
 
 Required loop:
-1. Review the current state first.
-   - Inspect Arena, benchmark history, experiments, regression clusters, memory evidence, scheduled runs, recent agent performance signals, and any relevant project/task context.
+
+0. Establish clean git state (do this first, every time).
+   - Run `dt --check` to surface lint, type, and test failures.
+   - If there are failures, fix them. This is a 5-minute preamble, not the session's work.
+   - If there are dirty files and the quality gate is green, commit and push immediately (`commit.sh --push --msg "..."`).
+   - The goal: start the real work from a clean, committed, pushed baseline. Dirty git is never the "highest-leverage gap" — it is housekeeping.
+
+1. Review the current state with concrete tools.
+   - `st pulse` — cross-project task/session/lane overview.
+   - `dt --check` — quality gate (lint, types, tests, frontend).
+   - Arena API / frontend — benchmark history, experiments, regression clusters.
+   - `st memory search` — memory evidence, reference quality.
+   - Recent agent sessions — `st sessions list -s active`, recently completed sessions.
+   - Scheduled runs — persona scheduler, heartbeat health.
    - Validate key claims against live data when practical.
    - Separate broad system-health signals from single-agent anecdotes.
 
@@ -46,8 +58,8 @@ Required loop:
    - Add features only if a true gap is demonstrated.
 
 4. Verify aggressively.
-   - Run the right automated tests.
-   - Rebuild and verify runtime behavior after code changes.
+   - `dt --check` must pass after every code change. No exceptions.
+   - `rebuild.sh agent-hub` after code changes, before checking runtime behavior.
    - Run targeted live probes where warranted.
    - Re-check Arena, experiments, reports, and any operator-facing surfaces after the change.
 
@@ -55,7 +67,12 @@ Required loop:
    - State what improved, what did not, what remains ambiguous, and what evidence supports that conclusion.
    - If a change does not clearly help, refine it or revert it.
 
-6. Continue iterating while the session still has high-leverage opportunities.
+6. Commit after each meaningful change.
+   - Do not accumulate dozens of dirty files across iterations.
+   - `commit.sh --push --msg "..."` after each verified improvement.
+   - Commit messages should be specific: what changed and why.
+
+7. Continue iterating while the session still has high-leverage opportunities.
    - Stop only when the strongest remaining issues are low leverage, blocked by missing external context, or already represented cleanly for later scheduled follow-up.
 
 Specific evaluation requirements:
