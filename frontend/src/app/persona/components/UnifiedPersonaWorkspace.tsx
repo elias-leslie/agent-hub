@@ -1167,6 +1167,7 @@ export function UnifiedPersonaWorkspace({
                         sessionEventDetails={sessionEventDetails}
                         narrationCache={narrationCache}
                         onFetchNarration={fetchNarrationTags}
+                        personaName={personaDisplayName}
                       />
                     </div>
                   );
@@ -1177,9 +1178,9 @@ export function UnifiedPersonaWorkspace({
                 const matched = matchedIds.has(item.id);
                 const activeMatched = activeMatchId === item.id;
                 const baseClasses = cn(
-                  "flex items-start gap-3 rounded-2xl",
-                  matched && "px-2 py-1 ring-1 ring-amber-200 dark:ring-amber-800",
-                  activeMatched && "ring-2 ring-amber-400 dark:ring-amber-500",
+                  "flex items-start gap-3 rounded-lg",
+                  matched && "px-2 py-1 ring-1 ring-amber-800",
+                  activeMatched && "ring-2 ring-amber-500",
                 );
 
                 return (
@@ -1225,6 +1226,7 @@ export function UnifiedPersonaWorkspace({
                               sessionEventDetails={sessionEventDetails}
                               narrationCache={narrationCache}
                               onFetchNarration={fetchNarrationTags}
+                              personaName={personaDisplayName}
                             />
                           )}
                         </div>
@@ -1248,7 +1250,7 @@ export function UnifiedPersonaWorkspace({
                             details={sessionEventDetails[item.sessionId]}
                             narrationTags={item.entry.external_id ? narrationCache[item.entry.external_id]?.tags : undefined}
                             narrationLoading={item.entry.external_id ? narrationCache[item.entry.external_id]?.loading : undefined}
-                            narrationError={item.entry.external_id ? narrationCache[item.entry.external_id]?.error : undefined}
+                            personaName={personaDisplayName}
                           />
                         </div>
                       </div>
@@ -1271,7 +1273,7 @@ export function UnifiedPersonaWorkspace({
                             details={sessionEventDetails[item.sessionId]}
                             narrationTags={item.entry.external_id ? narrationCache[item.entry.external_id]?.tags : undefined}
                             narrationLoading={item.entry.external_id ? narrationCache[item.entry.external_id]?.loading : undefined}
-                            narrationError={item.entry.external_id ? narrationCache[item.entry.external_id]?.error : undefined}
+                            personaName={personaDisplayName}
                           />
                           {row.childRuns.length > 0 && (
                             <ChildRunStack
@@ -1288,6 +1290,7 @@ export function UnifiedPersonaWorkspace({
                               sessionEventDetails={sessionEventDetails}
                               narrationCache={narrationCache}
                               onFetchNarration={fetchNarrationTags}
+                              personaName={personaDisplayName}
                             />
                           )}
                         </div>
