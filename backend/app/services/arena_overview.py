@@ -19,6 +19,8 @@ from app.models import (
 from app.services.benchmark_failure_classification import categorize_benchmark_failure_detail
 from app.services.improvement_signals import collect_improvement_signal_snapshot
 
+from ._benchmark_dashboard import benchmark_signal_run_clause
+
 
 def _round_metric(value: float | None, digits: int = 1) -> float | None:
     if value is None:
@@ -58,6 +60,7 @@ async def get_arena_overview(
                 AgentBenchmarkRun.agent_slug.in_(agent_slugs),
                 AgentBenchmarkRun.completed_at.is_not(None),
                 AgentBenchmarkRun.completed_at >= cutoff,
+                benchmark_signal_run_clause(AgentBenchmarkRun),
             )
             .group_by(AgentBenchmarkRun.agent_slug)
         )

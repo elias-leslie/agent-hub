@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services._benchmark_dashboard import is_signal_run_kind
 from app.services._benchmark_persistence import (
     _group_attempt_failures,
     _has_scored_attempts,
@@ -331,6 +332,14 @@ def test_should_update_regression_clusters_honors_explicit_override() -> None:
         experiment_cohort="candidate",
         metadata={"update_regression_clusters": True},
     ) is True
+
+
+def test_is_signal_run_kind_excludes_honing_iteration() -> None:
+    assert is_signal_run_kind("benchmark") is True
+    assert is_signal_run_kind("completion_review_benchmark") is True
+    assert is_signal_run_kind("honing_baseline") is True
+    assert is_signal_run_kind("honing_candidate") is True
+    assert is_signal_run_kind("honing_iteration") is False
 
 
 def test_group_attempt_failures_skips_infra_failures() -> None:

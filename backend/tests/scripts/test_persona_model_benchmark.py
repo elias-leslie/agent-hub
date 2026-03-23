@@ -566,6 +566,24 @@ def test_classify_failure_marks_authentication_failures_as_infra() -> None:
     assert kind == "infra"
 
 
+@pytest.mark.parametrize(
+    "detail",
+    [
+        "500: Completion cancelled unexpectedly.",
+        "sdk cancelled",
+        "tool loop cancelled",
+        "finalize cancelled",
+        "partial store cancelled",
+        "Claude SDK idle watchdog still armed during iterator unwind",
+    ],
+)
+def test_classify_failure_marks_runtime_cancellation_signatures_as_infra(detail: str) -> None:
+    infra, kind = classify_failure(detail)
+
+    assert infra is True
+    assert kind == "infra"
+
+
 def test_summarize_attempts_ranks_by_score_then_reliability() -> None:
     attempts = [
         PersonaBenchmarkAttempt(
