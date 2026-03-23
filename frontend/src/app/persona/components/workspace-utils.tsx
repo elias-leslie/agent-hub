@@ -124,8 +124,13 @@ export function humanizeTaskContextText(value: string): string {
 export function prettifyDisplayText(value: string): string {
   const extracted = extractWrappedTextPayload(value);
   const base = extracted ?? value;
-  // Strip [[P:type:content]] narration tags — they're shown separately in the narration timeline
-  const stripped = base.replace(/\[\[P:[a-z_]+:[^\]]*\]\]/g, "").replace(/\n{3,}/g, "\n\n");
+  // Strip observability tags — shown separately in narration timeline
+  const stripped = base
+    .replace(/\[\[P:[a-z_]+:[^\]]*\]?\]?/g, "")
+    .replace(/\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g, "")
+    .replace(/\[\[F:[^\]]*\]?\]?/g, "")
+    .replace(/\[\[S:[^\]]*\]?\]?/g, "")
+    .replace(/\n{3,}/g, "\n\n");
   return humanizeTaskContextText(unescapeDisplayText(stripped).trim());
 }
 

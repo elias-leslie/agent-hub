@@ -20,9 +20,9 @@ BASH_TOOL = Tool(
         "Execute a bash command in the working directory. "
         "Use for running tests, git operations, or system commands. "
         "Do not use bash/curl for ordinary public-web research when "
-        "`search_web` or `fetch_web_page` can do the job. If a bash-capable "
-        "agent needs the centralized web stack from shell, call "
-        "`web-research ...`."
+        "`search_web` or `fetch_web_page` can do the job. Never call the "
+        "`web-research` shell wrapper from Agent Hub bash; that wrapper is for "
+        "shell-only clients."
     ),
     input_schema={
         "type": "object",
@@ -162,7 +162,8 @@ SEARCH_WEB_TOOL = Tool(
         "Search the public web for current information and candidate sources. "
         "Use this for research, inspiration, or to find pages to inspect before "
         "calling `fetch_web_page`. Prefer this over bash/curl or provider-native "
-        "web tools for ordinary public-web research."
+        "web tools for ordinary public-web research. When this tool is available, "
+        "call it directly instead of routing through bash wrappers."
     ),
     input_schema={
         "type": "object",
@@ -206,7 +207,8 @@ FETCH_WEB_PAGE_TOOL = Tool(
         "Fetch a webpage and extract readable content. "
         "Use this after `search_web` or when you already have a URL and need the page text. "
         "Prefer this over bash/curl for public webpage retrieval. For large pages, "
-        "pass `focus_query` to return the most relevant sections."
+        "pass `focus_query` to return the most relevant sections. When this tool is "
+        "available, call it directly instead of routing through bash wrappers."
     ),
     input_schema={
         "type": "object",

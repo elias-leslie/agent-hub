@@ -46,6 +46,30 @@ import {
 import { describeValue } from "./workspace-event-details";
 import type { NarrationTag } from "../hooks/useNarrationTags";
 
+// ─── Strip observability tags from display text ───
+
+// Match [[P:type:content]] — requires opening [[ to avoid false positives
+const NARRATION_TAG_RE = /\[\[P:[a-z_]+:[^\]]*\]?\]?/g;
+// Match "Applied: [M:8hexchars]" citations — requires "Applied:" prefix or exact [M:hex] format
+const APPLIED_CITATION_RE = /\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g;
+// Match [[F:...]] feedback tags
+const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g;
+// Match [[S:...]] summary tags
+const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g;
+
+function cleanSummary(text: string | null | undefined): string {
+  if (!text) return "";
+  return text
+    .replace(NARRATION_TAG_RE, "")
+    .replace(APPLIED_CITATION_RE, "")
+    .replace(FEEDBACK_RE, "")
+    .replace(SUMMARY_RE, "")
+    .replace(/\.\.\./g, "…")
+    .replace(/\n{2,}/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 // ─── Helpers for extracting human-readable text from events ───
 
 function extractToolCallSummary(toolInput: unknown): string {
@@ -92,6 +116,9 @@ function isNoiseEvent(event: TimelineEvent): boolean {
     if (isPromptLikeText(event.content)) return true;
     if (isGenericStatusText(event.content)) return true;
     if (!event.content || event.content.trim().length === 0) return true;
+    // Filter out messages that are only observability tags with no real content
+    const cleaned = cleanSummary(event.content);
+    if (!cleaned || cleaned.length === 0) return true;
   }
   return false;
 }
@@ -204,7 +231,7 @@ function buildTranscriptItems(
         id: event.id,
         timestamp: event.created_at,
         kind: "message",
-        content: prettifyDisplayText(event.content) || "",
+        content: cleanSummary(prettifyDisplayText(event.content || "")),
       });
       continue;
     }
@@ -216,7 +243,7 @@ function buildTranscriptItems(
         id: event.id,
         timestamp: event.created_at,
         kind: "message",
-        content: prettifyDisplayText(event.content) || "",
+        content: cleanSummary(prettifyDisplayText(event.content || "")),
       });
       continue;
     }
@@ -306,12 +333,12 @@ function SessionTranscript({
                   expandedIds.has(item.id) ? (
                     <>
                       <span className="whitespace-pre-wrap">{item.content}</span>
-                      <button onClick={() => toggleExpand(item.id)} className="ml-1 text-slate-500 hover:text-slate-300">less</button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1 text-slate-500 hover:text-slate-300">less</button>
                     </>
                   ) : (
                     <>
                       {truncate(item.content, 200)}
-                      <button onClick={() => toggleExpand(item.id)} className="ml-1 text-slate-500 hover:text-slate-300">more</button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1 text-slate-500 hover:text-slate-300">more</button>
                     </>
                   )
                 ) : (
@@ -718,7 +745,7 @@ export function ChildRunCard({
       </div>
 
       <p className="mt-1 text-xs text-slate-400 leading-relaxed line-clamp-2">
-        {entry.summary_oneliner || entry.live_summary || `Running on ${entry.project_id}`}
+        {cleanSummary(entry.summary_oneliner) || cleanSummary(entry.live_summary) || `Running on ${entry.project_id}`}
       </p>
 
       {primaryIssue && !expanded && <EntryIssueSummary issueMarkers={issueMarkers} />}
@@ -789,7 +816,7 @@ export function HeartbeatCard({
       </div>
 
       <p className="mt-1 text-xs text-slate-400 leading-relaxed line-clamp-2">
-        {entry.summary_oneliner || entry.live_summary || "Routine check completed"}
+        {cleanSummary(entry.summary_oneliner) || cleanSummary(entry.live_summary) || "Routine check completed"}
       </p>
 
       {primaryIssue && !expanded && <EntryIssueSummary issueMarkers={issueMarkers} />}

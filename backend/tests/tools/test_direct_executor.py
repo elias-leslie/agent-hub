@@ -252,9 +252,11 @@ class TestStandardTools:
             "Ask the reviewer agent for risk-focused feedback after inspecting the code.",
         ]
         assert "Do not use bash/curl" in bash_tool.description
-        assert "`web-research ...`" in bash_tool.description
+        assert "Never call the `web-research` shell wrapper" in bash_tool.description
         assert "Prefer this over bash/curl" in search_tool.description
+        assert "call it directly" in search_tool.description
         assert "Prefer this over bash/curl" in fetch_tool.description
+        assert "call it directly" in fetch_tool.description
         assert "focus_query" in fetch_tool.input_schema["properties"]
         assert "large pages" in fetch_tool.input_schema["properties"]["focus_query"]["description"]
 

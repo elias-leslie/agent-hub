@@ -2,6 +2,21 @@ import type { ChatMessage } from "@agent-hub/chat-ui";
 import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
 import type { FeedItem, FeedChildRun, FeedAnchor, FeedMessage, FeedHeartbeat } from "./workspace-types";
 
+const NARRATION_TAG_RE = /\[\[P:[a-z_]+:[^\]]*\]?\]?/g;
+const APPLIED_CITATION_RE = /\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g;
+const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g;
+const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g;
+
+function stripObservabilityTags(text: string): string {
+  return text
+    .replace(NARRATION_TAG_RE, "")
+    .replace(APPLIED_CITATION_RE, "")
+    .replace(FEEDBACK_RE, "")
+    .replace(SUMMARY_RE, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export function isChildRunItem(item: FeedItem): item is FeedChildRun {
   return item.kind === "child_run";
 }
@@ -14,7 +29,7 @@ export function buildChatMessage(entry: PersonaStreamEntry): ChatMessage {
   return {
     id: entry.id,
     role: (entry.role as ChatMessage["role"]) || "assistant",
-    content: entry.content || "",
+    content: entry.content ? stripObservabilityTags(entry.content) : "",
     timestamp: new Date(entry.timestamp),
     agentName: entry.agent_slug || undefined,
     agentModel: entry.model || undefined,
