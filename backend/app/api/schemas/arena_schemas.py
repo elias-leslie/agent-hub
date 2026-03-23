@@ -94,6 +94,7 @@ class ArenaSystemSummary(BaseModel):
     avg_score: float | None = None
     avg_pass_rate: float | None = None
     total_regressions: int = 0
+    regressions_by_category: dict[str, int] = {}
 
 
 class ArenaOverviewResponse(BaseModel):

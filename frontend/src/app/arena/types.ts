@@ -87,6 +87,7 @@ export interface ArenaSystemSummary {
   avg_score: number | null;
   avg_pass_rate: number | null;
   total_regressions: number;
+  regressions_by_category: Record<string, number>;
 }
 
 export interface ArenaOverview {

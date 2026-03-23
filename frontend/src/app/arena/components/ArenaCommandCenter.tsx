@@ -309,7 +309,14 @@ export function ArenaCommandCenter() {
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
             <p className="text-xs uppercase tracking-wide text-slate-400">Open decision regressions</p>
             <p className="mt-3 text-3xl font-semibold text-slate-50">{overview.system.total_regressions}</p>
-            <p className="mt-2 text-sm text-slate-400">Counts behavior misses only; format and tooling issues are labeled below</p>
+            {Object.keys(overview.system.regressions_by_category ?? {}).length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">
+                {Object.entries(overview.system.regressions_by_category)
+                  .map(([cat, count]) => `${cat}: ${count}`)
+                  .join(" · ")}
+              </p>
+            )}
+            <p className="mt-2 text-sm text-slate-400">Headline counts behavior misses; breakdown shows all categories</p>
           </div>
         </section>
 

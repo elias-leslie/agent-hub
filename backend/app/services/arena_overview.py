@@ -43,6 +43,7 @@ async def get_arena_overview(
 
     benchmark_rows: dict[str, dict[str, Any]] = {}
     regression_rows: dict[str, int] = {}
+    regression_by_category: dict[str, int] = {}
     if agent_slugs:
         benchmark_stmt = (
             select(
@@ -89,10 +90,11 @@ async def get_arena_overview(
         )
         regression_result = (await db.execute(regression_stmt)).all()
         for row in regression_result:
-            failure_category = categorize_benchmark_failure_detail(str(row.failure_detail or ""))
-            if failure_category != "behavior":
-                continue
-            regression_rows[str(row.agent_slug)] = regression_rows.get(str(row.agent_slug), 0) + 1
+            failure_category = categorize_benchmark_failure_detail(str(row.failure_detail or "")) or "unknown"
+            regression_by_category[failure_category] = regression_by_category.get(failure_category, 0) + 1
+            if failure_category == "behavior":
+                slug = str(row.agent_slug)
+                regression_rows[slug] = regression_rows.get(slug, 0) + 1
 
     persona_id_stmt = (
         select(Persona.id)
@@ -202,6 +204,7 @@ async def get_arena_overview(
             "avg_score": _round_metric(sum(score_values) / len(score_values)) if score_values else None,
             "avg_pass_rate": _round_metric(sum(pass_values) / len(pass_values)) if pass_values else None,
             "total_regressions": total_regressions,
+            "regressions_by_category": regression_by_category,
         },
         "scheduled_jobs": scheduled_jobs,
         "agent_signal_volume": signal_snapshot["agent_signal_volume"],
