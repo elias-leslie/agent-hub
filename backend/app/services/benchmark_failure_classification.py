@@ -39,13 +39,14 @@ _TOOLING_FAILURE_MARKERS = (
 
 
 def classify_benchmark_failure_detail(detail: str | None) -> tuple[bool, str | None]:
-    """Classify a failure as infra or model-quality related."""
-    if not detail:
+    """Classify a failure as infra or model-quality related.
+
+    Delegates to categorize_benchmark_failure_detail for the single source of truth.
+    """
+    category = categorize_benchmark_failure_detail(detail)
+    if category is None:
         return False, None
-    lower = detail.lower()
-    if any(marker in lower for marker in _INFRA_FAILURE_MARKERS):
-        return True, "infra"
-    return False, "model"
+    return category == "infra", category if category == "infra" else "model"
 
 
 def categorize_benchmark_failure_detail(detail: str | None) -> str | None:
