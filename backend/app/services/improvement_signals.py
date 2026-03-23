@@ -268,7 +268,9 @@ async def collect_improvement_signal_snapshot(
         if project_id:
             experiment_stmt = experiment_stmt.where(AgentBenchmarkExperiment.project_id == project_id)
         experiment_stmt = experiment_stmt.order_by(
-            AgentBenchmarkExperiment.updated_at.desc()
+            # Show open experiments first, then most recently updated
+            (AgentBenchmarkExperiment.status == "open").desc(),
+            AgentBenchmarkExperiment.updated_at.desc(),
         ).limit(max_experiments)
         experiments = list((await db.execute(experiment_stmt)).scalars().all())
 
@@ -305,9 +307,9 @@ async def collect_improvement_signal_snapshot(
                 "suite_id": str(experiment.suite_id),
                 "decision": str(summary.get("decision") or "hold"),
                 "decision_reason": summary.get("decision_reason"),
-                "score_delta": float((summary.get("score_delta") or {}).get("mean") or 0.0),
+                "score_delta": float((summary.get("score_delta") or {}).get("mean_delta") or 0.0),
                 "pass_rate_delta": float(
-                    (summary.get("pass_rate_delta") or {}).get("mean") or 0.0
+                    (summary.get("pass_rate_delta") or {}).get("mean_delta") or 0.0
                 ),
             })
 

@@ -123,8 +123,8 @@ async def test_collect_improvement_signal_snapshot_returns_structured_evidence()
                 return_value={
                     "decision": "hold",
                     "decision_reason": "underpowered",
-                    "score_delta": {"mean": -0.5},
-                    "pass_rate_delta": {"mean": 0.0},
+                    "score_delta": {"mean_delta": -0.5},
+                    "pass_rate_delta": {"mean_delta": 0.0},
                 }
             ),
         ),
@@ -286,8 +286,8 @@ async def test_build_improvement_signal_digest_combines_evidence_sources() -> No
                 return_value={
                     "decision": "hold",
                     "decision_reason": "underpowered",
-                    "score_delta": {"mean": -0.5},
-                    "pass_rate_delta": {"mean": 0.0},
+                    "score_delta": {"mean_delta": -0.5},
+                    "pass_rate_delta": {"mean_delta": 0.0},
                 }
             ),
         ),
