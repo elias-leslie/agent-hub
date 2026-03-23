@@ -42,6 +42,8 @@ _DEFAULT_INTERVAL_MINUTES = 60
 class HeartbeatInput(BaseModel):
     manual: bool = False
     target_project_id: str | None = None
+    heartbeat_session_id: str | None = None
+    running_claimed: bool = False
 
 
 class HeartbeatResult(BaseModel):
@@ -76,6 +78,11 @@ class HeartbeatRuntimeInfo(BaseModel):
     supports_session_cache: bool
     heartbeat_supported: bool
     warnings: list[str] = []
+
+
+def create_heartbeat_session_id() -> str:
+    """Return a stable UUID string for one heartbeat run."""
+    return str(uuid4())
 
 
 async def _resolve_persona(
@@ -360,9 +367,10 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
         ctx.log(f"Heartbeat skipped ({runtime_skip})")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes, error=runtime_skip).model_dump()
 
-    heartbeat_session_id = str(uuid4())
-    await record_heartbeat_attempt(session_id=heartbeat_session_id)
-    await set_heartbeat_running(session_id=heartbeat_session_id)
+    heartbeat_session_id = input.heartbeat_session_id or create_heartbeat_session_id()
+    if not input.running_claimed:
+        await record_heartbeat_attempt(session_id=heartbeat_session_id)
+        await set_heartbeat_running(session_id=heartbeat_session_id)
     try:
         result, model_review_due = await _do_completion(
             interval_minutes,

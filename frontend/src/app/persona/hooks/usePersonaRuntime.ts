@@ -144,7 +144,7 @@ export interface PersonaRuntimeState {
   stopActiveWork: () => Promise<{ cancelled: number; attempted: number }>;
 }
 
-export function usePersonaRuntime(): PersonaRuntimeState {
+export function usePersonaRuntime(preferredSessionId: string | null = null): PersonaRuntimeState {
   const [activePersonaSessions, setActivePersonaSessions] = useState<SessionListItem[]>([]);
   const [activeChildSessions, setActiveChildSessions] = useState<SessionListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -228,6 +228,16 @@ export function usePersonaRuntime(): PersonaRuntimeState {
   }, [activePersonaSessions.length, activeChildSessions.length, liveEventsStatus]);
 
   const primarySession = useMemo(() => {
+    if (preferredSessionId) {
+      const preferredPersonaSession = activePersonaSessions.find((session) => session.id === preferredSessionId);
+      if (preferredPersonaSession) {
+        return preferredPersonaSession;
+      }
+      const preferredChildSession = activeChildSessions.find((session) => session.id === preferredSessionId);
+      if (preferredChildSession) {
+        return preferredChildSession;
+      }
+    }
     if (activePersonaSessions.length > 0) {
       return activePersonaSessions[0];
     }
@@ -235,7 +245,7 @@ export function usePersonaRuntime(): PersonaRuntimeState {
       return activeChildSessions[0];
     }
     return null;
-  }, [activeChildSessions, activePersonaSessions]);
+  }, [activeChildSessions, activePersonaSessions, preferredSessionId]);
 
   const runtimeSyncKey = useMemo(() => {
     const personaKey = activePersonaSessions.map((session) => `${session.id}:${session.updated_at}`).join("|");

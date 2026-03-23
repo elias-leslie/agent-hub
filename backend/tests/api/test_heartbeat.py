@@ -276,15 +276,33 @@ class TestHeartbeatTrigger:
                 return_value=True,
             ),
             patch(
+                "app.api.heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.api.heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch(
                 "app.api.heartbeat.persona_heartbeat_task",
             ) as mock_task,
+            patch(
+                "app.api.heartbeat.create_heartbeat_session_id",
+                return_value="hb-session-123",
+            ),
         ):
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "dispatched"
+        assert data["session_id"] == "hb-session-123"
+        mock_attempt.assert_awaited_once_with(session_id="hb-session-123")
+        mock_set_running.assert_awaited_once_with(session_id="hb-session-123")
         mock_task.run_no_wait.assert_called_once()
+        heartbeat_input = mock_task.run_no_wait.call_args.args[0]
+        assert heartbeat_input.heartbeat_session_id == "hb-session-123"
+        assert heartbeat_input.running_claimed is True
 
     def test_heartbeat_trigger_with_target_project_dispatches_scoped_run(self, api_client):
         with (
@@ -309,11 +327,23 @@ class TestHeartbeatTrigger:
                 return_value=True,
             ) as mock_permission,
             patch(
+                "app.api.heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.api.heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch(
                 "app.api.heartbeat.persona_heartbeat_task",
             ) as mock_task,
             patch(
                 "app.constants.VALID_PROJECT_IDS",
                 frozenset({"agent-hub", "persona-sandbox"}),
+            ),
+            patch(
+                "app.api.heartbeat.create_heartbeat_session_id",
+                return_value="hb-session-agent-hub",
             ),
         ):
             response = api_client.post("/api/heartbeat/trigger", json={"target_project_id": "agent-hub"})
@@ -321,22 +351,81 @@ class TestHeartbeatTrigger:
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Heartbeat triggered for agent-hub"
+        assert data["session_id"] == "hb-session-agent-hub"
+        mock_attempt.assert_awaited_once_with(session_id="hb-session-agent-hub")
+        mock_set_running.assert_awaited_once_with(session_id="hb-session-agent-hub")
         mock_permission.assert_awaited_once_with("agent-hub")
         mock_task.run_no_wait.assert_called_once()
         heartbeat_input = mock_task.run_no_wait.call_args.args[0]
         assert heartbeat_input.manual is True
         assert heartbeat_input.target_project_id == "agent-hub"
+        assert heartbeat_input.heartbeat_session_id == "hb-session-agent-hub"
+        assert heartbeat_input.running_claimed is True
 
     def test_heartbeat_trigger_when_running_returns_409(self, api_client):
         with patch(
             "app.api.heartbeat._get_effective_running_info",
             new_callable=AsyncMock,
-            return_value={"started_at": "2026-03-03T10:00:00+00:00", "elapsed_seconds": 30},
+            return_value={
+                "started_at": "2026-03-03T10:00:00+00:00",
+                "elapsed_seconds": 30,
+                "session_id": "hb-session-running",
+            },
         ):
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 409
         assert "already in progress" in response.json()["message"]
+        assert response.json()["running_session_id"] == "hb-session-running"
+
+    def test_heartbeat_trigger_clears_reserved_lock_if_dispatch_fails(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat._get_effective_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.api.heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.api.heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.api.heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_clear,
+            patch(
+                "app.api.heartbeat.persona_heartbeat_task",
+            ) as mock_task,
+            patch(
+                "app.api.heartbeat.create_heartbeat_session_id",
+                return_value="hb-session-fail",
+            ),
+        ):
+            mock_task.run_no_wait.side_effect = RuntimeError("queue unavailable")
+            response = api_client.post("/api/heartbeat/trigger")
+
+        assert response.status_code == 503
+        assert "Failed to dispatch heartbeat" in response.json()["message"]
+        mock_clear.assert_awaited_once()
 
     def test_heartbeat_trigger_when_not_onboarded_returns_400(self, api_client):
         with (

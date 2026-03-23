@@ -51,9 +51,6 @@ const STATUS_DOT: Record<RuntimeLabel, string> = {
 function PersonaContent() {
   const { persona, loading: personaLoading, error: personaError, updatePersona } = usePersona();
   const { status: heartbeatStatus, trigger: triggerHeartbeat, isTriggering } = useHeartbeat();
-  const runtime = usePersonaRuntime();
-  const toast = useToastActions();
-
   const {
     activeSessionId,
     sidebarRefreshTrigger,
@@ -61,6 +58,8 @@ function PersonaContent() {
     handleSelectSession,
     handleNewSession,
   } = useChatSession();
+  const runtime = usePersonaRuntime(activeSessionId);
+  const toast = useToastActions();
 
   const isHeartbeatRunning = heartbeatStatus?.running || isTriggering;
   const heartbeatTooltip = heartbeatStatus?.last_run
@@ -113,6 +112,13 @@ function PersonaContent() {
     );
   };
 
+  const handleHeartbeatTrigger = async () => {
+    const sessionId = await triggerHeartbeat();
+    if (sessionId) {
+      handleSelectSession(sessionId);
+    }
+  };
+
   if (personaLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-slate-950">
@@ -157,7 +163,7 @@ function PersonaContent() {
             {/* Heartbeat trigger when idle */}
             {!isActive && !personaPaused && (
               <button
-                onClick={triggerHeartbeat}
+                onClick={handleHeartbeatTrigger}
                 disabled={isHeartbeatRunning}
                 aria-busy={isHeartbeatRunning}
                 className={cn(

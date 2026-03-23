@@ -138,6 +138,7 @@ export interface HeartbeatRuntimeInfo {
 export interface HeartbeatTriggerResponse {
   status: string;
   message: string;
+  session_id: string | null;
 }
 
 export async function fetchHeartbeatStatus(): Promise<HeartbeatStatusResponse> {
@@ -151,7 +152,11 @@ export async function fetchHeartbeatStatus(): Promise<HeartbeatStatusResponse> {
 export async function triggerHeartbeat(): Promise<HeartbeatTriggerResponse> {
   const response = await fetchApi(`${API_BASE}/heartbeat/trigger`, { method: "POST" });
   if (response.status === 409) {
-    throw new HeartbeatConflictError("Heartbeat already in progress");
+    const data = await response.json().catch(() => ({}));
+    throw new HeartbeatConflictError(
+      typeof data.message === "string" ? data.message : "Heartbeat already in progress",
+      typeof data.running_session_id === "string" ? data.running_session_id : null,
+    );
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
@@ -161,8 +166,11 @@ export async function triggerHeartbeat(): Promise<HeartbeatTriggerResponse> {
 }
 
 export class HeartbeatConflictError extends Error {
-  constructor(message: string) {
+  runningSessionId: string | null;
+
+  constructor(message: string, runningSessionId: string | null = null) {
     super(message);
     this.name = "HeartbeatConflictError";
+    this.runningSessionId = runningSessionId;
   }
 }

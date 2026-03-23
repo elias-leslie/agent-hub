@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,62 @@ const mockHandleNewSession = vi.fn();
 const mockHandleSessionCreated = vi.fn();
 const mockStopCurrentStream = vi.fn();
 const mockStopActiveWork = vi.fn();
+const mockToastSuccess = vi.fn();
+const mockToastWarning = vi.fn();
+
+const mockHeartbeatState = {
+  status: {
+    running: false,
+    last_run: "2026-03-09T12:00:00Z",
+  },
+  isTriggering: false,
+};
+
+type MockPrimarySession =
+  | {
+      id: string;
+      updated_at: string;
+      live_activity: {
+        phase: string;
+        summary: string;
+        current_tool_name: string;
+        files_touched: string[];
+      };
+    }
+  | null;
+
+const mockRuntimeState: {
+  primarySession: MockPrimarySession;
+  activePersonaSessions: Array<{ id: string }>;
+  activeChildSessions: Array<{ id: string }>;
+  loading: boolean;
+  error: string | null;
+  stoppingSessionId: string | null;
+  runtimeSyncKey: string;
+  refresh: ReturnType<typeof vi.fn>;
+  stopCurrentStream: typeof mockStopCurrentStream;
+  stopActiveWork: typeof mockStopActiveWork;
+} = {
+  primarySession: {
+    id: "hb-1",
+    updated_at: "2026-03-09T12:01:00Z",
+    live_activity: {
+      phase: "running_tool",
+      summary: "Running validation",
+      current_tool_name: "dt -q -d",
+      files_touched: ["frontend/src/app/persona/page.tsx"],
+    },
+  },
+  activePersonaSessions: [{ id: "hb-1" }],
+  activeChildSessions: [{ id: "child-1" }],
+  loading: false,
+  error: null,
+  stoppingSessionId: null,
+  runtimeSyncKey: "",
+  refresh: vi.fn(),
+  stopCurrentStream: mockStopCurrentStream,
+  stopActiveWork: mockStopActiveWork,
+};
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => ({
@@ -20,8 +76,8 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/components/error/toast", () => ({
   useToastActions: () => ({
-    success: vi.fn(),
-    warning: vi.fn(),
+    success: mockToastSuccess,
+    warning: mockToastWarning,
     error: vi.fn(),
   }),
 }));
@@ -62,37 +118,14 @@ vi.mock("@/app/persona/hooks/usePersona", () => ({
 
 vi.mock("@/app/persona/hooks/useHeartbeat", () => ({
   useHeartbeat: () => ({
-    status: {
-      running: false,
-      last_run: "2026-03-09T12:00:00Z",
-    },
+    status: mockHeartbeatState.status,
     trigger: mockTriggerHeartbeat,
-    isTriggering: false,
+    isTriggering: mockHeartbeatState.isTriggering,
   }),
 }));
 
 vi.mock("@/app/persona/hooks/usePersonaRuntime", () => ({
-  usePersonaRuntime: () => ({
-    primarySession: {
-      id: "hb-1",
-      updated_at: "2026-03-09T12:01:00Z",
-      live_activity: {
-        phase: "running_tool",
-        summary: "Running validation",
-        current_tool_name: "dt -q -d",
-        files_touched: ["frontend/src/app/persona/page.tsx"],
-      },
-    },
-    activePersonaSessions: [{ id: "hb-1" }],
-    activeChildSessions: [{ id: "child-1" }],
-    loading: false,
-    error: null,
-    stoppingSessionId: null,
-    runtimeSyncKey: "",
-    refresh: vi.fn(),
-    stopCurrentStream: mockStopCurrentStream,
-    stopActiveWork: mockStopActiveWork,
-  }),
+  usePersonaRuntime: () => mockRuntimeState,
 }));
 
 vi.mock("@/app/chat/hooks/useChatSession", () => ({
@@ -108,48 +141,76 @@ vi.mock("@/app/chat/hooks/useChatSession", () => ({
 describe("PersonaPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHeartbeatState.status = {
+      running: false,
+      last_run: "2026-03-09T12:00:00Z",
+    };
+    mockHeartbeatState.isTriggering = false;
+    mockRuntimeState.primarySession = {
+      id: "hb-1",
+      updated_at: "2026-03-09T12:01:00Z",
+      live_activity: {
+        phase: "running_tool",
+        summary: "Running validation",
+        current_tool_name: "dt -q -d",
+        files_touched: ["frontend/src/app/persona/page.tsx"],
+      },
+    };
+    mockRuntimeState.activePersonaSessions = [{ id: "hb-1" }];
+    mockRuntimeState.activeChildSessions = [{ id: "child-1" }];
+    mockRuntimeState.stoppingSessionId = null;
   });
 
-  it("renders the unified workspace", async () => {
+  it("renders the unified workspace and active runtime summary", () => {
     render(<PersonaPage />);
 
-    expect(await screen.findByText("Unified workspace")).toBeInTheDocument();
     expect(screen.getByTestId("unified-workspace")).toHaveTextContent("workspace:sess-123");
     expect(screen.getByText("Running validation")).toBeInTheDocument();
-    expect(screen.getByText("dt -q -d")).toBeInTheDocument();
+    expect(screen.getByTitle("Stop Avery")).toBeInTheDocument();
   });
 
   it("pauses the persona from the main workspace header", async () => {
+    mockStopCurrentStream.mockResolvedValueOnce(true);
+
     render(<PersonaPage />);
 
-    fireEvent.click(await screen.findByText("Pause Avery"));
+    fireEvent.click(screen.getByTitle("Pause Avery"));
 
     expect(mockUpdatePersona).toHaveBeenCalledWith({
       execution_state: "paused",
     });
     expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("Avery paused and live stream stopped");
+    });
   });
 
-  it("triggers a manual heartbeat from the main workspace header", async () => {
+  it("triggers a manual heartbeat and selects the dispatched session when idle", async () => {
+    mockRuntimeState.primarySession = null;
+    mockRuntimeState.activePersonaSessions = [];
+    mockRuntimeState.activeChildSessions = [];
+    mockTriggerHeartbeat.mockResolvedValueOnce("hb-idle-1");
+
     render(<PersonaPage />);
 
-    fireEvent.click(await screen.findByText("Heartbeat"));
+    fireEvent.click(screen.getByText("Heartbeat"));
 
     expect(mockTriggerHeartbeat).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockHandleSelectSession).toHaveBeenCalledWith("hb-idle-1");
+    });
   });
 
-  it("starts a new thread from the runtime controls", async () => {
+  it("stops all active work from the runtime header", async () => {
+    mockStopActiveWork.mockResolvedValueOnce({ cancelled: 2, attempted: 2 });
+
     render(<PersonaPage />);
 
-    fireEvent.click(await screen.findByText("New thread"));
+    fireEvent.click(screen.getByTitle("Stop Avery"));
 
-    expect(mockHandleNewSession).toHaveBeenCalledTimes(1);
-  });
-
-  it("exposes Arena from the workspace header", async () => {
-    render(<PersonaPage />);
-
-    const arenaLink = await screen.findByTitle("View in Arena");
-    expect(arenaLink).toHaveAttribute("href", "/arena/persona");
+    expect(mockStopActiveWork).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockToastSuccess).toHaveBeenCalledWith("Stopped 2 active Avery sessions");
+    });
   });
 });

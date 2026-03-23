@@ -418,6 +418,151 @@ class TestPersonaHeartbeatTask:
         mock_permission.assert_awaited_once_with("agent-hub")
         mock_do_completion.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_manual_heartbeat_reuses_provided_session_id(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    heartbeat_supported=True,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch(
+                "app.workflows.persona_heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat._do_completion",
+                new_callable=AsyncMock,
+                return_value=(SimpleNamespace(content="HEARTBEAT_OK"), False),
+            ) as mock_do_completion,
+            patch(
+                "app.workflows.persona_heartbeat.postprocess_heartbeat",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    status="success",
+                    turns=1,
+                    tool_calls=0,
+                    model_dump=lambda: {"status": "success", "turns": 1, "tool_calls": 0},
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await _run_persona_heartbeat(
+                HeartbeatInput(manual=True, heartbeat_session_id="hb-session-provided"),
+                ctx,
+            )
+
+        assert result["status"] == "success"
+        mock_attempt.assert_awaited_once_with(session_id="hb-session-provided")
+        mock_set_running.assert_awaited_once_with(session_id="hb-session-provided")
+        mock_do_completion.assert_awaited_once()
+        assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-provided"
+
+    @pytest.mark.asyncio
+    async def test_manual_heartbeat_skips_reclaim_when_api_already_reserved_run(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    heartbeat_supported=True,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch(
+                "app.workflows.persona_heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.workflows.persona_heartbeat._do_completion",
+                new_callable=AsyncMock,
+                return_value=(SimpleNamespace(content="HEARTBEAT_OK"), False),
+            ) as mock_do_completion,
+            patch(
+                "app.workflows.persona_heartbeat.postprocess_heartbeat",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    status="success",
+                    turns=1,
+                    tool_calls=0,
+                    model_dump=lambda: {"status": "success", "turns": 1, "tool_calls": 0},
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await _run_persona_heartbeat(
+                HeartbeatInput(
+                    manual=True,
+                    heartbeat_session_id="hb-session-reserved",
+                    running_claimed=True,
+                ),
+                ctx,
+            )
+
+        assert result["status"] == "success"
+        mock_attempt.assert_not_awaited()
+        mock_set_running.assert_not_awaited()
+        assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-reserved"
+
 
 class TestHeartbeatCompletionRouting:
     """Tests that Claude and Codex use the same heartbeat execution contract."""

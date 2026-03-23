@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -18,12 +19,15 @@ from app.workflows._heartbeat_redis import (
     get_heartbeat_running_info,
     get_heartbeat_state,
     get_last_run_info,
+    record_heartbeat_attempt,
+    set_heartbeat_running,
 )
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_PROJECT,
     HeartbeatInput,
     HeartbeatRuntimeInfo,
     check_project_permission,
+    create_heartbeat_session_id,
     get_heartbeat_interval,
     get_heartbeat_runtime_info,
     get_persona_execution_state,
@@ -62,6 +66,7 @@ class HeartbeatStatusResponse(BaseModel):
 class HeartbeatTriggerResponse(BaseModel):
     status: str
     message: str
+    session_id: str | None = None
 
 
 class HeartbeatTriggerRequest(BaseModel):
@@ -158,7 +163,9 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
 
 
 @router.post("/trigger", response_model=HeartbeatTriggerResponse)
-async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> HeartbeatTriggerResponse:
+async def heartbeat_trigger(
+    request: HeartbeatTriggerRequest | None = None,
+) -> HeartbeatTriggerResponse | JSONResponse:
     """Manually trigger a heartbeat. Returns 409 if already running."""
     from app.constants import VALID_PROJECT_IDS
 
@@ -169,9 +176,13 @@ async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> H
     # Check if already running
     running_info = await _get_effective_running_info()
     if running_info:
-        raise HTTPException(
+        return JSONResponse(
             status_code=409,
-            detail=f"Heartbeat already in progress (started {running_info['elapsed_seconds']}s ago)",
+            content={
+                "error": "http_error",
+                "message": f"Heartbeat already in progress (started {running_info['elapsed_seconds']}s ago)",
+                "running_session_id": running_info.get("session_id"),
+            },
         )
 
     # Check onboarding
@@ -187,14 +198,32 @@ async def heartbeat_trigger(request: HeartbeatTriggerRequest | None = None) -> H
         raise HTTPException(status_code=403, detail=f"Heartbeat project permission is off for {permission_project}")
 
     # Dispatch via Hatchet (fire-and-forget)
-    persona_heartbeat_task.run_no_wait(
-        HeartbeatInput(manual=True, target_project_id=target_project_id)
-    )
+    heartbeat_session_id = create_heartbeat_session_id()
+    await record_heartbeat_attempt(session_id=heartbeat_session_id)
+    await set_heartbeat_running(session_id=heartbeat_session_id)
+    try:
+        persona_heartbeat_task.run_no_wait(
+            HeartbeatInput(
+                manual=True,
+                target_project_id=target_project_id,
+                heartbeat_session_id=heartbeat_session_id,
+                running_claimed=True,
+            )
+        )
+    except Exception as exc:
+        await clear_heartbeat_running()
+        logger.exception("Failed to dispatch manual heartbeat for target=%s", target_project_id or "persona-sandbox")
+        raise HTTPException(status_code=503, detail=f"Failed to dispatch heartbeat: {exc}") from exc
     logger.info("Manual heartbeat triggered via API for target=%s", target_project_id or "persona-sandbox")
 
     if target_project_id:
         return HeartbeatTriggerResponse(
             status="dispatched",
             message=f"Heartbeat triggered for {target_project_id}",
+            session_id=heartbeat_session_id,
         )
-    return HeartbeatTriggerResponse(status="dispatched", message="Heartbeat triggered")
+    return HeartbeatTriggerResponse(
+        status="dispatched",
+        message="Heartbeat triggered",
+        session_id=heartbeat_session_id,
+    )
