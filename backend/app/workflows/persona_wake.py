@@ -116,7 +116,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
     # Hatchet step-run dedup ID (only used for replay detection, not as external_id)
     step_dedup_id = f"wake-step:{ctx.step_run_id}" if getattr(ctx, "step_run_id", None) else None
 
-    # Resolve max_turns: explicit > persona limit > 200 fallback
+    # Resolve max_turns: explicit > persona limit/default
     from app.services._persona_crud import get_persona_limit
     from app.services.persona_service import get_persona
 
@@ -143,7 +143,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             max_turns = input.max_turns
         else:
             persona = await get_persona(db)
-            max_turns = get_persona_limit(persona, "max_turns") or 200
+            max_turns = get_persona_limit(persona, "max_turns")
 
         try:
             result = await complete_internal(

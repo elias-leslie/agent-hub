@@ -204,3 +204,46 @@ class TestStreamCompletionGenerator:
             error_chunks = [c for c in chunks if '"type":"error"' in c]
             assert len(error_chunks) == 1
             assert "API error occurred" in error_chunks[0]
+
+    @pytest.mark.asyncio
+    async def test_tool_stream_uses_shared_turn_budget(self):
+        """Streaming tool execution should use the same min-turn policy as non-streaming."""
+        from unittest.mock import AsyncMock, patch
+
+        captured: dict[str, int] = {}
+
+        async def fake_tool_loop(
+            adapter: object,
+            messages: list[Message],
+            model: str,
+            max_tokens: int | None,
+            temperature: float,
+            stream_kwargs: dict[str, object],
+            content_buf: list[str],
+            ctx: object,
+            project_id: str | None,
+            max_tool_turns: int,
+        ):
+            captured["max_tool_turns"] = max_tool_turns
+            yield "data: done\n\n"
+
+        with (
+            patch("app.api.complete.streaming.get_adapter") as mock_get_adapter,
+            patch("app.api.complete.streaming.iter_stream_sse_with_tools", new=fake_tool_loop),
+        ):
+            mock_get_adapter.return_value = AsyncMock()
+
+            chunks = []
+            async for chunk in stream_completion(
+                messages=[Message(role="user", content="Hi")],
+                model=CLAUDE_SONNET,
+                provider="codex",
+                temperature=0.7,
+                session_id="test-session",
+                tools=[{"name": "noop", "description": "noop", "input_schema": {"type": "object"}}],
+                max_tool_turns=1,
+            ):
+                chunks.append(chunk)
+
+        assert captured["max_tool_turns"] == 3
+        assert chunks[0].startswith("data: ")

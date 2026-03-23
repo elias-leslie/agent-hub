@@ -412,6 +412,37 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
             required_project_id="agent-hub",
         ),
         PersonaBenchmarkCase(
+            case_id="web_research_stack_lookup",
+            family="tooling",
+            name="Web Research Stack Lookup",
+            description="Use the shared web research tools to validate markdown-first retrieval before deciding.",
+            scenario=(
+                "Use search_web and fetch_web_page before answering.\n"
+                "TASK: task-7788\n"
+                "status=pending\n"
+                "priority=P1\n"
+                "ready=yes\n"
+                "objective=Decide whether Jenny should adopt the existing shared web research stack, or block and build yet another bespoke web scraper first.\n"
+                "external_validation=Search for Cloudflare Markdown for Agents and inspect the current public page that explains markdown-friendly agent retrieval.\n"
+                "decision_rule=If the shared stack can already retrieve concise markdown or focused page text from that public source, the persona should dispatch adoption/alignment work rather than re-implementing another fetcher.\n"
+                "question=What should the persona do next?\n"
+            ),
+            expected={
+                "case_id": "web_research_stack_lookup",
+                "primary_action": "dispatch",
+                "should_dispatch": True,
+                "should_close": False,
+            },
+            required_tool_names=("search_web", "fetch_web_page"),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("shared", "markdown"),
+            summary_term_alternatives={
+                "shared": ("central", "first-party", "existing stack", "adopt"),
+                "markdown": ("focused page text", "direct markdown", "markdown-first"),
+            },
+        ),
+        PersonaBenchmarkCase(
             case_id="review_request_routes_to_reviewer",
             family="delegation",
             name="Review Request Routes To Reviewer",

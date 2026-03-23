@@ -5,8 +5,7 @@ from __future__ import annotations
 _OPENAI_COMPAT_TOOL_PROVIDERS = frozenset(
     {"openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "codex"}
 )
-_OPENAI_COMPAT_TOOL_MIN_TURNS = 20
-_NATIVE_TOOL_MIN_TURNS = 5
+_MIN_TOOL_COMPLETION_TURNS = 3
 
 
 def uses_openai_compat_tool_loop(provider: str) -> bool:
@@ -15,9 +14,16 @@ def uses_openai_compat_tool_loop(provider: str) -> bool:
 
 
 def resolve_tool_max_turns(provider: str, requested_max_turns: int) -> int:
-    """Return the effective tool-loop turn budget for a provider."""
-    if provider == "claude":
-        return requested_max_turns
-    if uses_openai_compat_tool_loop(provider):
-        return max(requested_max_turns, _OPENAI_COMPAT_TOOL_MIN_TURNS)
-    return max(requested_max_turns, _NATIVE_TOOL_MIN_TURNS)
+    """Return the effective tool-loop turn budget.
+
+    Tool execution needs at least:
+    1. one model turn to request tools
+    2. one model turn after tool results
+    3. one closeout turn if the model ends without a user-facing answer
+
+    Keep the floor small and provider-agnostic so callers can set higher
+    budgets deliberately without OpenAI-compat providers being inflated by
+    arbitrary policy.
+    """
+    del provider  # Provider family no longer affects the minimum tool budget.
+    return max(requested_max_turns, _MIN_TOOL_COMPLETION_TURNS)

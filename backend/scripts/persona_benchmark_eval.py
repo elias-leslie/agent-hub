@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import re
-import statistics
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.adapters.registry import get_provider_for_model
+from app.services.benchmark_aggregation import aggregate_attempts
 from app.services.benchmark_failure_classification import classify_benchmark_failure_detail
 from scripts.persona_benchmark_cases import PersonaBenchmarkCase
 
@@ -216,6 +217,20 @@ def _normalize_tool_name(tool_name: str) -> str:
     return normalized
 
 
+def normalize_attempt_identity(
+    *,
+    model_id: str,
+    provider: str | None,
+    effective_model: str | None,
+    requested_model: str | None = None,
+) -> tuple[str, str, str]:
+    """Return provider/effective/requested model identity with safe fallbacks."""
+    resolved_requested_model = requested_model or model_id
+    resolved_effective_model = effective_model or resolved_requested_model
+    resolved_provider = provider or get_provider_for_model(resolved_effective_model)
+    return resolved_provider, resolved_effective_model, resolved_requested_model
+
+
 def _summary_term_present(case: PersonaBenchmarkCase, term: str, summary: str) -> bool:
     if term in summary:
         return True
@@ -245,6 +260,12 @@ def score_attempt(
     failure_detail: str | None = None,
 ) -> PersonaBenchmarkAttempt:
     """Turn one live completion into a scored benchmark attempt."""
+    provider, effective_model, requested_model = normalize_attempt_identity(
+        model_id=model_id,
+        provider=provider,
+        effective_model=effective_model,
+        requested_model=model_id,
+    )
     attempt = PersonaBenchmarkAttempt(
         model_id=model_id,
         case_id=case.case_id,
@@ -253,7 +274,7 @@ def score_attempt(
         session_id=session_id,
         provider=provider,
         effective_model=effective_model,
-        requested_model=model_id,
+        requested_model=requested_model,
         content=content,
         fallback_used=fallback_used,
         turns=turns,
@@ -337,25 +358,24 @@ def summarize_attempts(attempts: list[PersonaBenchmarkAttempt]) -> list[PersonaB
 
     summaries: list[PersonaBenchmarkSummary] = []
     for model_id, model_attempts in grouped.items():
-        infra_failures = sum(1 for attempt in model_attempts if attempt.failure_kind == "infra")
-        model_failures = sum(1 for attempt in model_attempts if attempt.failure_kind == "model")
+        aggregate = aggregate_attempts(model_attempts)
+        infra_failures = aggregate.infra_failure_count
+        model_failures = sum(
+            1 for attempt in model_attempts if not attempt.infra_failure and attempt.failure_kind == "model"
+        )
         summaries.append(
             PersonaBenchmarkSummary(
                 model_id=model_id,
                 attempts=len(model_attempts),
-                pass_rate=sum(1 for attempt in model_attempts if attempt.passed) / len(model_attempts),
-                avg_composite_score=statistics.fmean(
-                    attempt.composite_score for attempt in model_attempts
-                ),
-                avg_correctness_score=statistics.fmean(
-                    attempt.correctness_score for attempt in model_attempts
-                ),
+                pass_rate=(aggregate.pass_rate or 0.0) / 100,
+                avg_composite_score=aggregate.avg_score or 0.0,
+                avg_correctness_score=aggregate.avg_correctness_score or 0.0,
                 infra_failures=infra_failures,
                 model_failures=model_failures,
-                avg_latency_ms=statistics.fmean(attempt.latency_ms for attempt in model_attempts),
-                avg_total_tokens=statistics.fmean(attempt.total_tokens for attempt in model_attempts),
-                avg_turns=statistics.fmean(attempt.turns for attempt in model_attempts),
-                avg_tool_calls=statistics.fmean(attempt.tool_calls_count for attempt in model_attempts),
+                avg_latency_ms=aggregate.avg_latency_ms or 0.0,
+                avg_total_tokens=aggregate.avg_total_tokens or 0.0,
+                avg_turns=aggregate.avg_turns or 0.0,
+                avg_tool_calls=aggregate.avg_tool_calls or 0.0,
             )
         )
 
@@ -363,6 +383,9 @@ def summarize_attempts(attempts: list[PersonaBenchmarkAttempt]) -> list[PersonaB
         key=lambda summary: (
             -summary.avg_composite_score,
             -summary.pass_rate,
+            summary.avg_tool_calls,
+            summary.avg_total_tokens,
+            summary.avg_turns,
             summary.infra_failures,
             summary.avg_latency_ms,
         )

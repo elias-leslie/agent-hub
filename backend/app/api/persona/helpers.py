@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
+from app.services._persona_crud import get_persona_limit
 from app.services.persona_document_prompt_service import (
     get_persona_personality_document,
     get_persona_user_context_document,
@@ -26,6 +27,9 @@ async def persona_to_response(
     personality = await get_persona_personality_document(db)
     heartbeat_instructions = await get_persona_heartbeat_instructions(db)
     user_context = await get_persona_user_context_document(db)
+    limits = None
+    if persona.limits is not None:
+        limits = {"max_turns": get_persona_limit(persona, "max_turns")}
     return PersonaResponse(
         id=persona.id,
         name=persona.name,
@@ -44,7 +48,7 @@ async def persona_to_response(
         session_reset_mode=persona.session_reset_mode,
         session_reset_hour=persona.session_reset_hour,
         session_reset_idle_minutes=persona.session_reset_idle_minutes,
-        limits=persona.limits,
+        limits=limits,
         agent_slug=agent_slug,
         version=persona.version,
         updated_at=persona.updated_at.isoformat() if persona.updated_at else None,

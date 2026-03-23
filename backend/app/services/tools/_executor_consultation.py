@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.constants.models import FAST_CLAUDE_MODEL
 
@@ -22,8 +22,23 @@ from ._executor_dispatch import (
 if TYPE_CHECKING:
     from app.models import Session as DBSession
     from app.models import SessionEvent as DBSessionEvent
+    from app.services.tools.base import Tool
 
 logger = logging.getLogger(__name__)
+
+_CONSULTATION_TOOL_BLOCKLIST = frozenset({
+    "bash",
+    "write_file",
+    "consult_agent",
+    "dispatch_agent",
+    "steer_consultation",
+    "cancel_consultation",
+    "schedule_job",
+    "cancel_scheduled_job",
+    "send_push",
+    "manage_tasks",
+    "manage_backups",
+})
 
 
 def _session_working_dir(session: object) -> str | None:
@@ -70,6 +85,49 @@ def _build_consultation_messages(system_content: str | None, prompt: str) -> lis
         messages.append({"role": "system", "content": system_content})
     messages.append({"role": "user", "content": prompt})
     return messages
+
+
+def _consultation_allowed_tool_names() -> frozenset[str]:
+    from app.services.project_permission_service import get_tools_for_tier
+
+    return get_tools_for_tier("read") - _CONSULTATION_TOOL_BLOCKLIST
+
+
+def _tool_spec_to_api_tool(tool: Tool) -> dict[str, Any]:
+    api_tool: dict[str, Any] = {
+        "name": tool.name,
+        "description": tool.description,
+        "input_schema": tool.input_schema,
+    }
+    if tool.allowed_callers != ["direct"]:
+        api_tool["allowed_callers"] = list(tool.allowed_callers)
+    return api_tool
+
+
+def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
+    from app.services.tools._standard_tools import STANDARD_TOOLS
+    from app.services.tools.tool_definitions import get_agent_tool_specs
+
+    tool_specs = get_agent_tool_specs(agent_slug) if agent_slug else None
+    source_tools = tool_specs or STANDARD_TOOLS
+    allowed_names = _consultation_allowed_tool_names()
+    return [_tool_spec_to_api_tool(tool) for tool in source_tools if tool.name in allowed_names]
+
+
+async def _consultation_max_turns(db: Any) -> int:
+    from app.services._persona_crud import get_persona_limit
+    from app.services.persona_service import get_persona
+
+    persona = await get_persona(db)
+    return get_persona_limit(persona, "max_turns")
+
+
+def _consultation_permission_config(tools: list[dict[str, Any]]) -> dict[str, Any]:
+    from app.services.tools.permissions import PermissionConfig
+
+    return PermissionConfig.granular(
+        allow=[str(tool["name"]) for tool in tools],
+    ).to_dict()
 
 
 def _empty_sessions_msg(
@@ -139,7 +197,7 @@ async def dispatch_agent(
     project_id: str | None,
     agent_slug: str,
     task: str,
-    max_turns: int = 25,
+    max_turns: int | None = None,
     parent_session_id: str | None = None,
 ) -> str:
     """Dispatch an agent via Hatchet wake workflow (fire-and-forget)."""
@@ -188,7 +246,7 @@ async def consult_agent(
     question: str,
     context: str = "",
 ) -> str:
-    """Consult another agent for advice without executing tools."""
+    """Consult another agent for advice with read-only research tools."""
     if not project_id:
         return "Error: project_id not configured, cannot consult agent"
 
@@ -204,13 +262,18 @@ async def consult_agent(
             mandate = await inject_agent_mandates(
                 resolved.agent, db, prompt_mode="minimal", project_id=project_id,
             )
+            consultation_tools = _consultation_tools(agent_slug)
+            consultation_max_turns = await _consultation_max_turns(db)
             messages = _build_consultation_messages(mandate.system_content, prompt)
             result = await complete_internal(
                 messages=messages, model=resolved.model, provider=resolved.provider,
                 temperature=resolved.agent.temperature, project_id=project_id,
                 db=db, agent_slug=agent_slug, request_source="consultation",
                 use_memory=True, memory_group_id=f"project-{project_id}",
-                max_turns=1, execute_tools=False,
+                max_turns=consultation_max_turns,
+                execute_tools=bool(consultation_tools),
+                tools=consultation_tools,
+                permission_config=_consultation_permission_config(consultation_tools),
             )
         session_id = result.session_id if hasattr(result, "session_id") else None
         return f"[session:{session_id}] {result.content}" if session_id else result.content
@@ -228,11 +291,17 @@ async def steer_consultation(project_id: str | None, session_id: str, message: s
         from app.db import async_session
 
         async with async_session() as db:
+            consultation_tools = _consultation_tools()
+            consultation_max_turns = await _consultation_max_turns(db)
             result = await complete_internal(
                 messages=[{"role": "user", "content": message}],
                 model=FAST_CLAUDE_MODEL, provider="claude", temperature=0.3,
                 project_id=project_id, db=db, session_id=session_id,
-                request_source="consultation", max_turns=1, execute_tools=False,
+                request_source="consultation",
+                max_turns=consultation_max_turns,
+                execute_tools=bool(consultation_tools),
+                tools=consultation_tools,
+                permission_config=_consultation_permission_config(consultation_tools),
             )
             return f"[session:{session_id}] {result.content}"
     except Exception as e:

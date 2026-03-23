@@ -109,7 +109,7 @@ def _effective_turn_budget(
     if orchestration_path == "multi_turn":
         if requested_max_turns <= 4:
             return requested_max_turns
-        return requested_max_turns + min(math.ceil(requested_max_turns * 0.1), 25)
+        return requested_max_turns + math.ceil(requested_max_turns * 0.1)
     return requested_max_turns
 
 

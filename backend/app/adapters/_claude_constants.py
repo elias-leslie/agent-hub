@@ -15,6 +15,7 @@ WRITE_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
 # CLI-builtin tools to expose by default (MCP tools are separate)
 DEFAULT_ALLOWED_CLI_TOOLS = ["Read", "Write", "Bash", "Edit", "Glob", "Grep"]
+DEFAULT_DISALLOWED_CLI_TOOLS = ["WebFetch", "WebSearch", "Agent"]
 
 # CLI builtins that are also registered as MCP tools (use lowercase names from tool defs)
 _CLI_BUILTIN_TOOL_NAMES = frozenset({"bash", "read_file", "write_file"})

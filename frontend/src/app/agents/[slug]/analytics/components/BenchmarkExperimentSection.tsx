@@ -34,6 +34,13 @@ function formatDelta(value: number | null, low: number | null, high: number | nu
   return `${signed}${suffix} [${low}, ${high}]`;
 }
 
+function formatMetric(value: number | null, suffix = "") {
+  if (value === null) {
+    return "Pending";
+  }
+  return `${value}${suffix}`;
+}
+
 export function BenchmarkExperimentSection({
   experiments,
 }: BenchmarkExperimentSectionProps) {
@@ -87,6 +94,9 @@ export function BenchmarkExperimentSection({
                   <p className="text-slate-600 dark:text-slate-300">
                     Pass {experiment.baseline.avg_pass_rate ?? "Pending"}%
                   </p>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Tools {formatMetric(experiment.baseline.avg_tool_calls)}
+                  </p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-950/50">
                   <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -100,6 +110,9 @@ export function BenchmarkExperimentSection({
                   </p>
                   <p className="text-slate-600 dark:text-slate-300">
                     Pass {experiment.candidate.avg_pass_rate ?? "Pending"}%
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Tools {formatMetric(experiment.candidate.avg_tool_calls)}
                   </p>
                 </div>
               </div>
@@ -123,6 +136,16 @@ export function BenchmarkExperimentSection({
                       experiment.pass_rate_delta.ci_low,
                       experiment.pass_rate_delta.ci_high,
                       "%",
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="text-slate-500 dark:text-slate-400">Tool-call delta</dt>
+                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                    {formatDelta(
+                      experiment.tool_call_delta.mean_delta,
+                      experiment.tool_call_delta.ci_low,
+                      experiment.tool_call_delta.ci_high,
                     )}
                   </dd>
                 </div>

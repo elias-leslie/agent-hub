@@ -11,6 +11,11 @@ export interface PersonaUserProfile {
   boundaries_and_escalation?: string | null;
 }
 
+export interface PersonaLimits {
+  max_turns?: number | null;
+  [key: string]: number | null | undefined;
+}
+
 export interface Persona {
   id: number;
   name: string;
@@ -30,7 +35,7 @@ export interface Persona {
   session_reset_mode: "off" | "daily" | "idle";
   session_reset_hour: number;
   session_reset_idle_minutes: number;
-  limits: Record<string, number> | null;
+  limits: PersonaLimits | null;
   agent_slug: string;
   version: number;
   updated_at: string | null;
@@ -51,5 +56,5 @@ export interface PersonaUpdate {
   session_reset_mode?: "off" | "daily" | "idle";
   session_reset_hour?: number;
   session_reset_idle_minutes?: number;
-  limits?: Record<string, number> | null;
+  limits?: PersonaLimits | null;
 }

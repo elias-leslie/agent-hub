@@ -219,6 +219,23 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["allowed_tools"] == custom
 
+    def test_disallowed_tools_default(self, tmp_path: Path) -> None:
+        """Default disallowed_tools blocks Claude-native web/research builtins."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert captured_opts["disallowed_tools"] == [
+            "WebFetch",
+            "WebSearch",
+            "Agent",
+        ]
+
+    def test_disallowed_tools_custom(self, tmp_path: Path) -> None:
+        """Custom disallowed_tools list is forwarded as-is."""
+        custom = ["WebFetch"]
+        captured_opts = self._build_and_capture(tmp_path, disallowed_tools=custom)
+
+        assert captured_opts["disallowed_tools"] == custom
+
     def test_system_prompt_set(self, tmp_path: Path) -> None:
         """system_prompt is included in options when provided."""
         captured_opts = self._build_and_capture(tmp_path, system_prompt="You are helpful")

@@ -10,6 +10,7 @@ import pytest
 
 from app.services._benchmark_persistence import (
     _group_attempt_failures,
+    _has_scored_attempts,
     _refresh_experiment_decision,
 )
 from app.services.agent_benchmark_service import (
@@ -23,15 +24,30 @@ from app.services.agent_benchmark_service import (
 def _make_run(
     *,
     cohort: str,
-    avg_score: float,
-    pass_rate: float,
+    avg_score: float | None,
+    pass_rate: float | None,
+    avg_tool_calls: float | None = None,
+    avg_total_tokens: float | None = None,
+    avg_turns: float | None = None,
     completed_at: str = "2026-03-11T12:00:00+00:00",
     config_snapshot: dict[str, object] | None = None,
+    attempt_count: int = 6,
+    infra_failure_count: int = 0,
 ) -> SimpleNamespace:
+    run_metadata = {}
+    if any(metric is not None for metric in (avg_tool_calls, avg_total_tokens, avg_turns)):
+        run_metadata["efficiency"] = {
+            "avg_tool_calls": avg_tool_calls,
+            "avg_total_tokens": avg_total_tokens,
+            "avg_turns": avg_turns,
+        }
     return SimpleNamespace(
         experiment_cohort=cohort,
         avg_score=avg_score,
         pass_rate=pass_rate,
+        attempt_count=attempt_count,
+        infra_failure_count=infra_failure_count,
+        run_metadata=run_metadata,
         config_snapshot=config_snapshot or {"primary_model_id": "codex/gpt-5.4", "thinking_level": "medium"},
         completed_at=datetime.fromisoformat(completed_at),
         models=["codex/gpt-5.4"],
@@ -164,6 +180,42 @@ def test_summarize_benchmark_experiment_rolls_back_when_candidate_never_catches_
     assert summary["decision"] == "rollback"
     assert summary["decision_reason"] == "candidate_underperforms_baseline"
     assert summary["score_delta"]["ci_high"] == 0.0
+
+
+def test_summarize_benchmark_experiment_promotes_non_inferior_candidate_with_fewer_tool_calls() -> None:
+    experiment = _make_experiment()
+    runs = [
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=6.0),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=5.5),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=6.5),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=3.0),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=3.5),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=2.5),
+    ]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["decision"] == "promote"
+    assert summary["decision_reason"] == "candidate_matches_quality_with_fewer_tool_calls"
+    assert summary["tool_call_delta"]["mean_delta"] and summary["tool_call_delta"]["mean_delta"] < 0
+
+
+def test_summarize_benchmark_experiment_rolls_back_non_superior_candidate_with_more_tool_calls() -> None:
+    experiment = _make_experiment()
+    runs = [
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=2.0),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=2.5),
+        _make_run(cohort="baseline", avg_score=100.0, pass_rate=100.0, avg_tool_calls=1.5),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=6.0),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=5.5),
+        _make_run(cohort="candidate", avg_score=100.0, pass_rate=100.0, avg_tool_calls=6.5),
+    ]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["decision"] == "rollback"
+    assert summary["decision_reason"] == "candidate_matches_quality_with_more_tool_calls"
+    assert summary["tool_call_delta"]["mean_delta"] and summary["tool_call_delta"]["mean_delta"] > 0
 
 
 def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> None:
@@ -304,6 +356,54 @@ def test_group_attempt_failures_skips_infra_failures() -> None:
     ])
 
     assert list(grouped) == [("precision_search_architecture", "wrong_fields: should_dispatch")]
+
+
+def test_has_scored_attempts_returns_false_for_infra_only_payloads() -> None:
+    assert _has_scored_attempts([
+        {
+            "infra_failure": True,
+            "failure_kind": "infra",
+            "failure_detail": "All connection attempts failed",
+            "passed": False,
+        }
+    ]) is False
+    assert _has_scored_attempts([
+        {
+            "infra_failure": False,
+            "failure_kind": "model",
+            "failure_detail": "wrong_fields: should_dispatch",
+            "passed": False,
+        }
+    ]) is True
+
+
+def test_summarize_benchmark_experiment_ignores_infra_only_runs() -> None:
+    experiment = _make_experiment(min_runs_per_cohort=1)
+    runs = [
+        _make_run(
+            cohort="baseline",
+            avg_score=None,
+            pass_rate=None,
+            attempt_count=6,
+            infra_failure_count=6,
+        ),
+        _make_run(
+            cohort="baseline",
+            avg_score=90.0,
+            pass_rate=60.0,
+        ),
+        _make_run(
+            cohort="candidate",
+            avg_score=95.0,
+            pass_rate=80.0,
+        ),
+    ]
+
+    summary = summarize_benchmark_experiment(experiment, runs)
+
+    assert summary["baseline"]["run_count"] == 1
+    assert summary["baseline"]["infra_only_run_count"] == 1
+    assert summary["decision"] == "promote"
 
 
 @pytest.mark.asyncio

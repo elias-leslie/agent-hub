@@ -136,7 +136,7 @@ async def test_agent_wake_stores_summary_for_completed_session():
         ),
         patch(
             "app.services._persona_crud.get_persona_limit",
-            return_value=200,
+            return_value=500,
         ),
         patch(
             "app.api.complete.core.complete_internal",
@@ -207,7 +207,7 @@ async def test_agent_wake_forwards_parent_session_id():
             new_callable=AsyncMock,
             return_value=mock_persona,
         ),
-        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
         patch(
             "app.api.complete.core.complete_internal",
             new_callable=AsyncMock,
@@ -265,7 +265,7 @@ async def test_agent_wake_forwards_lane_metadata():
             new_callable=AsyncMock,
             return_value=mock_persona,
         ),
-        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
         patch(
             "app.api.complete.core.complete_internal",
             new_callable=AsyncMock,
@@ -371,7 +371,7 @@ async def test_agent_wake_rolls_back_and_closes_on_cancellation() -> None:
             new_callable=AsyncMock,
             return_value=mock_persona,
         ),
-        patch("app.services._persona_crud.get_persona_limit", return_value=200),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
         patch(
             "app.api.complete.core.complete_internal",
             new_callable=AsyncMock,

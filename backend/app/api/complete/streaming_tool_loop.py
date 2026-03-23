@@ -19,7 +19,9 @@ from .streaming_tool_messages import sse_for_simple_event
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_TOOL_TURNS = 15
+# Match CompletionRequest.max_turns default; shared tool budget resolution lifts
+# low values to the minimum viable tool loop when tools are actually enabled.
+DEFAULT_MAX_TOOL_TURNS = 1
 _EMPTY_FINAL_RESPONSE_MSG = (
     "<system-final-response>"
     "You have finished tool work but have not produced a final user-facing response. "

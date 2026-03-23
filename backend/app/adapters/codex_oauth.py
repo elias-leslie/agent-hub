@@ -40,7 +40,10 @@ from app.adapters.codex_sse import (
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 
 logger = logging.getLogger(__name__)
-_TOOL_TURN_TIMEOUT_SECONDS = DEFAULT_TIMEOUT
+# Tool-loop followups can take materially longer than ordinary one-shot turns
+# after large tool outputs or repo writes. Keep the normal request timeout tight
+# for standard completions, but give post-tool turns a higher idle budget.
+_TOOL_TURN_TIMEOUT_SECONDS = 300.0
 _EMPTY_FINAL_RESPONSE_MSG = (
     "You have finished tool work but have not produced a final user-facing response. "
     "Write the final response now. "
@@ -251,6 +254,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         resolved_model: str,
         max_tokens: int | None,
         temperature: float,
+        request_timeout: float = DEFAULT_TIMEOUT,
         **kwargs: Any,
     ) -> CompletionResult:
         """Issue a completion with pre-built Responses input items."""
@@ -268,7 +272,7 @@ class CodexOAuthAdapter(ProviderAdapter):
 
         try:
             async with (
-                httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client,
+                httpx.AsyncClient(timeout=request_timeout) as client,
                 client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response,
             ):
                 if response.status_code != 200:
@@ -277,7 +281,7 @@ class CodexOAuthAdapter(ProviderAdapter):
                         response.status_code, error_body.decode("utf-8", errors="replace")
                     )
                 return await collect_completion(response, resolved_model)
-        except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
+        except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
             logger.error("Codex HTTP error: %s", exc)
             raise ProviderError(str(exc), provider="codex", retriable=True) from exc
 
@@ -350,6 +354,7 @@ class CodexOAuthAdapter(ProviderAdapter):
                         resolved_model=resolved_model,
                         max_tokens=max_tokens,
                         temperature=temperature,
+                        request_timeout=_TOOL_TURN_TIMEOUT_SECONDS,
                         tools=tools,
                         prompt_cache_key=prompt_cache_key,
                         **kwargs,

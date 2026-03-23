@@ -813,6 +813,71 @@ class TestSteerConsultation:
     """Tests for steer_consultation tool."""
 
     @pytest.mark.asyncio
+    async def test_consult_agent_enables_read_only_research_tools(self):
+        from app.services.tools._executor_consultation import consult_agent
+
+        mock_result = MagicMock()
+        mock_result.content = "Here's my advice."
+        mock_result.session_id = "sess-456"
+
+        mock_db = AsyncMock()
+        mock_persona = _make_persona(limits={"max_turns": 500})
+        mock_persona_result = MagicMock()
+        mock_persona_result.scalar_one_or_none.return_value = mock_persona
+        mock_db.execute.return_value = mock_persona_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        resolved = MagicMock()
+        resolved.model = "gpt-5.4"
+        resolved.provider = "codex"
+        resolved.agent = MagicMock()
+        resolved.agent.temperature = 0.2
+
+        mandate = MagicMock(system_content="Consultation system prompt")
+
+        with (
+            patch("app.db.async_session", _session),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=resolved,
+            ),
+            patch(
+                "app.services.agent_routing_utils.inject_agent_mandates",
+                new_callable=AsyncMock,
+                return_value=mandate,
+            ),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ) as mock_complete,
+        ):
+            result = await consult_agent(
+                "test-project",
+                "supervisor",
+                "What should I verify next?",
+                "Changed the web research path.",
+            )
+
+        assert "sess-456" in result
+        kwargs = mock_complete.await_args.kwargs
+        tool_names = {tool["name"] for tool in kwargs["tools"]}
+        assert kwargs["execute_tools"] is True
+        assert kwargs["max_turns"] == 500
+        assert tool_names == {
+            "fetch_web_page",
+            "precision_code_search",
+            "read_file",
+            "search_web",
+        }
+        assert kwargs["permission_config"]["mode"] == "granular"
+        assert set(kwargs["permission_config"]["allow_list"]) == tool_names
+
+    @pytest.mark.asyncio
     async def test_sends_followup(self):
         from app.services.tools._executor_consultation import steer_consultation
 
@@ -841,13 +906,25 @@ class TestSteerConsultation:
                 "app.api.complete.core.complete_internal",
                 new_callable=AsyncMock,
                 return_value=mock_result,
-            ),
+            ) as mock_complete,
             patch("redis.asyncio.from_url", return_value=mock_redis),
         ):
             result = await steer_consultation("test-project", "sess-123", "Follow up question")
 
         assert "sess-123" in result
         assert "follow-up advice" in result
+        kwargs = mock_complete.await_args.kwargs
+        tool_names = {tool["name"] for tool in kwargs["tools"]}
+        assert kwargs["execute_tools"] is True
+        assert kwargs["max_turns"] == 500
+        assert tool_names == {
+            "fetch_web_page",
+            "precision_code_search",
+            "read_file",
+            "search_web",
+        }
+        assert kwargs["permission_config"]["mode"] == "granular"
+        assert set(kwargs["permission_config"]["allow_list"]) == tool_names
 
     @pytest.mark.asyncio
     async def test_no_project_id_error(self):

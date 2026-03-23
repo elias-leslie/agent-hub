@@ -458,7 +458,7 @@ class TestHeartbeatCompletionRouting:
             ),
             patch(
                 "app.services._persona_crud.get_persona_limit",
-                return_value=200,
+                return_value=500,
             ),
             patch(
                 "app.api.complete.core.complete_internal",
@@ -582,7 +582,7 @@ class TestHeartbeatCompletionRouting:
             ),
             patch(
                 "app.services._persona_crud.get_persona_limit",
-                return_value=200,
+                return_value=500,
             ),
             patch(
                 "app.api.complete.core.complete_internal",

@@ -269,6 +269,46 @@ async def test_complete_with_tools_retries_empty_final_response_once() -> None:
 
 
 @pytest.mark.asyncio
+async def test_complete_with_tools_uses_extended_request_timeout_for_tool_turns() -> None:
+    from app.adapters import codex_oauth as mod
+
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+    adapter._complete_from_input = AsyncMock(
+        return_value=CompletionResult(
+            content="Done",
+            model="gpt-5.4",
+            provider="codex",
+            input_tokens=8,
+            output_tokens=3,
+            finish_reason="done",
+            tool_calls=[],
+        )
+    )
+
+    tool_handler = AsyncMock()
+
+    events = []
+    async for event in adapter.complete_with_tools(
+        messages=[Message(role="user", content="hi")],
+        model="codex/gpt-5.4",
+        tools=[],
+        tool_handler=tool_handler,
+        max_turns=2,
+    ):
+        events.append(event)
+
+    assert events[-1].type == "done"
+    assert adapter._complete_from_input.await_args.kwargs["request_timeout"] == mod._TOOL_TURN_TIMEOUT_SECONDS
+
+
+@pytest.mark.asyncio
 async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.adapters import codex_oauth as mod
 

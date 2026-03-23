@@ -86,7 +86,7 @@ class TestDispatchAgentFireAndForget:
             project_id="summitflow",
             event_type="dispatch",
             thinking_level="medium",
-            max_turns=25,
+            max_turns=None,
             parent_session_id=None,
             current_branch=None,
             working_dir=None,
@@ -131,8 +131,51 @@ class TestDispatchAgentFireAndForget:
             project_id="summitflow",
             event_type="dispatch",
             thinking_level="high",
-            max_turns=25,
+            max_turns=None,
             parent_session_id="parent-session-123",
+            current_branch=None,
+            working_dir=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_forwards_explicit_max_turns(self):
+        """Explicit max_turns should override persona-limit resolution."""
+        mock_db = AsyncMock()
+        mock_resolved = MagicMock()
+        mock_resolved.model = "codex/gpt-5.4"
+        mock_resolved.provider = "codex"
+        mock_resolved.agent.temperature = 0.2
+        mock_resolved.agent.thinking_level = "high"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            await dispatch_agent(
+                "summitflow",
+                "git-agent",
+                "Advance the stale task recovery flow.",
+                max_turns=87,
+            )
+
+        mock_wake.assert_called_once_with(
+            agent_slug="git-agent",
+            model="codex/gpt-5.4",
+            provider="codex",
+            temperature=0.2,
+            prompt="Advance the stale task recovery flow.",
+            project_id="summitflow",
+            event_type="dispatch",
+            thinking_level="high",
+            max_turns=87,
+            parent_session_id=None,
             current_branch=None,
             working_dir=None,
         )
@@ -251,7 +294,7 @@ class TestDispatchAgentFireAndForget:
             project_id="agent-hub",
             event_type="dispatch_task",
             thinking_level="high",
-            max_turns=25,
+            max_turns=None,
             parent_session_id="parent-session-123",
             current_branch="task-12345678/main",
             working_dir="/tmp/worktrees/task-12345678",
@@ -362,5 +405,5 @@ class TestRetryFailedMcpTools:
             project_id="summitflow",
             agent_slug="git-agent",
             task="Fix the biome thread bug",
-            max_turns=25,
+            max_turns=None,
         )

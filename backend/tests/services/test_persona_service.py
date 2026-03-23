@@ -861,10 +861,14 @@ class TestGetPersonaLimit:
 
     def test_returns_default_when_no_limits(self):
         persona = _make_persona(limits=None)
-        assert get_persona_limit(persona, "max_turns") == 200
+        assert get_persona_limit(persona, "max_turns") == 500
 
     def test_returns_custom_limit(self):
         persona = _make_persona(limits={"max_turns": 500})
+        assert get_persona_limit(persona, "max_turns") == 500
+
+    def test_invalid_turn_limit_falls_back_to_default(self):
+        persona = _make_persona(limits={"max_turns": 0})
         assert get_persona_limit(persona, "max_turns") == 500
 
     def test_returns_default_for_unknown_key(self):
@@ -872,4 +876,4 @@ class TestGetPersonaLimit:
         assert get_persona_limit(persona, "unknown_key") == 0
 
     def test_returns_default_when_persona_is_none(self):
-        assert get_persona_limit(None, "max_turns") == 200
+        assert get_persona_limit(None, "max_turns") == 500

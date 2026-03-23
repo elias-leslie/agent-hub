@@ -153,6 +153,35 @@ def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
     assert attempt.failure_detail is None
 
 
+def test_score_attempt_backfills_identity_for_infra_failures() -> None:
+    case = get_case_by_id("ready_task_dispatch")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=2500,
+        content="",
+        session_id=None,
+        provider=None,
+        effective_model=None,
+        fallback_used=False,
+        turns=0,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+        failure_detail="All connection attempts failed",
+    )
+
+    assert attempt.provider == "codex"
+    assert attempt.effective_model == "codex/gpt-5.4"
+    assert attempt.requested_model == "codex/gpt-5.4"
+    assert attempt.infra_failure is True
+    assert attempt.failure_kind == "infra"
+
+
 def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     from scripts.persona_benchmark_eval import PersonaBenchmarkRun
     from scripts.run_persona_model_benchmark import build_persistence_payload
@@ -236,6 +265,9 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     assert payload["config_snapshot"]["benchmark_task_type"] == "heartbeat"
     assert payload["experiment"]["experiment_key"] == "persona-patience-ab"
     assert payload["experiment"]["cohort"] == "candidate"
+    assert payload["metadata"]["efficiency"]["avg_total_tokens"] == 120.0
+    assert payload["metadata"]["efficiency"]["avg_turns"] == 2.0
+    assert payload["metadata"]["efficiency"]["avg_tool_calls"] == 1.0
     assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
     assert payload["attempts"][0]["primary_action"] == "wait"
 
@@ -572,6 +604,81 @@ def test_summarize_attempts_ranks_by_score_then_reliability() -> None:
     assert summaries[1].model_failures == 1
 
 
+def test_summarize_attempts_prefers_fewer_tool_calls_when_scores_tie() -> None:
+    attempts = [
+        PersonaBenchmarkAttempt(
+            model_id="model-a",
+            case_id="c1",
+            run_number=1,
+            latency_ms=1000,
+            composite_score=100.0,
+            correctness_score=1.0,
+            passed=True,
+            total_tokens=120,
+            turns=2,
+            tool_calls_count=3,
+            used_tool_names=["read_file", "query_sessions", "manage_tasks"],
+        ),
+        PersonaBenchmarkAttempt(
+            model_id="model-b",
+            case_id="c1",
+            run_number=1,
+            latency_ms=1000,
+            composite_score=100.0,
+            correctness_score=1.0,
+            passed=True,
+            total_tokens=80,
+            turns=1,
+            tool_calls_count=1,
+            used_tool_names=["manage_tasks"],
+        ),
+    ]
+
+    summaries = summarize_attempts(attempts)
+
+    assert [summary.model_id for summary in summaries] == ["model-b", "model-a"]
+
+
+def test_summarize_attempts_ignores_infra_failures_in_scores() -> None:
+    attempts = [
+        PersonaBenchmarkAttempt(
+            model_id="model-a",
+            case_id="c1",
+            run_number=1,
+            latency_ms=1000,
+            composite_score=0.0,
+            correctness_score=0.0,
+            passed=False,
+            infra_failure=True,
+            failure_kind="infra",
+            failure_detail="All connection attempts failed",
+            total_tokens=0,
+            turns=0,
+            tool_calls_count=0,
+            used_tool_names=[],
+        ),
+        PersonaBenchmarkAttempt(
+            model_id="model-a",
+            case_id="c1",
+            run_number=2,
+            latency_ms=900,
+            composite_score=100.0,
+            correctness_score=1.0,
+            passed=True,
+            total_tokens=90,
+            turns=1,
+            tool_calls_count=0,
+            used_tool_names=[],
+        ),
+    ]
+
+    summary = summarize_attempts(attempts)[0]
+
+    assert summary.avg_composite_score == 100.0
+    assert summary.pass_rate == 1.0
+    assert summary.infra_failures == 1
+
+
 def test_generate_markdown_report_includes_ranking_table() -> None:
     attempts = [
         PersonaBenchmarkAttempt(
@@ -733,6 +840,49 @@ def test_precision_search_case_prompt_requires_specific_tool() -> None:
     assert "precision_code_search" in prompt
     assert "first code-navigation step" in prompt
     assert "Do not rely on read_file, bash, or assumptions" in prompt
+
+
+def test_web_research_case_requires_shared_web_tools() -> None:
+    case = get_case_by_id("web_research_stack_lookup")
+
+    prompt = case.build_prompt()
+
+    assert "search_web" in prompt
+    assert "fetch_web_page" in prompt
+    assert "Cloudflare Markdown for Agents" in prompt
+    assert case.required_tool_names == ("search_web", "fetch_web_page")
+
+
+def test_web_research_case_accepts_normalized_shared_tool_names() -> None:
+    case = get_case_by_id("web_research_stack_lookup")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="claude-sonnet-4-6",
+        run_number=1,
+        latency_ms=1200,
+        content=(
+            '{"case_id":"web_research_stack_lookup","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"Dispatch adoption of the shared markdown-first web research stack now instead of building another fetcher."}'
+        ),
+        session_id="sess-web",
+        provider="claude",
+        effective_model="claude-sonnet-4-6",
+        fallback_used=False,
+        turns=3,
+        tool_calls_count=2,
+        used_tool_names=[
+            "mcp__agent-hub__search_web",
+            "mcp__agent-hub__fetch_web_page",
+        ],
+        input_tokens=120,
+        output_tokens=30,
+        total_tokens=150,
+    )
+
+    assert attempt.passed is True
+    assert attempt.tool_requirement_met is True
 
 
 def test_validate_case_project_requirements_rejects_wrong_project() -> None:
@@ -956,6 +1106,7 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
         "workspace_inspection_gate",
         "precision_search_architecture",
         "precision_search_live_lookup",
+        "web_research_stack_lookup",
         "review_request_routes_to_reviewer",
         "dead_code_cleanup_followthrough",
         "feedback_triage_hotspot",

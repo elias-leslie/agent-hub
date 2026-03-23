@@ -243,6 +243,16 @@ describe("persona settings tabs", () => {
     expect(onUpdate).toHaveBeenCalledWith({ limits: null });
   });
 
+  it("rejects non-positive max-turn updates in the settings UI", () => {
+    const onUpdate = vi.fn();
+
+    render(<SessionLimitsTab persona={basePersona} onUpdate={onUpdate} />);
+
+    fireEvent.change(screen.getByLabelText("Max turns"), { target: { value: "0" } });
+
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it("shows reset onboarding failures inline", async () => {
     vi.mocked(fetchApi).mockResolvedValueOnce(jsonResponse({ detail: "failed" }, 500));
 

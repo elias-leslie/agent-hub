@@ -179,7 +179,6 @@ class CompletionRequest(BaseModel):
     max_turns: int = Field(
         default=1,
         ge=1,
-        le=200,
         description="Maximum agentic turns. 1 = single completion, >1 = agentic loop with tool execution.",
     )
     working_dir: str | None = Field(

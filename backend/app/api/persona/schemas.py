@@ -26,6 +26,14 @@ class PersonaUserProfile(BaseModel):
     boundaries_and_escalation: str | None = Field(default=None, max_length=2000)
 
 
+class PersonaLimits(BaseModel):
+    """Validated autonomous-execution limits."""
+
+    max_turns: int | None = Field(default=None, ge=1)
+
+    model_config = {"extra": "forbid"}
+
+
 class PersonaResponse(BaseModel):
     """Full persona representation."""
 
@@ -46,7 +54,7 @@ class PersonaResponse(BaseModel):
     session_reset_mode: str = "off"
     session_reset_hour: int = 9
     session_reset_idle_minutes: int = 120
-    limits: dict | None = None
+    limits: PersonaLimits | None = None
     agent_slug: str = "persona"
     version: int = 1
     updated_at: str | None = None
@@ -69,7 +77,7 @@ class PersonaUpdate(BaseModel):
     session_reset_mode: str | None = Field(default=None, pattern="^(off|daily|idle)$")
     session_reset_hour: int | None = Field(default=None, ge=0, le=23)
     session_reset_idle_minutes: int | None = Field(default=None, ge=5, le=1440)
-    limits: dict | None = None
+    limits: PersonaLimits | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ from .streaming_tool_loop import (
     iter_stream_sse_with_tools,
     sse_for_simple_event,
 )
+from .turn_budget import resolve_tool_max_turns
 
 logger = logging.getLogger(__name__)
 
@@ -193,9 +194,10 @@ async def stream_completion(
     )
     yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
     try:
+        effective_tool_turns = resolve_tool_max_turns(provider, max_tool_turns) if tools else max_tool_turns
         inner = _choose_inner_stream(
             adapter, messages, model, max_tokens, temperature,
-            stream_kwargs, content_buf, ctx, tools, project_id, max_tool_turns,
+            stream_kwargs, content_buf, ctx, tools, project_id, effective_tool_turns,
         )
         async for sse in _with_heartbeat(inner):
             yield sse

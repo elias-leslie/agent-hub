@@ -113,9 +113,9 @@ DISPATCH_AGENT_TOOL = Tool(
     name="dispatch_agent",
     description=(
         "Dispatch an agent with full tool access to perform a task autonomously. "
-        "Unlike consult_agent (text-only advice), the dispatched agent can use bash, "
-        "read_file, write_file, agent-browser, and other tools. Returns the agent's "
-        "final response summarizing what it did. "
+        "Unlike consult_agent (bounded read-only advice and research), the dispatched agent "
+        "can use bash, read_file, write_file, agent-browser, and other tools. Returns the "
+        "agent's final response summarizing what it did. "
         "Your agent roster shows available agents."
     ),
     input_schema={
@@ -135,8 +135,7 @@ DISPATCH_AGENT_TOOL = Tool(
             },
             "max_turns": {
                 "type": "integer",
-                "description": "Maximum agentic turns (default 25, capped at persona limit)",
-                "default": 25,
+                "description": "Maximum agentic turns. Omit to use the persona's configured limit.",
             },
         },
         "required": ["agent_slug", "task", "project_id"],

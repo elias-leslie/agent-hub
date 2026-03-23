@@ -101,7 +101,7 @@ async def test_execute_agent_loop_routes_tools_with_resolved_turn_budget() -> No
         result = await execute_agent_loop(_request(), should_execute_tools=True)
 
     assert isinstance(result, CompletionInternalResult)
-    assert mock_route.await_args.kwargs["max_turns"] == 20
+    assert mock_route.await_args.kwargs["max_turns"] == 3
     assert mock_finalize.await_args.kwargs["orchestration_path"] == "tool_loop"
     assert mock_finalize.await_args.kwargs["requested_max_turns"] == 1
     assert mock_finalize.await_args.args[4] == "codex/gpt-5.4"

@@ -39,6 +39,7 @@ from app.services.agent_benchmark_service import (
     get_benchmark_experiment_summary_by_key,
     persist_benchmark_payload,
 )
+from app.services.benchmark_aggregation import aggregate_attempts, merge_efficiency_metadata
 from scripts.completion_review_benchmark_cases import (
     DEFAULT_COMPLETION_REVIEW_MODELS,
     get_completion_review_case_by_id,
@@ -225,13 +226,7 @@ def build_persistence_payload(
     experiment: dict[str, object] | None = None,
 ) -> dict[str, object]:
     attempts = [attempt.to_dict() for attempt in run.attempts]
-    attempt_count = len(attempts)
-    passed_attempt_count = sum(1 for attempt in run.attempts if attempt.passed)
-    avg_score = round(
-        sum(float(attempt.composite_score) for attempt in run.attempts) / attempt_count,
-        1,
-    ) if attempt_count else 0.0
-    pass_rate = round((passed_attempt_count / attempt_count) * 100, 1) if attempt_count else 0.0
+    aggregate = aggregate_attempts(run.attempts)
 
     normalized_attempts: list[dict[str, object]] = []
     for attempt in attempts:
@@ -260,13 +255,13 @@ def build_persistence_payload(
         "runs_per_case": run.runs_per_case,
         "use_memory": use_memory,
         "seed": seed,
-        "avg_score": avg_score,
-        "pass_rate": pass_rate,
-        "attempt_count": attempt_count,
-        "passed_attempt_count": passed_attempt_count,
-        "infra_failure_count": sum(1 for attempt in run.attempts if attempt.failure_kind == "infra"),
+        "avg_score": aggregate.avg_score,
+        "pass_rate": aggregate.pass_rate,
+        "attempt_count": aggregate.total_attempts,
+        "passed_attempt_count": aggregate.passed_attempt_count,
+        "infra_failure_count": aggregate.infra_failure_count,
         "config_snapshot": dict(config_snapshot or {}),
-        "metadata": dict(metadata or {}),
+        "metadata": merge_efficiency_metadata(metadata, aggregate),
         "experiment": dict(experiment) if experiment else None,
         "started_at": run.started_at,
         "completed_at": run.completed_at,
