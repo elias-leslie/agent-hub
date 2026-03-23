@@ -12,7 +12,7 @@ const RUNNING_POLL_MS = 10_000;
 
 export interface UseHeartbeatReturn {
   status: HeartbeatStatusResponse | null;
-  trigger: () => Promise<void>;
+  trigger: () => Promise<string | null>;
   isTriggering: boolean;
 }
 
@@ -59,16 +59,20 @@ export function useHeartbeat(): UseHeartbeatReturn {
   const trigger = useCallback(async () => {
     setIsTriggering(true);
     try {
-      await triggerHeartbeat();
+      const response = await triggerHeartbeat();
       toast.success("Heartbeat triggered");
       // Immediately refresh status
       await poll();
+      return response.session_id;
     } catch (err) {
       if (err instanceof HeartbeatConflictError) {
         toast.warning("Heartbeat already in progress");
+        await poll();
+        return err.runningSessionId;
       } else {
         toast.error("Failed to trigger heartbeat", err instanceof Error ? err.message : undefined);
       }
+      return null;
     } finally {
       setIsTriggering(false);
     }
