@@ -28,6 +28,8 @@ from ._benchmark_config import (
     run_config_fingerprint,
 )
 
+_NON_SIGNAL_RUN_KINDS = frozenset({"honing_iteration"})
+
 
 def _round_metric(value: float | None, digits: int = 1) -> float | None:
     if value is None:
@@ -37,6 +39,16 @@ def _round_metric(value: float | None, digits: int = 1) -> float | None:
 
 def _sample_mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+def is_signal_run_kind(run_kind: str | None) -> bool:
+    """Return True when a run kind represents primary benchmark evidence."""
+    return str(run_kind or "").strip().lower() not in _NON_SIGNAL_RUN_KINDS
+
+
+def benchmark_signal_run_clause(model: Any) -> Any:
+    """Return the shared SQL filter for primary benchmark evidence."""
+    return model.run_kind.not_in(tuple(sorted(_NON_SIGNAL_RUN_KINDS)))
 
 
 def _bootstrap_mean_delta(
@@ -284,6 +296,7 @@ async def _query_recent_runs(
             AgentBenchmarkRun.agent_slug == agent_slug,
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
+            benchmark_signal_run_clause(AgentBenchmarkRun),
             AgentBenchmarkRun.attempt_count > AgentBenchmarkRun.infra_failure_count,
         )
         .order_by(AgentBenchmarkRun.completed_at.desc())
@@ -330,6 +343,7 @@ async def _query_model_performance(
             AgentBenchmarkAttempt.infra_failure.is_(False),
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
+            benchmark_signal_run_clause(AgentBenchmarkRun),
         )
         .group_by(AgentBenchmarkAttempt.model_id)
     )
@@ -353,6 +367,7 @@ async def _query_case_attempts(
             AgentBenchmarkAttempt.infra_failure.is_(False),
             AgentBenchmarkRun.completed_at.is_not(None),
             AgentBenchmarkRun.completed_at >= cutoff,
+            benchmark_signal_run_clause(AgentBenchmarkRun),
         )
         .order_by(AgentBenchmarkRun.completed_at.desc(), AgentBenchmarkAttempt.created_at.desc())
     )
