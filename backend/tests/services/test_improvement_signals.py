@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
 
 
 @pytest.mark.asyncio
@@ -62,7 +63,9 @@ async def test_collect_improvement_signal_snapshot_returns_structured_evidence()
     perf_result = MagicMock()
     perf_result.scalars.return_value.all.return_value = performance_logs
     experiment_result = MagicMock()
-    experiment_result.scalars.return_value.all.return_value = experiments
+    experiment_result.all.return_value = [
+        (experiments[0], now),
+    ]
     cluster_result = MagicMock()
     cluster_result.scalars.return_value.all.return_value = clusters
     event_result = MagicMock()
@@ -215,7 +218,9 @@ async def test_build_improvement_signal_digest_combines_evidence_sources() -> No
     perf_result = MagicMock()
     perf_result.scalars.return_value.all.return_value = performance_logs
     experiment_result = MagicMock()
-    experiment_result.scalars.return_value.all.return_value = experiments
+    experiment_result.all.return_value = [
+        (experiments[0], now),
+    ]
     cluster_result = MagicMock()
     cluster_result.scalars.return_value.all.return_value = clusters
     event_result = MagicMock()
@@ -306,3 +311,106 @@ async def test_build_improvement_signal_digest_combines_evidence_sources() -> No
     assert "selected_reference_citation_rate=0.333" in digest
     assert "noisy-ref" in digest
     assert "selected=2 cited=0 rate=0.000" in digest
+
+
+@pytest.mark.asyncio
+async def test_collect_improvement_signal_snapshot_scopes_queries_to_recent_project_signal_runs() -> None:
+    from app.services.improvement_signals import collect_improvement_signal_snapshot
+
+    now = datetime(2026, 3, 23, 12, 0, tzinfo=UTC)
+    mock_db = AsyncMock()
+    perf_result = MagicMock()
+    perf_result.scalars.return_value.all.return_value = []
+    experiment_result = MagicMock()
+    experiment_result.all.return_value = []
+    cluster_result = MagicMock()
+    cluster_result.scalars.return_value.all.return_value = []
+    event_result = MagicMock()
+    event_result.all.return_value = []
+    mock_db.execute.side_effect = [
+        perf_result,
+        experiment_result,
+        cluster_result,
+        event_result,
+    ]
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    memory_utilization = SimpleNamespace(
+        injection_sessions=0,
+        citation_sessions=0,
+        lookup_sessions=0,
+        lookup_after_injection_sessions=0,
+        memory_search_calls=0,
+        memory_get_calls=0,
+        assistant_message_count=0,
+        assistant_messages_with_memory_citations=0,
+        citation_session_rate=0.0,
+        lookup_session_rate=0.0,
+        expansion_session_rate=0.0,
+        assistant_citation_rate=0.0,
+        sessions_with_selected_references=0,
+        sessions_with_cited_selected_references=0,
+        selected_reference_count=0,
+        selected_reference_cited_count=0,
+        selected_reference_citation_rate=0.0,
+        selected_reference_session_rate=0.0,
+        memory_inject_event_count=0,
+        memory_inject_events_with_debug=0,
+        memory_debug_coverage_rate=0.0,
+    )
+
+    with (
+        patch("app.services.improvement_signals.async_session", return_value=_session()),
+        patch(
+            "app.services.improvement_signals.get_memory_utilization_summary",
+            new=AsyncMock(return_value=memory_utilization),
+        ),
+        patch(
+            "app.services.improvement_signals.batch_get_episodes",
+            new=AsyncMock(return_value={}),
+        ),
+        patch("app.services.improvement_signals.datetime") as mock_datetime,
+    ):
+        mock_datetime.now.return_value = now
+        mock_datetime.UTC = UTC
+        await collect_improvement_signal_snapshot(
+            project_id="agent-hub",
+            primary_agent_slug="persona",
+            days_back=7,
+        )
+
+    experiment_stmt = mock_db.execute.await_args_list[1].args[0]
+    cluster_stmt = mock_db.execute.await_args_list[2].args[0]
+
+    experiment_compiled = experiment_stmt.compile(dialect=postgresql.dialect())
+    experiment_sql = str(experiment_compiled)
+    cluster_compiled = cluster_stmt.compile(dialect=postgresql.dialect())
+    cluster_sql = str(cluster_compiled)
+
+    assert "JOIN agent_benchmark_runs" in experiment_sql
+    assert "agent_benchmark_runs.completed_at >=" in experiment_sql
+    assert "agent_benchmark_runs.project_id" in experiment_sql
+    assert "agent_benchmark_runs.run_kind" in experiment_sql
+    assert "max(agent_benchmark_runs.completed_at)" in experiment_sql
+    assert "agent-hub" in experiment_compiled.params.values()
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in experiment_compiled.params.values()
+    )
+
+    assert "JOIN agent_benchmark_runs" in cluster_sql
+    assert (
+        "coalesce(agent_regression_clusters.last_seen_run_id, "
+        "agent_regression_clusters.first_seen_run_id)"
+    ) in cluster_sql
+    assert "agent_regression_clusters.last_seen_at >=" in cluster_sql
+    assert "agent_benchmark_runs.project_id" in cluster_sql
+    assert "agent_benchmark_runs.run_kind" in cluster_sql
+    assert "agent-hub" in cluster_compiled.params.values()
+    assert any(
+        "honing_iteration" in (value if isinstance(value, list) else [value])
+        for value in cluster_compiled.params.values()
+    )

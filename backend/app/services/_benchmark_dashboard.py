@@ -307,18 +307,50 @@ async def _query_recent_runs(
 
 
 async def _query_open_clusters(
-    db: AsyncSession, agent_slug: str, suite_id: str | None,
+    db: AsyncSession,
+    agent_slug: str,
+    cutoff: datetime,
+    suite_id: str | None,
 ) -> list[AgentRegressionCluster]:
+    return await query_open_regression_clusters(
+        db,
+        agent_slug=agent_slug,
+        cutoff=cutoff,
+        suite_id=suite_id,
+    )
+
+
+async def query_open_regression_clusters(
+    db: AsyncSession,
+    *,
+    agent_slug: str,
+    cutoff: datetime,
+    suite_id: str | None = None,
+    project_id: str | None = None,
+    limit: int | None = None,
+) -> list[AgentRegressionCluster]:
+    scoped_run_id = func.coalesce(
+        AgentRegressionCluster.last_seen_run_id,
+        AgentRegressionCluster.first_seen_run_id,
+    )
     stmt = (
         select(AgentRegressionCluster)
+        .join(AgentBenchmarkRun, AgentBenchmarkRun.id == scoped_run_id)
         .where(
             AgentRegressionCluster.agent_slug == agent_slug,
             AgentRegressionCluster.status == "open",
+            AgentRegressionCluster.last_seen_at >= cutoff,
+            AgentBenchmarkRun.completed_at.is_not(None),
+            benchmark_signal_run_clause(AgentBenchmarkRun),
         )
         .order_by(AgentRegressionCluster.last_seen_at.desc())
     )
     if suite_id:
         stmt = stmt.where(AgentRegressionCluster.suite_id == suite_id)
+    if project_id:
+        stmt = stmt.where(AgentBenchmarkRun.project_id == project_id)
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list((await db.execute(stmt)).scalars().all())
 
 
@@ -377,27 +409,28 @@ async def _query_case_attempts(
 
 
 async def _query_experiment_summaries(
-    db: AsyncSession, agent_slug: str, suite_id: str | None,
+    db: AsyncSession,
+    agent_slug: str,
+    cutoff: datetime,
+    suite_id: str | None,
 ) -> list[dict[str, Any]]:
-    stmt = (
-        select(AgentBenchmarkExperiment)
-        .where(AgentBenchmarkExperiment.agent_slug == agent_slug)
-        .order_by(AgentBenchmarkExperiment.updated_at.desc())
+    experiments = await query_signal_experiments(
+        db,
+        agent_slug=agent_slug,
+        cutoff=cutoff,
+        suite_id=suite_id,
+        limit=10,
     )
-    if suite_id:
-        stmt = stmt.where(AgentBenchmarkExperiment.suite_id == suite_id)
-    experiments = list((await db.execute(stmt)).scalars().all())
-
-    top_experiments = experiments[:10]
-    if not top_experiments:
+    if not experiments:
         return []
 
     exp_run_rows = (
         await db.execute(
             select(AgentBenchmarkRun)
             .where(
-                AgentBenchmarkRun.experiment_id.in_([exp.id for exp in top_experiments]),
+                AgentBenchmarkRun.experiment_id.in_([exp.id for exp in experiments]),
                 AgentBenchmarkRun.completed_at.is_not(None),
+                benchmark_signal_run_clause(AgentBenchmarkRun),
             )
             .order_by(AgentBenchmarkRun.completed_at.desc())
         )
@@ -408,8 +441,43 @@ async def _query_experiment_summaries(
             runs_by_experiment.setdefault(exp_run.experiment_id, []).append(exp_run)
     return [
         summarize_benchmark_experiment(exp, runs_by_experiment.get(exp.id, []))
-        for exp in top_experiments
+        for exp in experiments
     ]
+
+
+async def query_signal_experiments(
+    db: AsyncSession,
+    *,
+    agent_slug: str,
+    cutoff: datetime,
+    suite_id: str | None = None,
+    project_id: str | None = None,
+    limit: int = 10,
+) -> list[AgentBenchmarkExperiment]:
+    latest_signal_completed_at = func.max(AgentBenchmarkRun.completed_at).label(
+        "latest_signal_completed_at"
+    )
+    stmt = (
+        select(AgentBenchmarkExperiment, latest_signal_completed_at)
+        .join(AgentBenchmarkRun, AgentBenchmarkRun.experiment_id == AgentBenchmarkExperiment.id)
+        .where(
+            AgentBenchmarkExperiment.agent_slug == agent_slug,
+            AgentBenchmarkRun.completed_at.is_not(None),
+            AgentBenchmarkRun.completed_at >= cutoff,
+            benchmark_signal_run_clause(AgentBenchmarkRun),
+        )
+        .group_by(AgentBenchmarkExperiment.id)
+        .order_by(latest_signal_completed_at.desc())
+        .limit(limit)
+    )
+    if suite_id:
+        stmt = stmt.where(AgentBenchmarkExperiment.suite_id == suite_id)
+    if project_id:
+        stmt = stmt.where(
+            AgentBenchmarkExperiment.project_id == project_id,
+            AgentBenchmarkRun.project_id == project_id,
+        )
+    return [row[0] for row in (await db.execute(stmt)).all()]
 
 
 def _build_overview(runs: list[AgentBenchmarkRun], open_clusters_count: int) -> dict[str, Any]:
@@ -768,10 +836,10 @@ async def get_agent_benchmark_dashboard(
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
     runs = await _query_recent_runs(db, agent_slug, cutoff, suite_id)
-    open_clusters = await _query_open_clusters(db, agent_slug, suite_id)
+    open_clusters = await _query_open_clusters(db, agent_slug, cutoff, suite_id)
     model_rows = await _query_model_performance(db, agent_slug, cutoff, suite_id)
     case_rows = await _query_case_attempts(db, agent_slug, cutoff, suite_id)
-    experiment_summaries = await _query_experiment_summaries(db, agent_slug, suite_id)
+    experiment_summaries = await _query_experiment_summaries(db, agent_slug, cutoff, suite_id)
     limited_runs = runs[:limit]
 
     return {

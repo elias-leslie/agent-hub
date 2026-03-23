@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db import async_session
-from app.models import AgentBenchmarkExperiment, AgentRegressionCluster, Session, SessionEvent
+from app.models import Session, SessionEvent
 from app.models.agent_performance_log import AgentPerformanceLog
 from app.models.session import SessionEventType
 from app.services.agent_benchmark_service import get_benchmark_experiment_summary_by_key
@@ -18,6 +18,8 @@ from app.services.benchmark_failure_classification import (
 )
 from app.services.memory._analytics_utilization import get_memory_utilization_summary
 from app.services.memory.episode_operations import batch_get_episodes
+
+from ._benchmark_dashboard import query_open_regression_clusters, query_signal_experiments
 
 
 def _format_timestamp(value: datetime | None) -> str:
@@ -261,29 +263,20 @@ async def collect_improvement_signal_snapshot(
         performance_stmt = performance_stmt.order_by(AgentPerformanceLog.created_at.desc())
         performance_logs = list((await db.execute(performance_stmt)).scalars().all())
 
-        experiment_stmt = select(AgentBenchmarkExperiment).where(
-            AgentBenchmarkExperiment.agent_slug == primary_agent_slug,
-            AgentBenchmarkExperiment.updated_at >= cutoff,
+        experiments = await query_signal_experiments(
+            db,
+            agent_slug=primary_agent_slug,
+            cutoff=cutoff,
+            project_id=project_id,
+            limit=max_experiments,
         )
-        if project_id:
-            experiment_stmt = experiment_stmt.where(AgentBenchmarkExperiment.project_id == project_id)
-        experiment_stmt = experiment_stmt.order_by(
-            # Show open experiments first, then most recently updated
-            (AgentBenchmarkExperiment.status == "open").desc(),
-            AgentBenchmarkExperiment.updated_at.desc(),
-        ).limit(max_experiments)
-        experiments = list((await db.execute(experiment_stmt)).scalars().all())
-
-        cluster_stmt = (
-            select(AgentRegressionCluster)
-            .where(
-                AgentRegressionCluster.agent_slug == primary_agent_slug,
-                AgentRegressionCluster.status == "open",
-            )
-            .order_by(AgentRegressionCluster.last_seen_at.desc())
-            .limit(max_clusters)
+        open_clusters = await query_open_regression_clusters(
+            db,
+            agent_slug=primary_agent_slug,
+            cutoff=cutoff,
+            project_id=project_id,
+            limit=max_clusters,
         )
-        open_clusters = list((await db.execute(cluster_stmt)).scalars().all())
 
         memory_event_stmt = select(SessionEvent.event_type, SessionEvent.tool_input).where(
             SessionEvent.created_at >= cutoff,

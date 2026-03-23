@@ -23,6 +23,7 @@ from ._benchmark_config import (
     memory_state_descriptor,  # noqa: F401
 )
 from ._benchmark_dashboard import (
+    benchmark_signal_run_clause,
     get_agent_benchmark_dashboard,  # noqa: F401
     summarize_benchmark_experiment,
 )
@@ -50,6 +51,7 @@ async def get_benchmark_experiment_summary_by_key(
             .where(
                 AgentBenchmarkRun.experiment_id == experiment.id,
                 AgentBenchmarkRun.completed_at.is_not(None),
+                benchmark_signal_run_clause(AgentBenchmarkRun),
             )
             .order_by(AgentBenchmarkRun.completed_at.desc())
         )
