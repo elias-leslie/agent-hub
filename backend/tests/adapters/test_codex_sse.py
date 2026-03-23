@@ -36,12 +36,15 @@ class TestBuildRequestBody:
             prompt_cache_key="sess-123",
         )
 
-        assert body["tools"] == [{
-            "type": "function",
-            "name": "read_file",
-            "description": "Read a file",
-            "parameters": {"type": "object", "properties": {"path": {"type": "string"}}},
-        }]
+        assert body["tools"] == [
+            {
+                "type": "function",
+                "name": "read_file",
+                "description": "Read a file",
+                "parameters": {"type": "object", "properties": {"path": {"type": "string"}}},
+            },
+            {"type": "web_search_preview"},
+        ]
         assert body["tool_choice"] == "auto"
         assert body["parallel_tool_calls"] is True
         assert body["prompt_cache_key"] == "sess-123"

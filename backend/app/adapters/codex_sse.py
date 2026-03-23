@@ -65,7 +65,10 @@ def build_request_body(
     if max_tokens is not None:
         body["max_output_tokens"] = max_tokens
     if kwargs.get("tools"):
-        body["tools"] = _convert_tools(kwargs["tools"])
+        body["tools"] = [
+            *_convert_tools(kwargs["tools"]),
+            {"type": "web_search_preview"},
+        ]
         body["tool_choice"] = "auto"
         body["parallel_tool_calls"] = True
     if kwargs.get("reasoning_effort"):
