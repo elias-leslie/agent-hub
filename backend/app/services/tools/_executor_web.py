@@ -6,11 +6,14 @@ import asyncio
 import json
 import logging
 import re
+from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
 from typing import Any, cast
 
 import httpx
+
+from app.config import settings
 
 DEFAULT_WEB_SEARCH_RESULTS = 5
 MAX_WEB_SEARCH_RESULTS = 10
@@ -18,6 +21,11 @@ DEFAULT_WEB_FETCH_MAX_CHARS = 12000
 MAX_WEB_FETCH_MAX_CHARS = 50000
 DEFAULT_SEARCH_REGION = "wt-wt"
 DEFAULT_FETCH_TIMEOUT = 20.0
+DEFAULT_SEARXNG_TIMEOUT = 8.0
+DEFAULT_SEARXNG_PORT = 18900
+DEFAULT_BROWSER_CDP_PORT = 9222
+DEFAULT_BROWSER_RENDER_WAIT_MS = 2500
+_SPARSE_CONTENT_CHARS = 400
 DEFAULT_FETCH_ACCEPT = (
     "text/markdown, text/html;q=0.9, application/xhtml+xml;q=0.8, "
     "text/plain;q=0.7, application/json;q=0.5, */*;q=0.1"
@@ -28,6 +36,27 @@ DEFAULT_USER_AGENT = (
 
 _SEARCH_TYPES = frozenset({"text", "news"})
 _TIMELIMITS = frozenset({"d", "w", "m", "y"})
+_SEARXNG_TIMELIMITS = {
+    "d": "day",
+    "w": "week",
+    "m": "month",
+    "y": "year",
+}
+_SPA_SHELL_MARKERS = (
+    'id="__next"',
+    "id='__next'",
+    'id="root"',
+    "id='root'",
+    'id="app"',
+    "id='app'",
+    "data-reactroot",
+    "ng-version",
+    "id=\"___gatsby\"",
+    "__NUXT__",
+)
+_EMPTY_DYNAMIC_CONTAINER_RE = re.compile(
+    r"<(div|main|section|article)[^>]+(?:id|class)=['\"][^'\"]+['\"][^>]*>\s*</(?:div|main|section|article)>"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +71,17 @@ def _error_payload(message: str, **extra: object) -> str:
 
 def _normalize_whitespace(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
+
+
+@dataclass(slots=True)
+class _PageExtraction:
+    content: str
+    format: str
+    title: str | None = None
+    site_name: str | None = None
+    author: str | None = None
+    published: str | None = None
+    markdown_tokens_estimate: int | None = None
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -219,10 +259,19 @@ def _normalize_search_result(index: int, raw: dict[str, Any]) -> dict[str, objec
         return None
 
     title = _normalize_whitespace(str(raw.get("title") or url))
-    snippet = _normalize_whitespace(str(raw.get("body") or raw.get("excerpt") or ""))
+    snippet = _normalize_whitespace(
+        str(raw.get("body") or raw.get("excerpt") or raw.get("content") or "")
+    )
     source = _normalize_whitespace(str(raw.get("source") or ""))
+    search_engine = _normalize_whitespace(str(raw.get("engine") or ""))
     published = _normalize_whitespace(
-        str(raw.get("date") or raw.get("published") or raw.get("published_at") or "")
+        str(
+            raw.get("date")
+            or raw.get("published")
+            or raw.get("published_at")
+            or raw.get("publishedDate")
+            or ""
+        )
     )
 
     result: dict[str, object] = {
@@ -234,9 +283,33 @@ def _normalize_search_result(index: int, raw: dict[str, Any]) -> dict[str, objec
         result["snippet"] = snippet
     if source:
         result["source"] = source
+    if search_engine:
+        result["search_engine"] = search_engine
     if published:
         result["published"] = published
     return result
+
+
+def _get_searxng_base_url() -> str | None:
+    configured = settings.web_search_searxng_url.strip()
+    if configured:
+        return configured.rstrip("/")
+
+    host = settings.sf_browser_host.strip()
+    if not host:
+        return None
+    return f"http://{host}:{DEFAULT_SEARXNG_PORT}"
+
+
+def _get_browser_cdp_url() -> str | None:
+    configured = settings.web_fetch_browser_cdp_url.strip()
+    if configured:
+        return configured
+
+    host = settings.sf_browser_host.strip()
+    if not host:
+        return None
+    return f"http://{host}:{DEFAULT_BROWSER_CDP_PORT}"
 
 
 def _run_search_request(
@@ -282,6 +355,58 @@ def _run_search_request(
         return normalized
 
 
+async def _search_with_searxng(
+    base_url: str,
+    *,
+    query: str,
+    max_results: int,
+    search_type: str,
+    timelimit: str | None,
+) -> list[dict[str, object]]:
+    params: dict[str, str | int] = {
+        "q": query,
+        "format": "json",
+        "safesearch": 1,
+    }
+    if search_type == "news":
+        params["categories"] = "news"
+    if timelimit:
+        params["time_range"] = _SEARXNG_TIMELIMITS[timelimit]
+
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        timeout=DEFAULT_SEARXNG_TIMEOUT,
+        headers={
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept": "application/json",
+        },
+    ) as client:
+        response = await client.get(f"{base_url}/search", params=params)
+        response.raise_for_status()
+        payload = response.json()
+
+    raw_results = payload.get("results")
+    if not isinstance(raw_results, list):
+        raise ValueError("SearXNG response missing results list")
+
+    normalized: list[dict[str, object]] = []
+    seen_urls: set[str] = set()
+    for raw in raw_results:
+        if not isinstance(raw, dict):
+            continue
+        result = _normalize_search_result(len(normalized) + 1, raw)
+        if result is None:
+            continue
+        url = str(result["url"])
+        if url in seen_urls:
+            continue
+        seen_urls.add(url)
+        normalized.append(result)
+        if len(normalized) >= max_results:
+            break
+    return normalized
+
+
 async def search_web(
     query: str,
     max_results: int = DEFAULT_WEB_SEARCH_RESULTS,
@@ -304,28 +429,62 @@ async def search_web(
         )
 
     bounded_max_results = max(1, min(max_results, MAX_WEB_SEARCH_RESULTS))
-    try:
-        results = await asyncio.to_thread(
-            _run_search_request,
-            normalized_query,
-            bounded_max_results,
-            search_type,
-            timelimit,
-        )
-    except Exception as exc:
-        logger.warning("search_web failed for %r: %s", normalized_query, exc)
-        return _error_payload(
-            "search_web request failed",
-            detail=str(exc),
-            query=normalized_query,
-        )
+    provider = "ddgs"
+    provider_errors: list[dict[str, str]] = []
+    results: list[dict[str, object]] = []
+
+    searxng_base_url = _get_searxng_base_url()
+    if searxng_base_url:
+        try:
+            results = await _search_with_searxng(
+                searxng_base_url,
+                query=normalized_query,
+                max_results=bounded_max_results,
+                search_type=search_type,
+                timelimit=timelimit,
+            )
+            if results:
+                provider = "searxng"
+        except Exception as exc:
+            logger.warning("search_web searxng failed for %r: %s", normalized_query, exc)
+            provider_errors.append(
+                {
+                    "provider": "searxng",
+                    "detail": str(exc),
+                }
+            )
+
+    if not results:
+        try:
+            results = await asyncio.to_thread(
+                _run_search_request,
+                normalized_query,
+                bounded_max_results,
+                search_type,
+                timelimit,
+            )
+        except Exception as exc:
+            logger.warning("search_web failed for %r: %s", normalized_query, exc)
+            error_payload: dict[str, object] = {
+                "detail": str(exc),
+                "query": normalized_query,
+            }
+            if provider_errors:
+                error_payload["provider_errors"] = provider_errors
+            return _error_payload(
+                "search_web request failed",
+                **error_payload,
+            )
 
     payload: dict[str, object] = {
         "query": normalized_query,
+        "provider": provider,
         "result_count": len(results),
         "results": results,
         "search_type": search_type,
     }
+    if provider_errors:
+        payload["provider_errors"] = provider_errors
     if timelimit:
         payload["timelimit"] = timelimit
     return _json_payload(payload)
@@ -361,6 +520,104 @@ def _extract_markdown_payload(html: str, url: str) -> tuple[dict[str, Any], str]
         output_format="markdown",
     ) or ""
     return metadata, markdown.strip()
+
+
+def _extract_page_content(
+    content_type: str,
+    raw_text: str,
+    final_url: str,
+    markdown_tokens_estimate: str | None = None,
+) -> _PageExtraction:
+    title: str | None = None
+    site_name: str | None = None
+    author: str | None = None
+    published: str | None = None
+    content_format = "text"
+    parsed_markdown_tokens: int | None = None
+
+    if "markdown" in content_type:
+        content = raw_text.strip()
+        content_format = "markdown"
+    elif "html" in content_type or not content_type:
+        metadata, markdown = _extract_markdown_payload(raw_text, final_url)
+        title = metadata.get("title") or _extract_title_from_html(raw_text)
+        site_name = metadata.get("sitename") or metadata.get("site_name")
+        author = metadata.get("author")
+        published = metadata.get("date")
+
+        extracted_text = markdown or metadata.get("raw_text") or metadata.get("text") or ""
+        content = markdown if markdown else _normalize_whitespace(str(extracted_text))
+        if not content:
+            content = _fallback_html_text(raw_text)
+        content_format = "markdown" if markdown else "text"
+    elif content_type.startswith("text/") or "json" in content_type:
+        content = raw_text
+    else:
+        raise ValueError("unsupported content type")
+
+    if markdown_tokens_estimate and markdown_tokens_estimate.isdigit():
+        parsed_markdown_tokens = int(markdown_tokens_estimate)
+
+    return _PageExtraction(
+        content=content,
+        format=content_format,
+        title=title,
+        site_name=site_name,
+        author=author,
+        published=published,
+        markdown_tokens_estimate=parsed_markdown_tokens,
+    )
+
+
+def _should_try_browser_fallback(
+    content_type: str,
+    raw_html: str,
+    content: str,
+) -> bool:
+    if "html" not in content_type and content_type:
+        return False
+    stripped_content = content.strip()
+    lowered_html = raw_html.lower()
+    if len(stripped_content) < _SPARSE_CONTENT_CHARS:
+        if len(raw_html) >= 1000:
+            return True
+        if "<script" in lowered_html and _EMPTY_DYNAMIC_CONTAINER_RE.search(lowered_html):
+            return True
+    return len(stripped_content) < (_SPARSE_CONTENT_CHARS * 3) and any(
+        marker.lower() in lowered_html for marker in _SPA_SHELL_MARKERS
+    )
+
+
+def _browser_result_is_better(direct_content: str, browser_content: str) -> bool:
+    direct_len = len(direct_content.strip())
+    browser_len = len(browser_content.strip())
+    if browser_len <= direct_len:
+        return False
+    if direct_len < _SPARSE_CONTENT_CHARS:
+        return browser_len >= direct_len + 40
+    return browser_len >= int(direct_len * 1.25)
+
+
+async def _render_html_via_browser(url: str, browser_cdp_url: str) -> tuple[str, str]:
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.connect_over_cdp(browser_cdp_url)
+        try:
+            page = await browser.new_page()
+            try:
+                await page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=int(DEFAULT_FETCH_TIMEOUT * 1000),
+                )
+                await page.wait_for_timeout(DEFAULT_BROWSER_RENDER_WAIT_MS)
+                rendered_html = await page.content()
+                return page.url, rendered_html
+            finally:
+                await page.close()
+        finally:
+            await browser.close()
 
 
 async def fetch_web_page(
@@ -400,47 +657,51 @@ async def fetch_web_page(
     content_type = response.headers.get("content-type", "").lower()
     final_url = str(response.url)
     raw_text = response.text
-    title: str | None = None
-    site_name: str | None = None
-    author: str | None = None
-    published: str | None = None
-    content_format = "text"
     markdown_tokens_estimate = response.headers.get("x-markdown-tokens")
+    fetch_backend = "direct"
 
-    if "markdown" in content_type:
-        content = raw_text.strip()
-        content_format = "markdown"
-    elif "html" in content_type or not content_type:
-        metadata, markdown = await asyncio.to_thread(
-            _extract_markdown_payload,
+    try:
+        page = await asyncio.to_thread(
+            _extract_page_content,
+            content_type,
             raw_text,
             final_url,
+            markdown_tokens_estimate,
         )
-        title = metadata.get("title") or _extract_title_from_html(raw_text)
-        site_name = metadata.get("sitename") or metadata.get("site_name")
-        author = metadata.get("author")
-        published = metadata.get("date")
-
-        extracted_text = markdown or metadata.get("raw_text") or metadata.get("text") or ""
-        content = markdown if markdown else _normalize_whitespace(str(extracted_text))
-        if not content:
-            content = _fallback_html_text(raw_text)
-        content_format = "markdown" if markdown else "text"
-    elif content_type.startswith("text/") or "json" in content_type:
-        content = raw_text
-    else:
+    except ValueError:
         return _error_payload(
             "fetch_web_page only supports text-like responses",
             content_type=content_type,
             url=normalized_url,
         )
 
+    browser_cdp_url = _get_browser_cdp_url()
+    if browser_cdp_url and _should_try_browser_fallback(content_type, raw_text, page.content):
+        try:
+            browser_final_url, browser_html = await _render_html_via_browser(
+                normalized_url,
+                browser_cdp_url,
+            )
+            browser_page = await asyncio.to_thread(
+                _extract_page_content,
+                "text/html; charset=utf-8",
+                browser_html,
+                browser_final_url,
+            )
+            if _browser_result_is_better(page.content, browser_page.content):
+                page = browser_page
+                final_url = browser_final_url
+                content_type = "text/html; charset=utf-8"
+                fetch_backend = "browser"
+        except Exception as exc:
+            logger.warning("fetch_web_page browser fallback failed for %r: %s", normalized_url, exc)
+
     focused_content, focus_metadata = _select_focused_content(
-        content,
+        page.content,
         focus_query,
         bounded_max_chars,
     )
-    content_for_payload = focused_content if focus_metadata.get("focused") else content
+    content_for_payload = focused_content if focus_metadata.get("focused") else page.content
 
     truncated_content, truncated = _truncate_text(content_for_payload, bounded_max_chars)
     excerpt, _ = _truncate_text(
@@ -451,24 +712,25 @@ async def fetch_web_page(
     payload: dict[str, object] = {
         "content": truncated_content,
         "content_type": content_type or "unknown",
+        "fetch_backend": fetch_backend,
         "final_url": final_url,
-        "format": content_format,
+        "format": page.format,
         "status_code": response.status_code,
         "truncated": truncated,
         "url": normalized_url,
     }
-    if title:
-        payload["title"] = title
-    if site_name:
-        payload["site_name"] = site_name
-    if author:
-        payload["author"] = author
-    if published:
-        payload["published"] = published
+    if page.title:
+        payload["title"] = page.title
+    if page.site_name:
+        payload["site_name"] = page.site_name
+    if page.author:
+        payload["author"] = page.author
+    if page.published:
+        payload["published"] = page.published
     if excerpt:
         payload["excerpt"] = excerpt
-    if markdown_tokens_estimate and markdown_tokens_estimate.isdigit():
-        payload["markdown_tokens_estimate"] = int(markdown_tokens_estimate)
+    if page.markdown_tokens_estimate is not None:
+        payload["markdown_tokens_estimate"] = page.markdown_tokens_estimate
     if focus_query:
         payload["focus_query"] = _normalize_whitespace(focus_query)
     if focus_metadata.get("focused"):

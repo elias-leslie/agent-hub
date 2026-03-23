@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.services.tools import _executor_web
 from app.services.tools._executor_web import fetch_web_page, search_web
 
 
@@ -47,16 +49,19 @@ class _FakeAsyncClient:
 class TestSearchWeb:
     @pytest.mark.asyncio
     async def test_returns_normalized_payload(self) -> None:
-        with patch(
-            "app.services.tools._executor_web._run_search_request",
-            return_value=[
-                {
-                    "rank": 1,
-                    "title": "Agent Hub",
-                    "url": "https://example.com",
-                    "snippet": "Research result",
-                }
-            ],
+        with (
+            patch("app.services.tools._executor_web._get_searxng_base_url", return_value=None),
+            patch(
+                "app.services.tools._executor_web._run_search_request",
+                return_value=[
+                    {
+                        "rank": 1,
+                        "title": "Agent Hub",
+                        "url": "https://example.com",
+                        "snippet": "Research result",
+                    }
+                ],
+            ),
         ):
             result = await search_web("agent hub", max_results=3, search_type="text")
 
@@ -64,6 +69,7 @@ class TestSearchWeb:
         assert payload["query"] == "agent hub"
         assert payload["result_count"] == 1
         assert payload["results"][0]["url"] == "https://example.com"
+        assert payload["provider"] == "ddgs"
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_timelimit(self) -> None:
@@ -71,6 +77,68 @@ class TestSearchWeb:
 
         payload = json.loads(result)
         assert "timelimit" in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_prefers_searxng_when_configured(self) -> None:
+        with (
+            patch.object(_executor_web.settings, "web_search_searxng_url", "http://vm100:18900"),
+            patch(
+                "app.services.tools._executor_web._search_with_searxng",
+                return_value=[
+                    {
+                        "rank": 1,
+                        "title": "React docs",
+                        "url": "https://react.dev/reference/react/useEffectEvent",
+                    }
+                ],
+            ) as mock_searxng,
+            patch("app.services.tools._executor_web._run_search_request") as mock_ddgs,
+        ):
+            result = await search_web("react useEffectEvent", max_results=3)
+
+        payload = json.loads(result)
+        assert payload["provider"] == "searxng"
+        assert payload["results"][0]["url"] == "https://react.dev/reference/react/useEffectEvent"
+        mock_searxng.assert_awaited_once_with(
+            "http://vm100:18900",
+            query="react useEffectEvent",
+            max_results=3,
+            search_type="text",
+            timelimit=None,
+        )
+        mock_ddgs.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_ddgs_when_searxng_fails(self) -> None:
+        with (
+            patch.object(_executor_web.settings, "web_search_searxng_url", "http://vm100:18900"),
+            patch(
+                "app.services.tools._executor_web._search_with_searxng",
+                side_effect=RuntimeError("searxng unavailable"),
+            ) as mock_searxng,
+            patch(
+                "app.services.tools._executor_web._run_search_request",
+                return_value=[
+                    {
+                        "rank": 1,
+                        "title": "Fallback result",
+                        "url": "https://example.com/fallback",
+                    }
+                ],
+            ) as mock_ddgs,
+        ):
+            result = await search_web("agent hub", max_results=2)
+
+        payload = json.loads(result)
+        assert payload["provider"] == "ddgs"
+        assert payload["provider_errors"] == [
+            {
+                "provider": "searxng",
+                "detail": "searxng unavailable",
+            }
+        ]
+        mock_searxng.assert_awaited_once()
+        mock_ddgs.assert_called_once()
 
 
 class TestFetchWebPage:
@@ -103,6 +171,7 @@ class TestFetchWebPage:
         assert payload["title"] == "Example title"
         assert payload["author"] == "Example author"
         assert payload["site_name"] == "Example Site"
+        assert payload["fetch_backend"] == "direct"
         assert payload["format"] == "markdown"
         assert payload["content"] == "# Heading\n\nBody text"
         assert payload["truncated"] is False
@@ -129,6 +198,7 @@ class TestFetchWebPage:
         assert payload["format"] == "markdown"
         assert payload["content"] == "---\ntitle: Example\n---\n\n# Heading\n\nBody text"
         assert payload["markdown_tokens_estimate"] == 42
+        assert payload["fetch_backend"] == "direct"
         mock_extract.assert_not_called()
 
     @pytest.mark.asyncio
@@ -172,6 +242,68 @@ class TestFetchWebPage:
         assert payload["focus_query"] == "extract endpoint markdown"
         assert "extract endpoint returns markdown" in payload["content"]
         assert "unrelated footer" not in payload["content"]
+
+    @pytest.mark.asyncio
+    async def test_uses_browser_fallback_for_sparse_html_pages(self) -> None:
+        response = _FakeResponse(
+            text=(
+                "<!doctype html><html><head><title>Shell</title>"
+                "<script>setTimeout(() => { const target = document.getElementById('late-content'); "
+                "target.textContent = 'Loaded dynamic content with actual pricing.'; }, 1200);</script>"
+                "</head><body><main><h1>Shell</h1><p>Starts mostly empty.</p>"
+                "<div id='late-content'></div></main></body></html>"
+            )
+        )
+        direct_page = SimpleNamespace(
+            content="Shell",
+            format="text",
+            title="Shell",
+            site_name=None,
+            author=None,
+            published=None,
+            markdown_tokens_estimate=None,
+        )
+        browser_page = SimpleNamespace(
+            content="# Browser title\n\nLoaded dynamic content with actual pricing.",
+            format="markdown",
+            title="Browser title",
+            site_name=None,
+            author=None,
+            published=None,
+            markdown_tokens_estimate=None,
+        )
+
+        with (
+            patch.object(_executor_web.settings, "web_fetch_browser_cdp_url", "http://vm100:9222"),
+            patch(
+                "app.services.tools._executor_web.httpx.AsyncClient",
+                return_value=_FakeAsyncClient(response),
+            ),
+            patch(
+                "app.services.tools._executor_web._extract_page_content",
+                side_effect=[direct_page, browser_page],
+            ) as mock_extract,
+            patch(
+                "app.services.tools._executor_web._render_html_via_browser",
+                new_callable=AsyncMock,
+                return_value=(
+                    "https://example.com/browser",
+                    "<html><body><main><h1>Browser title</h1><p>Loaded dynamic content with actual pricing.</p></main></body></html>",
+                ),
+            ) as mock_render,
+        ):
+            result = await fetch_web_page("https://example.com", max_chars=5000)
+
+        payload = json.loads(result)
+        assert payload["fetch_backend"] == "browser"
+        assert payload["final_url"] == "https://example.com/browser"
+        assert payload["title"] == "Browser title"
+        assert "Loaded dynamic content" in payload["content"]
+        assert mock_extract.call_count == 2
+        mock_render.assert_awaited_once_with(
+            "https://example.com",
+            "http://vm100:9222",
+        )
 
     @pytest.mark.asyncio
     async def test_rejects_non_http_url(self) -> None:
