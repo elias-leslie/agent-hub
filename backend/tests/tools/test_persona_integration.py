@@ -270,6 +270,36 @@ class TestAllPersonaToolsDispatch:
         assert "Removed persona-relevant" in result
 
     @pytest.mark.asyncio
+    async def test_manage_memory_tags_dispatches(self, executor: DirectToolExecutor):
+        full_uuid = "abc12345-0000-4000-8000-000000000000"
+        with (
+            patch(
+                "app.services.memory.memory_utils.resolve_uuid_prefix",
+                new_callable=AsyncMock,
+                return_value=full_uuid,
+            ),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["debugger-relevant"],
+            ),
+            patch(
+                "app.services.memory.episode_property_setters.set_episode_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+        ):
+            result = await executor.dispatch(
+                "manage_memory_tags",
+                {
+                    "action": "add_tags",
+                    "memory_uuid": "abc12345",
+                    "tags": ["oauth"],
+                },
+            )
+        assert "Updated tags for memory abc12345" in result
+
+    @pytest.mark.asyncio
     async def test_submit_onboarding_dispatches(self, executor: DirectToolExecutor):
         persona = _make_persona(
             onboarding_phase="in_progress",
@@ -488,6 +518,25 @@ class TestPersonaBashWorkflowGuards:
         assert "Model catalog" in result
 
     @pytest.mark.asyncio
+    async def test_manage_model_config_update_agent_memory_dispatches(self, executor: DirectToolExecutor):
+        with patch(
+            "app.services.tools._executor_model_mgmt.update_agent_memory",
+            new_callable=AsyncMock,
+            return_value="Agent 'persona' memory updated (version 8).",
+        ):
+            result = await executor.dispatch(
+                "manage_model_config",
+                {
+                    "action": "update_agent_memory",
+                    "agent_slug": "persona",
+                    "memory_config_patch": {"include_references": True},
+                    "add_audience_tags": ["persona-relevant"],
+                    "change_reason": "route references",
+                },
+            )
+        assert "memory updated" in result
+
+    @pytest.mark.asyncio
     async def test_log_agent_performance_dispatches(self, executor: DirectToolExecutor):
         mock_log = MagicMock()
         mock_log.id = 42
@@ -540,6 +589,15 @@ class TestPersonaBashWorkflowGuards:
         with patch("app.db.async_session", _session):
             result = await executor.dispatch("review_agent_performance", {})
         assert "No performance logs" in result
+
+    @pytest.mark.asyncio
+    async def test_review_improvement_signals_dispatches(self, executor: DirectToolExecutor):
+        with patch(
+            "app.services.tools._executor_performance.review_improvement_signals",
+            new=AsyncMock(return_value="# Improvement Signals\n- persona: friction=2"),
+        ):
+            result = await executor.dispatch("review_improvement_signals", {})
+        assert "Improvement Signals" in result
 
     @pytest.mark.asyncio
     async def test_unknown_tool_returns_error(self, executor: DirectToolExecutor):
@@ -621,6 +679,7 @@ class TestPersonaToolTierExemption:
         "manage_model_config",
         "log_agent_performance",
         "review_agent_performance",
+        "review_improvement_signals",
     ]
 
     ALL_PERSONA_OPERATIONAL: ClassVar[list[str]] = [

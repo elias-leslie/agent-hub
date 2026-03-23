@@ -544,6 +544,61 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
                 "benchmark": ("evidence", "data", "signals"),
             },
         ),
+        PersonaBenchmarkCase(
+            case_id="memory_routing_reconsideration",
+            family="self-correction",
+            name="Memory Routing Reconsideration",
+            description="Inspect agent configuration before deciding whether memory routing needs reconciliation.",
+            scenario=(
+                "Use manage_model_config before answering.\n"
+                "OBSERVATION: Jenny's last two honing reports show a specialist repeatedly misses a durable project workflow "
+                "until after a manual memory search, even though the reference memory already exists.\n"
+                "likely_root_cause=Agent memory routing or reference-tag targeting, not missing task scope.\n"
+                "correct_layer=agent memory config and reference-tier audience tags before more dispatching.\n"
+                "question=Should the persona reconcile memory routing now?\n"
+            ),
+            expected={
+                "case_id": "memory_routing_reconsideration",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_tool_names=("manage_model_config",),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("memory", "routing"),
+            summary_term_alternatives={
+                "memory": ("reference", "context", "retrieval"),
+                "routing": ("audience", "tags", "filter", "include_references"),
+            },
+        ),
+        PersonaBenchmarkCase(
+            case_id="rebuild_rule_reconsideration",
+            family="self-correction",
+            name="Rebuild Rule Reconsideration",
+            description="Inspect mandate exposure before deciding whether a specialist missing rebuild.sh needs reconciliation.",
+            scenario=(
+                "Use manage_model_config before answering.\n"
+                "OBSERVATION: A coding specialist has twice submitted Agent Hub changes without running rebuild.sh agent-hub, "
+                "and the correction already exists as a universal workflow rule.\n"
+                "likely_root_cause=Mandate exposure or instruction-compliance drift, not a missing project reference.\n"
+                "correct_layer=agent mandate/guardrail exposure or core workflow compliance before retagging references.\n"
+                "question=Should the persona reconcile this rebuild-rule miss now?\n"
+            ),
+            expected={
+                "case_id": "rebuild_rule_reconsideration",
+                "primary_action": "reconcile",
+                "should_dispatch": False,
+                "should_close": False,
+            },
+            required_tool_names=("manage_model_config",),
+            max_turns=8,
+            execute_tools=True,
+            required_summary_terms=("rebuild", "mandate"),
+            summary_term_alternatives={
+                "mandate": ("guardrail", "workflow rule", "universal rule", "instruction"),
+            },
+        ),
     ]
 
 
@@ -558,6 +613,16 @@ def get_case_by_id(case_id: str) -> PersonaBenchmarkCase:
 def get_case_name_map() -> dict[str, str]:
     """Return a mapping of case_id -> human-readable name for all known cases."""
     return {case.case_id: case.name for case in get_persona_benchmark_cases()}
+
+
+def get_case_ids_by_family(family: str) -> list[str]:
+    """Return all case ids for a given benchmark family."""
+    return [case.case_id for case in get_persona_benchmark_cases() if case.family == family]
+
+
+def get_self_correction_case_ids() -> list[str]:
+    """Return the self-correction case battery used for Jenny's autonomous honing."""
+    return get_case_ids_by_family("self-correction")
 
 
 def suggest_suite_id(case_ids: list[str]) -> str | None:

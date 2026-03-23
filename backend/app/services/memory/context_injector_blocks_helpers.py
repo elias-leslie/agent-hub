@@ -26,6 +26,29 @@ def _safe_tags(raw: Any) -> list[str]:
     return []
 
 
+def _safe_int(raw: Any) -> int:
+    """Normalize nullable numeric values to ints."""
+    try:
+        return int(raw or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _safe_confidence(raw: Any) -> float | None:
+    """Normalize nullable confidence values to floats."""
+    try:
+        return float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_optional_datetime(raw: Any) -> datetime | None:
+    """Normalize optional datetimes without inventing fallback timestamps."""
+    if isinstance(raw, datetime):
+        return raw
+    return None
+
+
 def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SYSTEM) -> MemorySearchResult | None:
     """Convert a raw episode dict to a MemorySearchResult, or None if content is missing."""
     content = ep.get("content") or ""
@@ -40,11 +63,18 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         content=content,
         summary=ep.get("summary"),
         source=source,
-        relevance_score=1.0,
+        relevance_score=float(ep.get("relevance_score") or 1.0),
         created_at=created_at,
         facts=[content],
         pinned=ep.get("pinned", False),
         tags=_safe_tags(ep.get("tags")),
+        loaded_count=_safe_int(ep.get("loaded_count")),
+        referenced_count=_safe_int(ep.get("referenced_count")),
+        token_count=_safe_int(ep.get("token_count")),
+        confidence=_safe_confidence(ep.get("confidence")),
+        last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
+        source_description=ep.get("source_description"),
+        auto_inject=bool(ep.get("auto_inject", False)),
     )
 
 
@@ -78,6 +108,13 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             facts=[content],
             pinned=ep.get("pinned", False),
             tags=_safe_tags(ep.get("tags")),
+            loaded_count=_safe_int(ep.get("loaded_count")),
+            referenced_count=_safe_int(ep.get("referenced_count")),
+            token_count=_safe_int(ep.get("token_count")),
+            confidence=_safe_confidence(ep.get("confidence")),
+            last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
+            source_description=ep.get("source_description"),
+            auto_inject=bool(ep.get("auto_inject", False)),
         )
     except Exception as e:
         logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
@@ -106,4 +143,11 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         facts=[content],
         pinned=ep.get("pinned", False),
         tags=_safe_tags(ep.get("tags")),
+        loaded_count=_safe_int(ep.get("loaded_count")),
+        referenced_count=_safe_int(ep.get("referenced_count")),
+        token_count=_safe_int(ep.get("token_count")),
+        confidence=_safe_confidence(ep.get("confidence")),
+        last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
+        source_description=ep.get("source_description"),
+        auto_inject=bool(ep.get("auto_inject", False)),
     )

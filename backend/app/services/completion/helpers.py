@@ -33,6 +33,7 @@ async def inject_memory_context(
             messages=messages,
             scope=scope,
             scope_id=scope_id,
+            variant=options.memory_variant_override,
             task_type=options.task_type,
             phase=options.phase,
             session_id=options.session_id,

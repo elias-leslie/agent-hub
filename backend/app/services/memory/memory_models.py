@@ -83,6 +83,13 @@ class MemorySearchResult(BaseModel):
     category: MemoryCategory | None = None
     pinned: bool = False
     tags: list[str] = []
+    loaded_count: int = 0
+    referenced_count: int = 0
+    token_count: int = 0
+    confidence: float | None = None
+    last_accessed_at: datetime | None = None
+    source_description: str | None = None
+    auto_inject: bool = False
 
     @property
     def prompt_content(self) -> str:

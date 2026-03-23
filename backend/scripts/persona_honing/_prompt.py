@@ -5,7 +5,12 @@ import json
 from typing import Any
 
 from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
-from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+from scripts.persona_benchmark_eval import (
+    PersonaBenchmarkRun,
+    _load_first_json_object,
+    _strip_leading_narration_tags,
+    strip_markdown_fences,
+)
 from scripts.persona_honing._clusters import (
     _diff_failure_clusters,
     _group_failures,
@@ -42,6 +47,7 @@ def build_honing_prompt(
     previous_clusters: list[dict[str, Any]] | None = None,
     review_run: CompletionReviewBenchmarkRun | None = None,
     previous_review_clusters: list[dict[str, Any]] | None = None,
+    improvement_signals: str | None = None,
     max_failures: int = 6,
 ) -> str:
     """Build the persona self-improvement prompt for one benchmark run."""
@@ -67,6 +73,7 @@ def build_honing_prompt(
     review_ranking_block = "- not run"
     review_failure_block = "Completion-review failure clusters:\n- not run"
     review_persistent_block = "Persistent completion-review clusters from the previous iteration:\n- not run"
+    improvement_signals_block = improvement_signals.strip() if improvement_signals else "- none"
     if review_run is not None:
         review_ranking_lines = [
             f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
@@ -103,15 +110,22 @@ def build_honing_prompt(
         f"{review_ranking_block}\n\n"
         f"{review_failure_block}\n\n"
         f"{review_persistent_block}\n\n"
+        "Recent improvement signals:\n"
+        f"{improvement_signals_block}\n\n"
         "Reference heuristics to borrow when relevant:\n"
         f"{reference_block}\n\n"
         "Required behavior:\n"
         "- Diagnose the canonical layer first: heartbeat instructions, memory retrieval, observability, or model config.\n"
         "- When reviewing your own performance history, use agent_slug=\"persona\" rather than a display name string.\n"
+        "- Use repeated issue clusters, benchmark decisions, and low-yield reference evidence to choose the smallest effective fix.\n"
         "- If you change heartbeat instructions, read them first and make a small targeted edit.\n"
         "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
+        "- If memory routing looks implicated, inspect current agent memory config first and use manage_memory_tags for reference-tier retagging before editing heartbeat instructions.\n"
+        "- If a specialist keeps missing universal workflow rules like rebuild.sh or dt, inspect mandate/guardrail exposure before retagging references.\n"
+        "- Treat audience tags and reference inclusion as the memory-routing levers; do not paper over routing misses by inventing new mandates or guardrails.\n"
         "- Treat completion-review regressions as first-class evidence; inspect completion-review-prompt, completion-review-rules, or supervisor model config when reviewer cases fail.\n"
         "- Keep reviewer edits small and targeted; do not rewrite working reviewer behavior because of one ambiguous case.\n"
+        "- If improvement signals show a recurring self-correction failure that this battery does not directly cover, call that out in next_focus as a benchmark coverage gap rather than overfitting the current prompt to an untested pattern.\n"
         "- Log a performance observation if the benchmark exposed a real recurring issue or confirmed an improvement.\n"
         "- Save durable memory only for reusable cross-session lessons.\n"
         "- Do not add speculative retry/safety mechanisms without demonstrated need.\n\n"
@@ -120,8 +134,9 @@ def build_honing_prompt(
 
 
 def _parse_improvement_content(content: str) -> dict[str, Any] | None:
+    cleaned = strip_markdown_fences(_strip_leading_narration_tags(content))
     try:
-        parsed = json.loads(content)
+        parsed = _load_first_json_object(cleaned)
     except json.JSONDecodeError:
         return None
     return parsed if isinstance(parsed, dict) else None

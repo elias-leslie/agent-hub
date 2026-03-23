@@ -109,6 +109,19 @@ def test_parse_benchmark_json_strips_leading_narration_tags() -> None:
     assert parsed["primary_action"] == "reconcile"
 
 
+def test_parse_benchmark_json_tolerates_interleaved_narration_and_citations() -> None:
+    parsed, error = parse_benchmark_json(
+        """[[P:started:checking the benchmark surface]] Applied: [M:b901dcc9]
+[[P:decision:reconcile the routing layer first]] Applied: [M:17449124]
+{"case_id":"memory_routing_reconsideration","primary_action":"reconcile","should_dispatch":false,"should_close":false,"confidence":"high","summary":"Reconcile memory routing before dispatching more work."}"""
+    )
+
+    assert error is None
+    assert parsed is not None
+    assert parsed["case_id"] == "memory_routing_reconsideration"
+    assert parsed["primary_action"] == "reconcile"
+
+
 def test_score_attempt_marks_perfect_pass_for_correct_response() -> None:
     case = get_case_by_id("ready_task_dispatch")
 
@@ -653,6 +666,65 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     assert captured_kwargs["response_format"]["type"] == "json_object"
 
 
+@pytest.mark.asyncio
+async def test_persist_run_promotes_memory_variant_on_candidate_win() -> None:
+    from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+    from scripts.run_persona_model_benchmark import _build_parser, _persist_run
+
+    attempt = PersonaBenchmarkAttempt(
+        model_id="codex/gpt-5.4",
+        case_id="ready_task_dispatch",
+        run_number=1,
+        latency_ms=100,
+        composite_score=100.0,
+        correctness_score=1.0,
+        passed=True,
+        total_tokens=50,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+    )
+    run = PersonaBenchmarkRun(
+        benchmark_id="bench-1",
+        project_id="agent-hub",
+        models=["codex/gpt-5.4"],
+        case_ids=["ready_task_dispatch"],
+        runs_per_case=1,
+        started_at="2026-03-11T00:00:00+00:00",
+        completed_at="2026-03-11T00:01:00+00:00",
+        attempts=[attempt],
+        summaries=summarize_attempts([attempt]),
+    )
+    args = _build_parser().parse_args([
+        "--experiment-key", "memory-exp-1",
+        "--experiment-cohort", "candidate",
+        "--memory-variant-override", "ENHANCED",
+        "--promote-on-win",
+    ])
+
+    with (
+        patch(
+            "scripts.run_persona_model_benchmark.capture_benchmark_config_snapshot",
+            new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
+        ),
+        patch(
+            "scripts.run_persona_model_benchmark.persist_benchmark_payload",
+            new=AsyncMock(return_value="run-1"),
+        ),
+        patch(
+            "scripts.run_persona_model_benchmark.get_benchmark_experiment_summary_by_key",
+            new=AsyncMock(return_value={"decision": "promote", "name": "exp", "decision_reason": "candidate_outperforms_baseline", "baseline": {"run_count": 3, "avg_score": 80.0, "avg_pass_rate": 50.0}, "candidate": {"run_count": 3, "avg_score": 95.0, "avg_pass_rate": 80.0}, "score_delta": {"mean_delta": 15.0, "ci_low": 5.0, "ci_high": 20.0}, "pass_rate_delta": {"mean_delta": 30.0, "ci_low": 10.0, "ci_high": 40.0}}),
+        ),
+        patch(
+            "scripts.run_persona_model_benchmark.set_active_memory_variant",
+            new=AsyncMock(),
+        ) as mock_promote,
+    ):
+        await _persist_run(run, args, ["ready_task_dispatch"])
+
+    mock_promote.assert_awaited_once_with("ENHANCED")
+
+
 def test_precision_search_case_prompt_requires_specific_tool() -> None:
     case = get_case_by_id("precision_search_live_lookup")
 
@@ -703,6 +775,27 @@ def test_model_config_reconsideration_case_requires_model_tools() -> None:
         "manage_model_config",
         "review_agent_performance",
     )
+
+
+def test_memory_routing_reconsideration_case_requires_memory_tooling() -> None:
+    case = get_case_by_id("memory_routing_reconsideration")
+
+    prompt = case.build_prompt()
+
+    assert "manage_model_config" in prompt
+    assert "memory routing" in prompt
+    assert case.required_tool_names == ("manage_model_config",)
+
+
+def test_rebuild_rule_reconsideration_case_requires_mandate_language() -> None:
+    case = get_case_by_id("rebuild_rule_reconsideration")
+
+    prompt = case.build_prompt()
+
+    assert "manage_model_config" in prompt
+    assert "rebuild.sh agent-hub" in prompt
+    assert "universal workflow rule" in prompt
+    assert case.required_tool_names == ("manage_model_config",)
 
 
 def test_recent_progress_session_case_requires_wait_language() -> None:
@@ -852,8 +945,10 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
 
     assert case_ids == [
         "ready_task_dispatch",
+        "scope_conflict_shared_plumbing",
         "same_task_overlap",
         "same_task_recent_progress",
+        "snapshot_recover_not_rollback",
         "cleanup_blocks_closeout",
         "session_patience_quiet",
         "session_patience_recent_progress",
@@ -866,4 +961,6 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
         "feedback_triage_hotspot",
         "performance_review_honing",
         "model_config_reconsideration",
+        "memory_routing_reconsideration",
+        "rebuild_rule_reconsideration",
     ]

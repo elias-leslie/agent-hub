@@ -13,6 +13,7 @@ export interface MemorySettings {
   enabled: boolean; // Kill switch for memory injection
   continuity_enabled: boolean; // Recent Activity block toggle
   continuity_max_sessions: number; // Max sessions in Recent Activity
+  active_variant: "BASELINE" | "ENHANCED" | "MINIMAL" | "AGGRESSIVE" | null;
 }
 
 export interface MemoryBudgetUsage {

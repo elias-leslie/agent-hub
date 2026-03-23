@@ -149,7 +149,7 @@ describe("PersonaPage", () => {
   it("exposes Arena from the workspace header", async () => {
     render(<PersonaPage />);
 
-    const arenaLink = await screen.findByTitle("Open Avery Arena");
-    expect(arenaLink).toHaveAttribute("href", "/persona/arena");
+    const arenaLink = await screen.findByTitle("View in Arena");
+    expect(arenaLink).toHaveAttribute("href", "/arena/persona");
   });
 });

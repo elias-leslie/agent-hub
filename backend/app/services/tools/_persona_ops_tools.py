@@ -205,9 +205,10 @@ MANAGE_BACKUPS_TOOL = Tool(
 MANAGE_MODEL_CONFIG_TOOL = Tool(
     name="manage_model_config",
     description=(
-        "Manage model configurations across agents. List models, view details, "
-        "update agent model settings, fetch external benchmarks, and review agents. "
-        "You have full autonomy on model decisions — no approval gates."
+        "Manage agent configuration across models and memory routing. List models, "
+        "inspect agent details, update model settings, patch memory config, fetch "
+        "external benchmarks, and review agents. You have full autonomy on these "
+        "changes — no approval gates."
     ),
     input_schema={
         "type": "object",
@@ -217,7 +218,9 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
                 "enum": [
                     "list_models",
                     "get_model_details",
+                    "get_agent_details",
                     "update_agent_model",
+                    "update_agent_memory",
                     "get_benchmarks",
                     "list_agents",
                 ],
@@ -229,7 +232,7 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
             },
             "agent_slug": {
                 "type": "string",
-                "description": "Agent slug (for update_agent_model)",
+                "description": "Agent slug (for get_agent_details, update_agent_model, update_agent_memory)",
             },
             "primary_model_id": {
                 "type": "string",
@@ -267,12 +270,49 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
                 "type": "boolean",
                 "description": "Optional filter for list_agents. true=coding agents only, false=non-coding only.",
             },
+            "memory_config_patch": {
+                "type": "object",
+                "description": (
+                    "Partial memory_config fields to merge into the current agent memory config "
+                    "(for update_agent_memory)."
+                ),
+            },
+            "add_audience_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Audience tags to add to agent memory routing (for update_agent_memory)",
+            },
+            "remove_audience_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Audience tags to remove from agent memory routing (for update_agent_memory)",
+            },
+            "clear_audience_tags": {
+                "type": "boolean",
+                "description": "Remove all audience tags before any add/remove operations (for update_agent_memory)",
+                "default": False,
+            },
+            "add_exclude_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Exclude tags to add to agent memory routing (for update_agent_memory)",
+            },
+            "remove_exclude_tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Exclude tags to remove from agent memory routing (for update_agent_memory)",
+            },
+            "clear_exclude_tags": {
+                "type": "boolean",
+                "description": "Remove all exclude tags before any add/remove operations (for update_agent_memory)",
+                "default": False,
+            },
         },
         "required": ["action"],
     },
     category="model-ops",
-    search_keywords=["models", "benchmarks", "agent config"],
-    usage_examples=["Review candidate models before updating a coding agent."],
+    search_keywords=["models", "benchmarks", "agent config", "memory routing"],
+    usage_examples=["Review agent memory routing before changing audience tags or reference settings."],
 )
 
 # --- Agent performance logging tools ---
@@ -536,5 +576,52 @@ REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
     category="observability",
     search_keywords=["performance review", "model history", "patterns"],
     usage_examples=["Review friction trends before changing an agent's primary model."],
+    defer_loading=True,
+)
+
+REVIEW_IMPROVEMENT_SIGNALS_TOOL = Tool(
+    name="review_improvement_signals",
+    description=(
+        "Review combined improvement signals from performance logs, benchmark experiments, "
+        "regression clusters, and memory utilization. Use this before changing prompts, "
+        "memory routing, or agent configs."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "project_id": {
+                "type": "string",
+                "description": "Optional project filter (for project-scoped evidence)",
+            },
+            "primary_agent_slug": {
+                "type": "string",
+                "description": "Primary agent to focus benchmark/regression evidence on",
+                "default": "persona",
+            },
+            "days_back": {
+                "type": "integer",
+                "description": "How many days back to analyze (default: 7)",
+                "default": 7,
+            },
+            "include_team": {
+                "type": "boolean",
+                "description": "Include specialist/team performance signals alongside the primary agent",
+                "default": True,
+            },
+            "max_agents": {
+                "type": "integer",
+                "description": "Max agents to summarize in the digest (default: 4)",
+                "default": 4,
+            },
+            "max_references": {
+                "type": "integer",
+                "description": "Max low-yield references to show (default: 6)",
+                "default": 6,
+            },
+        },
+    },
+    category="observability",
+    search_keywords=["improvement", "benchmark", "memory yield", "regression clusters"],
+    usage_examples=["Review combined evidence before retagging references or changing model config."],
     defer_loading=True,
 )

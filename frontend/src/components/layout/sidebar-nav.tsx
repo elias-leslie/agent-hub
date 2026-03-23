@@ -106,6 +106,7 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
           <Link
             key={item.href}
             href={item.href}
+            prefetch={false}
             data-active={active}
             className={cn(
               "nav-item-hover flex items-center gap-2.5 px-2.5 py-2 rounded-lg",

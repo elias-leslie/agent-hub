@@ -41,23 +41,46 @@ async def _manage_model_config(
     format: str | None = None,
     output_format: str = "detailed",
     coding_only: bool | None = None,
+    memory_config_patch: dict[str, object] | None = None,
+    add_audience_tags: list[str] | None = None,
+    remove_audience_tags: list[str] | None = None,
+    clear_audience_tags: bool = False,
+    add_exclude_tags: list[str] | None = None,
+    remove_exclude_tags: list[str] | None = None,
+    clear_exclude_tags: bool = False,
 ) -> str:
     """Dispatch model management actions to the appropriate handler."""
     from app.services.tools._executor_model_mgmt import (
+        get_agent_details,
         get_benchmarks,
         get_model_details,
         list_agents,
         list_models,
+        update_agent_memory,
         update_agent_model,
     )
     if action == "list_models":
         return await list_models()
     if action == "get_model_details":
         return await get_model_details(model_id)
+    if action == "get_agent_details":
+        return await get_agent_details(agent_slug)
     if action == "update_agent_model":
         return await update_agent_model(
             agent_slug, primary_model_id, fallback_models,
             escalation_model_id, temperature, thinking_level, change_reason,
+        )
+    if action == "update_agent_memory":
+        return await update_agent_memory(
+            agent_slug,
+            memory_config_patch,
+            add_audience_tags,
+            remove_audience_tags,
+            clear_audience_tags,
+            add_exclude_tags,
+            remove_exclude_tags,
+            clear_exclude_tags,
+            change_reason,
         )
     if action == "get_benchmarks":
         return await get_benchmarks()
@@ -66,7 +89,8 @@ async def _manage_model_config(
         return await list_agents(fmt=effective_format, coding_only=coding_only)
     return (
         f"Error: Unknown action '{action}'. "
-        "Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
+        "Use list_models/get_model_details/get_agent_details/update_agent_model/"
+        "update_agent_memory/get_benchmarks/list_agents."
     )
 
 
@@ -197,8 +221,10 @@ def build_tool_registry(
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
+        review_improvement_signals,
     )
     from app.services.tools._executor_persona import (
+        manage_memory_tags,
         mark_memory_irrelevant,
         mark_memory_relevant,
         read_heartbeat_instructions,
@@ -221,6 +247,7 @@ def build_tool_registry(
         "cancel_consultation": cancel_consultation,
         "log_agent_performance": log_agent_performance,
         "review_agent_performance": review_agent_performance,
+        "review_improvement_signals": review_improvement_signals,
         "read_personality": read_personality,
         "write_personality": write_personality,
         "write_user_context": write_user_context,
@@ -229,6 +256,7 @@ def build_tool_registry(
         "write_heartbeat_instructions": write_heartbeat_instructions,
         "mark_memory_relevant": mark_memory_relevant,
         "mark_memory_irrelevant": mark_memory_irrelevant,
+        "manage_memory_tags": manage_memory_tags,
         "submit_onboarding": submit_onboarding,
         "schedule_job": schedule_job,
         "list_scheduled_jobs": list_scheduled_jobs,

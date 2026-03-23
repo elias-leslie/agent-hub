@@ -374,6 +374,82 @@ class TestMarkMemoryIrrelevant:
         assert "Error" in result
 
 
+class TestManageMemoryTags:
+    """Tests for the generic memory-tag management tool."""
+
+    _full_uuid = "abc12345-0000-4000-8000-000000000000"
+    _resolve_patch = "app.services.memory.memory_utils.resolve_uuid_prefix"
+
+    @pytest.mark.asyncio
+    async def test_get_tags_returns_current_tags(self):
+        from app.services.tools._executor_persona import manage_memory_tags
+
+        with (
+            patch(self._resolve_patch, new_callable=AsyncMock, return_value=self._full_uuid),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["debugger-relevant", "oauth"],
+            ),
+        ):
+            result = await manage_memory_tags("get_tags", "abc12345", None)
+
+        assert "debugger-relevant" in result
+        assert "oauth" in result
+
+    @pytest.mark.asyncio
+    async def test_add_tags_merges_without_duplicates(self):
+        from app.services.tools._executor_persona import manage_memory_tags
+
+        with (
+            patch(self._resolve_patch, new_callable=AsyncMock, return_value=self._full_uuid),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["debugger-relevant"],
+            ),
+            patch(
+                "app.services.memory.episode_property_setters.set_episode_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_set,
+        ):
+            result = await manage_memory_tags(
+                "add_tags",
+                "abc12345",
+                ["debugger-relevant", "oauth"],
+            )
+
+        assert "Updated tags for memory abc12345" in result
+        mock_set.assert_awaited_once_with(self._full_uuid, ["debugger-relevant", "oauth"])
+
+    @pytest.mark.asyncio
+    async def test_remove_tags_updates_memory(self):
+        from app.services.tools._executor_persona import manage_memory_tags
+
+        with (
+            patch(self._resolve_patch, new_callable=AsyncMock, return_value=self._full_uuid),
+            patch(
+                "app.services.memory.episode_property_queries.get_episode_tags",
+                new_callable=AsyncMock,
+                return_value=["debugger-relevant", "oauth"],
+            ),
+            patch(
+                "app.services.memory.episode_property_setters.set_episode_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_set,
+        ):
+            result = await manage_memory_tags(
+                "remove_tags",
+                "abc12345",
+                ["oauth"],
+            )
+
+        assert "Updated tags for memory abc12345" in result
+        mock_set.assert_awaited_once_with(self._full_uuid, ["debugger-relevant"])
+
+
 class TestSubmitOnboarding:
     """Tests for submit_onboarding tool."""
 
@@ -558,6 +634,21 @@ class TestScheduleJob:
         assert "Invalid schedule_type" in result
 
     @pytest.mark.asyncio
+    async def test_rejects_invalid_payload_type(self):
+        from app.services.tools._executor_scheduling import schedule_job
+
+        result = await schedule_job(
+            name="Bad payload",
+            schedule_type="every",
+            schedule_value="60000",
+            payload_message="test",
+            payload_type="invalid",
+        )
+
+        assert "Error" in result
+        assert "Invalid payload_type" in result
+
+    @pytest.mark.asyncio
     async def test_rejects_past_at_time(self):
         from app.services.tools._executor_scheduling import schedule_job
 
@@ -587,6 +678,33 @@ class TestScheduleJob:
 
         assert "past" in result.lower()
 
+    @pytest.mark.asyncio
+    async def test_creates_self_honing_job(self):
+        from app.services.tools._executor_scheduling import schedule_job
+
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona)
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await schedule_job(
+                name="Nightly self-honing",
+                schedule_type="cron",
+                schedule_value="0 4 * * *",
+                payload_message="Nightly Jenny self-honing",
+                payload_type="self_honing",
+            )
+
+        assert "scheduled" in result
+        added_job = mock_db.add.call_args.args[0]
+        assert added_job.payload_type == "self_honing"
+
 
 class TestListScheduledJobs:
     """Tests for list_scheduled_jobs tool."""
@@ -613,6 +731,38 @@ class TestListScheduledJobs:
             result = await list_scheduled_jobs()
 
         assert "No scheduled jobs" in result
+
+    @pytest.mark.asyncio
+    async def test_lists_payload_type(self):
+        from app.services.tools._executor_scheduling import list_scheduled_jobs
+
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona)
+        mock_job = MagicMock()
+        mock_job.name = "Nightly self-honing"
+        mock_job.id = "job-1"
+        mock_job.schedule_type = "cron"
+        mock_job.schedule_value = "0 4 * * *"
+        mock_job.payload_type = "self_honing"
+        mock_job.next_run_at = datetime.now(UTC)
+        mock_job.run_count = 0
+        mock_job.max_runs = None
+        mock_job.enabled = True
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_job]
+        mock_db.execute.return_value = mock_result
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await list_scheduled_jobs()
+
+        assert "type=self_honing" in result
 
 
 class TestCancelScheduledJob:

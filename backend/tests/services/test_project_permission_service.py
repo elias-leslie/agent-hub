@@ -211,6 +211,17 @@ class TestCheckToolAllowed:
             assert reason == "allowed"
 
     @pytest.mark.asyncio
+    async def test_tool_search_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "tool_search")
+            assert allowed is True
+            assert reason == "allowed"
+
+    @pytest.mark.asyncio
     async def test_denied_tool_at_read_tier(self):
         with patch(
             "app.services.project_permission_service._get_cached_tier",

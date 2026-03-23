@@ -145,6 +145,12 @@ def _decide_experiment_outcome(
     return "hold", "no_clear_winner"
 
 
+def _effective_experiment_status(stored_status: str | None, decision: str) -> str:
+    if decision in {"promote", "rollback"}:
+        return "closed"
+    return stored_status or "open"
+
+
 def summarize_benchmark_experiment(
     experiment: AgentBenchmarkExperiment,
     runs: list[AgentBenchmarkRun],
@@ -173,7 +179,7 @@ def summarize_benchmark_experiment(
         "experiment_key": experiment.experiment_key,
         "name": experiment.name,
         "suite_id": experiment.suite_id,
-        "status": experiment.status,
+        "status": _effective_experiment_status(experiment.status, decision),
         "decision": decision,
         "decision_reason": reason,
         "hypothesis": experiment.hypothesis,

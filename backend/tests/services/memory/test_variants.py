@@ -187,6 +187,25 @@ class TestAssignVariant:
         )
         assert v == MemoryVariant.ENHANCED
 
+    def test_active_variant_takes_precedence_before_hash_assignment(self):
+        """Configured active variant should win when no explicit override is present."""
+        v = assign_variant(
+            external_id="task-123",
+            project_id="summitflow",
+            active_variant="MINIMAL",
+        )
+        assert v == MemoryVariant.MINIMAL
+
+    def test_invalid_active_variant_falls_back_to_hash_assignment(self):
+        """Invalid active variant should not block deterministic fallback assignment."""
+        baseline = assign_variant(external_id="task-123", project_id="summitflow")
+        v = assign_variant(
+            external_id="task-123",
+            project_id="summitflow",
+            active_variant="INVALID",
+        )
+        assert v == baseline
+
     def test_invalid_override_fallback(self):
         """Test invalid override falls back to BASELINE."""
         v = assign_variant(

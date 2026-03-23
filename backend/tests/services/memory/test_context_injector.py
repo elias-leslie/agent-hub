@@ -639,6 +639,7 @@ class TestInjectionMetrics:
 @pytest.mark.asyncio
 async def test_inject_progressive_context_assigns_variant_from_identifiers() -> None:
     from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
     now = datetime.now(UTC)
@@ -655,8 +656,13 @@ async def test_inject_progressive_context_assigns_variant_from_identifiers() -> 
         ],
         total_tokens=25,
     )
+    settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
     with (
+        patch(
+            "app.services.memory.context_injector.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
         patch(
             "app.services.memory.context_injector._build_context_and_format",
             new=AsyncMock(return_value=(context, "formatted")),
@@ -683,6 +689,71 @@ async def test_inject_progressive_context_assigns_variant_from_identifiers() -> 
         external_id="task-123",
         project_id="agent-hub",
         variant_override=None,
+        active_variant=None,
     )
     assert injected.debug_info["variant"] == "ENHANCED"
     assert mock_metrics.call_args.kwargs["variant"] == "ENHANCED"
+
+
+@pytest.mark.asyncio
+async def test_inject_progressive_context_uses_active_variant_before_hash_assignment() -> None:
+    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.settings import MemorySettingsDTO
+    from app.services.memory.variants import MemoryVariant
+
+    now = datetime.now(UTC)
+    context = ProgressiveContext(
+        reference=[
+            MemorySearchResult(
+                uuid="ref-1",
+                content="Reference",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.8,
+                created_at=now,
+                facts=[],
+            )
+        ],
+        total_tokens=25,
+    )
+    settings = MemorySettingsDTO(
+        enabled=True,
+        budget_enabled=True,
+        total_budget=3500,
+        active_variant="AGGRESSIVE",
+    )
+
+    with (
+        patch(
+            "app.services.memory.context_injector.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
+        patch(
+            "app.services.memory.context_injector._build_context_and_format",
+            new=AsyncMock(return_value=(context, "formatted")),
+        ),
+        patch(
+            "app.services.memory.context_injector._apply_continuity_to_context",
+            new=AsyncMock(return_value="<memory>formatted</memory>"),
+        ),
+        patch(
+            "app.services.memory.context_injector.assign_variant",
+            return_value=MemoryVariant.AGGRESSIVE,
+        ) as mock_assign,
+        patch(
+            "app.services.memory.context_injector._record_injection_metrics",
+        ) as mock_metrics,
+    ):
+        _, injected = await inject_progressive_context(
+            messages=[{"role": "user", "content": "Need help"}],
+            external_id="task-123",
+            project_id="agent-hub",
+        )
+
+    mock_assign.assert_called_once_with(
+        external_id="task-123",
+        project_id="agent-hub",
+        variant_override=None,
+        active_variant="AGGRESSIVE",
+    )
+    assert injected.debug_info["variant"] == "AGGRESSIVE"
+    assert mock_metrics.call_args.kwargs["variant"] == "AGGRESSIVE"

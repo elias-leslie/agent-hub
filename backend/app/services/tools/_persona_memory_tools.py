@@ -174,6 +174,39 @@ MARK_MEMORY_IRRELEVANT_TOOL = Tool(
     defer_loading=True,
 )
 
+MANAGE_MEMORY_TAGS_TOOL = Tool(
+    name="manage_memory_tags",
+    description=(
+        "Inspect or edit tags on a memory episode so reference-tier routing can be corrected "
+        "without rewriting mandates or prompts. Use this for role/domain audience tags on "
+        "reference memories, not for filtering mandates or guardrails."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["get_tags", "add_tags", "remove_tags"],
+                "description": "Whether to inspect or update the memory's tags",
+            },
+            "memory_uuid": {
+                "type": "string",
+                "description": "UUID or UUID prefix of the memory episode",
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Tags to add or remove (required for add_tags/remove_tags)",
+            },
+        },
+        "required": ["action", "memory_uuid"],
+    },
+    category="memory",
+    search_keywords=["memory tags", "audience tags", "reference routing"],
+    usage_examples=["Add debugger-relevant to a reference memory after a repeated retrieval miss."],
+    defer_loading=True,
+)
+
 # --- Onboarding tool ---
 
 SUBMIT_ONBOARDING_TOOL = Tool(

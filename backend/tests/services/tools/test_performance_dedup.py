@@ -14,7 +14,7 @@ class TestPerformanceLogDedup:
 
     @pytest.mark.asyncio
     async def test_duplicate_within_24h_is_skipped(self):
-        """Second log with same (agent, model, feedback_type) within 24h should be rejected."""
+        """Second identical log within 24h should be rejected."""
         from app.services.tools._executor_performance import log_agent_performance
 
         mock_db = AsyncMock()
@@ -37,6 +37,32 @@ class TestPerformanceLogDedup:
 
         assert "Skipped" in result
         assert "already logged within 24h" in result
+
+    @pytest.mark.asyncio
+    async def test_different_content_within_24h_is_not_deduped(self):
+        """Different content for the same feedback type should still be recorded."""
+        from app.services.tools._executor_performance import log_agent_performance
+
+        mock_db = AsyncMock()
+        mock_check_result = MagicMock()
+        mock_check_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_check_result
+        mock_db.refresh = AsyncMock()
+
+        mock_session_ctx = AsyncMock()
+        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("app.db.async_session", return_value=mock_session_ctx):
+            result = await log_agent_performance(
+                agent_slug="coder",
+                model_id=CLAUDE_SONNET,
+                feedback_type="friction",
+                content="Missed rebuild.sh requirement",
+            )
+
+        assert "Performance logged" in result
+        mock_db.add.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_new_entry_after_24h_is_allowed(self):

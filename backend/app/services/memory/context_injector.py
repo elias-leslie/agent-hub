@@ -25,6 +25,7 @@ from .context_injector_formatter import (
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import MemoryScope
 from .settings import get_memory_settings
+from .variants import assign_variant
 
 CITATION_INSTRUCTION = "When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
 MEMORY_CONTEXT_START = "<memory>"
@@ -137,6 +138,7 @@ async def _build_context_and_format(
     phase: str | None,
     memory_config: dict[str, Any] | None,
     consumer_profile: str | None,
+    variant: str | None,
 ) -> tuple[ProgressiveContext, str | None]:
     """Build progressive context and format it."""
     mc_mandates, mc_guardrails, mc_references = resolve_memory_config_includes(memory_config)
@@ -147,6 +149,7 @@ async def _build_context_and_format(
         include_references=mc_references,
         memory_config=memory_config,
         consumer_profile=consumer_profile,
+        variant=variant,
     )
     formatted = format_progressive_context(
         context,
@@ -218,7 +221,7 @@ async def inject_progressive_context(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     query: str | None = None,
-    variant: str = "BASELINE",
+    variant: str | None = None,
     session_id: str | None = None,
     external_id: str | None = None,
     project_id: str | None = None,
@@ -235,10 +238,18 @@ async def inject_progressive_context(
     if not messages or not (query or (query := _extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
+    settings = await get_memory_settings()
+    resolved_variant = assign_variant(
+        external_id=external_id,
+        project_id=project_id or scope_id,
+        variant_override=variant,
+        active_variant=settings.active_variant,
+    )
+
     context, formatted = await _build_context_and_format(
         query=query, scope=scope, scope_id=scope_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
-        consumer_profile=consumer_profile,
+        consumer_profile=consumer_profile, variant=resolved_variant.value,
     )
     if not formatted:
         return messages, context
@@ -250,16 +261,24 @@ async def inject_progressive_context(
     modified_messages = _inject_memory_block(messages, memory_block)
 
     latency_ms = int((time.monotonic() - start_time) * 1000)
-    context.debug_info.update({"variant": variant, "injection_latency_ms": latency_ms})
+    context.debug_info.update({"variant": resolved_variant.value, "injection_latency_ms": latency_ms})
     continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
     logger.info(
         "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d refs_selected=%d continuity_tokens=%d scope=%s",
-        variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
+        resolved_variant.value, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
         context.debug_info.get("reference_selected_count", len(context.reference)),
         continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
     )
     if collect_metrics:
-        _record_injection_metrics(context, latency_ms, query, variant, session_id, external_id, project_id)
+        _record_injection_metrics(
+            context=context,
+            latency_ms=latency_ms,
+            query=query,
+            variant=resolved_variant.value,
+            session_id=session_id,
+            external_id=external_id,
+            project_id=project_id,
+        )
     return modified_messages, context
 
 

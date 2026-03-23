@@ -157,3 +157,9 @@ Completion-review models should use the same pattern:
 - candidate reviewer model: alternate reviewer primary model
 - same completion-review suite
 - repeated runs until the reviewer decision is powered enough to decide
+
+Memory policy experiments should use the same Arena workflow instead of a separate tuner:
+
+- keep the benchmark suite fixed
+- run `baseline` vs `candidate` cohorts with `--memory-variant-override`
+- compare the cohorts through the existing experiment records and promote only when the evidence supports it

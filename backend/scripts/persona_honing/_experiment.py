@@ -61,6 +61,21 @@ from scripts.run_persona_model_benchmark import (
 )
 
 
+async def _load_recent_improvement_signals(project_id: str) -> str | None:
+    """Return recent combined improvement evidence for the honing prompt."""
+    from app.services.improvement_signals import build_improvement_signal_digest
+
+    review = await build_improvement_signal_digest(
+        project_id=project_id,
+        primary_agent_slug="persona",
+        days_back=7,
+        include_team=True,
+    )
+    if not review.strip():
+        return None
+    return review
+
+
 def _merge_runs(runs: list[PersonaBenchmarkRun], *, benchmark_id: str) -> PersonaBenchmarkRun:
     if not runs:
         raise ValueError("Cannot merge empty benchmark run list")
@@ -238,6 +253,7 @@ async def _run_improvement_pass(
     working_root: Path,
 ) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
     """Prompt the persona to improve itself based on benchmark failures."""
+    improvement_signals = await _load_recent_improvement_signals(project_id)
     response = await client.complete(
         messages=[{
             "role": "user",
@@ -247,6 +263,7 @@ async def _run_improvement_pass(
                 previous_clusters,
                 review_run=review_run,
                 previous_review_clusters=previous_review_clusters,
+                improvement_signals=improvement_signals,
             ),
         }],
         project_id=project_id,
@@ -648,6 +665,7 @@ async def _persist_iteration_record(
     metadata: dict[str, Any] = {
         "iteration": iteration,
         "benchmark_report_path": report_path,
+        "source_benchmark_id": benchmark_run.benchmark_id,
         "failure_clusters": failure_clusters,
         "persistent_failure_clusters": persistent_clusters,
         "improvement": None,
@@ -675,6 +693,7 @@ async def _persist_iteration_record(
         config_snapshot=config_snapshot,
         metadata=metadata,
     )
+    payload["benchmark_id"] = f"{benchmark_run.benchmark_id}-iter-{iteration}"
     record.persisted_run_id = await persist_benchmark_payload(payload)
 
 

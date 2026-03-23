@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -50,3 +51,21 @@ def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
         resolved = resolve_project_root("terminal")
 
     assert resolved == tmp_path.resolve()
+
+
+def test_resolve_project_root_falls_back_when_st_times_out(tmp_path: Path) -> None:
+    resolve_project_root.cache_clear()
+    candidate = tmp_path / "summitflow"
+    candidate.mkdir()
+
+    with (
+        patch("app.core.project_roots._CANONICAL_WORKSPACE_ROOT", tmp_path),
+        patch("app.core.project_roots.shutil.which", return_value="/usr/bin/st"),
+        patch(
+            "app.core.project_roots.subprocess.run",
+            side_effect=subprocess.TimeoutExpired(["st", "projects", "root", "summitflow"], timeout=5),
+        ),
+    ):
+        resolved = resolve_project_root("summitflow")
+
+    assert resolved == candidate.resolve()

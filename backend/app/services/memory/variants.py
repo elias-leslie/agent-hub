@@ -65,6 +65,8 @@ class VariantConfig:
     recency_config: RecencyConfig = field(default_factory=RecencyConfig)
     min_relevance_threshold: float = 0.35  # Minimum score for inclusion
     golden_standard_min_similarity: float = 0.25  # Min semantic similarity for golden standards
+    max_reference_items: int = 6
+    max_query_selected_references: int = 3
 
 
 # Variant configurations
@@ -88,6 +90,8 @@ BASELINE_CONFIG = VariantConfig(
     ),
     min_relevance_threshold=0.35,
     golden_standard_min_similarity=0.25,
+    max_reference_items=6,
+    max_query_selected_references=3,
 )
 
 # ENHANCED: Higher semantic weight, stricter quality
@@ -110,6 +114,8 @@ ENHANCED_CONFIG = VariantConfig(
     ),
     min_relevance_threshold=0.40,  # Higher threshold
     golden_standard_min_similarity=0.30,
+    max_reference_items=5,
+    max_query_selected_references=2,
 )
 
 # MINIMAL: Very strict filtering, fewer items injected
@@ -132,6 +138,8 @@ MINIMAL_CONFIG = VariantConfig(
     ),
     min_relevance_threshold=0.50,  # Very high threshold
     golden_standard_min_similarity=0.35,
+    max_reference_items=2,
+    max_query_selected_references=1,
 )
 
 # AGGRESSIVE: Lower thresholds, more items injected
@@ -154,6 +162,8 @@ AGGRESSIVE_CONFIG = VariantConfig(
     ),
     min_relevance_threshold=0.25,  # Lower threshold
     golden_standard_min_similarity=0.20,
+    max_reference_items=8,
+    max_query_selected_references=5,
 )
 
 # Mapping of variants to configs
@@ -177,10 +187,29 @@ VARIANT_BUCKETS: list[tuple[int, MemoryVariant]] = [
 ]
 
 
+def get_variant_config(
+    variant: MemoryVariant | str | None = None,
+) -> VariantConfig:
+    """Return the config for a variant, defaulting to BASELINE."""
+    if variant is None:
+        return BASELINE_CONFIG
+    if isinstance(variant, str):
+        try:
+            variant = MemoryVariant(variant)
+        except ValueError:
+            logger.warning(
+                "Invalid variant '%s', falling back to BASELINE config",
+                variant,
+            )
+            return BASELINE_CONFIG
+    return VARIANT_CONFIGS[variant]
+
+
 def assign_variant(
     external_id: str | None = None,
     project_id: str | None = None,
     variant_override: MemoryVariant | str | None = None,
+    active_variant: MemoryVariant | str | None = None,
 ) -> MemoryVariant:
     """
     Deterministically assign a variant based on hash of identifiers.
@@ -215,6 +244,18 @@ def assign_variant(
                 )
                 return MemoryVariant.BASELINE
         return variant_override
+
+    if active_variant is not None:
+        if isinstance(active_variant, str):
+            try:
+                return MemoryVariant(active_variant)
+            except ValueError:
+                logger.warning(
+                    "Invalid active variant '%s', falling back to deterministic assignment",
+                    active_variant,
+                )
+        else:
+            return active_variant
 
     # Build hash input from identifiers
     # Use empty strings for None values to ensure consistent hashing

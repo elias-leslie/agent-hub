@@ -5,7 +5,9 @@ Handles model listing, details, agent model updates, benchmarks, and agent listi
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,54 @@ def _resolve_catalog_model_id(model_id: str | None) -> str | None:
     if resolved in MODEL_CATALOG_BY_ID:
         return resolved
     return model_id
+
+
+def _normalize_tag_values(values: list[str] | None) -> list[str]:
+    normalized: list[str] = []
+    for value in values or []:
+        cleaned = value.strip()
+        if cleaned and cleaned not in normalized:
+            normalized.append(cleaned)
+    return normalized
+
+
+def _merge_tag_values(
+    current: object,
+    *,
+    add_values: list[str] | None = None,
+    remove_values: list[str] | None = None,
+    clear: bool = False,
+) -> list[str]:
+    merged = [] if clear else _normalize_tag_values(current if isinstance(current, list) else None)
+    for value in _normalize_tag_values(add_values):
+        if value not in merged:
+            merged.append(value)
+    remove_set = set(_normalize_tag_values(remove_values))
+    if remove_set:
+        merged = [value for value in merged if value not in remove_set]
+    return merged
+
+
+def _copy_memory_config(memory_config: object) -> dict[str, object]:
+    return dict(memory_config) if isinstance(memory_config, dict) else {}  # type: ignore[arg-type]
+
+
+def _format_agent_details(agent: Any) -> str:
+    memory_config = getattr(agent, "memory_config", None)
+    fallback_models = getattr(agent, "fallback_models", None) or []
+    fallbacks = ", ".join(fallback_models) if fallback_models else "none"
+    description = getattr(agent, "description", None)
+    description_block = f"\n  Description: {description}" if description else ""
+    memory_config_json = json.dumps(memory_config or {}, sort_keys=True)
+    return (
+        f"- **{agent.name}** (`{agent.slug}`){description_block}\n"
+        f"  Primary: {agent.primary_model_id} | Fallbacks: {fallbacks}\n"
+        f"  Escalation: {agent.escalation_model_id or 'none'} | "
+        f"Temp: {agent.temperature} | Thinking: {agent.thinking_level or 'N/A'}\n"
+        f"  Role: {'coding' if agent.is_coding_agent else 'general'} | "
+        f"Active: {agent.is_active} | Version: {agent.version}\n"
+        f"  Memory: {memory_config_json}"
+    )
 
 
 async def list_models() -> str:
@@ -216,6 +266,120 @@ async def update_agent_model(
         return f"Error updating agent model: {e}"
 
 
+async def get_agent_details(agent_slug: str | None) -> str:
+    """Inspect a single agent including its memory configuration."""
+    if not agent_slug:
+        return "Error: agent_slug required for get_agent_details"
+
+    try:
+        from app.db import async_session
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        async with async_session() as db:
+            agent = await agent_service.get_by_slug(db, agent_slug)
+
+        if not agent:
+            return f"Error: Agent '{agent_slug}' not found"
+
+        return _format_agent_details(agent)
+    except Exception as e:
+        logger.exception("get_agent_details failed")
+        return f"Error getting agent details: {e}"
+
+
+async def update_agent_memory(
+    agent_slug: str | None,
+    memory_config_patch: dict[str, object] | None,
+    add_audience_tags: list[str] | None,
+    remove_audience_tags: list[str] | None,
+    clear_audience_tags: bool,
+    add_exclude_tags: list[str] | None,
+    remove_exclude_tags: list[str] | None,
+    clear_exclude_tags: bool,
+    change_reason: str | None,
+) -> str:
+    """Patch an agent's memory configuration without replacing the whole blob."""
+    if not agent_slug:
+        return "Error: agent_slug required for update_agent_memory"
+
+    patch = _copy_memory_config(memory_config_patch)
+    if not any([
+        patch,
+        add_audience_tags,
+        remove_audience_tags,
+        clear_audience_tags,
+        add_exclude_tags,
+        remove_exclude_tags,
+        clear_exclude_tags,
+    ]):
+        return "Error: at least one memory update is required"
+
+    try:
+        from app.db import async_session
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+
+        async with async_session() as db:
+            agent = await agent_service.get_by_slug(db, agent_slug)
+            if not agent:
+                return f"Error: Agent '{agent_slug}' not found"
+
+            current_config = _copy_memory_config(getattr(agent, "memory_config", None))
+            updated_config = dict(current_config)
+            updated_config.update(patch)
+
+            if (
+                "audience_tags" in patch
+                or add_audience_tags
+                or remove_audience_tags
+                or clear_audience_tags
+            ):
+                updated_config["audience_tags"] = _merge_tag_values(
+                    updated_config.get("audience_tags"),
+                    add_values=add_audience_tags,
+                    remove_values=remove_audience_tags,
+                    clear=clear_audience_tags,
+                )
+
+            if (
+                "exclude_tags" in patch
+                or add_exclude_tags
+                or remove_exclude_tags
+                or clear_exclude_tags
+            ):
+                updated_config["exclude_tags"] = _merge_tag_values(
+                    updated_config.get("exclude_tags"),
+                    add_values=add_exclude_tags,
+                    remove_values=remove_exclude_tags,
+                    clear=clear_exclude_tags,
+                )
+
+            if updated_config == current_config:
+                return f"No memory config changes required for agent '{agent_slug}'."
+
+            updated = await agent_service.update(
+                db,
+                agent.id,
+                memory_config=updated_config,
+                changed_by="persona",
+                change_reason=change_reason or "Memory config update by persona",
+            )
+
+        if not updated:
+            return f"Error: Failed to update agent '{agent_slug}'"
+
+        return (
+            f"Agent '{agent_slug}' memory updated (version {updated.version}). "
+            f"Memory config: {json.dumps(updated_config, sort_keys=True)}. "
+            f"Reason: {change_reason or 'N/A'}"
+        )
+    except Exception as e:
+        logger.exception("update_agent_memory failed")
+        return f"Error updating agent memory: {e}"
+
+
 async def get_benchmarks() -> str:
     """Fetch and display latest external benchmark data."""
     try:
@@ -269,16 +433,7 @@ async def list_agents(fmt: str = "detailed", coding_only: bool | None = None) ->
 
         lines = []
         for a in agents:
-            fallbacks = ", ".join(a.fallback_models) if a.fallback_models else "none"
-            desc = f"\n  Description: {a.description}" if a.description else ""
-            lines.append(
-                f"- **{a.name}** (`{a.slug}`){desc}\n"
-                f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
-                f"  Escalation: {a.escalation_model_id or 'none'} | "
-                f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"
-                f"  Role: {'coding' if a.is_coding_agent else 'general'} | "
-                f"Active: {a.is_active} | Version: {a.version}"
-            )
+            lines.append(_format_agent_details(a))
         return "\n\n".join(lines)
     except Exception as e:
         logger.exception("list_agents failed")

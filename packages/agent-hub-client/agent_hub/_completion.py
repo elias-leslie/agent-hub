@@ -52,6 +52,7 @@ def _apply_identity_fields(
     external_id: str | None,
     use_memory: bool,
     memory_group_id: str | None,
+    memory_variant_override: str | None,
     routing_config: RoutingConfig | dict[str, Any] | None,
     tool_dicts: list[dict[str, Any]] | None,
     enable_programmatic_tools: bool,
@@ -71,6 +72,8 @@ def _apply_identity_fields(
     payload["use_memory"] = use_memory
     if memory_group_id:
         payload["memory_group_id"] = memory_group_id
+    if memory_variant_override:
+        payload["memory_variant_override"] = memory_variant_override
     if routing_config:
         if isinstance(routing_config, RoutingConfig):
             payload["routing_config"] = routing_config.model_dump(exclude_none=True)
@@ -140,6 +143,7 @@ def build_completion_payload(
     purpose: str | None = None, external_id: str | None = None,
     enable_caching: bool = True, use_memory: bool = False,
     memory_group_id: str | None = None,
+    memory_variant_override: str | None = None,
     routing_config: RoutingConfig | dict[str, Any] | None = None,
     tools: list[dict[str, Any] | ToolDefinition] | None = None,
     enable_programmatic_tools: bool = False,
@@ -168,7 +172,7 @@ def build_completion_payload(
     }
     _apply_identity_fields(
         payload, agent_slug, model, session_id, purpose, external_id,
-        use_memory, memory_group_id, routing_config, tool_dicts,
+        use_memory, memory_group_id, memory_variant_override, routing_config, tool_dicts,
         enable_programmatic_tools, disable_agent_fallbacks,
     )
     _apply_execution_fields(

@@ -10,7 +10,8 @@ SCHEDULE_JOB_TOOL = Tool(
     name="schedule_job",
     description=(
         "Create a scheduled job — set reminders, daily summaries, or recurring tasks. "
-        "Supports one-shot (at), interval (every), and cron expressions."
+        "Supports one-shot (at), interval (every), and cron expressions. "
+        "Can also schedule Jenny's autonomous self-honing loop."
     ),
     input_schema={
         "type": "object",
@@ -30,12 +31,18 @@ SCHEDULE_JOB_TOOL = Tool(
             },
             "payload_message": {
                 "type": "string",
-                "description": "Message to inject as user input (agent_turn) or push body",
+                "description": (
+                    "Message to inject as user input (agent_turn), push body (push), "
+                    "or a human-readable note for self_honing jobs"
+                ),
             },
             "payload_type": {
                 "type": "string",
-                "enum": ["agent_turn", "push"],
-                "description": "agent_turn=run as agent, push=send notification (default: agent_turn)",
+                "enum": ["agent_turn", "push", "self_honing"],
+                "description": (
+                    "agent_turn=run as agent, push=send notification, "
+                    "self_honing=run Jenny's scheduled self-honing loop"
+                ),
                 "default": "agent_turn",
             },
             "delivery": {

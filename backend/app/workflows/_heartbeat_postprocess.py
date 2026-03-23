@@ -7,7 +7,7 @@ alone cannot guarantee.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.workflows._completion_review import CompletionReviewOutcome, review_persona_completion
 from app.workflows._session_postprocess import (
@@ -21,6 +21,15 @@ if TYPE_CHECKING:
     from app.api.complete.types import CompletionInternalResult
 
 logger = logging.getLogger(__name__)
+
+
+async def log_agent_performance(*args: Any, **kwargs: Any) -> str:
+    """Lazily import performance logging so tests can patch the heartbeat seam."""
+    from app.services.tools._executor_performance import (
+        log_agent_performance as _log_agent_performance,
+    )
+
+    return await _log_agent_performance(*args, **kwargs)
 
 
 async def postprocess_heartbeat(
@@ -83,6 +92,13 @@ async def postprocess_heartbeat(
             note=followup_note,
             parent_session_id=session_id,
         )
+    await _log_heartbeat_performance_observation(
+        result=result,
+        format_ok=format_ok,
+        followup_reason=followup_reason,
+        completion_review=completion_review,
+        target_project_id=target_project_id,
+    )
 
     return HeartbeatResult(
         status=status,
@@ -121,6 +137,71 @@ def _extract_synthetic_summary(content: str) -> str:
     Falls back to first 120 chars of content.
     """
     return _shared_extract_synthetic_summary(content)
+
+
+def _build_performance_observation(
+    *,
+    result: CompletionInternalResult,
+    format_ok: bool,
+    followup_reason: str | None,
+    completion_review: CompletionReviewOutcome | None,
+) -> dict[str, str] | None:
+    notes: list[str] = []
+    if result.error:
+        notes.append(f"runtime error: {result.error}")
+    if not format_ok:
+        notes.append("missing HEARTBEAT_OK/HEARTBEAT_ACTION prefix")
+    if followup_reason and not followup_reason.startswith("completion_review_"):
+        notes.append(f"post-run residue detected: {followup_reason}")
+    if completion_review and completion_review.used and completion_review.decision in {"continue", "escalate"}:
+        reason = (completion_review.reason or "no reason provided").strip()
+        notes.append(
+            f"completion review requested {completion_review.decision}: {reason}"
+        )
+    if not notes:
+        return None
+    return {
+        "feedback_type": "friction",
+        "outcome": "failure" if result.error else "partial",
+        "content": "Heartbeat self-reflection signals: " + "; ".join(notes),
+    }
+
+
+async def _log_heartbeat_performance_observation(
+    *,
+    result: CompletionInternalResult,
+    format_ok: bool,
+    followup_reason: str | None,
+    completion_review: CompletionReviewOutcome | None,
+    target_project_id: str | None,
+) -> None:
+    observation = _build_performance_observation(
+        result=result,
+        format_ok=format_ok,
+        followup_reason=followup_reason,
+        completion_review=completion_review,
+    )
+    if observation is None:
+        return
+
+    try:
+        await log_agent_performance(
+            agent_slug="persona",
+            model_id=result.model_used or result.model,
+            feedback_type=observation["feedback_type"],
+            content=observation["content"],
+            outcome=observation["outcome"],
+            task_type="heartbeat",
+            project_id=target_project_id or "persona-sandbox",
+            session_id=result.session_id,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            tool_calls_count=result.tool_calls_count,
+            turns=result.turns,
+            logged_by="system",
+        )
+    except Exception:
+        logger.debug("Failed to log heartbeat performance observation", exc_info=True)
 
 
 

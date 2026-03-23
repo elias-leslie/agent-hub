@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
@@ -20,6 +21,27 @@ logger = logging.getLogger(__name__)
 
 SCHEDULER_PROJECT = "agent-hub"
 SCHEDULER_MEMORY_GROUP = "agent-hub:scheduler"
+_SELF_HONING_AGENT_SLUGS = frozenset({"persona", "supervisor"})
+_SELF_HONING_ROOT = Path(__file__).resolve().parents[2] / ".tmp" / "persona-scheduled-honing"
+_SELF_HONING_TIMEOUT_SECONDS = 120.0
+_SELF_HONING_RUNS_PER_CASE = 2
+_SELF_HONING_REVIEWER_RUNS_PER_CASE = 1
+_SELF_HONING_MAX_ITERATIONS = 2
+_SELF_HONING_COHORT_REPETITIONS = 2
+
+
+async def query_active_sessions(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+    """Lazily import active-session lookup for patchable scheduler tests."""
+    from app.services.memory.continuity_query import query_active_sessions as _query_active_sessions
+
+    return await _query_active_sessions(*args, **kwargs)
+
+
+async def run_honing_loop(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Lazily import the honing loop so tests can patch the scheduler seam."""
+    from scripts.run_persona_honing_loop import run_honing_loop as _run_honing_loop
+
+    return await _run_honing_loop(*args, **kwargs)
 
 
 class SchedulerResult(BaseModel):
@@ -160,6 +182,94 @@ async def _execute_push(job: Any) -> str:
     return f"Push sent to {sent} device(s)"
 
 
+def _scheduled_self_honing_paths(
+    now: datetime | None = None,
+) -> tuple[Path, Path, Path]:
+    timestamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
+    run_root = _SELF_HONING_ROOT / timestamp
+    return run_root / "work", run_root / "reports", run_root / "result.json"
+
+
+async def _resolve_self_honing_models() -> tuple[list[str], list[str]]:
+    from app.db import async_session
+    from app.services.agent_service import get_agent_service
+
+    async with async_session() as db:
+        agent_service = get_agent_service()
+        persona = await agent_service.get_by_slug(db, "persona")
+        if persona is None:
+            raise RuntimeError("persona agent not found")
+        supervisor = await agent_service.get_by_slug(db, "supervisor")
+
+    reviewer_models = [supervisor.primary_model_id] if supervisor and supervisor.primary_model_id else []
+    return [persona.primary_model_id], reviewer_models
+
+
+async def _active_self_honing_conflicts() -> list[dict[str, Any]]:
+    from app.db import async_session
+
+    async with async_session() as db:
+        sessions = await query_active_sessions(db, max_entries=20)
+
+    return [
+        session
+        for session in sessions
+        if str(session.get("agent_slug") or "") in _SELF_HONING_AGENT_SLUGS
+    ]
+
+
+async def _execute_self_honing(job: Any) -> str:
+    from scripts.completion_review_benchmark_cases import get_default_completion_review_case_ids
+    from scripts.persona_benchmark_cases import get_self_correction_case_ids
+
+    conflicts = await _active_self_honing_conflicts()
+    if conflicts:
+        active = ", ".join(
+            f"{item.get('agent_slug')}:{str(item.get('session_id') or '')[:8]}"
+            for item in conflicts
+        )
+        return f"Skipped: active self-edit conflict sessions present ({active})"
+
+    models, reviewer_models = await _resolve_self_honing_models()
+    working_root, output_dir, output_json_path = _scheduled_self_honing_paths()
+    seed = int(datetime.now(UTC).strftime("%Y%m%d"))
+    reviewer_case_ids = get_default_completion_review_case_ids() if reviewer_models else None
+
+    result = await run_honing_loop(
+        models=models,
+        case_ids=get_self_correction_case_ids(),
+        runs_per_case=_SELF_HONING_RUNS_PER_CASE,
+        reviewer_models=reviewer_models or None,
+        reviewer_case_ids=reviewer_case_ids,
+        reviewer_runs_per_case=_SELF_HONING_REVIEWER_RUNS_PER_CASE,
+        project_id=SCHEDULER_PROJECT,
+        working_root=working_root,
+        output_dir=output_dir,
+        seed=seed,
+        timeout_seconds=_SELF_HONING_TIMEOUT_SECONDS,
+        client_id=None,
+        use_memory=True,
+        benchmark_task_type="heartbeat",
+        max_iterations=_SELF_HONING_MAX_ITERATIONS,
+        cohort_repetitions=_SELF_HONING_COHORT_REPETITIONS,
+        base_url="http://localhost:8003",
+        output_json_path=output_json_path,
+        agent_slug="persona",
+        persist_results=True,
+        disable_completion_review=not bool(reviewer_models),
+    )
+
+    iterations = result.get("iterations") or []
+    latest_benchmark_id = iterations[-1].get("benchmark_id") if iterations else "n/a"
+    return (
+        "Self-honing completed: "
+        f"honed={result.get('honed')} "
+        f"iterations={result.get('completed_iterations')} "
+        f"benchmark_id={latest_benchmark_id} "
+        f"output={output_json_path}"
+    )
+
+
 @hatchet.task(
     name="persona-scheduler",
     input_validator=BaseModel,
@@ -200,6 +310,8 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
             try:
                 if job.payload_type == "push":
                     output = await _execute_push(job)
+                elif job.payload_type == "self_honing":
+                    output = await _execute_self_honing(job)
                 else:
                     output = await _execute_agent_turn(job)
 

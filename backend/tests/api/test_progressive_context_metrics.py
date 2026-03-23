@@ -155,9 +155,16 @@ class TestProgressiveContextMetrics:
 
 @pytest.mark.asyncio
 async def test_build_progressive_context_with_variant_passes_assigned_variant_to_builder() -> None:
+    from app.services.memory.settings import MemorySettingsDTO
+
     ctx = ProgressiveContext()
+    settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
 
     with (
+        patch(
+            "app.api.memory_agent_context_builder.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
         patch(
             "app.api.memory_agent_context_builder.assign_variant",
             return_value="MINIMAL",
@@ -184,3 +191,54 @@ async def test_build_progressive_context_with_variant_passes_assigned_variant_to
     assert built is ctx
     assert variant == "MINIMAL"
     assert mock_build.await_args.kwargs["variant"] == "MINIMAL"
+
+
+@pytest.mark.asyncio
+async def test_build_progressive_context_with_variant_uses_active_variant_setting() -> None:
+    from app.services.memory.settings import MemorySettingsDTO
+
+    ctx = ProgressiveContext()
+    settings = MemorySettingsDTO(
+        enabled=True,
+        budget_enabled=True,
+        total_budget=3500,
+        active_variant="ENHANCED",
+    )
+
+    with (
+        patch(
+            "app.api.memory_agent_context_builder.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.assign_variant",
+            return_value="ENHANCED",
+        ) as mock_assign,
+        patch(
+            "app.api.memory_agent_context_builder.build_progressive_context",
+            new_callable=AsyncMock,
+            return_value=ctx,
+        ) as mock_build,
+    ):
+        built, variant = await build_progressive_context_with_variant(
+            query="test query",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+            include_global=True,
+            task_type=None,
+            phase=None,
+            variant_override=None,
+            external_id="task-123",
+            project_id="agent-hub",
+            consumer_profile=None,
+        )
+
+    assert built is ctx
+    assert variant == "ENHANCED"
+    mock_assign.assert_called_once_with(
+        external_id="task-123",
+        project_id="agent-hub",
+        variant_override=None,
+        active_variant="ENHANCED",
+    )
+    assert mock_build.await_args.kwargs["variant"] == "ENHANCED"
