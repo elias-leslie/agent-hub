@@ -48,10 +48,10 @@ import type { NarrationTag } from "../hooks/useNarrationTags";
 
 // ─── Strip observability tags from display text ───
 
-// Match [[P:type:content]] — requires opening [[ to avoid false positives
-const NARRATION_TAG_RE = /\[\[P:[a-z_]+:[^\]]*\]?\]?/g;
-// Match "Applied: [M:8hexchars]" citations — requires "Applied:" prefix or exact [M:hex] format
-const APPLIED_CITATION_RE = /\s*Applied:\s*\[(?:M|G|R):[a-f0-9]{6,8}\]/g;
+// Match [[P:type:content]] and truncated variants like [[P:found… or [[P:started:text...
+const NARRATION_TAG_RE = /\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g;
+// Match "Applied: [M:8hexchars]" and bare "[M:hexchars]" citations
+const APPLIED_CITATION_RE = /\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g;
 // Match [[F:...]] feedback tags
 const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g;
 // Match [[S:...]] summary tags
@@ -59,15 +59,23 @@ const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g;
 
 function cleanSummary(text: string | null | undefined): string {
   if (!text) return "";
-  return text
+  let cleaned = text
     .replace(NARRATION_TAG_RE, "")
     .replace(APPLIED_CITATION_RE, "")
     .replace(FEEDBACK_RE, "")
-    .replace(SUMMARY_RE, "")
+    .replace(SUMMARY_RE, "");
+  // Clean orphaned bracket fragments left after tag stripping (e.g. "[…" or "[ ")
+  cleaned = cleaned
+    .replace(/\[…/g, "")
+    .replace(/^\[+\s*$/g, "")
+    .replace(/\[+\s*\.\.\./g, "")
     .replace(/\.\.\./g, "…")
     .replace(/\n{2,}/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
+  // If only punctuation/brackets/braces remain, return empty
+  if (/^[\[\]{}\(\)…\s.,;:]*$/.test(cleaned)) return "";
+  return cleaned;
 }
 
 // ─── Helpers for extracting human-readable text from events ───
