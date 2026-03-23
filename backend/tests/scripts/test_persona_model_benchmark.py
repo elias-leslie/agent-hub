@@ -865,6 +865,7 @@ def test_web_research_case_requires_shared_web_tools() -> None:
 
     prompt = case.build_prompt()
 
+    assert "research_web" in prompt
     assert "search_web" in prompt
     assert "fetch_web_page" in prompt
     assert "Cloudflare Markdown for Agents" in prompt
@@ -897,6 +898,35 @@ def test_web_research_case_accepts_normalized_shared_tool_names() -> None:
         input_tokens=120,
         output_tokens=30,
         total_tokens=150,
+    )
+
+    assert attempt.passed is True
+    assert attempt.tool_requirement_met is True
+
+
+def test_web_research_case_accepts_research_web_as_equivalent_coverage() -> None:
+    case = get_case_by_id("web_research_stack_lookup")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="claude-sonnet-4-6",
+        run_number=1,
+        latency_ms=900,
+        content=(
+            '{"case_id":"web_research_stack_lookup","primary_action":"dispatch",'
+            '"should_dispatch":true,"should_close":false,'
+            '"confidence":"high","summary":"Dispatch adoption of the shared markdown-first web research stack now instead of building another fetcher."}'
+        ),
+        session_id="sess-web-1call",
+        provider="claude",
+        effective_model="claude-sonnet-4-6",
+        fallback_used=False,
+        turns=2,
+        tool_calls_count=1,
+        used_tool_names=["mcp__agent-hub__research_web"],
+        input_tokens=110,
+        output_tokens=28,
+        total_tokens=138,
     )
 
     assert attempt.passed is True

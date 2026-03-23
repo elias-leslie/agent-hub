@@ -232,6 +232,7 @@ class TestStandardTools:
         assert "write_file" in names
         assert "consult_agent" in names
         assert "precision_code_search" in names
+        assert "research_web" in names
         assert "search_web" in names
         assert "fetch_web_page" in names
 
@@ -240,6 +241,7 @@ class TestStandardTools:
         tools = {tool.name: tool for tool in get_standard_tools()}
         bash_tool = tools["bash"]
         consult_tool = tools["consult_agent"]
+        research_tool = tools["research_web"]
         fetch_tool = tools["fetch_web_page"]
         search_tool = tools["search_web"]
 
@@ -252,11 +254,16 @@ class TestStandardTools:
             "Ask the reviewer agent for risk-focused feedback after inspecting the code.",
         ]
         assert "Do not use bash/curl" in bash_tool.description
-        assert "Never call the `web-research` shell wrapper" in bash_tool.description
+        assert "`web-research research`" in bash_tool.description
+        assert "one-call public-web research pass" in research_tool.description
+        assert "Prefer this for ordinary query-based research" in research_tool.description
+        assert "result_index" in research_tool.input_schema["properties"]
         assert "Prefer this over bash/curl" in search_tool.description
         assert "call it directly" in search_tool.description
+        assert "`research_web`" in search_tool.description
         assert "Prefer this over bash/curl" in fetch_tool.description
         assert "call it directly" in fetch_tool.description
+        assert "`research_web`" in fetch_tool.description
         assert "focus_query" in fetch_tool.input_schema["properties"]
         assert "large pages" in fetch_tool.input_schema["properties"]["focus_query"]["description"]
 
@@ -356,6 +363,36 @@ class TestDispatch:
             max_results=3,
             search_type="text",
             timelimit=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_dispatch_research_web(self, executor: DirectToolExecutor) -> None:
+        with patch(
+            "app.services.tools.direct_executor_core._research_web",
+            new_callable=AsyncMock,
+            return_value='{"selected_result": {"rank": 1}}',
+        ) as mock_research:
+            result = await executor.dispatch(
+                "research_web",
+                {
+                    "query": "Cloudflare Markdown for Agents",
+                    "max_results": 4,
+                    "result_index": 2,
+                    "max_chars": 4000,
+                    "focus_query": "markdown clients",
+                    "bogus": "ignored",
+                },
+            )
+
+        assert result == '{"selected_result": {"rank": 1}}'
+        mock_research.assert_awaited_once_with(
+            query="Cloudflare Markdown for Agents",
+            max_results=4,
+            result_index=2,
+            search_type="text",
+            timelimit=None,
+            max_chars=4000,
+            focus_query="markdown clients",
         )
 
     @pytest.mark.asyncio

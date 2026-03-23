@@ -20,9 +20,10 @@ BASH_TOOL = Tool(
         "Execute a bash command in the working directory. "
         "Use for running tests, git operations, or system commands. "
         "Do not use bash/curl for ordinary public-web research when "
-        "`search_web` or `fetch_web_page` can do the job. Never call the "
-        "`web-research` shell wrapper from Agent Hub bash; that wrapper is for "
-        "shell-only clients."
+        "`research_web`, `search_web`, or `fetch_web_page` can do the job. "
+        "If the current provider/tool surface cannot call direct web tools, "
+        "prefer a single `web-research research` bash command over ad hoc curl "
+        "or separate shell search/fetch steps."
     ),
     input_schema={
         "type": "object",
@@ -156,14 +157,78 @@ PRECISION_CODE_SEARCH_TOOL = Tool(
     usage_examples=["Look up `get_file_tree` before reading whole files."],
 )
 
+RESEARCH_WEB_TOOL = Tool(
+    name="research_web",
+    description=(
+        "Run a one-call public-web research pass: search the web, pick a result, and fetch "
+        "readable page content. Prefer this for ordinary query-based research when you need "
+        "both discovery and source verification with fewer tool calls. Use `search_web` and "
+        "`fetch_web_page` separately only when you need manual control over search and fetch steps."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Research query for the public web.",
+            },
+            "max_results": {
+                "type": "integer",
+                "description": (
+                    "Maximum number of search results to consider "
+                    f"(default {DEFAULT_WEB_SEARCH_RESULTS}, max {MAX_WEB_SEARCH_RESULTS})."
+                ),
+                "default": DEFAULT_WEB_SEARCH_RESULTS,
+            },
+            "result_index": {
+                "type": "integer",
+                "description": "1-based search result rank to fetch after searching.",
+                "default": 1,
+            },
+            "search_type": {
+                "type": "string",
+                "description": "Search scope: `text` for general search or `news` for recent news.",
+                "enum": ["text", "news"],
+                "default": "text",
+            },
+            "timelimit": {
+                "type": "string",
+                "description": "Optional time filter: `d`, `w`, `m`, or `y`.",
+                "enum": ["d", "w", "m", "y"],
+            },
+            "max_chars": {
+                "type": "integer",
+                "description": (
+                    "Maximum number of fetched content characters to return "
+                    f"(default {DEFAULT_WEB_FETCH_MAX_CHARS}, max {MAX_WEB_FETCH_MAX_CHARS})."
+                ),
+                "default": DEFAULT_WEB_FETCH_MAX_CHARS,
+            },
+            "focus_query": {
+                "type": "string",
+                "description": (
+                    "Optional topic or question used to focus the fetched page. "
+                    "Defaults to the research query for concise retrieval."
+                ),
+            },
+        },
+        "required": ["query"],
+    },
+    category="web",
+    search_keywords=["web research", "search then fetch", "current info with source", "browse and verify"],
+    usage_examples=[
+        "Research a public topic with one tool call before deciding or dispatching follow-on work.",
+    ],
+)
+
 SEARCH_WEB_TOOL = Tool(
     name="search_web",
     description=(
         "Search the public web for current information and candidate sources. "
-        "Use this for research, inspiration, or to find pages to inspect before "
-        "calling `fetch_web_page`. Prefer this over bash/curl or provider-native "
-        "web tools for ordinary public-web research. When this tool is available, "
-        "call it directly instead of routing through bash wrappers."
+        "Use this when you need manual search control or multiple candidate sources before "
+        "calling `fetch_web_page`. For the common search-plus-fetch flow, prefer `research_web`. "
+        "Prefer this over bash/curl or provider-native web tools for ordinary public-web research. "
+        "When this tool is available, call it directly instead of routing through bash wrappers."
     ),
     input_schema={
         "type": "object",
@@ -205,10 +270,10 @@ FETCH_WEB_PAGE_TOOL = Tool(
     name="fetch_web_page",
     description=(
         "Fetch a webpage and extract readable content. "
-        "Use this after `search_web` or when you already have a URL and need the page text. "
-        "Prefer this over bash/curl for public webpage retrieval. For large pages, "
-        "pass `focus_query` to return the most relevant sections. When this tool is "
-        "available, call it directly instead of routing through bash wrappers."
+        "Use this when you already have a URL or need manual fetch control after `search_web`. "
+        "For ordinary query-based research, prefer `research_web`. Prefer this over bash/curl for "
+        "public webpage retrieval. For large pages, pass `focus_query` to return the most relevant "
+        "sections. When this tool is available, call it directly instead of routing through bash wrappers."
     ),
     input_schema={
         "type": "object",
@@ -250,6 +315,7 @@ STANDARD_TOOLS: list[Tool] = [
     WRITE_FILE_TOOL,
     CONSULT_AGENT_TOOL,
     PRECISION_CODE_SEARCH_TOOL,
+    RESEARCH_WEB_TOOL,
     SEARCH_WEB_TOOL,
     FETCH_WEB_PAGE_TOOL,
 ]

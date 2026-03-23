@@ -37,6 +37,9 @@ from app.services.tools._executor_web import (
     fetch_web_page as _fetch_web_page,
 )
 from app.services.tools._executor_web import (
+    research_web as _research_web,
+)
+from app.services.tools._executor_web import (
     search_web as _search_web,
 )
 from app.services.tools._sensitive_content import scan_runtime_sensitive_content
@@ -176,7 +179,7 @@ class DirectToolExecutor:
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
         "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
-        "precision_code_search", "search_web", "fetch_web_page", "tool_search",
+        "precision_code_search", "research_web", "search_web", "fetch_web_page", "tool_search",
         "read_personality", "write_personality",
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
@@ -241,6 +244,13 @@ class DirectToolExecutor:
             return await self.dispatch_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "task", "project_id", "max_turns")})
         if name == "search_web":
             return await self.search_web(**{k: v for k, v in args.items() if k in ("query", "max_results", "search_type", "timelimit")})
+        if name == "research_web":
+            return await self.research_web(
+                **{
+                    k: v for k, v in args.items()
+                    if k in ("query", "max_results", "result_index", "search_type", "timelimit", "max_chars", "focus_query")
+                }
+            )
         if name == "fetch_web_page":
             return await self.fetch_web_page(
                 **{k: v for k, v in args.items() if k in ("url", "max_chars", "focus_query")}
@@ -327,6 +337,27 @@ class DirectToolExecutor:
             max_results=max_results,
             search_type=search_type,
             timelimit=timelimit,
+        )
+
+    async def research_web(
+        self,
+        query: str,
+        max_results: int = 5,
+        result_index: int = 1,
+        search_type: str = "text",
+        timelimit: str | None = None,
+        max_chars: int = 12000,
+        focus_query: str | None = None,
+    ) -> str:
+        """Search the web and fetch a selected result in one step."""
+        return await _research_web(
+            query=query,
+            max_results=max_results,
+            result_index=result_index,
+            search_type=search_type,
+            timelimit=timelimit,
+            max_chars=max_chars,
+            focus_query=focus_query,
         )
 
     async def fetch_web_page(
