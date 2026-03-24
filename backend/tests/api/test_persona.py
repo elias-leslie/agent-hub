@@ -972,6 +972,48 @@ class TestPersonaStreamHelpers:
         assert len(pulse.issue_markers) == 1
         assert pulse.issue_markers[0].event_type != "session_summary"
 
+    def test_classify_session_pulse_does_not_flag_retries_for_distinct_manage_tasks_inputs(self) -> None:
+        from app.api.persona.pulse import classify_session_pulse
+        from app.api.persona.schemas import PersonaStreamEventPreview
+
+        session = _make_mock_session(
+            "hb-2",
+            agent_slug="persona",
+            project_id="persona-sandbox",
+            status="completed",
+            created_at=datetime.now(UTC) - timedelta(minutes=3),
+            updated_at=datetime.now(UTC),
+        )
+        previews = [
+            PersonaStreamEventPreview(
+                id="preview-task-a",
+                event_type=SessionEventType.TOOL_RESULT,
+                created_at=datetime.now(UTC) - timedelta(minutes=2),
+                tool_name="manage_tasks",
+                content_preview=None,
+                tool_input_preview='{"action":"reconcile","task_id":"task-a"}',
+                tool_output_preview='{"status":"error","content":"Diff gate blocked completion","is_error":true}',
+                duration_ms=300,
+                model_used="codex/gpt-5.4",
+            ),
+            PersonaStreamEventPreview(
+                id="preview-task-b",
+                event_type=SessionEventType.TOOL_RESULT,
+                created_at=datetime.now(UTC) - timedelta(minutes=1),
+                tool_name="manage_tasks",
+                content_preview=None,
+                tool_input_preview='{"action":"reconcile","task_id":"task-b"}',
+                tool_output_preview='{"status":"error","content":"Diff gate blocked completion","is_error":true}',
+                duration_ms=320,
+                model_used="codex/gpt-5.4",
+            ),
+        ]
+
+        pulse = classify_session_pulse(session, previews)
+
+        assert "retries" not in pulse.tags
+        assert not any("retries" in marker.tags for marker in pulse.issue_markers)
+
     def test_build_pulse_summary_groups_repeated_issue_fingerprints(self) -> None:
         from app.api.persona.pulse import SessionPulse, build_pulse_summary
         from app.api.persona.schemas import PersonaIssueMarker, PersonaStreamEntry

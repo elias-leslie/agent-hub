@@ -18,9 +18,22 @@ from sqlalchemy import select
 
 from app.hatchet_app import hatchet
 from app.models.session import Session
-from app.workflows._session_postprocess import ensure_session_summary
+from app.workflows._session_postprocess import (
+    ensure_session_summary,
+    inline_summary_contract_issues,
+    progress_tag_contract_issues,
+)
 
 logger = logging.getLogger(__name__)
+
+
+async def log_agent_performance(*args: Any, **kwargs: Any) -> str:
+    """Lazily import performance logging so tests can patch the wake seam."""
+    from app.services.tools._executor_performance import (
+        log_agent_performance as _log_agent_performance,
+    )
+
+    return await _log_agent_performance(*args, **kwargs)
 
 
 class WakeInput(BaseModel):
@@ -48,6 +61,56 @@ class WakeResult(BaseModel):
     summary_stored: bool = False
 
 
+def _build_wake_tag_observation(
+    *,
+    content: str | None,
+    task_id: str | None,
+) -> dict[str, str] | None:
+    """Return a wake-session observability note when required tags are missing."""
+    notes = [
+        *inline_summary_contract_issues(content),
+        *progress_tag_contract_issues(content, require_progress=bool(task_id)),
+    ]
+    if not notes:
+        return None
+    return {
+        "feedback_type": "friction",
+        "outcome": "partial",
+        "content": "Wake tagging contract gap: " + "; ".join(notes),
+    }
+
+
+async def _log_wake_tag_observation(
+    *,
+    input: WakeInput,
+    result: Any,
+) -> None:
+    observation = _build_wake_tag_observation(
+        content=result.content or "",
+        task_id=input.task_id,
+    )
+    if observation is None:
+        return
+    try:
+        await log_agent_performance(
+            agent_slug=input.agent_slug,
+            model_id=getattr(result, "model_used", None) or getattr(result, "model", None) or input.model,
+            feedback_type=observation["feedback_type"],
+            content=observation["content"],
+            outcome=observation["outcome"],
+            task_type="wake",
+            project_id=input.project_id,
+            session_id=result.session_id,
+            input_tokens=getattr(result, "input_tokens", None),
+            output_tokens=getattr(result, "output_tokens", None),
+            tool_calls_count=result.tool_calls_count,
+            turns=result.turns,
+            logged_by="system",
+        )
+    except Exception:
+        logger.debug("Failed to log wake tagging observation", exc_info=True)
+
+
 async def _build_wake_prompt(prompt: str) -> str:
     """Prefix wake prompts with concise operational hints to reduce CLI thrash."""
     from app.services.persona_prompt_service import get_persona_wake_guidance
@@ -55,6 +118,17 @@ async def _build_wake_prompt(prompt: str) -> str:
     prompt = prompt.strip()
     wake_guidance = await get_persona_wake_guidance()
     return f"{wake_guidance}\nTask:\n{prompt}" if prompt else wake_guidance.strip()
+
+
+def _resolve_wake_working_dir(project_id: str, working_dir: str | None) -> str | None:
+    """Prefer explicit working_dir, else fall back to the project's canonical root."""
+    if working_dir:
+        return working_dir
+
+    from app.core.project_roots import resolve_project_root
+
+    root = resolve_project_root(project_id)
+    return str(root) if root else None
 
 
 def _wake_external_id(ctx: Context, task_id: str | None = None) -> str | None:
@@ -169,7 +243,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
                 thinking_level=input.thinking_level,
                 parent_session_id=input.parent_session_id,
                 current_branch=input.current_branch,
-                working_dir=input.working_dir,
+                working_dir=_resolve_wake_working_dir(input.project_id, input.working_dir),
             )
         except asyncio.CancelledError:
             with suppress(Exception):
@@ -183,6 +257,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
         result.content or "",
         agent_id=input.agent_slug,
     )
+    await _log_wake_tag_observation(input=input, result=result)
 
     out = WakeResult(
         status=result.status or "success",

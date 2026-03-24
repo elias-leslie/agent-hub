@@ -78,7 +78,7 @@ def test_adapt_claude_message_maps_error_max_turns_subtype() -> None:
 async def test_adapt_claude_stream_converts_provider_error_to_error_event() -> None:
     async def _stream():
         yield ResultMessage("partial"), "sdk-session-2"
-        raise ProviderError("Claude SDK stalled after tool_result for 300.0s", provider="claude")
+        raise ProviderError("upstream transient failure", provider="claude")
 
     events = []
     async for event, session_id in adapt_claude_stream(_stream()):
@@ -87,7 +87,7 @@ async def test_adapt_claude_stream_converts_provider_error_to_error_event() -> N
     assert len(events) == 2
     assert events[0][0].type == "result"
     assert events[1][0].type == "error"
-    assert "stalled after tool_result" in (events[1][0].error or "")
+    assert "upstream transient failure" in (events[1][0].error or "")
     assert events[1][1] == "sdk-session-2"
 
 

@@ -42,7 +42,18 @@ class TestExtractChatSummary:
     def test_extract_chat_summary_no_transformation_returns_same_content(self):
         """Content is taken as-is — no filtering, no special handling."""
         summary = _extract_chat_summary("Sure! The database has 42 tables in it.")
-        assert summary == "Sure! The database has 42 tables in it."
+        assert summary == "The database has 42 tables in it."
+
+    def test_extract_chat_summary_ignores_command_tail(self):
+        content = (
+            "[[P:tested:dt -q -d passes clean - biome OK, tsc OK, zero errors]] "
+            "Type checks pass. Now commit via `/commit_it`."
+        )
+
+        summary = _extract_chat_summary(content)
+
+        assert "/commit_it" not in summary
+        assert "passes clean" in summary or "Type checks pass." in summary
 
 
 class TestEnsureSyntheticSummary:

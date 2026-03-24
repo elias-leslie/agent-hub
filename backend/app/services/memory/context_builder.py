@@ -211,7 +211,8 @@ def _should_select_query_references(
     """Return True when semantic/text-selected references should be added."""
     if memory_config and "query_reference_selection_enabled" in memory_config:
         return bool(memory_config["query_reference_selection_enabled"])
-    return task_type in (None, "", "chat")
+    normalized = (task_type or "").strip().lower()
+    return normalized != "heartbeat"
 
 
 async def build_progressive_context(
@@ -233,8 +234,8 @@ async def build_progressive_context(
     Deterministic injection: ALL mandates and guardrails for the scope are
     injected. No scoring, no thresholds - just tiered prompt rendering.
     References still include auto-inject and task/phase-triggered items. Query-
-    selected references are chat-default because template-driven task prompts
-    are too noisy to use as semantic retrieval queries.
+    selected references are enabled by default except for heartbeat, whose
+    dynamic prompt is too noisy to use as a retrieval query.
     """
     context = ProgressiveContext()
     variant_config = get_variant_config(variant)

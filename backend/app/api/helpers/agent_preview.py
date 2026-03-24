@@ -10,6 +10,7 @@ from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import resolve_memory_config_includes
 from app.services.memory.context_injector import (
     build_progressive_context,
+    extract_query_from_messages,
     format_progressive_context,
 )
 from app.services.memory.service import MemoryScope
@@ -70,7 +71,9 @@ def _memory_scope_for_project(project_id: str | None) -> tuple[MemoryScope, str 
 
 def _build_preview_memory_query(task_prompt: str | None, prompt_input: str | None) -> str:
     """Mirror runtime memory-query extraction from the latest user message."""
-    return (task_prompt or prompt_input or "")[:500]
+    return extract_query_from_messages(
+        [{"role": "user", "content": task_prompt or prompt_input or ""}]
+    ) or ""
 
 
 async def build_agent_preview(

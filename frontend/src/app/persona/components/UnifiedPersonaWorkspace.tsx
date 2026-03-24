@@ -1121,6 +1121,25 @@ export function UnifiedPersonaWorkspace({
           </div>
         ) : (
           <div className="mx-auto max-w-3xl">
+            {total > entries.length && !deferredSearch.trim() && (
+              <div className="flex justify-center pt-2 pb-8">
+                <button
+                  onClick={() => {
+                    const container = scrollRef.current;
+                    if (container) {
+                      olderHistoryAnchorRef.current = {
+                        scrollHeight: container.scrollHeight,
+                        scrollTop: container.scrollTop,
+                      };
+                    }
+                    setPage((value) => value + 1);
+                  }}
+                  className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-5 py-2.5 text-xs font-medium text-slate-400 transition-all hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-600/50"
+                >
+                  Load older entries
+                </button>
+              </div>
+            )}
             <div
               className="relative w-full space-y-1.5"
               style={renderVirtualRows ? { height: `${virtualizer.getTotalSize()}px` } : undefined}
@@ -1319,25 +1338,6 @@ export function UnifiedPersonaWorkspace({
               })}
             </div>
 
-            {total > entries.length && !deferredSearch.trim() && (
-              <div className="flex justify-center pt-8 pb-2">
-                <button
-                  onClick={() => {
-                    const container = scrollRef.current;
-                    if (container) {
-                      olderHistoryAnchorRef.current = {
-                        scrollHeight: container.scrollHeight,
-                        scrollTop: container.scrollTop,
-                      };
-                    }
-                    setPage((value) => value + 1);
-                  }}
-                  className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-5 py-2.5 text-xs font-medium text-slate-400 transition-all hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-600/50"
-                >
-                  Load older entries
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -269,9 +269,7 @@ async def test_complete_with_tools_retries_empty_final_response_once() -> None:
 
 
 @pytest.mark.asyncio
-async def test_complete_with_tools_uses_extended_request_timeout_for_tool_turns() -> None:
-    from app.adapters import codex_oauth as mod
-
+async def test_complete_with_tools_disables_transport_timeout_for_tool_turns() -> None:
     adapter = CodexOAuthAdapter(
         credentials=CodexCredentials(
             access_token="token",
@@ -305,11 +303,13 @@ async def test_complete_with_tools_uses_extended_request_timeout_for_tool_turns(
         events.append(event)
 
     assert events[-1].type == "done"
-    assert adapter._complete_from_input.await_args.kwargs["request_timeout"] == mod._TOOL_TURN_TIMEOUT_SECONDS
+    assert adapter._complete_from_input.await_args.kwargs["request_timeout"] is None
 
 
 @pytest.mark.asyncio
-async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.adapters import codex_oauth as mod
 
     adapter = CodexOAuthAdapter(
@@ -321,12 +321,20 @@ async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: 
         )
     )
 
-    async def hang_forever(**kwargs):
-        await asyncio.Event().wait()
-        raise AssertionError("unreachable")
+    async def slow_complete(**kwargs):
+        await asyncio.sleep(0.05)
+        return CompletionResult(
+            content="Done",
+            model="gpt-5.4",
+            provider="codex",
+            input_tokens=8,
+            output_tokens=3,
+            finish_reason="done",
+            tool_calls=[],
+        )
 
-    monkeypatch.setattr(adapter, "_complete_from_input", hang_forever)
     monkeypatch.setattr(mod, "_TOOL_TURN_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(adapter, "_complete_from_input", slow_complete)
 
     tool_handler = AsyncMock()
 
@@ -340,7 +348,6 @@ async def test_complete_with_tools_emits_error_when_turn_times_out(monkeypatch: 
     ):
         events.append(event)
 
-    assert len(events) == 1
-    assert events[0].type == "error"
-    assert "timed out" in (events[0].error or "")
+    assert len(events) == 2
+    assert [event.type for event in events] == ["content", "done"]
     tool_handler.assert_not_awaited()
