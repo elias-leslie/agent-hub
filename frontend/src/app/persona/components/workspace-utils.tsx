@@ -192,11 +192,11 @@ export function badgeToneClasses(tone: PreviewBadge["tone"] = "neutral"): string
 
 export function entryStatusClasses(status: string): string {
   const normalized = status.toLowerCase();
-  if (normalized === "failed" || normalized === "error") return "bg-rose-950/40 text-rose-300";
-  if (normalized === "completed") return "bg-emerald-950/40 text-emerald-300";
-  if (normalized === "active") return "bg-sky-950/40 text-sky-300";
-  if (normalized === "paused") return "bg-amber-950/40 text-amber-300";
-  return "bg-slate-800 text-slate-300";
+  if (normalized === "failed" || normalized === "error") return "bg-rose-500/10 text-rose-400";
+  if (normalized === "completed") return "bg-emerald-500/10 text-emerald-400";
+  if (normalized === "active") return "bg-sky-500/10 text-sky-400";
+  if (normalized === "paused") return "bg-amber-500/10 text-amber-400";
+  return "bg-slate-800/60 text-slate-400";
 }
 
 export function outcomeToneClasses(hasErrors: boolean): string {
@@ -266,8 +266,8 @@ export function shouldRenderPulseSummary(summary: string | null, issueMarkers: P
 
 // --- Heartbeat classification ---
 
-export function heartbeatIsImportant(entry: { summary_oneliner?: string | null; live_summary?: string | null }): boolean {
-  const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
+export function heartbeatIsImportant(entry: { display_summary?: string | null; summary_oneliner?: string | null; live_summary?: string | null }): boolean {
+  const summary = `${entry.display_summary ?? ""} ${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
   const importantKeywords = [
     "dispatch", "publish", "verified", "verify", "fixed", "created ",
     "reconciled", "merged", "review", "audit", "error", "failed",
@@ -280,12 +280,12 @@ export function heartbeatIsImportant(entry: { summary_oneliner?: string | null; 
 
 export function DateDivider({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-3 py-3">
-      <div className="h-px flex-1 bg-slate-800" />
-      <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-600">
+    <div className="flex items-center gap-4 py-4">
+      <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-800 to-slate-800" />
+      <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 select-none">
         {label}
       </span>
-      <div className="h-px flex-1 bg-slate-800" />
+      <div className="h-px flex-1 bg-gradient-to-l from-transparent via-slate-800 to-slate-800" />
     </div>
   );
 }
@@ -297,7 +297,7 @@ export function TimelineTimestamp({ timestamp }: { timestamp: Date }) {
     <time
       dateTime={timestamp.toISOString()}
       title={title}
-      className="shrink-0 pt-2 text-[10px] font-medium tabular-nums tracking-[0.08em] text-slate-500"
+      className="shrink-0 pt-2.5 text-[10px] font-medium tabular-nums tracking-[0.06em] text-slate-600 select-none font-mono"
     >
       {label}
     </time>
@@ -307,13 +307,13 @@ export function TimelineTimestamp({ timestamp }: { timestamp: Date }) {
 function highlightKeywordClass(token: string): string {
   const normalized = token.toLowerCase();
   if (["error", "failed", "failure", "blocked"].includes(normalized))
-    return "rounded-md bg-rose-950/40 px-1 py-0.5 text-rose-300";
+    return "rounded px-1 py-0.5 bg-rose-500/10 text-rose-400 font-medium";
   if (["warning", "warn", "paused"].includes(normalized))
-    return "rounded-md bg-amber-950/40 px-1 py-0.5 text-amber-300";
+    return "rounded px-1 py-0.5 bg-amber-500/10 text-amber-400 font-medium";
   if (["success", "succeeded", "completed", "ok"].includes(normalized))
-    return "rounded-md bg-emerald-950/40 px-1 py-0.5 text-emerald-300";
+    return "rounded px-1 py-0.5 bg-emerald-500/10 text-emerald-400 font-medium";
   if (["running", "working", "active"].includes(normalized))
-    return "rounded-md bg-sky-950/40 px-1 py-0.5 text-sky-300";
+    return "rounded px-1 py-0.5 bg-sky-500/10 text-sky-400 font-medium";
   return "";
 }
 
@@ -358,7 +358,7 @@ export function ExpandableText({
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
-        className="mt-1 inline-flex items-center rounded-full border border-slate-700 px-2 py-0.5 text-[10px] font-medium text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+        className="mt-1.5 inline-flex items-center rounded-md border border-slate-700/40 bg-slate-800/30 px-2.5 py-0.5 text-[10px] font-medium text-slate-500 transition-all hover:bg-slate-800/60 hover:text-slate-300 hover:border-slate-600/40"
       >
         {expanded ? "Less" : "More"}
       </button>

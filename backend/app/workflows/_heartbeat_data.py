@@ -16,6 +16,10 @@ from app.services.ownership_lanes import (
     idle_minutes_from_timestamps,
     infer_task_id,
 )
+from app.services.session_display_summary import (
+    SessionDisplaySummaryCandidate,
+    fetch_session_display_summaries,
+)
 from app.services.task_overview_summary import (
     build_compact_task_overview,
     parse_task_overview_stats,
@@ -307,6 +311,7 @@ async def _fetch_recently_completed_sessions_section() -> str:
         async with async_session() as db:
             result = await db.execute(
                 select(
+                    Session.id,
                     Session.agent_slug,
                     Session.project_id,
                     Session.summary_oneliner,
@@ -324,6 +329,16 @@ async def _fetch_recently_completed_sessions_section() -> str:
                 .limit(10)
             )
             rows = list(result.all())
+            display_summaries = await fetch_session_display_summaries(
+                db,
+                [
+                    SessionDisplaySummaryCandidate(
+                        session_id=row.id,
+                        summary_oneliner=row.summary_oneliner,
+                    )
+                    for row in rows
+                ],
+            )
 
         if not rows:
             return ""
@@ -331,9 +346,10 @@ async def _fetch_recently_completed_sessions_section() -> str:
         for row in rows:
             ago = int((now - row.created_at).total_seconds() / 60)
             time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
+            summary = display_summaries.get(row.id) or row.summary_oneliner
             lines.append(
                 f"- {row.agent_slug or '?'} on {row.project_id}: "
-                f"{row.summary_oneliner} ({time_label})"
+                f"{summary} ({time_label})"
             )
         return "\n".join(lines)
     except Exception:

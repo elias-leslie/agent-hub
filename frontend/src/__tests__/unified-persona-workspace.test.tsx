@@ -62,6 +62,7 @@ function buildStreamResponse(options?: {
         role: "user",
         content: "pause that task",
         summary_oneliner: null,
+        display_summary: null,
         current_branch: null,
         external_id: null,
         model: "claude-sonnet",
@@ -85,6 +86,7 @@ function buildStreamResponse(options?: {
         role: null,
         content: null,
         summary_oneliner: "Checked active work",
+        display_summary: "Checked active work across queue, cleanup, and session truth. Dispatched the next safe follow-up lane.",
         current_branch: null,
         external_id: null,
         model: "claude-sonnet",
@@ -145,6 +147,7 @@ function buildStreamResponse(options?: {
               role: null,
               content: null,
               summary_oneliner: "Checked backlog state",
+              display_summary: "Checked backlog state across open tasks and cleanup debt.",
               current_branch: null,
               external_id: null,
               model: "claude-sonnet",
@@ -183,6 +186,7 @@ function buildStreamResponse(options?: {
         role: null,
         content: null,
         summary_oneliner: "Updated files",
+        display_summary: "Updated files, reran dt -q -d, and closed task-123.",
         current_branch: "task-branch",
         external_id: "task-123",
         model: "claude-sonnet",
@@ -805,6 +809,8 @@ describe("UnifiedPersonaWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByText("pause that task")).toBeInTheDocument();
     });
+
+    expect(screen.getByText(/Checked active work across queue, cleanup, and session truth\./i)).toBeInTheDocument();
 
     fireEvent.change(
       screen.getByPlaceholderText(/Search .* history, task IDs, files, agents\.\.\./i),

@@ -17,6 +17,7 @@ import {
   ArrowUp,
   CircleDot,
   Filter,
+  HeartPulse,
   Loader2,
   MessageSquarePlus,
   Search,
@@ -947,11 +948,11 @@ export function UnifiedPersonaWorkspace({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      {/* ── Compact toolbar ── */}
-      <div className="border-b border-slate-800 bg-slate-950/90 backdrop-blur px-4 py-2">
-        <div className="flex items-center gap-2">
+      {/* ── Toolbar ── */}
+      <div className="border-b border-slate-800/50 bg-[#0d0e13]/95 backdrop-blur-lg px-5 py-2.5">
+        <div className="flex items-center gap-2.5">
           <div className="relative flex-1 min-w-0">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
             <input
               id={searchInputId}
               value={search}
@@ -960,7 +961,7 @@ export function UnifiedPersonaWorkspace({
                 setAnchorEntryId(null);
               }}
               placeholder="Search history, tasks, files, agents..."
-              className="w-full rounded-lg border border-slate-800 bg-slate-900 py-1.5 pl-8 pr-3 text-xs text-slate-200 outline-none transition placeholder:text-slate-600 focus:border-slate-600 focus:bg-slate-900/80"
+              className="w-full rounded-lg border border-slate-700/50 bg-slate-900/60 py-2 pl-9 pr-3 text-xs text-slate-200 outline-none transition-all placeholder:text-slate-600 focus:border-amber-500/30 focus:bg-slate-900/80 focus:ring-1 focus:ring-amber-500/20"
             />
           </div>
           <TimeRangeDropdown value={timeRange} onChange={setTimeRange} />
@@ -968,10 +969,10 @@ export function UnifiedPersonaWorkspace({
             type="button"
             onClick={() => setShowFilters((v) => !v)}
             className={cn(
-              "inline-flex items-center gap-1 rounded-lg p-1.5 text-xs transition",
+              "inline-flex items-center gap-1 rounded-lg p-2 text-xs transition-all",
               showFilters || filterMode !== "all"
-                ? "bg-amber-950/30 text-amber-300"
-                : "text-slate-500 hover:bg-slate-800 hover:text-slate-300",
+                ? "bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20"
+                : "text-slate-500 hover:bg-slate-800/60 hover:text-slate-300",
             )}
             title="Toggle filters"
           >
@@ -981,11 +982,11 @@ export function UnifiedPersonaWorkspace({
 
         {/* Active filter indicator */}
         {filterMode !== "all" && !showFilters && (
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className="text-[10px] text-slate-500">Showing:</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-200">
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-[10px] text-slate-600">Showing:</span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 ring-1 ring-amber-500/20 px-2.5 py-1 text-[10px] font-medium text-amber-300">
               {filterMode} ({filterCounts[filterMode]})
-              <button type="button" onClick={() => setFilterMode("all")} className="ml-0.5 text-slate-500 hover:text-slate-300">
+              <button type="button" onClick={() => setFilterMode("all")} className="ml-0.5 text-amber-500/50 hover:text-amber-300 transition-colors">
                 <X className="h-3 w-3" />
               </button>
             </span>
@@ -994,7 +995,7 @@ export function UnifiedPersonaWorkspace({
 
         {/* Collapsible filter pills */}
         {showFilters && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5 pb-1">
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 pb-1">
             {([
               ["all", "All"],
               ["messages", "Messages"],
@@ -1015,10 +1016,10 @@ export function UnifiedPersonaWorkspace({
                 type="button"
                 onClick={() => { setFilterMode(value); setShowFilters(false); }}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition",
+                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-all",
                   filterMode === value
-                    ? "bg-slate-100 text-slate-900"
-                    : "bg-slate-800/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+                    ? "bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30"
+                    : "bg-slate-800/40 text-slate-500 hover:bg-slate-800/60 hover:text-slate-300",
                 )}
               >
                 {label}
@@ -1030,18 +1031,18 @@ export function UnifiedPersonaWorkspace({
 
         {/* Search results bar */}
         {deferredSearch.trim() && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400">
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-slate-700/40 bg-slate-900/60 px-3.5 py-2 text-xs text-slate-400">
             <span>
               {matchCount === 0
                 ? `No matches for "${deferredSearch.trim()}"`
                 : `${Math.max(activeSearchMatch, 0) + 1} of ${matchCount} matches`}
             </span>
             {matchCount > 0 && (
-              <div className="flex items-center gap-1">
-                <button type="button" onClick={() => jumpToSearchMatch(-1)} className="rounded p-1 hover:bg-slate-800">
+              <div className="flex items-center gap-0.5">
+                <button type="button" onClick={() => jumpToSearchMatch(-1)} className="rounded-md p-1.5 transition-colors hover:bg-slate-800/80 hover:text-slate-200">
                   <ArrowUp className="h-3.5 w-3.5" />
                 </button>
-                <button type="button" onClick={() => jumpToSearchMatch(1)} className="rounded p-1 hover:bg-slate-800">
+                <button type="button" onClick={() => jumpToSearchMatch(1)} className="rounded-md p-1.5 transition-colors hover:bg-slate-800/80 hover:text-slate-200">
                   <ArrowDown className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -1049,7 +1050,7 @@ export function UnifiedPersonaWorkspace({
           </div>
         )}
         {deferredSearch.trim() && visibleSearchMatches.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             {visibleSearchMatches.map((match) => (
               <button
                 key={match.entry_id}
@@ -1060,13 +1061,13 @@ export function UnifiedPersonaWorkspace({
                   setAutoFollow(false);
                 }}
                 className={cn(
-                  "max-w-full rounded-lg border px-2.5 py-1.5 text-left text-[11px] transition",
+                  "max-w-full rounded-xl border px-3 py-2 text-left text-[11px] transition-all",
                   match.entry_id === activeMatchId
-                    ? "border-amber-700 bg-amber-950/30 text-amber-100"
-                    : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700",
+                    ? "border-amber-600/40 bg-amber-950/20 text-amber-100 shadow-sm shadow-amber-900/10"
+                    : "border-slate-800/40 bg-slate-900/30 text-slate-400 hover:border-slate-700/50 hover:bg-slate-800/30",
                 )}
               >
-                <span className="font-medium uppercase tracking-wide text-[10px] opacity-70">
+                <span className="font-medium uppercase tracking-wider text-[9px] text-slate-600">
                   {formatTimeLabel(new Date(match.timestamp))} · {match.entry_type}
                 </span>
                 <HighlightedText text={shortenText(match.snippet, 90)} className="mt-0.5 block" />
@@ -1076,7 +1077,7 @@ export function UnifiedPersonaWorkspace({
         )}
       </div>
 
-      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-5 py-5 bg-[#0a0b0f]">
         <div className="mx-auto max-w-3xl">
           <PulseOverviewPanels
             visiblePulseMetrics={visiblePulseMetrics}
@@ -1087,24 +1088,31 @@ export function UnifiedPersonaWorkspace({
         </div>
 
         {(error || chatError) && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-rose-900 bg-rose-950/30 px-3 py-2 text-sm text-rose-300">
-            <AlertCircle className="h-4 w-4" />
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-2.5 text-sm text-rose-300/90">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-rose-400" />
             {error || chatError}
           </div>
         )}
 
         {loading && entries.length === 0 ? (
-          <div className="flex items-center justify-center py-20 text-slate-500">
-            <Loader2 className="h-5 w-5 animate-spin" />
+          <div className="flex flex-col items-center justify-center py-24 text-slate-500 gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-amber-500/60" />
+            <span className="text-xs text-slate-600">Loading activity...</span>
           </div>
         ) : groupedItems.length === 0 ? (
-          <div className="py-20 text-center text-slate-500">
-            No activity yet.
+          <div className="flex flex-col items-center justify-center py-24 gap-3">
+            <div className="rounded-full bg-slate-800/50 p-4">
+              <HeartPulse className="h-6 w-6 text-slate-600" />
+            </div>
+            <p className="text-sm font-medium text-slate-500">No activity yet</p>
+            <p className="text-xs text-slate-600 max-w-xs text-center">
+              {personaDisplayName} hasn&apos;t had any heartbeats or conversations in this time range.
+            </p>
           </div>
         ) : (
           <div className="mx-auto max-w-3xl">
             <div
-              className="relative w-full"
+              className="relative w-full space-y-1.5"
               style={renderVirtualRows ? { height: `${virtualizer.getTotalSize()}px` } : undefined}
             >
               {renderedRows.map(({ key, row, start, measure }) => {
@@ -1133,14 +1141,14 @@ export function UnifiedPersonaWorkspace({
                     >
                       <div
                         data-testid="new-activity-separator"
-                        className="flex items-center gap-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-400"
+                        className="flex items-center gap-3 py-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-400/80"
                       >
-                        <div className="h-px flex-1 bg-sky-900" />
-                        <span className="inline-flex items-center gap-1">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent to-amber-500/20" />
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1">
                           <CircleDot className="h-3 w-3" />
                           New activity
                         </span>
-                        <div className="h-px flex-1 bg-sky-900" />
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent to-amber-500/20" />
                       </div>
                     </div>
                   );
@@ -1178,9 +1186,9 @@ export function UnifiedPersonaWorkspace({
                 const matched = matchedIds.has(item.id);
                 const activeMatched = activeMatchId === item.id;
                 const baseClasses = cn(
-                  "flex items-start gap-3 rounded-lg",
-                  matched && "px-2 py-1 ring-1 ring-amber-800",
-                  activeMatched && "ring-2 ring-amber-500",
+                  "flex items-start gap-3 rounded-xl",
+                  matched && "px-2.5 py-1.5 ring-1 ring-amber-600/30 bg-amber-950/5",
+                  activeMatched && "ring-2 ring-amber-500/50 bg-amber-950/10",
                 );
 
                 return (
@@ -1198,9 +1206,9 @@ export function UnifiedPersonaWorkspace({
                         data-timestamp={item.timestamp.toISOString()}
                         className={cn(
                           "flex items-start gap-3",
-                          selected && "rounded-lg bg-sky-950/10 px-2 py-1",
-                          matched && "rounded-lg px-2 py-1 ring-1 ring-amber-800",
-                          activeMatched && "ring-2 ring-amber-500",
+                          selected && "rounded-xl bg-sky-950/10 px-2.5 py-1.5",
+                          matched && "rounded-xl px-2.5 py-1.5 ring-1 ring-amber-600/30 bg-amber-950/5",
+                          activeMatched && "ring-2 ring-amber-500/50 bg-amber-950/10",
                         )}
                       >
                         <TimelineTimestamp timestamp={item.timestamp} />
@@ -1302,7 +1310,7 @@ export function UnifiedPersonaWorkspace({
             </div>
 
             {total > entries.length && !deferredSearch.trim() && (
-              <div className="flex justify-center pt-6">
+              <div className="flex justify-center pt-8 pb-2">
                 <button
                   onClick={() => {
                     const container = scrollRef.current;
@@ -1314,7 +1322,7 @@ export function UnifiedPersonaWorkspace({
                     }
                     setPage((value) => value + 1);
                   }}
-                  className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-xs text-slate-400 transition hover:bg-slate-800 hover:text-slate-200"
+                  className="rounded-lg border border-slate-700/50 bg-slate-800/40 px-5 py-2.5 text-xs font-medium text-slate-400 transition-all hover:bg-slate-800/70 hover:text-slate-200 hover:border-slate-600/50"
                 >
                   Load older entries
                 </button>
@@ -1334,7 +1342,7 @@ export function UnifiedPersonaWorkspace({
               setIsAtBottom(true);
               markLatestAsRead();
             }}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-900 shadow-lg transition hover:bg-white"
+            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-black/30 ring-1 ring-slate-700 transition hover:bg-slate-700 hover:text-white"
           >
             <ArrowDown className="h-4 w-4" />
             {newActivityCount > 0 ? `${newActivityCount} new ${newActivityCount === 1 ? "item" : "items"} · Jump to latest` : "Jump to latest"}
@@ -1342,12 +1350,12 @@ export function UnifiedPersonaWorkspace({
         </div>
       )}
 
-      <div className="border-t border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
+      <div className="border-t border-slate-800/50 bg-[#0d0e13]/95 px-5 py-3 backdrop-blur-lg">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-1.5 flex items-center justify-between text-[11px] text-slate-500">
+          <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
             <div className="flex items-center gap-2">
               {status !== "idle" && (
-                <span className="inline-flex items-center gap-1 text-amber-300">
+                <span className="inline-flex items-center gap-1.5 text-amber-400/80">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   {personaDisplayName} is responding
                 </span>
@@ -1356,7 +1364,7 @@ export function UnifiedPersonaWorkspace({
             <button
               type="button"
               onClick={onNewSession}
-              className="inline-flex items-center gap-1 text-slate-500 transition hover:text-slate-300"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-slate-600 transition-all hover:bg-slate-800/50 hover:text-slate-400"
             >
               <MessageSquarePlus className="h-3 w-3" />
               New thread

@@ -33,7 +33,6 @@ import type {
 } from "./workspace-types";
 import {
   entryStatusClasses,
-  ExpandableText,
   formatRuntimeLabel,
   formatTimeLabel,
   isGenericStatusText,
@@ -78,6 +77,38 @@ function cleanSummary(text: string | null | undefined): string {
   // If only punctuation/brackets/braces remain, return empty
   if (/^[\[\]{}\(\)…\s.,;:]*$/.test(cleaned)) return "";
   return cleaned;
+}
+
+function entrySummary(
+  entry: Pick<PersonaStreamEntry, "display_summary" | "summary_oneliner" | "live_summary" | "status" | "live_status" | "project_id">,
+  fallback: string,
+): string {
+  const orderedCandidates = entry.status === "active" || entry.live_status === "active"
+    ? [entry.live_summary, entry.display_summary, entry.summary_oneliner]
+    : [entry.display_summary, entry.summary_oneliner, entry.live_summary];
+  for (const candidate of orderedCandidates) {
+    const cleaned = cleanSummary(candidate);
+    if (cleaned) return cleaned;
+  }
+  return fallback;
+}
+
+function normalizeSummaryComparison(text: string | null | undefined): string {
+  return cleanSummary(prettifyDisplayText(text || ""))
+    .toLowerCase()
+    .replace(/[`"'“”’]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isRedundantSummaryMessage(messageText: string | null | undefined, summaryText: string | null | undefined): boolean {
+  const message = normalizeSummaryComparison(messageText);
+  const summary = normalizeSummaryComparison(summaryText);
+  if (!message || !summary) return false;
+  if (message === summary) return true;
+  const shorter = message.length <= summary.length ? message : summary;
+  const longer = message.length > summary.length ? message : summary;
+  return shorter.length >= 72 && longer.includes(shorter);
 }
 
 // ─── Helpers for extracting human-readable text from events ───
@@ -294,14 +325,24 @@ function SessionTranscript({
   narrationLoading,
   issueMarkers,
   personaName,
+  summaryText,
+  hideRedundantSummaryMessage = false,
 }: {
   events: TimelineEvent[];
   narrationTags?: NarrationTag[];
   narrationLoading?: boolean;
   issueMarkers?: PersonaIssueMarker[];
   personaName?: string;
+  summaryText?: string;
+  hideRedundantSummaryMessage?: boolean;
 }) {
-  const items = useMemo(() => buildTranscriptItems(events, narrationTags), [events, narrationTags]);
+  const items = useMemo(() => {
+    const transcriptItems = buildTranscriptItems(events, narrationTags);
+    if (!hideRedundantSummaryMessage || !summaryText) return transcriptItems;
+    return transcriptItems.filter((item) => (
+      item.kind !== "message" || !isRedundantSummaryMessage(item.content, summaryText)
+    ));
+  }, [events, hideRedundantSummaryMessage, narrationTags, summaryText]);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const toggleExpand = (id: string) => {
@@ -315,15 +356,15 @@ function SessionTranscript({
 
   if (narrationLoading) {
     return (
-      <div className="mt-3 flex items-center gap-2 border-t border-slate-800 pt-3 text-xs text-slate-500">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />Loading...
+      <div className="mt-3 flex items-center gap-2 border-t border-slate-800/40 pt-3 text-xs text-slate-600">
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500/50" />Loading transcript...
       </div>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="mt-3 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-xs text-slate-500">
+      <div className="mt-3 rounded-lg border border-slate-800/30 bg-slate-900/20 px-3.5 py-2.5 text-xs text-slate-600">
         No detailed activity recorded.
       </div>
     );
@@ -332,23 +373,23 @@ function SessionTranscript({
   const name = personaName || "Jenny";
 
   return (
-    <div className="mt-3 border-t border-slate-800 pt-3 space-y-1.5">
+    <div className="mt-3 border-t border-slate-800/40 pt-3 space-y-2">
       {items.map((item) => {
         if (item.kind === "message") {
           return (
-            <div key={item.id} className="text-xs leading-relaxed">
+            <div key={item.id} className="text-xs leading-relaxed py-0.5">
               <span className="font-medium text-slate-300">{name}:</span>{" "}
-              <span className="text-slate-400">
+              <span className="text-slate-400/90">
                 {item.content && item.content.length > 200 ? (
                   expandedIds.has(item.id) ? (
                     <>
                       <span className="whitespace-pre-wrap">{item.content}</span>
-                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1 text-slate-500 hover:text-slate-300">less</button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors">less</button>
                     </>
                   ) : (
                     <>
                       {truncate(item.content, 200)}
-                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1 text-slate-500 hover:text-slate-300">more</button>
+                      <button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1.5 rounded bg-slate-800/40 px-1.5 py-0.5 text-[10px] text-slate-500 hover:text-slate-300 transition-colors">more</button>
                     </>
                   )
                 ) : (
@@ -363,21 +404,20 @@ function SessionTranscript({
           const paramStr = item.toolParam ? `(${item.toolParam})` : "";
           const isExpanded = expandedIds.has(item.id);
           return (
-            <div key={item.id} className="text-xs font-mono">
+            <div key={item.id} className="text-xs font-mono rounded-md bg-slate-800/20 px-2.5 py-1.5">
               <div className="text-slate-400">
-                <span className="text-slate-500">•</span>{" "}
-                Ran <span className="text-slate-300">{item.toolName}</span>
+                <span className={cn("inline-block h-1.5 w-1.5 rounded-full mr-1.5", item.isError ? "bg-rose-400" : "bg-slate-600")} />
+                Ran <span className="text-slate-300 font-medium">{item.toolName}</span>
                 {paramStr && <span className="text-slate-500">{paramStr}</span>}
               </div>
               {item.toolResult && (
-                <div className={cn("ml-3 mt-0.5", item.isError ? "text-rose-400" : "text-slate-500")}>
-                  <span className="text-slate-600">└</span>{" "}
+                <div className={cn("ml-4 mt-1 border-l border-slate-800/50 pl-2.5", item.isError ? "text-rose-400/80" : "text-slate-500")}>
                   {item.toolResultFull && !isExpanded ? (
                     <>
                       {item.toolResult}
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
-                        className="ml-1 text-slate-600 hover:text-slate-400 font-sans"
+                        className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
                       >
                         more
                       </button>
@@ -387,7 +427,7 @@ function SessionTranscript({
                       <span className="whitespace-pre-wrap break-words font-sans">{item.toolResultFull}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }}
-                        className="ml-1 text-slate-600 hover:text-slate-400 font-sans"
+                        className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]"
                       >
                         less
                       </button>
@@ -403,8 +443,9 @@ function SessionTranscript({
 
         if (item.kind === "error") {
           return (
-            <div key={item.id} className="text-xs text-rose-400">
-              <span className="text-rose-500">⚠</span> {item.content}
+            <div key={item.id} className="text-xs text-rose-400/80 rounded-md bg-rose-500/5 px-2.5 py-1.5 flex items-start gap-2">
+              <span className="text-rose-500/60 mt-0.5">⚠</span>
+              <span>{item.content}</span>
             </div>
           );
         }
@@ -416,17 +457,17 @@ function SessionTranscript({
             const pct = match ? parseInt(match[1], 10) : null;
             const rest = (item.tagContent || "").replace(/^\d+\s*[-–—:]\s*/, "");
             return (
-              <div key={item.id} className="text-xs text-violet-400 flex items-center gap-1.5">
-                <span>{icon}</span>
+              <div key={item.id} className="text-xs text-violet-400/80 flex items-center gap-2 py-0.5">
+                <span className="text-violet-500/60">{icon}</span>
                 {pct !== null && (
                   <>
-                    <div className="h-1.5 w-12 rounded-full bg-slate-800 overflow-hidden">
+                    <div className="h-1.5 w-14 rounded-full bg-slate-800/60 overflow-hidden">
                       <div
-                        className={cn("h-full rounded-full", pct >= 70 ? "bg-emerald-400" : pct >= 40 ? "bg-amber-400" : "bg-rose-400")}
+                        className={cn("h-full rounded-full transition-all", pct >= 70 ? "bg-emerald-500/70" : pct >= 40 ? "bg-amber-500/70" : "bg-rose-500/70")}
                         style={{ width: `${Math.min(pct, 100)}%` }}
                       />
                     </div>
-                    <span>{pct}%</span>
+                    <span className="font-medium tabular-nums">{pct}%</span>
                   </>
                 )}
                 {rest && <span className="text-slate-500">{rest}</span>}
@@ -435,10 +476,10 @@ function SessionTranscript({
           }
           return (
             <div key={item.id} className={cn(
-              "text-xs",
-              item.tagType === "blocked" ? "text-rose-400" : "text-slate-400",
+              "text-xs py-0.5",
+              item.tagType === "blocked" ? "text-rose-400/80" : "text-slate-400/80",
             )}>
-              <span className={item.tagType === "blocked" ? "text-rose-500" : "text-slate-500"}>{icon}</span>{" "}
+              <span className={item.tagType === "blocked" ? "text-rose-500/60" : "text-slate-500/60"}>{icon}</span>{" "}
               <span className="font-medium capitalize">{item.tagType}:</span> {item.tagContent}
             </div>
           );
@@ -449,12 +490,14 @@ function SessionTranscript({
 
       {/* Trailing issues not matched to events */}
       {issueMarkers && issueMarkers.length > 0 && (
-        <div className="mt-2 space-y-1">
+        <div className="mt-3 space-y-1.5 border-t border-slate-800/30 pt-2.5">
           {issueMarkers.map((marker) => (
-            <div key={`issue-${marker.event_id}-${marker.primary_tag}`} className="text-xs text-amber-400">
-              <span className="text-amber-500">⚠</span>{" "}
-              <span className="font-medium">{pulseTagLabel(marker.primary_tag)}:</span>{" "}
-              {marker.title}
+            <div key={`issue-${marker.event_id}-${marker.primary_tag}`} className="flex items-start gap-2 text-xs text-amber-400/80">
+              <span className="text-amber-500/60 mt-0.5">⚠</span>
+              <div>
+                <span className="font-medium">{pulseTagLabel(marker.primary_tag)}:</span>{" "}
+                {marker.title}
+              </div>
             </div>
           ))}
         </div>
@@ -470,8 +513,8 @@ export function EntryIssueSummary({ issueMarkers }: { issueMarkers: PersonaIssue
   if (!primaryMarker) return null;
 
   return (
-    <div className="mt-1.5 flex items-center gap-1.5">
-      <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", pulseTagClasses(primaryMarker.primary_tag))}>
+    <div className="mt-2 flex items-center gap-2">
+      <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-medium", pulseTagClasses(primaryMarker.primary_tag))}>
         {pulseTagLabel(primaryMarker.primary_tag)}
       </span>
       <span className="text-[10px] text-slate-500 truncate">{primaryMarker.title}</span>
@@ -502,39 +545,39 @@ export function PulseOverviewPanels({
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-400 transition hover:bg-slate-800/50 hover:text-slate-300"
+        className="flex items-center gap-2.5 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-500 transition-all hover:bg-slate-800/30 hover:text-slate-400"
       >
-        {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", !expanded && "-rotate-90")} />
         <Sparkles className="h-3.5 w-3.5" />
         Health overview
         {totalFriction > 0 && (
-          <span className="rounded-full bg-amber-950/40 px-2 py-0.5 text-[10px] text-amber-300">
+          <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400/80">
             {totalFriction} events
           </span>
         )}
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-3 rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+        <div className="mt-2 space-y-3 rounded-xl border border-slate-800/40 bg-slate-900/30 p-4">
           {visiblePulseMetrics.length > 0 && (
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
               {visiblePulseMetrics.map((metric) => {
                 const mode = pulseTagToFilterMode(metric.key);
                 return (
                   <button
                     key={metric.key} type="button" onClick={() => applyPulseFilter(mode)}
                     className={cn(
-                      "rounded-lg border px-3 py-2 text-left transition",
+                      "rounded-xl border px-3.5 py-2.5 text-left transition-all",
                       metric.count > 0
-                        ? "border-slate-700 bg-slate-800/50 hover:border-slate-600"
-                        : "border-slate-800 bg-slate-900/60",
+                        ? "border-slate-700/40 bg-slate-800/30 hover:border-slate-600/50 hover:bg-slate-800/40"
+                        : "border-slate-800/30 bg-slate-900/20",
                     )}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", pulseTagClasses(metric.key))}>{metric.label}</span>
-                      <span className="text-base font-semibold text-slate-100">{metric.count}</span>
+                      <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-medium", pulseTagClasses(metric.key))}>{metric.label}</span>
+                      <span className="text-base font-semibold text-slate-200 tabular-nums">{metric.count}</span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-400">{metric.description}</p>
+                    <p className="mt-1 text-xs text-slate-500">{metric.description}</p>
                   </button>
                 );
               })}
@@ -628,23 +671,23 @@ export function RoutineHeartbeatGroup({
   const timeRange = first && last ? `${formatTimeLabel(first.timestamp)} \u2013 ${formatTimeLabel(last.timestamp)}` : null;
 
   return (
-    <div className="rounded-lg border border-slate-800/60 bg-slate-900/40 px-3 py-2">
+    <div className="rounded-xl border border-slate-800/30 bg-slate-900/15 px-3.5 py-2.5">
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center justify-between gap-3"
+        className="flex w-full items-center justify-between gap-3 transition-colors hover:text-slate-300"
       >
-        <div className="flex items-center gap-2">
-          <Clock3 className="h-3.5 w-3.5 text-slate-500" />
-          <span className="text-xs font-medium text-slate-400">
+        <div className="flex items-center gap-2.5">
+          <Clock3 className="h-3.5 w-3.5 text-slate-600" />
+          <span className="text-xs font-medium text-slate-500">
             {block.items.length} routine heartbeats
           </span>
-          {timeRange && <span className="text-[10px] text-slate-600">{timeRange}</span>}
+          {timeRange && <span className="text-[10px] text-slate-600 font-mono tabular-nums">{timeRange}</span>}
         </div>
-        {expanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-500" />}
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-600 transition-transform duration-200", !expanded && "-rotate-90")} />
       </button>
       {expanded && (
-        <div className="mt-2 space-y-2 border-t border-slate-800/60 pt-2">
+        <div className="mt-2.5 space-y-2 border-t border-slate-800/30 pt-2.5">
           {block.items.map(({ anchorItem }) => (
             <div key={anchorItem.id} data-session-anchor={anchorItem.sessionId} data-testid="stream-item" data-stream-item-id={anchorItem.id} data-timestamp={anchorItem.timestamp.toISOString()} className="flex items-start gap-3">
               <TimelineTimestamp timestamp={anchorItem.timestamp} />
@@ -683,13 +726,13 @@ export function ChildRunStack({
   personaName?: string;
 }) {
   return (
-    <div className="ml-4 mt-2 border-l-2 border-sky-900/40 pl-3">
-      <div className="space-y-2">
+    <div className="ml-5 mt-2.5 border-l border-sky-800/30 pl-3.5">
+      <div className="space-y-2.5">
         {childRuns.map((childRun) => (
           <div key={childRun.id} data-session-anchor={childRun.sessionId} data-testid="stream-item" data-stream-item-id={childRun.id} data-timestamp={childRun.timestamp.toISOString()}
-            className={cn("flex items-start gap-2 rounded-lg",
-              matchedIds.has(childRun.id) && "px-2 py-1 ring-1 ring-amber-800",
-              activeMatchId === childRun.id && "ring-2 ring-amber-500",
+            className={cn("flex items-start gap-2 rounded-xl",
+              matchedIds.has(childRun.id) && "px-2.5 py-1.5 ring-1 ring-amber-600/30 bg-amber-950/5",
+              activeMatchId === childRun.id && "ring-2 ring-amber-500/50 bg-amber-950/10",
             )}
           >
             <div className="min-w-0 flex-1">
@@ -724,6 +767,7 @@ export function ChildRunCard({
   const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
   const primaryIssue = issueMarkers[0];
   const isActive = entry.status === "active";
+  const summaryText = entrySummary(entry, `Running on ${entry.project_id}`);
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -734,28 +778,33 @@ export function ChildRunCard({
   return (
     <div
       className={cn(
-        "rounded-lg border px-3 py-2 transition-colors cursor-pointer",
-        selected ? "border-sky-800 bg-sky-950/20" : "border-slate-800/60 bg-slate-900/30 hover:border-slate-700",
+        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0a0b0f]",
+        selected
+          ? "border-sky-700/40 bg-sky-950/10 shadow-sm shadow-sky-900/10"
+          : "border-slate-800/30 bg-slate-900/15 hover:border-slate-700/50 hover:bg-slate-800/20",
       )}
       onClick={handleClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onToggle(); } }}
     >
-      <div className="flex items-center gap-2">
-        <Bot className="h-3.5 w-3.5 text-sky-400 flex-shrink-0" />
-        <span className="text-xs font-medium text-slate-200 truncate">{entry.agent_slug || "Agent"}</span>
+      <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-sky-500/30" />
+      <div className="flex items-center gap-2.5">
+        <div className={cn("rounded-md p-1", isActive ? "bg-sky-500/10" : "bg-slate-800/40")}>
+          <Bot className={cn("h-3.5 w-3.5 flex-shrink-0", isActive ? "text-sky-400" : "text-sky-500/40")} />
+        </div>
+        <span className="text-xs font-semibold text-slate-300 tracking-wide truncate">{entry.agent_slug || "Agent"}</span>
         <span className="text-[10px] text-slate-600">on {entry.project_id}</span>
-        {entry.external_id && <span className="rounded bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300">{entry.external_id}</span>}
+        {entry.external_id && <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400/80">{entry.external_id}</span>}
         <div className="flex-1" />
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", entryStatusClasses(entry.status))}>{entry.status}</span>
-        {isActive && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
-        {entry.tool_count > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500"><Wrench className="h-3 w-3" />{entry.tool_count}</span>}
-        {expanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-500" />}
+        <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-medium", entryStatusClasses(entry.status))}>{entry.status}</span>
+        {isActive && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_theme(colors.emerald.400)]" />}
+        {entry.tool_count > 0 && <span className="inline-flex items-center gap-1 rounded-md bg-slate-800/50 px-1.5 py-0.5 text-[10px] text-slate-500"><Wrench className="h-2.5 w-2.5" />{entry.tool_count}</span>}
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-600 transition-transform duration-200", !expanded && "-rotate-90")} />
       </div>
 
-      <p className="mt-1 text-xs text-slate-400 leading-relaxed line-clamp-2">
-        {cleanSummary(entry.summary_oneliner) || cleanSummary(entry.live_summary) || `Running on ${entry.project_id}`}
+      <p className={cn("mt-1.5 text-xs text-slate-400/90 leading-relaxed", expanded ? "whitespace-pre-wrap" : "line-clamp-2")}>
+        {summaryText}
       </p>
 
       {primaryIssue && !expanded && <EntryIssueSummary issueMarkers={issueMarkers} />}
@@ -767,15 +816,17 @@ export function ChildRunCard({
           narrationLoading={narrationLoading}
           issueMarkers={issueMarkers}
           personaName={entry.agent_slug || personaName}
+          summaryText={summaryText}
+          hideRedundantSummaryMessage
         />
       )}
       {expanded && details?.loading && (
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-800 pt-3 text-xs text-slate-500">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />Loading...
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-800/40 pt-3 text-xs text-slate-600">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500/50" />Loading transcript...
         </div>
       )}
       {expanded && details?.error && (
-        <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-xs text-rose-400">{details.error}</div>
+        <div className="mt-3 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3.5 py-2.5 text-xs text-rose-400/80">{details.error}</div>
       )}
     </div>
   );
@@ -796,6 +847,8 @@ export function HeartbeatCard({
   const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
   const primaryIssue = issueMarkers[0];
   const isActive = entry.status === "active";
+  const speakerName = personaName || "Jenny";
+  const summaryText = entrySummary(entry, "Routine check completed");
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -806,27 +859,33 @@ export function HeartbeatCard({
   return (
     <div
       className={cn(
-        "rounded-lg border px-3 py-2 transition-colors cursor-pointer",
-        selected ? "border-amber-800 bg-amber-950/15" : "border-slate-800/60 bg-slate-900/30 hover:border-slate-700",
+        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0a0b0f]",
+        selected
+          ? "border-amber-700/40 bg-amber-950/10 shadow-sm shadow-amber-900/10"
+          : "border-slate-800/30 bg-slate-900/15 hover:border-slate-700/50 hover:bg-slate-800/20",
       )}
       onClick={handleClick}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onToggle(); } }}
     >
-      <div className="flex items-center gap-2">
-        <HeartPulse className={cn("h-3.5 w-3.5 flex-shrink-0", isActive ? "text-amber-400 animate-pulse" : "text-amber-500/70")} />
-        <span className="text-xs font-medium text-slate-200">Heartbeat</span>
-        {entry.external_id && <span className="rounded bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-300">{entry.external_id}</span>}
+      <div className="absolute left-0 top-0 bottom-0 w-[2px] rounded-full bg-amber-500/30" />
+      <div className="flex items-center gap-2.5">
+        <div className={cn("rounded-md p-1", isActive ? "bg-amber-500/10" : "bg-slate-800/40")}>
+          <HeartPulse className={cn("h-3.5 w-3.5", isActive ? "text-amber-400 animate-pulse" : "text-amber-500/40")} />
+        </div>
+        <span className="text-xs font-semibold text-slate-300 tracking-wide">Heartbeat</span>
+        {entry.external_id && <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-400/80">{entry.external_id}</span>}
         <div className="flex-1" />
-        <span className={cn("rounded-full px-1.5 py-0.5 text-[10px]", entryStatusClasses(entry.status))}>{entry.status}</span>
-        {isActive && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />}
-        {entry.tool_count > 0 && <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500"><Wrench className="h-3 w-3" />{entry.tool_count}</span>}
-        {expanded ? <ChevronDown className="h-3.5 w-3.5 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-500" />}
+        <span className={cn("rounded-md px-2 py-0.5 text-[10px] font-medium", entryStatusClasses(entry.status))}>{entry.status}</span>
+        {isActive && <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_theme(colors.emerald.400)]" />}
+        {entry.tool_count > 0 && <span className="inline-flex items-center gap-1 rounded-md bg-slate-800/50 px-1.5 py-0.5 text-[10px] text-slate-500"><Wrench className="h-2.5 w-2.5" />{entry.tool_count}</span>}
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-600 transition-transform duration-200", !expanded && "-rotate-90")} />
       </div>
 
-      <p className="mt-1 text-xs text-slate-400 leading-relaxed line-clamp-2">
-        {cleanSummary(entry.summary_oneliner) || cleanSummary(entry.live_summary) || "Routine check completed"}
+      <p className="mt-1.5 whitespace-pre-wrap text-xs leading-relaxed">
+        <span className="font-medium text-slate-300">{speakerName}:</span>{" "}
+        <span className="text-slate-400/90">{summaryText}</span>
       </p>
 
       {primaryIssue && !expanded && <EntryIssueSummary issueMarkers={issueMarkers} />}
@@ -838,15 +897,17 @@ export function HeartbeatCard({
           narrationLoading={narrationLoading}
           issueMarkers={issueMarkers}
           personaName={personaName}
+          summaryText={summaryText}
+          hideRedundantSummaryMessage
         />
       )}
       {expanded && details?.loading && (
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-800 pt-3 text-xs text-slate-500">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />Loading...
+        <div className="mt-3 flex items-center gap-2 border-t border-slate-800/40 pt-3 text-xs text-slate-600">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-500/50" />Loading transcript...
         </div>
       )}
       {expanded && details?.error && (
-        <div className="mt-3 rounded-lg border border-rose-900/50 bg-rose-950/20 px-3 py-2 text-xs text-rose-400">{details.error}</div>
+        <div className="mt-3 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3.5 py-2.5 text-xs text-rose-400/80">{details.error}</div>
       )}
     </div>
   );

@@ -138,7 +138,7 @@ export function isRoutineHeartbeatBlock(
   if (entry.event_previews.some((preview) => preview.event_type === "error")) return false;
   if (entry.event_previews.length > 4) return false;
   if (heartbeatIsImportant(entry)) return false;
-  const summary = `${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
+  const summary = `${entry.display_summary ?? ""} ${entry.summary_oneliner ?? ""} ${entry.live_summary ?? ""}`.toLowerCase();
   if (summary.trim().length > 140) return false;
   return (
     (entry.tool_count <= 2 && entry.message_count <= 0)

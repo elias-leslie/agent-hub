@@ -14,6 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.session import Session, SessionEvent
+from app.services.session_display_summary import (
+    SessionDisplaySummaryCandidate,
+    fetch_session_display_summaries,
+)
 
 from .constants import HOURS_MAP
 from .pulse import build_pulse_summary, build_session_pulses
@@ -102,6 +106,7 @@ def _entry_match_text(entry: PersonaStreamEntry) -> str:
         value
         for value in [
             entry.content,
+            entry.display_summary,
             entry.summary_oneliner,
             entry.live_summary,
             entry.agent_slug,
@@ -172,7 +177,13 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
     if parsed_search.task_terms:
         task_text = " ".join(
             value.lower()
-            for value in [entry.external_id, entry.summary_oneliner, entry.live_summary, entry.content]
+            for value in [
+                entry.external_id,
+                entry.display_summary,
+                entry.summary_oneliner,
+                entry.live_summary,
+                entry.content,
+            ]
             if isinstance(value, str) and value
         )
         if not _matches_terms(task_text, parsed_search.task_terms):
@@ -184,7 +195,7 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
     if parsed_search.agent_terms:
         agent_text = " ".join(
             value.lower()
-            for value in [entry.agent_slug, entry.summary_oneliner, entry.live_summary]
+            for value in [entry.agent_slug, entry.display_summary, entry.summary_oneliner, entry.live_summary]
             if isinstance(value, str) and value
         )
         if not _matches_terms(agent_text, parsed_search.agent_terms):
@@ -193,7 +204,7 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
     if parsed_search.status_terms:
         status_text = " ".join(
             value.lower()
-            for value in [entry.status, entry.live_status, entry.summary_oneliner, entry.live_summary]
+            for value in [entry.status, entry.live_status, entry.display_summary, entry.summary_oneliner, entry.live_summary]
             if isinstance(value, str) and value
         )
         if not _matches_terms(status_text, parsed_search.status_terms):
@@ -202,7 +213,7 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
     if parsed_search.project_terms:
         project_text = " ".join(
             value.lower()
-            for value in [entry.project_id, entry.current_branch, entry.summary_oneliner]
+            for value in [entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner]
             if isinstance(value, str) and value
         )
         if not _matches_terms(project_text, parsed_search.project_terms):
@@ -214,6 +225,7 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
 def _entry_match_snippet(entry: PersonaStreamEntry) -> str:
     for value in [
         entry.content,
+        entry.display_summary,
         entry.summary_oneliner,
         entry.live_summary,
         *[preview.content_preview for preview in entry.event_previews],
@@ -425,10 +437,12 @@ def _make_session_entry(
     tool_counts: dict[str, int],
     event_previews: dict[str, list[PersonaStreamEventPreview]],
     session_pulses: dict[str, Any],
+    display_summaries: dict[str, str | None] | None = None,
     session_type_override: str | None = None,
 ) -> PersonaStreamEntry:
     live_summary, live_status = _live_activity_summary(session)
     pulse = session_pulses.get(session.id)
+    display_summaries = display_summaries or {}
     return PersonaStreamEntry(
         id=entry_id,
         entry_type=entry_type,
@@ -440,6 +454,7 @@ def _make_session_entry(
         session_type=session_type_override or session.session_type,
         status=session.status,
         summary_oneliner=session.summary_oneliner,
+        display_summary=display_summaries.get(session.id),
         current_branch=session.current_branch,
         external_id=session.external_id,
         model=session.model,
@@ -486,9 +501,11 @@ def _build_stream_entries(
     tool_counts: dict[str, int],
     event_previews: dict[str, list[PersonaStreamEventPreview]],
     session_pulses: dict[str, Any] | None = None,
+    display_summaries: dict[str, str | None] | None = None,
 ) -> list[PersonaStreamEntry]:
     persona_by_id = {session.id: session for session in persona_sessions}
     session_pulses = session_pulses or {}
+    display_summaries = display_summaries or {}
     entries: list[PersonaStreamEntry] = []
 
     for event in message_events:
@@ -501,6 +518,7 @@ def _build_stream_entries(
         tool_counts=tool_counts,
         event_previews=event_previews,
         session_pulses=session_pulses,
+        display_summaries=display_summaries,
     )
     for session in persona_sessions:
         if session.session_type == "chat":
@@ -620,10 +638,22 @@ async def get_persona_stream(
     persona_chat_ids = [s.id for s in persona_sessions if s.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
     session_pulses = build_session_pulses([*persona_sessions, *child_sessions], event_previews)
+    display_summaries = await fetch_session_display_summaries(
+        db,
+        [
+            SessionDisplaySummaryCandidate(
+                session_id=session.id,
+                summary_oneliner=session.summary_oneliner,
+                live_summary=_live_activity_summary(session)[0],
+            )
+            for session in [*persona_sessions, *child_sessions]
+            if session.session_type != "chat"
+        ],
+    )
 
     entries = _build_stream_entries(
         persona_sessions, child_sessions, message_events,
-        message_counts, tool_counts, event_previews, session_pulses,
+        message_counts, tool_counts, event_previews, session_pulses, display_summaries,
     )
     matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
     pulse = build_pulse_summary(entries, [*persona_sessions, *child_sessions], session_pulses)
