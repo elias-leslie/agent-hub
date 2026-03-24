@@ -661,3 +661,76 @@ async def test_complete_with_tools_uses_plain_string_prompt_even_with_working_di
         pass
 
     assert isinstance(captured["prompt"], str)
+
+
+@pytest.mark.asyncio
+async def test_complete_with_tools_uses_streaming_prompt_for_working_dir_mcp_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class EmptyIterator:
+        def __aiter__(self) -> EmptyIterator:
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+    def fake_query(*, prompt, options):
+        captured["prompt"] = prompt
+        captured["options"] = options
+        return EmptyIterator()
+
+    fake_sdk = types.SimpleNamespace(
+        query=fake_query,
+        ClaudeAgentOptions=lambda **kwargs: types.SimpleNamespace(**kwargs),
+    )
+    fake_types = types.SimpleNamespace(
+        HookContext=object,
+        HookInput=object,
+        HookJSONOutput=object,
+        HookMatcher=lambda **kwargs: types.SimpleNamespace(**kwargs),
+    )
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk.types", fake_types)
+
+    from app.adapters.base import Message
+    from app.adapters.claude_tools_helpers import complete_with_tools
+
+    async def fake_wrap_prompt_as_stream(prompt: str):
+        async def _gen():
+            yield {"type": "user", "message": {"role": "user", "content": prompt}}
+
+        return _gen()
+
+    monkeypatch.setattr(
+        "app.adapters.claude_tools_helpers._build_tool_infra",
+        lambda *args, **kwargs: (
+            None,
+            {"agent-hub": object()},
+            ["mcp__agent-hub__research_web"],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.adapters.claude_tools_helpers._wrap_prompt_as_stream",
+        fake_wrap_prompt_as_stream,
+    )
+
+    async for _ in complete_with_tools(
+        messages=[Message(role="user", content="inspect the workspace")],
+        model="claude-sonnet-4-6",
+        tools=[{"name": "research_web", "description": "Research", "input_schema": {"type": "object"}}],
+        yolo_mode=True,
+        permission_checker=None,
+        working_dir=str(tmp_path),
+        resume_session_id=None,
+        cli_path="/usr/bin/claude",
+        model_map={},
+        provider_name="claude",
+        max_turns=4,
+    ):
+        pass
+
+    assert not isinstance(captured["prompt"], str)
+    assert hasattr(captured["prompt"], "__aiter__")
