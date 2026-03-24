@@ -113,6 +113,21 @@ class TestValidateHeartbeatFormat:
         assert summary_ok is True
         assert progress_ok is True
 
+    def test_detached_rebuild_closeout_is_compliant(self):
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
+            "HEARTBEAT_ACTION — Detached Agent Hub rebuild queued as sf-rebuild-agent-hub.service. "
+            "Post-restart verification is deferred to a fresh session.\n"
+            "[[P:started:ending the heartbeat after queueing a detached Agent Hub rebuild]]\n"
+            "[[P:decision:queued detached Agent Hub rebuild as sf-rebuild-agent-hub.service "
+            "and ended before post-restart verification]]\n"
+            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+            "must verify health and task completion.]]"
+        )
+        assert status == "action"
+        assert compliant is True
+        assert summary_ok is True
+        assert progress_ok is True
+
     def test_missing_summary_tag_is_noncompliant(self):
         status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
             "HEARTBEAT_OK — [[P:started:reviewing queue]] [[P:decision:no action required]]"
