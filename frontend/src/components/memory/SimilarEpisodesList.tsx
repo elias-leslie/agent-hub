@@ -39,7 +39,7 @@ export function SimilarEpisodesList({ episodeUuid }: SimilarEpisodesListProps) {
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors",
           showSimilar
-            ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+            ? "bg-purple-50 dark:bg-purple-900/20 text-purple-400 border-purple-200 dark:border-purple-800"
             : "bg-slate-800/50 text-slate-400 border-slate-700 hover:text-purple-600 dark:hover:text-purple-400"
         )}
       >

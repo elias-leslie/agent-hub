@@ -96,7 +96,7 @@ export function CredentialList({
                   <button
                     onClick={() => onRequestDeleteCredential?.(cred.id)}
                     aria-label={`Delete credential ${cred.value_masked}`}
-                    className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors"
+                    className="p-0.5 rounded hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors"
                     title="Delete this key"
                   >
                     <Trash2 className="h-2.5 w-2.5" />

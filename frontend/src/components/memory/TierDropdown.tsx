@@ -51,7 +51,7 @@ export function TierDropdown({ episodeUuid, currentCategory, onTierChange }: Tie
             "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-all",
             categoryConfig.bg,
             categoryConfig.color,
-            "hover:ring-2 hover:ring-offset-1 hover:ring-slate-300 dark:hover:ring-slate-600",
+            "hover:ring-2 hover:ring-offset-1 hover:ring-slate-600",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
         >

@@ -62,7 +62,7 @@ export function PreferencesTab() {
                 Control detail level in responses
               </p>
             </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm">
+            <select className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-sm">
               <option>Concise</option>
               <option>Balanced</option>
               <option>Detailed</option>
@@ -77,7 +77,7 @@ export function PreferencesTab() {
                 Preferred model for new sessions
               </p>
             </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm">
+            <select className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-sm">
               {availableModels.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}

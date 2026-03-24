@@ -163,7 +163,7 @@ export function PromptAssignmentCard({
                 </span>
               ) : null}
               {ownedByCurrentAgent ? (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 dark:text-emerald-300">
                   owned
                 </span>
               ) : null}
@@ -183,7 +183,7 @@ export function PromptAssignmentCard({
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
               />
             </label>
             <label className="space-y-1.5">
@@ -191,7 +191,7 @@ export function PromptAssignmentCard({
               <input
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
               />
             </label>
           </div>
@@ -202,7 +202,7 @@ export function PromptAssignmentCard({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
             />
           </label>
 
@@ -212,7 +212,7 @@ export function PromptAssignmentCard({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               rows={16}
-              className="min-h-[260px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+              className="min-h-[260px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs outline-none transition border-slate-700 dark:bg-slate-950"
             />
           </label>
 

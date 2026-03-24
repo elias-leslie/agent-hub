@@ -34,7 +34,7 @@ export function TierSelector({ value, onChange, disabled }: TierSelectorProps) {
             "flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border text-sm font-medium transition-all",
             tierConfig.bg,
             "border-slate-700",
-            "hover:ring-2 hover:ring-offset-1 hover:ring-slate-300 dark:hover:ring-slate-600",
+            "hover:ring-2 hover:ring-offset-1 hover:ring-slate-600",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
         >

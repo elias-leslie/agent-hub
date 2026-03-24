@@ -51,7 +51,7 @@ export function SessionTableRow({
       className={cn(
         "transition-all duration-300",
         isLive && "bg-emerald-50/50 dark:bg-emerald-950/10",
-        isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
+        isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-amber-800",
         isFlashing && "animate-flash"
       )}
     >
@@ -65,7 +65,7 @@ export function SessionTableRow({
 
         {/* Project */}
         <div className="min-w-0">
-          <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate block">
+          <span className="text-xs font-semibold text-slate-100 truncate block">
             {session.project_id}
           </span>
         </div>
@@ -105,7 +105,7 @@ export function SessionTableRow({
           <span className={cn(
             "text-[11px] font-mono tabular-nums font-medium",
             cost > 0.01
-              ? "text-amber-600 dark:text-amber-400"
+              ? "text-amber-400"
               : "text-slate-400"
           )}>
             {formatCost(cost)}

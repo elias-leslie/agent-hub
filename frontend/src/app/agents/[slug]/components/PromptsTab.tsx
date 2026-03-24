@@ -147,7 +147,7 @@ export function PromptsTab({
           <button
             type="button"
             onClick={() => { setShowCreateForm((v) => !v); setShowAssignForm(false); }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
           >
             <Plus className="h-4 w-4" />
             New Prompt

@@ -31,7 +31,7 @@ export function ErrorPage({
 
   return (
     <div className="flex flex-col items-center justify-center py-20">
-      <div className="p-4 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
+      <div className="p-4 rounded-full bg-red-900/20 mb-4">
         <Icon className={`h-8 w-8 ${iconColor}`} />
       </div>
       <h2 className="text-lg font-semibold text-slate-100 mb-2">

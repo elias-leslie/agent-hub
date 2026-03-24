@@ -160,13 +160,13 @@ export default function AgentEditorPage() {
       />
 
       {mutation.isSuccess && (
-        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-sm shadow-lg">
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-sm shadow-lg">
           <CheckCircle2 className="h-4 w-4" />
           Agent saved successfully
         </div>
       )}
       {mutation.isError && (
-        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm shadow-lg">
+        <div className="fixed top-20 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-950/40 border border-red-800 text-red-400 text-sm shadow-lg">
           <AlertCircle className="h-4 w-4" />
           Failed to save agent
         </div>

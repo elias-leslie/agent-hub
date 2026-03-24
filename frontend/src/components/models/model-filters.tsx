@@ -42,12 +42,12 @@ const CAPABILITY_BUTTONS: {
   icon: typeof Eye;
   activeClass: string;
 }[] = [
-  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-blue-500/10 text-amber-500 dark:text-amber-400 border-blue-500/20" },
-  { key: "thinking", label: "Thinking", icon: Brain, activeClass: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20" },
-  { key: "imageGen", label: "Image Gen", icon: Camera, activeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" },
-  { key: "pdf", label: "PDF", icon: FileText, activeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20" },
-  { key: "audio", label: "Audio", icon: Headphones, activeClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20" },
-  { key: "imageEdit", label: "Edit", icon: Pencil, activeClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20" },
+  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-blue-500/10 text-amber-400 border-blue-500/20" },
+  { key: "thinking", label: "Thinking", icon: Brain, activeClass: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
+  { key: "imageGen", label: "Image Gen", icon: Camera, activeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
+  { key: "pdf", label: "PDF", icon: FileText, activeClass: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  { key: "audio", label: "Audio", icon: Headphones, activeClass: "bg-teal-500/10 text-teal-400 border-teal-500/20" },
+  { key: "imageEdit", label: "Edit", icon: Pencil, activeClass: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
 ];
 
 export function ModelFilters({
@@ -119,7 +119,7 @@ export function ModelFilters({
                 <div
                   className={cn(
                     "w-2 h-2 rounded-full",
-                    isSelected ? providerColor.dot : "bg-slate-300 dark:bg-slate-600",
+                    isSelected ? providerColor.dot : "bg-slate-600",
                   )}
                 />
                 <span>{displayName}</span>
@@ -161,7 +161,7 @@ export function ModelFilters({
             type="checkbox"
             checked={groupByProvider}
             onChange={onGroupByProviderToggle}
-            className="rounded border-slate-300 dark:border-slate-600 text-amber-500 focus:ring-amber-500"
+            className="rounded border-slate-600 text-amber-500 focus:ring-amber-500"
           />
           <span className="text-xs font-medium text-slate-400">
             Group by Provider

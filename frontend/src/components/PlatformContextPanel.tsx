@@ -87,11 +87,11 @@ function CollapsedHeader({ isExpanded, isEnabled, content, activeAgentCount, onT
     <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/50 dark:hover:bg-slate-800/30 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
         <div className={cn("flex items-center justify-center w-7 h-7 rounded-md transition-colors", isEnabled ? "bg-amber-100 dark:bg-amber-900/40" : "bg-slate-800")}>
-          <Globe2 className={cn("h-4 w-4", isEnabled ? "text-amber-600 dark:text-amber-400" : "text-slate-400")} />
+          <Globe2 className={cn("h-4 w-4", isEnabled ? "text-amber-400" : "text-slate-400")} />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={cn("text-xs font-semibold uppercase tracking-wider", isEnabled ? "text-amber-700 dark:text-amber-300" : "text-slate-500")}>Platform Context</span>
+            <span className={cn("text-xs font-semibold uppercase tracking-wider", isEnabled ? "text-amber-300" : "text-slate-500")}>Platform Context</span>
             {!isEnabled && <span className="px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-slate-700 text-slate-400">Disabled</span>}
           </div>
           <p className="text-xs text-slate-400 truncate mt-0.5">{truncatePreview(content)}</p>
@@ -117,7 +117,7 @@ function Toolbar({ isEnabled, hasChanges, showSuccess, isPending, onToggle, onSa
     <div className="flex items-center justify-between py-3">
       <p className="text-[10px] uppercase tracking-wider text-slate-400">DB-backed global prompt injected into all agents</p>
       <div className="flex items-center gap-2">
-        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPending} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50" : "bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700")}>
+        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPending} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-900/30 text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50" : "bg-slate-800 text-slate-500 hover:bg-slate-700")}>
           {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           {isEnabled ? "Enabled" : "Disabled"}
         </button>
@@ -133,9 +133,9 @@ function Toolbar({ isEnabled, hasChanges, showSuccess, isPending, onToggle, onSa
 function Editor({ content, isEnabled, onChange }: { content: string; isEnabled: boolean; onChange: (value: string) => void; }) {
   return (
     <div className="relative">
-      <textarea value={content} onChange={(e) => onChange(e.target.value)} placeholder="Enter platform-wide context shared by all agents..." rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors min-h-[150px] max-h-[calc(100vh-20rem)]", isEnabled ? "bg-slate-900 border-amber-200 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-900/50 border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
+      <textarea value={content} onChange={(e) => onChange(e.target.value)} placeholder="Enter platform-wide context shared by all agents..." rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors min-h-[150px] max-h-[calc(100vh-20rem)]", isEnabled ? "bg-slate-900 border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-900/50 border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
       <div className="absolute bottom-2 right-2">
-        <span className="text-[10px] font-mono text-slate-400 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded">{content.length.toLocaleString()} chars</span>
+        <span className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-1.5 py-0.5 rounded">{content.length.toLocaleString()} chars</span>
       </div>
     </div>
   );
@@ -149,7 +149,7 @@ export function PlatformContextPanel({ activeAgentCount }: { activeAgentCount: n
 
   if (error) {
     return (
-      <div className="mb-5 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400">
+      <div className="mb-5 flex items-center gap-2 px-4 py-3 rounded-lg bg-red-950/20 border border-red-900 text-red-400">
         <AlertCircle className="h-4 w-4 flex-shrink-0" />
         <span className="text-xs">Failed to load platform context</span>
       </div>
@@ -168,14 +168,14 @@ export function PlatformContextPanel({ activeAgentCount }: { activeAgentCount: n
             <Toolbar isEnabled={isEnabled} hasChanges={hasChanges} showSuccess={showSuccess} isPending={mutation.isPending} onToggle={handleToggleEnabled} onSave={handleSave} />
             <Editor content={content} isEnabled={isEnabled} onChange={setEditedContent} />
             <div className="mt-3 flex items-start gap-2 text-[10px] text-slate-400">
-              <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600 mt-1.5 flex-shrink-0" />
+              <div className="w-1 h-1 rounded-full bg-slate-600 mt-1.5 flex-shrink-0" />
               <p>This is the canonical DB-backed prompt injected into every agent as <code className="px-1 py-0.5 rounded bg-slate-800 font-mono">&lt;platform_context&gt;</code>. Review it in the Prompts UI or any agent&apos;s combined preview.</p>
             </div>
           </div>
         )}
       </div>
       {mutation.isError && (
-        <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400">
+        <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-red-950/20 border border-red-900 text-red-400">
           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
           <span className="text-xs">Failed to save changes</span>
         </div>

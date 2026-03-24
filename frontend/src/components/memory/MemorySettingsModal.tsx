@@ -38,7 +38,7 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
               <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             </div>
           ) : error ? (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-red-900/20 text-red-400 text-sm">
               {error}
             </div>
           ) : (

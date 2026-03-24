@@ -91,7 +91,7 @@ export function AgentActionsMenu({
               onArchive?.(agent);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-950/20"
           >
             <Archive className="h-3.5 w-3.5" />
             Archive

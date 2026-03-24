@@ -180,7 +180,7 @@ export function SessionDropdown({
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
-          "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
+          "bg-indigo-900/20 text-indigo-400",
           "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
         )}
       >

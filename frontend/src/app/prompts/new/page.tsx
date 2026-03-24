@@ -67,13 +67,13 @@ export default function PromptNewPage() {
     <div className="min-h-screen bg-slate-950">
       {/* Toast notifications */}
       {createMutation.isSuccess && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-sm shadow-lg">
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-sm shadow-lg">
           <CheckCircle2 className="h-4 w-4" />
           Prompt created successfully
         </div>
       )}
       {createMutation.isError && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm shadow-lg">
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-950/40 border border-red-800 text-red-400 text-sm shadow-lg">
           <AlertCircle className="h-4 w-4" />
           Failed to create prompt
         </div>
@@ -85,7 +85,7 @@ export default function PromptNewPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/prompts")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -197,7 +197,7 @@ export default function PromptNewPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   !isGlobal
-                    ? "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                    ? "bg-slate-800 border-slate-600 text-slate-700"
                     : "border-slate-700 text-slate-400 hover:bg-slate-50",
                 )}
               >
@@ -208,8 +208,8 @@ export default function PromptNewPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   enabled
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-600"
-                    : "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-400",
+                    ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
+                    : "bg-slate-800 border-slate-600 text-slate-400",
                 )}
               >
                 {enabled ? "Enabled" : "Disabled"}

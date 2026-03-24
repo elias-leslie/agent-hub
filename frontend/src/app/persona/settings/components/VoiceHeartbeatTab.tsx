@@ -83,7 +83,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
             aria-label={ttsEnabled ? "Disable text-to-speech" : "Enable text-to-speech"}
             className={cn(
               "relative w-10 h-5 rounded-full transition-colors duration-200",
-              ttsEnabled ? "bg-amber-500" : "bg-slate-300 dark:bg-slate-600",
+              ttsEnabled ? "bg-amber-500" : "bg-slate-600",
             )}
           >
             <span
@@ -139,7 +139,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                         previewVoice(voice.id);
                       }
                     }}
-                    className="flex-shrink-0 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                    className="flex-shrink-0 p-0.5 rounded text-slate-400 hover:text-slate-300"
                   >
                     <Play className="w-3 h-3" />
                   </div>
@@ -220,7 +220,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                 heartbeatDisabled
                   ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
                   : runtime?.heartbeat_supported
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                    ? "bg-emerald-100 text-emerald-300 dark:text-emerald-300"
                     : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
               )}
             >

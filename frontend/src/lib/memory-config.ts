@@ -15,21 +15,21 @@ export const CATEGORY_CONFIG: Record<
   mandate: {
     icon: "🔒",
     label: "Mandate",
-    color: "text-red-600 dark:text-red-400",
+    color: "text-red-400",
     bg: "bg-red-500/10 border-red-400/40",
     description: "Always injected — golden standards",
   },
   guardrail: {
     icon: "⚠️",
     label: "Guardrail",
-    color: "text-amber-600 dark:text-amber-400",
+    color: "text-amber-400",
     bg: "bg-amber-500/10 border-amber-400/40",
     description: "Always injected — safety rules",
   },
   reference: {
     icon: "📚",
     label: "Reference",
-    color: "text-amber-500 dark:text-amber-400",
+    color: "text-amber-400",
     bg: "bg-blue-500/10 border-blue-400/40",
     description: "On-demand — triggered or searched",
   },
@@ -47,12 +47,12 @@ export const SCOPE_CONFIG: Record<MemoryScope, { label: string; color: string; b
   },
   project: {
     label: "Project",
-    color: "text-teal-600 dark:text-teal-400",
+    color: "text-teal-400",
     bg: "bg-teal-500/10 border-teal-400/40",
   },
   task: {
     label: "Task",
-    color: "text-orange-600 dark:text-orange-400",
+    color: "text-orange-400",
     bg: "bg-orange-500/10 border-orange-400/40",
   },
 };

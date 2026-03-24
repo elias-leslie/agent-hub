@@ -13,7 +13,7 @@ export function LiveEventsPanel({ events }: LiveEventsPanelProps) {
         <span className="text-xs font-semibold text-green-700 dark:text-green-300">
           Real-time Events
         </span>
-        <span className="text-[10px] text-green-600 dark:text-green-400 ml-auto font-mono tabular-nums">
+        <span className="text-[10px] text-green-400 ml-auto font-mono tabular-nums">
           {events.length}
         </span>
       </div>

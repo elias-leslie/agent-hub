@@ -77,7 +77,7 @@ export function MemoryTable({
               "w-5 h-5 rounded border flex items-center justify-center transition-colors",
               isAllSelected
                 ? "bg-emerald-500 border-emerald-500 text-white"
-                : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
+                : "border-slate-600 hover:border-emerald-400"
             )}
             data-testid="select-all-checkbox"
           >
@@ -101,7 +101,7 @@ export function MemoryTable({
 
       {/* Loading State */}
       {isLoading && (
-        <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+        <div className="divide-y divide-slate-800/50">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
               <div className="h-4 w-4 rounded bg-slate-700 animate-pulse" />
@@ -135,7 +135,7 @@ export function MemoryTable({
 
       {/* Table Rows */}
       {!isLoading && items.length > 0 && (
-        <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+        <div className="divide-y divide-slate-800/50">
           {items.map((item, index) => (
             <MemoryTableRow
               key={item.uuid}

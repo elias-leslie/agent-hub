@@ -39,7 +39,7 @@ const EVENT_CONFIG: Record<
   },
   tool_use: {
     icon: Wrench,
-    color: "text-amber-500 bg-amber-100 dark:bg-amber-900/30",
+    color: "text-amber-500 bg-amber-900/30",
     label: "Tool",
   },
   tool_result: {

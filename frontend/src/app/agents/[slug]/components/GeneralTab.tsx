@@ -51,7 +51,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 formData.is_active
-                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-600"
+                  ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
                   : "border-slate-700 text-slate-400 hover:bg-slate-50"
               )}
             >
@@ -63,7 +63,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 !formData.is_active
-                  ? "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                  ? "bg-slate-800 border-slate-600 text-slate-700"
                   : "border-slate-700 text-slate-400 hover:bg-slate-50"
               )}
             >
@@ -97,7 +97,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 !formData.is_coding_agent
-                  ? "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                  ? "bg-slate-800 border-slate-600 text-slate-700"
                   : "border-slate-700 text-slate-400 hover:bg-slate-50"
               )}
             >

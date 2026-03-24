@@ -59,8 +59,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors",
                   isActive
-                    ? "border-amber-500 text-amber-600 dark:text-amber-400"
-                    : "border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                    ? "border-amber-500 text-amber-400"
+                    : "border-transparent text-slate-400 hover:text-slate-300"
                 )}
               >
                 <Icon className="h-4 w-4" />

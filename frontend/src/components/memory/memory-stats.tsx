@@ -78,12 +78,12 @@ function StatCard({
             {value}
           </p>
           {subtext && (
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1">
               {subtext}
             </p>
           )}
         </div>
-        <Icon className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+        <Icon className="w-5 h-5 text-slate-500" />
       </div>
     </div>
   );

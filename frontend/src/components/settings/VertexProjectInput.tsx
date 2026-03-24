@@ -60,7 +60,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
           if (e.key === "Escape") setEditing(false);
         }}
         placeholder="gen-lang-client-..."
-        className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-300 dark:border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 w-48"
+        className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 w-48"
       />
       <button
         onClick={handleSave}

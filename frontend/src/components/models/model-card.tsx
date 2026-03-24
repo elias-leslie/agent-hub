@@ -23,11 +23,11 @@ function getCostTier(inputCostPerM: number): string {
 function getSpeedBadgeColor(tier: string): string {
   switch (tier) {
     case "fast":
-      return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20";
+      return "bg-green-500/10 text-green-400 border-green-500/20";
     case "medium":
-      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
+      return "bg-amber-500/10 text-amber-400 border-amber-500/20";
     case "slow":
-      return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
+      return "bg-red-500/10 text-red-400 border-red-500/20";
     default:
       return "bg-slate-500/10 text-slate-400 border-slate-500/20";
   }
@@ -108,7 +108,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
               className={cn(
                 "px-2 py-1 rounded text-xs font-semibold text-center border",
                 costTier === "Free"
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                  ? "bg-green-500/10 text-green-400 border-green-500/20"
                   : "bg-slate-800 text-slate-300 border-slate-700",
               )}
             >
@@ -137,7 +137,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
           {model.capabilities.has_vision && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-amber-500 dark:text-amber-400 border border-blue-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-amber-400 border border-blue-500/20"
               title="Vision"
             >
               <Eye className="h-2.5 w-2.5" />
@@ -146,7 +146,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
           {model.capabilities.has_thinking && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-violet-500/10 text-violet-400 border border-violet-500/20"
               title="Extended Thinking"
             >
               <Brain className="h-2.5 w-2.5" />
@@ -155,7 +155,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
           {model.capabilities.can_generate_images && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20"
               title="Image Generation"
             >
               <Camera className="h-2.5 w-2.5" />
@@ -164,7 +164,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
           {model.capabilities.supports_pdf && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-orange-500/10 text-orange-400 border border-orange-500/20"
               title="PDF Processing"
             >
               <FileText className="h-2.5 w-2.5" />
@@ -173,7 +173,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
           {model.capabilities.supports_audio && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/20"
               title="Audio Input"
             >
               <Headphones className="h-2.5 w-2.5" />
@@ -182,7 +182,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
           {model.capabilities.can_edit_images && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-pink-500/10 text-pink-400 border border-pink-500/20"
               title="Image Editing"
             >
               <Pencil className="h-2.5 w-2.5" />

@@ -173,11 +173,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
 
   const typeStyles = {
     success: {
-      bg: "bg-emerald-50 dark:bg-emerald-950/80",
-      border: "border-emerald-200 dark:border-emerald-800",
+      bg: "bg-emerald-950/80",
+      border: "border-emerald-800",
       icon: "text-emerald-500 dark:text-emerald-400",
-      title: "text-emerald-900 dark:text-emerald-100",
-      message: "text-emerald-700 dark:text-emerald-300",
+      title: "text-emerald-100",
+      message: "text-emerald-300",
     },
     error: {
       bg: "bg-rose-50 dark:bg-rose-950/80",
@@ -187,11 +187,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       message: "text-rose-700 dark:text-rose-300",
     },
     warning: {
-      bg: "bg-amber-50 dark:bg-amber-950/80",
-      border: "border-amber-200 dark:border-amber-800",
-      icon: "text-amber-500 dark:text-amber-400",
-      title: "text-amber-900 dark:text-amber-100",
-      message: "text-amber-700 dark:text-amber-300",
+      bg: "bg-amber-950/80",
+      border: "border-amber-800",
+      icon: "text-amber-400",
+      title: "text-amber-100",
+      message: "text-amber-300",
     },
     info: {
       bg: "bg-sky-50 dark:bg-sky-950/80",

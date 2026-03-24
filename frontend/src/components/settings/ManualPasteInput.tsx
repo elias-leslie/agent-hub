@@ -61,7 +61,7 @@ export function ManualPasteInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={submitting}
-          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono disabled:opacity-50"
+          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono disabled:opacity-50"
         />
         <button
           onClick={handleSubmit}
@@ -74,7 +74,7 @@ export function ManualPasteInput({
         <button
           onClick={onCancel}
           disabled={submitting}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 transition-colors disabled:opacity-50"
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>

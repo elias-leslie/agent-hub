@@ -45,7 +45,7 @@ export function AssignPromptForm({
           <select
             value={selectedPromptSlug}
             onChange={(event) => setSelectedPromptSlug(event.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
           >
             <option value="">Select a prompt...</option>
             {availablePrompts.map((prompt) => (
@@ -61,7 +61,7 @@ export function AssignPromptForm({
             value={assignRole}
             onChange={(event) => setAssignRole(event.target.value)}
             list="prompt-role-options"
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
           />
         </label>
       </div>
@@ -69,7 +69,7 @@ export function AssignPromptForm({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
         >
           Cancel
         </button>
