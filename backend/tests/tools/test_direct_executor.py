@@ -178,6 +178,20 @@ class TestDirectToolExecutor:
         assert str(tmp_path) in result
 
     @pytest.mark.asyncio
+    async def test_bash_default_timeout_is_unbounded(self, tmp_path: Path) -> None:
+        executor = DirectToolExecutor(str(tmp_path))
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+            return_value="ok",
+        ) as mock_run:
+            result = await executor.bash("echo ok")
+
+        assert result == "ok"
+        assert mock_run.await_args.args[3] is None
+
+    @pytest.mark.asyncio
     async def test_read_file_success(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
         """Test reading a file."""
         test_file = tmp_path / "test.txt"

@@ -62,8 +62,7 @@ class ChainExecutor:
     is True (default), the chain halts and returns partial results.
     """
 
-    def __init__(self, default_timeout: float = 300.0):
-        self._default_timeout = default_timeout
+    def __init__(self):
         self._subagent_manager = SubagentManager()
 
     async def execute(

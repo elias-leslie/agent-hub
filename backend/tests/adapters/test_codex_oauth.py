@@ -310,8 +310,6 @@ async def test_complete_with_tools_disables_transport_timeout_for_tool_turns() -
 async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.adapters import codex_oauth as mod
-
     adapter = CodexOAuthAdapter(
         credentials=CodexCredentials(
             access_token="token",
@@ -322,6 +320,7 @@ async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_
     )
 
     async def slow_complete(**kwargs):
+        assert kwargs["request_timeout"] is None
         await asyncio.sleep(0.05)
         return CompletionResult(
             content="Done",
@@ -333,7 +332,6 @@ async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_
             tool_calls=[],
         )
 
-    monkeypatch.setattr(mod, "_TOOL_TURN_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(adapter, "_complete_from_input", slow_complete)
 
     tool_handler = AsyncMock()

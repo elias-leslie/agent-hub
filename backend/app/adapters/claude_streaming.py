@@ -168,8 +168,8 @@ async def stream_oauth(
                 finish_reason="cancelled",
             )
     except TimeoutError:
-        logger.error("Claude OAuth stream timeout: request exceeded 300s")
-        yield StreamEvent(type="error", error="Request timeout exceeded 300s")
+        logger.error("Claude OAuth stream timeout")
+        yield StreamEvent(type="error", error="Claude OAuth stream timeout")
         if not got_done:
             yield _make_fallback_done(total_content)
     except Exception as e:

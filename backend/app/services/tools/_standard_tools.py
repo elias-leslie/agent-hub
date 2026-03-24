@@ -11,7 +11,7 @@ from app.services.tools._executor_web import (
     MAX_WEB_FETCH_MAX_CHARS,
     MAX_WEB_SEARCH_RESULTS,
 )
-from app.services.tools._tool_constants import DEFAULT_READ_LIMIT, DEFAULT_TIMEOUT
+from app.services.tools._tool_constants import DEFAULT_READ_LIMIT
 from app.services.tools.base import Tool
 
 BASH_TOOL = Tool(
@@ -34,8 +34,7 @@ BASH_TOOL = Tool(
             },
             "timeout": {
                 "type": "integer",
-                "description": f"Timeout in seconds (default {DEFAULT_TIMEOUT})",
-                "default": DEFAULT_TIMEOUT,
+                "description": "Optional timeout in seconds. Omit to wait for completion.",
             },
         },
         "required": ["command"],

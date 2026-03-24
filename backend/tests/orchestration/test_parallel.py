@@ -125,13 +125,11 @@ class TestParallelExecutor:
         """Test executor initialization."""
         executor = ParallelExecutor()
         assert executor._max_concurrency == 5
-        assert executor._default_timeout == 300.0
 
     def test_custom_initialization(self):
         """Test custom executor configuration."""
-        executor = ParallelExecutor(max_concurrency=10, default_timeout=60.0)
+        executor = ParallelExecutor(max_concurrency=10)
         assert executor._max_concurrency == 10
-        assert executor._default_timeout == 60.0
 
     @pytest.mark.asyncio
     async def test_execute_empty_tasks(self):

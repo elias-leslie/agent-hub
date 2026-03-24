@@ -117,8 +117,6 @@ def _apply_execution_fields(
         payload["task_type"] = task_type
     if trace_id:
         payload["trace_id"] = trace_id
-    if timeout_seconds is not None:
-        payload["timeout_seconds"] = timeout_seconds
     if thinking_level:
         payload["thinking_level"] = thinking_level
     if system_prompt:

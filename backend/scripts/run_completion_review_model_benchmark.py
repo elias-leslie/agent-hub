@@ -94,7 +94,7 @@ async def _run_one_attempt(
     model_id: str,
     case_id: str,
     run_number: int,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     use_memory: bool,
     memory_group_id: str,
 ) -> CompletionReviewBenchmarkAttempt:
@@ -166,7 +166,7 @@ async def run_completion_review_benchmark(
     runs_per_case: int,
     project_id: str,
     seed: int,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     base_url: str,
     client_id: str | None,
     use_memory: bool,
@@ -276,7 +276,12 @@ async def main() -> None:
     parser.add_argument("--runs-per-case", type=int, default=1)
     parser.add_argument("--project-id", default="persona-sandbox")
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--timeout-seconds", type=float, default=180.0)
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="Optional client HTTP timeout ceiling for each completion request.",
+    )
     parser.add_argument("--base-url", default="http://localhost:8003")
     parser.add_argument("--client-id")
     parser.add_argument("--use-memory", action="store_true")
