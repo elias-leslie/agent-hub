@@ -2357,7 +2357,17 @@ class TestManageTasks:
     async def test_retire_lane_marks_completed_sessions_retired(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock()
+        mock_bash = AsyncMock(
+            side_effect=[
+                (
+                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
+                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "To confirm, run:\n"
+                    "  st cleanup lanes task-77 --confirm deadbeef\n"
+                ),
+                "Deleted 1 target(s), 0 error(s)",
+            ]
+        )
         mock_db = AsyncMock()
         completed = MagicMock(
             status="completed",
@@ -2385,9 +2395,13 @@ class TestManageTasks:
             )
 
         assert "Retired 1 session-backed lane(s) for task-77" in result
+        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
         assert completed.workstream_status == "retired"
         assert "Retired via manage_tasks(action=\"retire_lane\")" in completed.workstream_note
-        mock_bash.assert_not_awaited()
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow cleanup lanes task-77"
+        assert mock_bash.await_args_list[1].args[0] == (
+            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
+        )
 
     @pytest.mark.asyncio
     async def test_retire_lane_refuses_when_active_sessions_exist(self):
@@ -2419,7 +2433,18 @@ class TestManageTasks:
     async def test_retire_lane_allows_stale_active_when_task_is_terminal(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value="TASK:task-77|completed|P2|task|SIMPLE")
+        mock_bash = AsyncMock(
+            side_effect=[
+                "TASK:task-77|completed|P2|task|SIMPLE",
+                (
+                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
+                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "To confirm, run:\n"
+                    "  st cleanup lanes task-77 --confirm deadbeef\n"
+                ),
+                "Deleted 1 target(s), 0 error(s)",
+            ]
+        )
         mock_db = AsyncMock()
         active = MagicMock(
             status="active",
@@ -2447,16 +2472,32 @@ class TestManageTasks:
             )
 
         assert "Retired 1 session-backed lane(s) for task-77" in result
+        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
         assert "stale active" in active.workstream_note
-        mock_bash.assert_awaited_once_with("st -P summitflow context task-77 --compact")
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow context task-77 --compact"
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-77"
+        assert mock_bash.await_args_list[2].args[0] == (
+            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
+        )
 
     @pytest.mark.asyncio
     async def test_retire_lane_allows_stale_active_by_inactivity_while_task_is_running(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value="TASK:task-77|running|P2|task|SIMPLE")
+        mock_bash = AsyncMock(
+            side_effect=[
+                "TASK:task-77|running|P2|task|SIMPLE",
+                (
+                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
+                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "To confirm, run:\n"
+                    "  st cleanup lanes task-77 --confirm deadbeef\n"
+                ),
+                "Deleted 1 target(s), 0 error(s)",
+            ]
+        )
         mock_db = AsyncMock()
         active = MagicMock(
             status="active",
@@ -2485,9 +2526,15 @@ class TestManageTasks:
             )
 
         assert "Retired 1 session-backed lane(s) for task-77" in result
+        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
         assert "Retired stale active lane during retire_lane after" in active.workstream_note
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow context task-77 --compact"
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-77"
+        assert mock_bash.await_args_list[2].args[0] == (
+            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
+        )
 
     @pytest.mark.asyncio
     async def test_unknown_action(self):
