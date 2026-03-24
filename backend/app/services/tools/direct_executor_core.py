@@ -17,12 +17,11 @@ from app.services.tools._executor_bash import (
     BLOCKED_COMMANDS as BLOCKED_COMMANDS,
 )
 from app.services.tools._executor_bash import (
-    DEFAULT_TIMEOUT,
-    is_blocked_command,
-    run_bash,
+    MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
 )
 from app.services.tools._executor_bash import (
-    MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
+    is_blocked_command,
+    run_bash,
 )
 from app.services.tools._executor_file_io import (
     _is_path_allowed as _check_path_allowed,
@@ -44,6 +43,7 @@ from app.services.tools._executor_web import (
     search_web as _search_web,
 )
 from app.services.tools._sensitive_content import scan_runtime_sensitive_content
+from app.services.tools._tool_constants import DEFAULT_TIMEOUT
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
@@ -293,7 +293,7 @@ class DirectToolExecutor:
 
         # Core instance methods handled directly
         if name == "bash":
-            return await self.bash(**{k: v for k, v in args.items() if k in ("command", "timeout")})
+            return await self.bash(**{k: v for k, v in args.items() if k == "command"})
         if name == "read_file":
             return await self.read_file(**{k: v for k, v in args.items() if k in ("path", "offset", "limit")})
         if name == "write_file":
@@ -329,7 +329,7 @@ class DirectToolExecutor:
         except TypeError as e:
             return f"Invalid arguments for {name}: {e}"
 
-    async def bash(self, command: str, timeout: int | None = DEFAULT_TIMEOUT) -> str:
+    async def bash(self, command: str) -> str:
         """Execute a bash command with environment inheritance."""
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
@@ -349,7 +349,12 @@ class DirectToolExecutor:
         if self._allowed_root and not self._is_path_allowed(self.working_dir):
             return "Error: Working directory outside allowed project root"
 
-        return await run_bash(command, self.working_dir, self._env, timeout, agent_slug=self._agent_slug)
+        return await run_bash(
+            command,
+            self.working_dir,
+            self._env,
+            agent_slug=self._agent_slug,
+        )
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:
         """Read a file with optional line offset and limit."""

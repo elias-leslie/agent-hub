@@ -187,6 +187,57 @@ async def _fetch_task_overview() -> str:
     return build_compact_task_overview(output)
 
 
+def _filter_task_overview_for_project(task_overview: str, project_id: str) -> str:
+    """Return the compact task overview narrowed to one project."""
+    if not task_overview or not project_id:
+        return task_overview
+
+    project_lines: list[str] = []
+    ready_lines: list[str] = []
+    blocked_lines: list[str] = []
+    stale_lines: list[str] = []
+    current_section: str | None = None
+    project_prefix = f"- {project_id} |"
+
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        if line.startswith("PROJECTS["):
+            current_section = "projects"
+            continue
+        if line.startswith("ACTIONABLE-READY["):
+            current_section = "ready"
+            continue
+        if line.startswith("ACTIONABLE-BLOCKED["):
+            current_section = "blocked"
+            continue
+        if line.startswith("ACTIONABLE-STALE["):
+            current_section = "stale"
+            continue
+        if not line.startswith(project_prefix):
+            continue
+        if current_section == "projects":
+            project_lines.append(line)
+        elif current_section == "ready":
+            ready_lines.append(line)
+        elif current_section == "blocked":
+            blocked_lines.append(line)
+        elif current_section == "stale":
+            stale_lines.append(line)
+
+    sections: list[str] = []
+    if project_lines:
+        sections.append("PROJECTS[1]\n" + "\n".join(project_lines))
+    if ready_lines:
+        sections.append(f"ACTIONABLE-READY[{len(ready_lines)}]\n" + "\n".join(ready_lines))
+    if blocked_lines:
+        sections.append(f"ACTIONABLE-BLOCKED[{len(blocked_lines)}]\n" + "\n".join(blocked_lines))
+    if stale_lines:
+        sections.append(f"ACTIONABLE-STALE[{len(stale_lines)}]\n" + "\n".join(stale_lines))
+    return "\n\n".join(sections)
+
+
 def _session_stale_threshold_minutes(is_coding_agent: bool | None) -> int:
     """Return the stale-session threshold for an agent."""
     if is_coding_agent:
@@ -243,7 +294,7 @@ def _format_active_session_entry(session: dict[str, object], *, now: datetime) -
     return f"- {' | '.join(parts)}"
 
 
-async def _query_active_sessions() -> tuple[list, datetime]:
+async def _query_active_sessions(target_project_id: str | None = None) -> tuple[list, datetime]:
     """Query active sessions from DB; returns (rows, now)."""
     from sqlalchemy import and_, func, or_, select
 
@@ -279,6 +330,7 @@ async def _query_active_sessions() -> tuple[list, datetime]:
                     Session.agent_slug.isnot(None),
                     Session.created_at >= cutoff,
                     or_(event_count > 0, Session.created_at >= ghost_cutoff),
+                    Session.project_id == target_project_id if target_project_id else True,
                 ))
                 .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
                 .limit(5)
@@ -307,16 +359,18 @@ def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
     }
 
 
-async def _query_active_sessions_for_heartbeat() -> list[dict[str, object]]:
+async def _query_active_sessions_for_heartbeat(
+    target_project_id: str | None = None,
+) -> list[dict[str, object]]:
     """Query and map active sessions for heartbeat display."""
-    rows, now = await _query_active_sessions()
+    rows, now = await _query_active_sessions(target_project_id)
     return [_map_active_session_row(r, now=now) for r in rows]
 
 
-async def _fetch_active_sessions_section() -> str:
+async def _fetch_active_sessions_section(target_project_id: str | None = None) -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        sessions = await _query_active_sessions_for_heartbeat()
+        sessions = await _query_active_sessions_for_heartbeat(target_project_id)
         if not sessions:
             return ""
         now = datetime.now(UTC)
@@ -329,7 +383,7 @@ async def _fetch_active_sessions_section() -> str:
         return ""
 
 
-async def _fetch_recently_completed_sessions_section() -> str:
+async def _fetch_recently_completed_sessions_section(target_project_id: str | None = None) -> str:
     """Show recently completed agent sessions with their summaries.
 
     Gives the persona automatic visibility into what dispatched agents accomplished.
@@ -358,6 +412,7 @@ async def _fetch_recently_completed_sessions_section() -> str:
                         Session.created_at >= cutoff,
                         Session.summary_oneliner.isnot(None),
                         Session.agent_slug != "persona",
+                        Session.project_id == target_project_id if target_project_id else True,
                     )
                 )
                 .order_by(Session.created_at.desc())
@@ -383,7 +438,13 @@ async def _fetch_recently_completed_sessions_section() -> str:
             ago = int((now - row.created_at).total_seconds() / 60)
             time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
             summary_result = display_summaries.get(row.id)
-            if not summary_result or not summary_result.summary or not summary_result.has_summary_tag:
+            if (
+                not summary_result
+                or not summary_result.summary
+                or not summary_result.has_summary_tag
+                or summary_result.summary_outcome != "completed"
+                or summary_result.has_unresolved_blocker
+            ):
                 continue
             rendered_rows.append((
                 row,
@@ -407,7 +468,9 @@ async def _fetch_recently_completed_sessions_section() -> str:
         return ""
 
 
-async def _query_active_specialist_sessions() -> list[dict[str, object]]:
+async def _query_active_specialist_sessions(
+    target_project_id: str | None = None,
+) -> list[dict[str, object]]:
     """Query active specialist sessions and return as dicts with age_minutes."""
     from sqlalchemy import and_, select
 
@@ -427,6 +490,7 @@ async def _query_active_specialist_sessions() -> list[dict[str, object]]:
                     Session.status == "active",
                     Session.agent_slug.isnot(None),
                     Session.project_id != "persona-sandbox",
+                    Session.project_id == target_project_id if target_project_id else True,
                     Session.created_at >= cutoff,
                     Session.external_id.is_(None),
                     Session.current_branch.is_(None),
@@ -476,10 +540,10 @@ def _format_specialist_group_line(
     return " | ".join(parts)
 
 
-async def _get_active_specialist_inventory() -> str:
+async def _get_active_specialist_inventory(target_project_id: str | None = None) -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
-        rows = await _query_active_specialist_sessions()
+        rows = await _query_active_specialist_sessions(target_project_id)
         if not rows:
             return ""
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -594,7 +658,9 @@ def _map_workstream_row(row: object, *, now: datetime) -> dict[str, object]:
     }
 
 
-async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
+async def _query_recent_workstream_sessions(
+    target_project_id: str | None = None,
+) -> list[dict[str, object]]:
     """Query workstream sessions from DB and collapse to deduplicated active rows."""
     from sqlalchemy import and_, or_, select
 
@@ -615,6 +681,7 @@ async def _query_recent_workstream_sessions() -> list[dict[str, object]]:
                     Session.agent_slug.isnot(None),
                     Session.created_at >= cutoff,
                     or_(Session.external_id.isnot(None), Session.current_branch.isnot(None)),
+                    Session.project_id == target_project_id if target_project_id else True,
                 ))
                 .order_by(Session.created_at.desc())
                 .limit(50)
@@ -766,13 +833,18 @@ async def _get_workstream_inventory(
     provider: str | None = None,
     *,
     task_overview: str | None = None,
+    target_project_id: str | None = None,
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         if task_overview is None:
             task_overview = await _fetch_task_overview()
-        rows = await _query_recent_workstream_sessions()
-        stale_tasks = _parse_stale_running_tasks(task_overview)
+        rows = await _query_recent_workstream_sessions(target_project_id)
+        stale_tasks = [
+            task
+            for task in _parse_stale_running_tasks(task_overview)
+            if not target_project_id or task["project_id"] == target_project_id
+        ]
         if not rows and not stale_tasks:
             return ""
         visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
@@ -790,22 +862,31 @@ async def _get_workstream_inventory(
         return ""
 
 
-async def _get_active_work_summary(*, task_overview: str | None = None) -> str:
+async def _get_active_work_summary(
+    *,
+    task_overview: str | None = None,
+    target_project_id: str | None = None,
+) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
     if task_overview is None:
         task_overview = await _fetch_task_overview()
+    visible_task_overview = (
+        _filter_task_overview_for_project(task_overview, target_project_id)
+        if target_project_id
+        else task_overview
+    )
     overview_stats = parse_task_overview_stats(task_overview)
-    sessions_section = await _fetch_active_sessions_section()
-    suppress_completed = (
+    sessions_section = await _fetch_active_sessions_section(target_project_id)
+    suppress_completed = not target_project_id and (
         overview_stats.ready > 0 and overview_stats.active == 0 and overview_stats.stale == 0
     )
     completed_section = (
         ""
         if suppress_completed
-        else await _fetch_recently_completed_sessions_section()
+        else await _fetch_recently_completed_sessions_section(target_project_id)
     )
 
-    sections = [s for s in (task_overview, sessions_section, completed_section) if s]
+    sections = [s for s in (visible_task_overview, sessions_section, completed_section) if s]
 
     if not sections:
         logger.info("Active work summary: empty (no tasks or sessions)")
@@ -824,11 +905,25 @@ async def _fetch_cleanup_status() -> str:
     )
 
 
-async def _get_cleanup_status_summary() -> str:
+def _filter_cleanup_status_for_project(output: str, project_id: str) -> str:
+    """Return cleanup summary lines for one project."""
+    project_lines = [
+        line.rstrip()
+        for line in output.splitlines()
+        if line.startswith(f"{project_id} ")
+    ]
+    return "\n".join(project_lines)
+
+
+async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
     output = await _fetch_cleanup_status()
     if not output:
         return ""
+    if target_project_id:
+        output = _filter_cleanup_status_for_project(output, target_project_id)
+        if not output:
+            return ""
     actionable = build_actionable_cleanup_summary(output)
     body = f"{output}\n\n{actionable}" if actionable else output
     return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
@@ -892,7 +987,27 @@ async def _get_agent_roster_summary() -> str:
         return ""
 
 
-async def _get_git_status_summary() -> str:
+def _filter_git_status_for_project(git_status: str, project_id: str) -> str:
+    """Return compact git status lines for one project."""
+    repo_lines = [
+        line.rstrip()
+        for line in git_status.splitlines()
+        if line.startswith(f"{project_id} ")
+    ]
+    actionable_lines = [
+        line.rstrip()
+        for line in git_status.splitlines()
+        if line.startswith(f"- {project_id} |")
+    ]
+    sections: list[str] = []
+    if repo_lines:
+        sections.append("GIT[1]\n" + "\n".join(repo_lines))
+    if actionable_lines:
+        sections.append(f"ACTIONABLE-GIT[{len(actionable_lines)}]\n" + "\n".join(actionable_lines))
+    return "\n\n".join(sections)
+
+
+async def _get_git_status_summary(target_project_id: str | None = None) -> str:
     """Build a <git_state> XML block from the canonical `st git status` surface."""
     git_status = await _run_st_command(
         ["st", "--compact", "git", "status"],
@@ -900,6 +1015,10 @@ async def _get_git_status_summary() -> str:
     )
     if not git_status:
         return ""
+    if target_project_id:
+        git_status = _filter_git_status_for_project(git_status, target_project_id)
+        if not git_status:
+            return ""
 
     actionable = build_actionable_git_summary(git_status)
     body = f"{git_status}\n\n{actionable}" if actionable else git_status

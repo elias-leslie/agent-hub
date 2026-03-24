@@ -28,7 +28,6 @@ class SummaryInput(BaseModel):
 @hatchet.task(
     name="session-summary",
     input_validator=SummaryInput,
-    execution_timeout="300s",
     retries=3,
     backoff_factor=2.0,
     backoff_max_seconds=300,

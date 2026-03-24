@@ -7,6 +7,7 @@ import re
 
 from app.services.memory.citation_parser import parse_summary_tags
 from app.services.narration_tags import parse_narration_tags
+from app.services.session_display_summary import has_unresolved_completed_summary
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ def inline_summary_contract_issues(content: str | None) -> list[str]:
         issues.append("inline summary tag must stay single-line")
     if _COMMANDY_SUMMARY_RE.match(last_description):
         issues.append("inline summary tag is procedural instead of outcome-focused")
+    if parsed[-1].outcome == "completed" and has_unresolved_completed_summary(last_description):
+        issues.append("completed inline summary tag still describes an unresolved blocker")
     return issues
 
 

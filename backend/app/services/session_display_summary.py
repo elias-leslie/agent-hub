@@ -33,6 +33,10 @@ _RESULT_SIGNAL_RE = re.compile(
     re.IGNORECASE,
 )
 _CONFIDENCE_PREFIX_RE = re.compile(r"^\s*\d{1,3}\s*[:\-]\s*")
+_UNRESOLVED_BLOCKER_RE = re.compile(
+    r"\b(?:blocked because|is blocked|was blocked|unavailable|needs manual|requires manual|waiting on)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -50,6 +54,8 @@ class SessionDisplaySummaryResult:
 
     summary: str | None
     has_summary_tag: bool
+    summary_outcome: str | None = None
+    has_unresolved_blocker: bool = False
 
 
 def _normalize_text(text: str | None) -> str:
@@ -214,6 +220,14 @@ def _build_narration_aware_summary(content: str) -> str | None:
     return _join_summary_parts([*narration_parts, assistant_text])
 
 
+def has_unresolved_completed_summary(text: str | None) -> bool:
+    """Return True when a 'completed' summary still describes an unresolved blocker."""
+    cleaned = clean_display_summary_text(text)
+    if not cleaned:
+        return False
+    return bool(_UNRESOLVED_BLOCKER_RE.search(cleaned))
+
+
 def select_display_summary(
     assistant_messages: Sequence[str | None],
     *,
@@ -236,6 +250,7 @@ def resolve_display_summary(
 ) -> SessionDisplaySummaryResult:
     """Resolve display summary details for one session."""
     latest_summary_tag: str | None = None
+    latest_summary_outcome: str | None = None
     latest_meaningful_message: str | None = None
 
     for content in assistant_messages:
@@ -245,6 +260,7 @@ def resolve_display_summary(
         if latest_summary_tag is None:
             parsed = parse_summary_tags(content)
             if parsed.tags:
+                latest_summary_outcome = parsed.tags[-1].outcome
                 latest_summary_tag = clean_display_summary_text(parsed.tags[-1].description)
 
         if latest_meaningful_message is None:
@@ -269,8 +285,18 @@ def resolve_display_summary(
             return SessionDisplaySummaryResult(
                 summary=candidate,
                 has_summary_tag=latest_summary_tag is not None,
+                summary_outcome=latest_summary_outcome,
+                has_unresolved_blocker=(
+                    latest_summary_outcome == "completed"
+                    and has_unresolved_completed_summary(candidate)
+                ),
             )
-    return SessionDisplaySummaryResult(summary=None, has_summary_tag=False)
+    return SessionDisplaySummaryResult(
+        summary=None,
+        has_summary_tag=False,
+        summary_outcome=None,
+        has_unresolved_blocker=False,
+    )
 
 
 async def fetch_session_display_summaries(

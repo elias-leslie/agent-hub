@@ -32,10 +32,6 @@ BASH_TOOL = Tool(
                 "type": "string",
                 "description": "The bash command to execute",
             },
-            "timeout": {
-                "type": "integer",
-                "description": "Optional timeout in seconds. Omit to wait for completion.",
-            },
         },
         "required": ["command"],
     },

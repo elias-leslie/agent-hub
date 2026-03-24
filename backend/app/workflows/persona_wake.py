@@ -163,7 +163,6 @@ async def _find_existing_wake_session(
 
 @hatchet.task(
     name="agent-wake",
-    execution_timeout="7200s",
     retries=0,
     input_validator=WakeInput,
 )

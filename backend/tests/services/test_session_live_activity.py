@@ -9,7 +9,7 @@ from app.services.session_live_activity import (
 )
 
 
-def test_build_live_activity_response_marks_post_tool_wait_as_stalled_earlier() -> None:
+def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None:
     session = MagicMock()
     session.status = "active"
     session.provider_metadata = {
@@ -28,12 +28,11 @@ def test_build_live_activity_response_marks_post_tool_wait_as_stalled_earlier() 
     response = build_live_activity_response(session)
 
     assert response is not None
-    assert response["health"] == "stalled"
-    assert response["stalled"] is True
-    assert response["stall_reason"] == "No model activity for 125s after tool_result"
+    assert response["health"] == "quiet"
+    assert response["stalled"] is False
 
 
-def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None:
+def test_build_live_activity_response_marks_long_active_wait_as_stalled() -> None:
     session = MagicMock()
     session.status = "active"
     session.provider_metadata = {
@@ -42,8 +41,8 @@ def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None
             "status": "active",
             "summary": "Waiting for model after Bash",
             "last_event_type": "tool_result",
-            "last_event_at": (datetime.now(UTC) - timedelta(seconds=70)).isoformat(),
-            "last_model_activity_at": (datetime.now(UTC) - timedelta(seconds=70)).isoformat(),
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=31)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(minutes=31)).isoformat(),
             "outstanding_tool_calls": 0,
             "tool_calls_count": 2,
         }
@@ -52,8 +51,9 @@ def test_build_live_activity_response_keeps_short_post_tool_wait_quiet() -> None
     response = build_live_activity_response(session)
 
     assert response is not None
-    assert response["health"] == "quiet"
-    assert response["stalled"] is False
+    assert response["health"] == "stalled"
+    assert response["stalled"] is True
+    assert response["stall_reason"] == "No model activity for 1860s while phase=waiting_for_model"
 
 
 def test_apply_live_activity_heartbeat_tracks_recent_paths() -> None:
@@ -196,3 +196,29 @@ def test_build_live_activity_response_blocks_reaping_when_lane_is_active() -> No
     assert response["lifecycle_state"] == "dead_candidate"
     assert response["reapable"] is False
     assert "owner_lane" in response["anti_reap_signals"]
+
+
+def test_build_live_activity_response_reaps_stale_detached_rebuild_specialist_session() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Waiting for model after bash",
+            "last_event_type": "tool_result",
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=31)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(minutes=31)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 8,
+            "last_command": "cd /srv/workspaces/projects/agent-hub && rebuild.sh --detach agent-hub",
+        }
+    }
+
+    response = build_live_activity_response(session, has_owner_lane=False, has_specialist_lane=True)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "reapable"
+    assert response["reapable"] is True
+    assert "detached_control_plane_rebuild" in response["dead_signals"]
+    assert "specialist_lane" not in response["anti_reap_signals"]

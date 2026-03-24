@@ -14,7 +14,6 @@ from app.services.persona_policy import (
     command_hits_persona_git_publish_policy,
     get_persona_git_publish_block_reason,
 )
-from app.services.tools._tool_constants import DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ async def run_bash(
     command: str,
     working_dir: Path,
     env: dict[str, str],
-    timeout: int | None = DEFAULT_TIMEOUT,
+    *,
     agent_slug: str | None = None,
 ) -> str:
     """Execute a bash command and return combined stdout+stderr output."""
@@ -82,13 +81,7 @@ async def run_bash(
             env=env,
         )
 
-        if timeout is None:
-            stdout, stderr = await process.communicate()
-        else:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout,
-            )
+        stdout, stderr = await process.communicate()
 
         output = stdout.decode("utf-8", errors="replace")
         stderr_text = stderr.decode("utf-8", errors="replace")
@@ -101,7 +94,5 @@ async def run_bash(
 
         return output or "(no output)"
 
-    except TimeoutError:
-        return f"Error: Command timed out after {timeout}s"
     except Exception as e:
         return f"Error executing command: {e}"
