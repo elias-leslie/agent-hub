@@ -275,6 +275,92 @@ async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_queue() -> None:
+    state = _ExecutionState(agent_slug="persona", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __init__(self) -> None:
+            self.aclose_calls = 0
+            self.resumed_after_tool_result = False
+
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="bash",
+                            input={"command": "cd /srv/workspaces/projects/agent-hub && rebuild.sh --detach agent-hub"},
+                            id="tool-1",
+                        )
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="tool_result",
+                tool_use_id="tool-1",
+                content="[18:23:59] Queueing detached rebuild for agent-hub...\nDetached rebuild queued: sf-rebuild-agent-hub.service\nRunning as unit: sf-rebuild-agent-hub.service",
+                is_error=False,
+                duration_ms=5,
+            ), None
+            self.resumed_after_tool_result = True
+            yield types.SimpleNamespace(type="result", result="should not run", finish_reason="end_turn"), None
+
+        async def aclose(self) -> None:
+            self.aclose_calls += 1
+
+    fake_stream = FakeEventStream()
+
+    with (
+        patch(
+            "app.api.complete.tool_handler_utils.build_event_stream",
+            return_value=fake_stream,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_result",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="codex",
+            model="codex/gpt-5.4",
+            tools=[],
+            tool_catalog=None,
+            working_dir="/srv/workspaces/projects/agent-hub",
+            permission_config=None,
+            session_id="session-detached-rebuild",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=20,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert fake_stream.aclose_calls == 1
+    assert fake_stream.resumed_after_tool_result is False
+    assert state.terminal_finish_reason == "end_turn"
+    assert state.turn == 1
+    assert state.content_parts == [
+        "Detached Agent Hub rebuild queued successfully.\n"
+        "Running as unit: sf-rebuild-agent-hub.service\n"
+        "Stop here. Verify backend/frontend health and task completion from a fresh post-restart session."
+    ]
+
+
+@pytest.mark.asyncio
 async def test_run_tool_loop_preserves_max_turn_finish_reason() -> None:
     state = _ExecutionState(agent_slug="refactor", messages_for_adapter=[])
     tracker = AsyncMock()

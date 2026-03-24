@@ -113,7 +113,7 @@ async def _process_tool_use_block(
     tracker: ProgressTracker,
     model_used: str | None,
     agent_id: str | None,
-    tool_use_id_to_name: dict[str, str] | None = None,
+    tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
 ) -> int:
     """Store and report a tool_use block; returns 1 (increment)."""
     from .tool_event_storage import store_tool_use
@@ -122,9 +122,12 @@ async def _process_tool_use_block(
     tool_input = getattr(block, "input", {})
     tool_use_id = getattr(block, "id", "")
 
-    # Track tool_use_id → tool_name so tool_result events can resolve the name
+    # Track tool_use_id → original tool metadata so tool_result events can resolve the name/input
     if tool_use_id and tool_use_id_to_name is not None:
-        tool_use_id_to_name[tool_use_id] = tool_name
+        tool_use_id_to_name[tool_use_id] = {
+            "name": tool_name,
+            "input": tool_input,
+        }
 
     await update_session_health(
         db,
@@ -147,7 +150,7 @@ async def _process_assistant_event(
     tracker: ProgressTracker,
     model_used: str | None,
     agent_id: str | None,
-    tool_use_id_to_name: dict[str, str] | None = None,
+    tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
 ) -> int:
     """Process an assistant event; returns total tool_calls_increment."""
     message = getattr(event, "message", None)
@@ -195,7 +198,7 @@ async def _process_tool_result_event(
     db: AsyncSession,
     model_used: str | None,
     agent_id: str | None,
-    tool_use_id_to_name: dict[str, str] | None = None,
+    tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
     tool_result_summaries: list[str] | None = None,
 ) -> int:
     """Store a tool_result event and return the incremented turn."""
@@ -207,7 +210,8 @@ async def _process_tool_result_event(
     duration_ms = getattr(event, "duration_ms", None)
 
     # Resolve actual tool name from the tool_use_id mapping
-    tool_name = (tool_use_id_to_name or {}).get(tool_use_id, tool_use_id)
+    tool_metadata = (tool_use_id_to_name or {}).get(tool_use_id, {})
+    tool_name = str(tool_metadata.get("name") or tool_use_id)
     if tool_result_summaries is not None:
         summary = _summarize_tool_result(tool_name, tool_content, is_error)
         if summary:
@@ -248,7 +252,7 @@ async def process_tool_event(
     tracker: ProgressTracker,
     model_used: str | None = None,
     agent_id: str | None = None,
-    tool_use_id_to_name: dict[str, str] | None = None,
+    tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
     tool_result_summaries: list[str] | None = None,
 ) -> tuple[int, int, str | None, int, bool]:
     """Process a single unified ToolEvent.
@@ -267,7 +271,7 @@ async def process_tool_event(
         tracker: Progress tracker instance
         model_used: Model identifier for event attribution
         agent_id: Agent slug for event attribution
-        tool_use_id_to_name: Mutable mapping of tool_use_id to tool_name,
+        tool_use_id_to_name: Mutable mapping of tool_use_id to original tool metadata,
             populated by tool_use events and consumed by tool_result events.
             Caller should pass a shared dict across calls.
 

@@ -21,6 +21,54 @@ if TYPE_CHECKING:
 __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
 
 
+def _extract_tool_metadata(
+    tool_use_metadata: dict[str, dict[str, Any]],
+    tool_use_id: str | None,
+) -> tuple[str, dict[str, Any]]:
+    """Return the resolved tool name and original tool input for a tool_result."""
+    metadata = tool_use_metadata.get(tool_use_id or "", {})
+    tool_name = str(metadata.get("name") or tool_use_id or "unknown")
+    tool_input = metadata.get("input")
+    return tool_name, tool_input if isinstance(tool_input, dict) else {}
+
+
+def _is_detached_agent_hub_rebuild_handoff(
+    *,
+    project_id: str | None,
+    tool_name: str,
+    tool_input: dict[str, Any],
+    tool_content: str,
+) -> bool:
+    """Return True when a bash tool result queued a detached Agent Hub self-rebuild."""
+    if project_id != "agent-hub" or tool_name.lower() != "bash":
+        return False
+    command = str(tool_input.get("command") or "").lower()
+    if "agent-hub" not in command or "--detach" not in command:
+        return False
+    if "rebuild.sh" not in command and "restart.sh" not in command:
+        return False
+    output = tool_content.lower()
+    return "detached rebuild queued" in output or "detached restart queued" in output
+
+
+def _build_detached_agent_hub_rebuild_closeout(tool_content: str) -> str:
+    """Return a deterministic closeout after queuing detached Agent Hub rebuild."""
+    unit_line = next(
+        (line.strip() for line in str(tool_content).splitlines() if "Running as unit:" in line),
+        None,
+    )
+    if unit_line:
+        return (
+            "Detached Agent Hub rebuild queued successfully.\n"
+            f"{unit_line}\n"
+            "Stop here. Verify backend/frontend health and task completion from a fresh post-restart session."
+        )
+    return (
+        "Detached Agent Hub rebuild queued successfully.\n"
+        "Stop here. Verify backend/frontend health and task completion from a fresh post-restart session."
+    )
+
+
 @dataclass
 class _ExecutionState:
     """Shared mutable state for a tool execution run."""
@@ -88,8 +136,8 @@ async def _run_tool_loop(
         agent_slug=state.agent_slug,
     )
 
-    # Mapping of tool_use_id → tool_name, shared across all events in the loop
-    tool_use_id_to_name: dict[str, str] = {}
+    # Mapping of tool_use_id → original tool metadata, shared across all events in the loop
+    tool_use_metadata: dict[str, dict[str, Any]] = {}
 
     terminal_error_message: str | None = None
     exhausted = False
@@ -105,12 +153,30 @@ async def _run_tool_loop(
             ) = await process_tool_event(
                 event, state.event_turn, state.turn, state.awaiting_tool_results, session_id, db, state.content_parts,
                 state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
-                tool_use_id_to_name=tool_use_id_to_name,
+                tool_use_id_to_name=tool_use_metadata,
                 tool_result_summaries=state.tool_result_summaries,
             )
             state.tool_calls_count += tools_delta
             if getattr(event, "type", None) == "result":
                 state.terminal_finish_reason = getattr(event, "finish_reason", None) or "end_turn"
+            elif getattr(event, "type", None) == "tool_result":
+                tool_name, tool_input = _extract_tool_metadata(
+                    tool_use_metadata,
+                    getattr(event, "tool_use_id", None),
+                )
+                if _is_detached_agent_hub_rebuild_handoff(
+                    project_id=project_id,
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    tool_content=str(getattr(event, "content", "") or ""),
+                ):
+                    state.content_parts = [
+                        _build_detached_agent_hub_rebuild_closeout(
+                            str(getattr(event, "content", "") or ""),
+                        )
+                    ]
+                    state.terminal_finish_reason = "end_turn"
+                    break
 
             if error_message and terminal_error_message is None:
                 # Record the terminal error, but keep draining the provider stream so
@@ -124,7 +190,8 @@ async def _run_tool_loop(
                 )
             elif getattr(event, "type", None) == "tool_result":
                 await update_session_health(db, session_id, "calling_model", commit=True)
-        exhausted = True
+        else:
+            exhausted = True
     finally:
         # Only force-close provider streams when the loop exits early. Redundant
         # close after natural exhaustion can re-enter provider cleanup on a
