@@ -861,6 +861,8 @@ def _should_skip_lane(
     task_overview: str,
 ) -> bool:
     """Return True if a lane should be excluded from the workstream inventory."""
+    if lane_state == "retired" and task_id and task_id in visible_task_ids:
+        return True
     if lane_state == "completed_ready_for_closure" and task_id and task_overview:
         return task_id not in visible_task_ids
     if lane_state == "completed_ready_for_closure" and not task_id:
