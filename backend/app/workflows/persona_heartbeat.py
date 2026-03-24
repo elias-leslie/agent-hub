@@ -15,8 +15,8 @@ from uuid import uuid4
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
+from app.core.project_roots import resolve_project_root
 from app.hatchet_app import hatchet
-from app.services.tools.direct_executor_core import KNOWN_ROOTS
 from app.workflows._heartbeat_postprocess import postprocess_heartbeat
 from app.workflows._heartbeat_prompt import (
     build_heartbeat_prompt,
@@ -272,6 +272,7 @@ async def _do_completion(
         target_project_id=target_project_id,
         provider=provider,
     )
+    execution_root = resolve_project_root(execution_project)
     async with async_session() as db:
         result = await complete_internal(
             messages=_build_messages(system_content, heartbeat_prompt),
@@ -294,7 +295,7 @@ async def _do_completion(
             defer_tool_loading=True,
             task_type="heartbeat",
             thinking_level=thinking_level,
-            working_dir=KNOWN_ROOTS.get(execution_project),
+            working_dir=str(execution_root) if execution_root else None,
             requested_model=model,
             requested_provider=provider,
         )

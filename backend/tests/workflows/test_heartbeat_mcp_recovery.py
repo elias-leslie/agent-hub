@@ -300,6 +300,58 @@ class TestDispatchAgentFireAndForget:
             working_dir="/tmp/worktrees/task-12345678",
         )
 
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_honors_explicit_task_mode_for_coder(self):
+        mock_db = AsyncMock()
+        mock_resolved = MagicMock()
+        mock_resolved.model = "codex/gpt-5.4"
+        mock_resolved.provider = "codex"
+        mock_resolved.agent.temperature = 0.2
+        mock_resolved.agent.thinking_level = "high"
+
+        fake_plan = MagicMock()
+        fake_plan.event_type = "dispatch_task"
+        fake_plan.current_branch = "task-87654321/main"
+        fake_plan.working_dir = "/tmp/worktrees/task-87654321"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
+            patch(
+                "app.services.tools._executor_consultation.prepare_specialist_dispatch",
+                new_callable=AsyncMock,
+                return_value=fake_plan,
+            ) as mock_prepare,
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            await dispatch_agent(
+                "summitflow",
+                "coder",
+                "Mode: task\nTask-ID: task-87654321\nTask: Fix the bad dispatch cwd.",
+            )
+
+        mock_prepare.assert_awaited_once()
+        mock_wake.assert_called_once_with(
+            agent_slug="coder",
+            model="codex/gpt-5.4",
+            provider="codex",
+            temperature=0.2,
+            prompt="Mode: task\nTask-ID: task-87654321\nTask: Fix the bad dispatch cwd.",
+            project_id="summitflow",
+            event_type="dispatch_task",
+            thinking_level="high",
+            max_turns=None,
+            parent_session_id=None,
+            current_branch="task-87654321/main",
+            working_dir="/tmp/worktrees/task-87654321",
+        )
+
 
 class TestRetryFailedMcpTools:
     """Tests for _retry_failed_mcp_tools."""

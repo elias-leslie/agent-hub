@@ -1,15 +1,14 @@
 """Project and agent type constants.
 
-VALID_PROJECT_IDS and KNOWN_ROOTS are derived dynamically from the
-project_permissions table (single source of truth). The cache is warmed
-on app startup and refreshes every 5 minutes from async callers.
+VALID_PROJECT_IDS are derived dynamically from project_permissions.
+Project roots are always derived through the canonical resolver in
+app.core.project_roots so there is exactly one root-resolution path.
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -34,19 +33,26 @@ _FALLBACK_PROJECT_IDS: frozenset[str] = frozenset({
     "agent-playground",
 })
 
-_FALLBACK_ROOTS: dict[str, str] = {
-    pid: str(Path.home() / pid)
-    for pid in ("summitflow", "agent-hub", "portfolio-ai", "terminal", "monkey-fight")
-}
-
 _cached_project_ids: frozenset[str] | None = None
 _cached_roots: dict[str, str] | None = None
 _cache_timestamp: float = 0.0
 _CACHE_TTL_SECONDS: float = 300.0  # 5 minutes
 
 
+def _resolve_known_roots(project_ids: frozenset[str]) -> dict[str, str]:
+    """Resolve project roots from the canonical single-project resolver."""
+    from app.core.project_roots import resolve_project_root
+
+    roots: dict[str, str] = {}
+    for project_id in project_ids:
+        resolved = resolve_project_root(project_id)
+        if resolved is not None:
+            roots[project_id] = str(resolved)
+    return roots
+
+
 async def refresh_project_cache() -> frozenset[str]:
-    """Refresh project IDs and roots cache from project_permissions table.
+    """Refresh project IDs cache from project_permissions and derive roots canonically.
 
     Called on app startup and periodically from async contexts.
     """
@@ -58,15 +64,14 @@ async def refresh_project_cache() -> frozenset[str]:
 
         async with async_session() as db:
             result = await db.execute(
-                text("SELECT project_id, root_path FROM project_permissions")
+                text("SELECT project_id FROM project_permissions")
             )
             rows = list(result)
             db_ids = frozenset(row[0] for row in rows)
-            db_roots = {row[0]: row[1] for row in rows if row[1]}
 
         if db_ids:
             _cached_project_ids = db_ids
-            _cached_roots = db_roots
+            _cached_roots = _resolve_known_roots(db_ids)
             _cache_timestamp = time.monotonic()
             return db_ids
     except Exception as e:
@@ -87,10 +92,10 @@ def get_valid_project_ids() -> frozenset[str]:
 
 
 def get_known_roots() -> dict[str, str]:
-    """Get project_id → root_path mapping from cache. Falls back to hardcoded."""
+    """Get project_id → root_path mapping via the canonical root resolver."""
     if _cached_roots is not None:
         return _cached_roots
-    return _FALLBACK_ROOTS
+    return _resolve_known_roots(_cached_project_ids or _FALLBACK_PROJECT_IDS)
 
 
 def is_cache_stale() -> bool:
@@ -106,6 +111,9 @@ def invalidate_project_cache() -> None:
     _cached_project_ids = None
     _cached_roots = None
     _cache_timestamp = 0.0
+    from app.core.project_roots import resolve_project_root
+
+    resolve_project_root.cache_clear()
 
 
 # Backward-compatible module-level constant — now a lazy proxy.

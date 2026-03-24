@@ -267,7 +267,7 @@ async def api_save_learning(
 | 8 | Summary | 10-40 chars |
 
 Example of GOOD format:
-  **Git Safety**: Use /commit_it for commits when available. Never use raw git commit unless explicitly requested. Why: shared checks and publish flow stay consistent.
+  **Git Safety**: Use commit.sh --push --msg "description" in Agent Hub sessions. Never use raw git commit unless explicitly requested. Why: shared checks and publish flow stay consistent.
 
 Example of BAD format:
   When working with git, you should remember to always commit first.

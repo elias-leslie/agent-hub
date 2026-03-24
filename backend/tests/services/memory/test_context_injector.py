@@ -12,6 +12,7 @@ from app.services.memory.context_injector import (
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
     ProgressiveContext,
+    extract_query_from_messages,
     format_progressive_context,
     format_relevance_debug_block,
     get_context_token_stats,
@@ -204,6 +205,33 @@ class TestParseMemoryGroupId:
         scope, scope_id = parse_memory_group_id("some-random-string")
         assert scope == MemoryScope.GLOBAL
         assert scope_id is None
+
+
+class TestExtractQueryFromMessages:
+    def test_prefers_task_block_over_wake_guidance(self) -> None:
+        query = extract_query_from_messages(
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        "Operational notes:\n"
+                        "- Use known-good commands.\n"
+                        "- Avoid broad search first.\n"
+                        "Task:\n"
+                        "Inspect the agent preview command before coding."
+                    ),
+                }
+            ]
+        )
+
+        assert query == "Inspect the agent preview command before coding."
+
+    def test_truncates_task_block_like_runtime_limit(self) -> None:
+        query = extract_query_from_messages(
+            [{"role": "user", "content": "Task:\n" + ("x" * 900)}]
+        )
+
+        assert query == ("x" * 500)
 
 
 class TestFormatProgressiveContext:

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.constants.models import CLAUDE_OPUS, CODEX_GPT_5_1_MINI, CODEX_GPT_5_4
-from app.services.tools.direct_executor_core import KNOWN_ROOTS
 from app.workflows.persona_heartbeat import (
     HEARTBEAT_MEMORY_GROUP,
     HEARTBEAT_PROJECT,
@@ -606,6 +606,10 @@ class TestHeartbeatCompletionRouting:
                 return_value=500,
             ),
             patch(
+                "app.workflows.persona_heartbeat.resolve_project_root",
+                return_value=Path("/tmp/agent-hub"),
+            ),
+            patch(
                 "app.api.complete.core.complete_internal",
                 new_callable=AsyncMock,
                 return_value=complete_result,
@@ -730,6 +734,10 @@ class TestHeartbeatCompletionRouting:
                 return_value=500,
             ),
             patch(
+                "app.workflows.persona_heartbeat.resolve_project_root",
+                return_value=Path("/tmp/agent-hub"),
+            ),
+            patch(
                 "app.api.complete.core.complete_internal",
                 new_callable=AsyncMock,
                 return_value=complete_result,
@@ -753,5 +761,5 @@ class TestHeartbeatCompletionRouting:
         kwargs = mock_complete.await_args.kwargs
         assert kwargs["project_id"] == "agent-hub"
         assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
-        assert kwargs["working_dir"] == KNOWN_ROOTS["agent-hub"]
+        assert kwargs["working_dir"] == "/tmp/agent-hub"
         assert kwargs["session_id"] == "hb-session-3"

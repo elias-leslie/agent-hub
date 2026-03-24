@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.services.memory.citation_parser import parse_feedback_tags, parse_summary_tags
+from app.services.session_display_summary import extract_outcome_summary
 
 from ._citation_helpers import (
     _create_new_feedback_items,
@@ -84,18 +85,8 @@ async def track_inline_summaries(
 
 
 def _extract_chat_summary(content: str) -> str:
-    """Extract a summary from assistant content: first sentence up to 120 chars.
-
-    Same approach as heartbeat's _extract_synthetic_summary — simple truncation
-    at the first sentence boundary, no attempt to parse or filter content.
-    """
-    text = content.strip()
-    if not text:
-        return ""
-    period_idx = text.find(". ")
-    if 0 < period_idx <= 120:
-        return text[: period_idx + 1]
-    return text[:120].rstrip() + ("..." if len(text) > 120 else "")
+    """Extract a concise outcome summary from assistant content."""
+    return extract_outcome_summary(content, max_chars=120) or ""
 
 
 async def _ensure_synthetic_summary(

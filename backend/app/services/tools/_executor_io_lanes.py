@@ -27,6 +27,9 @@ _TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "fa
 _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
 _RETIRE_NOTE = 'Retired via manage_tasks(action="retire_lane")'
 _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
+_NO_CODE_CHANGES_PHRASE = "no files changed vs base branch"
+_STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
+_ADMIN_RECOVERY_PHRASE = "recovery: st done"
 _EXEC_LOG_RECENT_MINUTES = 5
 _EXEC_LOG_ACTIVE_MARKERS = (
     "Verification failed",
@@ -256,6 +259,25 @@ async def _persist_workstream_resolution(
         await db.commit()
 
 
+async def _mark_lane_residue(
+    sessions: list[Session],
+    *,
+    workstream_status: str,
+    note: str,
+) -> None:
+    """Persist a uniform residue marker across all lane sessions."""
+    from app.db import async_session
+
+    now = datetime.now(UTC)
+    async with async_session() as db:
+        for session in sessions:
+            session.workstream_status = workstream_status
+            session.workstream_note = note
+            session.workstream_updated_at = now
+            db.add(session)
+        await db.commit()
+
+
 async def _retire_stale_active_sessions(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
@@ -351,6 +373,31 @@ async def _reconcile_task_lane(
             return await _handle_finalize_merge(bash_fn, task_id, project_id)
         return result
 
+    def _needs_admin_close(result: str) -> bool:
+        lowered = result.lower()
+        return (
+            (_MISSING_CHECKPOINT_PHRASE.lower() in lowered and "was it claimed?" in lowered)
+            or "claimed worktree has uncommitted changes." in lowered
+            or (_STATUS_UPDATE_FAILED_PHRASE in lowered and _ADMIN_RECOVERY_PHRASE in lowered and "--admin" in lowered)
+        )
+
+    async def _retire_noop_lane(result: str) -> str:
+        note = (
+            "Retired during reconcile after diff gate reported no code changes; "
+            "task remains open for a real implementation or explicit closure."
+        )
+        await _mark_lane_residue(
+            sessions,
+            workstream_status="retired",
+            note=note,
+        )
+        return (
+            f"Reconcile retired no-op lane for {task_id}: diff gate reported no files changed "
+            "vs base branch, so the completed session lane was closed as residue and the task "
+            "was left open.\n"
+            f"Original result: {result.strip()}"
+        )
+
     sessions = await _load_task_lane_sessions(task_id)
     if not sessions:
         task_status = await _get_task_status(bash_fn, task_id, project_id)
@@ -416,10 +463,9 @@ async def _reconcile_task_lane(
             'Inspect task context/verification and keep the lane open.\n'
             f"Original result: {result.strip()}"
         )
-    if (
-        (_MISSING_CHECKPOINT_PHRASE in result and "Was it claimed?" in result)
-        or "Claimed worktree has uncommitted changes." in result
-    ):
+    if _NO_CODE_CHANGES_PHRASE in result.lower():
+        return await _retire_noop_lane(result)
+    if _needs_admin_close(result):
         admin_cmd = _st_cmd(
             f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
             project_id,

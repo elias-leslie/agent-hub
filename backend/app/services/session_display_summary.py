@@ -23,6 +23,16 @@ _SUMMARY_RE = re.compile(r"\[\[S:.*?(?:\]\]|$)", re.IGNORECASE)
 _HEARTBEAT_PREFIX_RE = re.compile(r"^\s*HEARTBEAT_(?:OK|ACTION)\s*-?\s*", re.IGNORECASE)
 _WHITESPACE_RE = re.compile(r"\s+")
 _EMPTY_FRAGMENT_RE = re.compile(r"^[\[\]{}\(\)…\s.,;:]*$")
+_MARKDOWN_RE = re.compile(r"[*_`#]+")
+_COMMAND_START_RE = re.compile(
+    r"^(?:now|next|then|let me|let's|run|use|apply|check|inspect|review|verify|commit|publish|open)\b",
+    re.IGNORECASE,
+)
+_RESULT_SIGNAL_RE = re.compile(
+    r"\b(?:done|pass(?:es|ed)?|clean|fixed?|implemented?|refactor(?:ed)?|reduced?|moved?|removed?|verified?|completed?|ready)\b",
+    re.IGNORECASE,
+)
+_CONFIDENCE_PREFIX_RE = re.compile(r"^\s*\d{1,3}\s*[:\-]\s*")
 
 
 @dataclass(slots=True, frozen=True)
@@ -83,6 +93,7 @@ def clean_display_summary_text(text: str | None) -> str | None:
         .replace("[[", "")
         .replace("]]", "")
     )
+    cleaned = _MARKDOWN_RE.sub("", cleaned)
     cleaned = cleaned.replace("\n\n", " ")
     cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip()
     if not cleaned or _EMPTY_FRAGMENT_RE.fullmatch(cleaned):
@@ -107,12 +118,91 @@ def _join_summary_parts(parts: Sequence[str | None]) -> str | None:
     return " ".join(unique_parts)
 
 
+def _truncate_summary(text: str, max_chars: int) -> str:
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    last_period = truncated.rfind(". ")
+    if last_period > max_chars // 2:
+        return truncated[: last_period + 1]
+    return truncated[: max_chars - 3].rstrip() + "..."
+
+
+def _sentence_candidates(text: str) -> list[str]:
+    candidates = re.split(r"(?<=[.!?])\s+|\s{2,}|\n+", text)
+    return [candidate.strip(" -") for candidate in candidates if candidate.strip(" -")]
+
+
+def _is_command_like_sentence(text: str) -> bool:
+    normalized = _normalize_text(text)
+    if not normalized:
+        return True
+    if _COMMAND_START_RE.match(text):
+        return True
+    if any(token in normalized for token in (" now commit ", " run ", " use ", " let me ")):
+        return True
+    return "`" in text and any(token in normalized for token in ("commit", "git", "dt ", "st "))
+
+
+def extract_outcome_summary(text: str | None, *, max_chars: int = 150) -> str | None:
+    """Return a concise outcome-focused summary from noisy assistant text."""
+    cleaned = clean_display_summary_text(text)
+    if not cleaned:
+        return None
+    cleaned = _CONFIDENCE_PREFIX_RE.sub("", cleaned)
+    if _is_prompt_like_text(cleaned) or _is_generic_status_text(cleaned):
+        return None
+
+    candidates = _sentence_candidates(cleaned)
+    scored: list[tuple[int, int, str]] = []
+    for index, candidate in enumerate(candidates):
+        if len(candidate.split()) < 3 and len(candidates) > 1 and len(candidate) < 12:
+            continue
+        if _is_command_like_sentence(candidate):
+            continue
+        score = 0
+        if _RESULT_SIGNAL_RE.search(candidate):
+            score += 3
+        if 20 <= len(candidate) <= max_chars:
+            score += 1
+        if index == 0:
+            score += 1
+        scored.append((score, index, candidate))
+
+    if scored:
+        score, index, candidate = max(scored, key=lambda item: (item[0], -item[1]))
+        del score, index
+        return _truncate_summary(candidate, max_chars)
+
+    return _truncate_summary(cleaned, max_chars)
+
+
+def _preferred_narration_parts(content: str) -> list[str]:
+    tags = parse_narration_tags(content)
+    if not tags:
+        return []
+
+    parts: list[str] = []
+    seen: set[str] = set()
+    for tag_type in ("started", "found", "tested", "modified", "decision", "blocked", "confidence"):
+        for tag in reversed(tags):
+            if tag.tag_type != tag_type:
+                continue
+            part = extract_outcome_summary(tag.content)
+            normalized = _normalize_text(part)
+            if not part or not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            parts.append(part)
+            break
+        if len(parts) >= 3:
+            break
+    return parts
+
+
 def _build_narration_aware_summary(content: str) -> str | None:
-    narration_parts = [
-        clean_display_summary_text(tag.content)
-        for tag in parse_narration_tags(content)
-    ]
-    assistant_text = clean_display_summary_text(content)
+    narration_parts = _preferred_narration_parts(content)
+    assistant_text = extract_outcome_summary(content)
     return _join_summary_parts([*narration_parts, assistant_text])
 
 
