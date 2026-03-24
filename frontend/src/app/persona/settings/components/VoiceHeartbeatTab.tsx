@@ -121,7 +121,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                   aria-label={`Select voice ${voice.name}`}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-800/50 transition-colors",
-                    voice.id === selectedVoice && "bg-amber-50 dark:bg-amber-900/20",
+                    voice.id === selectedVoice && "bg-amber-900/20",
                   )}
                 >
                   <div

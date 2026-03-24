@@ -181,7 +181,7 @@ export function SessionDropdown({
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
           "bg-indigo-900/20 text-indigo-400",
-          "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+          "hover:bg-indigo-900/40 transition-colors"
         )}
       >
         <MessageSquare className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ export function SessionDropdown({
                       "w-full flex items-start gap-2 px-3 py-2 text-left transition-colors group",
                       activeSessionId === session.id
                         ? "bg-indigo-50 dark:bg-indigo-950/30"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                        : "hover:bg-slate-700/50"
                     )}
                   >
                     <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-400" />

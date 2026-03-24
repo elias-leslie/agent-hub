@@ -214,7 +214,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
               "px-2 py-1 rounded-md text-xs font-medium border",
               isSelected
                 ? "bg-amber-500 text-white border-amber-600"
-                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700",
+                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700",
             )}
           >
             {isSelected ? "Selected" : "Compare"}

@@ -78,7 +78,7 @@ export function ChatHeader({
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
                 "bg-indigo-900/20 text-indigo-400",
-                "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                "hover:bg-indigo-900/40 transition-colors"
               )}
             >
               <FolderOpen className="h-3.5 w-3.5" />
@@ -148,7 +148,7 @@ export function ChatHeader({
                           className={cn(
                             "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
                             "hover:bg-slate-700 transition-colors",
-                            agent.slug === selectedAgent.slug && "bg-slate-100 dark:bg-slate-700"
+                            agent.slug === selectedAgent.slug && "bg-slate-700"
                           )}
                         >
                           <Icon className="h-4 w-4" />

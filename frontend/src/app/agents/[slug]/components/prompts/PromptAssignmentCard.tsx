@@ -125,7 +125,7 @@ export function PromptAssignmentCard({
         onDragOver?.(prompt.slug);
       }}
       onDrop={() => onDrop?.(prompt.slug)}
-      className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+      className="rounded-xl border border-slate-200 border-slate-800 dark:bg-slate-900"
     >
       <div className="flex items-center gap-2 px-4 py-3">
         {draggable ? (

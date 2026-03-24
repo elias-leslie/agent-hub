@@ -22,13 +22,13 @@ export function MetadataPane({ episode, onEdit, onDelete, isDeleting }: Metadata
           <code className="font-mono text-slate-400">{episode.uuid.slice(0, 8)}</code>
           <CopyButton text={episode.uuid} />
         </div>
-        <span className="text-slate-700 dark:text-slate-600">|</span>
+        <span className="text-slate-600">|</span>
         <span className="font-mono tabular-nums">
           {new Date(episode.created_at).toLocaleDateString()}
         </span>
         {episode.scope_id && (
           <>
-            <span className="text-slate-700 dark:text-slate-600">|</span>
+            <span className="text-slate-600">|</span>
             <code className="font-mono truncate max-w-[120px]">{episode.scope_id}</code>
           </>
         )}

@@ -84,7 +84,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
           )}
 
           {/* Info Box */}
-          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-800">
+          <div className="p-3 rounded-lg bg-amber-900/20 border border-amber-800">
             <p className="text-xs text-amber-400">
               <strong>Note:</strong> Editing creates a new memory with the updated content while preserving usage
               statistics (helpful/harmful counts, load count, etc.).

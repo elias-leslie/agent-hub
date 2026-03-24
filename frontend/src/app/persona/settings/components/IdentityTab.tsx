@@ -226,7 +226,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               <button
                 onClick={handleResetOnboarding}
                 disabled={resetting}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
                 title="Re-run onboarding bootstrap on next conversation"
               >
                 {resetting ? (
