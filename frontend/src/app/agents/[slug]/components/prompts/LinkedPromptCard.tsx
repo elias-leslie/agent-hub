@@ -49,7 +49,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
     enabled !== prompt.enabled;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-xl border border-slate-200 border-slate-800 dark:bg-slate-900">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}

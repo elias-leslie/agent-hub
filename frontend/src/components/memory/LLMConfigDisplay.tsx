@@ -11,13 +11,13 @@ export function LLMConfigDisplay({ config }: { config: LLMConfig }) {
       <div className="space-y-1.5 text-sm">
         <div className="flex justify-between items-center">
           <span className="text-slate-500">Reranker</span>
-          <code className="text-xs font-mono text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+          <code className="text-xs font-mono text-slate-300 bg-slate-700 px-1.5 py-0.5 rounded">
             {config.reranker_model}
           </code>
         </div>
         <div className="flex justify-between items-center">
           <span className="text-slate-500">Embeddings</span>
-          <code className="text-xs font-mono text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+          <code className="text-xs font-mono text-slate-300 bg-slate-700 px-1.5 py-0.5 rounded">
             {config.embedding_model}
           </code>
         </div>

@@ -62,7 +62,7 @@ export function Sidebar({
             type="button"
             onClick={onMobileClose}
             aria-label="Close editor sections"
-            className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            className="rounded-md p-1 text-slate-500 transition-colors text-slate-400 dark:hover:bg-slate-800"
           >
             <X className="h-4 w-4" />
           </button>

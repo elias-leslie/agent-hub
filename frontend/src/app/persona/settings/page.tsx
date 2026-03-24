@@ -88,7 +88,7 @@ export default function PersonaSettingsPage() {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
         <div className="max-w-md text-center space-y-2">
-          <p className="text-sm font-medium text-rose-500 dark:text-rose-400">
+          <p className="text-sm font-medium text-rose-400">
             Failed to load persona settings
           </p>
           <p className="text-sm text-slate-400">

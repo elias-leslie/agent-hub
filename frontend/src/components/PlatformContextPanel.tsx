@@ -84,9 +84,9 @@ function CollapsedHeader({ isExpanded, isEnabled, content, activeAgentCount, onT
   isExpanded: boolean; isEnabled: boolean; content: string; activeAgentCount: number; onToggle: () => void;
 }) {
   return (
-    <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/50 dark:hover:bg-slate-800/30 transition-colors">
+    <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-800/30 transition-colors">
       <div className="flex items-center gap-3 min-w-0">
-        <div className={cn("flex items-center justify-center w-7 h-7 rounded-md transition-colors", isEnabled ? "bg-amber-100 dark:bg-amber-900/40" : "bg-slate-800")}>
+        <div className={cn("flex items-center justify-center w-7 h-7 rounded-md transition-colors", isEnabled ? "bg-amber-900/40" : "bg-slate-800")}>
           <Globe2 className={cn("h-4 w-4", isEnabled ? "text-amber-400" : "text-slate-400")} />
         </div>
         <div className="min-w-0">
@@ -98,11 +98,11 @@ function CollapsedHeader({ isExpanded, isEnabled, content, activeAgentCount, onT
         </div>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/60 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60">
+        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/60 border border-slate-700/60">
           <Sparkles className="h-3 w-3 text-slate-400" />
           <span className="text-[10px] font-medium text-slate-400">{activeAgentCount} agent{activeAgentCount !== 1 ? "s" : ""}</span>
         </div>
-        <div className="flex items-center justify-center w-6 h-6 rounded bg-white/60 dark:bg-slate-800/60">
+        <div className="flex items-center justify-center w-6 h-6 rounded bg-slate-800/60">
           {isExpanded ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
         </div>
       </div>
@@ -117,7 +117,7 @@ function Toolbar({ isEnabled, hasChanges, showSuccess, isPending, onToggle, onSa
     <div className="flex items-center justify-between py-3">
       <p className="text-[10px] uppercase tracking-wider text-slate-400">DB-backed global prompt injected into all agents</p>
       <div className="flex items-center gap-2">
-        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPending} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-900/30 text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50" : "bg-slate-800 text-slate-500 hover:bg-slate-700")}>
+        <button onClick={(e) => { e.stopPropagation(); onToggle(); }} disabled={isPending} className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors", isEnabled ? "bg-amber-900/30 text-amber-300 hover:bg-amber-900/50" : "bg-slate-800 text-slate-500 hover:bg-slate-700")}>
           {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : isEnabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           {isEnabled ? "Enabled" : "Disabled"}
         </button>
@@ -161,10 +161,10 @@ export function PlatformContextPanel({ activeAgentCount }: { activeAgentCount: n
 
   return (
     <div className="mb-5">
-      <div className={cn("rounded-lg border overflow-hidden transition-all duration-200", isEnabled ? "border-amber-300/50 dark:border-amber-700/50 bg-gradient-to-r from-amber-50/80 via-amber-50/40 to-transparent dark:from-amber-950/30 dark:via-amber-950/10 dark:to-transparent" : "border-slate-800 bg-slate-50/50 dark:bg-slate-900/50")}>
+      <div className={cn("rounded-lg border overflow-hidden transition-all duration-200", isEnabled ? "border-amber-700/50 bg-gradient-to-r from-amber-950/30 via-amber-950/10 to-transparent" : "border-slate-800 bg-slate-900/50")}>
         <CollapsedHeader isExpanded={isExpanded} isEnabled={isEnabled} content={content} activeAgentCount={activeAgentCount} onToggle={() => setIsExpanded(!isExpanded)} />
         {isExpanded && (
-          <div className="px-4 pb-4 border-t border-slate-200/50 dark:border-slate-700/50">
+          <div className="px-4 pb-4 border-t border-slate-700/50">
             <Toolbar isEnabled={isEnabled} hasChanges={hasChanges} showSuccess={showSuccess} isPending={mutation.isPending} onToggle={handleToggleEnabled} onSave={handleSave} />
             <Editor content={content} isEnabled={isEnabled} onChange={setEditedContent} />
             <div className="mt-3 flex items-start gap-2 text-[10px] text-slate-400">

@@ -175,16 +175,16 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
     success: {
       bg: "bg-emerald-950/80",
       border: "border-emerald-800",
-      icon: "text-emerald-500 dark:text-emerald-400",
+      icon: "text-emerald-400",
       title: "text-emerald-100",
       message: "text-emerald-300",
     },
     error: {
-      bg: "bg-rose-50 dark:bg-rose-950/80",
-      border: "border-rose-200 dark:border-rose-800",
-      icon: "text-rose-500 dark:text-rose-400",
-      title: "text-rose-900 dark:text-rose-100",
-      message: "text-rose-700 dark:text-rose-300",
+      bg: "bg-rose-950/80",
+      border: "border-rose-800",
+      icon: "text-rose-400",
+      title: "text-rose-100",
+      message: "text-rose-300",
     },
     warning: {
       bg: "bg-amber-950/80",
@@ -194,11 +194,11 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
       message: "text-amber-300",
     },
     info: {
-      bg: "bg-sky-50 dark:bg-sky-950/80",
-      border: "border-sky-200 dark:border-sky-800",
-      icon: "text-sky-500 dark:text-sky-400",
-      title: "text-sky-900 dark:text-sky-100",
-      message: "text-sky-700 dark:text-sky-300",
+      bg: "bg-sky-950/80",
+      border: "border-sky-800",
+      icon: "text-sky-400",
+      title: "text-sky-100",
+      message: "text-sky-300",
     },
   };
 
@@ -264,10 +264,10 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           <div
             className={cn(
               "h-full transition-all ease-linear",
-              toast.type === "success" && "bg-emerald-400 dark:bg-emerald-500",
-              toast.type === "error" && "bg-rose-400 dark:bg-rose-500",
-              toast.type === "warning" && "bg-amber-400 dark:bg-amber-500",
-              toast.type === "info" && "bg-sky-400 dark:bg-sky-500",
+              toast.type === "success" && "bg-emerald-500",
+              toast.type === "error" && "bg-rose-500",
+              toast.type === "warning" && "bg-amber-500",
+              toast.type === "info" && "bg-sky-500",
             )}
             style={{
               width: isVisible ? "0%" : "100%",

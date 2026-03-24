@@ -143,7 +143,7 @@ export function SessionTableRow({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
+          <div className="border-t border-slate-700 bg-slate-900/80">
             <ExpandedRowContent
               session={session}
               expandedData={isExpanded ? expandedSessionData : null}

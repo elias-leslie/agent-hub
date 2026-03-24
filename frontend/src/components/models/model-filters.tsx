@@ -42,7 +42,7 @@ const CAPABILITY_BUTTONS: {
   icon: typeof Eye;
   activeClass: string;
 }[] = [
-  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-blue-500/10 text-amber-400 border-blue-500/20" },
+  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
   { key: "thinking", label: "Thinking", icon: Brain, activeClass: "bg-violet-500/10 text-violet-400 border-violet-500/20" },
   { key: "imageGen", label: "Image Gen", icon: Camera, activeClass: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
   { key: "pdf", label: "PDF", icon: FileText, activeClass: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
@@ -113,7 +113,7 @@ export function ModelFilters({
                         providerColor.dot.replace("bg-", "text-"),
                         providerColor.bg,
                       )
-                    : "border-slate-700 text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
+                    : "border-slate-700 text-slate-400 hover:border-slate-600",
                 )}
               >
                 <div
@@ -144,7 +144,7 @@ export function ModelFilters({
                 "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
                 capabilityFilters[key]
                   ? activeClass
-                  : "border-slate-700 text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
+                  : "border-slate-700 text-slate-400 hover:border-slate-600",
               )}
             >
               <Icon className="h-3 w-3" />

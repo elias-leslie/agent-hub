@@ -210,7 +210,7 @@ export default function ModelsPage() {
                 type="button"
                 onClick={handleSync}
                 disabled={syncing}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
                 title="Sync external benchmark data"
               >
                 {syncing ? (
@@ -266,7 +266,7 @@ export default function ModelsPage() {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors"
               >
                 Retry
               </button>

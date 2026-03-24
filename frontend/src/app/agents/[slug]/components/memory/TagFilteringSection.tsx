@@ -41,7 +41,7 @@ export function TagFilteringSection({
           value={audienceTags.join(", ")}
           onChange={(e) => handleTagChange("audience_tags", e.target.value)}
           placeholder="e.g. agent:debugger, workflow:heartbeat, provider:codex"
-          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-500">
           Only memories with at least one matching tag remain eligible.
@@ -58,7 +58,7 @@ export function TagFilteringSection({
           value={excludeTags.join(", ")}
           onChange={(e) => handleTagChange("exclude_tags", e.target.value)}
           placeholder="e.g. deprecated, internal, draft"
-          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-500">
           Force-hide memories with these tags, even if they would otherwise match.

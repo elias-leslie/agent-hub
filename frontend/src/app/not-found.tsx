@@ -36,7 +36,7 @@ export default function NotFound() {
 
           <button
             onClick={() => typeof window !== "undefined" && window.history.back()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-100 font-medium transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Go back

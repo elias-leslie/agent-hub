@@ -66,7 +66,7 @@ export function AgentActionsMenu({
             href={`/agents/${agent.slug}/chat`}
             role="menuitem"
             onClick={() => setOpen(false)}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-700"
           >
             <MessageSquare className="h-3.5 w-3.5" />
             Chat
@@ -78,7 +78,7 @@ export function AgentActionsMenu({
               onClone?.(agent);
               setOpen(false);
             }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-700"
+            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-700"
           >
             <Copy className="h-3.5 w-3.5" />
             Clone
