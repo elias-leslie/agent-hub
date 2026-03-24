@@ -12,7 +12,7 @@ export function Toggle({ enabled, onToggle, disabled }: ToggleProps) {
       onClick={() => !disabled && onToggle()}
       className={cn(
         "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-        enabled ? "bg-blue-600" : "bg-slate-300 dark:bg-slate-600",
+        enabled ? "bg-amber-600" : "bg-slate-300 dark:bg-slate-600",
         disabled && "opacity-50 cursor-not-allowed"
       )}
     >

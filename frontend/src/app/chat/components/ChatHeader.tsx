@@ -48,15 +48,15 @@ export function ChatHeader({
   const [showProjectSelector, setShowProjectSelector] = useState(false);
 
   return (
-    <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20 relative">
+    <header className="flex-shrink-0 border-b border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20 relative">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-3">
           {/* Sidebar Toggle */}
           <button
             onClick={onToggleSidebar}
             className={cn(
-              "p-1.5 rounded-md text-slate-500 dark:text-slate-400",
-              "hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              "p-1.5 rounded-md text-slate-400",
+              "hover:bg-slate-800 transition-colors"
             )}
             title={showSidebar ? "Hide sidebar" : "Show sidebar"}
           >
@@ -67,7 +67,7 @@ export function ChatHeader({
             )}
           </button>
 
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h1 className="text-lg font-semibold text-slate-100">
             Chat
           </h1>
 
@@ -87,7 +87,7 @@ export function ChatHeader({
             </button>
 
             {showProjectSelector && (
-              <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
+              <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
                 <div className="p-1">
                   {projects.map((project) => (
                     <button
@@ -98,7 +98,7 @@ export function ChatHeader({
                       }}
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
-                        "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
+                        "hover:bg-slate-700 transition-colors",
                         project.id === selectedProject.id && "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
                       )}
                     >
@@ -121,7 +121,7 @@ export function ChatHeader({
                 onClick={() => setShowAgentSelector(!showAgentSelector)}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
-                  "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
+                  "bg-slate-800 text-slate-300",
                   "hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                 )}
               >
@@ -134,7 +134,7 @@ export function ChatHeader({
               </button>
 
               {showAgentSelector && (
-                <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50 max-h-96 overflow-y-auto">
+                <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50 max-h-96 overflow-y-auto">
                   <div className="p-1">
                     {agents.map((agent) => {
                       const Icon = getAgentIcon(agent.slug);
@@ -147,7 +147,7 @@ export function ChatHeader({
                           }}
                           className={cn(
                             "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
-                            "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
+                            "hover:bg-slate-700 transition-colors",
                             agent.slug === selectedAgent.slug && "bg-slate-100 dark:bg-slate-700"
                           )}
                         >

@@ -39,7 +39,7 @@ export function StatusCell({ status, isLive }: { status: string; isLive?: boolea
         />
         <span className={cn("relative inline-flex rounded-full h-2 w-2", dot)} />
       </span>
-      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+      <span className="text-[11px] text-slate-400 font-medium">
         {label}
       </span>
     </div>

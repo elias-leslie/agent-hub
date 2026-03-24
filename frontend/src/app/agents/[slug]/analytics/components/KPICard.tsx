@@ -19,25 +19,25 @@ export function KPICard({
   color = "blue",
 }: KPICardProps) {
   const colorClasses = {
-    blue: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400",
+    blue: "bg-blue-50 dark:bg-blue-950/30 text-amber-500 dark:text-amber-400",
     green: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400",
     amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400",
     red: "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400",
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+    <div className="bg-slate-900 rounded-xl border border-slate-800 p-5">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">
+          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
             {label}
           </p>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+            <span className="text-2xl font-bold text-slate-100 tabular-nums">
               {value}
             </span>
             {unit && (
-              <span className="text-sm text-slate-500 dark:text-slate-400">
+              <span className="text-sm text-slate-400">
                 {unit}
               </span>
             )}

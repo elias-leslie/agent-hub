@@ -66,7 +66,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
           </span>
         )}
       </h4>
-      <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-2">
+      <p className="text-[10px] text-slate-400 mb-2">
         Auto-inject this reference when task_type matches
       </p>
 
@@ -112,8 +112,8 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
           disabled={isUpdatingTriggers}
           className={cn(
             "flex-1 px-2 py-1 text-[10px] rounded-md",
-            "bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700",
-            "text-slate-700 dark:text-slate-300 placeholder:text-slate-400",
+            "bg-slate-800/50 border border-slate-700",
+            "text-slate-300 placeholder:text-slate-400",
             "focus:outline-none focus:ring-1 focus:ring-cyan-500/50",
             "disabled:opacity-50"
           )}
@@ -150,7 +150,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
                 e.stopPropagation();
                 setNewTriggerType(type);
               }}
-              className="px-1.5 py-0.5 text-[9px] rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+              className="px-1.5 py-0.5 text-[9px] rounded bg-slate-800 text-slate-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
             >
               +{type}
             </button>
@@ -159,7 +159,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
       )}
 
       {triggersError && (
-        <p className="text-[10px] text-red-500 dark:text-red-400 mt-1">{triggersError}</p>
+        <p className="text-[10px] text-red-400 mt-1">{triggersError}</p>
       )}
     </div>
   );

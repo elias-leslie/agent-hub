@@ -8,7 +8,7 @@ import { Tooltip } from "./Tooltip";
 const FALLBACK_CONFIG = {
   icon: "📝",
   label: "Unknown",
-  color: "text-slate-600 dark:text-slate-400",
+  color: "text-slate-400",
   bg: "bg-slate-500/10 border-slate-400/40",
   description: "",
 };

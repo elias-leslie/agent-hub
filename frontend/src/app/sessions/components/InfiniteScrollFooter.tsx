@@ -26,7 +26,7 @@ export function InfiniteScrollFooter({
 
   if (!hasNextPage && allSessionsLength > 0) {
     return (
-      <div className="flex items-center justify-center py-3 mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+      <div className="flex items-center justify-center py-3 mt-3 text-xs text-slate-500 bg-slate-900/50 rounded-lg">
         Showing all {allSessionsLength} of {total} sessions
       </div>
     );

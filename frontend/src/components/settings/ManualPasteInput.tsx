@@ -51,7 +51,7 @@ export function ManualPasteInput({
 
   return (
     <div className="mt-3 space-y-2">
-      <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+      <p className="text-xs text-slate-400">{hint}</p>
       <div className="flex gap-2">
         <input
           ref={inputRef}
@@ -61,12 +61,12 @@ export function ManualPasteInput({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={submitting}
-          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:opacity-50"
+          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono disabled:opacity-50"
         />
         <button
           onClick={handleSubmit}
           disabled={!value.trim() || submitting}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
         >
           {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
           Submit
@@ -74,13 +74,13 @@ export function ManualPasteInput({
         <button
           onClick={onCancel}
           disabled={submitting}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors disabled:opacity-50"
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
       </div>
       {error && (
-        <p className="text-xs text-red-500 dark:text-red-400">{error}</p>
+        <p className="text-xs text-red-400">{error}</p>
       )}
     </div>
   );

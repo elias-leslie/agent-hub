@@ -82,8 +82,8 @@ export default function NewClientPage() {
             </div>
           </div>
 
-          <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-blue-300 mb-2 font-medium">
+          <div className="bg-amber-900/20 border border-amber-800/50 rounded-lg p-4 mb-6">
+            <p className="text-sm text-amber-300 mb-2 font-medium">
               Client ID (use in X-Client-Id header)
             </p>
             <div className="flex items-center gap-2">
@@ -128,7 +128,7 @@ export default function NewClientPage() {
                 setCreatedClient(null);
                 setDisplayName("");
               }}
-              className="flex-1 py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+              className="flex-1 py-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors"
             >
               Create Another
             </button>
@@ -169,7 +169,7 @@ export default function NewClientPage() {
               required
               minLength={1}
               maxLength={100}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -180,7 +180,7 @@ export default function NewClientPage() {
             <select
               value={clientType}
               onChange={(e) => setClientType(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
             >
               <option value="external">External</option>
               <option value="internal">Internal</option>
@@ -199,7 +199,7 @@ export default function NewClientPage() {
                 onChange={(e) => setRateLimitRpm(parseInt(e.target.value) || 60)}
                 min={1}
                 max={10000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
@@ -212,7 +212,7 @@ export default function NewClientPage() {
                 onChange={(e) => setRateLimitTpm(parseInt(e.target.value) || 100000)}
                 min={1000}
                 max={10000000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -224,7 +224,7 @@ export default function NewClientPage() {
               "w-full py-3 px-4 rounded-lg text-white font-medium transition-colors",
               isSubmitting || !displayName.trim()
                 ? "bg-slate-700 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-500"
+                : "bg-amber-600 hover:bg-amber-500"
             )}
           >
             {isSubmitting ? "Creating..." : "Create Client"}

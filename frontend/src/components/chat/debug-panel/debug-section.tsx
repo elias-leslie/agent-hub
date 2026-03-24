@@ -15,10 +15,10 @@ export function DebugSection({
     const [isOpen, setIsOpen] = useState(defaultOpen);
 
     return (
-        <div className="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+        <div className="border-b border-slate-700 last:border-b-0">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 w-full px-4 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                className="flex items-center gap-2 w-full px-4 py-3 text-left hover:bg-slate-800/50 transition-colors"
             >
                 {isOpen ? (
                     <ChevronDown className="h-4 w-4 text-slate-400" />
@@ -26,7 +26,7 @@ export function DebugSection({
                     <ChevronRight className="h-4 w-4 text-slate-400" />
                 )}
                 <Icon className="h-4 w-4 text-slate-500" />
-                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     {title}
                 </span>
             </button>

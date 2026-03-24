@@ -61,10 +61,10 @@ export function ProviderForm({
   // Multi-field form
   if (credentialFields) {
     return (
-      <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 space-y-2">
+      <div className="mt-3 pt-3 border-t border-slate-700 space-y-2">
         {credentialFields.map((field) => (
           <div key={field.credentialType} className="flex items-center gap-2">
-            <label className="text-xs text-slate-500 dark:text-slate-400 w-20 shrink-0">
+            <label className="text-xs text-slate-400 w-20 shrink-0">
               {field.label}
             </label>
             <div className="relative flex-1">
@@ -78,7 +78,7 @@ export function ProviderForm({
                   }))
                 }
                 placeholder={field.placeholder}
-                className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSave();
                   if (e.key === "Escape") onCancel();
@@ -114,7 +114,7 @@ export function ProviderForm({
           </button>
           <button
             onClick={onCancel}
-            className="px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+            className="px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 text-slate-500 transition-colors"
           >
             Cancel
           </button>
@@ -126,7 +126,7 @@ export function ProviderForm({
 
   // Single-field form (original)
   return (
-    <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+    <div className="mt-3 pt-3 border-t border-slate-700">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <input
@@ -134,7 +134,7 @@ export function ProviderForm({
             value={keyValue}
             onChange={(e) => setKeyValue(e.target.value)}
             placeholder={`Enter ${providerName} API key`}
-            className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+            className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
@@ -168,7 +168,7 @@ export function ProviderForm({
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+          className="px-3 py-2 rounded-lg text-xs font-medium hover:bg-slate-800 text-slate-500 transition-colors"
         >
           Cancel
         </button>

@@ -34,7 +34,7 @@ const EVENT_CONFIG: Record<
   },
   message: {
     icon: MessageSquare,
-    color: "text-blue-500 bg-blue-100 dark:bg-blue-900/30",
+    color: "text-amber-500 bg-blue-100 dark:bg-blue-900/30",
     label: "Message",
   },
   tool_use: {

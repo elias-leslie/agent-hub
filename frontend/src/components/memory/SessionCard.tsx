@@ -26,7 +26,7 @@ export interface SessionMemoryInfo {
 
 const SOURCE_STYLES: Record<string, { label: string; bg: string; text: string }> = {
   claude_code: { label: "Claude Code", bg: "bg-violet-500/15", text: "text-violet-400" },
-  completion: { label: "Completion", bg: "bg-blue-500/15", text: "text-blue-400" },
+  completion: { label: "Completion", bg: "bg-blue-500/15", text: "text-amber-400" },
   chat: { label: "Chat", bg: "bg-emerald-500/15", text: "text-emerald-400" },
   agent: { label: "Agent", bg: "bg-amber-500/15", text: "text-amber-400" },
   roundtable: { label: "Roundtable", bg: "bg-pink-500/15", text: "text-pink-400" },

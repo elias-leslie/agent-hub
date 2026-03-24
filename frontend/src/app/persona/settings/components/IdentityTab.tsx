@@ -110,10 +110,10 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+        <h2 className="text-lg font-semibold text-slate-100 mb-1">
           Identity
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-slate-400">
           Core identity settings for your persona.
         </p>
       </div>
@@ -121,7 +121,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
       <div className="space-y-5">
         {/* Display Name */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
             Display Name
           </label>
           <input
@@ -131,7 +131,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             onBlur={handleNameBlur}
             onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
             maxLength={100}
-            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
           <p className="text-[10px] text-slate-400 mt-1">
             Injected into every conversation via the identity tag.
@@ -140,17 +140,17 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
 
         {/* Agent Slug */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
             Agent Slug
           </label>
-          <div className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 max-w-md">
+          <div className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 max-w-md">
             {persona.agent_slug}
           </div>
         </div>
 
         {/* Greeting */}
         <div>
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
             Greeting Message
           </label>
           <textarea
@@ -158,24 +158,24 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             onChange={(e) => setGreetingValue(e.target.value)}
             onBlur={handleGreetingBlur}
             rows={3}
-            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
             placeholder="Custom greeting for new sessions..."
           />
         </div>
 
         <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 max-w-4xl">
           <div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="text-base font-semibold text-slate-100">
               User Profile
             </h3>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-sm text-slate-400">
               Structured user preferences this persona can rely on consistently at runtime.
             </p>
           </div>
           <div className="grid gap-4">
             {USER_PROFILE_FIELDS.map(([field, label, placeholder]) => (
               <label key={field} className="space-y-2">
-                <span className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                <span className="block text-sm font-medium text-slate-300">
                   {label}
                 </span>
                 <textarea
@@ -198,7 +198,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
         </section>
 
         {/* Onboarding Status */}
-        <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 max-w-md">
+        <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/50 max-w-md">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -208,7 +208,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               )}
             />
             <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              <p className="text-sm font-medium text-slate-300">
                 {config.label}
               </p>
               <p className="text-[10px] text-slate-400">

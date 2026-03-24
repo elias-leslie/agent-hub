@@ -58,7 +58,7 @@ export function SessionTableRow({
       {/* ROW */}
       <button
         onClick={() => onToggleExpand(session.id)}
-        className="w-full grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group"
+        className="w-full grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center text-left hover:bg-slate-800/30 transition-colors group"
       >
         {/* Status */}
         <StatusCell status={session.status} isLive={isLive} />
@@ -72,7 +72,7 @@ export function SessionTableRow({
 
         {/* Agent */}
         <div className="min-w-0">
-          <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+          <span className="text-xs text-slate-400 truncate block">
             {session.agent_slug || "—"}
           </span>
         </div>
@@ -95,7 +95,7 @@ export function SessionTableRow({
           }
           position="top"
         >
-          <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-300 cursor-help">
+          <span className="text-[11px] font-mono tabular-nums text-slate-300 cursor-help">
             {formatTokenPair(session.total_input_tokens, session.total_output_tokens)}
           </span>
         </Tooltip>
@@ -106,7 +106,7 @@ export function SessionTableRow({
             "text-[11px] font-mono tabular-nums font-medium",
             cost > 0.01
               ? "text-amber-600 dark:text-amber-400"
-              : "text-slate-500 dark:text-slate-400"
+              : "text-slate-400"
           )}>
             {formatCost(cost)}
           </span>
@@ -114,7 +114,7 @@ export function SessionTableRow({
 
         {/* Time */}
         <div className="text-right">
-          <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+          <span className="text-[11px] font-mono tabular-nums text-slate-400">
             {formatRelativeTime(session.updated_at)}
           </span>
         </div>
@@ -143,7 +143,7 @@ export function SessionTableRow({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
+          <div className="border-t border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
             <ExpandedRowContent
               session={session}
               expandedData={isExpanded ? expandedSessionData : null}

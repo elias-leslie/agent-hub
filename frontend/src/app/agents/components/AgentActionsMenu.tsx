@@ -50,7 +50,7 @@ export function AgentActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
-        className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        className="p-1.5 rounded hover:bg-slate-800 transition-colors"
       >
         <MoreVertical className="h-4 w-4 text-slate-400" />
       </button>

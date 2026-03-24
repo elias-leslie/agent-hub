@@ -138,8 +138,8 @@ export function PromptsTab({
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Prompts</h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <h2 className="text-lg font-semibold text-slate-100">Prompts</h2>
+          <p className="mt-1 text-sm text-slate-400">
             Edit assigned prompt documents inline and reorder runtime prompt assignments.
           </p>
         </div>
@@ -155,7 +155,7 @@ export function PromptsTab({
           <button
             type="button"
             onClick={() => { setShowAssignForm((v) => !v); setShowCreateForm(false); }}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500"
           >
             <Plus className="h-4 w-4" />
             Assign Existing
@@ -204,10 +204,10 @@ export function PromptsTab({
 
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <h3 className="text-sm font-semibold text-slate-100">
             Prompt Assignments
           </h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Drag to reorder the runtime prompt stack. Owned prompts stay under this agent; shared prompts can be detached.
           </p>
         </div>
@@ -243,10 +243,10 @@ export function PromptsTab({
       {agentSlug === "persona" && personaWorkflowPrompts.length > 0 ? (
         <div className="space-y-4">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="text-sm font-semibold text-slate-100">
               Workflow Prompt Docs
             </h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-1 text-xs text-slate-400">
               Persona-specific workflow prompts that are used outside the ordered system prompt stack.
             </p>
           </div>

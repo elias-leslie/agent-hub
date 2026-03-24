@@ -18,21 +18,21 @@ export function MemoryConfigSection({
       className={cn(
         "space-y-5 p-5 rounded-lg border",
         isCustomEnabled
-          ? "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50"
-          : "border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/20 opacity-50 pointer-events-none"
+          ? "border-slate-700 bg-slate-800/50"
+          : "border-slate-700/50 bg-slate-800/20 opacity-50 pointer-events-none"
       )}
     >
-      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+      <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
         Injection Settings
       </h3>
 
       {/* Injection Enabled */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium text-slate-200">
             Memory Injection
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-400">
             Enable durable memory injection for this agent
           </p>
         </div>
@@ -47,10 +47,10 @@ export function MemoryConfigSection({
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium text-slate-200">
             Include Mandates
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-400">
             Keep universal rule summaries and full mandate expansions eligible
           </p>
         </div>
@@ -65,10 +65,10 @@ export function MemoryConfigSection({
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium text-slate-200">
             Include Guardrails
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-400">
             Keep anti-pattern and safety memories eligible for injection
           </p>
         </div>
@@ -83,10 +83,10 @@ export function MemoryConfigSection({
 
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium text-slate-200">
             Include References
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-400">
             Allow selected and triggered reference memories in prompt context
           </p>
         </div>
@@ -102,10 +102,10 @@ export function MemoryConfigSection({
       {/* Session Continuity */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium text-slate-200">
             Session Continuity
           </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-xs text-slate-400">
             Inject Recent Activity block from prior sessions
           </p>
         </div>
@@ -122,10 +122,10 @@ export function MemoryConfigSection({
       {config.continuity_enabled && (
         <div className="space-y-2 pl-2">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-slate-900 dark:text-slate-200">
+            <label className="text-sm font-medium text-slate-200">
               Max Sessions
             </label>
-            <span className="text-sm font-mono text-slate-700 dark:text-slate-300">
+            <span className="text-sm font-mono text-slate-300">
               {config.continuity_max_sessions}
             </span>
           </div>
@@ -141,7 +141,7 @@ export function MemoryConfigSection({
               })
             }
             disabled={!isCustomEnabled}
-            className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
+            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
           />
           <div className="flex justify-between text-[10px] text-slate-400">
             <span>1</span>

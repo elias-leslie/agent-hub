@@ -125,7 +125,7 @@ export function AuthBadges({
     badges.push(
       <span
         key="apikey"
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/20"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-amber-400 ring-1 ring-blue-500/20"
       >
         <Key className="h-2.5 w-2.5" />
         {apiKeyCount > 1 ? `API Key (${apiKeyCount})` : "API Key"}
@@ -299,7 +299,7 @@ export function PreferenceToggle({
           className={cn(
             "px-2 py-0.5 text-[10px] font-medium transition-colors",
             preferredAuth === "api_key"
-              ? "bg-blue-600 text-white"
+              ? "bg-amber-600 text-white"
               : "bg-slate-800 text-slate-500 hover:bg-slate-700",
           )}
         >

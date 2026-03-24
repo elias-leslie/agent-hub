@@ -18,22 +18,22 @@ export function TagFilteringSection({
   };
 
   return (
-    <div className="space-y-5 p-5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+    <div className="space-y-5 p-5 rounded-lg border border-slate-700 bg-slate-800/50">
       <div className="flex items-center gap-2">
         <Tags className="h-5 w-5 text-slate-400" />
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+        <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
           Tag Filtering
         </h3>
       </div>
 
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-slate-400">
         Audience tags route specialist memories to this agent. Exclude tags are
         an advanced suppression escape hatch.
       </p>
 
       {/* Audience Tags */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+        <label className="text-xs font-medium text-slate-400">
           Audience Tags
         </label>
         <input
@@ -41,7 +41,7 @@ export function TagFilteringSection({
           value={audienceTags.join(", ")}
           onChange={(e) => handleTagChange("audience_tags", e.target.value)}
           placeholder="e.g. agent:debugger, workflow:heartbeat, provider:codex"
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-400 dark:text-slate-500">
           Only memories with at least one matching tag remain eligible.
@@ -50,7 +50,7 @@ export function TagFilteringSection({
 
       {/* Exclude Tags */}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+        <label className="text-xs font-medium text-slate-400">
           Exclude Tags
         </label>
         <input
@@ -58,7 +58,7 @@ export function TagFilteringSection({
           value={excludeTags.join(", ")}
           onChange={(e) => handleTagChange("exclude_tags", e.target.value)}
           placeholder="e.g. deprecated, internal, draft"
-          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-400 dark:placeholder:text-slate-500"
         />
         <p className="text-[11px] text-slate-400 dark:text-slate-500">
           Force-hide memories with these tags, even if they would otherwise match.

@@ -17,13 +17,13 @@ export function ModelSelect({
 }: ModelSelectProps) {
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+      <label className="text-xs font-medium text-slate-400">
         {label}
       </label>
       <select
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+        className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
       >
         {allowNull && <option value="">None</option>}
         {models.map((model) => (

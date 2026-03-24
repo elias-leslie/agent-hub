@@ -86,7 +86,7 @@ export function MemoryTableRow({
         onClick={() => onToggleExpand(item.uuid)}
         className={cn(
           "w-full grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
-          "hover:bg-slate-50 dark:hover:bg-slate-800/30",
+          "hover:bg-slate-800/30",
           isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
           isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
           isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
@@ -132,7 +132,7 @@ export function MemoryTableRow({
               {item.pinned && (
                 <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
               )}
-              <span className="text-xs text-slate-700 dark:text-slate-300">
+              <span className="text-xs text-slate-300">
                 {truncatedContent}
               </span>
               {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
@@ -142,7 +142,7 @@ export function MemoryTableRow({
 
         {/* Time - hidden on mobile */}
         <div className="hidden md:block text-right">
-          <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+          <span className="text-[11px] font-mono tabular-nums text-slate-400">
             {formatRelativeTime(item.updated_at || item.created_at)}
           </span>
         </div>
@@ -157,7 +157,7 @@ export function MemoryTableRow({
                   ? "text-emerald-600 dark:text-emerald-400"
                   : item.utility_score >= 0.4
                     ? "text-amber-600 dark:text-amber-400"
-                    : "text-slate-500 dark:text-slate-400"
+                    : "text-slate-400"
               )}
             >
               {(item.utility_score * 100).toFixed(0)}%
@@ -186,7 +186,7 @@ export function MemoryTableRow({
         )}
       >
         <div className={isExpanded ? "overflow-visible" : "overflow-hidden"}>
-          <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
+          <div className="border-t border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
             <ExpandedRowContent
               episode={item as MemoryEpisode}
               onDelete={() => onDelete(item.uuid)}

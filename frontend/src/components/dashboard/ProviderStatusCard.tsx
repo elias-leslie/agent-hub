@@ -27,7 +27,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
           {provider.name === "claude" ? (
             <Cpu className="h-4 w-4 text-orange-400" />
           ) : (
-            <Server className="h-4 w-4 text-blue-400" />
+            <Server className="h-4 w-4 text-amber-400" />
           )}
         </div>
         <div>

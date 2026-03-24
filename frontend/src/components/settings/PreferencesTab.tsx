@@ -28,7 +28,7 @@ export function PreferencesTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="text-sm text-slate-400">
           Loading preferences...
         </div>
       </div>
@@ -38,7 +38,7 @@ export function PreferencesTab() {
   if (loadError) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-sm text-red-500 dark:text-red-400">
+        <div className="text-sm text-red-400">
           Failed to load preferences. Please try refreshing the page.
         </div>
       </div>
@@ -49,35 +49,35 @@ export function PreferencesTab() {
     <div className="space-y-6">
       {/* Other Preferences */}
       <div>
-        <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-3">
+        <h3 className="text-sm font-medium text-slate-100 mb-3">
           Response Preferences
         </h3>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700">
             <div>
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p className="text-sm font-medium text-slate-100">
                 Response Verbosity
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-400">
                 Control detail level in responses
               </p>
             </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm">
               <option>Concise</option>
               <option>Balanced</option>
               <option>Detailed</option>
             </select>
           </div>
-          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700">
             <div>
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p className="text-sm font-medium text-slate-100">
                 Default Model
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-400">
                 Preferred model for new sessions
               </p>
             </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
+            <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-800 text-sm">
               {availableModels.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
@@ -85,8 +85,8 @@ export function PreferencesTab() {
           </div>
         </div>
       </div>
-      <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+      <div className="pt-4 border-t border-slate-700">
+        <p className="text-xs text-slate-400">
           Preferences are saved locally and applied to future sessions.
         </p>
       </div>

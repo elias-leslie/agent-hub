@@ -60,7 +60,7 @@ export default function ClientsPage() {
           </div>
           <a
             href="/access-control/clients/new"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors"
           >
             <Plus className="h-4 w-4" />
             New Client
@@ -87,7 +87,7 @@ export default function ClientsPage() {
             <p className="text-lg mb-2">No clients registered</p>
             <a
               href="/access-control/clients/new"
-              className="text-blue-400 hover:text-blue-300"
+              className="text-amber-400 hover:text-amber-300"
             >
               Register your first client
             </a>

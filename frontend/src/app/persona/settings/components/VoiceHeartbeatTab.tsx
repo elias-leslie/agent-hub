@@ -65,17 +65,17 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
       {/* Voice Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+          <h2 className="text-lg font-semibold text-slate-100 mb-1">
             Voice
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-400">
             Text-to-speech voice selection for persona responses.
           </p>
         </div>
 
         {/* TTS Toggle */}
         <div className="flex items-center justify-between max-w-md">
-          <span className="text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-sm text-slate-300">
             Text-to-speech
           </span>
           <button
@@ -103,15 +103,15 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search voices..."
-            className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
           />
         </div>
 
         {/* Voice List */}
-        <div className="max-h-[280px] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 max-w-md">
+        <div className="max-h-[280px] overflow-y-auto rounded-lg border border-slate-700 max-w-md">
           {Object.entries(grouped).map(([gender, groupVoices]) => (
             <div key={gender}>
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 sticky top-0">
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-800/50 sticky top-0">
                 {gender}
               </div>
               {groupVoices.map((voice) => (
@@ -120,7 +120,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                   onClick={() => setSelectedVoice(voice.id)}
                   aria-label={`Select voice ${voice.name}`}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors",
+                    "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-800/50 transition-colors",
                     voice.id === selectedVoice && "bg-amber-50 dark:bg-amber-900/20",
                   )}
                 >
@@ -144,7 +144,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
                     <Play className="w-3 h-3" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate block">
+                    <span className="text-xs font-medium text-slate-100 truncate block">
                       {voice.name}
                     </span>
                     {voice.personalities.length > 0 && (
@@ -171,23 +171,23 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
       {/* Heartbeat Section */}
       <div className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+          <h2 className="text-lg font-semibold text-slate-100 mb-1">
             Heartbeat
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-400">
             Autonomous check-in schedule and runtime readiness.
           </p>
         </div>
 
         <div className="flex items-center justify-between max-w-md">
-          <span className="text-sm text-slate-700 dark:text-slate-300">
+          <span className="text-sm text-slate-300">
             Check-in interval
           </span>
           <select
             aria-label="Heartbeat interval"
             value={persona.heartbeat_interval_minutes}
             onChange={(e) => handleHeartbeatChange(Number(e.target.value))}
-            className="px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            className="px-2 py-1 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100"
           >
             <option value={15}>15 min</option>
             <option value={30}>30 min</option>
@@ -201,16 +201,16 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
           How often {persona.name} runs autonomous system checks
         </p>
 
-        <div className="max-w-md rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+        <div className="max-w-md rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                 Heartbeat Runtime
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p className="mt-1 text-sm font-medium text-slate-100">
                 {runtime?.model_display_name || runtime?.model || "Unavailable"}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-400">
                 {runtime ? `${runtime.provider} · thinking ${runtime.thinking_level || "off"}` : "Runtime status unavailable"}
               </p>
             </div>
@@ -228,11 +228,11 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/70 px-3 py-2">
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+            <div className="rounded-lg bg-slate-800/70 px-3 py-2">
               Tools: {runtime?.supports_tools ? "supported" : "not supported"}
             </div>
-            <div className="rounded-lg bg-slate-50 dark:bg-slate-800/70 px-3 py-2">
+            <div className="rounded-lg bg-slate-800/70 px-3 py-2">
               Session cache: {runtime?.supports_session_cache ? "supported" : "not supported"}
             </div>
           </div>

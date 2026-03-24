@@ -30,14 +30,14 @@ export function ToggleSetting({
     switch (variant) {
       case "danger":
         return enabled
-          ? "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+          ? "border-slate-700 hover:bg-slate-800/50"
           : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20";
       case "sky":
         return "border-sky-200 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20";
       case "violet":
         return "border-violet-200 dark:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20";
       default:
-        return "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50";
+        return "border-slate-700 hover:bg-slate-800/50";
     }
   };
 
@@ -45,7 +45,7 @@ export function ToggleSetting({
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+      <label className="text-sm font-medium text-slate-300">
         {label}
       </label>
       <button
@@ -76,7 +76,7 @@ export function ToggleSetting({
           )}
         />
         <div className="text-left">
-          <div className="font-medium text-slate-900 dark:text-slate-100">
+          <div className="font-medium text-slate-100">
             {enabled ? activeLabel : inactiveLabel}
           </div>
           <div className="text-xs text-slate-500">

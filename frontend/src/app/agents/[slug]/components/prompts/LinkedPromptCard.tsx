@@ -62,20 +62,20 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
+            <span className="truncate text-sm font-medium text-slate-100">
               {prompt.name}
             </span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               linked
             </span>
           </div>
-          <p className="truncate text-xs text-slate-500 dark:text-slate-400">{prompt.slug}</p>
+          <p className="truncate text-xs text-slate-400">{prompt.slug}</p>
         </div>
       </button>
       {expanded ? (
         <div className="space-y-4 border-t border-slate-200 px-4 py-4 dark:border-slate-800">
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Name</span>
+            <span className="text-xs font-medium text-slate-400">Name</span>
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -83,7 +83,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
             />
           </label>
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Description</span>
+            <span className="text-xs font-medium text-slate-400">Description</span>
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
@@ -92,7 +92,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
             />
           </label>
           <label className="space-y-1.5">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Content</span>
+            <span className="text-xs font-medium text-slate-400">Content</span>
             <textarea
               value={content}
               onChange={(event) => setContent(event.target.value)}
@@ -101,7 +101,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
             />
           </label>
           <div className="flex items-center justify-between gap-3">
-            <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+            <label className="inline-flex items-center gap-2 text-xs text-slate-400">
               <input
                 type="checkbox"
                 checked={enabled}
@@ -113,7 +113,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
               type="button"
               onClick={() => saveMutation.mutate()}
               disabled={!dirty || saveMutation.isPending}
-              className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-amber-500 disabled:opacity-50"
             >
               {saveMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

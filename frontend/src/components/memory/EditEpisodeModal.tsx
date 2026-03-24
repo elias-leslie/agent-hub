@@ -38,16 +38,16 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl mx-4 rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800">
+      <div className="relative w-full max-w-2xl mx-4 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-violet-100 dark:bg-violet-900/30">
               <Pencil className="w-5 h-5 text-violet-600 dark:text-violet-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit Memory</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{episode.uuid.slice(0, 8)}...</p>
+              <h2 className="text-lg font-semibold text-slate-100">Edit Memory</h2>
+              <p className="text-xs text-slate-400 font-mono">{episode.uuid.slice(0, 8)}...</p>
             </div>
           </div>
           <button
@@ -55,7 +55,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
             onClick={onClose}
             disabled={isSaving}
             aria-label="Close dialog"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-800 disabled:opacity-50"
           >
             <X className="w-5 h-5" />
           </button>
@@ -93,7 +93,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex items-center justify-between p-4 border-t border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
           <div className="text-xs text-slate-500">
             {hasChanges ? (
               <span className="text-violet-600 dark:text-violet-400">Unsaved changes</span>
@@ -106,7 +106,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+              className="px-4 py-2 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-50 transition-colors"
             >
               Cancel
             </button>

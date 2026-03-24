@@ -35,11 +35,11 @@ export function AgentsTable({
 
     return (
       <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
-        <Bot className="mx-auto mb-4 h-10 w-10 text-slate-300 dark:text-slate-600" />
+        <Bot className="mx-auto mb-4 h-10 w-10 text-slate-600" />
         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
           {hasSearch ? `No agents match "${searchQuery.trim()}"` : "No agents to show"}
         </p>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-500 dark:text-slate-400">
+        <p className="mx-auto mt-2 max-w-md text-sm text-slate-400">
           {hasSearch
             ? "Try a different name, slug, or description search."
             : showInactive
@@ -67,7 +67,7 @@ export function AgentsTable({
           )}
           <a
             href="/agents/new"
-            className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+            className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
           >
             New Agent
           </a>
@@ -77,7 +77,7 @@ export function AgentsTable({
   }
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+    <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
       <AgentsTableHeader
         sortField={sortField}
         sortDirection={sortDirection}

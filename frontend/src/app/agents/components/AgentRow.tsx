@@ -25,7 +25,7 @@ export function AgentRow({
       className={cn(
         "grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 items-center transition-colors",
         agent.is_active
-          ? "hover:bg-slate-50 dark:hover:bg-slate-800/30"
+          ? "hover:bg-slate-800/30"
           : "hover:bg-slate-50/80 dark:hover:bg-slate-800/20"
       )}
     >
@@ -42,10 +42,10 @@ export function AgentRow({
           <a
             href={`/agents/${agent.slug}`}
             className={cn(
-              "text-sm font-semibold hover:text-blue-600 dark:hover:text-blue-400 truncate block",
+              "text-sm font-semibold hover:text-amber-500 dark:hover:text-amber-400 truncate block",
               agent.is_active
                 ? "text-slate-800 dark:text-slate-100"
-                : "text-slate-500 dark:text-slate-400"
+                : "text-slate-400"
             )}
           >
             {agent.name}
@@ -76,7 +76,7 @@ export function AgentRow({
 
       {/* Requests 24h + success summary */}
       <div className="min-w-[90px]">
-        <div className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+        <div className="text-xs font-semibold tabular-nums text-slate-300">
           {requests24h}
         </div>
         <div className="text-[10px] text-slate-400 tabular-nums">
@@ -95,7 +95,7 @@ export function AgentRow({
 
       {/* Cost 24h */}
       <div className="text-right">
-        <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+        <span className="text-xs font-semibold tabular-nums text-slate-300">
           ${cost24hUsd.toFixed(2)}
         </span>
       </div>

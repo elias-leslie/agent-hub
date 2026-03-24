@@ -11,5 +11,5 @@ export function getProviderIcon(provider: string) {
   if (provider === "claude") {
     return <Cpu className="h-5 w-5 text-orange-500" />;
   }
-  return <Server className="h-5 w-5 text-blue-500" />;
+  return <Server className="h-5 w-5 text-amber-500" />;
 }

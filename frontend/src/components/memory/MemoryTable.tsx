@@ -69,7 +69,7 @@ export function MemoryTable({
   return (
     <>
       {/* Table Header */}
-      <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
+      <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-700">
         <div className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
           <button
             onClick={isAllSelected ? onClearSelection : onSelectAll}
@@ -104,13 +104,13 @@ export function MemoryTable({
         <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
           {Array.from({ length: 10 }).map((_, i) => (
             <div key={i} className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
-              <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="hidden md:block h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="h-5 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="h-4 w-full max-w-md rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="hidden md:block h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-              <div className="hidden md:block h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-              <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div className="h-4 w-4 rounded bg-slate-700 animate-pulse" />
+              <div className="hidden md:block h-5 w-14 rounded bg-slate-700 animate-pulse" />
+              <div className="h-5 w-16 rounded bg-slate-700 animate-pulse" />
+              <div className="h-4 w-full max-w-md rounded bg-slate-700 animate-pulse" />
+              <div className="hidden md:block h-4 w-12 rounded bg-slate-700 animate-pulse ml-auto" />
+              <div className="hidden md:block h-4 w-10 rounded bg-slate-700 animate-pulse ml-auto" />
+              <div className="h-4 w-4 rounded bg-slate-700 animate-pulse" />
             </div>
           ))}
         </div>
@@ -119,13 +119,13 @@ export function MemoryTable({
       {/* Empty State */}
       {!isLoading && items.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+          <div className="p-4 rounded-full bg-slate-800 mb-4">
             <Database className="w-8 h-8 text-slate-400" />
           </div>
-          <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">
+          <h3 className="text-lg font-medium text-slate-100 mb-1">
             No memories found
           </h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+          <p className="text-sm text-slate-400 max-w-sm">
             {isSearchMode
               ? `No results for "${searchQuery}"`
               : "Memories will appear here as they are created"}

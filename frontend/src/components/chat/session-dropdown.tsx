@@ -196,10 +196,10 @@ export function SessionDropdown({
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1 w-72 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
+        <div className="absolute left-0 top-full mt-1 w-72 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
           {/* Header */}
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-700">
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-700">
+            <span className="text-sm font-semibold text-slate-300">
               Sessions
             </span>
             <button
@@ -221,11 +221,11 @@ export function SessionDropdown({
                 <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
               </div>
             ) : error ? (
-              <div className="px-3 py-4 text-sm text-red-500 dark:text-red-400">
+              <div className="px-3 py-4 text-sm text-red-400">
                 {error}
               </div>
             ) : sessions.length === 0 ? (
-              <div className="px-3 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+              <div className="px-3 py-8 text-center text-sm text-slate-400">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No sessions yet</p>
                 <p className="text-xs mt-1">Start a new conversation</p>
@@ -245,7 +245,7 @@ export function SessionDropdown({
                   >
                     <MessageSquare className="h-4 w-4 mt-0.5 flex-shrink-0 text-slate-400" />
                     <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate block">
+                      <span className="text-sm font-medium text-slate-300 truncate block">
                         {getSessionTitle(session)}
                       </span>
                       <div className="mt-1 flex flex-wrap gap-1">
@@ -258,7 +258,7 @@ export function SessionDropdown({
                           </span>
                         ))}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
                           {formatDistanceToNow(new Date(session.updated_at), {

@@ -30,7 +30,7 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="settings-modal">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md mx-4 rounded-xl bg-white dark:bg-slate-900 shadow-2xl">
+      <div className="relative w-full max-w-md mx-4 rounded-xl bg-slate-900 shadow-2xl">
         <ModalHeader onClose={onClose} />
         <div className="p-4 space-y-6">
           {loading ? (
@@ -74,10 +74,10 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                   {continuityEnabled && (
                     <div className="space-y-2 pl-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        <label className="text-xs font-medium text-slate-400">
                           Max Sessions
                         </label>
-                        <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                        <span className="text-xs font-mono text-slate-300">
                           {continuityMaxSessions}
                         </span>
                       </div>
@@ -88,7 +88,7 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                         step={1}
                         value={continuityMaxSessions}
                         onChange={(e) => setContinuityMaxSessions(parseInt(e.target.value))}
-                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
+                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
                       />
                       <div className="flex justify-between text-[10px] text-slate-400">
                         <span>1</span>

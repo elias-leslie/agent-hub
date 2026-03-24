@@ -57,7 +57,7 @@ export function CredentialList({
               {idx === 0 ? "Primary:" : `Key ${idx + 1}:`}
             </span>
           )}
-          <code className="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">
+          <code className="font-mono bg-slate-800 px-1 rounded">
             {cred.value_masked}
           </code>
           {(onEditCredential || onDeleteCredential) && (
@@ -65,7 +65,7 @@ export function CredentialList({
               {onEditCredential && (
                 <button
                   onClick={() => onEditCredential(cred.id)}
-                  className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                  className="p-0.5 rounded hover:bg-slate-800 text-slate-400 transition-colors"
                   title="Update this key"
                 >
                   <Pencil className="h-2.5 w-2.5" />
@@ -86,7 +86,7 @@ export function CredentialList({
                     <button
                       onClick={onCancelDeleteCredential}
                       aria-label={`Cancel delete credential ${cred.value_masked}`}
-                      className="p-0.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                      className="p-0.5 rounded hover:bg-slate-800 text-slate-400 transition-colors"
                       title="Cancel delete this key"
                     >
                       <X className="h-2.5 w-2.5" />
@@ -96,7 +96,7 @@ export function CredentialList({
                   <button
                     onClick={() => onRequestDeleteCredential?.(cred.id)}
                     aria-label={`Delete credential ${cred.value_masked}`}
-                    className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
+                    className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors"
                     title="Delete this key"
                   >
                     <Trash2 className="h-2.5 w-2.5" />
@@ -106,7 +106,7 @@ export function CredentialList({
               {onSetPrimaryCredential && idx > 0 && (
                 <button
                   onClick={() => onSetPrimaryCredential(cred.id)}
-                  className="p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 text-slate-500 dark:text-slate-400 hover:text-blue-500 transition-colors"
+                  className="p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 text-slate-400 hover:text-amber-500 transition-colors"
                   title="Make primary"
                 >
                   <ArrowUp className="h-2.5 w-2.5" />
