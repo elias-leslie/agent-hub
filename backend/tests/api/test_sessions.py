@@ -107,7 +107,8 @@ class TestGetSession:
         mock_db_session.status = "active"
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
-        mock_db_session.summary_oneliner = None
+        mock_db_session.workstream_status = "completed_ready_for_closure"
+        mock_db_session.summary_oneliner = "Closed the loop on session detail observability"
         mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
         mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.provider_metadata = {
@@ -207,6 +208,8 @@ class TestGetSession:
         assert data["fallback_reason"] == "TimeoutError: primary timed out"
         assert data["live_activity"]["phase"] == "reading_file"
         assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
+        assert data["workstream_status"] == "completed_ready_for_closure"
+        assert data["summary_oneliner"] == "Closed the loop on session detail observability"
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
         # Verify context_usage is included

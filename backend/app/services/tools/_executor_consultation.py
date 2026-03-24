@@ -16,6 +16,7 @@ from ._executor_dispatch import (
     _SPECIALIST_AGENT_SLUGS,
     SpecialistDispatchPlan,
     dispatch_result_text,
+    parse_specialist_dispatch_request,
     prepare_specialist_dispatch,
 )
 
@@ -210,11 +211,12 @@ async def dispatch_agent(
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
+            dispatch_request = parse_specialist_dispatch_request(task)
             dispatch_plan = (
                 await prepare_specialist_dispatch(
                     db=db, project_id=project_id, agent_slug=agent_slug, task=task,
                 )
-                if agent_slug in _SPECIALIST_AGENT_SLUGS
+                if dispatch_request.mode is not None or agent_slug in _SPECIALIST_AGENT_SLUGS
                 else SpecialistDispatchPlan(event_type="dispatch")
             )
 

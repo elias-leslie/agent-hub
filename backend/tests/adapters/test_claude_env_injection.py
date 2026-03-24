@@ -248,12 +248,12 @@ class TestClaudeOAuthEnvInjection:
 
         assert "system_prompt" not in captured_opts
 
-    def test_mcp_servers_set_stream_close_timeout(self, tmp_path: Path) -> None:
-        """MCP sessions get CLAUDE_CODE_STREAM_CLOSE_TIMEOUT to prevent idle transport death."""
+    def test_mcp_servers_do_not_set_stream_close_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions should not inject a hardcoded stream-close timeout."""
         mock_mcp = MagicMock()
         captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
 
-        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
     def test_working_dir_hook_mode_does_not_set_stream_close_timeout(self, tmp_path: Path) -> None:
         """working_dir hook mode stays on plain prompts and skips stream-close overrides."""
@@ -261,8 +261,8 @@ class TestClaudeOAuthEnvInjection:
 
         assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
-    def test_mcp_servers_set_os_environ_stream_close_timeout(self, tmp_path: Path) -> None:
-        """MCP sessions set CLAUDE_CODE_STREAM_CLOSE_TIMEOUT in os.environ for Query.__init__."""
+    def test_mcp_servers_do_not_set_os_environ_stream_close_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions should not mutate process env with a hardcoded stream timeout."""
         import os
 
         # Clear to ensure our code sets it
@@ -270,14 +270,14 @@ class TestClaudeOAuthEnvInjection:
         mock_mcp = MagicMock()
         self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
 
-        assert os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT") == "900000"
+        assert os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT") is None
 
-    def test_mcp_servers_set_tool_timeout(self, tmp_path: Path) -> None:
-        """MCP sessions get MCP_TOOL_TIMEOUT for slow tool calls."""
+    def test_mcp_servers_do_not_set_tool_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions should not inject a hardcoded tool timeout."""
         mock_mcp = MagicMock()
         captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
 
-        assert captured_opts["env"]["MCP_TOOL_TIMEOUT"] == "300000"
+        assert "MCP_TOOL_TIMEOUT" not in captured_opts["env"]
 
     def test_working_dir_non_mcp_sessions_skip_stream_timeout(self, tmp_path: Path) -> None:
         """working_dir hook mode no longer opts into stream-input close timeout."""
@@ -285,14 +285,15 @@ class TestClaudeOAuthEnvInjection:
 
         assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
 
-    def test_mcp_timeout_env_preserves_venv(self, tmp_path: Path) -> None:
-        """MCP timeout env vars are added alongside venv env vars, not replacing them."""
+    def test_mcp_env_preserves_venv_without_timeout_overrides(self, tmp_path: Path) -> None:
+        """MCP sessions keep venv env without reintroducing timeout overrides."""
         venv_path = _make_venv(tmp_path)
         mock_mcp = MagicMock()
         captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
 
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
-        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts["env"]
+        assert "MCP_TOOL_TIMEOUT" not in captured_opts["env"]
 
 
 class TestClaudeStreamingEnvInjection:

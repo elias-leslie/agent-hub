@@ -64,7 +64,7 @@ class TestDirectToolExecutor:
         assert "blocked" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_bash_allows_safe_agent_hub_rebuild_from_agent_worker(
+    async def test_bash_blocks_in_band_agent_hub_rebuild_from_agent_worker(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
@@ -75,11 +75,62 @@ class TestDirectToolExecutor:
         with patch(
             "app.services.tools.direct_executor_core.run_bash",
             new_callable=AsyncMock,
-            return_value="ok",
         ) as mock_run:
             result = await executor.bash("rebuild.sh agent-hub")
 
-        assert result == "ok"
+        assert "blocked for runtime safety" in result.lower()
+        assert "rebuild.sh --detach agent-hub" in result
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bash_blocks_in_band_agent_hub_rebuild_from_direct_executor(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+        ) as mock_run:
+            result = await executor.bash("rebuild.sh agent-hub")
+
+        assert "blocked for runtime safety" in result.lower()
+        assert "rebuild.sh --detach agent-hub" in result
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bash_blocks_in_band_agent_hub_restart_from_direct_executor(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+        ) as mock_run:
+            result = await executor.bash("restart.sh agent-hub")
+
+        assert "blocked for runtime safety" in result.lower()
+        assert "rebuild.sh --detach agent-hub" in result
+        mock_run.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_bash_allows_detached_agent_hub_rebuild_from_direct_executor(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
+
+        with patch(
+            "app.services.tools.direct_executor_core.run_bash",
+            new_callable=AsyncMock,
+            return_value="queued",
+        ) as mock_run:
+            result = await executor.bash("rebuild.sh --detach agent-hub")
+
+        assert result == "queued"
         mock_run.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -95,7 +146,7 @@ class TestDirectToolExecutor:
             "app.services.tools.direct_executor_core.run_bash",
             new_callable=AsyncMock,
         ) as mock_run:
-            result = await executor.bash("rebuild.sh agent-hub --include-all-workers")
+            result = await executor.bash("systemctl --user restart agent-hub-hatchet-agent-worker.service")
 
         assert "runtime safety" in result.lower()
         assert "hosting worker service" in result.lower()
@@ -114,7 +165,7 @@ class TestDirectToolExecutor:
             "app.services.tools.direct_executor_core.run_bash",
             new_callable=AsyncMock,
         ) as mock_run:
-            result = await executor.bash("rebuild.sh agent-hub")
+            result = await executor.bash("systemctl --user restart agent-hub-hatchet-ops-worker.service")
 
         assert "runtime safety" in result.lower()
         assert "hosting worker service" in result.lower()

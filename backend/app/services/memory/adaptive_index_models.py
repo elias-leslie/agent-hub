@@ -57,7 +57,7 @@ class AdaptiveIndex:
         Example:
             ## Adaptive Index
             **Testing**: AAA pattern [M:abc12345], realistic data [M:def67890]
-            **Git**: NEVER direct commit [M:111222333], use /commit_it [M:444555666]
+            **Git**: NEVER direct commit [M:111222333], use commit.sh [M:444555666]
         """
         if not self.entries:
             return ""

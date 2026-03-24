@@ -20,7 +20,11 @@ from app.workflows._heartbeat_postprocess import (
 def _make_result(**overrides):
     """Create a mock CompletionInternalResult."""
     defaults = {
-        "content": "HEARTBEAT_OK — All systems normal.",
+        "content": (
+            "HEARTBEAT_OK — [[P:started:reviewing permitted projects]] "
+            "[[P:decision:no follow-up dispatch required after verification]] "
+            "[[S:completed:Reviewed the heartbeat state and confirmed no further action was needed.]]"
+        ),
         "session_id": "sess-test-123",
         "turns": 3,
         "tool_calls_count": 5,
@@ -72,34 +76,81 @@ class TestExtractSyntheticSummary:
         summary = _extract_synthetic_summary(content)
         assert summary == "First sentence."
 
+    def test_filters_command_tail_from_heartbeat_summary(self):
+        content = (
+            "HEARTBEAT_ACTION — [[P:tested:dt -q -d passes clean - biome OK, tsc OK, zero errors]] "
+            "Type checks pass. Now commit via `/commit_it`."
+        )
+
+        summary = _extract_synthetic_summary(content)
+
+        assert "/commit_it" not in summary
+        assert "passes clean" in summary or "Type checks pass." in summary
+
 
 class TestValidateHeartbeatFormat:
     """Tests for _validate_heartbeat_format."""
 
     def test_heartbeat_ok_format(self):
-        status, compliant = _validate_heartbeat_format("HEARTBEAT_OK — Everything fine.")
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
+            "HEARTBEAT_OK — [[P:started:reviewing queue]] "
+            "[[P:decision:no action required]] "
+            "[[S:completed:Everything fine.]]"
+        )
         assert status == "success"
         assert compliant is True
+        assert summary_ok is True
+        assert progress_ok is True
 
     def test_heartbeat_action_format(self):
-        status, compliant = _validate_heartbeat_format("HEARTBEAT_ACTION — Deployed fix.")
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
+            "HEARTBEAT_ACTION — [[P:started:repairing queue state]] "
+            "[[P:tested:validation passed after the repair]] "
+            "[[S:completed:Deployed fix.]]"
+        )
         assert status == "action"
         assert compliant is True
+        assert summary_ok is True
+        assert progress_ok is True
+
+    def test_missing_summary_tag_is_noncompliant(self):
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
+            "HEARTBEAT_OK — [[P:started:reviewing queue]] [[P:decision:no action required]]"
+        )
+        assert status == "success"
+        assert compliant is False
+        assert summary_ok is False
+        assert progress_ok is True
+
+    def test_missing_progress_tags_is_noncompliant(self):
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(
+            "HEARTBEAT_OK — Everything fine. [[S:completed:Everything fine.]]"
+        )
+        assert status == "success"
+        assert compliant is False
+        assert summary_ok is True
+        assert progress_ok is False
 
     def test_noncompliant_format(self):
-        status, compliant = _validate_heartbeat_format("I did some stuff today.")
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format("I did some stuff today.")
         assert status == "success"
         assert compliant is False
+        assert summary_ok is False
+        assert progress_ok is False
 
     def test_empty_content(self):
-        status, compliant = _validate_heartbeat_format("")
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format("")
         assert status == "success"
         assert compliant is False
+        assert summary_ok is False
+        assert progress_ok is False
 
     def test_none_content(self):
-        status, compliant = _validate_heartbeat_format(None)
+        status, compliant, summary_ok, progress_ok = _validate_heartbeat_format(None)
         assert status == "success"
         assert compliant is False
+        assert summary_ok is False
+        assert progress_ok is False
 
 
 class TestDetectFollowupReason:
@@ -136,6 +187,8 @@ class TestBuildPerformanceObservation:
         observation = _build_performance_observation(
             result=_make_result(),
             format_ok=True,
+            summary_tag_ok=True,
+            progress_tag_ok=True,
             followup_reason=None,
             completion_review=MagicMock(used=True, decision="complete", reason="Looks good."),
         )
@@ -146,6 +199,8 @@ class TestBuildPerformanceObservation:
         observation = _build_performance_observation(
             result=_make_result(content="Routine sweep complete.", error=None),
             format_ok=False,
+            summary_tag_ok=False,
+            progress_tag_ok=False,
             followup_reason="cleanup_actionable",
             completion_review=MagicMock(
                 used=True,

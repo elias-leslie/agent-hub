@@ -26,7 +26,7 @@ class TestSubagentConfig:
         assert config.system_prompt is None
         assert config.temperature == 1.0
         assert config.thinking_level is None
-        assert config.timeout_seconds == 300.0
+        assert config.timeout_seconds is None
 
     def test_custom_values(self):
         """Test custom configuration."""

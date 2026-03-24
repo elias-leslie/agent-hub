@@ -11,8 +11,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.services.narration_tags import parse_narration_tags
 from app.services.session_health import (
     executing_tool_health_detail,
+    progress_tag_health_detail,
     update_session_health,
 )
 
@@ -54,6 +56,23 @@ async def _extract_narration_from_text(
         )
     except Exception:
         logger.debug("Failed to extract narration from tool-loop text", exc_info=True)
+
+
+async def _session_requires_progress_tags(
+    db: AsyncSession,
+    session_id: str,
+) -> bool:
+    """Return True when the session is task-linked and should emit [[P:...]] tags."""
+    from sqlalchemy import select
+
+    from app.models import Session
+
+    external_id = (
+        await db.execute(
+            select(Session.external_id).where(Session.id == session_id).limit(1)
+        )
+    ).scalar_one_or_none()
+    return bool(external_id and str(external_id).startswith("task-"))
 
 
 async def _process_thinking_block(
@@ -136,11 +155,18 @@ async def _process_assistant_event(
         return 0
     await update_session_health(db, session_id, "processing_response", commit=True)
     tool_calls_increment = 0
+    saw_text_block = False
+    saw_valid_progress_tag = False
     for block in getattr(message, "content", []):
         block_type = getattr(block, "type", None)
         if block_type == "text":
+            saw_text_block = True
             _process_text_block(block, content_parts)
             text = getattr(block, "text", "")
+            if text:
+                tags = parse_narration_tags(text)
+                if tags:
+                    saw_valid_progress_tag = True
             if text and "[[P:" in text:
                 await _extract_narration_from_text(text, db, session_id)
         elif block_type == "thinking":
@@ -152,6 +178,13 @@ async def _process_assistant_event(
                 block, turn, session_id, db, tracker, model_used, agent_id,
                 tool_use_id_to_name=tool_use_id_to_name,
             )
+    if saw_text_block and await _session_requires_progress_tags(db, session_id):
+        await update_session_health(
+            db,
+            session_id,
+            progress_tag_health_detail(saw_valid_progress_tag),
+            commit=True,
+        )
     return tool_calls_increment
 
 

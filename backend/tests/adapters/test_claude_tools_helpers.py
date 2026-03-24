@@ -425,51 +425,6 @@ async def test_stream_sdk_messages_marks_empty_result_at_budget_as_max_turns(
 
 
 @pytest.mark.asyncio
-async def test_stream_sdk_messages_emits_error_message_when_post_tool_progress_stalls(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.adapters import claude_tools_helpers as helpers
-
-    class HangingIterator:
-        def __init__(self) -> None:
-            self._step = 0
-            self._closed = False
-
-        def __aiter__(self) -> HangingIterator:
-            return self
-
-        async def __anext__(self):
-            if self._step == 0:
-                self._step += 1
-                block = types.SimpleNamespace(
-                    type="tool_result",
-                    tool_use_id="tool-1",
-                    content="ok",
-                    is_error=False,
-                )
-                return types.SimpleNamespace(content=[block], subtype=None)
-            while not self._closed:
-                await asyncio.Event().wait()
-            raise StopAsyncIteration
-
-        async def aclose(self) -> None:
-            self._closed = True
-
-    def fake_query(*, prompt, options):
-        return HangingIterator()
-
-    fake_sdk = types.SimpleNamespace(query=fake_query)
-    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
-    monkeypatch.setattr(helpers, "_SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS", 0.01)
-
-    seen = []
-    async for message, _session_id in _stream_sdk_messages("prompt", object(), "claude"):
-        seen.append(type(message).__name__)
-
-    assert seen == ["SimpleNamespace", "ErrorMessage"]
-
-
-@pytest.mark.asyncio
 async def test_stream_sdk_messages_closes_cleanly_when_consumer_stops_early(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -103,14 +103,15 @@ class TestClaudeTimeout:
             assert "timeout" in str(exc_info.value).lower()
 
     @pytest.mark.asyncio
-    async def test_timeout_value_is_300_seconds(self, mock_cli_available: None) -> None:
-        """Test that the timeout is set to 300 seconds for agentic calls."""
+    async def test_complete_does_not_hardcode_300s_timeout(self, mock_cli_available: None) -> None:
+        """Claude CLI completions should not add a local hardcoded 300s timeout."""
         import inspect
 
         import app.adapters.claude_oauth as oauth_module
 
         source = inspect.getsource(oauth_module.complete_oauth)
-        assert "timeout=300" in source or "timeout=300.0" in source
+        assert "timeout=300" not in source
+        assert "timeout=300.0" not in source
 
 
 class TestBuildClaudePrompt:
