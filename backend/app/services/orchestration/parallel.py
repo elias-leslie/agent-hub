@@ -28,9 +28,8 @@ __all__ = ["ParallelExecutor", "ParallelResult", "ParallelTask"]
 class ParallelExecutor:
     """Execute multiple subagents in parallel with concurrency control."""
 
-    def __init__(self, max_concurrency: int = 5, default_timeout: float = 300.0):
+    def __init__(self, max_concurrency: int = 5):
         self._max_concurrency = max_concurrency
-        self._default_timeout = default_timeout
         self._subagent_manager = SubagentManager()
         self._semaphore = asyncio.Semaphore(max_concurrency)
 

@@ -57,7 +57,7 @@ class AsyncAgentHubClient(
         self,
         base_url: str = "http://localhost:8003",
         api_key: str | None = None,
-        timeout: float = 120.0,
+        timeout: float | None = None,
         client_name: str | None = None,
         auto_inject_headers: bool = True,
         client_id: str | None = None,
@@ -195,14 +195,7 @@ class AsyncAgentHubClient(
 
         extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
         headers = self._inject_tracking_headers("sdk.complete", extra_headers=extra_headers)
-        # HTTP timeout must cover all turns. The server enforces per-turn inactivity
-        # timeout internally — the SDK just needs a generous ceiling.
-        if timeout_seconds and max_turns > 1:
-            request_timeout = timeout_seconds * max_turns + 60
-        elif timeout_seconds:
-            request_timeout = timeout_seconds + 30
-        else:
-            request_timeout = self.timeout
+        request_timeout = timeout_seconds if timeout_seconds is not None else self.timeout
         response = await client.post(
             "/api/complete", json=payload, headers=headers, timeout=request_timeout
         )

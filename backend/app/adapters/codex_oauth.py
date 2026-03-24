@@ -40,10 +40,6 @@ from app.adapters.codex_sse import (
 from app.adapters.codex_token_cache import read_cached_token, write_cached_token
 
 logger = logging.getLogger(__name__)
-# Tool-loop followups can take materially longer than ordinary one-shot turns
-# after large tool outputs or repo writes. Keep the normal request timeout tight
-# for standard completions, but give post-tool turns a higher idle budget.
-_TOOL_TURN_TIMEOUT_SECONDS = 300.0
 _EMPTY_FINAL_RESPONSE_MSG = (
     "You have finished tool work but have not produced a final user-facing response. "
     "Write the final response now. "
@@ -254,7 +250,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         resolved_model: str,
         max_tokens: int | None,
         temperature: float,
-        request_timeout: float = DEFAULT_TIMEOUT,
+        request_timeout: float | None = DEFAULT_TIMEOUT,
         **kwargs: Any,
     ) -> CompletionResult:
         """Issue a completion with pre-built Responses input items."""
@@ -346,35 +342,17 @@ class CodexOAuthAdapter(ProviderAdapter):
         empty_closeout_used = False
 
         for turn in range(max_turns):
-            try:
-                result = await asyncio.wait_for(
-                    self._complete_from_input(
-                        input_items=input_items,
-                        instructions=instructions,
-                        resolved_model=resolved_model,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        request_timeout=_TOOL_TURN_TIMEOUT_SECONDS,
-                        tools=tools,
-                        prompt_cache_key=prompt_cache_key,
-                        **kwargs,
-                    ),
-                    timeout=_TOOL_TURN_TIMEOUT_SECONDS,
-                )
-            except TimeoutError:
-                logger.error(
-                    "Codex tool loop turn %s timed out after %.1fs",
-                    turn + 1,
-                    _TOOL_TURN_TIMEOUT_SECONDS,
-                )
-                yield StreamEvent(
-                    type="error",
-                    error=(
-                        "Codex tool loop timed out waiting for the next model response "
-                        f"after {_TOOL_TURN_TIMEOUT_SECONDS:.0f}s"
-                    ),
-                )
-                return
+            result = await self._complete_from_input(
+                input_items=input_items,
+                instructions=instructions,
+                resolved_model=resolved_model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                request_timeout=None,
+                tools=tools,
+                prompt_cache_key=prompt_cache_key,
+                **kwargs,
+            )
 
             total_input_tokens += result.input_tokens or 0
             total_output_tokens += result.output_tokens or 0

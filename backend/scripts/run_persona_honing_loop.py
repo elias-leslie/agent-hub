@@ -78,7 +78,12 @@ class HoningLoopParser(argparse.ArgumentParser):
         self.add_argument("--working-root", default=str(DEFAULT_WORKING_ROOT))
         self.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
         self.add_argument("--seed", type=int, default=DEFAULT_SEED)
-        self.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+        self.add_argument(
+            "--timeout-seconds",
+            type=float,
+            default=DEFAULT_TIMEOUT_SECONDS,
+            help="Optional client HTTP timeout ceiling for each completion request.",
+        )
         self.add_argument("--base-url", default=DEFAULT_BASE_URL)
         self.add_argument("--client-id")
         self.add_argument("--max-iterations", type=int, default=DEFAULT_MAX_ITERATIONS)
@@ -113,7 +118,7 @@ def _build_iteration_kwargs(
     working_root: Path,
     output_dir: Path,
     seed: int,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     client_id: str,
     use_memory: bool,
     benchmark_task_type: str,
@@ -188,7 +193,7 @@ async def run_honing_loop(
     working_root: Path,
     output_dir: Path,
     seed: int,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     client_id: str | None,
     use_memory: bool,
     benchmark_task_type: str,

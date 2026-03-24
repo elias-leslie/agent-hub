@@ -13,7 +13,7 @@ class BaseClientMixin:
         self,
         base_url: str = "http://localhost:8003",
         api_key: str | None = None,
-        timeout: float = 120.0,
+        timeout: float | None = None,
         client_name: str | None = None,
         auto_inject_headers: bool = True,
         client_id: str | None = None,

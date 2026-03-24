@@ -26,7 +26,9 @@ from app.adapters.codex_auth import CodexCredentials
 logger = logging.getLogger(__name__)
 
 CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
-DEFAULT_TIMEOUT = 120.0  # seconds
+# Do not impose a local transport timeout on agent turns. Let the provider or
+# an explicit caller override determine lifetime.
+DEFAULT_TIMEOUT: float | None = None
 
 
 def build_headers(credentials: CodexCredentials) -> dict[str, str]:

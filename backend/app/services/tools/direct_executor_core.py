@@ -329,7 +329,7 @@ class DirectToolExecutor:
         except TypeError as e:
             return f"Invalid arguments for {name}: {e}"
 
-    async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
+    async def bash(self, command: str, timeout: int | None = DEFAULT_TIMEOUT) -> str:
         """Execute a bash command with environment inheritance."""
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"

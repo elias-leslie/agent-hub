@@ -138,11 +138,12 @@ async def execute_subagent(
             "subagent.model": model,
             "subagent.parent_id": parent_id or "",
             "subagent.task_length": len(task),
-            "subagent.timeout_seconds": config.timeout_seconds,
             "subagent.current_depth": config.current_depth,
             "subagent.max_spawn_depth": config.max_spawn_depth,
         },
     ) as span:
+        if config.timeout_seconds is not None:
+            span.set_attribute("subagent.timeout_seconds", config.timeout_seconds)
         logger.info(
             f"Spawning subagent {config.name} ({subagent_id}) "
             f"provider={config.provider} parent={parent_id} trace={effective_trace_id}"
@@ -152,17 +153,25 @@ async def execute_subagent(
         messages = build_messages(task, config, context)
 
         try:
-            # Execute with timeout
-            result = await asyncio.wait_for(
-                adapter.complete(
+            if config.timeout_seconds is None:
+                result = await adapter.complete(
                     messages=messages,
                     model=model,
                     temperature=config.temperature,
                     thinking_level=config.thinking_level,
                     tools=config.tools,
-                ),
-                timeout=config.timeout_seconds,
-            )
+                )
+            else:
+                result = await asyncio.wait_for(
+                    adapter.complete(
+                        messages=messages,
+                        model=model,
+                        temperature=config.temperature,
+                        thinking_level=config.thinking_level,
+                        tools=config.tools,
+                    ),
+                    timeout=config.timeout_seconds,
+                )
 
             # Record success in span
             span.set_attribute("subagent.status", "completed")

@@ -3,7 +3,7 @@
 import shlex
 
 # Default timeout for bash command execution (seconds)
-DEFAULT_TIMEOUT: int = 120
+DEFAULT_TIMEOUT: int | None = None
 
 # Default line limit for read_file tool
 DEFAULT_READ_LIMIT: int = 2000

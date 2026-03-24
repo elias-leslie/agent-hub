@@ -37,7 +37,7 @@ class TestGeminiAdapter:
         assert adapter._api_keys == ["custom-key"]
         call_kwargs = mock_genai.Client.call_args.kwargs
         assert call_kwargs["api_key"] == "custom-key"
-        assert "http_options" in call_kwargs
+        assert "http_options" not in call_kwargs
 
     def test_init_from_credential_manager(self, mock_genai):
         """CredentialManager API keys should populate the failover list."""

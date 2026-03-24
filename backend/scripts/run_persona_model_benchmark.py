@@ -300,7 +300,7 @@ async def _run_one_attempt(
     case_id: str,
     run_number: int,
     working_root: Path,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     keep_workdirs: bool,
     use_memory: bool,
     memory_group_id: str,
@@ -353,7 +353,7 @@ async def _execute_attempt_loop(
     benchmark_id: str,
     project_id: str,
     working_root: Path,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     keep_workdirs: bool,
     use_memory: bool,
     memory_group_id: str,
@@ -390,7 +390,7 @@ async def run_benchmark(
     project_id: str,
     working_root: Path,
     seed: int,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     keep_workdirs: bool,
     base_url: str,
     client_id: str | None,
@@ -461,7 +461,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project-id", default=_DEFAULT_PROJECT_ID, help="Project id for benchmark sessions")
     parser.add_argument("--working-root", default=_DEFAULT_WORKING_ROOT, help="Root directory for temporary benchmark workspaces")
     parser.add_argument("--seed", type=int, default=42, help="Shuffle seed for attempt order")
-    parser.add_argument("--timeout-seconds", type=float, default=180.0, help="Per-turn timeout")
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=None,
+        help="Optional client HTTP timeout ceiling for each completion request.",
+    )
     parser.add_argument("--base-url", default=_DEFAULT_BASE_URL, help="Agent Hub base URL")
     parser.add_argument("--client-id", help="Registered Agent Hub client id for access control")
     parser.add_argument("--output-json", help="Write full JSON result to this path")

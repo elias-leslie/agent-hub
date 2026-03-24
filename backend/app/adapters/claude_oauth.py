@@ -1,6 +1,5 @@
 """OAuth completion logic for Claude adapter."""
 
-import asyncio
 import json
 import logging
 import time
@@ -140,7 +139,7 @@ async def complete_oauth(
     try:
         client = ClaudeSDKClient(options=options)
         async with _sdk_semaphore, client:
-            await asyncio.wait_for(client.query(conversation_prompt), timeout=300.0)
+            await client.query(conversation_prompt)
             structured_output, usage, cache_metrics = await _process_response_stream(
                 client, content_parts, thinking_parts,
             )
@@ -149,6 +148,11 @@ async def complete_oauth(
             cache_metrics, json_mode, sdk_model, provider_name, start_time,
         )
     except TimeoutError as e:
-        raise ProviderError("Claude OAuth timeout: request exceeded 300s", provider=provider_name, retriable=True) from e
+        detail = f": {e}" if str(e) else ""
+        raise ProviderError(
+            f"Claude OAuth timeout{detail}",
+            provider=provider_name,
+            retriable=True,
+        ) from e
     except Exception as e:
         raise ProviderError(f"Claude OAuth error: {e}", provider=provider_name, retriable=True) from e
