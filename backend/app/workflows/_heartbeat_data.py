@@ -7,6 +7,7 @@ import logging
 import re
 import subprocess
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from app.adapters._claude_constants import MCP_TOOL_PREFIX, build_mcp_tool_name
 from app.services.cleanup_summary import build_actionable_cleanup_summary
@@ -38,6 +39,7 @@ _CODING_AGENT_SESSION_STALE_MINUTES = 30
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 _CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
+_WORKSPACE_BASE = Path("/srv/workspaces/projects")
 
 # Contract: workstream inventory states are derived in precedence order.
 # Highest precedence first:
@@ -57,8 +59,29 @@ _CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
 # - mixed / orphaned / reconciled / retired / superseded: informational, no new automatic close path here
 
 
+def _read_project_ports(project_id: str) -> str:
+    """Read backend/frontend ports from a project's .index.yaml (compact, fail-silent)."""
+    index_path = _WORKSPACE_BASE / project_id / ".index.yaml"
+    if not index_path.is_file():
+        return ""
+    try:
+        import yaml
+
+        data = yaml.safe_load(index_path.read_text())
+        if not isinstance(data, dict):
+            return ""
+        services = data.get("services", {})
+        backend = services.get("backend_port")
+        frontend = services.get("frontend_port")
+        if backend and frontend:
+            return f"{backend}/{frontend}"
+        return ""
+    except Exception:
+        return ""
+
+
 async def get_project_access_summary() -> str:
-    """Build a summary of project access tiers for the heartbeat prompt."""
+    """Build a summary of project access tiers with paths and ports for the heartbeat prompt."""
     from sqlalchemy import text
 
     from app.db import async_session
@@ -82,7 +105,18 @@ async def get_project_access_summary() -> str:
     lines = ["Your project access:"]
     for row in rows:
         auto = "auto-exec" if row.auto_exec_enabled else "manual"
-        lines.append(f"- {row.project_id}: {row.permission_tier} ({auto})")
+        parts = [f"{row.project_id}: {row.permission_tier} ({auto})"]
+        workspace_path = _WORKSPACE_BASE / row.project_id
+        if workspace_path.is_dir():
+            parts.append(str(workspace_path))
+            ports = _read_project_ports(row.project_id)
+            if ports:
+                parts.append(ports)
+        lines.append(f"- {' | '.join(parts)}")
+    lines.append(
+        "\nCross-project inspection: use `st` CLI commands — they work from any directory."
+        " Do not cd into project directories or use relative paths from persona-sandbox."
+    )
     return "\n".join(lines)
 
 
