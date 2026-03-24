@@ -66,4 +66,12 @@ describe('fetchApi', () => {
       }),
     )
   })
+
+  it('builds the same-origin chat completion path for browser requests', async () => {
+    vi.stubGlobal('window', { location: { hostname: '192.168.8.244' } } as Window & typeof globalThis)
+
+    const { getCompleteApiUrl } = await import('./api-config')
+
+    expect(getCompleteApiUrl()).toBe('/api/complete')
+  })
 })
