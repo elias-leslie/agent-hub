@@ -1517,6 +1517,56 @@ class TestManageTasks:
         mock_bash.assert_awaited_once_with("st -P summitflow done 42")
 
     @pytest.mark.asyncio
+    async def test_done_falls_back_to_retire_lane_cleanup_for_retired_noop_lane(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                (
+                    "ERROR Diff gate blocked completion: No files changed vs base branch — "
+                    "task has no code changes\n"
+                ),
+                (
+                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
+                    "  LANE summitflow/task-42 [git-worktree]\n"
+                    "To confirm, run:\n"
+                    "  st cleanup lanes task-42 --confirm deadbeef\n"
+                ),
+                "Deleted 1 target(s), 0 error(s)",
+            ]
+        )
+        mock_db = AsyncMock()
+        completed = MagicMock(
+            status="completed",
+            current_branch="task-42/main",
+            created_at=datetime.now(UTC),
+            workstream_status="retired",
+            workstream_note=None,
+            workstream_updated_at=None,
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [completed]
+        mock_db.execute.return_value = mock_result
+        mock_db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await manage_tasks(
+                mock_bash, action="done", task_id="task-42", project_id="summitflow"
+            )
+
+        assert "Fallback: Retired 1 session-backed lane(s) for task-42" in result
+        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow done task-42"
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-42"
+        assert mock_bash.await_args_list[2].args[0] == (
+            "st -P summitflow cleanup lanes task-42 --confirm deadbeef"
+        )
+
+    @pytest.mark.asyncio
     async def test_abandon(self):
         from app.services.tools._executor_io import manage_tasks
 

@@ -12,6 +12,7 @@ from collections.abc import Awaitable, Callable
 from app.services.task_overview_summary import build_actionable_ready_summary
 
 from ._executor_io_lanes import (
+    _NO_CODE_CHANGES_PHRASE,
     _load_task_lane_sessions,
     _reconcile_task_lane,
     _retire_task_lane,
@@ -121,7 +122,20 @@ async def manage_tasks(
         return await handler(bash_fn, task_id, project_id)
     if action in _SIMPLE_TASK_ACTIONS:
         err = _require_task_id(action, task_id)
-        return err if err else await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))
+        if err:
+            return err
+        result = await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))
+        if action == "done" and _NO_CODE_CHANGES_PHRASE in result.lower():
+            sessions = await _load_task_lane_sessions(task_id)
+            if sessions:
+                has_retired_lane = any(
+                    getattr(session, "workstream_status", None) == "retired"
+                    for session in sessions
+                )
+                fallback_handler = _retire_task_lane if has_retired_lane else _reconcile_task_lane
+                fallback = await fallback_handler(bash_fn, task_id, project_id)
+                return f"{result.rstrip()}\nFallback: {fallback}"
+        return result
     return (
         f"Error: Unknown action '{action}'. "
         "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/salvage_orphan/cleanup_all_safe/"
