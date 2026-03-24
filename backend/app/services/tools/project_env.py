@@ -127,7 +127,7 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
     env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
     env.pop("PYTHONHOME", None)
 
-    logger.info(
+    logger.debug(
         "Resolved project venv: %s (working_dir=%s, worktree=%s)",
         venv_path,
         working_dir,

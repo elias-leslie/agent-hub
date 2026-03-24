@@ -183,13 +183,15 @@ async def project_dispatch_overlap_block_reason(
 
 
 async def _run_project_st_command(project_id: str, subcommand: str) -> str:
+    import os
+
     from app.constants.projects import get_known_roots
     from app.services.tools._executor_bash import run_bash
-    from app.services.tools.project_env import build_project_env
 
     root = get_known_roots().get(project_id)
     working_dir = Path(root or ".").resolve()
-    env = build_project_env(working_dir)
+    env = os.environ.copy()
+    env.pop("PYTHONHOME", None)
     return await run_bash(f"st -P {shlex.quote(project_id)} {subcommand}", working_dir, env)
 
 
@@ -208,12 +210,12 @@ async def _ensure_task_lane_context(
     project_id: str, task_id: str,
 ) -> tuple[str | None, str | None, str | None]:
     """Return (branch, worktree, error) for a claimed task lane, claiming if needed."""
-    details = await _run_project_st_command(project_id, f"checkpoints -d {shlex.quote(task_id)}")
+    details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
     if "No checkpoint found" in details:
         claim = await _run_project_st_command(project_id, f"claim {shlex.quote(task_id)}")
         if "Error:" in claim or claim.startswith("ERROR"):
             return None, None, f"Dispatch blocked for {task_id}: {claim.strip()}"
-        details = await _run_project_st_command(project_id, f"checkpoints -d {shlex.quote(task_id)}")
+        details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
 
     branch_match = _BRANCH_RE.search(details)
     worktree_match = _WORKTREE_RE.search(details)
