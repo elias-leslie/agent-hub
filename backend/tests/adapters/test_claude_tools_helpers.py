@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.adapters.claude_tools_helpers import _close_internal_query, _stream_sdk_messages
+from app.adapters.claude_tools_helpers import (
+    _close_internal_query,
+    _sdk_query_via_internal_api,
+    _stream_sdk_messages,
+)
 
 
 class ResultMessage:
@@ -563,6 +567,79 @@ async def test_close_internal_query_skips_query_close_from_foreign_task() -> Non
 
     query_obj.close.assert_not_awaited()
     transport.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_sdk_query_via_internal_api_owns_query_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle: list[str] = []
+
+    class FakeTransport:
+        def __init__(self, *, prompt, options) -> None:
+            self.prompt = prompt
+            self.options = options
+
+        async def connect(self) -> None:
+            lifecycle.append("connect")
+
+        async def write(self, payload: str) -> None:
+            lifecycle.append(f"write:{payload.strip()}")
+
+        async def end_input(self) -> None:
+            lifecycle.append("end_input")
+
+        async def close(self) -> None:
+            lifecycle.append("transport_close")
+
+    class FakeQuery:
+        def __init__(self, **kwargs) -> None:
+            self.kwargs = kwargs
+
+        async def start(self) -> None:
+            lifecycle.append("start")
+
+        async def initialize(self) -> None:
+            lifecycle.append("initialize")
+
+        async def receive_messages(self):
+            yield {"kind": "assistant"}
+
+        async def close(self) -> None:
+            lifecycle.append("query_close")
+
+    def fake_parse_message(data):
+        return types.SimpleNamespace(parsed=data["kind"])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "claude_agent_sdk._internal.message_parser",
+        types.SimpleNamespace(parse_message=fake_parse_message),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "claude_agent_sdk._internal.query",
+        types.SimpleNamespace(Query=FakeQuery),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "claude_agent_sdk._internal.transport.subprocess_cli",
+        types.SimpleNamespace(SubprocessCLITransport=FakeTransport),
+    )
+
+    messages = []
+    async for message in _sdk_query_via_internal_api("hello", types.SimpleNamespace()):
+        messages.append(message.parsed)
+
+    assert messages == ["assistant"]
+    assert lifecycle == [
+        "connect",
+        "start",
+        "initialize",
+        'write:{"type": "user", "session_id": "", "message": {"role": "user", "content": "hello"}, "parent_tool_use_id": null}',
+        "end_input",
+        "query_close",
+    ]
 
 
 @pytest.mark.asyncio
