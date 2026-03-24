@@ -35,17 +35,17 @@ async def test_append_normalized_events_skips_existing_turn_sequence_pair() -> N
 
     with (
         patch(
-            "app.services.session_ingestion.service.get_max_turn",
+            "app.services.session_ingestion._events.get_max_turn",
             new_callable=AsyncMock,
             return_value=1,
         ),
         patch(
-            "app.services.session_ingestion.service.get_max_sequence",
+            "app.services.session_ingestion._events.get_max_sequence",
             new_callable=AsyncMock,
             return_value=1,
         ),
         patch(
-            "app.services.session_ingestion.service.store_event",
+            "app.services.session_ingestion._events.store_event",
             new_callable=AsyncMock,
             return_value=stored_event,
         ) as mock_store,
@@ -91,16 +91,16 @@ async def test_append_normalized_events_single_implicit_event_uses_fast_path() -
 
     with (
         patch(
-            "app.services.session_ingestion.service.store_event",
+            "app.services.session_ingestion._events.store_event",
             new_callable=AsyncMock,
             return_value=stored_event,
         ) as mock_store,
         patch(
-            "app.services.session_ingestion.service.get_max_turn",
+            "app.services.session_ingestion._events.get_max_turn",
             new_callable=AsyncMock,
         ) as mock_get_max_turn,
         patch(
-            "app.services.session_ingestion.service._load_existing_pairs",
+            "app.services.session_ingestion._events._load_existing_pairs",
             new_callable=AsyncMock,
         ) as mock_load_existing_pairs,
     ):
