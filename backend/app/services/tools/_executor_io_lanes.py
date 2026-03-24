@@ -30,7 +30,9 @@ _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
 _NO_CODE_CHANGES_PHRASE = "no files changed vs base branch"
 _STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
 _ADMIN_RECOVERY_PHRASE = "recovery: st done"
+_CLEANUP_NO_MATCHING_LANE_PHRASE = "No matching lane, orphaned snapshots, or stale checkpoints found to clean up."
 _EXEC_LOG_RECENT_MINUTES = 5
+_CONFIRM_TOKEN_RE = re.compile(r"--confirm (?P<token>[0-9a-f]{8})\b")
 _EXEC_LOG_ACTIVE_MARKERS = (
     "Verification failed",
     "Self-heal attempt",
@@ -180,6 +182,35 @@ async def _recover_orphan_running_task(
         f"{result}\n"
         f"Recovered {task_id}: task was running but had no linked Agent Hub sessions and no active checkpoint."
     )
+
+
+async def _cleanup_explicit_lane(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str:
+    """Delete a single lane through the canonical two-pass cleanup command."""
+    preview_cmd = _st_cmd(f"cleanup lanes {shlex.quote(task_id)}", project_id)
+    preview = await bash_fn(preview_cmd)
+    preview_text = preview.strip()
+    if not preview_text:
+        return f"Lane cleanup preview returned no output for {task_id}."
+    if _CLEANUP_NO_MATCHING_LANE_PHRASE in preview_text:
+        return preview_text
+
+    token_match = _CONFIRM_TOKEN_RE.search(preview_text)
+    if not token_match:
+        return (
+            f"Lane cleanup preview for {task_id} did not return a confirm token.\n"
+            f"Preview output: {preview_text}"
+        )
+
+    token = token_match.group("token")
+    confirm_cmd = _st_cmd(
+        f"cleanup lanes {shlex.quote(task_id)} --confirm {token}",
+        project_id,
+    )
+    return (await bash_fn(confirm_cmd)).strip()
 
 
 async def _mark_stale_active_sessions(
@@ -391,11 +422,13 @@ async def _reconcile_task_lane(
             workstream_status="retired",
             note=note,
         )
+        cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
         return (
             f"Reconcile retired no-op lane for {task_id}: diff gate reported no files changed "
             "vs base branch, so the completed session lane was closed as residue and the task "
             "was left open.\n"
-            f"Original result: {result.strip()}"
+            f"Original result: {result.strip()}\n"
+            f"Lane cleanup: {cleanup_result}"
         )
 
     sessions = await _load_task_lane_sessions(task_id)
