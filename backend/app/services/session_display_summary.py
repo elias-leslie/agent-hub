@@ -44,6 +44,14 @@ class SessionDisplaySummaryCandidate:
     live_summary: str | None = None
 
 
+@dataclass(slots=True, frozen=True)
+class SessionDisplaySummaryResult:
+    """Resolved display summary plus whether it came from an explicit [[S:...]] tag."""
+
+    summary: str | None
+    has_summary_tag: bool
+
+
 def _normalize_text(text: str | None) -> str:
     if not text:
         return ""
@@ -213,6 +221,20 @@ def select_display_summary(
     live_summary: str | None = None,
 ) -> str | None:
     """Prefer the latest inline [[S:...]] description, then a clean fallback."""
+    return resolve_display_summary(
+        assistant_messages,
+        summary_oneliner=summary_oneliner,
+        live_summary=live_summary,
+    ).summary
+
+
+def resolve_display_summary(
+    assistant_messages: Sequence[str | None],
+    *,
+    summary_oneliner: str | None = None,
+    live_summary: str | None = None,
+) -> SessionDisplaySummaryResult:
+    """Resolve display summary details for one session."""
     latest_summary_tag: str | None = None
     latest_meaningful_message: str | None = None
 
@@ -244,8 +266,11 @@ def select_display_summary(
         clean_display_summary_text(live_summary),
     ):
         if candidate and not _is_generic_status_text(candidate):
-            return candidate
-    return None
+            return SessionDisplaySummaryResult(
+                summary=candidate,
+                has_summary_tag=latest_summary_tag is not None,
+            )
+    return SessionDisplaySummaryResult(summary=None, has_summary_tag=False)
 
 
 async def fetch_session_display_summaries(
@@ -253,6 +278,18 @@ async def fetch_session_display_summaries(
     candidates: Sequence[SessionDisplaySummaryCandidate],
 ) -> dict[str, str | None]:
     """Resolve display summaries for a set of sessions."""
+    results = await fetch_session_display_summary_results(db, candidates)
+    return {
+        session_id: result.summary
+        for session_id, result in results.items()
+    }
+
+
+async def fetch_session_display_summary_results(
+    db: AsyncSession,
+    candidates: Sequence[SessionDisplaySummaryCandidate],
+) -> dict[str, SessionDisplaySummaryResult]:
+    """Resolve display summary details for a set of sessions."""
     if not candidates:
         return {}
 
@@ -279,7 +316,7 @@ async def fetch_session_display_summaries(
         messages_by_session.setdefault(session_id, []).append(content)
 
     return {
-        candidate.session_id: select_display_summary(
+        candidate.session_id: resolve_display_summary(
             messages_by_session.get(candidate.session_id, []),
             summary_oneliner=candidate.summary_oneliner,
             live_summary=candidate.live_summary,
