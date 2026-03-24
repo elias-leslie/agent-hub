@@ -266,9 +266,14 @@ class TestRecentlyCompletedSessionsSection:
         with (
             patch("app.db.async_session", session_factory),
             patch(
-                "app.workflows._heartbeat_data.fetch_session_display_summaries",
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
                 new_callable=AsyncMock,
-                return_value={"sess-1": "Refactored the tool handler and verified follow-up."},
+                return_value={
+                    "sess-1": MagicMock(
+                        summary="Refactored the tool handler and verified follow-up.",
+                        has_summary_tag=True,
+                    )
+                },
             ),
         ):
             result = await _fetch_recently_completed_sessions_section()
@@ -279,6 +284,81 @@ class TestRecentlyCompletedSessionsSection:
         assert "Refactored the tool handler and verified follow-up." in result
         assert "persona" not in result
         assert "sessions.agent_slug != :agent_slug_1" in executed_query
+
+    @pytest.mark.asyncio
+    async def test_skips_sessions_without_clean_display_summary(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                MagicMock(
+                    id="sess-noisy",
+                    agent_slug="coder",
+                    project_id="agent-hub",
+                    summary_oneliner="Noisy fallback summary",
+                    created_at=now,
+                ),
+                MagicMock(
+                    id="sess-clean",
+                    agent_slug="refactor",
+                    project_id="summitflow",
+                    summary_oneliner="Refactored cleanup flow",
+                    created_at=now,
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "sess-noisy": MagicMock(summary=None, has_summary_tag=False),
+                    "sess-clean": MagicMock(
+                        summary="Refactored cleanup flow and verified the lane state.",
+                        has_summary_tag=True,
+                    ),
+                },
+            ),
+        ):
+            result = await _fetch_recently_completed_sessions_section()
+
+        assert "Recently completed sessions: 1" in result
+        assert "sess-noisy" not in result
+        assert "summitflow" in result
+        assert "Refactored cleanup flow and verified the lane state." in result
+
+    @pytest.mark.asyncio
+    async def test_skips_sessions_without_explicit_summary_tag(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                MagicMock(
+                    id="sess-fallback",
+                    agent_slug="coder",
+                    project_id="agent-hub",
+                    summary_oneliner="Fallback summary",
+                    created_at=now,
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "sess-fallback": MagicMock(
+                        summary="Fallback summary cleaned from prose.",
+                        has_summary_tag=False,
+                    )
+                },
+            ),
+        ):
+            result = await _fetch_recently_completed_sessions_section()
+
+        assert result == ""
 
 
 class TestActiveWorkSummary:

@@ -340,6 +340,48 @@ class TestReferenceInjection:
         assert context.debug_info["reference_count"] == 0
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_allows_query_selected_references_for_heartbeat_when_enabled(
+        self,
+    ) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        selector = AsyncMock(
+            return_value=[
+                _reference_result(
+                    "f2ae2668-da26-46e1-b499-ffac6141e377",
+                    "**Session Surfaces**: Use st sessions ownership for normalized lane truth.",
+                ).model_dump()
+            ]
+        )
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=selector,
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Run the heartbeat now and review dynamic sections.",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                task_type="heartbeat",
+                memory_config={"query_reference_selection_enabled": True},
+            )
+
+        selector.assert_awaited_once()
+        assert [item.uuid for item in context.reference] == [
+            "f2ae2668-da26-46e1-b499-ffac6141e377"
+        ]
+        assert context.debug_info["reference_count"] == 1
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_injects_query_selected_references_for_wake(self) -> None:
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
         selector = AsyncMock(

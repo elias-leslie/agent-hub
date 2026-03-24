@@ -20,7 +20,7 @@ from app.services.ownership_lanes import (
 )
 from app.services.session_display_summary import (
     SessionDisplaySummaryCandidate,
-    fetch_session_display_summaries,
+    fetch_session_display_summary_results,
 )
 from app.services.task_overview_summary import (
     build_compact_task_overview,
@@ -364,7 +364,7 @@ async def _fetch_recently_completed_sessions_section() -> str:
                 .limit(10)
             )
             rows = list(result.all())
-            display_summaries = await fetch_session_display_summaries(
+            display_summaries = await fetch_session_display_summary_results(
                 db,
                 [
                     SessionDisplaySummaryCandidate(
@@ -377,14 +377,27 @@ async def _fetch_recently_completed_sessions_section() -> str:
 
         if not rows:
             return ""
-        lines = [f"Recently completed sessions: {len(rows)}"]
+
+        rendered_rows: list[tuple[object, str]] = []
         for row in rows:
             ago = int((now - row.created_at).total_seconds() / 60)
             time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
-            summary = display_summaries.get(row.id) or row.summary_oneliner
-            lines.append(
+            summary_result = display_summaries.get(row.id)
+            if not summary_result or not summary_result.summary or not summary_result.has_summary_tag:
+                continue
+            rendered_rows.append((
+                row,
                 f"- {row.agent_slug or '?'} on {row.project_id}: "
-                f"{summary} ({time_label})"
+                f"{summary_result.summary} ({time_label})",
+            ))
+
+        if not rendered_rows:
+            return ""
+
+        lines = [f"Recently completed sessions: {len(rendered_rows)}"]
+        for _row, rendered in rendered_rows:
+            lines.append(
+                rendered
             )
         return "\n".join(lines)
     except Exception:
