@@ -470,16 +470,13 @@ export function UnifiedPersonaWorkspace({
           setMatchCount(data.match_count);
           setPulse(data.pulse ?? EMPTY_PULSE);
           setError(null);
+          setLoading(false);
         });
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load stream");
           setPulse(EMPTY_PULSE);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
           setLoading(false);
         }
       });
@@ -511,11 +508,15 @@ export function UnifiedPersonaWorkspace({
     }
     initialViewportSettledRef.current = true;
     clearInitialViewportTimeout();
+    // Use rAF to ensure the browser has laid out all rendered items before scrolling.
+    // A plain setTimeout(0) can fire before layout is complete on large feeds.
     initialViewportTimeoutRef.current = window.setTimeout(() => {
-      scrollToBottom("auto");
-      setIsAtBottom(true);
-      markLatestAsRead();
-      initialViewportTimeoutRef.current = null;
+      requestAnimationFrame(() => {
+        scrollToBottom("auto");
+        setIsAtBottom(true);
+        markLatestAsRead();
+        initialViewportTimeoutRef.current = null;
+      });
     }, 0);
     return () => clearInitialViewportTimeout();
   }, [anchorEntryId, autoFollow, clearInitialViewportTimeout, deferredSearch, focusSessionId, hydratedEntries.length, loading, messages.length]);
