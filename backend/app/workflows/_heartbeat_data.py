@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -159,30 +158,6 @@ async def get_project_access_summary() -> str:
         " Do not cd into project directories or use relative paths from persona-sandbox."
     )
     return "\n".join(lines)
-
-
-async def _run_st_command(
-    cmd: list[str],
-    *,
-    timeout: int = 15,
-    failure_log: str,
-) -> str:
-    """Run an `st` command off the event loop and return stripped stdout."""
-    try:
-        proc = await asyncio.to_thread(
-            subprocess.run,
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except Exception:
-        logger.debug(failure_log, exc_info=True)
-        return ""
-    stdout = proc.stdout
-    if isinstance(stdout, bytes):
-        stdout = stdout.decode(errors="replace")
-    return stdout.strip() if isinstance(stdout, str) else ""
 
 
 async def _fetch_summitflow_json(endpoint: str, *, failure_log: str) -> dict[str, Any] | None:
@@ -1301,7 +1276,6 @@ __all__ = [
     "_query_active_sessions_for_heartbeat",
     "_query_active_specialist_sessions",
     "_query_recent_workstream_sessions",
-    "_run_st_command",
     "_session_display_health",
     "_session_stale_threshold_minutes",
     "_tool_call",
