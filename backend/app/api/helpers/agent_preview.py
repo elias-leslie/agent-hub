@@ -7,7 +7,11 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.agent_dto import AgentDTO
-from app.services.memory.context_builder_settings import resolve_memory_config_includes
+from app.services.memory.context_builder_settings import (
+    memory_injection_enabled,
+    resolve_memory_config_includes,
+    resolve_runtime_prompt_includes,
+)
 from app.services.memory.context_injector import (
     build_progressive_context,
     extract_query_from_messages,
@@ -19,6 +23,19 @@ from app.services.runtime_prompt_stack import (
     collect_runtime_prompt_sections,
     join_runtime_prompt_sections,
 )
+
+
+class _EmptyPreviewContext:
+    def __init__(self) -> None:
+        self.mandates: list[Any] = []
+        self.guardrails: list[Any] = []
+        self.debug_info: dict[str, Any] = {}
+
+    def get_loaded_uuids(self) -> list[str]:
+        return []
+
+    def get_reference_uuids(self) -> list[str]:
+        return []
 
 
 async def _build_task_prompt_preview(
@@ -86,11 +103,23 @@ async def build_agent_preview(
     prompt_input: str | None = None,
 ) -> dict[str, Any]:
     """Build agent preview with runtime system sections, task prompt, and memory injection."""
+    agent_memory_config = agent.memory_config
+    include_mandates, include_guardrails, include_references = resolve_memory_config_includes(
+        agent_memory_config
+    )
+    injection_enabled = memory_injection_enabled(agent_memory_config)
+    runtime_include_mandates, runtime_include_guardrails = resolve_runtime_prompt_includes(
+        agent_memory_config
+    )
+    runtime_sections: list[RuntimePromptSection] = []
     runtime_sections = await collect_runtime_prompt_sections(
         db,
         agent,
         task_type=None if task_type == "chat" else task_type,
         project_id=project_id,
+        include_global_prompts=True,
+        include_mandates=runtime_include_mandates,
+        include_guardrails=runtime_include_guardrails,
     )
     combined = join_runtime_prompt_sections(runtime_sections)
 
@@ -115,27 +144,27 @@ async def build_agent_preview(
 
     scope, scope_id = _memory_scope_for_project(project_id)
     memory_query = _build_preview_memory_query(task_prompt, prompt_input)
-    include_mandates, include_guardrails, include_references = resolve_memory_config_includes(
-        agent.memory_config
-    )
-    context = await build_progressive_context(
-        query=memory_query,
-        scope=scope,
-        scope_id=scope_id,
-        include_mandates=include_mandates,
-        include_guardrails=include_guardrails,
-        include_references=include_references,
-        task_type=None if task_type == "chat" else task_type,
-        phase=phase,
-        memory_config=agent.memory_config,
-        consumer_profile="agent_preview",
-    )
-
-    formatted_memory = format_progressive_context(
-        context,
-        include_citations=True,
-        consumer_profile="agent_preview",
-    )
+    if injection_enabled:
+        context = await build_progressive_context(
+            query=memory_query,
+            scope=scope,
+            scope_id=scope_id,
+            include_mandates=include_mandates,
+            include_guardrails=include_guardrails,
+            include_references=include_references,
+            task_type=None if task_type == "chat" else task_type,
+            phase=phase,
+            memory_config=agent_memory_config,
+            consumer_profile="agent_preview",
+        )
+        formatted_memory = format_progressive_context(
+            context,
+            include_citations=True,
+            consumer_profile="agent_preview",
+        )
+    else:
+        context = _EmptyPreviewContext()
+        formatted_memory = ""
     if formatted_memory:
         combined = f"{combined}\n\n{formatted_memory}" if combined else formatted_memory
         runtime_sections.append(

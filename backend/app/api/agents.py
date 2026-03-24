@@ -24,12 +24,28 @@ from app.api.schemas.agent_schemas import (
     AgentUpdateRequest,
 )
 from app.db import get_db
-from app.services.agent_service import get_agent_service
+from app.services.agent_service import AgentDTO, get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
+from app.services.memory.context_builder_settings import resolve_effective_memory_config
+from app.services.memory.settings import get_memory_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+async def _build_agent_response(
+    db: AsyncSession,
+    agent: AgentDTO,
+) -> AgentResponse:
+    settings = await get_memory_settings(db)
+    return AgentResponse.from_dto(
+        agent,
+        effective_memory_config=resolve_effective_memory_config(
+            settings,
+            agent.memory_config,
+        ),
+    )
 
 
 @router.get("", response_model=AgentListResponse)
@@ -53,8 +69,18 @@ async def list_agents(
         db, active_only=active_only, coding_only=is_coding_agent, limit=limit, offset=offset
     )
 
+    settings = await get_memory_settings(db)
     return AgentListResponse(
-        agents=[AgentResponse.from_dto(a) for a in agents],
+        agents=[
+            AgentResponse.from_dto(
+                agent,
+                effective_memory_config=resolve_effective_memory_config(
+                    settings,
+                    agent.memory_config,
+                ),
+            )
+            for agent in agents
+        ],
         total=len(agents),
     )
 
@@ -72,7 +98,7 @@ async def get_agent(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    return AgentResponse.from_dto(agent)
+    return await _build_agent_response(db, agent)
 
 
 @router.post("", response_model=AgentResponse, status_code=201)
@@ -117,7 +143,7 @@ async def create_agent(
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
-        return AgentResponse.from_dto(agent)
+        return await _build_agent_response(db, agent)
     except HTTPException:
         raise
     except Exception as e:
@@ -177,7 +203,7 @@ async def update_agent(
             raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
         logger.info(f"Updated agent: {slug} to version {updated.version}")
-        return AgentResponse.from_dto(updated)
+        return await _build_agent_response(db, updated)
     except HTTPException:
         raise
     except Exception as e:

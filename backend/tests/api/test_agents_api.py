@@ -13,6 +13,7 @@ import pytest
 
 from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.agent_service import AgentDTO
+from app.services.memory.settings import MemorySettingsDTO
 
 
 # Helper to create mock AgentDTO
@@ -50,6 +51,22 @@ def make_mock_dto(
     return AgentDTO(id=id, slug=slug, name=name, **defaults)
 
 
+@pytest.fixture(autouse=True)
+def _mock_memory_settings() -> MemorySettingsDTO:
+    settings = MemorySettingsDTO(
+        enabled=True,
+        budget_enabled=True,
+        total_budget=3500,
+        continuity_enabled=True,
+        continuity_max_sessions=5,
+    )
+    with patch(
+        "app.api.agents.get_memory_settings",
+        new=AsyncMock(return_value=settings),
+    ):
+        yield settings
+
+
 class TestAgentListEndpoint:
     """Tests for GET /api/agents endpoint."""
 
@@ -70,6 +87,7 @@ class TestAgentListEndpoint:
             assert "agents" in data
             assert len(data["agents"]) == 1
             assert data["agents"][0]["slug"] == "coder"
+            assert data["agents"][0]["effective_memory_config"]["injection_enabled"] is True
 
     @pytest.mark.asyncio
     async def test_list_agents_with_inactive_filter(self, api_client):
@@ -104,6 +122,7 @@ class TestAgentDetailEndpoint:
             data = response.json()
             assert data["slug"] == "coder"
             assert data["name"] == "Code Generator"
+            assert data["effective_memory_config"]["continuity_max_sessions"] == 5
 
     @pytest.mark.asyncio
     async def test_get_agent_returns_404_for_missing(self, api_client):

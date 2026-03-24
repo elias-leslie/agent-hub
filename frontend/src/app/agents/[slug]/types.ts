@@ -40,6 +40,7 @@ export interface Agent {
   is_coding_agent: boolean;
   tool_permissions: PermissionConfig | null;
   memory_config: (MemoryConfig & Record<string, unknown>) | null;
+  effective_memory_config: MemoryConfig & Record<string, unknown>;
   max_concurrency: number | null;
   max_subagent_concurrency: number | null;
   daily_token_budget: number | null;

@@ -1,20 +1,75 @@
 import { MemoryConfig } from "./types";
-import { DEFAULT_CONFIG } from "./constants";
+
+const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
+  injection_enabled: true,
+  include_mandates: true,
+  include_guardrails: true,
+  include_references: true,
+  continuity_enabled: true,
+  continuity_max_sessions: 5,
+  audience_tags: [],
+  exclude_tags: [],
+};
+
+const KNOWN_KEYS = new Set([
+  "enabled",
+  "injection_enabled",
+  "include_mandates",
+  "include_guardrails",
+  "include_references",
+  "continuity_enabled",
+  "continuity_max_sessions",
+  "audience_tags",
+  "exclude_tags",
+]);
+
+function parseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item, index, items) => item.length > 0 && items.indexOf(item) === index);
+}
+
+export function createDefaultConfig(): MemoryConfig {
+  return {
+    ...DEFAULT_MEMORY_CONFIG,
+    audience_tags: [...DEFAULT_MEMORY_CONFIG.audience_tags],
+    exclude_tags: [...DEFAULT_MEMORY_CONFIG.exclude_tags],
+  };
+}
 
 export function parseConfig(raw: Record<string, unknown> | null): MemoryConfig {
-  if (!raw) return { ...DEFAULT_CONFIG };
+  if (!raw) return createDefaultConfig();
+  const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true;
+  const injectionEnabled =
+    typeof raw.injection_enabled === "boolean" ? raw.injection_enabled : true;
+  const extras = Object.fromEntries(
+    Object.entries(raw).filter(([key]) => !KNOWN_KEYS.has(key))
+  );
   return {
-    injection_enabled:
-      (raw.injection_enabled as boolean | undefined) ??
-      (raw.enabled as boolean | undefined) ??
-      true,
-    include_mandates: (raw.include_mandates as boolean | undefined) ?? true,
-    include_guardrails: (raw.include_guardrails as boolean | undefined) ?? true,
-    include_references: (raw.include_references as boolean | undefined) ?? true,
-    continuity_enabled: (raw.continuity_enabled as boolean) ?? true,
-    continuity_max_sessions: (raw.continuity_max_sessions as number) ?? 5,
-    audience_tags: (raw.audience_tags as string[] | undefined) ?? [],
-    exclude_tags: (raw.exclude_tags as string[]) ?? [],
+    ...extras,
+    injection_enabled: enabled && injectionEnabled,
+    include_mandates:
+      typeof raw.include_mandates === "boolean" ? raw.include_mandates : true,
+    include_guardrails:
+      typeof raw.include_guardrails === "boolean" ? raw.include_guardrails : true,
+    include_references:
+      typeof raw.include_references === "boolean"
+        ? raw.include_references
+        : true,
+    continuity_enabled:
+      typeof raw.continuity_enabled === "boolean"
+        ? raw.continuity_enabled
+        : true,
+    continuity_max_sessions:
+      typeof raw.continuity_max_sessions === "number" &&
+      Number.isInteger(raw.continuity_max_sessions) &&
+      raw.continuity_max_sessions >= 1
+        ? raw.continuity_max_sessions
+        : 5,
+    audience_tags: parseStringArray(raw.audience_tags),
+    exclude_tags: parseStringArray(raw.exclude_tags),
   };
 }
 

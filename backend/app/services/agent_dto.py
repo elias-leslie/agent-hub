@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from app.models import Agent
+from app.services.memory.context_builder_settings import normalize_memory_config
 
 
 @dataclass
@@ -55,7 +56,7 @@ class AgentDTO:
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
             tool_permissions=agent.tool_permissions,
-            memory_config=agent.memory_config,
+            memory_config=normalize_memory_config(agent.memory_config),
             max_concurrency=agent.max_concurrency,
             max_subagent_concurrency=agent.max_subagent_concurrency,
             daily_token_budget=agent.daily_token_budget,
@@ -114,7 +115,7 @@ class AgentDTO:
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
             tool_permissions=data.get("tool_permissions"),
-            memory_config=data.get("memory_config"),
+            memory_config=normalize_memory_config(data.get("memory_config")),
             max_concurrency=data.get("max_concurrency"),
             max_subagent_concurrency=data.get("max_subagent_concurrency"),
             daily_token_budget=data.get("daily_token_budget"),

@@ -372,51 +372,6 @@ async def get_distinct_roles(db: AsyncSession) -> list[str]:
     return [row[0] for row in result.all()]
 
 
-async def build_prompt_context(
-    db: AsyncSession,
-    agent_id: int,
-    *,
-    include_roles: list[str] | None = None,
-    exclude_roles: list[str] | None = None,
-    agent_slug: str | None = None,
-) -> str:
-    """Compose global prompts + agent's role-assigned prompts into a single block.
-
-    Composition order:
-    1. Global prompts (is_global=true, ordered by slug) — skipping any that exclude this agent
-    2. Agent's assigned prompts (ordered by priority ASC)
-
-    Args:
-        db: Database session
-        agent_id: Agent ID
-        include_roles: When provided, only include agent assignments with matching roles.
-            When None (default), includes all assignments (backwards compatible).
-        agent_slug: When provided, skip global prompts whose exclude_agents list
-            contains this slug.
-    """
-    sections: list[str] = []
-
-    global_prompts = await get_all_prompts(db, is_global=True)
-    for p in global_prompts:
-        if not p.enabled:
-            continue
-        if agent_slug and p.exclude_agents and agent_slug in p.exclude_agents:
-            logger.debug("Skipping global prompt '%s' (excluded for agent '%s')", p.slug, agent_slug)
-            continue
-        sections.append(p.content)
-
-    agent_assignments = await get_agent_prompts(
-        db,
-        agent_id,
-        include_roles=include_roles,
-        exclude_roles=exclude_roles,
-    )
-    for ap in agent_assignments:
-        if not ap.prompt.enabled:
-            continue
-        sections.append(ap.prompt.content)
-
-    return "\n\n".join(sections)
 
 
 async def get_prompt_content(slug: str, default: str) -> str:

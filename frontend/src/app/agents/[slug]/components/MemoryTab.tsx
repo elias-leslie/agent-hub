@@ -1,10 +1,8 @@
 "use client";
 
 import { Brain, Settings2 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Agent } from "../types";
 import { parseConfig } from "./memory/utils";
-import { DEFAULT_CONFIG } from "./memory/constants";
 import { Toggle } from "./memory/Toggle";
 import { MemoryConfigSection } from "./memory/MemoryConfigSection";
 import { TagFilteringSection } from "./memory/TagFilteringSection";
@@ -17,7 +15,10 @@ interface MemoryTabProps {
 
 export function MemoryTab({ formData, updateField }: MemoryTabProps) {
   const isCustomEnabled = formData.memory_config != null;
-  const config = parseConfig(formData.memory_config ?? null);
+  const effectiveConfig = parseConfig(formData.effective_memory_config ?? null);
+  const config = isCustomEnabled
+    ? parseConfig(formData.memory_config ?? null)
+    : effectiveConfig;
 
   const updateConfig = (updates: Partial<MemoryConfig>) => {
     const newConfig = { ...config, ...updates };
@@ -28,7 +29,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
     if (isCustomEnabled) {
       updateField("memory_config", null);
     } else {
-      updateField("memory_config", { ...DEFAULT_CONFIG });
+      updateField("memory_config", { ...effectiveConfig });
     }
   };
 
@@ -49,7 +50,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
         updateField(
           "memory_config",
           {
-            ...DEFAULT_CONFIG,
+            ...effectiveConfig,
             [field]: tags,
             [otherField]: otherTags,
           } as unknown as Agent["memory_config"]
@@ -83,7 +84,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             <p className="text-xs text-slate-400">
               {isCustomEnabled
                 ? "Using per-agent memory configuration"
-                : "Using global memory settings"}
+                : "Using inherited memory baseline"}
             </p>
           </div>
         </div>

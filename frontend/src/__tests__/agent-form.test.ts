@@ -23,6 +23,16 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     is_coding_agent: false,
     tool_permissions: null,
     memory_config: null,
+    effective_memory_config: {
+      injection_enabled: true,
+      include_mandates: true,
+      include_guardrails: true,
+      include_references: true,
+      continuity_enabled: true,
+      continuity_max_sessions: 5,
+      audience_tags: [],
+      exclude_tags: [],
+    },
     max_concurrency: 4,
     max_subagent_concurrency: 2,
     daily_token_budget: 200000,
@@ -41,6 +51,9 @@ describe("agent form helpers", () => {
 
     expect(formData.name).toBe("Persona");
     expect(formData.primary_model_id).toBe("claude-sonnet-4-6");
+    expect(formData.effective_memory_config).toEqual(
+      makeAgent().effective_memory_config
+    );
     expect(formData.max_concurrency).toBe(4);
     expect(formData.daily_token_budget).toBe(200000);
     expect(formData.timeout_seconds).toBe(90);
@@ -63,5 +76,61 @@ describe("agent form helpers", () => {
       hourly_request_limit: 30,
       timeout_seconds: null,
     });
+  });
+
+  it("preserves memory_config as a single payload", () => {
+    const memoryConfig = {
+      injection_enabled: false,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: false,
+      continuity_enabled: false,
+      continuity_max_sessions: 5,
+      audience_tags: [],
+      exclude_tags: [],
+    };
+
+    const payload = buildAgentUpdatePayload({
+      name: "Note Titler",
+      primary_model_id: "gemini-2.5-flash-lite",
+      memory_config: memoryConfig,
+    });
+
+    expect(payload.memory_config).toEqual(memoryConfig);
+  });
+
+  it("normalizes sparse memory_config while preserving extra keys", () => {
+    const payload = buildAgentUpdatePayload({
+      name: "Voice Responder",
+      primary_model_id: "claude-sonnet-4-6",
+      memory_config: {
+        include_mandates: false,
+        include_guardrails: false,
+        include_references: true,
+        cross_project_enabled: true,
+      } as unknown as Agent["memory_config"],
+    });
+
+    expect(payload.memory_config).toEqual({
+      injection_enabled: true,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: true,
+      continuity_enabled: true,
+      continuity_max_sessions: 5,
+      audience_tags: [],
+      exclude_tags: [],
+      cross_project_enabled: true,
+    });
+  });
+
+  it("strips effective_memory_config from update payloads", () => {
+    const payload = buildAgentUpdatePayload({
+      name: "Voice Responder",
+      primary_model_id: "claude-sonnet-4-6",
+      effective_memory_config: makeAgent().effective_memory_config,
+    });
+
+    expect(payload.effective_memory_config).toBeUndefined();
   });
 });

@@ -9,6 +9,8 @@ import json
 import logging
 from typing import Any
 
+from app.services.memory.context_builder_settings import normalize_memory_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +54,8 @@ def _merge_tag_values(
 
 
 def _copy_memory_config(memory_config: object) -> dict[str, object]:
-    return dict(memory_config) if isinstance(memory_config, dict) else {}  # type: ignore[arg-type]
+    normalized = normalize_memory_config(memory_config if isinstance(memory_config, dict) else None)
+    return dict(normalized) if normalized else {}
 
 
 def _format_agent_details(agent: Any) -> str:

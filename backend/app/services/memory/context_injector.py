@@ -11,7 +11,10 @@ import time
 from typing import Any
 
 from .context_builder import ProgressiveContext, build_progressive_context
-from .context_builder_settings import resolve_memory_config_includes
+from .context_builder_settings import (
+    resolve_continuity_settings,
+    resolve_memory_config_includes,
+)
 from .context_injector_formatter import (
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
@@ -72,24 +75,6 @@ def extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
     return None
 
 
-async def _resolve_continuity_settings(
-    settings: Any,
-    memory_config: dict[str, Any] | None,
-) -> tuple[bool, int, bool, bool]:
-    """Resolve continuity settings from memory_config (per-agent) or global settings.
-
-    Returns (continuity_enabled, max_sessions, include_cross_project, include_live_sessions).
-    """
-    def cfg(key: str, default: Any) -> Any:
-        return memory_config.get(key, default) if memory_config else default
-
-    continuity_enabled = cfg("continuity_enabled", settings.continuity_enabled)
-    max_sessions = cfg("continuity_max_sessions", settings.continuity_max_sessions)
-    include_cross_project = cfg("cross_project_enabled", True)
-    include_live_sessions = cfg("live_sessions_enabled", False)
-    return continuity_enabled, max_sessions, include_cross_project, include_live_sessions
-
-
 async def _get_continuity_markdown(
     scope: MemoryScope,
     scope_id: str | None,
@@ -109,7 +94,7 @@ async def _get_continuity_markdown(
     try:
         settings = await get_memory_settings()
         continuity_enabled, max_sessions, include_cross_project, include_live_sessions = (
-            await _resolve_continuity_settings(settings, memory_config)
+            resolve_continuity_settings(settings, memory_config)
         )
         if not continuity_enabled:
             logger.debug("Continuity skipped: continuity_enabled=False for project=%s", scope_id)

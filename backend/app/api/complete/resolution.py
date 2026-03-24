@@ -12,6 +12,9 @@ from app.services.agent_routing import (
     inject_agent_mandates,
     resolve_agent,
 )
+from app.services.memory.context_builder_settings import (
+    resolve_runtime_prompt_includes,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,10 +60,21 @@ async def resolve_agent_and_model(
         resolved_model = resolved_agent.model
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug
-        agent_mandate_injection = await inject_agent_mandates(
-            resolved_agent.agent, db, include_roles=request.include_roles,
-            project_id=request.project_id, task_type=request.task_type,
+        agent_memory_config = resolved_agent.agent.memory_config
+        include_mandates, include_guardrails = resolve_runtime_prompt_includes(
+            agent_memory_config
         )
+        agent_mandate_injection = await inject_agent_mandates(
+            resolved_agent.agent,
+            db,
+            include_roles=request.include_roles,
+            include_mandates=include_mandates,
+            include_guardrails=include_guardrails,
+            project_id=request.project_id,
+            task_type=request.task_type,
+        )
+        if not agent_mandate_injection.system_content.strip():
+            agent_mandate_injection = None
         logger.debug(
             f"DEBUG[{request_hash}] Agent routing: {request.agent_slug} -> {resolved_model}"
         )
