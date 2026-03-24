@@ -17,12 +17,10 @@ from app.services.agent_benchmark_service import (
     summarize_benchmark_experiment,
 )
 from scripts.completion_review_benchmark_eval import (
-    CompletionReviewBenchmarkAttempt,
     CompletionReviewBenchmarkRun,
     summarize_completion_review_attempts,
 )
 from scripts.persona_benchmark_eval import (
-    PersonaBenchmarkAttempt,
     PersonaBenchmarkRun,
     summarize_attempts,
 )
@@ -71,79 +69,52 @@ async def _load_recent_improvement_signals(project_id: str) -> str | None:
         days_back=7,
         include_team=True,
     )
-    if not review.strip():
-        return None
-    return review
+    return review.strip() or None
+
+
+def _merge_benchmark_runs(runs: list[Any], *, benchmark_id: str, summarize_fn: Any) -> Any:
+    """Generic run merger for PersonaBenchmarkRun and CompletionReviewBenchmarkRun."""
+    if not runs:
+        raise ValueError("Cannot merge empty benchmark run list")
+    attempts: list[Any] = []
+    models: list[str] = []
+    case_ids: list[str] = []
+    for run in runs:
+        attempts.extend(run.attempts)
+        for m in run.models:
+            if m not in models:
+                models.append(m)
+        for c in run.case_ids:
+            if c not in case_ids:
+                case_ids.append(c)
+    return type(runs[0])(
+        benchmark_id=benchmark_id,
+        project_id=runs[0].project_id,
+        models=models,
+        case_ids=case_ids,
+        runs_per_case=sum(r.runs_per_case for r in runs),
+        started_at=runs[0].started_at,
+        completed_at=runs[-1].completed_at,
+        attempts=attempts,
+        summaries=summarize_fn(attempts),
+    )
 
 
 def _merge_runs(runs: list[PersonaBenchmarkRun], *, benchmark_id: str) -> PersonaBenchmarkRun:
-    if not runs:
-        raise ValueError("Cannot merge empty benchmark run list")
-    attempts: list[PersonaBenchmarkAttempt] = []
-    models: list[str] = []
-    case_ids: list[str] = []
-    for run in runs:
-        attempts.extend(run.attempts)
-        for model_id in run.models:
-            if model_id not in models:
-                models.append(model_id)
-        for case_id in run.case_ids:
-            if case_id not in case_ids:
-                case_ids.append(case_id)
-    return PersonaBenchmarkRun(
-        benchmark_id=benchmark_id,
-        project_id=runs[0].project_id,
-        models=models,
-        case_ids=case_ids,
-        runs_per_case=sum(run.runs_per_case for run in runs),
-        started_at=runs[0].started_at,
-        completed_at=runs[-1].completed_at,
-        attempts=attempts,
-        summaries=summarize_attempts(attempts),
-    )
+    return _merge_benchmark_runs(runs, benchmark_id=benchmark_id, summarize_fn=summarize_attempts)  # type: ignore[return-value]
 
 
 def _merge_review_runs(
-    runs: list[CompletionReviewBenchmarkRun],
-    *,
-    benchmark_id: str,
+    runs: list[CompletionReviewBenchmarkRun], *, benchmark_id: str
 ) -> CompletionReviewBenchmarkRun:
-    if not runs:
-        raise ValueError("Cannot merge empty completion-review benchmark run list")
-    attempts: list[CompletionReviewBenchmarkAttempt] = []
-    models: list[str] = []
-    case_ids: list[str] = []
-    for run in runs:
-        attempts.extend(run.attempts)
-        for model_id in run.models:
-            if model_id not in models:
-                models.append(model_id)
-        for case_id in run.case_ids:
-            if case_id not in case_ids:
-                case_ids.append(case_id)
-    return CompletionReviewBenchmarkRun(
-        benchmark_id=benchmark_id,
-        project_id=runs[0].project_id,
-        models=models,
-        case_ids=case_ids,
-        runs_per_case=sum(run.runs_per_case for run in runs),
-        started_at=runs[0].started_at,
-        completed_at=runs[-1].completed_at,
-        attempts=attempts,
-        summaries=summarize_completion_review_attempts(attempts),
-    )
+    return _merge_benchmark_runs(runs, benchmark_id=benchmark_id, summarize_fn=summarize_completion_review_attempts)  # type: ignore[return-value]
 
 
-def _cohort_run_summary(
-    run: Any,
-    *,
-    cohort: str,
-    config_snapshot: dict[str, Any],
-) -> SimpleNamespace:
-    attempt_count = len(run.attempts)
-    passed_count = sum(1 for a in run.attempts if a.passed)
-    avg_score = (sum(float(a.composite_score) for a in run.attempts) / attempt_count) if attempt_count else 0.0
-    pass_rate = ((passed_count / attempt_count) * 100) if attempt_count else 0.0
+def _cohort_run_summary(run: Any, *, cohort: str, config_snapshot: dict[str, Any]) -> SimpleNamespace:
+    count = len(run.attempts)
+    passed = sum(1 for a in run.attempts if a.passed)
+    avg_score = (sum(float(a.composite_score) for a in run.attempts) / count) if count else 0.0
+    pass_rate = ((passed / count) * 100) if count else 0.0
     return SimpleNamespace(
         experiment_cohort=cohort,
         avg_score=avg_score,
@@ -170,25 +141,17 @@ async def _persist_cohort_runs(
     config_snapshot: dict[str, Any],
 ) -> list[str]:
     run_ids: list[str] = []
+    experiment = {
+        "experiment_key": experiment_key, "name": experiment_name, "cohort": cohort,
+        "hypothesis": hypothesis, "suite_id": suite_id, "project_id": project_id,
+        "min_runs_per_cohort": min_runs_per_cohort,
+    }
     for offset, run in enumerate(runs):
         payload = build_persistence_payload(
-            run,
-            agent_slug=agent_slug,
-            suite_id=suite_id,
-            run_kind=run_kind,
-            use_memory=use_memory,
-            seed=seed_start + offset,
+            run, agent_slug=agent_slug, suite_id=suite_id, run_kind=run_kind,
+            use_memory=use_memory, seed=seed_start + offset,
             config_snapshot=dict(config_snapshot),
-            metadata={"honing_cohort": cohort},
-            experiment={
-                "experiment_key": experiment_key,
-                "name": experiment_name,
-                "cohort": cohort,
-                "hypothesis": hypothesis,
-                "suite_id": suite_id,
-                "project_id": project_id,
-                "min_runs_per_cohort": min_runs_per_cohort,
-            },
+            metadata={"honing_cohort": cohort}, experiment=experiment,
         )
         run_ids.append(await persist_benchmark_payload(payload))
     return run_ids
@@ -211,30 +174,21 @@ async def _persist_review_cohort_runs(
     config_snapshot: dict[str, Any],
 ) -> list[str]:
     run_ids: list[str] = []
+    experiment = {
+        "experiment_key": experiment_key, "name": experiment_name, "cohort": cohort,
+        "hypothesis": hypothesis, "suite_id": suite_id, "project_id": project_id,
+        "min_runs_per_cohort": min_runs_per_cohort,
+    }
     for offset, run in enumerate(runs):
         payload = build_review_persistence_payload(
-            run,
-            agent_slug=agent_slug,
-            suite_id=suite_id,
-            run_kind=run_kind,
-            use_memory=use_memory,
-            seed=seed_start + offset,
+            run, agent_slug=agent_slug, suite_id=suite_id, run_kind=run_kind,
+            use_memory=use_memory, seed=seed_start + offset,
             config_snapshot=dict(config_snapshot),
             metadata={
-                "honing_cohort": cohort,
-                "reviewer_role": True,
-                "reviewer_agent_slug": "supervisor",
-                "reviewer_models": list(run.models),
+                "honing_cohort": cohort, "reviewer_role": True,
+                "reviewer_agent_slug": "supervisor", "reviewer_models": list(run.models),
             },
-            experiment={
-                "experiment_key": experiment_key,
-                "name": experiment_name,
-                "cohort": cohort,
-                "hypothesis": hypothesis,
-                "suite_id": suite_id,
-                "project_id": project_id,
-                "min_runs_per_cohort": min_runs_per_cohort,
-            },
+            experiment=experiment,
         )
         run_ids.append(await persist_benchmark_payload(payload))
     return run_ids
@@ -255,27 +209,16 @@ async def _run_improvement_pass(
     """Prompt the persona to improve itself based on benchmark failures."""
     improvement_signals = await _load_recent_improvement_signals(project_id)
     response = await client.complete(
-        messages=[{
-            "role": "user",
-            "content": build_honing_prompt(
-                run,
-                iteration,
-                previous_clusters,
-                review_run=review_run,
-                previous_review_clusters=previous_review_clusters,
-                improvement_signals=improvement_signals,
-            ),
-        }],
+        messages=[{"role": "user", "content": build_honing_prompt(
+            run, iteration, previous_clusters,
+            review_run=review_run, previous_review_clusters=previous_review_clusters,
+            improvement_signals=improvement_signals,
+        )}],
         project_id=project_id,
         agent_slug="persona",
         external_id=f"persona-honing:{run.benchmark_id}:iteration-{iteration}",
-        enable_caching=False,
-        skip_cache=True,
-        use_memory=False,
-        max_turns=12,
-        working_dir=str(working_root),
-        execute_tools=True,
-        timeout_seconds=timeout_seconds,
+        enable_caching=False, skip_cache=True, use_memory=False, max_turns=12,
+        working_dir=str(working_root), execute_tools=True, timeout_seconds=timeout_seconds,
         response_format={"type": "json_object", "schema": _HONING_RESPONSE_SCHEMA},
     )
     used_tools = await _fetch_used_tool_names(response.session_id)
@@ -312,20 +255,12 @@ async def _run_cohort_benchmarks(
 ) -> list[PersonaBenchmarkRun]:
     """Run `count` benchmark repetitions; optionally prepend an already-executed first_run."""
     runs: list[PersonaBenchmarkRun] = [first_run] if first_run else []
-    start_offset = 1 if first_run else 0
-    for offset in range(start_offset, count):
+    for offset in range(1 if first_run else 0, count):
         runs.append(await run_benchmark(
-            models=models,
-            case_ids=case_ids,
-            runs_per_case=runs_per_case,
-            project_id=project_id,
-            working_root=working_root,
-            seed=seed_base + offset,
-            timeout_seconds=timeout_seconds,
-            keep_workdirs=False,
-            base_url=base_url,
-            client_id=client_id,
-            use_memory=use_memory,
+            models=models, case_ids=case_ids, runs_per_case=runs_per_case,
+            project_id=project_id, working_root=working_root, seed=seed_base + offset,
+            timeout_seconds=timeout_seconds, keep_workdirs=False,
+            base_url=base_url, client_id=client_id, use_memory=use_memory,
             memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}",
             task_type=benchmark_task_type,
         ))
@@ -347,18 +282,11 @@ async def _run_review_cohort_benchmarks(
     first_run: CompletionReviewBenchmarkRun | None = None,
 ) -> list[CompletionReviewBenchmarkRun]:
     runs: list[CompletionReviewBenchmarkRun] = [first_run] if first_run else []
-    start_offset = 1 if first_run else 0
-    for offset in range(start_offset, count):
+    for offset in range(1 if first_run else 0, count):
         runs.append(await run_completion_review_benchmark(
-            models=models,
-            case_ids=case_ids,
-            runs_per_case=runs_per_case,
-            project_id=project_id,
-            seed=seed_base + offset,
-            timeout_seconds=timeout_seconds,
-            base_url=base_url,
-            client_id=client_id,
-            use_memory=use_memory,
+            models=models, case_ids=case_ids, runs_per_case=runs_per_case,
+            project_id=project_id, seed=seed_base + offset, timeout_seconds=timeout_seconds,
+            base_url=base_url, client_id=client_id, use_memory=use_memory,
         ))
     return runs
 
@@ -375,19 +303,14 @@ async def _evaluate_experiment(
     cohort_repetitions: int,
     persist_results: bool,
 ) -> dict[str, Any]:
-    name = f"Persona honing iteration {iteration}"
-    hypothesis = f"Candidate self-edit for iteration {iteration} should improve {suite_name}."
     experiment = SimpleNamespace(
         experiment_key=experiment_key,
-        name=name,
-        suite_id=suite_name,
-        status="open",
-        hypothesis=hypothesis,
-        baseline_label="baseline",
-        candidate_label="candidate",
+        name=f"Persona honing iteration {iteration}",
+        suite_id=suite_name, status="open",
+        hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
+        baseline_label="baseline", candidate_label="candidate",
         min_runs_per_cohort=cohort_repetitions,
-        updated_at=datetime.now(UTC),
-        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC), created_at=datetime.now(UTC),
     )
     local_runs = [
         *[_cohort_run_summary(r, cohort="baseline", config_snapshot=dict(baseline_config)) for r in baseline_runs],
@@ -415,16 +338,121 @@ def _update_loop_state_from_merged(
     loop_state.previous_failing_attempts = sum(1 for a in merged.attempts if not a.passed)
     loop_state.previous_clusters = _group_failures(merged.attempts)
     if review_merged is not None:
-        review_top_summary = review_merged.summaries[0] if review_merged.summaries else None
+        review_top = review_merged.summaries[0] if review_merged.summaries else None
         loop_state.previous_review_best_score = (
-            review_top_summary.avg_composite_score
-            if review_top_summary is not None
-            else (record.review_top_score or 0.0)
+            review_top.avg_composite_score if review_top is not None else (record.review_top_score or 0.0)
         )
         loop_state.previous_review_failing_attempts = sum(
-            1 for attempt in review_merged.attempts if not attempt.passed
+            1 for a in review_merged.attempts if not a.passed
         )
         loop_state.previous_review_clusters = _group_failures(review_merged.attempts)
+
+
+async def _run_review_cohort_experiment(
+    *,
+    record: PersonaHoningIteration,
+    review_run: CompletionReviewBenchmarkRun,
+    reviewer_models: list[str],
+    reviewer_case_ids: list[str],
+    reviewer_runs_per_case: int,
+    project_id: str,
+    timeout_seconds: float,
+    base_url: str,
+    client_id: str,
+    use_memory: bool,
+    seed: int,
+    iteration: int,
+    agent_slug: str,
+    cohort_repetitions: int,
+    persist_results: bool,
+    review_baseline_config: dict[str, Any],
+    experiment_key: str,
+) -> tuple[list[CompletionReviewBenchmarkRun], list[CompletionReviewBenchmarkRun], dict[str, Any] | None]:
+    """Run review cohort benchmarks, optionally persist, evaluate, and mutate record."""
+    review_suite_name = derive_review_suite_id(reviewer_case_ids)
+    common = dict(
+        models=reviewer_models, case_ids=reviewer_case_ids, runs_per_case=reviewer_runs_per_case,
+        project_id=project_id, timeout_seconds=timeout_seconds,
+        base_url=base_url, client_id=client_id, use_memory=use_memory, count=cohort_repetitions,
+    )
+    review_baseline_runs = await _run_review_cohort_benchmarks(
+        **common, seed_base=seed + iteration * 10000, first_run=review_run,
+    )
+    review_candidate_runs = await _run_review_cohort_benchmarks(
+        **common, seed_base=seed + iteration * 20000,
+    )
+    review_experiment_key = (
+        f"persona-honing-review-{review_suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
+    )
+    record.review_experiment_key = review_experiment_key
+    review_candidate_config = await _get_config_snapshot(agent_slug, "review")
+    if persist_results:
+        shared = dict(
+            experiment_key=review_experiment_key,
+            experiment_name=f"Persona completion-review honing iteration {iteration}",
+            hypothesis=(
+                f"Candidate self-edit for iteration {iteration} should improve "
+                f"completion-review benchmark {review_suite_name}."
+            ),
+            suite_id=review_suite_name, project_id=project_id, agent_slug=agent_slug,
+            use_memory=use_memory, min_runs_per_cohort=cohort_repetitions,
+        )
+        record.review_baseline_run_ids = await _persist_review_cohort_runs(
+            runs=review_baseline_runs, cohort="baseline", run_kind=RUN_KIND_HONING_BASELINE,
+            seed_start=seed + iteration * 10000, config_snapshot=review_baseline_config, **shared,
+        )
+        record.review_candidate_run_ids = await _persist_review_cohort_runs(
+            runs=review_candidate_runs, cohort="candidate", run_kind=RUN_KIND_HONING_CANDIDATE,
+            seed_start=seed + iteration * 20000, config_snapshot=review_candidate_config, **shared,
+        )
+    review_summary = await _evaluate_experiment(
+        experiment_key=review_experiment_key, iteration=iteration, suite_name=review_suite_name,
+        baseline_runs=review_baseline_runs, candidate_runs=review_candidate_runs,
+        baseline_config=review_baseline_config, candidate_config=review_candidate_config,
+        cohort_repetitions=cohort_repetitions, persist_results=persist_results,
+    )
+    record.review_experiment_summary = review_summary
+    return review_baseline_runs, review_candidate_runs, review_summary
+
+
+async def _resolve_experiment_decision(
+    *,
+    decision: str,
+    review_summary: dict[str, Any] | None,
+    baseline_state: PersonaMutableState,
+    agent_slug: str,
+    iteration: int,
+    experiment_key: str,
+    baseline_runs: list[PersonaBenchmarkRun],
+    candidate_runs: list[PersonaBenchmarkRun],
+    review_baseline_runs: list[CompletionReviewBenchmarkRun],
+    review_candidate_runs: list[CompletionReviewBenchmarkRun],
+    record: PersonaHoningIteration,
+    loop_state: _LoopState,
+) -> None:
+    """Apply promote/rollback decision, merge winning runs, update loop state."""
+    review_decision = str(review_summary.get("decision")) if review_summary is not None else None
+    should_rollback = decision != DECISION_PROMOTE or review_decision == "rollback"
+    if should_rollback:
+        await _restore_persona_mutable_state(
+            agent_slug, baseline_state,
+            reason=f"Reverted non-promoted honing candidate iteration {iteration}",
+        )
+        record.rollback_applied = True
+        merged = _merge_runs(baseline_runs, benchmark_id=f"{experiment_key}-baseline-merged")
+        review_merged = (
+            _merge_review_runs(review_baseline_runs, benchmark_id=f"{record.review_experiment_key}-baseline-merged")
+            if review_baseline_runs else None
+        )
+    else:
+        merged = _merge_runs(candidate_runs, benchmark_id=f"{experiment_key}-candidate-merged")
+        review_merged = (
+            _merge_review_runs(review_candidate_runs, benchmark_id=f"{record.review_experiment_key}-candidate-merged")
+            if review_candidate_runs else None
+        )
+    _update_loop_state_from_merged(loop_state, merged, record, review_merged=review_merged)
+    review_clean = loop_state.previous_review_failing_attempts == 0 if review_merged is not None else True
+    loop_state.honed = not should_rollback and loop_state.previous_failing_attempts == 0 and review_clean
 
 
 async def _run_experiment_and_decide(
@@ -460,42 +488,31 @@ async def _run_experiment_and_decide(
 ) -> None:
     """Run improvement pass + cohort experiments + decide promote/rollback; mutates record and loop_state."""
     session_id, content, tools, parsed = await _run_improvement_pass(
-        client=client,
-        project_id=project_id,
-        iteration=iteration,
-        run=benchmark_run,
-        previous_clusters=loop_state.previous_clusters,
-        review_run=review_run,
+        client=client, project_id=project_id, iteration=iteration, run=benchmark_run,
+        previous_clusters=loop_state.previous_clusters, review_run=review_run,
         previous_review_clusters=loop_state.previous_review_clusters,
-        timeout_seconds=timeout_seconds,
-        working_root=working_root,
+        timeout_seconds=timeout_seconds, working_root=working_root,
     )
     record.improvement_session_id = session_id
     record.improvement_content = content
     record.improvement_tools = tools
     record.improvement_parsed = parsed
 
-    baseline_runs = await _run_cohort_benchmarks(
+    cohort_kw: dict[str, Any] = dict(
         models=models, case_ids=case_ids, runs_per_case=runs_per_case,
         project_id=project_id, working_root=working_root, timeout_seconds=timeout_seconds,
         base_url=base_url, client_id=client_id, use_memory=use_memory,
-        benchmark_task_type=benchmark_task_type,
-        seed_base=seed + iteration * 100, count=cohort_repetitions, first_run=benchmark_run,
+        benchmark_task_type=benchmark_task_type, count=cohort_repetitions,
     )
-    candidate_runs = await _run_cohort_benchmarks(
-        models=models, case_ids=case_ids, runs_per_case=runs_per_case,
-        project_id=project_id, working_root=working_root, timeout_seconds=timeout_seconds,
-        base_url=base_url, client_id=client_id, use_memory=use_memory,
-        benchmark_task_type=benchmark_task_type,
-        seed_base=seed + iteration * 1000, count=cohort_repetitions,
-    )
+    baseline_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 100, first_run=benchmark_run)
+    candidate_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 1000)
 
     experiment_key = f"persona-honing-{suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
     record.experiment_key = experiment_key
     candidate_config = await _get_config_snapshot(agent_slug, benchmark_task_type)
 
     if persist_results:
-        shared = dict(
+        shared: dict[str, Any] = dict(
             experiment_key=experiment_key,
             experiment_name=f"Persona honing iteration {iteration}",
             hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
@@ -518,10 +535,10 @@ async def _run_experiment_and_decide(
         cohort_repetitions=cohort_repetitions, persist_results=persist_results,
     )
     record.experiment_summary = experiment_summary
-    review_experiment_summary: dict[str, Any] | None = None
+
     review_baseline_runs: list[CompletionReviewBenchmarkRun] = []
     review_candidate_runs: list[CompletionReviewBenchmarkRun] = []
-    review_candidate_config: dict[str, Any] | None = None
+    review_experiment_summary: dict[str, Any] | None = None
     if (
         not disable_completion_review
         and review_run is not None
@@ -529,118 +546,26 @@ async def _run_experiment_and_decide(
         and reviewer_case_ids
         and review_baseline_config is not None
     ):
-        review_suite_name = derive_review_suite_id(reviewer_case_ids)
-        review_baseline_runs = await _run_review_cohort_benchmarks(
-            models=reviewer_models,
-            case_ids=reviewer_case_ids,
-            runs_per_case=reviewer_runs_per_case,
-            project_id=project_id,
-            timeout_seconds=timeout_seconds,
-            base_url=base_url,
-            client_id=client_id,
-            use_memory=use_memory,
-            seed_base=seed + iteration * 10000,
-            count=cohort_repetitions,
-            first_run=review_run,
-        )
-        review_candidate_runs = await _run_review_cohort_benchmarks(
-            models=reviewer_models,
-            case_ids=reviewer_case_ids,
-            runs_per_case=reviewer_runs_per_case,
-            project_id=project_id,
-            timeout_seconds=timeout_seconds,
-            base_url=base_url,
-            client_id=client_id,
-            use_memory=use_memory,
-            seed_base=seed + iteration * 20000,
-            count=cohort_repetitions,
-        )
-        review_experiment_key = (
-            f"persona-honing-review-{review_suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
-        )
-        record.review_experiment_key = review_experiment_key
-        review_candidate_config = await _get_config_snapshot(agent_slug, "review")
-        if persist_results:
-            review_shared = dict(
-                experiment_key=review_experiment_key,
-                experiment_name=f"Persona completion-review honing iteration {iteration}",
-                hypothesis=(
-                    f"Candidate self-edit for iteration {iteration} should improve "
-                    f"completion-review benchmark {review_suite_name}."
-                ),
-                suite_id=review_suite_name,
-                project_id=project_id,
-                agent_slug=agent_slug,
-                use_memory=use_memory,
-                min_runs_per_cohort=cohort_repetitions,
+        review_baseline_runs, review_candidate_runs, review_experiment_summary = (
+            await _run_review_cohort_experiment(
+                record=record, review_run=review_run,
+                reviewer_models=reviewer_models, reviewer_case_ids=reviewer_case_ids,
+                reviewer_runs_per_case=reviewer_runs_per_case,
+                project_id=project_id, timeout_seconds=timeout_seconds,
+                base_url=base_url, client_id=client_id, use_memory=use_memory,
+                seed=seed, iteration=iteration, agent_slug=agent_slug,
+                cohort_repetitions=cohort_repetitions, persist_results=persist_results,
+                review_baseline_config=review_baseline_config, experiment_key=experiment_key,
             )
-            record.review_baseline_run_ids = await _persist_review_cohort_runs(
-                runs=review_baseline_runs,
-                cohort="baseline",
-                run_kind=RUN_KIND_HONING_BASELINE,
-                seed_start=seed + iteration * 10000,
-                config_snapshot=review_baseline_config,
-                **review_shared,
-            )
-            record.review_candidate_run_ids = await _persist_review_cohort_runs(
-                runs=review_candidate_runs,
-                cohort="candidate",
-                run_kind=RUN_KIND_HONING_CANDIDATE,
-                seed_start=seed + iteration * 20000,
-                config_snapshot=review_candidate_config,
-                **review_shared,
-            )
-        review_experiment_summary = await _evaluate_experiment(
-            experiment_key=review_experiment_key,
-            iteration=iteration,
-            suite_name=review_suite_name,
-            baseline_runs=review_baseline_runs,
-            candidate_runs=review_candidate_runs,
-            baseline_config=review_baseline_config,
-            candidate_config=review_candidate_config,
-            cohort_repetitions=cohort_repetitions,
-            persist_results=persist_results,
         )
-        record.review_experiment_summary = review_experiment_summary
 
-    decision = experiment_summary["decision"]
-    review_decision = (
-        str(review_experiment_summary.get("decision"))
-        if review_experiment_summary is not None
-        else None
-    )
-    should_rollback = decision != DECISION_PROMOTE or review_decision == "rollback"
-    review_merged: CompletionReviewBenchmarkRun | None = None
-    if should_rollback:
-        await _restore_persona_mutable_state(
-            agent_slug, baseline_state,
-            reason=f"Reverted non-promoted honing candidate iteration {iteration}",
-        )
-        record.rollback_applied = True
-        merged = _merge_runs(baseline_runs, benchmark_id=f"{experiment_key}-baseline-merged")
-        if review_baseline_runs:
-            review_merged = _merge_review_runs(
-                review_baseline_runs,
-                benchmark_id=f"{record.review_experiment_key}-baseline-merged",
-            )
-    else:
-        merged = _merge_runs(candidate_runs, benchmark_id=f"{experiment_key}-candidate-merged")
-        if review_candidate_runs:
-            review_merged = _merge_review_runs(
-                review_candidate_runs,
-                benchmark_id=f"{record.review_experiment_key}-candidate-merged",
-            )
-
-    _update_loop_state_from_merged(loop_state, merged, record, review_merged=review_merged)
-    review_clean = (
-        loop_state.previous_review_failing_attempts == 0
-        if review_merged is not None
-        else True
-    )
-    loop_state.honed = (
-        not should_rollback
-        and loop_state.previous_failing_attempts == 0
-        and review_clean
+    await _resolve_experiment_decision(
+        decision=experiment_summary["decision"], review_summary=review_experiment_summary,
+        baseline_state=baseline_state, agent_slug=agent_slug, iteration=iteration,
+        experiment_key=experiment_key,
+        baseline_runs=baseline_runs, candidate_runs=candidate_runs,
+        review_baseline_runs=review_baseline_runs, review_candidate_runs=review_candidate_runs,
+        record=record, loop_state=loop_state,
     )
 
 
@@ -684,14 +609,9 @@ async def _persist_iteration_record(
     if stop_reason:
         metadata["stop_reason"] = stop_reason
     payload = build_persistence_payload(
-        benchmark_run,
-        agent_slug=agent_slug,
-        suite_id=suite_name,
-        run_kind=RUN_KIND_HONING_ITERATION,
-        use_memory=use_memory,
-        seed=seed,
-        config_snapshot=config_snapshot,
-        metadata=metadata,
+        benchmark_run, agent_slug=agent_slug, suite_id=suite_name,
+        run_kind=RUN_KIND_HONING_ITERATION, use_memory=use_memory, seed=seed,
+        config_snapshot=config_snapshot, metadata=metadata,
     )
     payload["benchmark_id"] = f"{benchmark_run.benchmark_id}-iter-{iteration}"
     record.persisted_run_id = await persist_benchmark_payload(payload)
@@ -719,22 +639,42 @@ def _build_iteration_record(
     )
     if review_run is not None:
         review_failure_clusters = _group_failures(review_run.attempts)
-        review_persistent_clusters, _, _ = _diff_failure_clusters(
-            loop_state.previous_review_clusters,
-            review_failure_clusters,
+        review_persistent, _, _ = _diff_failure_clusters(
+            loop_state.previous_review_clusters, review_failure_clusters,
         )
-        review_top_summary = review_run.summaries[0] if review_run.summaries else None
+        review_top = review_run.summaries[0] if review_run.summaries else None
         record.review_benchmark_id = review_run.benchmark_id
-        record.review_top_model = review_top_summary.model_id if review_top_summary else None
-        record.review_top_score = (
-            review_top_summary.avg_composite_score if review_top_summary else 0.0
-        )
-        record.review_failing_attempts = sum(
-            1 for attempt in review_run.attempts if not attempt.passed
-        )
+        record.review_top_model = review_top.model_id if review_top else None
+        record.review_top_score = review_top.avg_composite_score if review_top else 0.0
+        record.review_failing_attempts = sum(1 for a in review_run.attempts if not a.passed)
         record.review_failure_clusters = review_failure_clusters
-        record.review_persistent_failure_clusters = review_persistent_clusters
+        record.review_persistent_failure_clusters = review_persistent
     return record
+
+
+def _is_stalled(
+    record: PersonaHoningIteration,
+    loop_state: _LoopState,
+    *,
+    review_run: CompletionReviewBenchmarkRun | None,
+) -> bool:
+    """Return True when there is no measurable improvement since last iteration."""
+    if loop_state.previous_best_score is None or loop_state.previous_failing_attempts is None:
+        return False
+    main_stalled = (
+        record.top_score <= loop_state.previous_best_score
+        and record.failing_attempts >= loop_state.previous_failing_attempts
+    )
+    if not main_stalled:
+        return False
+    if review_run is None:
+        return True
+    return (
+        loop_state.previous_review_best_score is not None
+        and loop_state.previous_review_failing_attempts is not None
+        and (record.review_top_score or 0.0) <= loop_state.previous_review_best_score
+        and (record.review_failing_attempts or 0) >= loop_state.previous_review_failing_attempts
+    )
 
 
 async def _run_iteration(
@@ -764,40 +704,27 @@ async def _run_iteration(
     disable_completion_review: bool,
 ) -> bool:
     """Execute one benchmark + improvement cycle. Returns True if the loop should stop."""
-    import uuid as _uuid
-
     baseline_state = await _capture_persona_mutable_state(agent_slug)
     benchmark_run = await run_benchmark(
         models=models, case_ids=case_ids, runs_per_case=runs_per_case, project_id=project_id,
         working_root=working_root, seed=seed + iteration - 1, timeout_seconds=timeout_seconds,
         keep_workdirs=False, base_url=base_url, client_id=client_id, use_memory=use_memory,
-        memory_group_id=f"benchmark:honing:{_uuid.uuid4().hex[:8]}", task_type=benchmark_task_type,
+        memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}", task_type=benchmark_task_type,
     )
     review_run: CompletionReviewBenchmarkRun | None = None
     review_baseline_config: dict[str, Any] | None = None
     if not disable_completion_review and reviewer_models and reviewer_case_ids:
         review_run = await run_completion_review_benchmark(
-            models=reviewer_models,
-            case_ids=reviewer_case_ids,
-            runs_per_case=reviewer_runs_per_case,
-            project_id=project_id,
-            seed=seed + iteration + 4999,
-            timeout_seconds=timeout_seconds,
-            base_url=base_url,
-            client_id=client_id,
-            use_memory=use_memory,
+            models=reviewer_models, case_ids=reviewer_case_ids, runs_per_case=reviewer_runs_per_case,
+            project_id=project_id, seed=seed + iteration + 4999, timeout_seconds=timeout_seconds,
+            base_url=base_url, client_id=client_id, use_memory=use_memory,
         )
         review_baseline_config = await _get_config_snapshot(agent_slug, "review")
+
     report_path = _write_iteration_report(output_dir, benchmark_run, iteration)
     baseline_config = await _get_config_snapshot(agent_slug, benchmark_task_type)
     suite_name = suite_id or derive_suite_id(case_ids)
-    record = _build_iteration_record(
-        iteration,
-        benchmark_run,
-        report_path,
-        loop_state,
-        review_run=review_run,
-    )
+    record = _build_iteration_record(iteration, benchmark_run, report_path, loop_state, review_run=review_run)
 
     persist_kw: dict[str, Any] = dict(
         record=record, benchmark_run=benchmark_run, config_snapshot=baseline_config,
@@ -814,21 +741,7 @@ async def _run_iteration(
         loop_state.honed = True
         return True
 
-    main_no_improvement = (
-        loop_state.previous_best_score is not None
-        and loop_state.previous_failing_attempts is not None
-        and record.top_score <= loop_state.previous_best_score
-        and record.failing_attempts >= loop_state.previous_failing_attempts
-    )
-    review_no_improvement = (
-        review_run is not None
-        and loop_state.previous_review_best_score is not None
-        and loop_state.previous_review_failing_attempts is not None
-        and (record.review_top_score or 0.0) <= loop_state.previous_review_best_score
-        and (record.review_failing_attempts or 0) >= loop_state.previous_review_failing_attempts
-    )
-    no_improvement = main_no_improvement and (review_run is None or review_no_improvement)
-    if no_improvement:
+    if _is_stalled(record, loop_state, review_run=review_run):
         await _persist_iteration_record(stop_reason="no_improvement", **persist_kw)
         loop_state.iterations.append(record)
         return True
@@ -837,10 +750,10 @@ async def _run_iteration(
         iteration=iteration, record=record, benchmark_run=benchmark_run, review_run=review_run,
         baseline_state=baseline_state, loop_state=loop_state,
         suite_name=suite_name, baseline_config=baseline_config, review_baseline_config=review_baseline_config,
-        client=client,
-        project_id=project_id, agent_slug=agent_slug, models=models, case_ids=case_ids,
-        runs_per_case=runs_per_case, reviewer_models=reviewer_models,
-        reviewer_case_ids=reviewer_case_ids, reviewer_runs_per_case=reviewer_runs_per_case,
+        client=client, project_id=project_id, agent_slug=agent_slug,
+        models=models, case_ids=case_ids, runs_per_case=runs_per_case,
+        reviewer_models=reviewer_models, reviewer_case_ids=reviewer_case_ids,
+        reviewer_runs_per_case=reviewer_runs_per_case,
         working_root=working_root, timeout_seconds=timeout_seconds,
         base_url=base_url, client_id=client_id, use_memory=use_memory,
         benchmark_task_type=benchmark_task_type, seed=seed,
