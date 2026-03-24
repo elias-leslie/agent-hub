@@ -113,8 +113,8 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
               "transition-colors duration-150",
               "focus-ring-amber",
               active
-                ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400"
-                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
+                ? "bg-amber-950/30 text-amber-400"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
               isCollapsed && "lg:justify-center lg:px-0",
             )}
             title={isCollapsed ? label : undefined}
@@ -122,7 +122,7 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
             <Icon
               className={cn(
                 "h-[18px] w-[18px] flex-shrink-0",
-                active && "text-amber-600 dark:text-amber-400",
+                active && "text-amber-400",
               )}
             />
             {!isCollapsed && (
@@ -133,7 +133,7 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
             {/* Mobile always shows labels */}
             <div className="lg:hidden">
               <span className="text-[13px] font-medium">{label}</span>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+              <p className="text-[10px] text-slate-500">
                 {item.description}
               </p>
             </div>

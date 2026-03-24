@@ -163,10 +163,10 @@ export default function AccessControlPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <a
                 href="/access-control/clients"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Users className="h-5 w-5 text-blue-400" />
+                  <Users className="h-5 w-5 text-amber-400" />
                   <h2 className="text-sm font-semibold text-slate-100">Clients</h2>
                 </div>
                 <p className="text-xs text-slate-400">
@@ -176,7 +176,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/permissions"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <FolderLock className="h-5 w-5 text-amber-400" />
@@ -189,7 +189,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/budgets"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <DollarSign className="h-5 w-5 text-emerald-400" />
@@ -202,7 +202,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/monitoring/requests"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Clock className="h-5 w-5 text-emerald-400" />
@@ -215,10 +215,10 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/clients/new"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-blue-900/20 hover:bg-blue-900/30 transition-colors"
+                className="block p-5 rounded-lg border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 transition-colors card-hover-lift"
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <Shield className="h-5 w-5 text-blue-400" />
+                  <Shield className="h-5 w-5 text-amber-400" />
                   <h2 className="text-sm font-semibold text-slate-100">New Client</h2>
                 </div>
                 <p className="text-xs text-slate-400">

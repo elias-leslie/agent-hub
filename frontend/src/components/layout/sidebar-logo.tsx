@@ -16,7 +16,7 @@ export function SidebarLogo({
   onMobileClose,
 }: SidebarLogoProps) {
   return (
-    <div className="flex items-center justify-between h-14 px-3 border-b border-slate-200 dark:border-slate-800">
+    <div className="flex items-center justify-between h-14 px-3 border-b border-slate-800">
       <Link
         href="/"
         className={cn(
@@ -31,7 +31,7 @@ export function SidebarLogo({
           {/* Status indicator */}
           <div
             className={cn(
-              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-white dark:border-slate-900",
+              "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-slate-900",
               statusIndicator === "healthy"
                 ? "bg-emerald-500 animate-status-pulse"
                 : statusIndicator === "degraded"
@@ -42,17 +42,17 @@ export function SidebarLogo({
         </div>
         {!isCollapsed && (
           <div className="lg:block hidden">
-            <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 tracking-tight leading-tight">
+            <h1 className="text-sm font-semibold text-slate-100 tracking-tight leading-tight">
               Agent Hub
             </h1>
-            <p className="text-[9px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider">
               Command Center
             </p>
           </div>
         )}
         {/* Mobile always shows title */}
         <div className="lg:hidden">
-          <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+          <h1 className="text-sm font-semibold text-slate-100 tracking-tight">
             Agent Hub
           </h1>
         </div>
@@ -61,7 +61,7 @@ export function SidebarLogo({
       {/* Mobile close */}
       <button
         onClick={onMobileClose}
-        className="p-2 lg:hidden rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+        className="p-2 lg:hidden rounded-lg hover:bg-slate-800"
       >
         <X className="h-5 w-5 text-slate-500" />
       </button>
