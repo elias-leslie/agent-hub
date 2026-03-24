@@ -43,7 +43,6 @@ from app.services.tools._executor_web import (
     search_web as _search_web,
 )
 from app.services.tools._sensitive_content import scan_runtime_sensitive_content
-from app.services.tools._tool_constants import DEFAULT_TIMEOUT
 from app.services.tools.catalog import search_tool_catalog
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
