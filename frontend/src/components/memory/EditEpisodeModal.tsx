@@ -43,7 +43,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-full bg-violet-100 dark:bg-violet-900/30">
-              <Pencil className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+              <Pencil className="w-5 h-5 text-violet-400" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-slate-100">Edit Memory</h2>
@@ -78,14 +78,14 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
 
           {/* Error Message */}
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <div className="p-3 rounded-lg bg-red-900/20 border border-red-800">
+              <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
           {/* Info Box */}
-          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-            <p className="text-xs text-amber-700 dark:text-amber-400">
+          <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-800">
+            <p className="text-xs text-amber-400">
               <strong>Note:</strong> Editing creates a new memory with the updated content while preserving usage
               statistics (helpful/harmful counts, load count, etc.).
             </p>
@@ -96,7 +96,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
         <div className="flex items-center justify-between p-4 border-t border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
           <div className="text-xs text-slate-500">
             {hasChanges ? (
-              <span className="text-violet-600 dark:text-violet-400">Unsaved changes</span>
+              <span className="text-violet-400">Unsaved changes</span>
             ) : (
               "No changes"
             )}

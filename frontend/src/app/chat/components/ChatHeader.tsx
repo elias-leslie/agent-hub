@@ -48,7 +48,7 @@ export function ChatHeader({
   const [showProjectSelector, setShowProjectSelector] = useState(false);
 
   return (
-    <header className="flex-shrink-0 border-b border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20 relative">
+    <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/80 backdrop-blur-lg z-20 relative">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-3">
           {/* Sidebar Toggle */}
@@ -77,7 +77,7 @@ export function ChatHeader({
               onClick={() => setShowProjectSelector(!showProjectSelector)}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
-                "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
+                "bg-indigo-900/20 text-indigo-400",
                 "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
               )}
             >
@@ -99,7 +99,7 @@ export function ChatHeader({
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
                         "hover:bg-slate-700 transition-colors",
-                        project.id === selectedProject.id && "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
+                        project.id === selectedProject.id && "bg-indigo-900/20 text-indigo-400"
                       )}
                     >
                       <FolderOpen className="h-4 w-4 flex-shrink-0" />
@@ -122,7 +122,7 @@ export function ChatHeader({
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
                   "bg-slate-800 text-slate-300",
-                  "hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  "hover:bg-slate-700 transition-colors"
                 )}
               >
                 {(() => {
@@ -167,8 +167,8 @@ export function ChatHeader({
 
       {/* Error Display */}
       {(sessionError || agentsError) && (
-        <div className="border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-2">
-          <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+        <div className="border-t border-red-800 bg-red-900/20 px-4 py-2">
+          <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertCircle className="h-4 w-4" />
             <span>{sessionError || agentsError}</span>
           </div>

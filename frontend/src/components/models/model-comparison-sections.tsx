@@ -72,7 +72,7 @@ export function ScoreBreakdown({ models }: SectionProps) {
 
 export function CompositeScore({ models }: SectionProps) {
   return (
-    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg p-6 border border-amber-200 dark:border-amber-900/30">
+    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg p-6 border border-amber-900/30">
       <h3 className="text-sm font-semibold text-slate-100 mb-4">
         Composite Score
       </h3>
@@ -139,7 +139,7 @@ export function CostComparison({ models }: SectionProps) {
                   className={cn(
                     "px-3 py-1 rounded text-sm font-semibold border",
                     costTier === "Free"
-                      ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                      ? "bg-green-500/10 text-green-400 border-green-500/20"
                       : "bg-slate-800 text-slate-300 border-slate-700",
                   )}
                 >

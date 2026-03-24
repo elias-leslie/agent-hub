@@ -65,28 +65,28 @@ export function AgentEditorHeader({
 
           <div className="flex flex-wrap items-center gap-2">
             {hasChanges && (
-              <span className="text-xs text-amber-600 dark:text-amber-400">
+              <span className="text-xs text-amber-400">
                 Unsaved changes
               </span>
             )}
             <button
               type="button"
               onClick={onPreview}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 transition-colors"
             >
               <Eye className="h-3.5 w-3.5" />
               Preview
             </button>
             <Link
               href={`/agents/${agent.slug}/chat`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 transition-colors"
             >
               <MessageSquare className="h-3.5 w-3.5" />
               Chat
             </Link>
             <Link
               href={`/arena/${agent.slug}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 transition-colors"
             >
               <FlaskConical className="h-3.5 w-3.5" />
               Arena

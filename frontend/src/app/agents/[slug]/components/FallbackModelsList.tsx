@@ -53,7 +53,7 @@ export function FallbackModelsList({
               </select>
               <button
                 onClick={() => removeModel(index)}
-                className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500"
+                className="p-2 rounded-lg hover:bg-red-950/20 text-red-500"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

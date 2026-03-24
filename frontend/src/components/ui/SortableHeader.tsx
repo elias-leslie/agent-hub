@@ -27,8 +27,8 @@ export function SortableHeader<T extends string>({
       onClick={() => onSort(field)}
       className={cn(
         "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
-        "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
-        isActive && "text-slate-700 dark:text-slate-200",
+        "text-slate-500 hover:text-slate-300",
+        isActive && "text-slate-200",
         align === "right" && "justify-end ml-auto"
       )}
     >

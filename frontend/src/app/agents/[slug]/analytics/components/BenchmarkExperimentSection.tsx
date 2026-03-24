@@ -57,7 +57,7 @@ export function BenchmarkExperimentSection({
           return (
             <article
               key={experiment.experiment_key}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm border-slate-800 dark:bg-slate-900/60"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -120,7 +120,7 @@ export function BenchmarkExperimentSection({
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Score delta</dt>
-                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                  <dd className="text-right text-slate-200">
                     {formatDelta(
                       experiment.score_delta.mean_delta,
                       experiment.score_delta.ci_low,
@@ -130,7 +130,7 @@ export function BenchmarkExperimentSection({
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Pass delta</dt>
-                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                  <dd className="text-right text-slate-200">
                     {formatDelta(
                       experiment.pass_rate_delta.mean_delta,
                       experiment.pass_rate_delta.ci_low,
@@ -141,7 +141,7 @@ export function BenchmarkExperimentSection({
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Tool-call delta</dt>
-                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                  <dd className="text-right text-slate-200">
                     {formatDelta(
                       experiment.tool_call_delta.mean_delta,
                       experiment.tool_call_delta.ci_low,
@@ -151,13 +151,13 @@ export function BenchmarkExperimentSection({
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Reason</dt>
-                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                  <dd className="text-right text-slate-200">
                     {experiment.decision_reason ?? "Pending"}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
                   <dt className="text-slate-400">Config stability</dt>
-                  <dd className="text-right text-slate-700 dark:text-slate-200">
+                  <dd className="text-right text-slate-200">
                     {experiment.baseline.config_stable && experiment.candidate.config_stable
                       ? "Frozen"
                       : "Mixed"}

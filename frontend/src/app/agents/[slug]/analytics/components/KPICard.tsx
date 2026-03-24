@@ -19,10 +19,10 @@ export function KPICard({
   color = "blue",
 }: KPICardProps) {
   const colorClasses = {
-    blue: "bg-blue-50 dark:bg-blue-950/30 text-amber-500 dark:text-amber-400",
-    green: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400",
-    amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400",
-    red: "bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400",
+    blue: "bg-blue-50 dark:bg-blue-950/30 text-amber-400",
+    green: "bg-emerald-950/30 text-emerald-400",
+    amber: "bg-amber-950/30 text-amber-400",
+    red: "bg-red-950/30 text-red-400",
   };
 
   return (

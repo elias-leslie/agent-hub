@@ -25,11 +25,11 @@ function formatDate(dateStr: string): string {
 
 function getCategoryBadge(category: string): { icon: string; color: string; label: string } {
   const badges: Record<string, { icon: string; color: string; label: string }> = {
-    coding_standard: { icon: "📏", color: "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-amber-300", label: "Standard" },
-    troubleshooting_guide: { icon: "⚠️", color: "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300", label: "Gotcha" },
+    coding_standard: { icon: "📏", color: "bg-blue-100 dark:bg-blue-900/30 text-amber-300", label: "Standard" },
+    troubleshooting_guide: { icon: "⚠️", color: "bg-red-100 dark:bg-red-900/30 text-red-300", label: "Gotcha" },
     system_design: { icon: "🏗️", color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300", label: "Design" },
-    operational_context: { icon: "⚙️", color: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300", label: "Ops" },
-    domain_knowledge: { icon: "📚", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300", label: "Domain" },
+    operational_context: { icon: "⚙️", color: "bg-amber-900/30 text-amber-300", label: "Ops" },
+    domain_knowledge: { icon: "📚", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-300", label: "Domain" },
     active_state: { icon: "▶️", color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300", label: "Active" },
   };
   return badges[category] || { icon: "📝", color: "bg-slate-800 text-slate-400", label: category };
@@ -46,9 +46,9 @@ function getScopeBadge(scope: string): { color: string; label: string } {
 
 function getUtilityScoreColor(score: number | undefined): string {
   if (score === undefined) return "bg-slate-800 text-slate-400";
-  if (score >= 0.7) return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300";
-  if (score >= 0.4) return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300";
-  return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
+  if (score >= 0.7) return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-300";
+  if (score >= 0.4) return "bg-amber-900/30 text-amber-300";
+  return "bg-red-100 dark:bg-red-900/30 text-red-300";
 }
 
 export function MemoryCard({
@@ -87,7 +87,7 @@ export function MemoryCard({
             "flex-shrink-0 w-5 h-5 rounded border transition-colors mt-0.5",
             isSelected
               ? "bg-emerald-500 border-emerald-500 text-white"
-              : "border-slate-300 dark:border-slate-600 hover:border-emerald-400",
+              : "border-slate-600 hover:border-emerald-400",
           )}
         >
           {isSelected && <Check className="w-4 h-4" />}
@@ -103,10 +103,10 @@ export function MemoryCard({
             <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium", categoryBadge.color)}>
               {categoryBadge.icon} {categoryBadge.label}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-slate-500">
               {formatDate(episode.created_at)}
             </span>
-            <span className="text-xs text-slate-400 dark:text-slate-500 px-2 py-0.5 rounded bg-slate-800">
+            <span className="text-xs text-slate-500 px-2 py-0.5 rounded bg-slate-800">
               {episode.source}
             </span>
           </div>
@@ -120,7 +120,7 @@ export function MemoryCard({
           {episode.content.length > 200 && (
             <button
               onClick={() => setIsExpanded(!isExpanded)}
-              className="flex items-center gap-1 mt-2 text-xs text-emerald-600 dark:text-emerald-400 hover:underline"
+              className="flex items-center gap-1 mt-2 text-xs text-emerald-400 hover:underline"
             >
               {isExpanded ? (
                 <>
@@ -150,13 +150,13 @@ export function MemoryCard({
                 </span>
               )}
               {episode.helpful_count !== undefined && episode.helpful_count > 0 && (
-                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400" title="Helpful feedback">
+                <span className="flex items-center gap-1 text-emerald-400" title="Helpful feedback">
                   <ThumbsUp className="w-3 h-3" />
                   {episode.helpful_count}
                 </span>
               )}
               {episode.harmful_count !== undefined && episode.harmful_count > 0 && (
-                <span className="flex items-center gap-1 text-red-600 dark:text-red-400" title="Harmful feedback">
+                <span className="flex items-center gap-1 text-red-400" title="Harmful feedback">
                   <ThumbsDown className="w-3 h-3" />
                   {episode.harmful_count}
                 </span>

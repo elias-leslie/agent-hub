@@ -22,7 +22,7 @@ export function BudgetUsageDisplay({
               {usage.mandates_injected}/{usage.mandates_total}
             </span>
             {usage.mandates_total - usage.mandates_injected > 0 && (
-              <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+              <span className="ml-2 text-xs text-amber-400">
                 {usage.mandates_total - usage.mandates_injected} cut
               </span>
             )}
@@ -35,7 +35,7 @@ export function BudgetUsageDisplay({
               {usage.guardrails_injected}/{usage.guardrails_total}
             </span>
             {usage.guardrails_total - usage.guardrails_injected > 0 && (
-              <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+              <span className="ml-2 text-xs text-amber-400">
                 {usage.guardrails_total - usage.guardrails_injected} cut
               </span>
             )}

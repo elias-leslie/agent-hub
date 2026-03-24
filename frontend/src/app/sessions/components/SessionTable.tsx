@@ -61,7 +61,7 @@ export function SessionTable({
       className="bg-slate-900 rounded-lg border border-slate-800 overflow-auto shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 max-h-[calc(100vh-280px)]"
     >
       {/* TABLE HEADER - Sticky */}
-      <div className="sticky top-14 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-700">
+      <div className="sticky top-14 z-20 bg-slate-800/95 backdrop-blur-sm border-b border-slate-700">
         <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Status
@@ -112,7 +112,7 @@ export function SessionTable({
       </div>
 
       {/* TABLE BODY */}
-      <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+      <div className="divide-y divide-slate-800/50">
         {sessions.map((session, index) => (
           <SessionTableRow
             key={session.id}

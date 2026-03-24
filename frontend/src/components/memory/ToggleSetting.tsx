@@ -31,7 +31,7 @@ export function ToggleSetting({
       case "danger":
         return enabled
           ? "border-slate-700 hover:bg-slate-800/50"
-          : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20";
+          : "border-red-900 bg-red-900/20";
       case "sky":
         return "border-sky-200 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20";
       case "violet":

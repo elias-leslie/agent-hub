@@ -8,7 +8,7 @@ export default function NotFound() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center">
         <div className="mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-200 dark:bg-slate-800">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-800">
             <FileQuestion className="w-8 h-8 text-slate-400" />
           </div>
         </div>
@@ -36,7 +36,7 @@ export default function NotFound() {
 
           <button
             onClick={() => typeof window !== "undefined" && window.history.back()}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-100 font-medium transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-100 font-medium transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Go back

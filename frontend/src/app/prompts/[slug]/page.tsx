@@ -149,19 +149,19 @@ export default function PromptEditPage() {
     <div className="min-h-screen bg-slate-950">
       {/* Toast notifications */}
       {saveMutation.isSuccess && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-sm shadow-lg">
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-sm shadow-lg">
           <CheckCircle2 className="h-4 w-4" />
           Prompt saved successfully
         </div>
       )}
       {saveMutation.isError && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm shadow-lg">
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-950/40 border border-red-800 text-red-400 text-sm shadow-lg">
           <AlertCircle className="h-4 w-4" />
           Failed to save prompt
         </div>
       )}
       {deleteMutation.isError && (
-        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-sm shadow-lg">
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-red-950/40 border border-red-800 text-red-400 text-sm shadow-lg">
           <AlertCircle className="h-4 w-4" />
           Failed to delete prompt
         </div>
@@ -173,7 +173,7 @@ export default function PromptEditPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/prompts")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
@@ -185,7 +185,7 @@ export default function PromptEditPage() {
             <button
               onClick={handleDelete}
               disabled={deleteMutation.isPending || prompt.deletion_locked}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+              className="px-4 py-2 text-sm font-medium rounded-lg border border-red-800 text-red-400 hover:bg-red-950/40 transition-colors"
             >
               {deleteMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -316,7 +316,7 @@ export default function PromptEditPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   !isGlobal
-                    ? "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                    ? "bg-slate-800 border-slate-600 text-slate-700"
                     : "border-slate-700 text-slate-400 hover:bg-slate-50",
                 )}
               >
@@ -327,8 +327,8 @@ export default function PromptEditPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   enabled
-                    ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-600"
-                    : "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-400",
+                    ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
+                    : "bg-slate-800 border-slate-600 text-slate-400",
                 )}
               >
                 {enabled ? "Enabled" : "Disabled"}
@@ -349,7 +349,7 @@ export default function PromptEditPage() {
                 {excludeAgents.map((agent) => (
                   <span
                     key={agent}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-mono bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-mono bg-red-950/30 border border-red-800 text-red-400"
                   >
                     {agent}
                     <button
@@ -390,7 +390,7 @@ export default function PromptEditPage() {
                     setExcludeInput("");
                   }}
                   disabled={!excludeInput.trim()}
-                  className="px-3 py-2 text-sm font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                  className="px-3 py-2 text-sm font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
                 >
                   Add
                 </button>

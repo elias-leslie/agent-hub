@@ -33,14 +33,14 @@ export function ModelPill({
       className={cn(
         "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-all",
         onClick && "cursor-pointer hover:scale-105 active:scale-95",
-        isActive && "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900",
+        isActive && "ring-2 ring-offset-1 ring-offset-slate-900",
         isClaude
           ? cn(
-              "border-purple-400/60 text-purple-600 dark:text-purple-400 bg-purple-50/80 dark:bg-purple-950/40",
+              "border-purple-400/60 text-purple-400 bg-purple-50/80 dark:bg-purple-950/40",
               isActive && "ring-purple-400"
             )
           : cn(
-              "border-emerald-400/60 text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40",
+              "border-emerald-400/60 text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40",
               isActive && "ring-emerald-400"
             )
       )}

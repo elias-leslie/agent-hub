@@ -190,7 +190,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
                     })
                   }
                   rows={field === "timezone" ? 2 : 3}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                 />
               </label>
             ))}
@@ -218,7 +218,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
           </div>
           <div className="flex items-center gap-2">
             {persona.onboarding_attempts > 0 && (
-              <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+              <span className="text-[10px] font-mono text-slate-500">
                 {persona.onboarding_attempts} attempt{persona.onboarding_attempts !== 1 ? "s" : ""}
               </span>
             )}
@@ -226,7 +226,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               <button
                 onClick={handleResetOnboarding}
                 disabled={resetting}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
                 title="Re-run onboarding bootstrap on next conversation"
               >
                 {resetting ? (

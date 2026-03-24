@@ -197,12 +197,12 @@ export default function ModelsPage() {
             {/* Controls */}
             <div className="flex items-center gap-2">
               {lastSync && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 font-mono">
                   Synced {new Date(lastSync).toLocaleDateString()}
                 </span>
               )}
               {lastModelReview && (
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                <span className="text-[10px] text-slate-500 font-mono">
                   Reviewed {new Date(lastModelReview).toLocaleDateString()}
                 </span>
               )}

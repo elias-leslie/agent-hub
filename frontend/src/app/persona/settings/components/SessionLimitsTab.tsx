@@ -110,7 +110,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 "flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150",
                 mode === opt.value
                   ? "bg-white dark:bg-slate-700 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
+                  : "text-slate-400 hover:text-slate-300",
               )}
             >
               {opt.label}
@@ -170,7 +170,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                     className={cn(
                       "flex-1 px-2 py-1 text-xs rounded-md transition-colors",
                       persona.session_reset_idle_minutes === preset.value
-                        ? "bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                        ? "bg-amber-50 dark:bg-amber-900/30 text-amber-400 font-medium"
                         : "text-slate-400 hover:bg-slate-700 border border-slate-700",
                     )}
                   >
@@ -207,14 +207,14 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 {isLimitCustom(key) && (
                   <button
                     onClick={() => handleLimitReset(key)}
-                    className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+                    className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
                   >
                     <RotateCcw className="w-2.5 h-2.5" />
                     Reset
                   </button>
                 )}
               </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-2">
+              <p className="text-[10px] text-slate-500 mb-2">
                 {config.description}
               </p>
               <input

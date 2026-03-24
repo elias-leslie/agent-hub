@@ -44,7 +44,7 @@ export function AgentRow({
             className={cn(
               "text-sm font-semibold hover:text-amber-500 dark:hover:text-amber-400 truncate block",
               agent.is_active
-                ? "text-slate-800 dark:text-slate-100"
+                ? "text-slate-100"
                 : "text-slate-400"
             )}
           >

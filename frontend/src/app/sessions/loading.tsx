@@ -6,13 +6,13 @@ export default function SessionsLoading() {
         <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
-              <div className="h-6 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-              <div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+              <div className="h-6 w-20 bg-slate-800 rounded animate-pulse" />
+              <div className="h-4 w-16 bg-slate-800 rounded animate-pulse" />
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-              <div className="h-8 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-              <div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+              <div className="h-8 w-24 bg-slate-800 rounded animate-pulse" />
+              <div className="h-8 w-20 bg-slate-800 rounded animate-pulse" />
+              <div className="h-8 w-16 bg-slate-800 rounded animate-pulse" />
             </div>
           </div>
         </div>

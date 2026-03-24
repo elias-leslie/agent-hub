@@ -221,7 +221,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               onChange={(e) =>
                 updateField("thinking_level", e.target.value || null)
               }
-              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
+              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200"
             >
               {thinkingLevels.map((level) => (
                 <option key={level.value} value={level.value}>
@@ -253,7 +253,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               onChange={(e) =>
                 updateField("verbosity_level", e.target.value || null)
               }
-              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200"
+              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200"
             >
               {VERBOSITY_LEVELS.map((level) => (
                 <option key={level.value} value={level.value}>
@@ -301,7 +301,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                 setFieldError("timeout_seconds", "Enter a value between 1 and 600 seconds.");
               }
             }}
-            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-400"
           />
           <p className="text-[10px] text-slate-400">
             Override the model&apos;s default timeout. Leave empty to use the model&apos;s timeout hint (based on speed tier).
@@ -313,7 +313,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
 
         <div className="space-y-4">
           <div>
-            <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200">
+            <h3 className="text-sm font-medium text-slate-200">
               Execution limits
             </h3>
             <p className="text-[10px] text-slate-400 mt-1">
@@ -353,7 +353,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                       )
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 placeholder-slate-400"
+                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-400"
                 />
                 <p className="text-[10px] text-slate-400">{config.description}</p>
                 {fieldErrors[config.field] && (

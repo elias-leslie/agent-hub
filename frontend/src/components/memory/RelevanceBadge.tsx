@@ -8,9 +8,9 @@ export function RelevanceBadge({ score }: { score: number }) {
   const percentage = Math.round(score * 100);
   const color =
     percentage >= 80
-      ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
+      ? "text-emerald-400 bg-emerald-500/10"
       : percentage >= 60
-        ? "text-amber-500 dark:text-amber-400 bg-blue-500/10"
+        ? "text-amber-400 bg-blue-500/10"
         : "text-slate-400 bg-slate-500/10";
 
   return (

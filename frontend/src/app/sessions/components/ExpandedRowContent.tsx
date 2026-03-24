@@ -18,7 +18,7 @@ export function ExpandedRowContent({
 }) {
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-500">
         <RefreshCw className="h-4 w-4 animate-spin mr-2" />
         Loading session details...
       </div>
@@ -27,7 +27,7 @@ export function ExpandedRowContent({
 
   if (!expandedData || !eventsData) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-500">
         Failed to load session details
       </div>
     );

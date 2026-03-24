@@ -77,7 +77,7 @@ export function Sidebar({
               className={cn(
                 "flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors",
                 activeTab === tab.id
-                  ? "bg-amber-950/40 text-amber-500 dark:text-amber-400"
+                  ? "bg-amber-950/40 text-amber-400"
                   : "text-slate-400 hover:bg-slate-800"
               )}
             >

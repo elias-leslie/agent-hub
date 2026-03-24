@@ -25,7 +25,7 @@ export function PersonaSettingsHeader({
   const displayName = getPersonaDisplayName(personaName);
 
   return (
-    <header className="flex-shrink-0 border-b border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20">
+    <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/80 backdrop-blur-lg z-20">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-3">
           <Link
@@ -49,13 +49,13 @@ export function PersonaSettingsHeader({
             <FlaskConical className="h-4.5 w-4.5" />
           </Link>
           {saveSuccess && !hasChanges && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Saved
             </span>
           )}
           {saveError && (
-            <span className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+            <span className="flex items-center gap-1.5 text-xs text-red-400">
               <AlertCircle className="h-3.5 w-3.5" />
               Failed to save
             </span>

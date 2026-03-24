@@ -59,7 +59,7 @@ export function LiveBadge({
         />
       </span>
       {showLabel && (
-        <span className="text-green-600 dark:text-green-400 uppercase tracking-wide font-semibold">
+        <span className="text-green-400 uppercase tracking-wide font-semibold">
           Live
         </span>
       )}

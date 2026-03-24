@@ -87,7 +87,7 @@ export function MemoryTableRow({
         className={cn(
           "w-full grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
           "hover:bg-slate-800/30",
-          isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
+          isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-amber-800",
           isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
           isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
         )}
@@ -103,7 +103,7 @@ export function MemoryTableRow({
             "w-5 h-5 rounded border flex items-center justify-center transition-colors cursor-pointer",
             isSelected
               ? "bg-emerald-500 border-emerald-500 text-white"
-              : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
+              : "border-slate-600 hover:border-emerald-400"
           )}
         >
           {isSelected && <Check className="w-3 h-3" />}
@@ -154,9 +154,9 @@ export function MemoryTableRow({
               className={cn(
                 "text-[11px] font-mono tabular-nums font-medium",
                 item.utility_score >= 0.7
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-emerald-400"
                   : item.utility_score >= 0.4
-                    ? "text-amber-600 dark:text-amber-400"
+                    ? "text-amber-400"
                     : "text-slate-400"
               )}
             >

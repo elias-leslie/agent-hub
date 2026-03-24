@@ -60,7 +60,7 @@ function AgentChatContent() {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20">
+      <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/80 backdrop-blur-lg z-20">
         <div className="flex items-center gap-3 px-4 h-14">
           <Link
             href={`/agents/${slug}`}
