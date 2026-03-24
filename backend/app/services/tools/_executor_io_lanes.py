@@ -380,7 +380,11 @@ async def _retire_task_lane(
             session.workstream_updated_at = now
             db.add(session)
         await db.commit()
-    return f"Retired {len(sessions)} session-backed lane(s) for {task_id}"
+    cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
+    return (
+        f"Retired {len(sessions)} session-backed lane(s) for {task_id}\n"
+        f"Lane cleanup: {cleanup_result}"
+    )
 
 
 async def _reconcile_task_lane(
