@@ -252,7 +252,7 @@ export function SessionDropdown({
                         {getSessionMeta(session).map((meta) => (
                           <span
                             key={`${session.id}-${meta}`}
-                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 dark:bg-slate-700 dark:text-slate-300"
+                            className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 bg-slate-700 dark:text-slate-300"
                           >
                             {meta}
                           </span>

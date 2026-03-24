@@ -117,7 +117,7 @@ function OAuthButton({ isOAuthLoading, hasOAuthToken, onOAuthStart }: OAuthButto
         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50",
         hasOAuthToken
           ? "bg-slate-800 hover:bg-slate-700 text-slate-400"
-          : "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-amber-300",
+          : "bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-amber-300",
       )}
     >
       {isOAuthLoading ? (

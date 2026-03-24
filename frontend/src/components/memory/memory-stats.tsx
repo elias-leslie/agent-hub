@@ -56,8 +56,8 @@ function StatCard({
 }) {
   const colors = {
     emerald: "border-l-emerald-500 dark:border-l-emerald-400",
-    amber: "border-l-amber-500 dark:border-l-amber-400",
-    blue: "border-l-blue-500 dark:border-l-blue-400",
+    amber: "border-l-amber-400",
+    blue: "border-l-amber-400",
     purple: "border-l-purple-500 dark:border-l-purple-400",
   };
 

@@ -244,8 +244,8 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             className={cn(
               "flex max-w-md items-start gap-2 rounded-lg border px-3 py-2 text-xs",
               resetState.status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
-                : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300",
+                ? "border-emerald-200 bg-emerald-50 text-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-300"
+                : "border-rose-200 bg-rose-50 text-rose-300 bg-rose-950/30 dark:text-rose-300",
             )}
           >
             {resetState.status === "success" ? (

@@ -50,8 +50,8 @@ export function SessionTableRow({
       data-testid="session-row"
       className={cn(
         "transition-all duration-300",
-        isLive && "bg-emerald-50/50 dark:bg-emerald-950/10",
-        isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-amber-800",
+        isLive && "bg-emerald-950/10",
+        isFocused && "bg-blue-950/20 ring-1 ring-inset ring-amber-800",
         isFlashing && "animate-flash"
       )}
     >

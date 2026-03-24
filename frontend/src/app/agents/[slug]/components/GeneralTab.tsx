@@ -76,7 +76,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
           <label className="text-xs font-medium text-slate-400">
             Coding Agent
           </label>
-          <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
+          <p className="text-xs text-slate-500 mb-2">
             Enable to make this agent available for autonomous task execution
           </p>
           <div className="flex items-center gap-3">

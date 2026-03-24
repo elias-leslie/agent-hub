@@ -53,7 +53,7 @@ export function AgentRow({
           {agent.is_coding_agent && (
             <span title="Coding specialist">
               <Code2
-                className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400 shrink-0"
+                className="h-3.5 w-3.5 text-cyan-400 shrink-0"
               />
             </span>
           )}

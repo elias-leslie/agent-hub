@@ -52,7 +52,7 @@ export function EpisodeFormFields({
         />
         <p className="text-xs text-slate-400">
           Short action phrase (~20 chars) shown in reference index:{" "}
-          <code className="text-cyan-600 dark:text-cyan-400">
+          <code className="text-cyan-400">
             {episodeUuid.slice(0, 8)}:{summary || "..."}
           </code>
         </p>

@@ -231,7 +231,7 @@ export default function PromptEditPage() {
               </p>
             )}
             {prompt.deletion_locked && (
-              <p className="text-[11px] text-amber-600 dark:text-amber-300">
+              <p className="text-[11px] text-amber-300">
                 This prompt is locked and cannot be deleted.
               </p>
             )}
