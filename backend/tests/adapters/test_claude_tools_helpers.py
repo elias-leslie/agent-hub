@@ -14,6 +14,67 @@ class ResultMessage:
     pass
 
 
+def test_build_mcp_server_uses_canonical_server_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_sdk_tool(name: str, description: str, input_schema: dict[str, object]):
+        def _decorate(handler):
+            captured.setdefault("tool_names", []).append(name)
+            return handler
+
+        return _decorate
+
+    def fake_create_sdk_mcp_server(name: str, tools: list[object]) -> object:
+        captured["server_name"] = name
+        captured["tool_count"] = len(tools)
+        return object()
+
+    fake_sdk = types.SimpleNamespace(
+        create_sdk_mcp_server=fake_create_sdk_mcp_server,
+        tool=fake_sdk_tool,
+    )
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", fake_sdk)
+
+    monkeypatch.setattr(
+        "app.adapters.claude_tools_mcp._patch_sdk_mcp_race_condition",
+        lambda: None,
+    )
+
+    class _ToolCall:
+        def __init__(self, **kwargs: object) -> None:
+            self.__dict__.update(kwargs)
+
+    class _Handler:
+        async def execute(self, tool_call: object) -> object:
+            return types.SimpleNamespace(content=f"ok:{getattr(tool_call, 'name', '')}")
+
+    fake_base = types.SimpleNamespace(ToolCall=_ToolCall)
+    fake_tool_handler = types.SimpleNamespace(create_direct_handler=lambda **kwargs: _Handler())
+    monkeypatch.setitem(sys.modules, "app.services.tools.base", fake_base)
+    monkeypatch.setitem(sys.modules, "app.services.tools.tool_handler", fake_tool_handler)
+
+    from app.adapters._claude_constants import MCP_SERVER_NAME
+    from app.adapters.claude_tools_mcp import build_mcp_server
+
+    server = build_mcp_server(
+        tools=[
+            {
+                "name": "research_web",
+                "description": "Research the web",
+                "input_schema": {"type": "object"},
+            }
+        ],
+        working_dir=None,
+        project_id="agent-hub",
+        agent_slug="analyst",
+    )
+
+    assert server is not None
+    assert captured["server_name"] == MCP_SERVER_NAME
+    assert captured["tool_names"] == ["research_web"]
+    assert captured["tool_count"] == 1
+
+
 @pytest.mark.asyncio
 async def test_stream_sdk_messages_closes_after_result_message(monkeypatch: pytest.MonkeyPatch) -> None:
     yielded = []

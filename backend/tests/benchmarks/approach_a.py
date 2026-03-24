@@ -18,6 +18,7 @@ from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server, query
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
+from app.adapters._claude_constants import MCP_SERVER_NAME
 from tests.benchmarks._shared import (
     BENCHMARK_PROMPT,
     BENCHMARK_TOOLS,
@@ -78,7 +79,7 @@ def _build_mcp_server_with_handler(
 
         mcp_tools.append(sdk_tool(tool_name, t["description"], t["input_schema"])(mcp_handler))
 
-    return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
+    return create_sdk_mcp_server(MCP_SERVER_NAME, tools=mcp_tools)
 
 
 async def run_approach_a(

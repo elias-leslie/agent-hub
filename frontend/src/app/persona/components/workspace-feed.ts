@@ -25,29 +25,31 @@ export function canAnchorChildRuns(item: FeedAnchor): item is FeedMessage | Feed
   return item.kind !== "child_run";
 }
 
-export function buildChatMessage(entry: PersonaStreamEntry): ChatMessage {
+export function buildChatMessage(entry: PersonaStreamEntry, personaDisplayName?: string): ChatMessage {
   return {
     id: entry.id,
     role: (entry.role as ChatMessage["role"]) || "assistant",
     content: entry.content ? stripObservabilityTags(entry.content) : "",
     timestamp: new Date(entry.timestamp),
-    agentName: entry.agent_slug || undefined,
+    agentName: personaDisplayName || entry.agent_slug || undefined,
     agentModel: entry.model || undefined,
     agentProvider: "claude",
   };
 }
 
-export function buildLocalFeedMessages(messages: ChatMessage[], currentSessionId: string | null): FeedItem[] {
+export function buildLocalFeedMessages(messages: ChatMessage[], currentSessionId: string | null, personaDisplayName?: string): FeedItem[] {
   return messages.map((message) => ({
     kind: "message" as const,
     id: message.id,
     sessionId: currentSessionId,
     timestamp: message.timestamp,
-    message,
+    message: message.role === "assistant" && personaDisplayName
+      ? { ...message, agentName: message.agentName || personaDisplayName }
+      : message,
   }));
 }
 
-export function buildRemoteFeedItems(entries: PersonaStreamEntry[]): FeedItem[] {
+export function buildRemoteFeedItems(entries: PersonaStreamEntry[], personaDisplayName?: string): FeedItem[] {
   return entries.map((entry) => {
     if (entry.entry_type === "message") {
       return {
@@ -55,7 +57,7 @@ export function buildRemoteFeedItems(entries: PersonaStreamEntry[]): FeedItem[] 
         id: entry.id,
         sessionId: entry.session_id,
         timestamp: new Date(entry.timestamp),
-        message: buildChatMessage(entry),
+        message: buildChatMessage(entry, personaDisplayName),
       };
     }
     return {

@@ -598,12 +598,10 @@ async def complete_with_tools(
         allowed_tools=allowed_tools,
         agent_slug=agent_slug,
     )
-    # Working-dir sessions use settings/hooks for permission enforcement and
-    # stay on plain-string prompts to avoid async-input cancel-scope corruption.
     prompt: str | Any = (
-        conversation_prompt
-        if working_dir
-        else await _wrap_prompt_as_stream(conversation_prompt) if use_streaming_prompt else conversation_prompt
+        await _wrap_prompt_as_stream(conversation_prompt)
+        if use_streaming_prompt
+        else conversation_prompt
     )
     async for item in _stream_sdk_messages(prompt, options, provider_name):
         yield item
