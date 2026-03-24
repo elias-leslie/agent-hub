@@ -100,14 +100,21 @@ export function buildApiUrl(path: string): string {
 }
 
 export function buildInternalHeaders(): Record<string, string> {
-  // Server-side calls may hit the backend directly, so attach the real
-  // internal/dashboard headers from the runtime environment. Client-side
-  // calls stay same-origin and rely on the Next proxy route instead.
+  const headers: Record<string, string> = {}
+
   if (typeof window !== 'undefined') {
-    return {}
+    // Client-side: SSE/WS paths bypass the Next.js proxy (which injects
+    // auth headers), so we must include the dashboard client identity
+    // directly.  The NEXT_PUBLIC_ prefix makes these available at build time.
+    const clientId = process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID?.trim()
+    if (clientId) {
+      headers['X-Client-Id'] = clientId
+      headers['X-Request-Source'] = 'agent-hub-dashboard'
+    }
+    return headers
   }
 
-  const headers: Record<string, string> = {}
+  // Server-side: attach full internal auth headers from the runtime env.
   const internalSecret = process.env.INTERNAL_SERVICE_SECRET?.trim()
   const dashboardClientId = process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim()
   const dashboardRequestSource =
