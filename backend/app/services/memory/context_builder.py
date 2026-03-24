@@ -11,7 +11,11 @@ from .budget import BudgetUsage
 from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
 from .context_builder_processors import compute_token_counts
-from .context_builder_settings import apply_memory_config_overrides
+from .context_builder_settings import (
+    apply_memory_config_overrides,
+    normalize_memory_config,
+    resolve_memory_tags,
+)
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .context_profiles import priority_tags_for_profile
@@ -59,8 +63,7 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
     for deprecated episodes).  audience_tags filtering applies exclusively to
     references, where role/domain-specific selection is appropriate.
     """
-    exclude_tags = memory_config.get("exclude_tags", [])
-    audience_tags = memory_config.get("audience_tags", [])
+    audience_tags, exclude_tags = resolve_memory_tags(memory_config)
     if exclude_tags:
         context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
         context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
@@ -209,10 +212,11 @@ def _should_select_query_references(
     memory_config: dict[str, Any] | None,
 ) -> bool:
     """Return True when semantic/text-selected references should be added."""
-    if memory_config and "query_reference_selection_enabled" in memory_config:
-        return bool(memory_config["query_reference_selection_enabled"])
-    normalized = (task_type or "").strip().lower()
-    return normalized != "heartbeat"
+    normalized_config = normalize_memory_config(memory_config)
+    if normalized_config and "query_reference_selection_enabled" in normalized_config:
+        return bool(normalized_config["query_reference_selection_enabled"])
+    task_kind = (task_type or "").strip().lower()
+    return task_kind != "heartbeat"
 
 
 async def build_progressive_context(

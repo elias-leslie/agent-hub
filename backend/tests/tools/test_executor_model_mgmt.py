@@ -120,7 +120,16 @@ async def test_get_agent_details_includes_memory_config() -> None:
         is_coding_agent=True,
         is_active=True,
         version=4,
-        memory_config={"include_references": True, "audience_tags": ["debugger-relevant"]},
+        memory_config={
+            "injection_enabled": True,
+            "include_mandates": True,
+            "include_guardrails": True,
+            "include_references": True,
+            "continuity_enabled": True,
+            "continuity_max_sessions": 5,
+            "audience_tags": ["debugger-relevant"],
+            "exclude_tags": [],
+        },
     )
 
     with (
@@ -177,7 +186,12 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
     kwargs = service.update.await_args.kwargs
     assert kwargs["changed_by"] == "persona"
     assert kwargs["memory_config"] == {
+        "injection_enabled": True,
+        "include_mandates": True,
+        "include_guardrails": True,
         "include_references": True,
+        "continuity_enabled": True,
+        "continuity_max_sessions": 5,
         "query_reference_selection_enabled": True,
         "audience_tags": ["persona-relevant", "memory-routing"],
         "exclude_tags": ["archive"],

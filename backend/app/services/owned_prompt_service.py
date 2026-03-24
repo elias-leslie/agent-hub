@@ -19,6 +19,8 @@ from app.services.prompt_service import get_prompt_by_slug, record_prompt_revisi
 
 STANDARD_PROMPT_TYPE = "standard"
 AGENT_SYSTEM_PROMPT_TYPE = "agent_system"
+GLOBAL_MANDATE_PROMPT_TYPE = "global_mandate"
+GLOBAL_GUARDRAIL_PROMPT_TYPE = "global_guardrail"
 PERSONA_PERSONALITY_PROMPT_TYPE = "persona_personality"
 PERSONA_USER_CONTEXT_PROMPT_TYPE = "persona_user_context"
 PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE = "persona_heartbeat_instructions"
@@ -245,6 +247,8 @@ async def get_persona_prompt_text(
 
 __all__ = [
     "AGENT_SYSTEM_PROMPT_TYPE",
+    "GLOBAL_GUARDRAIL_PROMPT_TYPE",
+    "GLOBAL_MANDATE_PROMPT_TYPE",
     "PERSONA_HEARTBEAT_INSTRUCTIONS_PROMPT_TYPE",
     "PERSONA_PERSONALITY_PROMPT_TYPE",
     "PERSONA_USER_CONTEXT_PROMPT_TYPE",

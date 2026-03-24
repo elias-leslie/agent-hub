@@ -104,6 +104,7 @@ class AgentResponse(BaseModel):
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
     memory_config: dict[str, Any] | None
+    effective_memory_config: dict[str, Any]
     max_concurrency: int | None
     max_subagent_concurrency: int | None
     daily_token_budget: int | None
@@ -114,7 +115,12 @@ class AgentResponse(BaseModel):
     updated_at: str
 
     @classmethod
-    def from_dto(cls, dto: AgentDTO) -> "AgentResponse":
+    def from_dto(
+        cls,
+        dto: AgentDTO,
+        *,
+        effective_memory_config: dict[str, Any],
+    ) -> "AgentResponse":
         """Create response from DTO."""
         return cls(
             id=dto.id,
@@ -133,6 +139,7 @@ class AgentResponse(BaseModel):
             is_coding_agent=dto.is_coding_agent,
             tool_permissions=dto.tool_permissions,
             memory_config=dto.memory_config,
+            effective_memory_config=effective_memory_config,
             max_concurrency=dto.max_concurrency,
             max_subagent_concurrency=dto.max_subagent_concurrency,
             daily_token_budget=dto.daily_token_budget,

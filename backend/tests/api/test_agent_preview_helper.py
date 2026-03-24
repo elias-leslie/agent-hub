@@ -259,6 +259,156 @@ async def test_build_agent_preview_passes_agent_memory_config_to_context_builder
 
 
 @pytest.mark.asyncio
+async def test_build_agent_preview_keeps_runtime_prompt_when_injection_disabled() -> None:
+    agent = AgentDTO(
+        id=1,
+        slug="note-titler",
+        name="Note Titler",
+        description=None,
+        system_prompt="legacy system prompt",
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=[],
+        escalation_model_id=None,
+        strategies={},
+        temperature=0.1,
+        thinking_level=None,
+        verbosity_level=None,
+        is_active=True,
+        is_coding_agent=False,
+        tool_permissions=None,
+        memory_config={"enabled": False, "injection_enabled": True},
+        max_concurrency=None,
+        max_subagent_concurrency=None,
+        daily_token_budget=None,
+        hourly_request_limit=None,
+        timeout_seconds=None,
+        version=1,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    with (
+        patch(
+            "app.api.helpers.agent_preview.collect_runtime_prompt_sections",
+            new_callable=AsyncMock,
+            return_value=[
+                type(
+                    "Section",
+                    (),
+                    {
+                        "content": "<agent_persona>legacy system prompt</agent_persona>",
+                        "to_preview_dict": lambda self: {
+                            "label": "Note Titler System Prompt",
+                            "source_kind": "agent_system_prompt",
+                            "source_id": "note-titler",
+                            "role": None,
+                            "priority": None,
+                            "updated_at": None,
+                            "content_hash": "abcd1234",
+                            "chars": 49,
+                            "estimated_tokens": 12,
+                            "content": "<agent_persona>legacy system prompt</agent_persona>",
+                        },
+                    },
+                )(),
+            ],
+        ) as collect_runtime_prompt_sections,
+        patch(
+            "app.api.helpers.agent_preview.join_runtime_prompt_sections",
+            return_value="<agent_persona>legacy system prompt</agent_persona>",
+        ),
+        patch(
+            "app.api.helpers.agent_preview.build_progressive_context",
+            new_callable=AsyncMock,
+        ) as build_progressive_context,
+    ):
+        preview = await build_agent_preview(
+            AsyncMock(),
+            agent,
+            prompt_input="Title this note.",
+        )
+
+    collect_runtime_prompt_sections.assert_awaited_once()
+    build_progressive_context.assert_not_awaited()
+    assert preview["mandate_count"] == 0
+    assert preview["guardrail_count"] == 0
+    assert preview["full_context"] == "<agent_persona>legacy system prompt</agent_persona>"
+    assert preview["sections"][0]["source_kind"] == "agent_system_prompt"
+    assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
+    assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is False
+
+
+@pytest.mark.asyncio
+async def test_build_agent_preview_disables_mandate_runtime_prompts_when_include_mandates_disabled() -> None:
+    agent = AgentDTO(
+        id=1,
+        slug="note-titler",
+        name="Note Titler",
+        description=None,
+        system_prompt="legacy system prompt",
+        primary_model_id="codex/gpt-5.4",
+        fallback_models=[],
+        escalation_model_id=None,
+        strategies={},
+        temperature=0.1,
+        thinking_level=None,
+        verbosity_level=None,
+        is_active=True,
+        is_coding_agent=False,
+        tool_permissions=None,
+        memory_config={"include_mandates": False, "include_guardrails": True},
+        max_concurrency=None,
+        max_subagent_concurrency=None,
+        daily_token_budget=None,
+        hourly_request_limit=None,
+        timeout_seconds=None,
+        version=1,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    fake_context = type(
+        "Ctx",
+        (),
+        {
+            "mandates": [],
+            "guardrails": [],
+            "get_loaded_uuids": lambda self: [],
+            "get_reference_uuids": lambda self: [],
+        },
+    )()
+
+    with (
+        patch(
+            "app.api.helpers.agent_preview.collect_runtime_prompt_sections",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as collect_runtime_prompt_sections,
+        patch(
+            "app.api.helpers.agent_preview.join_runtime_prompt_sections",
+            return_value="",
+        ),
+        patch(
+            "app.api.helpers.agent_preview.build_progressive_context",
+            new_callable=AsyncMock,
+            return_value=fake_context,
+        ),
+        patch(
+            "app.api.helpers.agent_preview.format_progressive_context",
+            return_value="",
+        ),
+    ):
+        await build_agent_preview(
+            AsyncMock(),
+            agent,
+            prompt_input="Title this note.",
+        )
+
+    assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
+    assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is True
+
+
+@pytest.mark.asyncio
 async def test_build_agent_preview_respects_memory_config_include_flags() -> None:
     agent = AgentDTO(
         id=1,

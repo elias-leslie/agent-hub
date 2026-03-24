@@ -41,50 +41,43 @@ async def inject_agent_mandates(
     db: AsyncSession | None = None,
     *,
     include_roles: list[str] | None = None,
+    include_mandates: bool = True,
+    include_guardrails: bool = True,
     prompt_mode: str = "full",
     project_id: str | None = None,
     task_type: str | None = None,
 ) -> MandateInjection:
     """Build system content with DB-stored prompts + agent's system prompt."""
-    sections = []
-    prompt_context = None
-    exclude_roles: list[str] | None = None
-    if db and prompt_mode != "none":
-        from app.services.prompt_service import get_runtime_excluded_prompt_roles
+    if prompt_mode == "none":
+        return MandateInjection(system_content="", injected_uuids=[])
 
-        exclude_roles = get_runtime_excluded_prompt_roles(
-            agent_slug=agent.slug,
-            prompt_mode=prompt_mode,
-            task_type=task_type,
+    sections: list[str] = []
+    if db:
+        from app.services.runtime_prompt_stack import (
+            collect_runtime_prompt_sections,
+            join_runtime_prompt_sections,
         )
-    if db and prompt_mode != "none":
-        from app.services.prompt_service import build_prompt_context
-        prompt_context = await build_prompt_context(
+
+        runtime_sections = await collect_runtime_prompt_sections(
             db,
-            agent.id,
+            agent,
             include_roles=include_roles,
-            exclude_roles=exclude_roles,
-            agent_slug=agent.slug,
+            task_type=task_type,
+            project_id=project_id,
+            include_global_prompts=True,
+            include_mandates=include_mandates,
+            include_guardrails=include_guardrails,
+            include_persona_context=(prompt_mode == "full"),
         )
-        if prompt_context:
-            sections.append(prompt_context)
-    elif prompt_mode != "none" and agent.system_prompt:
+        system_content = join_runtime_prompt_sections(runtime_sections)
+        return MandateInjection(system_content=system_content, injected_uuids=[])
+
+    if agent.system_prompt:
         sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
-
-    if db and prompt_mode == "full":
-        from app.services.persona_service import get_persona_context_for_agent
-        persona_context = await get_persona_context_for_agent(db, agent.id, task_type=task_type)
-        if persona_context:
-            sections.append(f"<persona_context>\n{persona_context}\n</persona_context>")
-
-    if db and prompt_mode != "none" and not prompt_context and agent.system_prompt:
-        sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
-
     if project_id:
-        perm_block = await _build_project_permissions_block(project_id, db)
+        perm_block = await _build_project_permissions_block(project_id, None)
         if perm_block:
             sections.append(perm_block)
-
     return MandateInjection(system_content="\n\n".join(sections), injected_uuids=[])
 
 

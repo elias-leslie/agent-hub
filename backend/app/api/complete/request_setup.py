@@ -19,6 +19,7 @@ from app.services.memory import (
     parse_memory_group_id,
     track_loaded_batch,
 )
+from app.services.memory.context_builder_settings import memory_injection_enabled
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
@@ -128,21 +129,11 @@ async def inject_memory(
     memory_facts_injected = 0
     loaded_memory_uuids: list[str] = []
 
-    def _memory_injection_enabled(agent_memory_config: dict[str, Any] | None) -> bool:
-        """Resolve per-agent memory injection toggle."""
-        if not agent_memory_config:
-            return True
-        if "injection_enabled" in agent_memory_config:
-            return bool(agent_memory_config["injection_enabled"])
-        if "enabled" in agent_memory_config:
-            return bool(agent_memory_config["enabled"])
-        return True
-
     agent_memory_config = (
         resolved_agent.agent.memory_config if resolved_agent else None
     )
 
-    if request.use_memory and _memory_injection_enabled(agent_memory_config):
+    if request.use_memory and memory_injection_enabled(agent_memory_config):
         scope, scope_id = parse_memory_group_id(request.memory_group_id)
         try:
             messages_dict, progressive_context = await inject_progressive_context(

@@ -5,7 +5,7 @@ export interface MemoryTabProps {
   updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
 }
 
-export interface MemoryConfig {
+export interface MemoryConfig extends Record<string, unknown> {
   injection_enabled: boolean;
   include_mandates: boolean;
   include_guardrails: boolean;

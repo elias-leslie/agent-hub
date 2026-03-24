@@ -94,6 +94,27 @@ async def test_inject_memory_skips_when_enabled_false() -> None:
 
 
 @pytest.mark.asyncio
+async def test_inject_memory_requires_both_enabled_and_injection_enabled() -> None:
+    request = _request()
+
+    with patch(
+        "app.api.complete.request_setup.inject_progressive_context",
+        new_callable=AsyncMock,
+    ) as mock_inject:
+        _, injected_count, loaded = await inject_memory(
+            request=request,
+            messages_dict=[{"role": "user", "content": "hi"}],
+            session_id="s1",
+            resolved_agent=_resolved_agent({"enabled": False, "injection_enabled": True}),
+            db=None,
+        )
+
+    assert injected_count == 0
+    assert loaded == []
+    mock_inject.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     request = _request()
     request.memory_variant_override = "MINIMAL"

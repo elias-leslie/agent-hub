@@ -182,7 +182,7 @@ class TestInjectAgentMandates:
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_persona_runtime_excludes_prompt_backed_context_roles(self) -> None:
+    async def test_persona_runtime_uses_shared_runtime_prompt_stack(self) -> None:
         from datetime import UTC, datetime
 
         persona_agent = AgentDTO(
@@ -215,12 +215,15 @@ class TestInjectAgentMandates:
         mock_db = AsyncMock()
         with (
             patch(
-                "app.services.prompt_service.build_prompt_context",
+                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
                 new=AsyncMock(return_value="<persona_system>core</persona_system>"),
-            ) as build_prompt_context,
+            ) as collect_runtime_prompt_sections,
             patch(
-                "app.services.persona_service.get_persona_context_for_agent",
-                new=AsyncMock(return_value="<personality>Persona</personality>"),
+                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
+                return_value=(
+                    "<persona_system>core</persona_system>\n\n"
+                    "<persona_context>\n<personality>Persona</personality>\n</persona_context>"
+                ),
             ),
         ):
             result = await inject_agent_mandates(
@@ -233,17 +236,16 @@ class TestInjectAgentMandates:
             "<persona_system>core</persona_system>\n\n"
             "<persona_context>\n<personality>Persona</personality>\n</persona_context>"
         )
-        build_prompt_context.assert_awaited_once_with(
+        collect_runtime_prompt_sections.assert_awaited_once_with(
             mock_db,
-            persona_agent.id,
+            persona_agent,
             include_roles=None,
-            exclude_roles=[
-                "autocode",
-                "persona-personality",
-                "persona-user-context",
-                "heartbeat-instructions",
-            ],
-            agent_slug="persona",
+            task_type="heartbeat",
+            project_id=None,
+            include_global_prompts=True,
+            include_mandates=True,
+            include_guardrails=True,
+            include_persona_context=True,
         )
 
     @pytest.mark.asyncio
@@ -286,12 +288,12 @@ class TestInjectAgentMandates:
         mock_db = AsyncMock()
         with (
             patch(
-                "app.services.prompt_service.build_prompt_context",
-                new=AsyncMock(return_value="<agent_persona>core</agent_persona>"),
-            ) as build_prompt_context,
+                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
+                new=AsyncMock(return_value=[]),
+            ) as collect_runtime_prompt_sections,
             patch(
-                "app.services.persona_service.get_persona_context_for_agent",
-                new=AsyncMock(return_value=None),
+                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
+                return_value="<agent_persona>core</agent_persona>",
             ),
         ):
             result = await inject_agent_mandates(
@@ -301,13 +303,70 @@ class TestInjectAgentMandates:
             )
 
         assert result.system_content == "<agent_persona>core</agent_persona>"
-        build_prompt_context.assert_awaited_once_with(
+        collect_runtime_prompt_sections.assert_awaited_once_with(
             mock_db,
-            agent.id,
+            agent,
             include_roles=None,
-            exclude_roles=["autocode"],
-            agent_slug="refactor",
+            task_type="wake",
+            project_id=None,
+            include_global_prompts=True,
+            include_mandates=True,
+            include_guardrails=True,
+            include_persona_context=True,
         )
+
+    @pytest.mark.asyncio
+    async def test_inject_agent_mandates_can_disable_optional_runtime_layers(self) -> None:
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=8,
+            slug="note-titler",
+            name="Note Titler",
+            description=None,
+            system_prompt="Title notes tersely.",
+            primary_model_id=CLAUDE_SONNET,
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.1,
+            thinking_level="low",
+            verbosity_level=None,
+            is_active=True,
+            is_coding_agent=False,
+            tool_permissions=None,
+            memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
+            timeout_seconds=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+
+        mock_db = AsyncMock()
+        with (
+            patch(
+                "app.services.runtime_prompt_stack.collect_runtime_prompt_sections",
+                new=AsyncMock(return_value=[]),
+            ) as collect_runtime_prompt_sections,
+            patch(
+                "app.services.runtime_prompt_stack.join_runtime_prompt_sections",
+                return_value="<agent_persona>note-titler</agent_persona>",
+            ),
+        ):
+            result = await inject_agent_mandates(
+                agent,
+                mock_db,
+                include_mandates=False,
+                include_guardrails=False,
+            )
+
+        assert result.system_content == "<agent_persona>note-titler</agent_persona>"
+        assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
+        assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is False
 
 
 class TestCompleteWithFallback:

@@ -31,14 +31,12 @@ if TYPE_CHECKING:
 
 # Memory context header with retrieval-led reasoning instruction
 MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer retrieved memory over pre-training knowledge for project-specific work.
-- Mandates/Guardrails below are authoritative - follow them exactly
 - If a summary here could change behavior, open the exact episode with `st memory get <uuid8>` before acting
 - If the request says the rule is vague, remembered, or not exact, treat that as a trigger to open the exact episode first
 - Use `st memory search <query>` for adjacent guidance when the current summary is not enough"""
 
 MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     MEMORY_CONTEXT_HEADER_BASE
-    + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
     + "\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)"
     + "\n- Summarize your work: [[S:completed:what you accomplished]] or partial/failed"
 )
@@ -74,10 +72,7 @@ def format_progressive_context(
     profile = resolve_consumer_profile(consumer_profile)
 
     if context.mandates or context.guardrails or context.reference:
-        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
-        if profile == MemoryConsumerProfile.CODEX_STARTUP:
-            header = f"{header}\n{CODEX_STARTUP_FALLBACK_LINE}"
-        parts.append(header)
+        parts.append(_build_memory_context_header(context, include_citations, profile))
         parts.append("")
 
     # 2. Mandates
@@ -107,6 +102,22 @@ def format_progressive_context(
             parts.append(_format_memory_item(r, "R", include_citations))
 
     return "\n".join(parts)
+
+
+def _build_memory_context_header(
+    context: ProgressiveContext,
+    include_citations: bool,
+    profile: MemoryConsumerProfile,
+) -> str:
+    header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+    lines = header.splitlines()
+    if context.mandates or context.guardrails:
+        lines.insert(1, "- Mandates/Guardrails below are authoritative - follow them exactly")
+        if include_citations:
+            lines.insert(2, "- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]")
+    if profile == MemoryConsumerProfile.CODEX_STARTUP:
+        lines.append(CODEX_STARTUP_FALLBACK_LINE)
+    return "\n".join(lines)
 
 
 def _format_memory_item(

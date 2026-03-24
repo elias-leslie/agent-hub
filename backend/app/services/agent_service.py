@@ -28,6 +28,7 @@ from app.services.agent_crud import (
     get_version_history as get_version_history_crud,
 )
 from app.services.agent_dto import AgentDTO
+from app.services.memory.context_builder_settings import normalize_memory_config
 from app.services.owned_prompt_service import sync_agent_system_prompt
 from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.prompt_catalog import build_agent_system_prompt_slug
@@ -157,7 +158,7 @@ class AgentService:
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
-            memory_config=memory_config,
+            memory_config=normalize_memory_config(memory_config),
             max_concurrency=max_concurrency,
             max_subagent_concurrency=max_subagent_concurrency,
             daily_token_budget=daily_token_budget,
@@ -223,6 +224,10 @@ class AgentService:
         if not agent:
             return None
 
+        normalized_memory_config = (
+            normalize_memory_config(memory_config) if memory_config is not None else None
+        )
+
         old_slug = agent.slug
         apply_agent_updates(
             agent,
@@ -239,7 +244,7 @@ class AgentService:
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
-            memory_config=memory_config,
+            memory_config=normalized_memory_config,
             max_concurrency=max_concurrency,
             max_subagent_concurrency=max_subagent_concurrency,
             daily_token_budget=daily_token_budget,
