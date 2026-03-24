@@ -34,7 +34,7 @@ export function AgentsTable({
     const hasSearch = searchQuery.trim().length > 0;
 
     return (
-      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-16 text-center dark:border-slate-700 dark:bg-slate-900">
+      <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-16 text-center border-slate-700 dark:bg-slate-900">
         <Bot className="mx-auto mb-4 h-10 w-10 text-slate-600" />
         <p className="text-sm font-semibold text-slate-200">
           {hasSearch ? `No agents match "${searchQuery.trim()}"` : "No agents to show"}
@@ -51,7 +51,7 @@ export function AgentsTable({
             <button
               type="button"
               onClick={onClearSearch}
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 border-slate-700 text-slate-200 dark:hover:bg-slate-800"
             >
               Clear search
             </button>
@@ -60,7 +60,7 @@ export function AgentsTable({
             <button
               type="button"
               onClick={onShowActiveOnly}
-              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 border-slate-700 text-slate-200 dark:hover:bg-slate-800"
             >
               Include inactive agents
             </button>

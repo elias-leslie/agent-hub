@@ -75,8 +75,8 @@ export function MemoryTableRow({
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
-    guardrail: "border-l-amber-500 dark:border-l-amber-400",
-    reference: "border-l-blue-500 dark:border-l-blue-400",
+    guardrail: "border-l-amber-400",
+    reference: "border-l-amber-400",
   }[item.category] || "";
 
   return (
@@ -87,8 +87,8 @@ export function MemoryTableRow({
         className={cn(
           "w-full grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
           "hover:bg-slate-800/30",
-          isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-amber-800",
-          isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
+          isFocused && "bg-blue-950/20 ring-1 ring-inset ring-amber-800",
+          isExpanded && "bg-emerald-950/10",
           isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
         )}
         data-testid="memory-row"

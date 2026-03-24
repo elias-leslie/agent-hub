@@ -33,7 +33,7 @@ export function AgentEditorHeader({
               type="button"
               onClick={onOpenSidebar}
               aria-label="Open editor sections"
-              className="rounded-lg p-1.5 text-slate-600 transition-colors text-slate-400 dark:hover:bg-slate-800 lg:hidden"
+              className="rounded-lg p-1.5 text-slate-600 transition-colors text-slate-400 hover:bg-slate-800 lg:hidden"
             >
               <Menu className="h-5 w-5" />
             </button>
@@ -51,7 +51,7 @@ export function AgentEditorHeader({
                 <h1 className="truncate text-lg font-bold tracking-tight text-slate-100">
                   {agent.name}
                 </h1>
-                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-400 dark:bg-slate-800">
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-400 bg-slate-800">
                   {agent.slug}
                 </span>
               </div>

@@ -72,7 +72,7 @@ export function ScoreBreakdown({ models }: SectionProps) {
 
 export function CompositeScore({ models }: SectionProps) {
   return (
-    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg p-6 border border-amber-900/30">
+    <div className="bg-gradient-to-br from-amber-50 from-amber-950/20 dark:to-orange-950/20 rounded-lg p-6 border border-amber-900/30">
       <h3 className="text-sm font-semibold text-slate-100 mb-4">
         Composite Score
       </h3>

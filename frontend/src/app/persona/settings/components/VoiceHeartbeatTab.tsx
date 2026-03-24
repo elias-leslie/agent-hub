@@ -218,10 +218,10 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
               className={cn(
                 "inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
                 heartbeatDisabled
-                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  ? "bg-slate-100 text-slate-400 bg-slate-800 dark:text-slate-300"
                   : runtime?.heartbeat_supported
-                    ? "bg-emerald-100 text-emerald-300 dark:text-emerald-300"
-                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300",
+                    ? "bg-emerald-100 text-emerald-300"
+                    : "bg-rose-100 text-rose-300",
               )}
             >
               {heartbeatDisabled ? "Disabled" : runtime?.heartbeat_supported ? "Ready" : "Attention"}
@@ -238,13 +238,13 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
           </div>
 
           {heartbeatDisabled && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-300 dark:bg-amber-950/40 dark:text-amber-200">
               Heartbeat is currently off, so {persona.name} is not autonomously driving work.
             </div>
           )}
 
           {heartbeatWarning && (
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-300 bg-rose-950/40 dark:text-rose-200">
               {heartbeatWarning}
             </div>
           )}

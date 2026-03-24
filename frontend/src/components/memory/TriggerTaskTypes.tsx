@@ -61,7 +61,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
         <Tag className="h-3 w-3" />
         Trigger Task Types
         {triggerTypes.length > 0 && (
-          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">
+          <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cyan-100 dark:bg-cyan-900/40 text-cyan-300">
             {triggerTypes.length}
           </span>
         )}
@@ -75,7 +75,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
         {triggerTypes.map((type) => (
           <span
             key={type}
-            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-full bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+            className="flex items-center gap-1 px-2 py-1 text-[10px] rounded-full bg-cyan-50 dark:bg-cyan-950/30 text-cyan-300 border border-cyan-200 dark:border-cyan-800"
           >
             {type}
             <button
@@ -126,7 +126,7 @@ export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTa
           disabled={isUpdatingTriggers || !newTriggerType.trim()}
           className={cn(
             "px-2 py-1 rounded-md text-[10px] font-medium transition-colors",
-            "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600 dark:text-cyan-400",
+            "bg-cyan-50 dark:bg-cyan-900/20 text-cyan-400",
             "hover:bg-cyan-100 dark:hover:bg-cyan-900/30",
             "border border-cyan-200 dark:border-cyan-800",
             "disabled:opacity-50 disabled:cursor-not-allowed"

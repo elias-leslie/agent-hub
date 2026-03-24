@@ -71,7 +71,7 @@ export function CreatePromptForm({
   });
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 border-slate-800 dark:bg-slate-900">
       <h3 className="text-sm font-semibold text-slate-100">Create Prompt</h3>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
@@ -82,7 +82,7 @@ export function CreatePromptForm({
               setNewName(event.target.value);
               setNewSlug(slugify(event.target.value));
             }}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
           />
         </label>
         <label className="space-y-1.5">
@@ -90,7 +90,7 @@ export function CreatePromptForm({
           <input
             value={newSlug}
             onChange={(event) => setNewSlug(slugify(event.target.value))}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm outline-none transition"
           />
         </label>
       </div>
@@ -101,7 +101,7 @@ export function CreatePromptForm({
             value={newDescription}
             onChange={(event) => setNewDescription(event.target.value)}
             rows={2}
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
           />
         </label>
         <label className="space-y-1.5">
@@ -110,7 +110,7 @@ export function CreatePromptForm({
             value={newRole}
             onChange={(event) => setNewRole(event.target.value)}
             list="prompt-role-options"
-            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
           />
         </label>
       </div>
@@ -120,14 +120,14 @@ export function CreatePromptForm({
           value={newContent}
           onChange={(event) => setNewContent(event.target.value)}
           rows={12}
-          className="min-h-[220px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs outline-none transition border-slate-700 dark:bg-slate-950"
+          className="min-h-[220px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none transition"
         />
       </label>
       <div className="flex justify-end gap-2">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 text-slate-200 dark:hover:bg-slate-800"
         >
           Cancel
         </button>

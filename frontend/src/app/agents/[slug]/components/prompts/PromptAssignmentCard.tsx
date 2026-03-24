@@ -212,7 +212,7 @@ export function PromptAssignmentCard({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               rows={16}
-              className="min-h-[260px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-xs outline-none transition border-slate-700 dark:bg-slate-950"
+              className="min-h-[260px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none transition"
             />
           </label>
 
