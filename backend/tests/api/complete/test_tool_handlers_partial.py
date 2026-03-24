@@ -354,9 +354,95 @@ async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_que
     assert state.terminal_finish_reason == "end_turn"
     assert state.turn == 1
     assert state.content_parts == [
-        "Detached Agent Hub rebuild queued successfully.\n"
-        "Running as unit: sf-rebuild-agent-hub.service\n"
-        "Stop here. Verify backend/frontend health and task completion from a fresh post-restart session."
+        "HEARTBEAT_ACTION — Detached Agent Hub rebuild queued as sf-rebuild-agent-hub.service. "
+        "Post-restart verification is deferred to a fresh session.\n"
+        "[[P:started:ending the heartbeat after queueing a detached Agent Hub rebuild]]\n"
+        "[[P:decision:queued detached Agent Hub rebuild as sf-rebuild-agent-hub.service "
+        "and ended before post-restart verification]]\n"
+        "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+        "must verify health and task completion.]]"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_formats_detached_rebuild_closeout_for_task_session() -> None:
+    state = _ExecutionState(
+        agent_slug="coder",
+        messages_for_adapter=[],
+        external_id="task-12345678",
+    )
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    class FakeEventStream:
+        def __aiter__(self):
+            return self._iter()
+
+        async def _iter(self):
+            yield types.SimpleNamespace(
+                type="assistant",
+                message=types.SimpleNamespace(
+                    content=[
+                        types.SimpleNamespace(
+                            type="tool_use",
+                            name="bash",
+                            input={"command": "cd /srv/workspaces/projects/agent-hub && rebuild.sh --detach agent-hub"},
+                            id="tool-1",
+                        )
+                    ]
+                ),
+            ), None
+            yield types.SimpleNamespace(
+                type="tool_result",
+                tool_use_id="tool-1",
+                content="Detached rebuild queued: sf-rebuild-agent-hub.service\nRunning as unit: sf-rebuild-agent-hub.service",
+                is_error=False,
+                duration_ms=5,
+            ), None
+
+        async def aclose(self) -> None:
+            return None
+
+    with (
+        patch(
+            "app.api.complete.tool_handler_utils.build_event_stream",
+            return_value=FakeEventStream(),
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_use",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.complete.tool_event_storage.store_tool_result",
+            new_callable=AsyncMock,
+        ),
+    ):
+        result = await _run_tool_loop(
+            adapter=MagicMock(),
+            state=state,
+            provider="codex",
+            model="codex/gpt-5.4",
+            tools=[],
+            tool_catalog=None,
+            working_dir="/srv/workspaces/projects/agent-hub",
+            permission_config=None,
+            session_id="session-detached-rebuild-task",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=20,
+            project_id="agent-hub",
+        )
+
+    assert result is None
+    assert state.content_parts == [
+        "Detached Agent Hub rebuild queued as sf-rebuild-agent-hub.service. "
+        "This session is ending before post-restart verification.\n"
+        "[[P:started:ending the task session after queueing a detached Agent Hub rebuild]]\n"
+        "[[P:decision:queued detached Agent Hub rebuild as sf-rebuild-agent-hub.service "
+        "and ended before post-restart verification]]\n"
+        "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+        "must verify health and task completion.]]"
     ]
 
 
