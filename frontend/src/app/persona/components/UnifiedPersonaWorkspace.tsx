@@ -32,7 +32,7 @@ import {
 
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { cn } from "@/lib/utils";
-import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getSseBaseUrl, getWsUrl } from "@/lib/api-config";
+import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getCompleteApiUrl, getWsUrl } from "@/lib/api-config";
 import { fetchSessionEvents } from "@/lib/api/sessions";
 import {
   type PersonaStreamMatch,
@@ -148,7 +148,7 @@ export function UnifiedPersonaWorkspace({
   const apiConfig = useMemo(
     () => ({
       fetchHeaders: INTERNAL_HEADERS,
-      completeEndpoint: `${getSseBaseUrl()}/api/complete`,
+      completeEndpoint: getCompleteApiUrl(),
       sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
       preferencesEndpoint: "/api/preferences",
       fetchFn: fetchApi,
@@ -170,8 +170,17 @@ export function UnifiedPersonaWorkspace({
     sessionId: activeSessionId || undefined,
     toolsEnabled: true,
     apiConfig,
-    loadInitialSession: false,
+    loadInitialSession: Boolean(activeSessionId),
   });
+
+  const responseStatusLabel =
+    status === "streaming"
+      ? `${personaDisplayName} is responding`
+      : status === "reconnecting"
+        ? `Reconnecting to ${personaDisplayName}`
+        : status === "cancelling"
+          ? `Stopping ${personaDisplayName}'s response`
+          : null;
 
   useEffect(() => {
     autoFollowRef.current = autoFollow;
@@ -1354,10 +1363,10 @@ export function UnifiedPersonaWorkspace({
         <div className="mx-auto max-w-3xl">
           <div className="mb-2 flex items-center justify-between text-[11px] text-slate-500">
             <div className="flex items-center gap-2">
-              {status !== "idle" && (
+              {responseStatusLabel && (
                 <span className="inline-flex items-center gap-1.5 text-amber-400/80">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {personaDisplayName} is responding
+                  {responseStatusLabel}
                 </span>
               )}
             </div>

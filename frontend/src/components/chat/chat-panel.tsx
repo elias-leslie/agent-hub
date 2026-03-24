@@ -8,7 +8,7 @@ import {
 } from "@agent-hub/chat-ui";
 import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
-import { getApiBaseUrl, getSseBaseUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
+import { getApiBaseUrl, getCompleteApiUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
 
 interface ChatPanelProps {
   agent?: Agent;
@@ -70,7 +70,7 @@ export function ChatPanel({
 
   const apiConfig: ChatStreamApiConfig = useMemo(() => ({
     fetchHeaders: INTERNAL_HEADERS,
-    completeEndpoint: `${getSseBaseUrl()}/api/complete`,
+    completeEndpoint: getCompleteApiUrl(),
     sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
     preferencesEndpoint: "/api/preferences",
     fetchFn: fetchApi,

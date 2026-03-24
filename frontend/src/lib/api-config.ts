@@ -99,6 +99,16 @@ export function buildApiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`
 }
 
+/**
+ * Get the chat completion endpoint for browser streaming requests.
+ *
+ * Using the same-origin /api path keeps chat streaming on the authenticated
+ * proxy path instead of depending on client-side header injection.
+ */
+export function getCompleteApiUrl(): string {
+  return `${getApiBaseUrl()}/api/complete`
+}
+
 export function buildInternalHeaders(): Record<string, string> {
   const headers: Record<string, string> = {}
 
@@ -154,4 +164,3 @@ export async function fetchApi(url: string, options: RequestInit = {}): Promise<
   }
   return fetch(url, { ...options, headers })
 }
-

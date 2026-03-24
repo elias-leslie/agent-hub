@@ -27,11 +27,6 @@ const nextConfig: NextConfig = {
           source: '/api/voice/:path*',
           destination: `${AGENT_HUB_API_URL}/api/voice/:path*`,
         },
-        // SSE: chat completion streaming (buffered by Next.js otherwise)
-        {
-          source: '/api/complete',
-          destination: `${AGENT_HUB_API_URL}/api/complete`,
-        },
       ],
       // afterFiles: existing file-based routes (e.g. /api/memory/*) resolve first,
       // then unmatched /api/* requests go through the auth proxy handler.
