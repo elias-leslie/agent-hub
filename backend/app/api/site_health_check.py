@@ -47,7 +47,7 @@ async def trigger_site_health_check(request: TriggerRequest) -> TriggerResponse:
         project_id=request.project_id,
         task_id=request.task_id,
     )
-    single_project_health_check_task.run_no_wait(check_input)
+    await single_project_health_check_task.aio_run_no_wait(input=check_input)
 
     logger.info(
         "Dispatched site health check for %s (task: %s)",

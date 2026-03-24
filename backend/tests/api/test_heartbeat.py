@@ -291,6 +291,7 @@ class TestHeartbeatTrigger:
                 return_value="hb-session-123",
             ),
         ):
+            mock_task.aio_run_no_wait = AsyncMock()
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 200
@@ -299,8 +300,8 @@ class TestHeartbeatTrigger:
         assert data["session_id"] == "hb-session-123"
         mock_attempt.assert_awaited_once_with(session_id="hb-session-123")
         mock_set_running.assert_awaited_once_with(session_id="hb-session-123")
-        mock_task.run_no_wait.assert_called_once()
-        heartbeat_input = mock_task.run_no_wait.call_args.args[0]
+        mock_task.aio_run_no_wait.assert_awaited_once()
+        heartbeat_input = mock_task.aio_run_no_wait.call_args.kwargs["input"]
         assert heartbeat_input.heartbeat_session_id == "hb-session-123"
         assert heartbeat_input.running_claimed is True
 
@@ -346,6 +347,7 @@ class TestHeartbeatTrigger:
                 return_value="hb-session-agent-hub",
             ),
         ):
+            mock_task.aio_run_no_wait = AsyncMock()
             response = api_client.post("/api/heartbeat/trigger", json={"target_project_id": "agent-hub"})
 
         assert response.status_code == 200
@@ -355,8 +357,8 @@ class TestHeartbeatTrigger:
         mock_attempt.assert_awaited_once_with(session_id="hb-session-agent-hub")
         mock_set_running.assert_awaited_once_with(session_id="hb-session-agent-hub")
         mock_permission.assert_awaited_once_with("agent-hub")
-        mock_task.run_no_wait.assert_called_once()
-        heartbeat_input = mock_task.run_no_wait.call_args.args[0]
+        mock_task.aio_run_no_wait.assert_awaited_once()
+        heartbeat_input = mock_task.aio_run_no_wait.call_args.kwargs["input"]
         assert heartbeat_input.manual is True
         assert heartbeat_input.target_project_id == "agent-hub"
         assert heartbeat_input.heartbeat_session_id == "hb-session-agent-hub"
@@ -420,7 +422,7 @@ class TestHeartbeatTrigger:
                 return_value="hb-session-fail",
             ),
         ):
-            mock_task.run_no_wait.side_effect = RuntimeError("queue unavailable")
+            mock_task.aio_run_no_wait = AsyncMock(side_effect=RuntimeError("queue unavailable"))
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 503

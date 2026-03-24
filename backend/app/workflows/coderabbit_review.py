@@ -207,7 +207,7 @@ async def _wake_persona_with_findings(result: ReviewResult) -> None:
         event_type="coderabbit_review",
         thinking_level=agent.thinking_level,
     )
-    agent_wake_task.run_no_wait(wake_input)
+    await agent_wake_task.aio_run_no_wait(input=wake_input)
     logger.info("Persona woken with %d CodeRabbit findings for triage", result.total_findings)
 
 

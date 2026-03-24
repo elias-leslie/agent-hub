@@ -202,8 +202,8 @@ async def heartbeat_trigger(
     await record_heartbeat_attempt(session_id=heartbeat_session_id)
     await set_heartbeat_running(session_id=heartbeat_session_id)
     try:
-        persona_heartbeat_task.run_no_wait(
-            HeartbeatInput(
+        await persona_heartbeat_task.aio_run_no_wait(
+            input=HeartbeatInput(
                 manual=True,
                 target_project_id=target_project_id,
                 heartbeat_session_id=heartbeat_session_id,
