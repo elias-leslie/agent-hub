@@ -135,22 +135,22 @@ export default function AgentsPage() {
   const activeCount = data?.agents?.filter((agent) => agent.is_active).length ?? 0;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="min-h-screen bg-slate-950">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
         <div className="px-4 lg:px-8">
           <div className="flex min-h-14 flex-col gap-3 py-3 lg:h-14 lg:flex-row lg:items-center lg:justify-between lg:py-0">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
-                <Bot className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                <Bot className="h-5 w-5 text-slate-400" />
+                <h1 className="text-base font-semibold tracking-tight text-slate-100">
                   Agents
                 </h1>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs font-mono tabular-nums">
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-300">
                   {visibleCount} visible
                 </span>
-                <span className="text-slate-500 dark:text-slate-400">
+                <span className="text-slate-400">
                   {showInactive ? `${totalCount} total` : `${activeCount} active`}
                 </span>
               </div>
@@ -165,14 +165,14 @@ export default function AgentsPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label="Search agents"
-                  className="w-full rounded-md border border-slate-200 bg-white py-1.5 pl-8 pr-8 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 dark:border-slate-700 dark:bg-slate-800 sm:w-64"
+                  className="w-full rounded-md border border-slate-700 bg-slate-800 py-1.5 pl-8 pr-8 text-xs text-slate-100 placeholder-slate-500 focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/40 sm:w-64"
                 />
                 {hasSearch && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
                     aria-label="Clear search"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -184,16 +184,16 @@ export default function AgentsPage() {
                   type="checkbox"
                   checked={showInactive}
                   onChange={(e) => setShowInactive(e.target.checked)}
-                  className="rounded border-slate-300 dark:border-slate-600"
+                  className="rounded border-slate-600"
                 />
-                <span className="text-slate-600 dark:text-slate-400">Show inactive</span>
+                <span className="text-slate-400">Show inactive</span>
               </label>
 
               <button
                 type="button"
                 onClick={() => refetch()}
                 disabled={isRefetching}
-                className="flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+                className="flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50 cursor-pointer"
               >
                 <RefreshCw className={cn("h-3.5 w-3.5", isRefetching && "animate-spin")} />
                 Refresh
@@ -201,7 +201,7 @@ export default function AgentsPage() {
 
               <Link
                 href="/agents/new"
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
+                className="flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500"
               >
                 <Plus className="h-3.5 w-3.5" />
                 New Agent
@@ -215,12 +215,12 @@ export default function AgentsPage() {
         <PlatformContextPanel activeAgentCount={activeCount} />
 
         {archiveCandidate && (
-          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-100 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-amber-900/60 bg-amber-950/30 p-4 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2">
               <Archive className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-medium">Archive {archiveCandidate.name}?</p>
-                <p className="text-amber-800/80 dark:text-amber-200/80">
+                <p className="text-amber-200/80">
                   This deactivates the agent and removes it from the default list. You can still find it later by showing inactive agents.
                 </p>
               </div>
@@ -229,7 +229,7 @@ export default function AgentsPage() {
               <button
                 type="button"
                 onClick={dismissArchiveMessage}
-                className="rounded-md border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/30"
+                className="rounded-md border border-amber-800 bg-transparent px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-900/30 cursor-pointer"
               >
                 Cancel
               </button>
@@ -250,8 +250,8 @@ export default function AgentsPage() {
             className={cn(
               "mb-5 mt-5 flex items-start gap-2 rounded-lg border p-4 text-sm",
               archiveState.status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
-                : "border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300",
+                ? "border-emerald-900/60 bg-emerald-950/30 text-emerald-300"
+                : "border-red-900/60 bg-red-950/30 text-red-300",
             )}
           >
             {archiveState.status === "success" ? (
@@ -269,7 +269,7 @@ export default function AgentsPage() {
               type="button"
               onClick={dismissArchiveMessage}
               aria-label="Dismiss archive message"
-              className="rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
+              className="rounded p-1 hover:bg-white/10"
             >
               <X className="h-4 w-4" />
             </button>
@@ -277,12 +277,12 @@ export default function AgentsPage() {
         )}
 
         {error && (
-          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5 mt-5 flex flex-col gap-3 rounded-lg border border-red-900/60 bg-red-950/20 p-4 text-red-300 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-2">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="text-sm font-medium">Failed to load agents</p>
-                <p className="text-xs text-red-600/90 dark:text-red-300/80">
+                <p className="text-xs text-red-300/80">
                   {error instanceof Error ? error.message : "Check the API response and try again."}
                 </p>
               </div>
@@ -290,7 +290,7 @@ export default function AgentsPage() {
             <button
               type="button"
               onClick={() => refetch()}
-              className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-900/30"
+              className="rounded-md border border-red-800 bg-transparent px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-900/30 cursor-pointer"
             >
               Retry
             </button>
@@ -298,19 +298,19 @@ export default function AgentsPage() {
         )}
 
         {isLoading && (
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="h-10 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50" />
+          <div className="overflow-hidden rounded-xl border border-slate-800/80 bg-slate-900/60">
+            <div className="h-10 border-b border-slate-800/80 bg-slate-800/50" />
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800/50"
+                className="grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 border-b border-slate-800/50 px-4 py-3"
               >
-                <div className="h-4 w-32 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div className="h-4 w-48 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div className="h-4 w-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div className="h-4 w-12 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div className="h-4 w-14 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
-                <div className="h-4 w-4 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+                <div className="h-4 w-32 animate-pulse rounded bg-slate-700" />
+                <div className="h-4 w-48 animate-pulse rounded bg-slate-700" />
+                <div className="h-4 w-16 animate-pulse rounded bg-slate-700" />
+                <div className="h-4 w-12 animate-pulse rounded bg-slate-700" />
+                <div className="h-4 w-14 animate-pulse rounded bg-slate-700" />
+                <div className="h-4 w-4 animate-pulse rounded bg-slate-700" />
               </div>
             ))}
           </div>

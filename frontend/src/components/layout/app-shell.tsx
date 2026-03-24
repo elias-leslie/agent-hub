@@ -52,7 +52,7 @@ export function AppShell({ children }: AppShellProps) {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="flex h-screen bg-slate-950">
       {/* Mobile overlay */}
       {isMobileOpen && (
         <div
@@ -66,8 +66,8 @@ export function AppShell({ children }: AppShellProps) {
         className={cn(
           "fixed lg:static inset-y-0 left-0 z-50",
           "flex flex-col",
-          "bg-white dark:bg-slate-900",
-          "border-r border-slate-200 dark:border-slate-800",
+          "bg-slate-900",
+          "border-r border-slate-800",
           "sidebar-transition",
           // Desktop width
           isCollapsed ? "lg:w-14" : "lg:w-48",
