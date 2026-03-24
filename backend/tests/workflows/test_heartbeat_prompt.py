@@ -11,8 +11,10 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _fetch_cleanup_status,
     _fetch_git_status_compact,
     _fetch_recently_completed_sessions_section,
+    _fetch_task_overview_raw,
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_cleanup_status_summary,
@@ -299,15 +301,77 @@ class TestCleanupStatusSummary:
     @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock)
     async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
         mock_fetch.return_value = (
-            "CLEANUP[all]:repos=2 needs_cleanup=2 worktrees=2 dirty=2 orphan=0 prunable=0\n"
-            "summitflow worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-1\n"
+            "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=1 orphan=0 prunable=0\n"
             "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
         )
 
         result = await _get_cleanup_status_summary("agent-hub")
 
+        mock_fetch.assert_called_once_with("agent-hub")
         assert "agent-hub worktrees:1 dirty:1" in result
         assert "summitflow" not in result
+
+
+class TestFetchCleanupStatus:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._read_project_api_url", return_value="http://localhost:8001/api")
+    @patch("app.workflows._heartbeat_data.httpx.AsyncClient")
+    async def test_returns_compact_cleanup_from_api(
+        self,
+        mock_client_cls: MagicMock,
+        _mock_read_api_url: MagicMock,
+    ) -> None:
+        fake_client = _FakeAsyncClient(
+            _FakeGitStatusResponse(
+                {
+                    "compact": (
+                        "CLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+                        "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
+                    )
+                }
+            )
+        )
+        mock_client_cls.return_value = fake_client
+
+        result = await _fetch_cleanup_status()
+
+        assert result == (
+            "CLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+            "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
+        )
+        assert fake_client.requested_urls == ["http://localhost:8001/api/git/cleanup-status"]
+
+
+class TestFetchTaskOverviewRaw:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._read_project_api_url", return_value="http://localhost:8001/api")
+    @patch("app.workflows._heartbeat_data.httpx.AsyncClient")
+    async def test_returns_ready_all_raw_from_api(
+        self,
+        mock_client_cls: MagicMock,
+        _mock_read_api_url: MagicMock,
+    ) -> None:
+        fake_client = _FakeAsyncClient(
+            _FakeGitStatusResponse(
+                {
+                    "raw": (
+                        "READY-ALL[1 ready, 0 blocked, 1 active, 1 stale across 1 projects]\n\n"
+                        "agent-hub (1 ready, 1 active, 1 stale)\n"
+                        "  ~ task-live P2 task     [M] Live task [running]\n"
+                        "  ? task-stale P2 task     [M] Stale task [stale-running]\n"
+                        "    task-ready P1 bug      [A] Ready fix\n"
+                    )
+                }
+            )
+        )
+        mock_client_cls.return_value = fake_client
+
+        result = await _fetch_task_overview_raw()
+
+        assert "READY-ALL[1 ready, 0 blocked, 1 active, 1 stale across 1 projects]" in result
+        assert "~ task-live" in result
+        assert "? task-stale" in result
+        assert fake_client.requested_urls == ["http://localhost:8001/api/tasks/ready-all"]
 
 
 class TestActiveSpecialistInventory:
@@ -649,7 +713,7 @@ class TestGetWorkstreamInventory:
             new_callable=AsyncMock,
             return_value=fake_rows,
         ), patch(
-            "app.workflows._heartbeat_data._fetch_task_overview",
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
             return_value="agent-hub (1)\n  * task-123 pending Refactor",
         ):
             result = await _get_workstream_inventory()
@@ -679,7 +743,7 @@ class TestGetWorkstreamInventory:
             new_callable=AsyncMock,
             return_value=fake_rows,
         ), patch(
-            "app.workflows._heartbeat_data._fetch_task_overview",
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
             return_value="agent-hub (1)\n  * task-123 pending Refactor",
         ):
             result = await _get_workstream_inventory(provider="claude")
@@ -706,7 +770,7 @@ class TestGetWorkstreamInventory:
             new_callable=AsyncMock,
             return_value=fake_rows,
         ), patch(
-            "app.workflows._heartbeat_data._fetch_task_overview",
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
             return_value="terminal (1)\n  * task-a3903361 pending Refactor",
         ):
             result = await _get_workstream_inventory()
@@ -767,7 +831,7 @@ class TestGetWorkstreamInventory:
                 return_value=fake_rows,
             ),
             patch(
-                "app.workflows._heartbeat_data._fetch_task_overview",
+                "app.workflows._heartbeat_data._fetch_task_overview_raw",
                 return_value="READY-ALL[0 ready, 0 blocked, 0 active, 0 stale across 0 projects]",
             ),
         ):
@@ -797,7 +861,7 @@ class TestGetWorkstreamInventory:
                 return_value=fake_rows,
             ),
             patch(
-                "app.workflows._heartbeat_data._fetch_task_overview",
+                "app.workflows._heartbeat_data._fetch_task_overview_raw",
                 return_value="READY-ALL[0 ready, 0 blocked, 0 active, 0 stale across 0 projects]",
             ),
         ):
@@ -952,7 +1016,7 @@ agent-hub (1 ready, 1 stale)
             new_callable=AsyncMock,
             return_value=[],
         ), patch(
-            "app.workflows._heartbeat_data._fetch_task_overview",
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
             return_value=fake_overview,
         ):
             result = await _get_workstream_inventory()
@@ -990,7 +1054,7 @@ agent-hub (1 ready, 1 stale)
             new_callable=AsyncMock,
             return_value=fake_rows,
         ), patch(
-            "app.workflows._heartbeat_data._fetch_task_overview",
+            "app.workflows._heartbeat_data._fetch_task_overview_raw",
             return_value=fake_overview,
         ):
             result = await _get_workstream_inventory()

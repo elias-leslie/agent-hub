@@ -2,6 +2,8 @@
 
 from app.services.task_overview_summary import (
     build_actionable_ready_summary,
+    build_actionable_stale_summary,
+    build_compact_task_overview,
     extract_ready_task_candidates,
     parse_task_overview_stats,
 )
@@ -53,3 +55,38 @@ agent-hub (3 ready)
     assert "task-1aaaaaaa" in summary
     assert "task-2bbbbbbb" in summary
     assert "task-3ccccccc" not in summary
+
+
+def test_build_actionable_stale_summary_emits_stale_rows() -> None:
+    overview = """READY-ALL[1 ready, 0 blocked, 0 active, 2 stale across 1 projects]
+
+agent-hub (1 ready, 2 stale)
+  ? task-stale001 P2 task     [M] Stale task one [stale-running]
+  ? task-stale002 P3 refactor [A] Stale task two [stale-running]
+    task-ready001 P2 bug      [A] Ready task
+"""
+
+    summary = build_actionable_stale_summary(overview, per_project_limit=2)
+
+    assert "ACTIONABLE-STALE[2]" in summary
+    assert "task-stale001" in summary
+    assert "task-stale002" in summary
+
+
+def test_build_compact_task_overview_preserves_blocked_and_stale_sections() -> None:
+    overview = """READY-ALL[1 ready, 1 blocked, 1 active, 1 stale across 1 projects]
+
+agent-hub (1 ready, 1 blocked, 1 active, 1 stale)
+  ~ task-live001 P2 task     [M] Live lane [running]
+  ? task-stale001 P3 task     [M] Stale lane [stale-running]
+  ! task-block001 P1 bug      [A] Blocked fix
+    task-ready001 P2 refactor [A] Ready refactor
+"""
+
+    summary = build_compact_task_overview(overview, per_project_limit=2)
+
+    assert "ACTIONABLE-READY[1]" in summary
+    assert "ACTIONABLE-BLOCKED[1]" in summary
+    assert "ACTIONABLE-STALE[1]" in summary
+    assert "task-block001" in summary
+    assert "task-stale001" in summary
