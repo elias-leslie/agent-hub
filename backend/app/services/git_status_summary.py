@@ -51,6 +51,19 @@ def parse_git_status_rows(git_status: str) -> list[RepoGitStatus]:
     return rows
 
 
+def build_compact_git_status(rows: list[RepoGitStatus]) -> str:
+    """Render compact git status text from structured repository rows."""
+    if not rows:
+        return ""
+    lines = [f"GIT[{len(rows)}]"]
+    for row in rows:
+        lines.append(
+            f"{row.project_id:<15} {row.branch:<15} {row.state:<7} "
+            f"uncommitted:{row.uncommitted} ahead:{row.ahead} behind:{row.behind}"
+        )
+    return "\n".join(lines)
+
+
 def _next_action(row: RepoGitStatus) -> str:
     """Return the default next action for one repo row."""
     if row.behind > 0 and row.uncommitted == 0:
@@ -67,6 +80,11 @@ def _next_action(row: RepoGitStatus) -> str:
 def build_actionable_git_summary(git_status: str) -> str:
     """Build an explicit actionable summary from compact `st git status` output."""
     rows = parse_git_status_rows(git_status)
+    return build_actionable_git_summary_from_rows(rows)
+
+
+def build_actionable_git_summary_from_rows(rows: list[RepoGitStatus]) -> str:
+    """Build an explicit actionable summary from structured repository rows."""
     actionable = [
         row
         for row in rows
@@ -88,5 +106,7 @@ def build_actionable_git_summary(git_status: str) -> str:
 __all__ = [
     "RepoGitStatus",
     "build_actionable_git_summary",
+    "build_actionable_git_summary_from_rows",
+    "build_compact_git_status",
     "parse_git_status_rows",
 ]

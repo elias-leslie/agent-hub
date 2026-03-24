@@ -49,9 +49,62 @@ def extract_cleanup_action_items(cleanup_status: str) -> list[CleanupActionItem]
     return items
 
 
+def extract_cleanup_action_items_from_payload(cleanup_payload: dict[str, object]) -> list[CleanupActionItem]:
+    """Extract actionable cleanup tasks from structured cleanup payloads."""
+    items: list[CleanupActionItem] = []
+    repositories = cleanup_payload.get("repositories")
+    if not isinstance(repositories, list):
+        return items
+
+    task_fields = (
+        ("needs_merge_tasks", "finalize"),
+        ("conflict_tasks", "conflicts"),
+        ("review_tasks", "review"),
+        ("salvage_task_ids", "salvage"),
+        ("review_orphan_task_ids", "review_orphans"),
+    )
+
+    for repo in repositories:
+        if not isinstance(repo, dict):
+            continue
+        project_id = repo.get("project_id")
+        if not isinstance(project_id, str) or not project_id:
+            continue
+        for field_name, kind in task_fields:
+            task_ids = repo.get(field_name)
+            if not isinstance(task_ids, list):
+                continue
+            for task_id in task_ids:
+                if isinstance(task_id, str) and task_id:
+                    items.append(CleanupActionItem(project_id=project_id, kind=kind, task_id=task_id))
+        orphan_branch_names = repo.get("orphan_branch_names")
+        if not isinstance(orphan_branch_names, list):
+            continue
+        for branch_name in orphan_branch_names:
+            if not isinstance(branch_name, str) or not branch_name:
+                continue
+            task_id = branch_name.split("/", 1)[0]
+            if task_id.startswith("task-"):
+                items.append(
+                    CleanupActionItem(project_id=project_id, kind="orphan_branch", task_id=task_id)
+                )
+    return items
+
+
 def build_actionable_cleanup_summary(cleanup_status: str) -> str:
     """Build a short explicit actionable cleanup section from cleanup status output."""
     items = extract_cleanup_action_items(cleanup_status)
+    return build_actionable_cleanup_summary_from_items(items)
+
+
+def build_actionable_cleanup_summary_from_payload(cleanup_payload: dict[str, object]) -> str:
+    """Build an actionable cleanup summary directly from structured payloads."""
+    items = extract_cleanup_action_items_from_payload(cleanup_payload)
+    return build_actionable_cleanup_summary_from_items(items)
+
+
+def build_actionable_cleanup_summary_from_items(items: list[CleanupActionItem]) -> str:
+    """Build a short explicit actionable cleanup section from extracted items."""
     if not items:
         return ""
     lines = [f"ACTIONABLE-CLEANUP[{len(items)}]"]
@@ -63,5 +116,8 @@ def build_actionable_cleanup_summary(cleanup_status: str) -> str:
 __all__ = [
     "CleanupActionItem",
     "build_actionable_cleanup_summary",
+    "build_actionable_cleanup_summary_from_items",
+    "build_actionable_cleanup_summary_from_payload",
     "extract_cleanup_action_items",
+    "extract_cleanup_action_items_from_payload",
 ]

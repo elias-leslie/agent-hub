@@ -69,14 +69,29 @@ class TestGetGitStatusSummary:
     """Tests for _get_git_status_summary."""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
     async def test_returns_xml_block(self, mock_fetch: AsyncMock) -> None:
         """Returns <git_state> XML when compact git status has content."""
-        mock_fetch.return_value = (
-            "GIT[2]\n"
-            "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
-            "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
-        )
+        from app.services.git_status_summary import RepoGitStatus
+
+        mock_fetch.return_value = [
+            RepoGitStatus(
+                project_id="summitflow",
+                branch="main",
+                state="clean",
+                uncommitted=0,
+                ahead=0,
+                behind=0,
+            ),
+            RepoGitStatus(
+                project_id="agent-hub",
+                branch="main",
+                state="dirty",
+                uncommitted=3,
+                ahead=1,
+                behind=0,
+            ),
+        ]
         result = await _get_git_status_summary()
 
         assert result.startswith("\n<git_state>")
@@ -86,24 +101,54 @@ class TestGetGitStatusSummary:
         assert "agent-hub" in result
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock, return_value=[])
     async def test_empty_when_no_git_state(self, mock_fetch: AsyncMock) -> None:
         """Returns empty when compact git status output is empty."""
         result = await _get_git_status_summary()
         assert result == ""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
     async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
-        mock_fetch.return_value = (
-            "GIT[1]\n"
-            "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
-        )
+        from app.services.git_status_summary import RepoGitStatus
+
+        mock_fetch.return_value = [
+            RepoGitStatus(
+                project_id="agent-hub",
+                branch="main",
+                state="dirty",
+                uncommitted=3,
+                ahead=1,
+                behind=0,
+            )
+        ]
 
         result = await _get_git_status_summary("agent-hub")
 
         assert "agent-hub" in result
         assert "summitflow" not in result
+        assert "ACTIONABLE-GIT[1]" in result
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
+    async def test_builds_git_state_from_structured_rows(self, mock_fetch_rows: AsyncMock) -> None:
+        from app.services.git_status_summary import RepoGitStatus
+
+        mock_fetch_rows.return_value = [
+            RepoGitStatus(
+                project_id="agent-hub",
+                branch="main",
+                state="dirty",
+                uncommitted=3,
+                ahead=1,
+                behind=0,
+            )
+        ]
+
+        result = await _get_git_status_summary()
+
+        assert "GIT[1]" in result
+        assert "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0" in result
         assert "ACTIONABLE-GIT[1]" in result
 
 
@@ -282,9 +327,12 @@ class TestCleanupStatusSummary:
 
     @pytest.mark.asyncio
     @patch(
-        "app.workflows._heartbeat_data._fetch_cleanup_status",
+        "app.workflows._heartbeat_data._fetch_cleanup_status_response",
         new_callable=AsyncMock,
-        return_value="CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
+        return_value={
+            "compact": "CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
+            "payload": {"repositories": []},
+        },
     )
     async def test_returns_xml_block(self, _mock_fetch: AsyncMock) -> None:
         result = await _get_cleanup_status_summary()
@@ -293,23 +341,58 @@ class TestCleanupStatusSummary:
         assert result.endswith("</cleanup_status>")
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock, return_value=None)
     async def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: AsyncMock) -> None:
         assert await _get_cleanup_status_summary() == ""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
     async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
-        mock_fetch.return_value = (
-            "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=1 orphan=0 prunable=0\n"
-            "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
-        )
+        mock_fetch.return_value = {
+            "compact": (
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=1 orphan=0 prunable=0\n"
+                "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
+            ),
+            "payload": {"repositories": []},
+        }
 
         result = await _get_cleanup_status_summary("agent-hub")
 
         mock_fetch.assert_called_once_with("agent-hub")
         assert "agent-hub worktrees:1 dirty:1" in result
         assert "summitflow" not in result
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
+    async def test_builds_actionable_cleanup_from_structured_payload(
+        self,
+        mock_fetch_response: AsyncMock,
+    ) -> None:
+        mock_fetch_response.return_value = {
+            "compact": (
+                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+                "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-aa44180c"
+            ),
+            "payload": {
+                "repositories": [
+                    {
+                        "project_id": "summitflow",
+                        "needs_merge_tasks": ["task-aa44180c"],
+                        "conflict_tasks": [],
+                        "review_tasks": [],
+                        "salvage_task_ids": [],
+                        "review_orphan_task_ids": [],
+                        "orphan_branch_names": ["task-ee55ff66/main"],
+                    }
+                ]
+            },
+        }
+
+        result = await _get_cleanup_status_summary()
+
+        assert "ACTIONABLE-CLEANUP[2]" in result
+        assert "- summitflow | finalize | task-aa44180c" in result
+        assert "- summitflow | orphan_branch | task-ee55ff66" in result
 
 
 class TestFetchCleanupStatus:
@@ -689,6 +772,45 @@ agent-hub (1 ready, 1 stale)
         assert "- agent-hub | task-1" in result
         assert "summitflow" not in result
 
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_recently_completed_sessions_section", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_data._fetch_active_sessions_section", new_callable=AsyncMock, return_value="")
+    async def test_builds_active_work_from_structured_payload(
+        self,
+        _mock_sessions: AsyncMock,
+        _mock_completed: AsyncMock,
+    ) -> None:
+        task_overview_payload = {
+            "summary": {"ready": 1, "blocked": 0, "active": 0, "stale": 0, "projects": 1},
+            "projects": [
+                {
+                    "project_id": "agent-hub",
+                    "ready_count": 1,
+                    "blocked_count": 0,
+                    "active_count": 0,
+                    "stale_count": 0,
+                    "ready_tasks": [
+                        {
+                            "id": "task-1",
+                            "priority": 2,
+                            "task_type": "refactor",
+                            "execution_mode": "autonomous",
+                            "title": "Refactor: backend/app/foo.py",
+                        }
+                    ],
+                    "blocked_tasks": [],
+                    "active_tasks": [],
+                    "stale_tasks": [],
+                }
+            ],
+        }
+
+        result = await _get_active_work_summary(task_overview_payload=task_overview_payload)
+
+        assert "READY-ALL[1 ready, 0 blocked, 0 active, 0 stale across 1 projects]" in result
+        assert "PROJECTS[1]" in result
+        assert "- agent-hub | task-1 | P2 refactor [A] | Refactor: backend/app/foo.py" in result
+
 
 class TestGetWorkstreamInventory:
     """Tests for first-class workstream inventory classification."""
@@ -1064,6 +1186,51 @@ agent-hub (1 ready, 1 stale)
             'manage_tasks(action="reconcile", task_id="task-de53b498", project_id="agent-hub")'
             in result
         )
+
+    @pytest.mark.asyncio
+    async def test_promotes_stale_running_entries_from_task_overview_payload(self) -> None:
+        task_overview_payload = {
+            "summary": {"ready": 1, "blocked": 0, "active": 0, "stale": 1, "projects": 1},
+            "projects": [
+                {
+                    "project_id": "agent-hub",
+                    "ready_count": 1,
+                    "blocked_count": 0,
+                    "active_count": 0,
+                    "stale_count": 1,
+                    "ready_tasks": [
+                        {
+                            "id": "task-ready001",
+                            "priority": 2,
+                            "task_type": "refactor",
+                            "execution_mode": "autonomous",
+                            "title": "Refactor: backend/app/foo.py",
+                        }
+                    ],
+                    "blocked_tasks": [],
+                    "active_tasks": [],
+                    "stale_tasks": [
+                        {
+                            "id": "task-de53b498",
+                            "priority": 1,
+                            "task_type": "task",
+                            "execution_mode": "manual",
+                            "title": "Add persona heartbeat provider regression tests for ...",
+                        }
+                    ],
+                }
+            ],
+        }
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            result = await _get_workstream_inventory(task_overview_payload=task_overview_payload)
+
+        assert "task-de53b498" in result
+        assert "state=stale_running_task" in result
 
     @pytest.mark.asyncio
     async def test_stale_running_queue_truth_overrides_historical_session_rows(self) -> None:

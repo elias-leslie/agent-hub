@@ -11,6 +11,7 @@ from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
 from app.services.prompt_service import require_prompt_content
 from app.workflows._heartbeat_data import (
     _fetch_task_overview,
+    _fetch_task_overview_payload,
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
@@ -130,7 +131,12 @@ async def _append_dynamic_sections(
     provider: str | None = None,
 ) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
-    task_overview = await _fetch_task_overview()
+    task_overview_payload = await _fetch_task_overview_payload()
+    task_overview = (
+        await _fetch_task_overview()
+        if task_overview_payload is None
+        else ""
+    )
     (
         active_work,
         protection_status,
@@ -143,6 +149,7 @@ async def _append_dynamic_sections(
     ) = await asyncio.gather(
         _get_active_work_summary(
             task_overview=task_overview,
+            task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
         ),
         _get_protection_status_summary(target_project_id),
@@ -152,6 +159,7 @@ async def _append_dynamic_sections(
         _get_workstream_inventory(
             provider,
             task_overview=task_overview,
+            task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
         ),
         _get_git_status_summary(target_project_id),
