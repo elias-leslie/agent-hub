@@ -25,30 +25,30 @@ function formatDate(dateStr: string): string {
 
 function getCategoryBadge(category: string): { icon: string; color: string; label: string } {
   const badges: Record<string, { icon: string; color: string; label: string }> = {
-    coding_standard: { icon: "📏", color: "bg-blue-100 dark:bg-blue-900/30 text-amber-300", label: "Standard" },
-    troubleshooting_guide: { icon: "⚠️", color: "bg-red-100 dark:bg-red-900/30 text-red-300", label: "Gotcha" },
-    system_design: { icon: "🏗️", color: "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300", label: "Design" },
+    coding_standard: { icon: "📏", color: "bg-blue-900/30 text-amber-300", label: "Standard" },
+    troubleshooting_guide: { icon: "⚠️", color: "bg-red-900/30 text-red-300", label: "Gotcha" },
+    system_design: { icon: "🏗️", color: "bg-purple-900/30 text-purple-300", label: "Design" },
     operational_context: { icon: "⚙️", color: "bg-amber-900/30 text-amber-300", label: "Ops" },
-    domain_knowledge: { icon: "📚", color: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-300", label: "Domain" },
-    active_state: { icon: "▶️", color: "bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300", label: "Active" },
+    domain_knowledge: { icon: "📚", color: "bg-emerald-900/30 text-emerald-300", label: "Domain" },
+    active_state: { icon: "▶️", color: "bg-cyan-900/30 text-cyan-300", label: "Active" },
   };
   return badges[category] || { icon: "📝", color: "bg-slate-800 text-slate-400", label: category };
 }
 
 function getScopeBadge(scope: string): { color: string; label: string } {
   const badges: Record<string, { color: string; label: string }> = {
-    global: { color: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300", label: "Global" },
-    project: { color: "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300", label: "Project" },
-    task: { color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300", label: "Task" },
+    global: { color: "bg-indigo-900/30 text-indigo-300", label: "Global" },
+    project: { color: "bg-teal-900/30 text-teal-300", label: "Project" },
+    task: { color: "bg-orange-900/30 text-orange-300", label: "Task" },
   };
   return badges[scope] || { color: "bg-slate-800 text-slate-400", label: scope };
 }
 
 function getUtilityScoreColor(score: number | undefined): string {
   if (score === undefined) return "bg-slate-800 text-slate-400";
-  if (score >= 0.7) return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-300";
+  if (score >= 0.7) return "bg-emerald-900/30 text-emerald-300";
   if (score >= 0.4) return "bg-amber-900/30 text-amber-300";
-  return "bg-red-100 dark:bg-red-900/30 text-red-300";
+  return "bg-red-900/30 text-red-300";
 }
 
 export function MemoryCard({
@@ -73,8 +73,8 @@ export function MemoryCard({
         "rounded-lg border transition-all",
         "bg-slate-900/50",
         isSelected
-          ? "border-emerald-500 dark:border-emerald-400 ring-1 ring-emerald-500/50"
-          : "border-slate-800 hover:border-slate-300 dark:hover:border-slate-700",
+          ? "border-emerald-400 ring-1 ring-emerald-500/50"
+          : "border-slate-800 hover:border-slate-700",
       )}
       data-testid="memory-card"
     >
@@ -180,7 +180,7 @@ export function MemoryCard({
           disabled={isDeleting}
           className={cn(
             "flex-shrink-0 p-2 rounded-lg transition-colors",
-            "text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20",
+            "text-slate-400 hover:text-red-500 hover:bg-red-900/20",
             isDeleting && "opacity-50 cursor-not-allowed",
           )}
           title="Delete memory"

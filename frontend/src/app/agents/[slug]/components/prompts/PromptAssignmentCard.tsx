@@ -125,7 +125,7 @@ export function PromptAssignmentCard({
         onDragOver?.(prompt.slug);
       }}
       onDrop={() => onDrop?.(prompt.slug)}
-      className="rounded-xl border border-slate-200 border-slate-800 dark:bg-slate-900"
+      className="rounded-xl border border-slate-800 bg-slate-900"
     >
       <div className="flex items-center gap-2 px-4 py-3">
         {draggable ? (
@@ -148,22 +148,22 @@ export function PromptAssignmentCard({
               <span className="truncate text-sm font-medium text-slate-100">
                 {prompt.name}
               </span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-amber-300">
+              <span className="rounded-full bg-blue-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                 {assignment.role}
               </span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
                 p{assignment.priority}
               </span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
                 {prompt.prompt_type}
               </span>
               {prompt.deletion_locked ? (
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                <span className="rounded-full bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                   locked
                 </span>
               ) : null}
               {ownedByCurrentAgent ? (
-                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 dark:text-emerald-300">
+                <span className="rounded-full bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
                   owned
                 </span>
               ) : null}
@@ -176,14 +176,14 @@ export function PromptAssignmentCard({
       </div>
 
       {expanded ? (
-        <div className="space-y-4 border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+        <div className="space-y-4 border-t border-slate-800 px-4 py-4">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1.5">
               <span className="text-xs font-medium text-slate-400">Name</span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
               />
             </label>
             <label className="space-y-1.5">
@@ -191,7 +191,7 @@ export function PromptAssignmentCard({
               <input
                 value={role}
                 onChange={(event) => setRole(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
               />
             </label>
           </div>
@@ -202,7 +202,7 @@ export function PromptAssignmentCard({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={2}
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition border-slate-700 dark:bg-slate-950"
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none transition"
             />
           </label>
 
@@ -231,7 +231,7 @@ export function PromptAssignmentCard({
                   type="button"
                   onClick={() => removeMutation.mutate()}
                   disabled={removeMutation.isPending}
-                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 transition hover:bg-slate-800 disabled:opacity-50"
                 >
                   <Unplug className="h-3.5 w-3.5" />
                   Remove Assignment
@@ -242,7 +242,7 @@ export function PromptAssignmentCard({
                   type="button"
                   onClick={() => deleteMutation.mutate()}
                   disabled={deleteMutation.isPending}
-                  className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/60 dark:text-rose-300 dark:hover:bg-rose-950/30"
+                  className="inline-flex items-center gap-1 rounded-lg border border-rose-900/60 px-3 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-950/30 disabled:opacity-50"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Delete Prompt
