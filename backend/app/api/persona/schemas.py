@@ -154,6 +154,7 @@ class PersonaStreamEntry(BaseModel):
     role: str | None = None
     content: str | None = None
     summary_oneliner: str | None = None
+    display_summary: str | None = None
     current_branch: str | None = None
     external_id: str | None = None
     model: str | None = None

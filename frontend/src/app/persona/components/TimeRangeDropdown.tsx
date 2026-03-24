@@ -38,19 +38,19 @@ export function TimeRangeDropdown({ value, onChange }: TimeRangeDropdownProps) {
       <button
         onClick={() => setOpen(!open)}
         className={cn(
-          "flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-colors",
-          "border border-slate-800",
-          "bg-slate-900 hover:bg-slate-800",
+          "flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all",
+          "border border-slate-700/50",
+          "bg-slate-900/60 hover:bg-slate-800/60 hover:border-slate-600/50",
           "text-slate-400",
         )}
       >
         <Clock className="w-3 h-3 text-slate-500" />
-        <span className="font-mono">{activeLabel}</span>
-        <ChevronDown className={cn("w-3 h-3 text-slate-500 transition-transform", open && "rotate-180")} />
+        <span className="font-mono tabular-nums">{activeLabel}</span>
+        <ChevronDown className={cn("w-3 h-3 text-slate-600 transition-transform duration-200", open && "rotate-180")} />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[6rem] rounded-lg border border-slate-700 bg-slate-800 shadow-lg shadow-black/30 py-1">
+        <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[7rem] rounded-xl border border-slate-700/50 bg-slate-800/95 backdrop-blur-lg shadow-xl shadow-black/40 py-1.5">
           {TIME_RANGES.map((range) => (
             <button
               key={range.value}
@@ -59,10 +59,10 @@ export function TimeRangeDropdown({ value, onChange }: TimeRangeDropdownProps) {
                 setOpen(false);
               }}
               className={cn(
-                "w-full px-3 py-1.5 text-left text-xs font-mono transition-colors",
+                "w-full px-3.5 py-2 text-left text-xs font-mono transition-colors",
                 range.value === value
-                  ? "bg-amber-900/20 text-amber-300 font-semibold"
-                  : "text-slate-300 hover:bg-slate-700/50",
+                  ? "bg-amber-500/10 text-amber-300 font-semibold"
+                  : "text-slate-300 hover:bg-slate-700/40",
               )}
             >
               {range.label}

@@ -254,6 +254,7 @@ class TestRecentlyCompletedSessionsSection:
         session_factory, mock_db = _mock_async_session_with_rows(
             [
                 MagicMock(
+                    id="sess-1",
                     agent_slug="refactor",
                     project_id="agent-hub",
                     summary_oneliner="Refactored the tool handler",
@@ -262,13 +263,20 @@ class TestRecentlyCompletedSessionsSection:
             ]
         )
 
-        with patch("app.db.async_session", session_factory):
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summaries",
+                new_callable=AsyncMock,
+                return_value={"sess-1": "Refactored the tool handler and verified follow-up."},
+            ),
+        ):
             result = await _fetch_recently_completed_sessions_section()
 
         executed_query = str(mock_db.execute.await_args.args[0])
         assert "Recently completed sessions: 1" in result
         assert "refactor on agent-hub" in result
-        assert "Refactored the tool handler" in result
+        assert "Refactored the tool handler and verified follow-up." in result
         assert "persona" not in result
         assert "sessions.agent_slug != :agent_slug_1" in executed_query
 

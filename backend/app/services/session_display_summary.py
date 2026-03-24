@@ -1,0 +1,198 @@
+"""Resolve richer display summaries from session events."""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models import SessionEvent
+from app.services.memory.citation_parser import parse_summary_tags
+from app.services.narration_tags import parse_narration_tags
+
+_NARRATION_TAG_RE = re.compile(r"\[\[P:[a-z_]+(?::.*?(?:\]\]|$))?", re.IGNORECASE)
+_APPLIED_CITATION_RE = re.compile(
+    r"\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?",
+    re.IGNORECASE,
+)
+_FEEDBACK_RE = re.compile(r"\[\[F:.*?(?:\]\]|$)", re.IGNORECASE)
+_SUMMARY_RE = re.compile(r"\[\[S:.*?(?:\]\]|$)", re.IGNORECASE)
+_HEARTBEAT_PREFIX_RE = re.compile(r"^\s*HEARTBEAT_(?:OK|ACTION)\s*-?\s*", re.IGNORECASE)
+_WHITESPACE_RE = re.compile(r"\s+")
+_EMPTY_FRAGMENT_RE = re.compile(r"^[\[\]{}\(\)…\s.,;:]*$")
+
+
+@dataclass(slots=True, frozen=True)
+class SessionDisplaySummaryCandidate:
+    """Session metadata used to choose a richer display summary."""
+
+    session_id: str
+    summary_oneliner: str | None = None
+    live_summary: str | None = None
+
+
+def _normalize_text(text: str | None) -> str:
+    if not text:
+        return ""
+    return _WHITESPACE_RE.sub(" ", text.strip()).lower()
+
+
+def _is_prompt_like_text(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return (
+        "# persona safety boundaries" in normalized
+        or "<persona_context>" in normalized
+        or "<heartbeat_instructions>" in normalized
+        or (text is not None and len(text) > 900 and text.count("\n") > 20)
+    )
+
+
+def _is_generic_status_text(text: str | None) -> bool:
+    normalized = _normalize_text(text)
+    return normalized in {
+        "execution completed",
+        "session started",
+        "new message",
+        "tool",
+    } or normalized.startswith("waiting for model after")
+
+
+def clean_display_summary_text(text: str | None) -> str | None:
+    """Strip observability tags and placeholder fragments from display text."""
+    if not text:
+        return None
+
+    cleaned = (
+        text.replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\u2014", "-")
+        .replace("\u2013", "-")
+    )
+    cleaned = _NARRATION_TAG_RE.sub(" ", cleaned)
+    cleaned = _APPLIED_CITATION_RE.sub(" ", cleaned)
+    cleaned = _FEEDBACK_RE.sub(" ", cleaned)
+    cleaned = _SUMMARY_RE.sub(" ", cleaned)
+    cleaned = _HEARTBEAT_PREFIX_RE.sub(" ", cleaned)
+    cleaned = (
+        cleaned
+        .replace("\u2026", "...")
+        .replace("[...", "")
+        .replace("[[", "")
+        .replace("]]", "")
+    )
+    cleaned = cleaned.replace("\n\n", " ")
+    cleaned = _WHITESPACE_RE.sub(" ", cleaned).strip()
+    if not cleaned or _EMPTY_FRAGMENT_RE.fullmatch(cleaned):
+        return None
+    return cleaned
+
+
+def _join_summary_parts(parts: Sequence[str | None]) -> str | None:
+    unique_parts: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        normalized = _normalize_text(part)
+        if not normalized or normalized in seen:
+            continue
+        cleaned_part = part.strip() if part else ""
+        if not cleaned_part:
+            continue
+        seen.add(normalized)
+        unique_parts.append(cleaned_part)
+    if not unique_parts:
+        return None
+    return " ".join(unique_parts)
+
+
+def _build_narration_aware_summary(content: str) -> str | None:
+    narration_parts = [
+        clean_display_summary_text(tag.content)
+        for tag in parse_narration_tags(content)
+    ]
+    assistant_text = clean_display_summary_text(content)
+    return _join_summary_parts([*narration_parts, assistant_text])
+
+
+def select_display_summary(
+    assistant_messages: Sequence[str | None],
+    *,
+    summary_oneliner: str | None = None,
+    live_summary: str | None = None,
+) -> str | None:
+    """Prefer the latest inline [[S:...]] description, then a clean fallback."""
+    latest_summary_tag: str | None = None
+    latest_meaningful_message: str | None = None
+
+    for content in assistant_messages:
+        if not content:
+            continue
+
+        if latest_summary_tag is None:
+            parsed = parse_summary_tags(content)
+            if parsed.tags:
+                latest_summary_tag = clean_display_summary_text(parsed.tags[-1].description)
+
+        if latest_meaningful_message is None:
+            cleaned_message = _build_narration_aware_summary(content)
+            if (
+                cleaned_message
+                and not _is_prompt_like_text(cleaned_message)
+                and not _is_generic_status_text(cleaned_message)
+            ):
+                latest_meaningful_message = cleaned_message
+
+        if latest_summary_tag and latest_meaningful_message:
+            break
+
+    for candidate in (
+        latest_summary_tag,
+        latest_meaningful_message,
+        clean_display_summary_text(summary_oneliner),
+        clean_display_summary_text(live_summary),
+    ):
+        if candidate and not _is_generic_status_text(candidate):
+            return candidate
+    return None
+
+
+async def fetch_session_display_summaries(
+    db: AsyncSession,
+    candidates: Sequence[SessionDisplaySummaryCandidate],
+) -> dict[str, str | None]:
+    """Resolve display summaries for a set of sessions."""
+    if not candidates:
+        return {}
+
+    session_ids = [candidate.session_id for candidate in candidates]
+    rows = (
+        await db.execute(
+            select(SessionEvent.session_id, SessionEvent.content)
+            .where(
+                SessionEvent.session_id.in_(session_ids),
+                SessionEvent.event_type == "assistant_message",
+            )
+            .order_by(
+                SessionEvent.session_id,
+                SessionEvent.turn.desc(),
+                SessionEvent.sequence.desc(),
+            )
+        )
+    ).all()
+
+    messages_by_session: dict[str, list[str | None]] = {
+        candidate.session_id: [] for candidate in candidates
+    }
+    for session_id, content in rows:
+        messages_by_session.setdefault(session_id, []).append(content)
+
+    return {
+        candidate.session_id: select_display_summary(
+            messages_by_session.get(candidate.session_id, []),
+            summary_oneliner=candidate.summary_oneliner,
+            live_summary=candidate.live_summary,
+        )
+        for candidate in candidates
+    }

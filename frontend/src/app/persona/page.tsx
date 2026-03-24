@@ -121,38 +121,48 @@ function PersonaContent() {
 
   if (personaLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-950">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      <div className="h-full flex items-center justify-center bg-[#0a0b0f]">
+        <Loader2 className="h-6 w-6 animate-spin text-amber-500/50" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-950">
-      {/* ── Compact status bar ── */}
-      <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/80 backdrop-blur-lg z-20 relative">
-        <div className="flex items-center gap-3 px-4 py-2.5">
+    <div className="h-full flex flex-col bg-[#0a0b0f]">
+      {/* ── Status bar ── */}
+      <header className="flex-shrink-0 border-b border-slate-800/60 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-slate-950/95 backdrop-blur-xl z-20 relative">
+        <div className="flex items-center gap-3.5 px-5 py-3">
           {/* Left: name + status */}
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-            <span className={cn("h-2.5 w-2.5 rounded-full flex-shrink-0 transition-all", STATUS_DOT[runtimeLabel])} />
-            <h1 className="text-sm font-semibold text-slate-100 flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="relative flex-shrink-0">
+              <span className={cn("block h-2.5 w-2.5 rounded-full transition-all", STATUS_DOT[runtimeLabel])} />
+            </div>
+            <h1 className="text-sm font-semibold tracking-wide text-slate-50 flex-shrink-0">
               {persona?.name || "Persona"}
             </h1>
-            <span className="text-xs text-slate-500 flex-shrink-0">{runtimeLabel}</span>
-            <span className="mx-1 text-slate-700 flex-shrink-0">|</span>
+            <span className={cn(
+              "rounded-md px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase flex-shrink-0",
+              isActive ? "bg-emerald-500/15 text-emerald-400" :
+              personaPaused ? "bg-amber-500/15 text-amber-400" :
+              runtimeLabel === "Blocked" ? "bg-rose-500/15 text-rose-400" :
+              "bg-slate-800 text-slate-500"
+            )}>
+              {runtimeLabel}
+            </span>
+            <span className="mx-0.5 text-slate-800 flex-shrink-0">·</span>
             <p className="text-sm text-slate-400 truncate min-w-0">
               {liveSummary}
             </p>
           </div>
 
           {/* Right: context-sensitive actions */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {/* Show stop when actively working */}
             {isActive && runtime.primarySession && (
               <button
                 onClick={handleStopCurrentStream}
                 disabled={runtime.stoppingSessionId !== null}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-rose-300 transition-colors hover:bg-rose-950/40 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-rose-300 ring-1 ring-rose-500/20 transition-all hover:bg-rose-950/30 hover:ring-rose-500/40 disabled:opacity-50"
                 title={`Stop ${personaName}`}
               >
                 <Square className="h-3.5 w-3.5" />
@@ -167,10 +177,10 @@ function PersonaContent() {
                 disabled={isHeartbeatRunning}
                 aria-busy={isHeartbeatRunning}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
                   isHeartbeatRunning
                     ? "text-amber-400 cursor-not-allowed"
-                    : "text-slate-300 hover:bg-slate-800",
+                    : "text-slate-300 ring-1 ring-slate-700 hover:bg-slate-800/80 hover:ring-slate-600 hover:text-slate-100",
                 )}
                 title={heartbeatTooltip}
               >
@@ -185,10 +195,10 @@ function PersonaContent() {
             <button
               onClick={handlePersonaPauseResume}
               className={cn(
-                "inline-flex items-center gap-1 rounded-lg p-1.5 transition-colors",
+                "inline-flex items-center gap-1 rounded-lg p-1.5 transition-all",
                 personaPaused
                   ? "text-emerald-400 hover:bg-emerald-950/30"
-                  : "text-slate-400 hover:bg-slate-800",
+                  : "text-slate-500 hover:bg-slate-800/80 hover:text-slate-300",
               )}
               title={personaPaused ? `Resume ${personaName}` : `Pause ${personaName}`}
             >
@@ -198,7 +208,7 @@ function PersonaContent() {
             {/* Settings */}
             <Link
               href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
-              className="p-1.5 rounded-lg transition-colors text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              className="p-1.5 rounded-lg transition-all text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
               title="Settings"
             >
               <Settings className="h-4 w-4" />
@@ -207,8 +217,8 @@ function PersonaContent() {
         </div>
 
         {runtime.error && (
-          <div className="px-4 pb-2">
-            <p className="text-xs text-rose-400">{runtime.error}</p>
+          <div className="px-5 pb-2">
+            <p className="text-xs text-rose-400/80">{runtime.error}</p>
           </div>
         )}
       </header>
@@ -226,14 +236,19 @@ function PersonaContent() {
             onNewSession={handleNewSession}
           />
         ) : personaError ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-rose-400">
-            <AlertCircle className="h-6 w-6" />
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-rose-400">
+            <div className="rounded-full bg-rose-500/10 p-3">
+              <AlertCircle className="h-5 w-5" />
+            </div>
             <p className="text-sm font-medium">Failed to load persona</p>
-            <p className="text-xs text-rose-500 max-w-md text-center">{personaError}</p>
+            <p className="text-xs text-rose-500/80 max-w-md text-center">{personaError}</p>
           </div>
         ) : (
-          <div className="h-full flex items-center justify-center text-slate-500">
-            Persona not configured
+          <div className="h-full flex flex-col items-center justify-center gap-3">
+            <div className="rounded-full bg-slate-800/50 p-3">
+              <HeartPulse className="h-5 w-5 text-slate-600" />
+            </div>
+            <p className="text-sm font-medium text-slate-500">Persona not configured</p>
           </div>
         )}
       </main>
@@ -245,8 +260,8 @@ export default function PersonaPage() {
   return (
     <Suspense
       fallback={
-        <div className="h-full flex items-center justify-center bg-slate-950">
-          <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+        <div className="h-full flex items-center justify-center bg-[#0a0b0f]">
+          <Loader2 className="h-6 w-6 animate-spin text-amber-500/50" />
         </div>
       }
     >

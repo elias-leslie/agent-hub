@@ -844,6 +844,10 @@ class TestPersonaStreamHelpers:
                     summary="tool friction detected",
                 ),
             },
+            display_summaries={
+                "hb-1": "Checked active work across queue, cleanup, and session truth.",
+                "child-1": "Updated files and verified the result.",
+            },
         )
 
         assert [entry.entry_type for entry in entries] == ["child_run", "heartbeat", "message"]
@@ -853,6 +857,7 @@ class TestPersonaStreamHelpers:
 
         assert message_entry.content == "pause that work"
         assert heartbeat_entry.session_type == "heartbeat"
+        assert heartbeat_entry.display_summary == "Checked active work across queue, cleanup, and session truth."
         assert heartbeat_entry.live_summary == "Checking tasks"
         assert heartbeat_entry.event_previews[0].tool_name == "st ready-all"
         assert heartbeat_entry.event_previews[0].tool_input_preview == '{"project":"agent-hub"}'
@@ -861,6 +866,7 @@ class TestPersonaStreamHelpers:
         assert heartbeat_entry.primary_root_cause == "context"
         assert child_entry.agent_slug == "git-agent"
         assert child_entry.current_branch == "task-branch"
+        assert child_entry.display_summary == "Updated files and verified the result."
         assert child_entry.event_previews[0].content_preview == "passed"
         assert child_entry.event_previews[0].tool_output_preview == '{"status":"ok"}'
         assert child_entry.issue_markers[0].fingerprint == "tool-friction:dt-q-d"

@@ -41,6 +41,7 @@ export interface PersonaStreamEntry {
   role: "user" | "assistant" | "system" | null;
   content: string | null;
   summary_oneliner: string | null;
+  display_summary: string | null;
   current_branch: string | null;
   external_id: string | null;
   model: string | null;
