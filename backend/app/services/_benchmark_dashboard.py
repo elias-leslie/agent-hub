@@ -99,6 +99,35 @@ def _run_efficiency_metric(run: Any, metric_name: str) -> float | None:
     return None
 
 
+def _collect_efficiency_metrics(scored_runs: list[AgentBenchmarkRun]) -> dict[str, list[float]]:
+    def _gather(metric_name: str) -> list[float]:
+        return [m for run in scored_runs if (m := _run_efficiency_metric(run, metric_name)) is not None]
+    return {
+        "avg_tool_calls": _gather("avg_tool_calls"),
+        "avg_total_tokens": _gather("avg_total_tokens"),
+        "avg_turns": _gather("avg_turns"),
+    }
+
+
+def _collect_prompt_versions(scored_runs: list[AgentBenchmarkRun]) -> list[str]:
+    prompt_version_set: set[str] = set()
+    for run in scored_runs:
+        cs = dict(run.config_snapshot or {})
+        ps = cs.get("prompt_stack")
+        if isinstance(ps, dict):
+            raw = ps.get("descriptors")
+            if isinstance(raw, list):
+                prompt_version_set.update(str(item) for item in raw if item)
+                continue
+        hd = heartbeat_prompt_descriptor(cs)
+        if hd:
+            prompt_version_set.add(hd)
+        md = memory_state_descriptor(cs)
+        if md:
+            prompt_version_set.add(f"memory:{md}")
+    return sorted(prompt_version_set)
+
+
 def _quality_is_non_inferior(
     score_delta: dict[str, float | None],
     pass_rate_delta: dict[str, float | None],
@@ -129,41 +158,16 @@ def _summarize_experiment_arm(
     scored_runs = [run for run in runs if run_has_scored_attempts(run)]
     scores = [float(run.avg_score) for run in scored_runs if run.avg_score is not None]
     pass_rates = [float(run.pass_rate) for run in scored_runs if run.pass_rate is not None]
-    avg_tool_calls = [
-        metric for run in scored_runs
-        if (metric := _run_efficiency_metric(run, "avg_tool_calls")) is not None
-    ]
-    avg_total_tokens = [
-        metric for run in scored_runs
-        if (metric := _run_efficiency_metric(run, "avg_total_tokens")) is not None
-    ]
-    avg_turns = [
-        metric for run in scored_runs
-        if (metric := _run_efficiency_metric(run, "avg_turns")) is not None
-    ]
+    efficiency = _collect_efficiency_metrics(scored_runs)
     fingerprints = sorted({run_config_fingerprint(run) for run in scored_runs})
-
-    prompt_version_set: set[str] = set()
-    for run in scored_runs:
-        cs = dict(run.config_snapshot or {})
-        ps = cs.get("prompt_stack")
-        if isinstance(ps, dict):
-            raw = ps.get("descriptors")
-            if isinstance(raw, list):
-                prompt_version_set.update(str(item) for item in raw if item)
-                continue
-        hd = heartbeat_prompt_descriptor(cs)
-        if hd:
-            prompt_version_set.add(hd)
-        md = memory_state_descriptor(cs)
-        if md:
-            prompt_version_set.add(f"memory:{md}")
-    prompt_versions = sorted(prompt_version_set)
-
+    prompt_versions = _collect_prompt_versions(scored_runs)
     latest_completed = max(
         (run.completed_at for run in scored_runs if run.completed_at is not None),
         default=None,
     )
+    avg_tool_calls = efficiency["avg_tool_calls"]
+    avg_total_tokens = efficiency["avg_total_tokens"]
+    avg_turns = efficiency["avg_turns"]
     return {
         "label": label,
         "run_count": len(scored_runs),
@@ -304,20 +308,6 @@ async def _query_recent_runs(
     if suite_id:
         stmt = stmt.where(AgentBenchmarkRun.suite_id == suite_id)
     return list((await db.execute(stmt)).scalars().all())
-
-
-async def _query_open_clusters(
-    db: AsyncSession,
-    agent_slug: str,
-    cutoff: datetime,
-    suite_id: str | None,
-) -> list[AgentRegressionCluster]:
-    return await query_open_regression_clusters(
-        db,
-        agent_slug=agent_slug,
-        cutoff=cutoff,
-        suite_id=suite_id,
-    )
 
 
 async def query_open_regression_clusters(
@@ -836,7 +826,7 @@ async def get_agent_benchmark_dashboard(
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
     runs = await _query_recent_runs(db, agent_slug, cutoff, suite_id)
-    open_clusters = await _query_open_clusters(db, agent_slug, cutoff, suite_id)
+    open_clusters = await query_open_regression_clusters(db, agent_slug=agent_slug, cutoff=cutoff, suite_id=suite_id)
     model_rows = await _query_model_performance(db, agent_slug, cutoff, suite_id)
     case_rows = await _query_case_attempts(db, agent_slug, cutoff, suite_id)
     experiment_summaries = await _query_experiment_summaries(db, agent_slug, cutoff, suite_id)
