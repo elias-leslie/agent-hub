@@ -36,11 +36,11 @@ export function SessionsHeader({
               {pageStats && (
                 <>
                   <span className="text-slate-600">|</span>
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <span className="flex items-center gap-1 text-emerald-400">
                     <Zap className="h-3 w-3" />
                     {formatTokens(pageStats.totalTokens)}
                   </span>
-                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                  <span className="flex items-center gap-1 text-amber-400">
                     <TrendingUp className="h-3 w-3" />
                     {formatCost(pageStats.totalCost)}
                   </span>
@@ -79,7 +79,7 @@ export function SessionsHeader({
             {/* Refresh */}
             <button
               onClick={onRefresh}
-              className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-400 transition-colors"
+              className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
               title="Refresh"
             >
               <RefreshCw
