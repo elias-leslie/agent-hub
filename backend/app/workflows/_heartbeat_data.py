@@ -39,6 +39,7 @@ _ACTIVE_SESSION_GHOST_MINUTES = 15
 _DEFAULT_SESSION_STALE_MINUTES = 15
 _CODING_AGENT_SESSION_STALE_MINUTES = 30
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
+_COMPACT_STALE_LINE = re.compile(r"^- (?P<project>[a-z0-9-]+) \| (?P<task_id>task-[^\s|]+) \| ")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 _CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
 _WORKSPACE_BASE = Path("/srv/workspaces/projects")
@@ -194,13 +195,29 @@ def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
-async def _fetch_task_overview_raw() -> str:
-    """Return raw cross-project task overview via st ready-all."""
-    output = await _run_st_command(
-        ["st", "ready-all"],
-        failure_log="Failed to fetch task overview for heartbeat prompt",
+async def _fetch_task_overview_raw(target_project_id: str | None = None) -> str:
+    """Fetch canonical SummitFlow ready-all output via API."""
+    api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
+    if not api_base:
+        logger.debug("Missing SummitFlow API URL for heartbeat task overview")
+        return ""
+
+    endpoint = (
+        f"{api_base}/projects/{target_project_id}/tasks/ready-all"
+        if target_project_id
+        else f"{api_base}/tasks/ready-all"
     )
-    return output
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(endpoint)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        logger.debug("Failed to fetch task overview for heartbeat prompt from SummitFlow API", exc_info=True)
+        return ""
+
+    raw = payload.get("raw")
+    return raw.strip() if isinstance(raw, str) else ""
 
 
 async def _fetch_git_status_compact(target_project_id: str | None = None) -> str:
@@ -265,9 +282,9 @@ async def _fetch_git_status_compact(target_project_id: str | None = None) -> str
     return "\n".join(lines)
 
 
-async def _fetch_task_overview() -> str:
+async def _fetch_task_overview(target_project_id: str | None = None) -> str:
     """Cross-project task overview condensed for heartbeat prompt injection."""
-    output = await _fetch_task_overview_raw()
+    output = await _fetch_task_overview_raw(target_project_id)
     if not output:
         return ""
     return build_compact_task_overview(output)
@@ -778,19 +795,35 @@ async def _query_recent_workstream_sessions(
 
 
 def _parse_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
-    """Parse stale-running tasks from ready-all TOON output."""
+    """Parse stale-running tasks from raw ready-all or compact ACTIONABLE-STALE output."""
     stale_tasks: list[dict[str, str]] = []
     cur_project: str | None = None
+    in_compact_stale_section = False
     for raw_line in task_overview.splitlines():
         line = raw_line.rstrip()
         if not line:
             continue
+        if line.startswith("ACTIONABLE-STALE["):
+            in_compact_stale_section = True
+            continue
+        if line.startswith("ACTIONABLE-") or line.startswith("PROJECTS[") or line.startswith("READY-ALL["):
+            in_compact_stale_section = False
         if not line.startswith(" ") and "(" in line and line.endswith(")"):
             cur_project = line.split(" ", 1)[0]
             continue
         m = _STALE_READY_ALL_LINE.match(line)
         if m and cur_project:
             stale_tasks.append({"project_id": cur_project, "task_id": m.group(1)})
+            continue
+        if in_compact_stale_section:
+            compact_match = _COMPACT_STALE_LINE.match(line)
+            if compact_match:
+                stale_tasks.append(
+                    {
+                        "project_id": compact_match.group("project"),
+                        "task_id": compact_match.group("task_id"),
+                    }
+                )
     return stale_tasks
 
 
@@ -924,7 +957,7 @@ async def _get_workstream_inventory(
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
         if task_overview is None:
-            task_overview = await _fetch_task_overview()
+            task_overview = await _fetch_task_overview_raw(target_project_id)
         rows = await _query_recent_workstream_sessions(target_project_id)
         stale_tasks = [
             task
@@ -955,7 +988,7 @@ async def _get_active_work_summary(
 ) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
     if task_overview is None:
-        task_overview = await _fetch_task_overview()
+        task_overview = await _fetch_task_overview(target_project_id)
     visible_task_overview = (
         _filter_task_overview_for_project(task_overview, target_project_id)
         if target_project_id
@@ -983,33 +1016,36 @@ async def _get_active_work_summary(
     return f"\n<active_work>\n{body}\n</active_work>"
 
 
-async def _fetch_cleanup_status() -> str:
-    """Run `st cleanup status --all` and return stripped stdout."""
-    return await _run_st_command(
-        ["st", "cleanup", "status", "--all"],
-        failure_log="Failed to fetch cleanup status for heartbeat prompt",
+async def _fetch_cleanup_status(target_project_id: str | None = None) -> str:
+    """Fetch canonical SummitFlow cleanup status via API and return compact text."""
+    api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
+    if not api_base:
+        logger.debug("Missing SummitFlow API URL for heartbeat cleanup status")
+        return ""
+
+    endpoint = (
+        f"{api_base}/projects/{target_project_id}/git/cleanup-status"
+        if target_project_id
+        else f"{api_base}/git/cleanup-status"
     )
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(endpoint)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        logger.debug("Failed to fetch cleanup status for heartbeat prompt from SummitFlow API", exc_info=True)
+        return ""
 
-
-def _filter_cleanup_status_for_project(output: str, project_id: str) -> str:
-    """Return cleanup summary lines for one project."""
-    project_lines = [
-        line.rstrip()
-        for line in output.splitlines()
-        if line.startswith(f"{project_id} ")
-    ]
-    return "\n".join(project_lines)
+    compact = payload.get("compact")
+    return compact.strip() if isinstance(compact, str) else ""
 
 
 async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    output = await _fetch_cleanup_status()
+    output = await _fetch_cleanup_status(target_project_id)
     if not output:
         return ""
-    if target_project_id:
-        output = _filter_cleanup_status_for_project(output, target_project_id)
-        if not output:
-            return ""
     actionable = build_actionable_cleanup_summary(output)
     body = f"{output}\n\n{actionable}" if actionable else output
     return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
