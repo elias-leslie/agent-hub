@@ -274,7 +274,6 @@ async def _execute_self_honing(job: Any) -> str:
     name="persona-scheduler",
     input_validator=BaseModel,
     on_crons=["*/5 * * * *"],
-    execution_timeout="7200s",
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",
         max_runs=1,

@@ -398,7 +398,6 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
     name="persona-heartbeat",
     input_validator=HeartbeatInput,
     on_crons=["*/5 * * * *"],
-    execution_timeout="7200s",
     concurrency=ConcurrencyExpression(
         expression="'persona_heartbeat'",
         max_runs=1,

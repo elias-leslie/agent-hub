@@ -10,10 +10,11 @@ backward compatibility with existing imports.
 
 from __future__ import annotations
 
+from app.services.tools._tool_constants import DEFAULT_TIMEOUT
+
 # Core executor implementation
 from app.services.tools.direct_executor_core import (
     BLOCKED_COMMANDS,
-    DEFAULT_TIMEOUT,
     MAX_OUTPUT_SIZE,
     DirectToolExecutor,
     _get_command_redirect,

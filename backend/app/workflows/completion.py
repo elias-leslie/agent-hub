@@ -171,7 +171,6 @@ async def _wake_persona_on_autocode_failure(
 
 @hatchet.task(
     name="agentic-completion",
-    execution_timeout="7200s",
     retries=0,
     input_validator=CompletionInput,
 )

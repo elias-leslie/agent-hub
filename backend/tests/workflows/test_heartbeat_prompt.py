@@ -62,6 +62,25 @@ class TestGetGitStatusSummary:
         result = await _get_git_status_summary()
         assert result == ""
 
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock)
+    async def test_filters_to_target_project(self, mock_run: AsyncMock) -> None:
+        mock_run.return_value = (
+            "GIT[2]\n"
+            "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
+            "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
+            "\n"
+            "ACTIONABLE-GIT[2]\n"
+            "- summitflow | branch=main | state=clean | next=none\n"
+            "- agent-hub | branch=main | state=dirty | next=inspect_then_commit_or_dispatch\n"
+        )
+
+        result = await _get_git_status_summary("agent-hub")
+
+        assert "agent-hub" in result
+        assert "summitflow" not in result
+        assert "ACTIONABLE-GIT[1]" in result
+
 
 class TestBuildHeartbeatPromptIncludesGitState:
     """Integration: build_heartbeat_prompt includes git_state section."""
@@ -188,6 +207,41 @@ class TestProtectionStatusSummary:
         assert await _get_protection_status_summary("agent-hub") == ""
 
 
+class TestCleanupStatusSummary:
+    """Tests for heartbeat cleanup-status section."""
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.workflows._heartbeat_data._fetch_cleanup_status",
+        new_callable=AsyncMock,
+        return_value="CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
+    )
+    async def test_returns_xml_block(self, _mock_fetch: AsyncMock) -> None:
+        result = await _get_cleanup_status_summary()
+        assert result.startswith("\n<cleanup_status>")
+        assert "needs_cleanup=1" in result
+        assert result.endswith("</cleanup_status>")
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock, return_value="")
+    async def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: AsyncMock) -> None:
+        assert await _get_cleanup_status_summary() == ""
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock)
+    async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
+        mock_fetch.return_value = (
+            "CLEANUP[all]:repos=2 needs_cleanup=2 worktrees=2 dirty=2 orphan=0 prunable=0\n"
+            "summitflow worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-1\n"
+            "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
+        )
+
+        result = await _get_cleanup_status_summary("agent-hub")
+
+        assert "agent-hub worktrees:1 dirty:1" in result
+        assert "summitflow" not in result
+
+
 class TestActiveSpecialistInventory:
     """Tests for active specialist inventory in heartbeat prompt context."""
 
@@ -244,6 +298,17 @@ class TestActiveSpecialistInventory:
 
         assert result == ""
 
+    @pytest.mark.asyncio
+    async def test_passes_target_project_filter(self) -> None:
+        with patch(
+            "app.workflows._heartbeat_data._query_active_specialist_sessions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_query:
+            await _get_active_specialist_inventory("agent-hub")
+
+        mock_query.assert_awaited_once_with("agent-hub")
+
 
 class TestRecentlyCompletedSessionsSection:
     """Tests for recently completed session summaries in heartbeat context."""
@@ -272,6 +337,8 @@ class TestRecentlyCompletedSessionsSection:
                     "sess-1": MagicMock(
                         summary="Refactored the tool handler and verified follow-up.",
                         has_summary_tag=True,
+                        summary_outcome="completed",
+                        has_unresolved_blocker=False,
                     )
                 },
             ),
@@ -317,6 +384,8 @@ class TestRecentlyCompletedSessionsSection:
                     "sess-clean": MagicMock(
                         summary="Refactored cleanup flow and verified the lane state.",
                         has_summary_tag=True,
+                        summary_outcome="completed",
+                        has_unresolved_blocker=False,
                     ),
                 },
             ),
@@ -352,6 +421,42 @@ class TestRecentlyCompletedSessionsSection:
                     "sess-fallback": MagicMock(
                         summary="Fallback summary cleaned from prose.",
                         has_summary_tag=False,
+                        summary_outcome=None,
+                        has_unresolved_blocker=False,
+                    )
+                },
+            ),
+        ):
+            result = await _fetch_recently_completed_sessions_section()
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_skips_completed_summary_that_still_describes_blocker(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                MagicMock(
+                    id="sess-blocked",
+                    agent_slug="coder",
+                    project_id="agent-hub",
+                    summary_oneliner="Publish is blocked.",
+                    created_at=now,
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "sess-blocked": MagicMock(
+                        summary="Publish is blocked because detached rebuild is unavailable.",
+                        has_summary_tag=True,
+                        summary_outcome="completed",
+                        has_unresolved_blocker=True,
                     )
                 },
             ),
@@ -425,26 +530,32 @@ agent-hub (1 ready, 1 stale)
         assert "Recently completed sessions: 1" in result
         mock_completed.assert_awaited_once()
 
-
-class TestCleanupStatusSummary:
-    """Tests for heartbeat cleanup-status section."""
-
     @pytest.mark.asyncio
-    @patch(
-        "app.workflows._heartbeat_data._fetch_cleanup_status",
-        new_callable=AsyncMock,
-        return_value="CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
-    )
-    async def test_returns_xml_block(self, _mock_fetch: AsyncMock) -> None:
-        result = await _get_cleanup_status_summary()
-        assert result.startswith("\n<cleanup_status>")
-        assert "needs_cleanup=1" in result
-        assert result.endswith("</cleanup_status>")
+    @patch("app.workflows._heartbeat_data._fetch_recently_completed_sessions_section", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_data._fetch_active_sessions_section", new_callable=AsyncMock, return_value="")
+    async def test_filters_task_overview_to_target_project(
+        self,
+        _mock_sessions: AsyncMock,
+        _mock_completed: AsyncMock,
+    ) -> None:
+        task_overview = (
+            "READY-ALL[2 ready, 0 blocked, 2 active, 0 stale across 2 projects]\n\n"
+            "PROJECTS[2]\n"
+            "- agent-hub | 1 ready, 1 active\n"
+            "- summitflow | 1 ready, 1 active\n\n"
+            "ACTIONABLE-READY[2]\n"
+            "- agent-hub | task-1 | P2 refactor [A] | Refactor: backend/app/foo.py\n"
+            "- summitflow | task-2 | P2 refactor [A] | Refactor: backend/app/bar.py\n"
+        )
 
-    @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._fetch_cleanup_status", new_callable=AsyncMock, return_value="")
-    async def test_returns_empty_when_no_cleanup_state(self, _mock_fetch: AsyncMock) -> None:
-        assert await _get_cleanup_status_summary() == ""
+        result = await _get_active_work_summary(
+            task_overview=task_overview,
+            target_project_id="agent-hub",
+        )
+
+        assert "- agent-hub | 1 ready, 1 active" in result
+        assert "- agent-hub | task-1" in result
+        assert "summitflow" not in result
 
 
 class TestGetWorkstreamInventory:

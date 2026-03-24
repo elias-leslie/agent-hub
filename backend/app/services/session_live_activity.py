@@ -19,8 +19,7 @@ _ACTIVE_PHASES = {
     "finalizing",
 }
 _QUIET_AFTER_SECONDS = 60
-_STALL_AFTER_SECONDS = 180
-_POST_TOOL_STALL_AFTER_SECONDS = 120
+_STALL_AFTER_SECONDS = 30 * 60
 _NO_ACTIVITY_STALL_AFTER_SECONDS = 90 * 60
 _DEAD_CANDIDATE_AFTER_SECONDS = 30 * 60
 _REAPABLE_AFTER_SECONDS = 6 * 60 * 60
@@ -35,6 +34,10 @@ _NON_REAPABLE_PHASES = {
     "running_validation",
     "finalizing",
 }
+_DETACHED_AGENT_HUB_RESTART_TOKENS = (
+    "rebuild.sh --detach agent-hub",
+    "restart.sh --detach agent-hub",
+)
 
 
 def _now_iso() -> str:
@@ -83,6 +86,28 @@ def _command_from_tool_input(tool_input: dict[str, Any] | None) -> str | None:
         return None
     value = tool_input.get("command")
     return value if isinstance(value, str) and value else None
+
+
+def _is_detached_agent_hub_restart_command(command: Any) -> bool:
+    if not isinstance(command, str):
+        return False
+    normalized = " ".join(command.lower().split())
+    return any(token in normalized for token in _DETACHED_AGENT_HUB_RESTART_TOKENS)
+
+
+def _detached_agent_hub_restart_stale(
+    response: dict[str, Any],
+    quiet_for: int | None,
+    *,
+    has_owner_lane: bool,
+) -> bool:
+    return (
+        not has_owner_lane
+        and quiet_for is not None
+        and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS
+        and int(response.get("outstanding_tool_calls") or 0) == 0
+        and _is_detached_agent_hub_restart_command(response.get("last_command"))
+    )
 
 
 def _tool_phase(tool_name: str | None, tool_input: dict[str, Any] | None) -> tuple[str, str]:
@@ -196,9 +221,14 @@ def _collect_anti_reap_signals(
     has_specialist_lane: bool,
 ) -> list[str]:
     signals: list[str] = []
+    detached_rebuild_stale = _detached_agent_hub_restart_stale(
+        response,
+        quiet_for,
+        has_owner_lane=has_owner_lane,
+    )
     if has_owner_lane:
         signals.append("owner_lane")
-    if has_specialist_lane:
+    if has_specialist_lane and not detached_rebuild_stale:
         signals.append("specialist_lane")
     if int(response.get("outstanding_tool_calls") or 0) > 0:
         signals.append("outstanding_tool_calls")
@@ -225,6 +255,8 @@ def _collect_dead_signals(
         signals.append("heartbeat_only")
     if response.get("termination_reason"):
         signals.append("termination_signal")
+    if _is_detached_agent_hub_restart_command(response.get("last_command")):
+        signals.append("detached_control_plane_rebuild")
     if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
         signals.append("heartbeat_missing")
     elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
@@ -234,7 +266,7 @@ def _collect_dead_signals(
 
 _STRONG_DEAD_SIGNALS = {
     "no_structured_activity", "heartbeat_only", "heartbeat_missing",
-    "heartbeat_absent_6h", "termination_signal",
+    "heartbeat_absent_6h", "termination_signal", "detached_control_plane_rebuild",
 }
 
 
@@ -254,6 +286,11 @@ def _apply_lifecycle_state(
         response, phase, quiet_for,
         has_owner_lane=has_owner_lane, has_specialist_lane=has_specialist_lane,
     )
+    detached_rebuild_stale = _detached_agent_hub_restart_stale(
+        response,
+        quiet_for,
+        has_owner_lane=has_owner_lane,
+    )
     dead_signals: list[str] = []
     state = str(response.get("health") or response.get("status") or "idle")
 
@@ -261,6 +298,13 @@ def _apply_lifecycle_state(
         dead_signals = _collect_dead_signals(response, phase, quiet_for, last_heartbeat_age)
         if dead_signals:
             state = "dead_candidate"
+        if (
+            detached_rebuild_stale
+            and state == "dead_candidate"
+            and not anti_reap_signals
+            and "detached_control_plane_rebuild" in dead_signals
+        ):
+            state = "reapable"
         if (
             quiet_for is not None
             and quiet_for >= _REAPABLE_AFTER_SECONDS
@@ -527,19 +571,8 @@ def _classify_active_health(
 ) -> tuple[str, bool, str | None]:
     """Return (health, stalled, stall_reason) for an active session."""
     if phase in _ACTIVE_PHASES:
-        post_tool_wait = (
-            phase == "waiting_for_model"
-            and response.get("last_event_type") == "tool_result"
-            and int(response.get("outstanding_tool_calls") or 0) == 0
-        )
-        stall_after = _POST_TOOL_STALL_AFTER_SECONDS if post_tool_wait else _STALL_AFTER_SECONDS
-        if quiet_for_seconds is not None and quiet_for_seconds >= stall_after:
-            reason = (
-                f"No model activity for {quiet_for_seconds}s after tool_result"
-                if post_tool_wait
-                else f"No model activity for {quiet_for_seconds}s while phase={phase}"
-            )
-            return "stalled", True, reason
+        if quiet_for_seconds is not None and quiet_for_seconds >= _STALL_AFTER_SECONDS:
+            return "stalled", True, f"No model activity for {quiet_for_seconds}s while phase={phase}"
         if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
             return "quiet", False, None
         return "active", False, None

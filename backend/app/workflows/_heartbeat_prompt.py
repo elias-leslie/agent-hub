@@ -141,13 +141,20 @@ async def _append_dynamic_sections(
         git_status,
         feedback_summary,
     ) = await asyncio.gather(
-        _get_active_work_summary(task_overview=task_overview),
+        _get_active_work_summary(
+            task_overview=task_overview,
+            target_project_id=target_project_id,
+        ),
         _get_protection_status_summary(target_project_id),
-        _get_cleanup_status_summary(),
-        _get_active_specialist_inventory(),
+        _get_cleanup_status_summary(target_project_id),
+        _get_active_specialist_inventory(target_project_id),
         _get_agent_roster_summary(),
-        _get_workstream_inventory(provider),
-        _get_git_status_summary(),
+        _get_workstream_inventory(
+            provider,
+            task_overview=task_overview,
+            target_project_id=target_project_id,
+        ),
+        _get_git_status_summary(target_project_id),
         _get_feedback_summary_section(),
     )
     for section in (

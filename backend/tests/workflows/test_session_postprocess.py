@@ -22,6 +22,14 @@ def test_inline_summary_contract_flags_nonfinal_summary() -> None:
     assert "inline summary tag is not the final line" in issues
 
 
+def test_inline_summary_contract_flags_completed_summary_with_unresolved_blocker() -> None:
+    issues = inline_summary_contract_issues(
+        "[[S:completed:Publish is blocked because detached rebuild is unavailable.]]"
+    )
+
+    assert "completed inline summary tag still describes an unresolved blocker" in issues
+
+
 def test_progress_tag_contract_requires_start_and_later_proof() -> None:
     issues = progress_tag_contract_issues(
         (

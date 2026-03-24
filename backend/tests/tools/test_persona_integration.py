@@ -493,7 +493,7 @@ class TestPersonaBashWorkflowGuards:
 
         result = await executor.dispatch(
             "bash",
-            {"command": "git commit -m 'test'", "timeout": 1},
+            {"command": "git commit -m 'test'"},
         )
 
         assert "blocked for workflow policy" not in result.lower()

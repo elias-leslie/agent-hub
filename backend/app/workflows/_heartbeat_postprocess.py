@@ -76,8 +76,8 @@ async def postprocess_heartbeat(
 
     # 4. Retry MCP tools that failed with "Stream closed"
     mcp_retried = await _retry_failed_mcp_tools(session_id)
-    cleanup_status = await _get_cleanup_status_summary()
-    workstream_inventory = await _get_workstream_inventory()
+    cleanup_status = await _get_cleanup_status_summary(target_project_id=target_project_id)
+    workstream_inventory = await _get_workstream_inventory(target_project_id=target_project_id)
     completion_review = await _maybe_review_completion(
         content=content,
         session_id=session_id,
@@ -284,18 +284,18 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool, bool, bool]:
     return status, prefix_ok and summary_tag_ok and progress_tag_ok, summary_tag_ok, progress_tag_ok
 
 
-async def _get_cleanup_status_summary() -> str:
+async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
     from app.workflows._heartbeat_data import _get_cleanup_status_summary as fetch_cleanup_status
 
-    return await fetch_cleanup_status()
+    return await fetch_cleanup_status(target_project_id)
 
 
-async def _get_workstream_inventory() -> str:
+async def _get_workstream_inventory(target_project_id: str | None = None) -> str:
     from app.workflows._heartbeat_data import (
         _get_workstream_inventory as fetch_workstream_inventory,
     )
 
-    return await fetch_workstream_inventory()
+    return await fetch_workstream_inventory(target_project_id=target_project_id)
 
 
 def _detect_followup_reason(

@@ -178,7 +178,7 @@ class TestDirectToolExecutor:
         assert str(tmp_path) in result
 
     @pytest.mark.asyncio
-    async def test_bash_default_timeout_is_unbounded(self, tmp_path: Path) -> None:
+    async def test_bash_never_passes_model_timeout(self, tmp_path: Path) -> None:
         executor = DirectToolExecutor(str(tmp_path))
 
         with patch(
@@ -189,7 +189,8 @@ class TestDirectToolExecutor:
             result = await executor.bash("echo ok")
 
         assert result == "ok"
-        assert mock_run.await_args.args[3] is None
+        assert mock_run.await_args.args == ("echo ok", tmp_path.resolve(), executor._env)
+        assert mock_run.await_args.kwargs == {"agent_slug": None}
 
     @pytest.mark.asyncio
     async def test_read_file_success(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
