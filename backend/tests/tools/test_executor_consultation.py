@@ -194,7 +194,7 @@ def test_parse_specialist_dispatch_request_reads_mode_and_task_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_project_dispatch_overlap_block_reason_blocks_missing_scope_specialist() -> None:
+async def test_project_dispatch_overlap_block_reason_allows_missing_scope_specialist() -> None:
     block = await _project_dispatch_overlap_block_reason(
         project_id="agent-hub",
         agent_slug="debugger",
@@ -214,8 +214,7 @@ async def test_project_dispatch_overlap_block_reason_blocks_missing_scope_specia
         ],
     )
 
-    assert "missing scope evidence" in block
-    assert "reviewer" in block
+    assert block is None
 
 
 @pytest.mark.asyncio
@@ -273,3 +272,35 @@ async def test_project_dispatch_overlap_block_reason_blocks_shared_plumbing_owne
 
     assert "shared-plumbing" in block
     assert "backend/alembic/versions/123_add_mode.py" in block
+
+
+@pytest.mark.asyncio
+async def test_project_dispatch_overlap_block_reason_allows_owner_without_scope_paths() -> None:
+    block = await _project_dispatch_overlap_block_reason(
+        project_id="agent-hub",
+        agent_slug="debugger",
+        mode="task",
+        task_id="task-12345678",
+        owners=[
+            OwnershipOwner(
+                task_id="task-deadbeef",
+                session_id="sess-owner",
+                agent_slug="coder",
+                branch="task-deadbeef/main",
+                worktree_path="/tmp/worktrees/task-deadbeef",
+                is_worktree=True,
+                session_status="active",
+                workstream_status=None,
+                workstream_note=None,
+                ownership_kind="scoped",
+                scope_paths=[],
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+                age_minutes=1,
+                is_stale=False,
+            )
+        ],
+        specialists=[],
+    )
+
+    assert block is None

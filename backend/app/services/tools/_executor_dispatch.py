@@ -105,28 +105,6 @@ def _check_duplicate_campaign(
     )
 
 
-def _check_specialist_scope_gap(
-    project_id: str, agent_slug: str, mode: str, specialists: list[object],
-) -> str | None:
-    relevant = [
-        s for s in specialists
-        if _is_wake_dispatch_specialist_session(s)
-        and not (
-            mode == "task"
-            and getattr(s, "agent_slug", None) == agent_slug
-            and getattr(s, "request_source", None) == "persona_wake:dispatch_campaign"
-        )
-    ]
-    if not relevant:
-        return None
-    detail = getattr(relevant[0], "agent_slug", None) or "unknown"
-    return (
-        f"Dispatch blocked for {project_id}: active specialist {detail} has missing scope "
-        "evidence, so parallel same-project coding would be blind overlap risk. Wait, "
-        "inspect, or reconcile before dispatching another specialist lane."
-    )
-
-
 def _check_owner_overlap(
     project_id: str, mode: str, task_id: str | None, owners: list[object],
 ) -> str | None:
@@ -136,17 +114,6 @@ def _check_owner_overlap(
             continue
 
         scope_paths = list(getattr(owner, "scope_paths", []) or [])
-        if not scope_paths:
-            detail = (
-                owner_task_id
-                or getattr(owner, "branch", None)
-                or getattr(owner, "session_id", "unknown")
-            )
-            return (
-                f"Dispatch blocked for {project_id}: live lane {detail} has missing scope evidence. "
-                "Do not start another coding lane until scope is known or the lane is reconciled."
-            )
-
         shared = [p for p in scope_paths if _is_shared_plumbing_path(p)]
         if shared:
             return (
@@ -171,10 +138,6 @@ async def project_dispatch_overlap_block_reason(
         reason = _check_duplicate_campaign(project_id, agent_slug, specialists)
         if reason:
             return reason
-
-    reason = _check_specialist_scope_gap(project_id, agent_slug, mode, specialists)
-    if reason:
-        return reason
 
     return _check_owner_overlap(project_id, mode, task_id, owners)
 
