@@ -682,18 +682,18 @@ class TestPersonaToolTierExemption:
         "review_improvement_signals",
     ]
 
-    ALL_PERSONA_OPERATIONAL: ClassVar[list[str]] = [
-        "manage_tasks",
+    SAFE_PERSONA_OPERATIONAL: ClassVar[list[str]] = [
         "schedule_job",
         "cancel_scheduled_job",
         "send_push",
         "steer_consultation",
         "cancel_consultation",
+        "query_sessions",
         "inspect_session",
     ]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + ALL_PERSONA_OPERATIONAL)
+    @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + SAFE_PERSONA_OPERATIONAL)
     async def test_persona_tools_allowed_at_read_tier(self, tool_name: str):
         """All persona tools should be allowed even when project is at read tier."""
         from app.services.project_permission_service import check_tool_allowed
@@ -725,7 +725,57 @@ class TestPersonaToolTierExemption:
         assert "tier-exempt" in reason
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + ALL_PERSONA_OPERATIONAL)
+    async def test_manage_tasks_overview_allowed_at_read_tier(self):
+        from app.services.project_permission_service import check_tool_allowed
+
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed(
+                "persona-sandbox",
+                "manage_tasks",
+                tool_input={"action": "overview"},
+            )
+
+        assert allowed is True
+        assert "tier-exempt" in reason
+
+    @pytest.mark.asyncio
+    async def test_manage_tasks_dispatch_denied_at_read_tier(self):
+        from app.services.project_permission_service import check_tool_allowed
+
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed(
+                "persona-sandbox",
+                "manage_tasks",
+                tool_input={"action": "dispatch"},
+            )
+
+        assert allowed is False
+        assert "requires yolo tier" in reason
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_denied_at_read_tier(self):
+        from app.services.project_permission_service import check_tool_allowed
+
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("persona-sandbox", "dispatch_agent")
+
+        assert allowed is False
+        assert "requires yolo tier" in reason
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tool_name", ALL_PERSONA_INTERNAL + SAFE_PERSONA_OPERATIONAL + ["manage_tasks", "dispatch_agent"])
     async def test_persona_tools_denied_at_off_tier(self, tool_name: str):
         """All persona tools should be DENIED when project tier is off."""
         from app.services.project_permission_service import check_tool_allowed

@@ -364,14 +364,14 @@ class TestPersonaToolTierExemption:
             assert "persona-internal" in reason
 
     @pytest.mark.asyncio
-    async def test_operational_tool_allowed_at_read_tier(self):
-        """manage_tasks is yolo-only in tiers but tier-exempt as persona-operational."""
+    async def test_safe_operational_tool_allowed_at_read_tier(self):
+        """Safe persona-ops like scheduling remain tier-exempt at read tier."""
         with patch(
             "app.services.project_permission_service._get_cached_tier",
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("proj", "manage_tasks")
+            allowed, reason = await check_tool_allowed("proj", "schedule_job")
             assert allowed is True
             assert "persona-internal" in reason
 
@@ -386,6 +386,44 @@ class TestPersonaToolTierExemption:
             allowed, reason = await check_tool_allowed("proj", "schedule_job")
             assert allowed is True
             assert "persona-internal" in reason
+
+    @pytest.mark.asyncio
+    async def test_manage_tasks_overview_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed(
+                "proj", "manage_tasks", tool_input={"action": "overview"},
+            )
+            assert allowed is True
+            assert "persona-internal" in reason
+
+    @pytest.mark.asyncio
+    async def test_manage_tasks_dispatch_denied_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed(
+                "proj", "manage_tasks", tool_input={"action": "dispatch"},
+            )
+            assert allowed is False
+            assert "requires yolo tier" in reason
+            assert "dispatch" in reason
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_denied_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "dispatch_agent")
+            assert allowed is False
+            assert "requires yolo tier" in reason
 
     @pytest.mark.asyncio
     async def test_persona_tool_denied_at_off_tier(self):
