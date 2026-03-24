@@ -840,6 +840,43 @@ class TestGetWorkstreamInventory:
         assert result == ""
 
     @pytest.mark.asyncio
+    async def test_omits_retired_lane_when_task_is_visible_in_current_queue_snapshot(self) -> None:
+        fake_rows = [
+            {
+                "session_id": "sess-retired",
+                "agent_slug": "refactor",
+                "project_id": "agent-hub",
+                "external_id": "task-d24e47d8",
+                "current_branch": "task-d24e47d8/main",
+                "status": "completed",
+                "workstream_status": "retired",
+                "created_at": "ignored",
+                "updated_at": "ignored",
+                "age_minutes": 30,
+                "idle_minutes": 30,
+            },
+        ]
+
+        with (
+            patch(
+                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                new_callable=AsyncMock,
+                return_value=fake_rows,
+            ),
+            patch(
+                "app.workflows._heartbeat_data._fetch_task_overview_raw",
+                return_value=(
+                    "READY-ALL[1 ready, 0 blocked, 0 active, 0 stale across 1 projects]\n\n"
+                    "agent-hub (1 ready, 0 active)\n"
+                    "  * task-d24e47d8 P2 refactor [A] Refactor session ingestion"
+                ),
+            ),
+        ):
+            result = await _get_workstream_inventory()
+
+        assert result == ""
+
+    @pytest.mark.asyncio
     async def test_omits_persona_completed_lanes_without_task_ids(self) -> None:
         fake_rows = [
             {
