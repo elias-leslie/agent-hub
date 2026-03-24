@@ -26,7 +26,6 @@ from app.adapters.claude_tools_permissions import (
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
-    extract_block_content,
     extract_system_and_conversation,
 )
 
@@ -67,6 +66,128 @@ class ErrorMessage:
     """Terminal message carrying a tool-stream error without raising through the iterator."""
 
     error: str
+
+
+@dataclass
+class _ClaudeInternalQuerySession:
+    """Own one Claude SDK Query lifecycle on the task that created it."""
+
+    prompt: str | AsyncIterable[dict[str, Any]]
+    options: Any
+    query_cls: Any
+    parse_message: Any
+    transport: Any
+    query_obj: Any | None = None
+    connected: bool = False
+    owner_task: asyncio.Task[Any] | None = None
+
+    async def start(self) -> None:
+        """Connect transport, start Query, and send the initial prompt."""
+        self.owner_task = asyncio.current_task()
+        await self.transport.connect()
+        self.connected = True
+        self.query_obj = self.query_cls(
+            transport=self.transport,
+            is_streaming_mode=True,
+            can_use_tool=getattr(self.options, "can_use_tool", None),
+            hooks=(
+                _convert_hooks_to_internal_format(self.options.hooks)
+                if getattr(self.options, "hooks", None)
+                else None
+            ),
+            sdk_mcp_servers=_extract_sdk_mcp_servers(self.options),
+            agents=_extract_agents_dict(self.options),
+        )
+        await self.query_obj.start()
+        await self.query_obj.initialize()
+        await _send_prompt_to_transport(self.prompt, self.transport, self.query_obj)
+
+    async def iter_messages(self) -> AsyncIterator[Any]:
+        """Yield parsed SDK messages from the owned Query."""
+        if self.query_obj is None:
+            raise RuntimeError("Claude Query session was not started")
+        async for data in self.query_obj.receive_messages():
+            message = self.parse_message(data)
+            if message is not None:
+                yield message
+
+    async def close(self) -> None:
+        """Close the owned Query from the correct task when possible."""
+        await _close_internal_query(
+            self.query_obj,
+            self.transport,
+            connected=self.connected,
+            owner_task=self.owner_task,
+        )
+
+
+@dataclass
+class _ClaudeSDKMessageStreamSession:
+    """Own Claude SDK iterator state for one streamed tool session."""
+
+    prompt: str | Any
+    options: Any
+    session_id: str | None = None
+    done_emitted: bool = False
+    saw_payload: bool = False
+    configured_max_turns: int | None = None
+    iterator_closed: bool = False
+
+    def __post_init__(self) -> None:
+        self.configured_max_turns = getattr(self.options, "max_turns", None)
+        self.message_iter = _sdk_query_messages(self.prompt, self.options).__aiter__()
+
+    async def _close_iterator(self) -> None:
+        await _close_sdk_message_iter(self.message_iter)
+        self.iterator_closed = True
+
+    async def iterate(self) -> AsyncGenerator[tuple[Any, str | None]]:
+        """Yield (message, session_id) pairs while owning iterator cleanup."""
+        try:
+            while True:
+                try:
+                    message = await anext(self.message_iter)
+                except StopAsyncIteration:
+                    if self.saw_payload and not self.done_emitted:
+                        finish_reason = "end_turn"
+                        logger.warning(
+                            "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
+                            finish_reason,
+                        )
+                        yield (
+                            ResultMessage(
+                                session_id=self.session_id,
+                                stop_reason=finish_reason,
+                                finish_reason=finish_reason,
+                            ),
+                            self.session_id,
+                        )
+                    await self._close_iterator()
+                    return
+                if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                    self.session_id = message.data.get("session_id")
+                    if self.session_id:
+                        logger.info("Claude SDK session ID: %s", self.session_id)
+                    continue
+                if type(message).__name__ == "ResultMessage":
+                    message = _resolve_result_message(
+                        message,
+                        self.session_id,
+                        self.configured_max_turns,
+                    )
+                    yield (message, self.session_id)
+                    self.done_emitted = True
+                    await self._close_iterator()
+                    return
+                if self.done_emitted:
+                    continue
+                self.saw_payload = True
+                yield (message, self.session_id)
+        finally:
+            if not self.iterator_closed:
+                with suppress(asyncio.CancelledError):
+                    await _close_sdk_message_iter(self.message_iter)
+                self.iterator_closed = True
 
 
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
@@ -192,42 +313,19 @@ async def _sdk_query_via_internal_api(
     from claude_agent_sdk._internal.query import Query
     from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 
-    transport = SubprocessCLITransport(prompt=prompt, options=options)
-    query_obj: Any | None = None
-    connected = False
-    owner_task = asyncio.current_task()
+    session = _ClaudeInternalQuerySession(
+        prompt=prompt,
+        options=options,
+        query_cls=Query,
+        parse_message=parse_message,
+        transport=SubprocessCLITransport(prompt=prompt, options=options),
+    )
     try:
-        await transport.connect()
-        connected = True
-
-        query_obj = Query(
-            transport=transport,
-            is_streaming_mode=True,
-            can_use_tool=getattr(options, "can_use_tool", None),
-            hooks=(
-                _convert_hooks_to_internal_format(options.hooks)
-                if getattr(options, "hooks", None)
-                else None
-            ),
-            sdk_mcp_servers=_extract_sdk_mcp_servers(options),
-            agents=_extract_agents_dict(options),
-        )
-
-        await query_obj.start()
-        await query_obj.initialize()
-        await _send_prompt_to_transport(prompt, transport, query_obj)
-
-        async for data in query_obj.receive_messages():
-            message = parse_message(data)
-            if message is not None:
-                yield message
+        await session.start()
+        async for message in session.iter_messages():
+            yield message
     finally:
-        await _close_internal_query(
-            query_obj,
-            transport,
-            connected=connected,
-            owner_task=owner_task,
-        )
+        await session.close()
 
 
 async def _sdk_query_messages(prompt: str | AsyncIterable[dict[str, Any]], options: Any) -> AsyncIterator[Any]:
@@ -313,20 +411,6 @@ def _resolve_can_use_tool(
     )
 
 
-def _message_has_tool_use(message: Any) -> bool:
-    for block in getattr(message, "content", []) or []:
-        if extract_block_content(block)["type"] == "tool_use":
-            return True
-    return False
-
-
-def _message_has_tool_result(message: Any) -> bool:
-    for block in getattr(message, "content", []) or []:
-        if extract_block_content(block)["type"] == "tool_result":
-            return True
-    return False
-
-
 def _resolve_result_message(
     message: Any,
     session_id: str | None,
@@ -364,67 +448,21 @@ def _resolve_result_message(
     return message
 
 
-def _update_tool_call_count(message: Any, pending_tool_calls: int) -> int:
-    """Track pending tool calls based on tool_use / tool_result blocks."""
-    if _message_has_tool_use(message):
-        pending_tool_calls += 1
-    if _message_has_tool_result(message):
-        pending_tool_calls = max(0, pending_tool_calls - 1)
-    return pending_tool_calls
-
-
 async def _iterate_sdk_messages(
     prompt: str | Any,
     options: Any,
     provider_name: str,
 ) -> AsyncGenerator[tuple[Any, str | None]]:
     """Core message-processing loop over the claude_agent_sdk query iterator."""
-    session_id: str | None = None
-    done_emitted = False
-    saw_payload = False
-    pending_tool_calls = 0
-    configured_max_turns = getattr(options, "max_turns", None)
-    iterator_closed = False
-    message_iter = _sdk_query_messages(prompt, options).__aiter__()
+    del provider_name  # Reserved for future per-provider streaming specialization.
+    session = _ClaudeSDKMessageStreamSession(prompt=prompt, options=options)
+    session_iter = session.iterate()
     try:
-        while True:
-            try:
-                message = await anext(message_iter)
-            except StopAsyncIteration:
-                if saw_payload and not done_emitted:
-                    finish_reason = "end_turn"
-                    logger.warning(
-                        "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
-                        finish_reason,
-                    )
-                    yield (
-                        ResultMessage(session_id=session_id, stop_reason=finish_reason, finish_reason=finish_reason),
-                        session_id,
-                    )
-                await _close_sdk_message_iter(message_iter)
-                iterator_closed = True
-                return
-            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                session_id = message.data.get("session_id")
-                if session_id:
-                    logger.info(f"Claude SDK session ID: {session_id}")
-                continue
-            if type(message).__name__ == "ResultMessage":
-                message = _resolve_result_message(message, session_id, configured_max_turns)
-                yield (message, session_id)
-                done_emitted = True
-                await _close_sdk_message_iter(message_iter)
-                iterator_closed = True
-                return
-            if done_emitted:
-                continue
-            saw_payload = True
-            pending_tool_calls = _update_tool_call_count(message, pending_tool_calls)
-            yield (message, session_id)
+        async for item in session_iter:
+            yield item
     finally:
-        if not iterator_closed:
-            with suppress(asyncio.CancelledError):
-                await _close_sdk_message_iter(message_iter)
+        with suppress(asyncio.CancelledError):
+            await session_iter.aclose()
 
 
 async def _stream_sdk_messages(
