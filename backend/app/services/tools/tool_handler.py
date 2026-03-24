@@ -179,7 +179,9 @@ def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
         try:
             from app.services.project_permission_service import check_tool_allowed
 
-            allowed, reason = await check_tool_allowed(project_id, tool_call.name)
+            allowed, reason = await check_tool_allowed(
+                project_id, tool_call.name, tool_input=tool_call.input,
+            )
             if not allowed:
                 logger.info(
                     "Project permission DENY: %s for %s (%s)",
