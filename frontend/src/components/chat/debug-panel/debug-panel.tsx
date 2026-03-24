@@ -26,8 +26,8 @@ export function DebugPanel({ agent, preview, debugTrace, messages }: DebugPanelP
     const [showPrompt, setShowPrompt] = useState(false);
 
     return (
-        <div className="w-80 flex-shrink-0 overflow-y-auto bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 h-full">
-            <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+        <div className="w-80 flex-shrink-0 overflow-y-auto bg-slate-900 border-l border-slate-800 h-full">
+            <div className="sticky top-0 bg-slate-900 border-b border-slate-700 px-4 py-3">
                 <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                     Debug Trace
                 </h2>
@@ -101,18 +101,18 @@ export function DebugPanel({ agent, preview, debugTrace, messages }: DebugPanelP
                     <div>
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs text-slate-500">Length</span>
-                            <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                            <span className="text-xs font-mono text-slate-300">
                                 {preview.combined_prompt.length} chars
                             </span>
                         </div>
                         <button
                             onClick={() => setShowPrompt(!showPrompt)}
-                            className="text-xs text-blue-600 hover:underline"
+                            className="text-xs text-amber-500 hover:underline"
                         >
                             {showPrompt ? "Hide" : "Show"} full prompt
                         </button>
                         {showPrompt && (
-                            <pre className="mt-2 p-2 rounded bg-slate-50 dark:bg-slate-800 text-[10px] font-mono text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap max-h-60 overflow-y-auto">
+                            <pre className="mt-2 p-2 rounded bg-slate-800 text-[10px] font-mono text-slate-400 overflow-x-auto whitespace-pre-wrap max-h-60 overflow-y-auto">
                                 {preview.combined_prompt}
                             </pre>
                         )}

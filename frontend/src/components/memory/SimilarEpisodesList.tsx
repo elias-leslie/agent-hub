@@ -40,7 +40,7 @@ export function SimilarEpisodesList({ episodeUuid }: SimilarEpisodesListProps) {
           "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors",
           showSimilar
             ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800"
-            : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-purple-600 dark:hover:text-purple-400"
+            : "bg-slate-800/50 text-slate-400 border-slate-700 hover:text-purple-600 dark:hover:text-purple-400"
         )}
       >
         {isLoadingSimilar ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}
@@ -48,7 +48,7 @@ export function SimilarEpisodesList({ episodeUuid }: SimilarEpisodesListProps) {
       </button>
 
       {showSimilar && similar !== null && (
-        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden">
+        <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
           {similar.length === 0 ? (
             <p className="p-3 text-xs text-slate-400 italic">No similar episodes found</p>
           ) : (
@@ -64,7 +64,7 @@ export function SimilarEpisodesList({ episodeUuid }: SimilarEpisodesListProps) {
                       {(s.relevance_score * 100).toFixed(0)}% match
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{s.content}</p>
+                  <p className="text-xs text-slate-300 line-clamp-2">{s.content}</p>
                 </div>
               ))}
             </div>

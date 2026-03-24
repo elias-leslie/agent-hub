@@ -70,7 +70,7 @@ export function TierDropdown({ episodeUuid, currentCategory, onTierChange }: Tie
         {/* Dropdown Menu */}
         {isDropdownOpen && (
           <div
-            className="absolute top-full left-0 mt-1 z-50 w-40 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden"
+            className="absolute top-full left-0 mt-1 z-50 w-40 rounded-lg border border-slate-700 bg-slate-900 shadow-lg overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {(["mandate", "guardrail", "reference"] as MemoryCategory[]).map((tier) => {
@@ -83,8 +83,8 @@ export function TierDropdown({ episodeUuid, currentCategory, onTierChange }: Tie
                   disabled={isUpdatingTier}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors",
-                    "hover:bg-slate-50 dark:hover:bg-slate-800",
-                    isSelected && "bg-slate-100 dark:bg-slate-800"
+                    "hover:bg-slate-800",
+                    isSelected && "bg-slate-800"
                   )}
                 >
                   <span>{config.icon}</span>
@@ -101,7 +101,7 @@ export function TierDropdown({ episodeUuid, currentCategory, onTierChange }: Tie
 
       {/* Tier Error Message */}
       {tierError && (
-        <div className="text-xs text-red-500 dark:text-red-400 mt-1">
+        <div className="text-xs text-red-400 mt-1">
           {tierError}
         </div>
       )}

@@ -61,10 +61,10 @@ export function BenchmarkExperimentSection({
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  <p className="text-sm font-semibold text-slate-100">
                     {experiment.name}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-xs text-slate-400">
                     {experiment.suite_id}
                   </p>
                 </div>
@@ -75,43 +75,43 @@ export function BenchmarkExperimentSection({
               </div>
 
               {experiment.hypothesis && (
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                <p className="mt-3 text-sm text-slate-300">
                   {experiment.hypothesis}
                 </p>
               )}
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-950/50">
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
                     {experiment.baseline.label}
                   </p>
-                  <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  <p className="mt-1 font-semibold text-slate-100">
                     {experiment.baseline.run_count} runs
                   </p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-300">
+                  <p className="mt-1 text-slate-300">
                     Score {experiment.baseline.avg_score ?? "Pending"}
                   </p>
-                  <p className="text-slate-600 dark:text-slate-300">
+                  <p className="text-slate-300">
                     Pass {experiment.baseline.avg_pass_rate ?? "Pending"}%
                   </p>
-                  <p className="text-slate-600 dark:text-slate-300">
+                  <p className="text-slate-300">
                     Tools {formatMetric(experiment.baseline.avg_tool_calls)}
                   </p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-950/50">
-                  <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">
                     {experiment.candidate.label}
                   </p>
-                  <p className="mt-1 font-semibold text-slate-900 dark:text-slate-100">
+                  <p className="mt-1 font-semibold text-slate-100">
                     {experiment.candidate.run_count} runs
                   </p>
-                  <p className="mt-1 text-slate-600 dark:text-slate-300">
+                  <p className="mt-1 text-slate-300">
                     Score {experiment.candidate.avg_score ?? "Pending"}
                   </p>
-                  <p className="text-slate-600 dark:text-slate-300">
+                  <p className="text-slate-300">
                     Pass {experiment.candidate.avg_pass_rate ?? "Pending"}%
                   </p>
-                  <p className="text-slate-600 dark:text-slate-300">
+                  <p className="text-slate-300">
                     Tools {formatMetric(experiment.candidate.avg_tool_calls)}
                   </p>
                 </div>
@@ -119,7 +119,7 @@ export function BenchmarkExperimentSection({
 
               <dl className="mt-4 space-y-2 text-sm">
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-slate-500 dark:text-slate-400">Score delta</dt>
+                  <dt className="text-slate-400">Score delta</dt>
                   <dd className="text-right text-slate-700 dark:text-slate-200">
                     {formatDelta(
                       experiment.score_delta.mean_delta,
@@ -129,7 +129,7 @@ export function BenchmarkExperimentSection({
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-slate-500 dark:text-slate-400">Pass delta</dt>
+                  <dt className="text-slate-400">Pass delta</dt>
                   <dd className="text-right text-slate-700 dark:text-slate-200">
                     {formatDelta(
                       experiment.pass_rate_delta.mean_delta,
@@ -140,7 +140,7 @@ export function BenchmarkExperimentSection({
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-slate-500 dark:text-slate-400">Tool-call delta</dt>
+                  <dt className="text-slate-400">Tool-call delta</dt>
                   <dd className="text-right text-slate-700 dark:text-slate-200">
                     {formatDelta(
                       experiment.tool_call_delta.mean_delta,
@@ -150,13 +150,13 @@ export function BenchmarkExperimentSection({
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-slate-500 dark:text-slate-400">Reason</dt>
+                  <dt className="text-slate-400">Reason</dt>
                   <dd className="text-right text-slate-700 dark:text-slate-200">
                     {experiment.decision_reason ?? "Pending"}
                   </dd>
                 </div>
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="text-slate-500 dark:text-slate-400">Config stability</dt>
+                  <dt className="text-slate-400">Config stability</dt>
                   <dd className="text-right text-slate-700 dark:text-slate-200">
                     {experiment.baseline.config_stable && experiment.candidate.config_stable
                       ? "Frozen"

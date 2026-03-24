@@ -92,7 +92,7 @@ export default function ClientDetailPage() {
           <p className="text-red-400 mb-4">Failed to load client</p>
           <button
             onClick={() => router.push("/access-control/clients")}
-            className="text-blue-400 hover:text-blue-300"
+            className="text-amber-400 hover:text-amber-300"
           >
             Back to clients
           </button>

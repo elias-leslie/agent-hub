@@ -31,7 +31,7 @@ export function FallbackModelsList({
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+      <label className="text-xs font-medium text-slate-400">
         Fallback Models (in order)
       </label>
       {selectedModels.length === 0 ? (
@@ -43,7 +43,7 @@ export function FallbackModelsList({
               <select
                 value={model}
                 onChange={(e) => updateModel(index, e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                className="flex-1 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
               >
                 {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -64,7 +64,7 @@ export function FallbackModelsList({
       <button
         onClick={addModel}
         disabled={selectedModels.length >= availableModels.length - 1}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50"
       >
         <Plus className="h-3.5 w-3.5" />
         Add Fallback

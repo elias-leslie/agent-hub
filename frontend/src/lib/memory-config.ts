@@ -29,7 +29,7 @@ export const CATEGORY_CONFIG: Record<
   reference: {
     icon: "📚",
     label: "Reference",
-    color: "text-blue-600 dark:text-blue-400",
+    color: "text-amber-500 dark:text-amber-400",
     bg: "bg-blue-500/10 border-blue-400/40",
     description: "On-demand — triggered or searched",
   },

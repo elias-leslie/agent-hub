@@ -65,7 +65,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
             />
           </div>
 
@@ -78,7 +78,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
                 onChange={(e) => setRateLimitRpm(parseInt(e.target.value) || 60)}
                 min={1}
                 max={10000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
@@ -89,7 +89,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
                 onChange={(e) => setRateLimitTpm(parseInt(e.target.value) || 100000)}
                 min={1000}
                 max={10000000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
@@ -100,7 +100,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
                 type="checkbox"
                 checked={allowUnrestricted}
                 onChange={(e) => setAllowUnrestricted(e.target.checked)}
-                className="rounded bg-slate-800 border-slate-600 text-blue-500 focus:ring-blue-500"
+                className="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-amber-500"
               />
               Unrestricted (allow all projects)
             </label>
@@ -114,7 +114,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
                   value={allowedProjects}
                   onChange={(e) => setAllowedProjects(e.target.value)}
                   placeholder="project-1, project-2, project-3"
-                  className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                  className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                   Enter project IDs separated by commas. Leave empty to block all projects.
@@ -134,7 +134,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
           <button
             onClick={handleUpdate}
             disabled={isPending}
-            className="flex-1 py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition-colors disabled:opacity-50"
+            className="flex-1 py-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm transition-colors disabled:opacity-50"
           >
             {isPending ? "Saving..." : "Save Changes"}
           </button>

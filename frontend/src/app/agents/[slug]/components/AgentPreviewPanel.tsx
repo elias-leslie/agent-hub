@@ -169,10 +169,10 @@ export function AgentPreviewPanel({
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <h3 className="text-sm font-semibold text-slate-100">
             Runtime Preview
           </h3>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Build a real scenario first, then inspect the assembled prompt and memory plan.
           </p>
         </div>
@@ -204,7 +204,7 @@ export function AgentPreviewPanel({
 
       <div className="grid gap-3 md:grid-cols-2">
         <label htmlFor={projectScopeId} className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-400">
             Project Scope
           </span>
           <select
@@ -224,7 +224,7 @@ export function AgentPreviewPanel({
         </label>
 
         <label htmlFor={phaseHintId} className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-400">
             {getPhaseLabel(previewMode)}
           </span>
           <input
@@ -240,7 +240,7 @@ export function AgentPreviewPanel({
 
       {previewMode !== "heartbeat" ? (
         <label htmlFor={promptInputId} className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-400">
             {promptInputConfig.label}
           </span>
           <textarea
@@ -252,7 +252,7 @@ export function AgentPreviewPanel({
             placeholder={promptInputConfig.placeholder}
             className="min-h-[96px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-slate-400 dark:border-slate-700 dark:bg-slate-950"
           />
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] text-slate-400">
             {promptInputConfig.helper}
           </p>
         </label>

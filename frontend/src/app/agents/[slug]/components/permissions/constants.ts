@@ -34,7 +34,7 @@ export const MODE_CONFIG: Record<
     label: "Granular",
     description: "Configure permissions per tool with allow/deny lists",
     icon: ShieldAlert,
-    color: "text-blue-400",
+    color: "text-amber-400",
     bg: "bg-blue-950/30 border-blue-500/30",
   },
 };

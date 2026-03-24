@@ -50,7 +50,7 @@ export function ProvidersTab() {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+      <h3 className="text-sm font-medium text-slate-100">
         Provider Credentials
       </h3>
 

@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export function ToolTypeBadge({ type }: { type: string | null }) {
   const config = {
-    api: { icon: Server, color: "text-blue-400", bg: "bg-blue-500/10" },
+    api: { icon: Server, color: "text-amber-400", bg: "bg-blue-500/10" },
     cli: { icon: Terminal, color: "text-emerald-400", bg: "bg-emerald-500/10" },
     sdk: { icon: Code2, color: "text-purple-400", bg: "bg-purple-500/10" },
   };

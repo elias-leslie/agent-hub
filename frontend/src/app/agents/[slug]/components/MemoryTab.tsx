@@ -62,25 +62,25 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+        <h2 className="text-lg font-semibold text-slate-100 flex items-center gap-2">
           <Brain className="h-5 w-5 text-slate-400" />
           Memory Configuration
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-sm text-slate-400 mt-1">
           Control how memory episodes are injected into this agent&apos;s
           context
         </p>
       </div>
 
       {/* Custom Settings Toggle */}
-      <div className="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50">
+      <div className="flex items-center justify-between p-4 rounded-lg border border-slate-700 bg-slate-800/50">
         <div className="flex items-center gap-3">
           <Settings2 className="h-5 w-5 text-slate-400" />
           <div>
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+            <p className="text-sm font-medium text-slate-100">
               Enable Custom Memory Settings
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-400">
               {isCustomEnabled
                 ? "Using per-agent memory configuration"
                 : "Using global memory settings"}

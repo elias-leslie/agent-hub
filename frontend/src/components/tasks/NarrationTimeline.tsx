@@ -29,7 +29,7 @@ const TAG_ICONS: Record<string, string> = {
 };
 
 const TAG_COLORS: Record<string, string> = {
-  started: "text-blue-400",
+  started: "text-amber-400",
   found: "text-yellow-400",
   modified: "text-green-400",
   tested: "text-emerald-400",

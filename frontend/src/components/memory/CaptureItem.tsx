@@ -23,7 +23,7 @@ const TYPE_CONFIG: Record<string, { color: string; icon: typeof Eye }> = {
   learning: { color: "text-emerald-400 bg-emerald-400/10 border-emerald-400/30", icon: Lightbulb },
   error: { color: "text-red-400 bg-red-400/10 border-red-400/30", icon: Bug },
   decision: { color: "text-amber-400 bg-amber-400/10 border-amber-400/30", icon: Zap },
-  change: { color: "text-blue-400 bg-blue-400/10 border-blue-400/30", icon: RefreshCw },
+  change: { color: "text-amber-400 bg-blue-400/10 border-blue-400/30", icon: RefreshCw },
   pattern: { color: "text-cyan-400 bg-cyan-400/10 border-cyan-400/30", icon: Layers },
 };
 

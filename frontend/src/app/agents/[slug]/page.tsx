@@ -119,7 +119,7 @@ export default function AgentEditorPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -127,15 +127,15 @@ export default function AgentEditorPage() {
 
   if (error || !agent) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
-          <p className="text-sm text-slate-600 dark:text-slate-400">
+          <p className="text-sm text-slate-400">
             Agent not found
           </p>
           <button
             onClick={() => router.push("/agents")}
-            className="mt-4 px-4 py-2 text-sm font-medium text-blue-600 hover:underline"
+            className="mt-4 px-4 py-2 text-sm font-medium text-amber-500 hover:underline"
           >
             Back to Agents
           </button>
@@ -148,7 +148,7 @@ export default function AgentEditorPage() {
     AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.label ?? "Editor";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-950">
       <AgentEditorHeader
         agent={agent}
         hasChanges={hasChanges}

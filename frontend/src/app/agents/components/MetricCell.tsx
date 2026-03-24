@@ -19,7 +19,7 @@ export function MetricCell({
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-[50px]">
-        <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+        <span className="text-xs font-semibold tabular-nums text-slate-300">
           {value}
         </span>
         {unit && (

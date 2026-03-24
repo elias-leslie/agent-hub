@@ -3,7 +3,7 @@ import type { TierChangesSummary } from "@/lib/memory-api";
 const CHANGE_COLORS: Record<string, string> = {
   self_heal: "text-emerald-400",
   demotion: "text-red-400",
-  promotion: "text-blue-400",
+  promotion: "text-amber-400",
   retirement: "text-slate-400",
 };
 

@@ -175,20 +175,20 @@ export default function ModelsPage() {
   }, [filteredModels, groupByProvider]);
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-950">
       {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
         <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                <Cpu className="h-5 w-5 text-slate-400" />
+                <h1 className="text-lg font-bold text-slate-100 tracking-tight">
                   Models
                 </h1>
               </div>
               <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
-                <span className="text-slate-500 dark:text-slate-400">
+                <span className="text-slate-400">
                   {filteredModels.length} of {models.length} models
                 </span>
               </div>
@@ -210,7 +210,7 @@ export default function ModelsPage() {
                 type="button"
                 onClick={handleSync}
                 disabled={syncing}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
                 title="Sync external benchmark data"
               >
                 {syncing ? (
@@ -257,16 +257,16 @@ export default function ModelsPage() {
           <div className="flex items-center justify-center py-16 text-center">
             <div className="max-w-md">
               <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              <h3 className="text-lg font-semibold text-slate-100 mb-2">
                 Failed to load model catalog
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+              <p className="text-sm text-slate-400 mb-4">
                 The models API request failed. Retry to refresh catalog data.
               </p>
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               >
                 Retry
               </button>
@@ -278,18 +278,18 @@ export default function ModelsPage() {
           <div className="flex items-center justify-center py-16 text-center">
             <div className="max-w-md">
               <Loader2 className="h-10 w-10 text-slate-400 animate-spin mx-auto mb-3" />
-              <p className="text-sm text-slate-500 dark:text-slate-400">Loading models...</p>
+              <p className="text-sm text-slate-400">Loading models...</p>
             </div>
           </div>
         )}
 
         {filteredModels.length === 0 && !isError && !isLoading && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <AlertCircle className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+            <AlertCircle className="h-12 w-12 text-slate-600 mb-4" />
+            <h3 className="text-lg font-semibold text-slate-100 mb-2">
               No models found
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md">
+            <p className="text-sm text-slate-400 max-w-md">
               Try adjusting your filters or search query to find models.
             </p>
           </div>
@@ -315,7 +315,7 @@ export default function ModelsPage() {
           <div className="space-y-8">
             {Object.entries(groupedModels).map(([provider, providerModels]) => (
               <div key={provider}>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4 capitalize flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-100 mb-4 capitalize flex items-center gap-2">
                   <span>{provider}</span>
                   <span className="text-xs text-slate-400 font-normal">
                     ({providerModels.length} model{providerModels.length !== 1 ? "s" : ""})

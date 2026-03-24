@@ -36,12 +36,12 @@ export function AssignPromptForm({
 
   return (
     <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+      <h3 className="text-sm font-semibold text-slate-100">
         Assign Existing Prompt
       </h3>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Prompt</span>
+          <span className="text-xs font-medium text-slate-400">Prompt</span>
           <select
             value={selectedPromptSlug}
             onChange={(event) => setSelectedPromptSlug(event.target.value)}
@@ -56,7 +56,7 @@ export function AssignPromptForm({
           </select>
         </label>
         <label className="space-y-1.5">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">Role</span>
+          <span className="text-xs font-medium text-slate-400">Role</span>
           <input
             value={assignRole}
             onChange={(event) => setAssignRole(event.target.value)}
@@ -86,7 +86,7 @@ export function AssignPromptForm({
             })
           }
           disabled={!selectedPromptSlug || !assignRole || assignMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-amber-500 disabled:opacity-50"
         >
           {assignMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

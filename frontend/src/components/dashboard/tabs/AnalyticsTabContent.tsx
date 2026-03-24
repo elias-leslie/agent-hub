@@ -129,7 +129,7 @@ export function AnalyticsTabContent({
       {/* Token Usage by Model Bar */}
       <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">
         <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
-          <BarChart3 className="h-3 w-3 text-blue-500" />
+          <BarChart3 className="h-3 w-3 text-amber-500" />
           Tokens by Model (K)
         </h4>
         {barData.length > 0 ? (

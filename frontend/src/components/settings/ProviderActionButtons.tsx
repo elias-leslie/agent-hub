@@ -69,7 +69,7 @@ export function ProviderActionButtons({
             <button
               onClick={onCancelDisconnectOAuth}
               aria-label="Cancel disconnect OAuth"
-              className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-500 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -116,8 +116,8 @@ function OAuthButton({ isOAuthLoading, hasOAuthToken, onOAuthStart }: OAuthButto
       className={cn(
         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50",
         hasOAuthToken
-          ? "bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
-          : "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300",
+          ? "bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"
+          : "bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-amber-300",
       )}
     >
       {isOAuthLoading ? (
@@ -175,7 +175,7 @@ function ApiKeyActions({
           </button>
           <button
             onClick={onCancelDelete}
-            className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+            className="p-1.5 rounded-md hover:bg-slate-800 text-slate-500 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -188,7 +188,7 @@ function ApiKeyActions({
         {provider.id === "gemini" && (
           <button
             onClick={onAdd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-300 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Add Key
@@ -196,14 +196,14 @@ function ApiKeyActions({
         )}
         <button
           onClick={onEdit}
-          className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+          className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 transition-colors"
           title={provider.id === "gemini" ? "Update primary key" : "Edit key"}
         >
           <Pencil className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={onConfirmDelete}
-          className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
+          className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-400 hover:text-red-500 transition-colors"
           title={credentials.length > 1 ? "Delete all keys" : "Delete key"}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -217,7 +217,7 @@ function ApiKeyActions({
     <div className="flex items-center gap-1.5 flex-wrap">
       <button
         onClick={onAdd}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-300 transition-colors"
       >
         <Plus className="h-3.5 w-3.5" />
         {credentials.length > 0 ? "Update" : "Add Key"}
@@ -226,7 +226,7 @@ function ApiKeyActions({
       {credentials.length > 0 && provider.id === "gemini" && (
         <button
           onClick={onAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-300 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Add Another Key

@@ -65,16 +65,16 @@ function StatCard({
     <div
       className={cn(
         "border-l-4 rounded-lg p-4",
-        "bg-white dark:bg-slate-900/50",
-        "border border-slate-200 dark:border-slate-800",
+        "bg-slate-900/50",
+        "border border-slate-800",
         colors[accentColor],
       )}
       data-testid="stat-card"
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
-          <p className="text-2xl font-semibold text-slate-900 dark:text-slate-100 mt-1">
+          <p className="text-sm text-slate-400">{label}</p>
+          <p className="text-2xl font-semibold text-slate-100 mt-1">
             {value}
           </p>
           {subtext && (
@@ -91,10 +91,10 @@ function StatCard({
 
 function SkeletonCard() {
   return (
-    <div className="border-l-4 border-l-slate-300 dark:border-l-slate-700 rounded-lg p-4 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+    <div className="border-l-4 border-l-slate-300 dark:border-l-slate-700 rounded-lg p-4 bg-slate-900/50 border border-slate-800">
       <div className="animate-pulse">
-        <div className="h-4 w-20 bg-slate-200 dark:bg-slate-700 rounded" />
-        <div className="h-8 w-16 bg-slate-200 dark:bg-slate-700 rounded mt-2" />
+        <div className="h-4 w-20 bg-slate-700 rounded" />
+        <div className="h-8 w-16 bg-slate-700 rounded mt-2" />
       </div>
     </div>
   );

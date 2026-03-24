@@ -29,7 +29,7 @@ function getSpeedBadgeColor(tier: string): string {
     case "slow":
       return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20";
     default:
-      return "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20";
+      return "bg-slate-500/10 text-slate-400 border-slate-500/20";
   }
 }
 
@@ -41,11 +41,11 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
   return (
     <div
       className={cn(
-        "group relative rounded-lg border bg-white dark:bg-slate-900 overflow-hidden",
+        "group relative rounded-lg border bg-slate-900 overflow-hidden",
         "transition-all duration-200",
         isSelected
           ? "border-amber-500/40 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20"
-          : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md",
+          : "border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md",
       )}
       onClick={() => onExpand?.(model)}
     >
@@ -62,14 +62,14 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+              <h3 className="text-base font-semibold text-slate-100 truncate">
                 {model.name}
               </h3>
               {hasEnrichment && (
                 <Database className="h-3 w-3 text-emerald-500 flex-shrink-0" />
               )}
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+            <p className="text-xs text-slate-400 truncate mt-0.5">
               {model.alias}
               {model.family && (
                 <span className="ml-1 text-slate-400">({model.family})</span>
@@ -91,11 +91,11 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         {/* Composite Score */}
         <div className="flex items-center gap-2 mb-4">
           <div className="flex-1">
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="text-xs text-slate-400 mb-1">
               Composite Score
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              <span className="text-2xl font-bold text-slate-100">
                 {model.scores.composite}
               </span>
               <span className="text-xs text-slate-400">/100</span>
@@ -109,7 +109,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
                 "px-2 py-1 rounded text-xs font-semibold text-center border",
                 costTier === "Free"
                   ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700",
+                  : "bg-slate-800 text-slate-300 border-slate-700",
               )}
             >
               {costTier}
@@ -137,7 +137,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         <div className="flex flex-wrap items-center gap-1.5 mb-3">
           {model.capabilities.has_vision && (
             <div
-              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-amber-500 dark:text-amber-400 border border-blue-500/20"
               title="Vision"
             >
               <Eye className="h-2.5 w-2.5" />
@@ -192,10 +192,10 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         </div>
 
         {/* Context Window & Timeout */}
-        <div className="text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3 space-y-1.5">
+        <div className="text-xs text-slate-400 border-t border-slate-800 pt-3 space-y-1.5">
           <div className="flex justify-between">
             <span>Context Window</span>
-            <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+            <span className="font-mono font-medium text-slate-300">
               {(model.context_window / 1000).toFixed(0)}K
             </span>
           </div>
@@ -214,7 +214,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
               "px-2 py-1 rounded-md text-xs font-medium border",
               isSelected
                 ? "bg-amber-500 text-white border-amber-600"
-                : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700",
+                : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700",
             )}
           >
             {isSelected ? "Selected" : "Compare"}

@@ -22,20 +22,20 @@ export function SessionsHeader({
   onRefresh: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
       <div className="px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+            <h1 className="text-lg font-bold text-slate-100 tracking-tight">
               Sessions
             </h1>
             <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
-              <span className="text-slate-500 dark:text-slate-400">
+              <span className="text-slate-400">
                 {total} total
               </span>
               {pageStats && (
                 <>
-                  <span className="text-slate-300 dark:text-slate-600">|</span>
+                  <span className="text-slate-600">|</span>
                   <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                     <Zap className="h-3 w-3" />
                     {formatTokens(pageStats.totalTokens)}
@@ -59,7 +59,7 @@ export function SessionsHeader({
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-8 pr-3 py-1.5 w-44 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500"
+                className="pl-8 pr-3 py-1.5 w-44 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500"
               />
             </div>
 
@@ -68,7 +68,7 @@ export function SessionsHeader({
               data-testid="filter-status"
               value={statusFilter}
               onChange={(e) => onStatusFilterChange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="px-2.5 py-1.5 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
             >
               <option value="">All status</option>
               <option value="active">Active</option>
@@ -79,7 +79,7 @@ export function SessionsHeader({
             {/* Refresh */}
             <button
               onClick={onRefresh}
-              className="p-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+              className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-400 transition-colors"
               title="Refresh"
             >
               <RefreshCw

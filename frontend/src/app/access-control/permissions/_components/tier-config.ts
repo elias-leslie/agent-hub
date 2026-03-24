@@ -13,7 +13,7 @@ export const TIER_CONFIG = {
   read: {
     label: "Read",
     icon: BookOpen,
-    color: "text-blue-400",
+    color: "text-amber-400",
     bg: "bg-blue-500/10",
     border: "border-l-blue-500",
     dot: "bg-blue-500",

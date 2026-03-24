@@ -64,7 +64,7 @@ export default function PromptNewPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <div className="min-h-screen bg-slate-950">
       {/* Toast notifications */}
       {createMutation.isSuccess && (
         <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-sm shadow-lg">
@@ -80,23 +80,23 @@ export default function PromptNewPage() {
       )}
 
       {/* Header */}
-      <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4">
+      <div className="border-b border-slate-800 bg-slate-900 px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => router.push("/prompts")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-800 transition-colors"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h1 className="text-lg font-semibold text-slate-100">
               New Prompt
             </h1>
           </div>
           <button
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !slug || !name || !content}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
           >
             {createMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -115,7 +115,7 @@ export default function PromptNewPage() {
         <div className="space-y-6">
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-slate-400">
               Name
             </label>
             <input
@@ -123,13 +123,13 @@ export default function PromptNewPage() {
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="My Prompt"
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
             />
           </div>
 
           {/* Slug (editable, auto-generated from name) */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-slate-400">
               Slug
             </label>
             <input
@@ -137,7 +137,7 @@ export default function PromptNewPage() {
               value={slug}
               onChange={(e) => handleSlugChange(e.target.value)}
               placeholder="my-prompt"
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40"
             />
             {autoSlug && name && (
               <p className="text-xs text-slate-400">
@@ -148,7 +148,7 @@ export default function PromptNewPage() {
 
           {/* Content */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-slate-400">
               Content
             </label>
             <textarea
@@ -156,13 +156,13 @@ export default function PromptNewPage() {
               onChange={(e) => setContent(e.target.value)}
               placeholder="Enter prompt content..."
               style={{ minHeight: "300px" }}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
             />
           </div>
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-slate-400">
               Description
             </label>
             <textarea
@@ -170,13 +170,13 @@ export default function PromptNewPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Optional description..."
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 resize-y"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
             />
           </div>
 
           {/* Is Global toggle */}
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <label className="text-xs font-medium text-slate-400">
               Scope & Status
             </label>
             <div className="flex flex-wrap items-center gap-3">
@@ -185,8 +185,8 @@ export default function PromptNewPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   isGlobal
-                    ? "bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800 text-blue-600"
-                    : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50",
+                    ? "bg-amber-950/40 border-amber-800 text-amber-500"
+                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
                 )}
               >
                 <Globe className="h-4 w-4" />
@@ -197,8 +197,8 @@ export default function PromptNewPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   !isGlobal
-                    ? "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
-                    : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50",
+                    ? "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
                 )}
               >
                 Non-Global
@@ -209,7 +209,7 @@ export default function PromptNewPage() {
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   enabled
                     ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-600"
-                    : "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400",
+                    : "bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-400",
                 )}
               >
                 {enabled ? "Enabled" : "Disabled"}

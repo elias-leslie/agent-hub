@@ -16,7 +16,7 @@ export default function Error({
   }, [error])
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
       <div className="max-w-md w-full text-center">
         <div className="mb-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 dark:bg-red-900/30">
@@ -24,11 +24,11 @@ export default function Error({
           </div>
         </div>
 
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <h1 className="text-2xl font-bold text-slate-100 mb-2">
           Something went wrong
         </h1>
 
-        <p className="text-slate-600 dark:text-slate-400 mb-6">
+        <p className="text-slate-400 mb-6">
           An unexpected error occurred. Please try again or return to the
           dashboard.
         </p>
@@ -42,7 +42,7 @@ export default function Error({
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <button
             onClick={reset}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-medium transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             Try again
@@ -50,7 +50,7 @@ export default function Error({
 
           <Link
             href="/dashboard"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-100 font-medium transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-100 font-medium transition-colors"
           >
             <Home className="w-4 h-4" />
             Go to Dashboard

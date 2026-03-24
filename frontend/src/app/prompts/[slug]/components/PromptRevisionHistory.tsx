@@ -16,7 +16,7 @@ interface PromptRevisionHistoryProps {
 
 const ACTION_STYLES: Record<string, string> = {
   create: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900",
-  update: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900",
+  update: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-amber-300 dark:border-blue-900",
   restore: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-900",
   delete: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900",
 };
@@ -66,11 +66,11 @@ export function PromptRevisionHistory({
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-slate-900 dark:text-slate-100">
+          <div className="flex items-center gap-2 text-slate-100">
             <History className="h-4 w-4" />
             <h2 className="text-sm font-semibold">Revision History</h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-400">
             Immutable prompt snapshots for rollback and benchmark attribution.
           </p>
         </div>
@@ -80,7 +80,7 @@ export function PromptRevisionHistory({
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-12 text-slate-500 dark:text-slate-400">
+        <div className="flex items-center justify-center py-12 text-slate-400">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : revisions.length === 0 ? (
@@ -118,20 +118,20 @@ export function PromptRevisionHistory({
                         </span>
                       )}
                     </div>
-                    <div className="text-sm text-slate-900 dark:text-slate-100">
+                    <div className="text-sm text-slate-100">
                       <span className="font-medium">{revision.prompt_name}</span>
-                      <span className="ml-2 text-slate-500 dark:text-slate-400">
+                      <span className="ml-2 text-slate-400">
                         {formatTimestamp(revision.created_at)}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
                       <span>Changed by {revision.changed_by ?? "system"}</span>
                       <span>Hash {shortenHash(revision.content_hash)}</span>
                       <span>{revision.enabled ? "Enabled" : "Disabled"}</span>
                       <span>{revision.is_global ? "Global" : "Non-global"}</span>
                     </div>
                     {revision.change_reason && (
-                      <p className="text-sm text-slate-600 dark:text-slate-300">
+                      <p className="text-sm text-slate-300">
                         {revision.change_reason}
                       </p>
                     )}

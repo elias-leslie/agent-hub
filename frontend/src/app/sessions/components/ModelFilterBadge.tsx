@@ -10,7 +10,7 @@ export function ModelFilterBadge({ modelFilter, onClear }: ModelFilterBadgeProps
 
   return (
     <div className="mb-4 flex items-center gap-2">
-      <span className="text-xs text-slate-500 dark:text-slate-400">Filtered by model:</span>
+      <span className="text-xs text-slate-400">Filtered by model:</span>
       <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
         {modelFilter}
         <button

@@ -31,7 +31,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
       <div className="flex items-center gap-1 mt-1">
         <span className="text-[10px] text-slate-500">Vertex AI project:</span>
         {value ? (
-          <code className="text-[10px] font-mono text-slate-600 dark:text-slate-400">
+          <code className="text-[10px] font-mono text-slate-400">
             {value}
           </code>
         ) : (
@@ -39,7 +39,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
         )}
         <button
           onClick={() => setEditing(true)}
-          className="ml-1 text-[10px] text-blue-500 hover:text-blue-600 font-medium"
+          className="ml-1 text-[10px] text-amber-500 hover:text-amber-500 font-medium"
         >
           {value ? "edit" : "set"}
         </button>
@@ -60,7 +60,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
           if (e.key === "Escape") setEditing(false);
         }}
         placeholder="gen-lang-client-..."
-        className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500 w-48"
+        className="px-1.5 py-0.5 text-[10px] font-mono rounded border border-slate-300 dark:border-slate-600 bg-slate-800 text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 w-48"
       />
       <button
         onClick={handleSave}
@@ -70,7 +70,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
       </button>
       <button
         onClick={() => setEditing(false)}
-        className="p-0.5 rounded text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+        className="p-0.5 rounded text-slate-400 hover:bg-slate-800"
       >
         <X className="h-3 w-3" />
       </button>
