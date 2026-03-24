@@ -21,6 +21,16 @@ DEFAULT_DISALLOWED_CLI_TOOLS = ["WebFetch", "WebSearch", "Agent"]
 _CLI_BUILTIN_TOOL_NAMES = frozenset({"bash", "read_file", "write_file"})
 
 MCP_SERVER_NAME = "agent-hub"
+MCP_TOOL_PREFIX = f"mcp__{MCP_SERVER_NAME}__"
+
+
+def build_mcp_tool_name(
+    tool_name: str,
+    *,
+    mcp_server_name: str = MCP_SERVER_NAME,
+) -> str:
+    """Return the Claude MCP-qualified tool name for a bare tool."""
+    return f"mcp__{mcp_server_name}__{tool_name}"
 
 
 def build_allowed_tools(
@@ -37,5 +47,5 @@ def build_allowed_tools(
         for t in custom_tools:
             name = t.get("name", "")
             if name and name not in _CLI_BUILTIN_TOOL_NAMES:
-                allowed.append(f"mcp__{mcp_server_name}__{name}")
+                allowed.append(build_mcp_tool_name(str(name), mcp_server_name=mcp_server_name))
     return allowed

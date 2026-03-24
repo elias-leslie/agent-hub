@@ -13,7 +13,10 @@ from app.services.response_cache import get_response_cache
 from .agent_loop import AgentLoopRequest, execute_agent_loop
 from .cache_handler import handle_cached_response
 from .memory_handler import inject_memory_context
-from .precision_search_guidance import maybe_inject_precision_search_guidance
+from .precision_search_guidance import (
+    maybe_inject_claude_tool_alias_guidance,
+    maybe_inject_precision_search_guidance,
+)
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress
 from .tool_provisioner import provision_standard_tools
@@ -89,8 +92,22 @@ async def execute_and_build_result(
     should_execute_tools = (execute_tools or enable_programmatic_tools) and bool(provisioned.loaded_tools)
     messages_with_guidance = messages_dict
     if should_execute_tools and supports_tools(provider, model):
+        messages_with_guidance, alias_guidance_injected = (
+            maybe_inject_claude_tool_alias_guidance(
+                messages_with_guidance,
+                provisioned.loaded_tools,
+                provider=provider,
+            )
+        )
+        if alias_guidance_injected:
+            logger.info(
+                "Injected Claude MCP alias guidance for session=%s project=%s agent=%s",
+                session_id,
+                project_id,
+                agent_slug,
+            )
         messages_with_guidance, reminder_injected = maybe_inject_precision_search_guidance(
-            messages_dict,
+            messages_with_guidance,
             provisioned.loaded_tools,
         )
         if reminder_injected:

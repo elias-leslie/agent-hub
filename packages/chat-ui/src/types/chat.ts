@@ -83,6 +83,7 @@ export interface StreamMessage {
   provider?: string;
   model?: string;
   model_display_name?: string;
+  agent_used?: string;
   input_tokens?: number;
   output_tokens?: number;
   thinking_tokens?: number;

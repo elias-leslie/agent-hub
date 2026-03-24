@@ -3,6 +3,8 @@
 import logging
 from typing import Any
 
+from app.adapters._claude_constants import MCP_SERVER_NAME
+
 logger = logging.getLogger(__name__)
 
 # Tools already built into Claude Code CLI — skip when building MCP server
@@ -87,4 +89,4 @@ def build_mcp_server(
 
         mcp_tools.append(sdk_tool(tool_name, t["description"], t["input_schema"])(handler))
 
-    return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
+    return create_sdk_mcp_server(MCP_SERVER_NAME, tools=mcp_tools)

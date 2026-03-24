@@ -284,8 +284,8 @@ export function UnifiedPersonaWorkspace({
   );
 
   const mergedItems = useMemo(() => {
-    const remote = buildRemoteFeedItems([...hydratedEntries].reverse());
-    const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId);
+    const remote = buildRemoteFeedItems([...hydratedEntries].reverse(), personaDisplayName);
+    const local = buildLocalFeedMessages(messages, currentSessionId || activeSessionId, personaDisplayName);
     return [...remote, ...local]
       .filter((item) => {
         if (filterMode === "all") return true;

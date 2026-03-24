@@ -8,6 +8,7 @@ import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 
+from app.adapters._claude_constants import MCP_TOOL_PREFIX, build_mcp_tool_name
 from app.services.cleanup_summary import build_actionable_cleanup_summary
 from app.services.git_status_summary import build_actionable_git_summary
 from app.services.ownership_lanes import (
@@ -36,7 +37,7 @@ _DEFAULT_SESSION_STALE_MINUTES = 15
 _CODING_AGENT_SESSION_STALE_MINUTES = 30
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
-_CLAUDE_MCP_PREFIX = "mcp__agent-hub__"
+_CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
 
 # Contract: workstream inventory states are derived in precedence order.
 # Highest precedence first:
@@ -116,7 +117,7 @@ def _tool_call(
     provider: str | None = None,
 ) -> str:
     """Render a callable tool invocation string for heartbeat guidance."""
-    rendered = f"{_CLAUDE_MCP_PREFIX}{tool_name}" if provider == "claude" else tool_name
+    rendered = build_mcp_tool_name(tool_name) if provider == "claude" else tool_name
     return f"{rendered}({arguments})" if arguments else f"{rendered}()"
 
 
@@ -126,7 +127,7 @@ def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
         from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
 
         names = [
-            f"{_CLAUDE_MCP_PREFIX}{t.name}" if provider == "claude" else t.name
+            build_mcp_tool_name(t.name) if provider == "claude" else t.name
             for t in PERSONA_EXTRA_TOOLS
         ]
         return len(names), ", ".join(names)

@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from app.adapters._claude_constants import build_mcp_tool_name
 from app.workflows._completion_review import CompletionReviewOutcome, review_persona_completion
 from app.workflows._session_postprocess import (
     ensure_session_summary as _shared_ensure_session_summary,
@@ -321,10 +322,10 @@ async def _dispatch_followup_wake(
 
 
 # Tools that can be safely retried by calling the Python function directly.
-# Keys are MCP tool names as stored in session_events (mcp__agent-hub__ prefix).
+# Keys are MCP tool names as stored in session_events.
 _RETRYABLE_TOOLS: set[str] = {
-    "mcp__agent-hub__log_agent_performance",
-    "mcp__agent-hub__dispatch_agent",
+    build_mcp_tool_name("log_agent_performance"),
+    build_mcp_tool_name("dispatch_agent"),
 }
 
 
@@ -377,11 +378,11 @@ async def _fetch_tool_args(session_id: str, tool_name: str, seq: int) -> dict | 
 
 async def _execute_tool_retry(tool_name: str, tool_args: dict) -> None:
     """Call the Python function that backs *tool_name* with *tool_args*."""
-    if tool_name == "mcp__agent-hub__log_agent_performance":
+    if tool_name == build_mcp_tool_name("log_agent_performance"):
         from app.services.tools._executor_performance import log_agent_performance
 
         await log_agent_performance(**tool_args)
-    elif tool_name == "mcp__agent-hub__dispatch_agent":
+    elif tool_name == build_mcp_tool_name("dispatch_agent"):
         from app.services.tools._executor_consultation import dispatch_agent
 
         await dispatch_agent(

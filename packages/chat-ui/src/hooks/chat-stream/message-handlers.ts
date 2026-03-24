@@ -51,6 +51,7 @@ export function handleStreamEvent(
               content: state.content,
               thinking: state.thinking || undefined,
               agentProvider: provider,
+              agentName: data.agent_used || m.agentName,
               agentModel: data.model_display_name || data.model,
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
