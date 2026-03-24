@@ -87,7 +87,7 @@ class TestEpisodeCreatorValidation:
     def test_accepts_topic_header_when_tier_is_provided(self):
         """Tier-aware validation should accept topic headers because tier lives in metadata."""
         EpisodeValidator.validate_content(
-            "**Git Safety**: Use /commit_it for commits when available.",
+            "**Git Safety**: Use commit.sh --push --msg \"description\" in Agent Hub sessions.",
             tier="mandate",
         )
 
@@ -95,7 +95,7 @@ class TestEpisodeCreatorValidation:
         """Tier-aware validation should still require a bold topic header."""
         with pytest.raises(EpisodeValidationError) as exc:
             EpisodeValidator.validate_content(
-                "Use /commit_it for commits when available.",
+                "Use commit.sh --push --msg \"description\" in Agent Hub sessions.",
                 tier="mandate",
             )
 

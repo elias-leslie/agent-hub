@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -138,14 +139,20 @@ def _append_retry_marker(
     markers: list[PersonaIssueMarker],
     seen_fingerprints: set[str],
     tool_failure_counts: Counter[str],
+    tool_failure_labels: dict[str, str],
     explicit_retry_signal: bool,
 ) -> bool:
     """Add a retry marker if retries were detected. Returns True if added."""
     if not explicit_retry_signal and not any(count > 1 for count in tool_failure_counts.values()):
         return False
 
-    top_failed_tool = tool_failure_counts.most_common(1)[0][0] if tool_failure_counts else None
-    fp = f"retries:{normalize_issue_key(top_failed_tool or session.agent_slug or session.id)}"
+    top_failure_key = tool_failure_counts.most_common(1)[0][0] if tool_failure_counts else None
+    top_failed_tool = (
+        tool_failure_labels.get(top_failure_key, top_failure_key)
+        if top_failure_key
+        else None
+    )
+    fp = f"retries:{normalize_issue_key(top_failure_key or top_failed_tool or session.agent_slug or session.id)}"
     if fp in seen_fingerprints:
         return False
     seen_fingerprints.add(fp)
@@ -170,6 +177,26 @@ def _append_retry_marker(
         )
     )
     return True
+
+
+def _tool_failure_key(preview_item: PersonaStreamEventPreview, command: str | None) -> str | None:
+    """Return a retry-fingerprint key that distinguishes distinct tool steps."""
+    def _normalize_retry_detail(value: str) -> str:
+        lowered = value.lower()
+        lowered = re.sub(r"\b[0-9]+\b", "#", lowered)
+        lowered = re.sub(r"[^a-z0-9]+", "-", lowered)
+        return lowered.strip("-")[:160]
+
+    tool_name = preview_item.tool_name
+    if not tool_name:
+        return None
+
+    detail = command or preview_item.tool_input_preview
+    normalized_tool = normalize_issue_key(tool_name)
+    normalized_detail = _normalize_retry_detail(detail) if detail else ""
+    if normalized_detail:
+        return f"{normalized_tool}:{normalized_detail}"
+    return normalized_tool
 
 
 def _append_summary_marker_if_needed(
@@ -244,6 +271,7 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
     all_root_causes: set[str] = set()
     all_tags: set[str] = set()
     tool_failure_counts: Counter[str] = Counter()
+    tool_failure_labels: dict[str, str] = {}
     explicit_retry_signal = False
     had_issue = False
     had_error = session.status == "failed"
@@ -261,7 +289,9 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
 
         # Track tool failures for retry detection
         if "error" in marker_tags and preview_item.tool_name:
-            tool_failure_counts[preview_item.tool_name] += 1
+            failure_key = _tool_failure_key(preview_item, command) or preview_item.tool_name
+            tool_failure_counts[failure_key] += 1
+            tool_failure_labels.setdefault(failure_key, preview_item.tool_name)
         if "retries" in marker_tags:
             explicit_retry_signal = True
 
@@ -303,7 +333,14 @@ def classify_session_pulse(session: Session, previews: list[PersonaStreamEventPr
 
     if _append_stalled_marker(session, markers, seen_fingerprints):
         had_issue = True
-    if _append_retry_marker(session, markers, seen_fingerprints, tool_failure_counts, explicit_retry_signal):
+    if _append_retry_marker(
+        session,
+        markers,
+        seen_fingerprints,
+        tool_failure_counts,
+        tool_failure_labels,
+        explicit_retry_signal,
+    ):
         had_issue = True
 
     _append_summary_marker_if_needed(session, markers, seen_fingerprints)

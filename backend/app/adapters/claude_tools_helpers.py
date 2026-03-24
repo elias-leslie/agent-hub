@@ -12,7 +12,7 @@ from app.adapters._claude_result_metadata import (
     normalized_stop_reason,
     resolve_result_finish_reason,
 )
-from app.adapters.base import Message, ProviderError
+from app.adapters.base import Message
 from app.adapters.claude_tools_mcp import build_mcp_server as _build_mcp_server_impl
 from app.adapters.claude_tools_permissions import (
     compose_permission_hooks as _compose_permission_hooks,
@@ -31,7 +31,6 @@ from app.adapters.claude_utils import (
 )
 
 logger = logging.getLogger(__name__)
-_SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS = 300.0
 
 # Re-export constants callers may reference
 _CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
@@ -314,17 +313,6 @@ def _resolve_can_use_tool(
     )
 
 
-async def _next_message(message_iter: Any, idle_timeout: float | None) -> Any:
-    if idle_timeout is None:
-        return await anext(message_iter)
-    try:
-        async with asyncio.timeout(idle_timeout):
-            return await anext(message_iter)
-    except TimeoutError as exc:
-        logger.warning("Claude SDK timed out after post-tool stall; skipping explicit iterator close")
-        raise TimeoutError(f"Claude SDK stalled after tool_result for {idle_timeout:.1f}s") from exc
-
-
 def _message_has_tool_use(message: Any) -> bool:
     for block in getattr(message, "content", []) or []:
         if extract_block_content(block)["type"] == "tool_use":
@@ -337,58 +325,6 @@ def _message_has_tool_result(message: Any) -> bool:
         if extract_block_content(block)["type"] == "tool_result":
             return True
     return False
-
-
-async def _fetch_next_or_stop(
-    message_iter: Any,
-    idle_timeout: float | None,
-    provider_name: str,
-) -> Any:
-    """Fetch next message, return _STREAM_STOP on exhaustion, raise ProviderError on timeout."""
-    try:
-        return await _next_message(message_iter, idle_timeout)
-    except StopAsyncIteration:
-        return _STREAM_STOP
-    except TimeoutError as exc:
-        logger.error(str(exc))
-        raise ProviderError(str(exc), provider=provider_name, retriable=True) from exc
-
-
-def _resolve_idle_timeout(
-    saw_payload: bool,
-    pending_tool_calls: int,
-    done_emitted: bool,
-) -> float | None:
-    """Return idle timeout if post-tool watchdog should be active, else None."""
-    if saw_payload and pending_tool_calls == 0 and not done_emitted:
-        return _SDK_POST_TOOL_IDLE_TIMEOUT_SECONDS
-    return None
-
-
-def _log_idle_watchdog_transition(
-    idle_timeout: float | None,
-    idle_watch_armed: bool,
-    session_id: str | None,
-    pending_tool_calls: int,
-    done_emitted: bool,
-) -> bool:
-    """Log watchdog arm/disarm transitions and return new armed state."""
-    if idle_timeout is not None and not idle_watch_armed:
-        logger.warning(
-            "Claude SDK post-tool idle watchdog armed: session_id=%s timeout=%.1fs",
-            session_id,
-            idle_timeout,
-        )
-        return True
-    if idle_timeout is None and idle_watch_armed:
-        logger.info(
-            "Claude SDK post-tool idle watchdog cleared: session_id=%s pending_tool_calls=%d done=%s",
-            session_id,
-            pending_tool_calls,
-            done_emitted,
-        )
-        return False
-    return idle_watch_armed
 
 
 def _resolve_result_message(
@@ -448,23 +384,13 @@ async def _iterate_sdk_messages(
     saw_payload = False
     pending_tool_calls = 0
     configured_max_turns = getattr(options, "max_turns", None)
-    idle_watch_armed = False
-    skip_iterator_close = False
     iterator_closed = False
     message_iter = _sdk_query_messages(prompt, options).__aiter__()
     try:
         while True:
-            idle_timeout = _resolve_idle_timeout(saw_payload, pending_tool_calls, done_emitted)
-            idle_watch_armed = _log_idle_watchdog_transition(
-                idle_timeout, idle_watch_armed, session_id, pending_tool_calls, done_emitted,
-            )
             try:
-                message = await _fetch_next_or_stop(message_iter, idle_timeout, provider_name)
-            except ProviderError as exc:
-                if "stalled after tool_result" in str(exc):
-                    skip_iterator_close = True
-                raise exc
-            if message is _STREAM_STOP:
+                message = await anext(message_iter)
+            except StopAsyncIteration:
                 if saw_payload and not done_emitted:
                     finish_reason = "end_turn"
                     logger.warning(
@@ -496,11 +422,7 @@ async def _iterate_sdk_messages(
             pending_tool_calls = _update_tool_call_count(message, pending_tool_calls)
             yield (message, session_id)
     finally:
-        if idle_watch_armed:
-            logger.info("Claude SDK idle watchdog still armed during iterator unwind: session_id=%s", session_id)
-        if skip_iterator_close:
-            logger.info("Claude SDK iterator close skipped after idle-timeout unwind: session_id=%s", session_id)
-        elif not iterator_closed:
+        if not iterator_closed:
             with suppress(asyncio.CancelledError):
                 await _close_sdk_message_iter(message_iter)
 

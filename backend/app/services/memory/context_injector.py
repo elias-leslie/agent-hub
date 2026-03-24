@@ -35,22 +35,40 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "CHARS_PER_TOKEN", "CITATION_INSTRUCTION", "GUARDRAIL_DIRECTIVE", "MANDATE_DIRECTIVE",
     "MEMORY_CONTEXT_END", "MEMORY_CONTEXT_HEADER", "MEMORY_CONTEXT_START", "ProgressiveContext",
-    "build_progressive_context", "format_progressive_context", "format_relevance_debug_block", "get_context_token_stats",
-    "get_relevance_debug_info", "inject_progressive_context", "parse_memory_group_id",
+    "build_progressive_context", "extract_query_from_messages", "format_progressive_context",
+    "format_relevance_debug_block", "get_context_token_stats", "get_relevance_debug_info",
+    "inject_progressive_context", "parse_memory_group_id",
 ]
 
 
-def _extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
-    """Extract query text from most recent user message."""
+def _extract_query_text(content: Any) -> str | None:
+    """Extract the most task-relevant query text from one message payload."""
+    text = ""
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        text = " ".join(parts)
+    if not text:
+        return None
+
+    task_marker = "\nTask:\n"
+    task_index = text.rfind(task_marker)
+    if task_index >= 0:
+        text = text[task_index + len(task_marker):]
+    elif text.startswith("Task:\n"):
+        text = text[len("Task:\n"):]
+
+    text = text.strip()
+    return text[:500] if text else None
+
+
+def extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
+    """Extract query text from the most recent user message."""
     for msg in reversed(messages):
         if msg.get("role") != "user":
             continue
-        content = msg.get("content", "")
-        if isinstance(content, str):
-            return content[:500]
-        if isinstance(content, list):
-            parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
-            return " ".join(parts)[:500]
+        return _extract_query_text(msg.get("content", ""))
     return None
 
 
@@ -235,7 +253,7 @@ async def inject_progressive_context(
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """Inject mandates and guardrails context into messages. Main entry point for memory injection."""
     start_time = time.monotonic()
-    if not messages or not (query or (query := _extract_query_from_messages(messages))):
+    if not messages or not (query or (query := extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
     settings = await get_memory_settings()

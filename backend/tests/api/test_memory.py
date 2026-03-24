@@ -196,7 +196,7 @@ class TestUpdateEpisodeEndpoint:
         with patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo):
             response = await client.patch(
                 "/api/memory/episode/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                json={"content": "**Git Safety**: Git commits should use /commit_it when available."},
+                json={"content": "**Git Safety**: Git commits should use commit.sh in Agent Hub sessions."},
             )
 
         assert response.status_code == 422
@@ -225,7 +225,7 @@ class TestSaveLearningEndpoint:
         response = await client.post(
             "/api/memory/save-learning",
             json={
-                "content": "Use /commit_it for commits when available.",
+                "content": "Use commit.sh --push --msg \"description\" in Agent Hub sessions.",
                 "summary": "Use commit flow",
                 "injection_tier": "mandate",
             },

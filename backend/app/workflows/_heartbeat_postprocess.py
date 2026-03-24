@@ -17,6 +17,15 @@ from app.workflows._session_postprocess import (
 from app.workflows._session_postprocess import (
     extract_synthetic_summary as _shared_extract_synthetic_summary,
 )
+from app.workflows._session_postprocess import (
+    has_inline_summary_tag as _shared_has_inline_summary_tag,
+)
+from app.workflows._session_postprocess import (
+    inline_summary_contract_issues as _shared_inline_summary_contract_issues,
+)
+from app.workflows._session_postprocess import (
+    progress_tag_contract_issues as _shared_progress_tag_contract_issues,
+)
 
 if TYPE_CHECKING:
     from app.api.complete.types import CompletionInternalResult
@@ -51,7 +60,7 @@ async def postprocess_heartbeat(
     summary_stored = await _ensure_session_summary(session_id, content)
 
     # 2. Format validation
-    status, format_ok = _validate_heartbeat_format(content)
+    status, format_ok, summary_tag_ok, progress_tag_ok = _validate_heartbeat_format(content)
 
     # 3. Record observability metrics
     from app.workflows._heartbeat_redis import record_heartbeat_metrics
@@ -96,6 +105,8 @@ async def postprocess_heartbeat(
     await _log_heartbeat_performance_observation(
         result=result,
         format_ok=format_ok,
+        summary_tag_ok=summary_tag_ok,
+        progress_tag_ok=progress_tag_ok,
         followup_reason=followup_reason,
         completion_review=completion_review,
         target_project_id=target_project_id,
@@ -144,14 +155,20 @@ def _build_performance_observation(
     *,
     result: CompletionInternalResult,
     format_ok: bool,
+    summary_tag_ok: bool,
+    progress_tag_ok: bool,
     followup_reason: str | None,
     completion_review: CompletionReviewOutcome | None,
 ) -> dict[str, str] | None:
     notes: list[str] = []
     if result.error:
         notes.append(f"runtime error: {result.error}")
-    if not format_ok:
+    if "HEARTBEAT_OK" not in (result.content or "") and "HEARTBEAT_ACTION" not in (result.content or ""):
         notes.append("missing HEARTBEAT_OK/HEARTBEAT_ACTION prefix")
+    elif not summary_tag_ok:
+        notes.append("missing inline [[S:...]] summary tag")
+    elif not progress_tag_ok:
+        notes.append("missing meaningful [[P:...]] progress tags")
     if followup_reason and not followup_reason.startswith("completion_review_"):
         notes.append(f"post-run residue detected: {followup_reason}")
     if completion_review and completion_review.used and completion_review.decision in {"continue", "escalate"}:
@@ -172,6 +189,8 @@ async def _log_heartbeat_performance_observation(
     *,
     result: CompletionInternalResult,
     format_ok: bool,
+    summary_tag_ok: bool,
+    progress_tag_ok: bool,
     followup_reason: str | None,
     completion_review: CompletionReviewOutcome | None,
     target_project_id: str | None,
@@ -179,6 +198,8 @@ async def _log_heartbeat_performance_observation(
     observation = _build_performance_observation(
         result=result,
         format_ok=format_ok,
+        summary_tag_ok=summary_tag_ok,
+        progress_tag_ok=progress_tag_ok,
         followup_reason=followup_reason,
         completion_review=completion_review,
     )
@@ -206,26 +227,61 @@ async def _log_heartbeat_performance_observation(
 
 
 
-def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
-    """Validate heartbeat output format.
+def _has_inline_summary_tag(content: str | None) -> bool:
+    """Return True when heartbeat output contains an inline [[S:...]] tag."""
+    return _shared_has_inline_summary_tag(content)
 
-    Returns (status, format_compliant):
-    - HEARTBEAT_OK → ("success", True)
-    - HEARTBEAT_ACTION → ("action", True)
-    - Anything else → ("success", False) with a warning
+
+def _inline_summary_contract_issues(content: str | None) -> list[str]:
+    """Return heartbeat summary-tag contract issues."""
+    return _shared_inline_summary_contract_issues(content)
+
+
+def _progress_tag_contract_issues(content: str | None) -> list[str]:
+    """Return heartbeat progress-tag contract issues."""
+    return _shared_progress_tag_contract_issues(content, require_progress=True)
+
+
+def _validate_heartbeat_format(content: str) -> tuple[str, bool, bool, bool]:
+    """Validate heartbeat output contract.
+
+    Returns (status, format_compliant, summary_tag_ok, progress_tag_ok).
+    Compliance requires a HEARTBEAT_OK/HEARTBEAT_ACTION prefix, meaningful
+    inline [[P:...]] progress tags, and an inline [[S:...]] summary tag.
     """
     if not content:
-        return "success", False
+        return "success", False, False, False
 
     # Multi-turn heartbeats place the prefix in the final message,
     # not at the start of the concatenated content.
+    status = "success"
+    prefix_ok = False
     if "HEARTBEAT_OK" in content:
-        return "success", True
-    if "HEARTBEAT_ACTION" in content:
-        return "action", True
+        prefix_ok = True
+    elif "HEARTBEAT_ACTION" in content:
+        status = "action"
+        prefix_ok = True
+    else:
+        logger.warning("Heartbeat output missing format prefix: %.60s...", content.strip()[:60])
 
-    logger.warning("Heartbeat output missing format prefix: %.60s...", content.strip()[:60])
-    return "success", False
+    summary_issues = _inline_summary_contract_issues(content)
+    summary_tag_ok = not summary_issues
+    progress_issues = _progress_tag_contract_issues(content)
+    progress_tag_ok = not progress_issues
+    if prefix_ok and summary_issues:
+        logger.warning(
+            "Heartbeat summary contract issues: %s | %.60s...",
+            "; ".join(summary_issues),
+            content.strip()[:60],
+        )
+    if prefix_ok and progress_issues:
+        logger.warning(
+            "Heartbeat progress contract issues: %s | %.60s...",
+            "; ".join(progress_issues),
+            content.strip()[:60],
+        )
+
+    return status, prefix_ok and summary_tag_ok and progress_tag_ok, summary_tag_ok, progress_tag_ok
 
 
 async def _get_cleanup_status_summary() -> str:

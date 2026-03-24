@@ -148,6 +148,10 @@ async def test_agent_wake_stores_summary_for_completed_session():
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_summary,
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ) as mock_perf,
     ):
         result = await agent_wake_task.aio_mock_run(
             WakeInput(
@@ -163,6 +167,8 @@ async def test_agent_wake_stores_summary_for_completed_session():
         )
 
     assert result["summary_stored"] is True
+    mock_perf.assert_awaited_once()
+    assert "missing inline [[S:...]] summary tag" in mock_perf.await_args.kwargs["content"]
     mock_summary.assert_awaited_once_with(
         "sess-wake-1",
         "Investigated worktree and found valid in-progress work.",
@@ -217,6 +223,10 @@ async def test_agent_wake_forwards_parent_session_id():
             "app.workflows.persona_wake.ensure_session_summary",
             new_callable=AsyncMock,
             return_value=True,
+        ),
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
         ),
     ):
         await agent_wake_task.aio_mock_run(
@@ -276,6 +286,10 @@ async def test_agent_wake_forwards_lane_metadata():
             new_callable=AsyncMock,
             return_value=True,
         ),
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ),
     ):
         await agent_wake_task.aio_mock_run(
             WakeInput(
@@ -294,6 +308,73 @@ async def test_agent_wake_forwards_lane_metadata():
     assert mock_complete.await_args.kwargs["current_branch"] == "task-12345678/main"
     assert mock_complete.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-12345678"
     assert mock_complete.await_args.kwargs["request_source"] == "persona_wake:dispatch_task"
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_falls_back_to_project_root_when_working_dir_missing():
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
+    complete_result = SimpleNamespace(
+        status="success",
+        turns=2,
+        tool_calls_count=1,
+        error=None,
+        session_id="sess-wake-4",
+        content="Closed the task from the project root.",
+    )
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=complete_result,
+        ) as mock_complete,
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.workflows.persona_wake._resolve_wake_working_dir",
+            return_value="/srv/workspaces/projects/agent-hub",
+        ) as mock_resolve,
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="persona",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Close out task-22b3fdea cleanly.",
+                project_id="agent-hub",
+                event_type="autocode_complete",
+                task_id="task-22b3fdea",
+            )
+        )
+
+    mock_resolve.assert_called_once_with("agent-hub", None)
+    assert mock_complete.await_args.kwargs["working_dir"] == "/srv/workspaces/projects/agent-hub"
 
 
 @pytest.mark.asyncio
@@ -330,6 +411,10 @@ async def test_agent_wake_skips_replayed_step_run() -> None:
             "app.workflows.persona_wake.ensure_session_summary",
             new_callable=AsyncMock,
         ) as mock_summary,
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ) as mock_perf,
     ):
         result = await agent_wake_task.aio_mock_run(
             WakeInput(
@@ -346,6 +431,138 @@ async def test_agent_wake_skips_replayed_step_run() -> None:
     assert result["error"] == "duplicate_step_run:existing-wake-session"
     mock_complete.assert_not_awaited()
     mock_summary.assert_not_awaited()
+    mock_perf.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_logs_missing_progress_tags_for_task_session() -> None:
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
+    complete_result = SimpleNamespace(
+        status="success",
+        turns=3,
+        tool_calls_count=2,
+        error=None,
+        session_id="sess-wake-tags-1",
+        content="Implemented the lane fix.",
+    )
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=complete_result,
+        ),
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ) as mock_perf,
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="coder",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Implement the scoped task.",
+                project_id="agent-hub",
+                event_type="dispatch_task",
+                task_id="task-12345678",
+            )
+        )
+
+    assert mock_perf.await_count == 1
+    content = mock_perf.await_args.kwargs["content"]
+    assert "missing inline [[S:...]] summary tag" in content
+    assert "missing [[P:...]] progress tags on task session" in content
+
+
+@pytest.mark.asyncio
+async def test_agent_wake_skips_tag_gap_log_when_both_tags_present() -> None:
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=_mock_execute_result(None))
+    complete_result = SimpleNamespace(
+        status="success",
+        turns=3,
+        tool_calls_count=2,
+        error=None,
+        session_id="sess-wake-tags-2",
+        content=(
+            "[[P:started:reading task context]]"
+            "[[P:tested:dt -q -d passes clean]]"
+            "[[S:completed:Validated the task lane and finished the requested fix.]]"
+        ),
+    )
+    mock_perm = SimpleNamespace(permission_tier="yolo")
+    mock_persona = SimpleNamespace(limits=None)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch(
+            "app.services.persona_prompt_service.get_persona_wake_guidance",
+            new=AsyncMock(return_value="Wake guidance\nst ready-all"),
+        ),
+        patch(
+            "app.services.project_permission_service.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=mock_perm,
+        ),
+        patch(
+            "app.services.persona_service.get_persona",
+            new_callable=AsyncMock,
+            return_value=mock_persona,
+        ),
+        patch("app.services._persona_crud.get_persona_limit", return_value=500),
+        patch(
+            "app.api.complete.core.complete_internal",
+            new_callable=AsyncMock,
+            return_value=complete_result,
+        ),
+        patch(
+            "app.workflows.persona_wake.ensure_session_summary",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch(
+            "app.workflows.persona_wake.log_agent_performance",
+            new_callable=AsyncMock,
+        ) as mock_perf,
+    ):
+        await agent_wake_task.aio_mock_run(
+            WakeInput(
+                agent_slug="coder",
+                model="codex/gpt-5.4",
+                provider="codex",
+                prompt="Implement the scoped task.",
+                project_id="agent-hub",
+                event_type="dispatch_task",
+                task_id="task-12345678",
+            )
+        )
+
+    mock_perf.assert_not_awaited()
 
 
 @pytest.mark.asyncio

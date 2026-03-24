@@ -16,6 +16,11 @@ def executing_tool_health_detail(tool_name: str | None) -> str:
     return f"executing_tool:{tool_name or 'unknown'}"
 
 
+def progress_tag_health_detail(has_progress_tags: bool) -> str:
+    """Return the persisted health label for live progress-tag compliance."""
+    return "progress_tags_present" if has_progress_tags else "progress_tags_missing"
+
+
 def health_detail_for_error(error: BaseException | str) -> str:
     """Map an execution error to a health detail label."""
     if isinstance(error, RateLimitError):
