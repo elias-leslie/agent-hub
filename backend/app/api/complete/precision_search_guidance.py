@@ -168,7 +168,7 @@ def _build_claude_tool_alias_guidance(tools: list[dict[str, Any]] | None) -> str
     return (
         f"{_CLAUDE_TOOL_ALIAS_GUIDANCE_SENTINEL}: "
         "`mcp__agent-hub__<tool_name>`. When instructions mention a bare tool name, "
-        "call the matching MCP tool instead."
+        "call the matching MCP tool directly instead of using ToolSearch to rediscover it."
         + (f" Examples: {examples}." if examples else "")
     )
 
@@ -243,16 +243,7 @@ def maybe_inject_claude_tool_alias_guidance(
         return messages, False
 
     guided_messages = list(messages)
-    insert_at = 0
-    while insert_at < len(guided_messages) and guided_messages[insert_at].get("role") == "system":
-        insert_at += 1
-    guided_messages.insert(
-        insert_at,
-        {
-            "role": "system",
-            "content": guidance,
-        },
-    )
+    guided_messages.insert(0, {"role": "system", "content": guidance})
     return guided_messages, True
 
 
