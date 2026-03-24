@@ -8,12 +8,20 @@ import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import httpx
 
 from app.adapters._claude_constants import MCP_TOOL_PREFIX, build_mcp_tool_name
-from app.services.cleanup_summary import build_actionable_cleanup_summary
-from app.services.git_status_summary import RepoGitStatus, build_actionable_git_summary
+from app.services.cleanup_summary import (
+    build_actionable_cleanup_summary,
+    build_actionable_cleanup_summary_from_payload,
+)
+from app.services.git_status_summary import (
+    RepoGitStatus,
+    build_actionable_git_summary_from_rows,
+    build_compact_git_status,
+)
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     collapse_active_workstream_rows,
@@ -26,7 +34,11 @@ from app.services.session_display_summary import (
 )
 from app.services.task_overview_summary import (
     build_compact_task_overview,
+    build_compact_task_overview_from_payload,
+    collect_visible_task_ids_from_payload,
+    extract_stale_task_candidates_from_payload,
     parse_task_overview_stats,
+    parse_task_overview_stats_from_payload,
 )
 
 logger = logging.getLogger(__name__)
@@ -169,6 +181,19 @@ async def _run_st_command(
     return stdout.strip() if isinstance(stdout, str) else ""
 
 
+async def _fetch_summitflow_json(endpoint: str, *, failure_log: str) -> dict[str, Any] | None:
+    """Fetch one SummitFlow API JSON response for heartbeat assembly."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(endpoint)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        logger.debug(failure_log, exc_info=True)
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 def _tool_call(
     tool_name: str,
     arguments: str = "",
@@ -195,55 +220,64 @@ def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
-async def _fetch_task_overview_raw(target_project_id: str | None = None) -> str:
-    """Fetch canonical SummitFlow ready-all output via API."""
+async def _fetch_task_overview_response(target_project_id: str | None = None) -> dict[str, Any] | None:
+    """Fetch canonical SummitFlow ready-all response via API."""
     api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
     if not api_base:
         logger.debug("Missing SummitFlow API URL for heartbeat task overview")
-        return ""
+        return None
 
     endpoint = (
         f"{api_base}/projects/{target_project_id}/tasks/ready-all"
         if target_project_id
         else f"{api_base}/tasks/ready-all"
     )
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(endpoint)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception:
-        logger.debug("Failed to fetch task overview for heartbeat prompt from SummitFlow API", exc_info=True)
-        return ""
+    return await _fetch_summitflow_json(
+        endpoint,
+        failure_log="Failed to fetch task overview for heartbeat prompt from SummitFlow API",
+    )
 
-    raw = payload.get("raw")
+
+async def _fetch_task_overview_payload(target_project_id: str | None = None) -> dict[str, Any] | None:
+    """Fetch structured ready-all payload from SummitFlow API."""
+    response = await _fetch_task_overview_response(target_project_id)
+    if not response:
+        return None
+    payload = response.get("payload")
+    return payload if isinstance(payload, dict) else None
+
+
+async def _fetch_task_overview_raw(target_project_id: str | None = None) -> str:
+    """Fetch canonical SummitFlow ready-all raw text via API."""
+    response = await _fetch_task_overview_response(target_project_id)
+    if not response:
+        return ""
+    raw = response.get("raw")
     return raw.strip() if isinstance(raw, str) else ""
 
 
-async def _fetch_git_status_compact(target_project_id: str | None = None) -> str:
-    """Fetch canonical SummitFlow git status via API and render compact st-compatible output."""
+async def _fetch_git_status_rows(target_project_id: str | None = None) -> list[RepoGitStatus]:
+    """Fetch canonical SummitFlow git status rows via API."""
     api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
     if not api_base:
         logger.debug("Missing SummitFlow API URL for heartbeat git status")
-        return ""
+        return []
 
     endpoint = (
         f"{api_base}/projects/{target_project_id}/git/status"
         if target_project_id
         else f"{api_base}/git/status"
     )
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(endpoint)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception:
-        logger.debug("Failed to fetch git status for heartbeat prompt from SummitFlow API", exc_info=True)
-        return ""
+    payload = await _fetch_summitflow_json(
+        endpoint,
+        failure_log="Failed to fetch git status for heartbeat prompt from SummitFlow API",
+    )
+    if not payload:
+        return []
 
     repositories = payload.get("repositories", [])
     if not isinstance(repositories, list) or not repositories:
-        return ""
+        return []
 
     rows: list[RepoGitStatus] = []
     for repo in repositories:
@@ -270,20 +304,20 @@ async def _fetch_git_status_compact(target_project_id: str | None = None) -> str
             )
         )
 
-    if not rows:
-        return ""
+    return rows
 
-    lines = [f"GIT[{len(rows)}]"]
-    for row in rows:
-        lines.append(
-            f"{row.project_id:<15} {row.branch:<15} {row.state:<7} "
-            f"uncommitted:{row.uncommitted} ahead:{row.ahead} behind:{row.behind}"
-        )
-    return "\n".join(lines)
+
+async def _fetch_git_status_compact(target_project_id: str | None = None) -> str:
+    """Fetch canonical SummitFlow git status and render compact st-compatible output."""
+    rows = await _fetch_git_status_rows(target_project_id)
+    return build_compact_git_status(rows)
 
 
 async def _fetch_task_overview(target_project_id: str | None = None) -> str:
     """Cross-project task overview condensed for heartbeat prompt injection."""
+    payload = await _fetch_task_overview_payload(target_project_id)
+    if payload is not None:
+        return build_compact_task_overview_from_payload(payload)
     output = await _fetch_task_overview_raw(target_project_id)
     if not output:
         return ""
@@ -858,12 +892,13 @@ def _should_skip_lane(
     task_id: str | None,
     lane_rows: list[dict[str, object]],
     visible_task_ids: set[str],
-    task_overview: str,
+    *,
+    queue_truth_available: bool,
 ) -> bool:
     """Return True if a lane should be excluded from the workstream inventory."""
     if lane_state == "retired" and task_id and task_id in visible_task_ids:
         return True
-    if lane_state == "completed_ready_for_closure" and task_id and task_overview:
+    if lane_state == "completed_ready_for_closure" and task_id and queue_truth_available:
         return task_id not in visible_task_ids
     if lane_state == "completed_ready_for_closure" and not task_id:
         agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
@@ -915,7 +950,8 @@ def _build_workstream_lines(
     grouped: dict[tuple[str, str], list[dict[str, object]]],
     stale_keys: set[tuple[str, str]],
     visible_task_ids: set[str],
-    task_overview: str,
+    *,
+    queue_truth_available: bool,
     provider: str | None,
 ) -> list[str]:
     """Build per-lane inventory lines for the workstream section."""
@@ -923,7 +959,13 @@ def _build_workstream_lines(
     for (project_id, lane_key), lane_rows in sorted(grouped.items()):
         task_id = _infer_lane_task_id(lane_rows)
         lane_state = _classify_workstream_lane(lane_rows)
-        if _should_skip_lane(lane_state, task_id, lane_rows, visible_task_ids, task_overview):
+        if _should_skip_lane(
+            lane_state,
+            task_id,
+            lane_rows,
+            visible_task_ids,
+            queue_truth_available=queue_truth_available,
+        ):
             continue
         if task_id and (project_id, task_id) in stale_keys:
             next_a = _tool_call(
@@ -954,26 +996,53 @@ async def _get_workstream_inventory(
     provider: str | None = None,
     *,
     task_overview: str | None = None,
+    task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
-        if task_overview is None:
-            task_overview = await _fetch_task_overview_raw(target_project_id)
+        queue_truth_available = False
+        if task_overview_payload is not None:
+            stale_tasks = [
+                {"project_id": candidate.project_id, "task_id": candidate.task_id}
+                for candidate in extract_stale_task_candidates_from_payload(
+                    task_overview_payload,
+                    per_project_limit=None,
+                    project_id=target_project_id,
+                )
+            ]
+            visible_task_ids = collect_visible_task_ids_from_payload(
+                task_overview_payload,
+                project_id=target_project_id,
+            )
+            queue_truth_available = True
+            if task_overview is None:
+                task_overview = build_compact_task_overview_from_payload(task_overview_payload)
+        else:
+            if task_overview is None:
+                task_overview = await _fetch_task_overview_raw(target_project_id)
+            stale_tasks = [
+                task
+                for task in _parse_stale_running_tasks(task_overview)
+                if not target_project_id or task["project_id"] == target_project_id
+            ]
+            visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
+            queue_truth_available = bool(task_overview)
+
         rows = await _query_recent_workstream_sessions(target_project_id)
-        stale_tasks = [
-            task
-            for task in _parse_stale_running_tasks(task_overview)
-            if not target_project_id or task["project_id"] == target_project_id
-        ]
         if not rows and not stale_tasks:
             return ""
-        visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
         grouped = _group_rows_by_lane(rows)
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
         if not grouped and not stale_tasks:
             return ""
-        lines = _build_workstream_lines(grouped, stale_keys, visible_task_ids, task_overview, provider)
+        lines = _build_workstream_lines(
+            grouped,
+            stale_keys,
+            visible_task_ids,
+            queue_truth_available=queue_truth_available,
+            provider=provider,
+        )
         if len(lines) == 1:
             return ""
         body = "\n".join(lines)
@@ -986,9 +1055,12 @@ async def _get_workstream_inventory(
 async def _get_active_work_summary(
     *,
     task_overview: str | None = None,
+    task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
 ) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
+    if task_overview is None and task_overview_payload is not None:
+        task_overview = build_compact_task_overview_from_payload(task_overview_payload)
     if task_overview is None:
         task_overview = await _fetch_task_overview(target_project_id)
     visible_task_overview = (
@@ -996,7 +1068,11 @@ async def _get_active_work_summary(
         if target_project_id
         else task_overview
     )
-    overview_stats = parse_task_overview_stats(task_overview)
+    overview_stats = (
+        parse_task_overview_stats_from_payload(task_overview_payload)
+        if task_overview_payload is not None
+        else parse_task_overview_stats(task_overview)
+    )
     sessions_section = await _fetch_active_sessions_section(target_project_id)
     suppress_completed = not target_project_id and (
         overview_stats.ready > 0 and overview_stats.active == 0 and overview_stats.stale == 0
@@ -1020,36 +1096,47 @@ async def _get_active_work_summary(
 
 async def _fetch_cleanup_status(target_project_id: str | None = None) -> str:
     """Fetch canonical SummitFlow cleanup status via API and return compact text."""
+    response = await _fetch_cleanup_status_response(target_project_id)
+    if not response:
+        return ""
+    compact = response.get("compact")
+    return compact.strip() if isinstance(compact, str) else ""
+
+
+async def _fetch_cleanup_status_response(target_project_id: str | None = None) -> dict[str, Any] | None:
+    """Fetch canonical SummitFlow cleanup-status response via API."""
     api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
     if not api_base:
         logger.debug("Missing SummitFlow API URL for heartbeat cleanup status")
-        return ""
+        return None
 
     endpoint = (
         f"{api_base}/projects/{target_project_id}/git/cleanup-status"
         if target_project_id
         else f"{api_base}/git/cleanup-status"
     )
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(endpoint)
-            response.raise_for_status()
-            payload = response.json()
-    except Exception:
-        logger.debug("Failed to fetch cleanup status for heartbeat prompt from SummitFlow API", exc_info=True)
-        return ""
-
-    compact = payload.get("compact")
-    return compact.strip() if isinstance(compact, str) else ""
+    return await _fetch_summitflow_json(
+        endpoint,
+        failure_log="Failed to fetch cleanup status for heartbeat prompt from SummitFlow API",
+    )
 
 
 async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    output = await _fetch_cleanup_status(target_project_id)
-    if not output:
+    response = await _fetch_cleanup_status_response(target_project_id)
+    if not response:
         return ""
-    actionable = build_actionable_cleanup_summary(output)
-    body = f"{output}\n\n{actionable}" if actionable else output
+    output = response.get("compact")
+    compact = output.strip() if isinstance(output, str) else ""
+    payload = response.get("payload")
+    actionable = (
+        build_actionable_cleanup_summary_from_payload(payload)
+        if isinstance(payload, dict)
+        else build_actionable_cleanup_summary(compact)
+    )
+    if not compact and not actionable:
+        return ""
+    body = f"{compact}\n\n{actionable}" if actionable and compact else actionable or compact
     return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
 
 
@@ -1133,11 +1220,12 @@ def _filter_git_status_for_project(git_status: str, project_id: str) -> str:
 
 async def _get_git_status_summary(target_project_id: str | None = None) -> str:
     """Build a <git_state> XML block from the canonical `st git status` surface."""
-    git_status = await _fetch_git_status_compact(target_project_id)
-    if not git_status:
+    rows = await _fetch_git_status_rows(target_project_id)
+    if not rows:
         return ""
 
-    actionable = build_actionable_git_summary(git_status)
+    git_status = build_compact_git_status(rows)
+    actionable = build_actionable_git_summary_from_rows(rows)
     body = f"{git_status}\n\n{actionable}" if actionable else git_status
     return f"\n<git_state>\n{body}\n</git_state>"
 

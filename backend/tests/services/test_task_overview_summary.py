@@ -2,10 +2,16 @@
 
 from app.services.task_overview_summary import (
     build_actionable_ready_summary,
+    build_actionable_ready_summary_from_payload,
     build_actionable_stale_summary,
+    build_actionable_stale_summary_from_payload,
     build_compact_task_overview,
+    build_compact_task_overview_from_payload,
+    collect_visible_task_ids_from_payload,
     extract_ready_task_candidates,
+    extract_stale_task_candidates_from_payload,
     parse_task_overview_stats,
+    parse_task_overview_stats_from_payload,
 )
 
 
@@ -90,3 +96,160 @@ agent-hub (1 ready, 1 blocked, 1 active, 1 stale)
     assert "ACTIONABLE-STALE[1]" in summary
     assert "task-block001" in summary
     assert "task-stale001" in summary
+
+
+def test_parse_task_overview_stats_from_payload_reads_summary_counts() -> None:
+    payload = {
+        "summary": {
+            "ready": 4,
+            "blocked": 1,
+            "active": 2,
+            "stale": 3,
+            "projects": 2,
+        },
+        "projects": [],
+    }
+
+    stats = parse_task_overview_stats_from_payload(payload)
+
+    assert stats.ready == 4
+    assert stats.blocked == 1
+    assert stats.active == 2
+    assert stats.stale == 3
+    assert stats.projects == 2
+
+
+def test_build_compact_task_overview_from_payload_matches_existing_contract() -> None:
+    payload = {
+        "summary": {"ready": 2, "blocked": 1, "active": 1, "stale": 1, "projects": 1},
+        "projects": [
+            {
+                "project_id": "agent-hub",
+                "ready_count": 2,
+                "blocked_count": 1,
+                "active_count": 1,
+                "stale_count": 1,
+                "ready_tasks": [
+                    {
+                        "id": "task-ready001",
+                        "priority": 2,
+                        "task_type": "refactor",
+                        "execution_mode": "autonomous",
+                        "title": "Ready refactor",
+                    },
+                    {
+                        "id": "task-ready002",
+                        "priority": 1,
+                        "task_type": "bug",
+                        "execution_mode": "manual",
+                        "title": "Ready fix",
+                    },
+                ],
+                "blocked_tasks": [
+                    {
+                        "id": "task-block001",
+                        "priority": 1,
+                        "task_type": "bug",
+                        "execution_mode": "autonomous",
+                        "title": "Blocked fix",
+                    }
+                ],
+                "active_tasks": [
+                    {
+                        "id": "task-live001",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "manual",
+                        "title": "Live lane",
+                    }
+                ],
+                "stale_tasks": [
+                    {
+                        "id": "task-stale001",
+                        "priority": 3,
+                        "task_type": "task",
+                        "execution_mode": "manual",
+                        "title": "Stale lane",
+                    }
+                ],
+            }
+        ],
+    }
+
+    summary = build_compact_task_overview_from_payload(payload, per_project_limit=2)
+
+    assert "READY-ALL[2 ready, 1 blocked, 1 active, 1 stale across 1 projects]" in summary
+    assert "PROJECTS[1]" in summary
+    assert "- agent-hub | 2 ready, 1 blocked, 1 active, 1 stale" in summary
+    assert "ACTIONABLE-READY[2]" in summary
+    assert "- agent-hub | task-ready001 | P2 refactor [A] | Ready refactor" in summary
+    assert "- agent-hub | task-ready002 | P1 bug [M] | Ready fix" in summary
+    assert "ACTIONABLE-BLOCKED[1]" in summary
+    assert "ACTIONABLE-STALE[1]" in summary
+
+
+def test_payload_task_helpers_collect_visible_ids_and_stale_candidates() -> None:
+    payload = {
+        "summary": {"ready": 1, "blocked": 0, "active": 1, "stale": 2, "projects": 1},
+        "projects": [
+            {
+                "project_id": "agent-hub",
+                "ready_count": 1,
+                "blocked_count": 0,
+                "active_count": 1,
+                "stale_count": 2,
+                "ready_tasks": [
+                    {
+                        "id": "task-ready001",
+                        "priority": 2,
+                        "task_type": "refactor",
+                        "execution_mode": "autonomous",
+                        "title": "Ready refactor",
+                    }
+                ],
+                "blocked_tasks": [],
+                "active_tasks": [
+                    {
+                        "id": "task-live001",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "manual",
+                        "title": "Live lane",
+                    }
+                ],
+                "stale_tasks": [
+                    {
+                        "id": "task-stale001",
+                        "priority": 2,
+                        "task_type": "task",
+                        "execution_mode": "manual",
+                        "title": "Stale lane one",
+                    },
+                    {
+                        "id": "task-stale002",
+                        "priority": 3,
+                        "task_type": "refactor",
+                        "execution_mode": "autonomous",
+                        "title": "Stale lane two",
+                    },
+                ],
+            }
+        ],
+    }
+
+    visible_task_ids = collect_visible_task_ids_from_payload(payload)
+    stale_candidates = extract_stale_task_candidates_from_payload(payload)
+    stale_summary = build_actionable_stale_summary_from_payload(payload, per_project_limit=1)
+    ready_summary = build_actionable_ready_summary_from_payload(payload)
+
+    assert visible_task_ids == {
+        "task-ready001",
+        "task-live001",
+        "task-stale001",
+        "task-stale002",
+    }
+    assert [candidate.task_id for candidate in stale_candidates] == ["task-stale001", "task-stale002"]
+    assert "ACTIONABLE-STALE[1]" in stale_summary
+    assert "task-stale001" in stale_summary
+    assert "task-stale002" not in stale_summary
+    assert "ACTIONABLE-READY[1]" in ready_summary

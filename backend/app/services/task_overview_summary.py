@@ -47,6 +47,302 @@ class ProjectOverview:
     label: str
 
 
+def _coerce_int(value: object, default: int = 0) -> int:
+    """Return value as int when possible, else default."""
+    return value if isinstance(value, int) else default
+
+
+def _task_mode(task: dict[str, object]) -> str:
+    """Return the compact execution-mode marker for a task payload."""
+    return "A" if task.get("execution_mode") == "autonomous" else "M"
+
+
+def _payload_projects(
+    task_overview_payload: dict[str, object],
+    *,
+    project_id: str | None = None,
+) -> list[dict[str, object]]:
+    """Return typed project payload entries, optionally filtered to one project."""
+    projects = task_overview_payload.get("projects")
+    if not isinstance(projects, list):
+        return []
+    filtered: list[dict[str, object]] = []
+    for item in projects:
+        if isinstance(item, dict):
+            filtered.append(item)
+    if project_id is None:
+        return filtered
+    matching: list[dict[str, object]] = []
+    for item in filtered:
+        item_project_id = item.get("project_id")
+        if isinstance(item_project_id, str) and item_project_id == project_id:
+            matching.append(item)
+    return matching
+
+
+def _project_overview_from_payload(project: dict[str, object]) -> ProjectOverview | None:
+    """Map one API project payload into a compact overview row."""
+    project_id = project.get("project_id")
+    if not isinstance(project_id, str) or not project_id:
+        return None
+
+    ready = _coerce_int(project.get("ready_count"))
+    blocked = _coerce_int(project.get("blocked_count"))
+    active = _coerce_int(project.get("active_count"))
+    stale = _coerce_int(project.get("stale_count"))
+
+    parts = [f"{ready} ready"]
+    if blocked:
+        parts.append(f"{blocked} blocked")
+    if active:
+        parts.append(f"{active} active")
+    if stale:
+        parts.append(f"{stale} stale")
+
+    return ProjectOverview(project_id=project_id, label=", ".join(parts))
+
+
+def _candidate_from_payload_task(
+    project_id: str,
+    task: dict[str, object],
+) -> ReadyTaskCandidate | None:
+    """Convert one task payload row into the compact heartbeat candidate shape."""
+    task_id = task.get("id")
+    if not isinstance(task_id, str) or not task_id:
+        return None
+
+    task_type = task.get("task_type")
+    title = task.get("title")
+    return ReadyTaskCandidate(
+        project_id=project_id,
+        task_id=task_id,
+        priority=_coerce_int(task.get("priority"), default=3),
+        task_type=task_type if isinstance(task_type, str) and task_type else "task",
+        mode=_task_mode(task),
+        title=title.strip() if isinstance(title, str) else "",
+    )
+
+
+def _extract_payload_task_candidates(
+    task_overview_payload: dict[str, object],
+    field_name: str,
+    *,
+    per_project_limit: int | None = 2,
+    project_id: str | None = None,
+) -> list[ReadyTaskCandidate]:
+    """Extract heartbeat task candidates directly from ready-all API payloads."""
+    candidates: list[ReadyTaskCandidate] = []
+    for project in _payload_projects(task_overview_payload, project_id=project_id):
+        pid = project.get("project_id")
+        if not isinstance(pid, str) or not pid:
+            continue
+        tasks = project.get(field_name)
+        if not isinstance(tasks, list):
+            continue
+        shown = 0
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            candidate = _candidate_from_payload_task(pid, task)
+            if candidate is None:
+                continue
+            candidates.append(candidate)
+            shown += 1
+            if per_project_limit is not None and shown >= per_project_limit:
+                break
+    return candidates
+
+
+def parse_task_overview_stats_from_payload(task_overview_payload: dict[str, object]) -> TaskOverviewStats:
+    """Parse ready-all headline counts from structured API payloads."""
+    summary = task_overview_payload.get("summary")
+    if not isinstance(summary, dict):
+        return TaskOverviewStats()
+    return TaskOverviewStats(
+        ready=_coerce_int(summary.get("ready")),
+        blocked=_coerce_int(summary.get("blocked")),
+        active=_coerce_int(summary.get("active")),
+        stale=_coerce_int(summary.get("stale")),
+        projects=_coerce_int(summary.get("projects")),
+    )
+
+
+def extract_project_overviews_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    project_id: str | None = None,
+) -> list[ProjectOverview]:
+    """Extract compact per-project overview rows from ready-all API payloads."""
+    overviews: list[ProjectOverview] = []
+    for project in _payload_projects(task_overview_payload, project_id=project_id):
+        overview = _project_overview_from_payload(project)
+        if overview is not None:
+            overviews.append(overview)
+    return overviews
+
+
+def build_actionable_ready_summary_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    per_project_limit: int = 2,
+    project_id: str | None = None,
+) -> str:
+    """Build actionable ready-task summary directly from ready-all API payloads."""
+    candidates = _extract_payload_task_candidates(
+        task_overview_payload,
+        "ready_tasks",
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if not candidates:
+        return ""
+    lines = [f"ACTIONABLE-READY[{len(candidates)}]"]
+    for candidate in candidates:
+        lines.append(
+            f"- {candidate.project_id} | {candidate.task_id} | "
+            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
+        )
+    return "\n".join(lines)
+
+
+def build_actionable_blocked_summary_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    per_project_limit: int = 2,
+    project_id: str | None = None,
+) -> str:
+    """Build actionable blocked-task summary directly from ready-all API payloads."""
+    candidates = _extract_payload_task_candidates(
+        task_overview_payload,
+        "blocked_tasks",
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if not candidates:
+        return ""
+    lines = [f"ACTIONABLE-BLOCKED[{len(candidates)}]"]
+    for candidate in candidates:
+        lines.append(
+            f"- {candidate.project_id} | {candidate.task_id} | "
+            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
+        )
+    return "\n".join(lines)
+
+
+def extract_stale_task_candidates_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    per_project_limit: int | None = None,
+    project_id: str | None = None,
+) -> list[ReadyTaskCandidate]:
+    """Extract stale-running task rows directly from ready-all API payloads."""
+    return _extract_payload_task_candidates(
+        task_overview_payload,
+        "stale_tasks",
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+
+
+def build_actionable_stale_summary_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    per_project_limit: int = 2,
+    project_id: str | None = None,
+) -> str:
+    """Build actionable stale-running summary directly from ready-all API payloads."""
+    candidates = extract_stale_task_candidates_from_payload(
+        task_overview_payload,
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if not candidates:
+        return ""
+    lines = [f"ACTIONABLE-STALE[{len(candidates)}]"]
+    for candidate in candidates:
+        lines.append(
+            f"- {candidate.project_id} | {candidate.task_id} | "
+            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
+        )
+    return "\n".join(lines)
+
+
+def collect_visible_task_ids_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    project_id: str | None = None,
+) -> set[str]:
+    """Collect visible queue task ids from a ready-all API payload."""
+    task_ids: set[str] = set()
+    for field_name in ("ready_tasks", "blocked_tasks", "active_tasks", "stale_tasks"):
+        for candidate in _extract_payload_task_candidates(
+            task_overview_payload,
+            field_name,
+            per_project_limit=None,
+            project_id=project_id,
+        ):
+            task_ids.add(candidate.task_id)
+    return task_ids
+
+
+def build_compact_task_overview_from_payload(
+    task_overview_payload: dict[str, object],
+    *,
+    per_project_limit: int = 2,
+    project_id: str | None = None,
+) -> str:
+    """Build the heartbeat-ready compact overview directly from API payloads."""
+    stats = parse_task_overview_stats_from_payload(task_overview_payload)
+    project_overviews = extract_project_overviews_from_payload(
+        task_overview_payload,
+        project_id=project_id,
+    )
+    if not project_overviews and stats.projects == 0:
+        return ""
+
+    lines = [
+        (
+            f"READY-ALL[{stats.ready} ready, {stats.blocked} blocked, "
+            f"{stats.active} active, {stats.stale} stale across {stats.projects} projects]"
+        )
+    ]
+
+    if project_overviews:
+        lines.append("")
+        lines.append(f"PROJECTS[{len(project_overviews)}]")
+        for overview in project_overviews:
+            lines.append(f"- {overview.project_id} | {overview.label}")
+
+    ready_actionable = build_actionable_ready_summary_from_payload(
+        task_overview_payload,
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if ready_actionable:
+        lines.append("")
+        lines.append(ready_actionable)
+
+    blocked_actionable = build_actionable_blocked_summary_from_payload(
+        task_overview_payload,
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if blocked_actionable:
+        lines.append("")
+        lines.append(blocked_actionable)
+
+    stale_actionable = build_actionable_stale_summary_from_payload(
+        task_overview_payload,
+        per_project_limit=per_project_limit,
+        project_id=project_id,
+    )
+    if stale_actionable:
+        lines.append("")
+        lines.append(stale_actionable)
+
+    return "\n".join(lines)
+
+
 def parse_task_overview_stats(task_overview: str) -> TaskOverviewStats:
     """Parse the READY-ALL headline counts from compact CLI output."""
     first_line = task_overview.strip().splitlines()[0] if task_overview.strip() else ""
@@ -280,10 +576,18 @@ __all__ = [
     "ReadyTaskCandidate",
     "TaskOverviewStats",
     "build_actionable_blocked_summary",
+    "build_actionable_blocked_summary_from_payload",
     "build_actionable_ready_summary",
+    "build_actionable_ready_summary_from_payload",
     "build_actionable_stale_summary",
+    "build_actionable_stale_summary_from_payload",
     "build_compact_task_overview",
+    "build_compact_task_overview_from_payload",
+    "collect_visible_task_ids_from_payload",
     "extract_project_overviews",
+    "extract_project_overviews_from_payload",
     "extract_ready_task_candidates",
+    "extract_stale_task_candidates_from_payload",
     "parse_task_overview_stats",
+    "parse_task_overview_stats_from_payload",
 ]
