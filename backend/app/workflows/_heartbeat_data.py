@@ -9,9 +9,11 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
+
 from app.adapters._claude_constants import MCP_TOOL_PREFIX, build_mcp_tool_name
 from app.services.cleanup_summary import build_actionable_cleanup_summary
-from app.services.git_status_summary import build_actionable_git_summary
+from app.services.git_status_summary import RepoGitStatus, build_actionable_git_summary
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     collapse_active_workstream_rows,
@@ -40,6 +42,7 @@ _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$"
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
 _CLAUDE_MCP_PREFIX = MCP_TOOL_PREFIX
 _WORKSPACE_BASE = Path("/srv/workspaces/projects")
+_SUMMITFLOW_PROJECT_ID = "summitflow"
 
 # Contract: workstream inventory states are derived in precedence order.
 # Highest precedence first:
@@ -59,25 +62,46 @@ _WORKSPACE_BASE = Path("/srv/workspaces/projects")
 # - mixed / orphaned / reconciled / retired / superseded: informational, no new automatic close path here
 
 
-def _read_project_ports(project_id: str) -> str:
-    """Read backend/frontend ports from a project's .index.yaml (compact, fail-silent)."""
+def _read_project_index(project_id: str) -> dict[str, object] | None:
+    """Read and parse a project's .index.yaml, returning None on failure."""
     index_path = _WORKSPACE_BASE / project_id / ".index.yaml"
     if not index_path.is_file():
-        return ""
+        return None
     try:
         import yaml
 
         data = yaml.safe_load(index_path.read_text())
-        if not isinstance(data, dict):
-            return ""
-        services = data.get("services", {})
-        backend = services.get("backend_port")
-        frontend = services.get("frontend_port")
-        if backend and frontend:
-            return f"{backend}/{frontend}"
-        return ""
+        return data if isinstance(data, dict) else None
     except Exception:
+        logger.debug("Failed to read project index for %s", project_id, exc_info=True)
+        return None
+
+
+def _read_project_ports(project_id: str) -> str:
+    """Read backend/frontend ports from a project's .index.yaml (compact, fail-silent)."""
+    data = _read_project_index(project_id)
+    if not data:
         return ""
+    services = data.get("services", {})
+    if not isinstance(services, dict):
+        return ""
+    backend = services.get("backend_port")
+    frontend = services.get("frontend_port")
+    if backend and frontend:
+        return f"{backend}/{frontend}"
+    return ""
+
+
+def _read_project_api_url(project_id: str) -> str:
+    """Read the canonical local API URL for a project from .index.yaml."""
+    data = _read_project_index(project_id)
+    if not data:
+        return ""
+    urls = data.get("urls", {})
+    if not isinstance(urls, dict):
+        return ""
+    api_url = urls.get("api")
+    return api_url.strip() if isinstance(api_url, str) else ""
 
 
 async def get_project_access_summary() -> str:
@@ -177,6 +201,68 @@ async def _fetch_task_overview_raw() -> str:
         failure_log="Failed to fetch task overview for heartbeat prompt",
     )
     return output
+
+
+async def _fetch_git_status_compact(target_project_id: str | None = None) -> str:
+    """Fetch canonical SummitFlow git status via API and render compact st-compatible output."""
+    api_base = _read_project_api_url(_SUMMITFLOW_PROJECT_ID)
+    if not api_base:
+        logger.debug("Missing SummitFlow API URL for heartbeat git status")
+        return ""
+
+    endpoint = (
+        f"{api_base}/projects/{target_project_id}/git/status"
+        if target_project_id
+        else f"{api_base}/git/status"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(endpoint)
+            response.raise_for_status()
+            payload = response.json()
+    except Exception:
+        logger.debug("Failed to fetch git status for heartbeat prompt from SummitFlow API", exc_info=True)
+        return ""
+
+    repositories = payload.get("repositories", [])
+    if not isinstance(repositories, list) or not repositories:
+        return ""
+
+    rows: list[RepoGitStatus] = []
+    for repo in repositories:
+        if not isinstance(repo, dict):
+            continue
+        project_id = repo.get("project_id") or repo.get("name")
+        branch = repo.get("branch")
+        state = repo.get("state")
+        uncommitted = repo.get("uncommitted")
+        ahead = repo.get("ahead")
+        behind = repo.get("behind")
+        if not isinstance(project_id, str) or not isinstance(branch, str) or not isinstance(state, str):
+            continue
+        if not all(isinstance(value, int) for value in (uncommitted, ahead, behind)):
+            continue
+        rows.append(
+            RepoGitStatus(
+                project_id=project_id,
+                branch=branch,
+                state=state,
+                uncommitted=uncommitted,
+                ahead=ahead,
+                behind=behind,
+            )
+        )
+
+    if not rows:
+        return ""
+
+    lines = [f"GIT[{len(rows)}]"]
+    for row in rows:
+        lines.append(
+            f"{row.project_id:<15} {row.branch:<15} {row.state:<7} "
+            f"uncommitted:{row.uncommitted} ahead:{row.ahead} behind:{row.behind}"
+        )
+    return "\n".join(lines)
 
 
 async def _fetch_task_overview() -> str:
@@ -1009,16 +1095,9 @@ def _filter_git_status_for_project(git_status: str, project_id: str) -> str:
 
 async def _get_git_status_summary(target_project_id: str | None = None) -> str:
     """Build a <git_state> XML block from the canonical `st git status` surface."""
-    git_status = await _run_st_command(
-        ["st", "--compact", "git", "status"],
-        failure_log="Failed to fetch git status for heartbeat prompt",
-    )
+    git_status = await _fetch_git_status_compact(target_project_id)
     if not git_status:
         return ""
-    if target_project_id:
-        git_status = _filter_git_status_for_project(git_status, target_project_id)
-        if not git_status:
-            return ""
 
     actionable = build_actionable_git_summary(git_status)
     body = f"{git_status}\n\n{actionable}" if actionable else git_status

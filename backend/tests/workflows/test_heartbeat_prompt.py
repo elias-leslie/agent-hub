@@ -11,6 +11,7 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _fetch_git_status_compact,
     _fetch_recently_completed_sessions_section,
     _get_active_specialist_inventory,
     _get_active_work_summary,
@@ -35,14 +36,41 @@ def _mock_async_session_with_rows(rows: list[object]):
     return _session, mock_db
 
 
+class _FakeGitStatusResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, object]:
+        return self._payload
+
+
+class _FakeAsyncClient:
+    def __init__(self, response: _FakeGitStatusResponse) -> None:
+        self._response = response
+        self.requested_urls: list[str] = []
+
+    async def __aenter__(self) -> _FakeAsyncClient:
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    async def get(self, url: str) -> _FakeGitStatusResponse:
+        self.requested_urls.append(url)
+        return self._response
+
+
 class TestGetGitStatusSummary:
     """Tests for _get_git_status_summary."""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock)
-    async def test_returns_xml_block(self, mock_run: AsyncMock) -> None:
+    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock)
+    async def test_returns_xml_block(self, mock_fetch: AsyncMock) -> None:
         """Returns <git_state> XML when compact git status has content."""
-        mock_run.return_value = (
+        mock_fetch.return_value = (
             "GIT[2]\n"
             "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
             "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
@@ -56,23 +84,18 @@ class TestGetGitStatusSummary:
         assert "agent-hub" in result
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock, return_value="")
-    async def test_empty_when_no_git_state(self, mock_run: AsyncMock) -> None:
+    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock, return_value="")
+    async def test_empty_when_no_git_state(self, mock_fetch: AsyncMock) -> None:
         """Returns empty when compact git status output is empty."""
         result = await _get_git_status_summary()
         assert result == ""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_data._run_st_command", new_callable=AsyncMock)
-    async def test_filters_to_target_project(self, mock_run: AsyncMock) -> None:
-        mock_run.return_value = (
-            "GIT[2]\n"
-            "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
+    @patch("app.workflows._heartbeat_data._fetch_git_status_compact", new_callable=AsyncMock)
+    async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
+        mock_fetch.return_value = (
+            "GIT[1]\n"
             "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0\n"
-            "\n"
-            "ACTIONABLE-GIT[2]\n"
-            "- summitflow | branch=main | state=clean | next=none\n"
-            "- agent-hub | branch=main | state=dirty | next=inspect_then_commit_or_dispatch\n"
         )
 
         result = await _get_git_status_summary("agent-hub")
@@ -80,6 +103,51 @@ class TestGetGitStatusSummary:
         assert "agent-hub" in result
         assert "summitflow" not in result
         assert "ACTIONABLE-GIT[1]" in result
+
+
+class TestFetchGitStatusCompact:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._read_project_api_url", return_value="http://localhost:8001/api")
+    @patch("app.workflows._heartbeat_data.httpx.AsyncClient")
+    async def test_renders_compact_output_from_api_payload(
+        self,
+        mock_client_cls: MagicMock,
+        _mock_read_api_url: MagicMock,
+    ) -> None:
+        fake_client = _FakeAsyncClient(
+            _FakeGitStatusResponse(
+                {
+                    "repositories": [
+                        {
+                            "project_id": "summitflow",
+                            "branch": "main",
+                            "state": "clean",
+                            "uncommitted": 0,
+                            "ahead": 0,
+                            "behind": 0,
+                        },
+                        {
+                            "project_id": "agent-hub",
+                            "branch": "main",
+                            "state": "dirty",
+                            "uncommitted": 2,
+                            "ahead": 1,
+                            "behind": 0,
+                        },
+                    ]
+                }
+            )
+        )
+        mock_client_cls.return_value = fake_client
+
+        result = await _fetch_git_status_compact()
+
+        assert result == (
+            "GIT[2]\n"
+            "summitflow      main            clean   uncommitted:0 ahead:0 behind:0\n"
+            "agent-hub       main            dirty   uncommitted:2 ahead:1 behind:0"
+        )
+        assert fake_client.requested_urls == ["http://localhost:8001/api/git/status"]
 
 
 class TestBuildHeartbeatPromptIncludesGitState:
