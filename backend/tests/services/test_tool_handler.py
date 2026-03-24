@@ -85,6 +85,28 @@ class TestProjectPermissionHookFailClosed:
             decision = await hook(tool_call)
             assert decision == ToolDecision.DENY
 
+    @pytest.mark.asyncio
+    async def test_hook_forwards_tool_input_to_permission_check(self):
+        """Action-aware permission checks must receive the raw tool payload."""
+        hook = _create_project_permission_hook("test-project")
+        tool_call = ToolCall(
+            id="test-id",
+            name="manage_tasks",
+            input={"action": "dispatch", "task_id": "task-123"},
+        )
+
+        with patch(
+            "app.services.project_permission_service.check_tool_allowed",
+            new_callable=AsyncMock,
+            return_value=(False, "manage_tasks action requires yolo tier: 'dispatch'"),
+        ) as mock_check:
+            decision = await hook(tool_call)
+
+        assert decision == ToolDecision.DENY
+        mock_check.assert_awaited_once_with(
+            "test-project", "manage_tasks", tool_input=tool_call.input,
+        )
+
 
 # ---------------------------------------------------------------------------
 # _compose_hooks fail-closed tests

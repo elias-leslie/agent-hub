@@ -10,6 +10,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -31,6 +32,8 @@ _redis: aioredis.Redis | None = None
 _REASON_ALLOWED = "allowed"
 _REASON_PERSONA_EXEMPT = "persona-internal tool (tier-exempt)"
 _REASON_TIER_OFF = "project permission tier is off"
+_REASON_MANAGE_TASKS_YOLO = "manage_tasks action requires yolo tier"
+_REASON_DISPATCH_AGENT_YOLO = "dispatch_agent requires yolo tier"
 
 # Reason strings for execution permission results
 _EXEC_REASON_ALLOWED = "allowed"
@@ -78,9 +81,10 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
 })
 
 # Persona-operational tools — the persona's agency capabilities that don't modify
-# project code. Task management, scheduling, notifications, and consultation
-# steering. Tier-exempt so the persona can operate during heartbeat/scheduler
-# workflows regardless of the project's read/write tier.
+# project code. Safe coordination tools stay tier-exempt so the persona can
+# operate during heartbeat/scheduler workflows regardless of the project's
+# read/write tier. Tools that can launch or mutate project work are checked
+# separately below.
 _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "manage_tasks",
     "manage_backups",
@@ -95,6 +99,23 @@ _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
 })
 
 _PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
+
+_SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
+    "manage_backups",
+    "schedule_job",
+    "cancel_scheduled_job",
+    "send_push",
+    "steer_consultation",
+    "cancel_consultation",
+    "query_sessions",
+    "inspect_session",
+})
+
+_READ_SAFE_MANAGE_TASK_ACTIONS: frozenset[str] = frozenset({
+    "overview",
+    "get_context",
+    "cleanup_status",
+})
 
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
@@ -278,25 +299,64 @@ async def _load_perm_from_db(
         return await get_project_permission(fresh_db, project_id)
 
 
+async def _resolve_project_tier(
+    project_id: str, db: AsyncSession | None,
+) -> str | None:
+    """Return the cached or persisted permission tier for a project."""
+    tier = await _get_cached_tier(project_id)
+    if tier is not None:
+        return tier
+    perm = await _load_perm_from_db(project_id, db)
+    return perm.permission_tier if perm else None
+
+
 # ---------------------------------------------------------------------------
 # Tool permission checks (hot path)
 # ---------------------------------------------------------------------------
 
+def _normalize_action(tool_input: dict[str, Any] | None) -> str | None:
+    """Return a normalized tool action string, or None when absent."""
+    if not tool_input:
+        return None
+    action = tool_input.get("action")
+    if not isinstance(action, str):
+        return None
+    normalized = action.strip().lower()
+    return normalized or None
+
+
 async def _check_persona_tool_allowed(
-    project_id: str, db: AsyncSession | None
+    project_id: str,
+    tool_name: str,
+    tool_input: dict[str, Any] | None,
+    db: AsyncSession | None,
 ) -> tuple[bool, str]:
-    """Persona tools are tier-exempt; only blocked when tier is explicitly 'off'."""
-    tier = await _get_cached_tier(project_id)
-    if tier is None:
-        perm = await _load_perm_from_db(project_id, db)
-        tier = perm.permission_tier if perm else None
+    """Persona tools are blocked at off; mutating actions are further tier-gated."""
+    tier = await _resolve_project_tier(project_id, db)
     if tier == "off":
         return False, _REASON_TIER_OFF
+    if tool_name in _PERSONA_INTERNAL or tool_name in _SAFE_PERSONA_OPERATIONAL:
+        return True, _REASON_PERSONA_EXEMPT
+    if tool_name == "manage_tasks":
+        action = _normalize_action(tool_input)
+        if action in _READ_SAFE_MANAGE_TASK_ACTIONS:
+            return True, _REASON_PERSONA_EXEMPT
+        if tier == "yolo":
+            return True, _REASON_ALLOWED
+        return False, f"{_REASON_MANAGE_TASKS_YOLO}: '{action or 'unknown'}'"
+    if tool_name == "dispatch_agent":
+        if tier == "yolo":
+            return True, _REASON_ALLOWED
+        return False, _REASON_DISPATCH_AGENT_YOLO
     return True, _REASON_PERSONA_EXEMPT
 
 
 async def check_tool_allowed(
-    project_id: str, tool_name: str, *, db: AsyncSession | None = None
+    project_id: str,
+    tool_name: str,
+    *,
+    tool_input: dict[str, Any] | None = None,
+    db: AsyncSession | None = None,
 ) -> tuple[bool, str]:
     """Check whether a tool call is allowed for a project.
 
@@ -308,7 +368,7 @@ async def check_tool_allowed(
     """
     try:
         if tool_name in _PERSONA_TOOLS:
-            return await _check_persona_tool_allowed(project_id, db)
+            return await _check_persona_tool_allowed(project_id, tool_name, tool_input, db)
 
         # Regular tool: cache → DB → check
         tier = await _get_cached_tier(project_id)
