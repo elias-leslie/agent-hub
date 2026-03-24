@@ -5,6 +5,12 @@ from __future__ import annotations
 import shlex
 from collections.abc import Awaitable, Callable
 
+from app.services.backup_summary import (
+    fetch_backup_schedule_line,
+    fetch_backup_sources_summary,
+    fetch_latest_backup_status_line,
+)
+
 
 def _base_st_cmd(project_id: str | None = None) -> str:
     """Build the base st command prefix with an optional project flag."""
@@ -102,12 +108,12 @@ async def manage_backups(
     """Query backup state and run carefully-scoped backup operations."""
     if action == "protection_status":
         lines: list[str] = []
-        lines.append(await bash_fn(_backup_cmd("status", project_id=project_id)))
+        lines.append(await fetch_latest_backup_status_line(project_id))
         target_source = source_id or project_id
         if target_source:
-            lines.append(await bash_fn(_backup_cmd("schedule", source_id=target_source)))
+            lines.append(await fetch_backup_schedule_line(target_source))
         else:
-            lines.append(await bash_fn(_backup_cmd("sources", source_type=source_type)))
+            lines.append(await fetch_backup_sources_summary(source_type))
         return "\n---\n".join(line.strip() for line in lines if line and line.strip())
 
     if action == "schedule" and not source_id:

@@ -298,13 +298,13 @@ class TestProtectionStatusSummary:
         mock_schedule: AsyncMock,
     ) -> None:
         mock_status.return_value = "LATEST bkp-123|completed|8.5MB"
-        mock_schedule.return_value = "SOURCE:agent-hub|enabled|daily|retention_days:30"
+        mock_schedule.return_value = "agent-hub            project    enabled  daily    30   Agent Hub"
 
         result = await _get_protection_status_summary("agent-hub")
 
         assert result.startswith("\n<protection_status>")
         assert "LATEST bkp-123|completed|8.5MB" in result
-        assert "SOURCE:agent-hub|enabled|daily|retention_days:30" in result
+        assert "agent-hub            project    enabled  daily    30   Agent Hub" in result
         mock_status.assert_called_once_with("agent-hub")
         mock_schedule.assert_called_once_with("agent-hub")
 

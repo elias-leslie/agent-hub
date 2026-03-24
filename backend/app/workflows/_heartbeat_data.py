@@ -13,6 +13,10 @@ from typing import Any
 import httpx
 
 from app.adapters._claude_constants import MCP_TOOL_PREFIX, build_mcp_tool_name
+from app.services.backup_summary import (
+    fetch_backup_schedule_line,
+    fetch_latest_backup_status_line,
+)
 from app.services.cleanup_summary import (
     build_actionable_cleanup_summary,
     build_actionable_cleanup_summary_from_payload,
@@ -1141,21 +1145,13 @@ async def _get_cleanup_status_summary(target_project_id: str | None = None) -> s
 
 
 async def _fetch_backup_status(target_project_id: str | None = None) -> str:
-    """Run `st backup status` for the given project and return stripped stdout."""
-    cmd = ["st"]
-    if target_project_id:
-        cmd.extend(["-P", target_project_id])
-    cmd.extend(["backup", "status"])
-    return await _run_st_command(cmd, failure_log="Failed to fetch backup status for heartbeat prompt")
+    """Fetch the compact latest-backup status line from structured SummitFlow data."""
+    return await fetch_latest_backup_status_line(target_project_id)
 
 
 async def _fetch_backup_schedule(target_project_id: str | None = None) -> str:
-    """Run `st backup schedule` for the given project source and return stripped stdout."""
-    source = target_project_id or "persona-sandbox"
-    return await _run_st_command(
-        ["st", "backup", "schedule", source],
-        failure_log="Failed to fetch backup schedule for heartbeat prompt",
-    )
+    """Fetch the compact backup-source schedule line from structured SummitFlow data."""
+    return await fetch_backup_schedule_line(target_project_id)
 
 
 async def _get_protection_status_summary(target_project_id: str | None = None) -> str:

@@ -2600,15 +2600,24 @@ class TestManageBackups:
     """Tests for manage_backups tool."""
 
     @pytest.mark.asyncio
-    async def test_protection_status_for_project(self):
+    @patch(
+        "app.services.tools._executor_backups.fetch_backup_schedule_line",
+        new_callable=AsyncMock,
+        return_value="agent-hub            project    enabled  daily    30   Agent Hub",
+    )
+    @patch(
+        "app.services.tools._executor_backups.fetch_latest_backup_status_line",
+        new_callable=AsyncMock,
+        return_value="LATEST bkp-123|completed|8.5MB",
+    )
+    async def test_protection_status_for_project(
+        self,
+        mock_status: AsyncMock,
+        mock_schedule: AsyncMock,
+    ):
         from app.services.tools._executor_backups import manage_backups
 
-        mock_bash = AsyncMock(
-            side_effect=[
-                "LATEST bkp-123|completed|8.5MB",
-                "SOURCE:agent-hub|enabled|daily|retention_days:30",
-            ]
-        )
+        mock_bash = AsyncMock()
 
         result = await manage_backups(
             mock_bash,
@@ -2617,10 +2626,11 @@ class TestManageBackups:
         )
 
         assert "LATEST bkp-123|completed|8.5MB" in result
-        assert "SOURCE:agent-hub|enabled|daily|retention_days:30" in result
+        assert "agent-hub            project    enabled  daily    30   Agent Hub" in result
         assert "---" in result
-        mock_bash.assert_any_await("st -P agent-hub backup status")
-        mock_bash.assert_any_await("st backup schedule agent-hub")
+        mock_bash.assert_not_awaited()
+        mock_status.assert_awaited_once_with("agent-hub")
+        mock_schedule.assert_awaited_once_with("agent-hub")
 
     @pytest.mark.asyncio
     async def test_create_project_backup(self):
