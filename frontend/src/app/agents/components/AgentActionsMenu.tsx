@@ -60,7 +60,7 @@ export function AgentActionsMenu({
           id={menuId}
           role="menu"
           aria-label={`${agent.name} actions`}
-          className="absolute right-0 top-8 z-50 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800"
+          className="absolute right-0 top-8 z-50 w-40 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-lg"
         >
           <Link
             href={`/agents/${agent.slug}/chat`}
@@ -83,7 +83,7 @@ export function AgentActionsMenu({
             <Copy className="h-3.5 w-3.5" />
             Clone
           </button>
-          <div className="my-1 border-t border-slate-100 dark:border-slate-700" />
+          <div className="my-1 border-t border-slate-700" />
           <button
             type="button"
             role="menuitem"

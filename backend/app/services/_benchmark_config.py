@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
 from app.models import Agent, Memory, MemoryRevision, Persona, Prompt
+from app.services.agent_crud import get_agent_by_slug
 from app.services.prompt_catalog import (
     COMPLETION_REVIEW_PROMPT_SLUG,
     COMPLETION_REVIEW_RULES_PROMPT_SLUG,
@@ -219,7 +220,7 @@ async def capture_benchmark_config_snapshot(
 ) -> dict[str, Any]:
     """Capture the live agent/model/prompt state for a benchmark run."""
     async with async_session() as db:
-        agent = await db.scalar(select(Agent).where(Agent.slug == agent_slug))
+        agent = await get_agent_by_slug(db, agent_slug, active_only=True)
         if agent is None:
             return {}
 

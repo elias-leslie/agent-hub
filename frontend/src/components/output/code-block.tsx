@@ -120,9 +120,9 @@ export function CodeBlock({
     <div
       className={cn(
         "group relative rounded-lg overflow-hidden",
-        "bg-[oklch(0.12_0_0)] dark:bg-[oklch(0.08_0_0)]",
-        "border border-[oklch(0.25_0_0)] dark:border-[oklch(0.2_0_0)]",
-        "shadow-[0_2px_8px_oklch(0_0_0/0.15)] dark:shadow-[0_2px_12px_oklch(0_0_0/0.4)]",
+        "bg-[oklch(0.08_0_0)]",
+        "border border-[oklch(0.2_0_0)]",
+        "shadow-[0_2px_12px_oklch(0_0_0/0.4)]",
         "font-mono text-sm",
         className,
       )}
@@ -131,8 +131,8 @@ export function CodeBlock({
       <div
         className={cn(
           "flex items-center justify-between px-3 py-2",
-          "bg-[oklch(0.16_0_0)] dark:bg-[oklch(0.1_0_0)]",
-          "border-b border-[oklch(0.25_0_0)] dark:border-[oklch(0.18_0_0)]",
+          "bg-[oklch(0.1_0_0)]",
+          "border-b border-[oklch(0.18_0_0)]",
         )}
       >
         <div className="flex items-center gap-2">
@@ -191,8 +191,8 @@ export function CodeBlock({
             <div
               className={cn(
                 "flex-shrink-0 py-3 px-3 select-none text-right",
-                "bg-[oklch(0.14_0_0)] dark:bg-[oklch(0.09_0_0)]",
-                "border-r border-[oklch(0.22_0_0)] dark:border-[oklch(0.16_0_0)]",
+                "bg-[oklch(0.09_0_0)]",
+                "border-r border-[oklch(0.16_0_0)]",
                 "text-[oklch(0.45_0_0)] text-xs leading-relaxed",
               )}
             >

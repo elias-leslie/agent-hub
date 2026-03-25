@@ -64,7 +64,7 @@ export function FallbackModelsList({
       <button
         onClick={addModel}
         disabled={selectedModels.length >= availableModels.length - 1}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-500 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-500 hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
       >
         <Plus className="h-3.5 w-3.5" />
         Add Fallback

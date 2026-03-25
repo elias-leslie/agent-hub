@@ -45,7 +45,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         "transition-all duration-200",
         isSelected
           ? "border-amber-500/40 shadow-lg shadow-amber-500/10 ring-2 ring-amber-500/20"
-          : "border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md",
+          : "border-slate-800 hover:border-slate-700 hover:shadow-md",
       )}
       onClick={() => onExpand?.(model)}
     >

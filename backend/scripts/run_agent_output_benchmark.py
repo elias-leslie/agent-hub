@@ -76,14 +76,6 @@ def derive_suite_id(agent_slug: str, case_ids: list[str]) -> str:
     return f"output-contract-{agent_slug}-custom"
 
 
-async def _resolve_default_model(agent_slug: str) -> str:
-    snapshot = await capture_benchmark_config_snapshot(agent_slug, task_type="task")
-    primary_model = str(snapshot.get("primary_model_id") or "").strip()
-    if not primary_model:
-        raise ValueError(f"Could not resolve primary model for agent '{agent_slug}'")
-    return primary_model
-
-
 async def _run_one_attempt(
     *,
     client: AsyncAgentHubClient,
@@ -174,7 +166,17 @@ async def run_agent_output_benchmark(
     started_at = datetime.now(UTC).isoformat()
     benchmark_id = f"output-contract-{agent_slug}-{uuid.uuid4().hex[:8]}"
     client_id_resolved = await _resolve_client_id(client_id, project_id)
-    requested_models = list(models or [await _resolve_default_model(agent_slug)])
+    agent_snapshot = await capture_benchmark_config_snapshot(agent_slug, task_type="task")
+    if not agent_snapshot:
+        raise ValueError(f"Active agent '{agent_slug}' not found")
+
+    if models:
+        requested_models = list(models)
+    else:
+        primary_model = str(agent_snapshot.get("primary_model_id") or "").strip()
+        if not primary_model:
+            raise ValueError(f"Could not resolve primary model for agent '{agent_slug}'")
+        requested_models = [primary_model]
     explicit_model_override = bool(models)
     attempts: list[AgentOutputBenchmarkAttempt] = []
 

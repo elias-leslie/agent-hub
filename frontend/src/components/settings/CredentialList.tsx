@@ -106,7 +106,7 @@ export function CredentialList({
               {onSetPrimaryCredential && idx > 0 && (
                 <button
                   onClick={() => onSetPrimaryCredential(cred.id)}
-                  className="p-0.5 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 text-slate-400 hover:text-amber-500 transition-colors"
+                  className="p-0.5 rounded hover:bg-blue-950/30 text-slate-400 hover:text-amber-500 transition-colors cursor-pointer"
                   title="Make primary"
                 >
                   <ArrowUp className="h-2.5 w-2.5" />

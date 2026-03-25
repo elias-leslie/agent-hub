@@ -14,7 +14,7 @@ export default function AgentsLoading() {
               <div className="h-8 w-36 bg-slate-700 rounded-md animate-pulse" />
               <div className="h-8 w-24 bg-slate-700 rounded-md animate-pulse" />
               <div className="h-8 w-20 bg-slate-700 rounded-md animate-pulse" />
-              <div className="h-8 w-24 bg-blue-200 dark:bg-blue-900/50 rounded-md animate-pulse" />
+              <div className="h-8 w-24 bg-blue-900/50 rounded-md animate-pulse" />
             </div>
           </div>
         </div>
