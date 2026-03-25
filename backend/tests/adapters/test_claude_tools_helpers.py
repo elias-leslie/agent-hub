@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.adapters.claude_tools_helpers import (
+    _ClaudeSDKQuerySession,
     _close_internal_query,
     _sdk_query_via_internal_api,
     _stream_sdk_messages,
@@ -640,6 +641,47 @@ async def test_sdk_query_via_internal_api_owns_query_lifecycle(
         "end_input",
         "query_close",
     ]
+
+
+@pytest.mark.asyncio
+async def test_claude_sdk_query_session_falls_back_to_public_query_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    iterator_holder: dict[str, object] = {}
+
+    class ClosingIterator:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def __aiter__(self) -> ClosingIterator:
+            return self
+
+        async def __anext__(self):
+            raise StopAsyncIteration
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    def fake_query(*, prompt, options):
+        iterator = ClosingIterator()
+        iterator_holder["prompt"] = prompt
+        iterator_holder["options"] = options
+        iterator_holder["iterator"] = iterator
+        return iterator
+
+    monkeypatch.setitem(sys.modules, "claude_agent_sdk", types.SimpleNamespace(query=fake_query))
+
+    session = _ClaudeSDKQuerySession(
+        "hello",
+        types.SimpleNamespace(cli_path="/usr/bin/claude", system_prompt="system"),
+    )
+    await session.start()
+    await session.close()
+
+    assert iterator_holder["prompt"] == "hello"
+    assert session.internal_session is None
+    assert session.message_iter is iterator_holder["iterator"]
+    assert iterator_holder["iterator"].closed is True
 
 
 @pytest.mark.asyncio
