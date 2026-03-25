@@ -62,6 +62,31 @@ def test_score_output_contract_attempt_rejects_observability_tags() -> None:
     assert attempt.failure_detail == "missing_required_prefix"
 
 
+def test_score_output_contract_attempt_requires_summary_tag_for_coder_case() -> None:
+    case = get_case_by_id("coder", "coder_summary_tag_override")
+
+    attempt = score_output_contract_attempt(
+        case=case,
+        model_id="claude-haiku-4-5",
+        run_number=1,
+        latency_ms=600,
+        content="BRANCH_OK",
+        session_id="sess-coder-1",
+        provider="claude",
+        effective_model="claude-haiku-4-5",
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=40,
+        output_tokens=5,
+        total_tokens=45,
+    )
+
+    assert attempt.passed is False
+    assert attempt.failure_detail == "missing_required_tool_call"
+
+
 def test_derive_suite_id_uses_agent_default_suite() -> None:
     suite_id = derive_suite_id("note-formatter", get_default_case_ids("note-formatter"))
 

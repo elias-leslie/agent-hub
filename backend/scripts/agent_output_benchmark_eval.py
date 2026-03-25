@@ -173,6 +173,13 @@ def score_output_contract_attempt(
         attempt.failure_detail = "empty_output"
         return attempt
 
+    if case.require_tool_call:
+        tool_call_ok = bool(tool_calls_count or used_tool_names)
+        checks.append(tool_call_ok)
+        if not tool_call_ok and attempt.failure_detail is None:
+            attempt.failure_kind = "model"
+            attempt.failure_detail = "missing_required_tool_call"
+
     if case.required_prefix:
         prefix_ok = stripped.startswith(case.required_prefix)
         checks.append(prefix_ok)
