@@ -8,7 +8,8 @@ using PostgreSQL pgvector search.
 import logging
 from typing import Any
 
-from .embedder import get_embedder
+from ._repo_helpers import to_dict
+from .embedder import get_embedder_or_none
 from .memory_models import MemoryContext, MemoryScope, MemorySearchResult
 from .repository import get_memory_repository
 from .search_helpers import (
@@ -43,15 +44,33 @@ async def get_context_for_query(
         max_facts: Maximum number of facts to return.
         max_entities: Maximum number of entities to return.
     """
-    embedder = get_embedder()
-    query_vec = await embedder.embed(query)
-
     repo = get_memory_repository()
-    results = await repo.semantic_search(
-        query_vec,
-        group_id=group_id,
-        limit=max_facts + max_entities,
-    )
+    results: list[dict[str, Any]] = []
+    embedder = get_embedder_or_none("memory context lookup")
+    if embedder is not None:
+        try:
+            query_vec = await embedder.embed(query)
+            results = await repo.semantic_search(
+                query_vec,
+                group_id=group_id,
+                limit=max_facts + max_entities,
+            )
+        except Exception:
+            logger.warning(
+                "Semantic memory context unavailable for query=%s; using text-only results",
+                query[:80],
+                exc_info=True,
+            )
+    if not results:
+        try:
+            text_matches = await repo.text_search(
+                query,
+                group_id=group_id,
+                limit=max_facts + max_entities,
+            )
+            results = [to_dict(mem) for mem in text_matches]
+        except Exception:
+            logger.debug("Text context fallback failed", exc_info=True)
 
     facts = extract_facts_from_results(results, max_facts)
     entities = extract_entity_names_from_results(results, max_entities)

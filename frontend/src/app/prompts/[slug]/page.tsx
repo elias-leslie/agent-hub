@@ -356,7 +356,7 @@ export default function PromptEditPage() {
                       onClick={() =>
                         setExcludeAgents(excludeAgents.filter((a) => a !== agent))
                       }
-                      className="ml-0.5 hover:text-red-800 dark:hover:text-red-200"
+                      className="ml-0.5 hover:text-red-200 cursor-pointer"
                     >
                       x
                     </button>

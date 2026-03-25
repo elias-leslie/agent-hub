@@ -74,13 +74,13 @@ export function MemoryTableRow({
     : item.content.slice(0, charBudget).replace(/\s+\S*$/, "") + "...";
 
   const tierBorderColor = {
-    mandate: "border-l-red-500 dark:border-l-red-400",
+    mandate: "border-l-red-400",
     guardrail: "border-l-amber-400",
     reference: "border-l-amber-400",
   }[item.category] || "";
 
   return (
-    <div key={item.uuid} className={cn("border-l-4", tierBorderColor, isExpanded && "bg-slate-50/50 dark:bg-slate-800/20")}>
+    <div key={item.uuid} className={cn("border-l-4", tierBorderColor, isExpanded && "bg-slate-800/20")}>
       {/* ROW */}
       <button
         onClick={() => onToggleExpand(item.uuid)}
@@ -89,7 +89,7 @@ export function MemoryTableRow({
           "hover:bg-slate-800/30",
           isFocused && "bg-blue-950/20 ring-1 ring-inset ring-amber-800",
           isExpanded && "bg-emerald-950/10",
-          isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
+          isSelected && !isExpanded && "bg-emerald-950/5"
         )}
         data-testid="memory-row"
       >

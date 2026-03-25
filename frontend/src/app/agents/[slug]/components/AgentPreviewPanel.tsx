@@ -166,7 +166,7 @@ export function AgentPreviewPanel({
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 border-slate-800 dark:bg-slate-900">
+    <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-900 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-slate-100">
@@ -185,8 +185,8 @@ export function AgentPreviewPanel({
               className={cn(
                 "rounded-full border px-3 py-1.5 text-xs font-medium transition",
                 previewMode === mode.value
-                  ? "border-slate-900 bg-slate-900 text-slate-900 bg-slate-100 dark:text-slate-900"
-                  : "border-slate-200 text-slate-600 hover:border-slate-700 dark:text-slate-300",
+                  ? "border-slate-600 bg-slate-100 text-slate-900"
+                  : "border-slate-700 text-slate-300 hover:border-slate-600",
               )}
             >
               {mode.label}
@@ -195,7 +195,7 @@ export function AgentPreviewPanel({
           <button
             type="button"
             onClick={onTogglePreview}
-            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition border-slate-700 text-slate-200 dark:hover:bg-slate-800"
+            className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:bg-slate-800 cursor-pointer"
           >
             {showPreview ? "Hide Preview" : "Show Preview"}
           </button>
@@ -257,13 +257,13 @@ export function AgentPreviewPanel({
           </p>
         </label>
       ) : (
-        <div className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[11px] text-slate-500 border-slate-700 dark:text-slate-400">
+        <div className="rounded-lg border border-dashed border-slate-700 px-3 py-2 text-[11px] text-slate-400">
           Heartbeat preview builds the task prompt from live heartbeat inputs; only project and phase hints matter here.
         </div>
       )}
 
       {warnings.length > 0 ? (
-        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+        <div className="space-y-2 rounded-lg border border-amber-900/40 bg-amber-950/20 px-3 py-3">
           {warnings.map((warning) => (
             <div
               key={warning}

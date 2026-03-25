@@ -11,18 +11,18 @@ function decisionTone(decision: string) {
   if (decision === "promote") {
     return {
       icon: CheckCircle2,
-      className: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-800",
+      className: "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800",
     };
   }
   if (decision === "rollback") {
     return {
       icon: RotateCcw,
-      className: "bg-rose-50 text-rose-700 ring-1 ring-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:ring-rose-800",
+      className: "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800",
     };
   }
   return {
     icon: AlertTriangle,
-    className: "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-800",
+    className: "bg-amber-950/30 text-amber-300 ring-1 ring-amber-800",
   };
 }
 
@@ -57,7 +57,7 @@ export function BenchmarkExperimentSection({
           return (
             <article
               key={experiment.experiment_key}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm border-slate-800 dark:bg-slate-900/60"
+              className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>

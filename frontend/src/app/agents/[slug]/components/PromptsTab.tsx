@@ -147,7 +147,7 @@ export function PromptsTab({
           <button
             type="button"
             onClick={() => { setShowCreateForm((v) => !v); setShowAssignForm(false); }}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             New Prompt
@@ -216,7 +216,7 @@ export function PromptsTab({
             <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
           </div>
         ) : orderedAssignments.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 px-6 py-12 text-center text-slate-500 border-slate-700 dark:text-slate-400">
+          <div className="rounded-xl border border-dashed border-slate-700 px-6 py-12 text-center text-slate-400">
             <FileText className="mx-auto mb-3 h-8 w-8 opacity-50" />
             No prompts assigned yet.
           </div>
