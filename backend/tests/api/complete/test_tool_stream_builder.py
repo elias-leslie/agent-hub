@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.adapters.base import Message
-from app.api.complete.tool_stream_builder import build_event_stream
+from app.api.complete.tool_handler_utils import build_event_stream
 
 
 def test_build_event_stream_floors_openai_compat_tool_turns(monkeypatch) -> None:
