@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.adapters.runtime_session import StreamBackedRuntimeSession
 from app.api.complete.tool_handler_utils import (
     _ExecutionState,
     _init_execution_state,
@@ -26,7 +27,7 @@ def _mock_session() -> MagicMock:
 
 def _mock_adapter_with_stream(stream: object) -> MagicMock:
     adapter = MagicMock()
-    adapter.complete_with_tool_events.return_value = stream
+    adapter.start_tool_session.return_value = StreamBackedRuntimeSession(stream=stream)
     return adapter
 
 
@@ -219,6 +220,47 @@ async def test_run_tool_loop_does_not_reclose_exhausted_stream() -> None:
 
 
 @pytest.mark.asyncio
+async def test_run_tool_loop_interrupts_owned_runtime_session_on_cancellation() -> None:
+    state = _ExecutionState(agent_slug="persona", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+    interrupt = AsyncMock()
+    close = AsyncMock()
+
+    async def fake_stream():
+        raise asyncio.CancelledError()
+        yield
+
+    adapter = MagicMock()
+    adapter.start_tool_session.return_value = StreamBackedRuntimeSession(
+        stream=fake_stream(),
+        interrupt_callback=interrupt,
+        close_callback=close,
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await _run_tool_loop(
+            adapter=adapter,
+            state=state,
+            provider="claude",
+            model="claude-sonnet-4-6",
+            tools=[],
+            tool_catalog=None,
+            working_dir=None,
+            permission_config=None,
+            session_id="session-cancelled",
+            loaded_memory_uuids=[],
+            db=db,
+            tracker=tracker,
+            max_turns=1,
+            project_id="agent-hub",
+        )
+
+    interrupt.assert_awaited_once()
+    close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_run_tool_loop_floors_codex_tool_turns_before_adapter_call() -> None:
     state = _ExecutionState(agent_slug="memory-curator", messages_for_adapter=[])
     tracker = AsyncMock()
@@ -247,7 +289,7 @@ async def test_run_tool_loop_floors_codex_tool_turns_before_adapter_call() -> No
     )
 
     assert result is None
-    assert adapter.complete_with_tool_events.call_args.kwargs["max_turns"] == 3
+    assert adapter.start_tool_session.call_args.kwargs["max_turns"] == 3
 
 
 @pytest.mark.asyncio
@@ -279,7 +321,7 @@ async def test_run_tool_loop_preserves_claude_tool_turns_before_adapter_call() -
     )
 
     assert result is None
-    assert adapter.complete_with_tool_events.call_args.kwargs["max_turns"] == 7
+    assert adapter.start_tool_session.call_args.kwargs["max_turns"] == 7
 
 
 @pytest.mark.asyncio

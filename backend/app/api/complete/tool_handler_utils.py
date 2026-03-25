@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -95,7 +97,7 @@ async def _run_tool_loop(
     """
     await update_session_health(db, session_id, "calling_model", commit=True)
 
-    event_stream = adapter.complete_with_tool_events(
+    runtime_session = adapter.start_tool_session(
         messages=state.messages_for_adapter,
         model=model,
         tools=tools,
@@ -107,6 +109,7 @@ async def _run_tool_loop(
         session_id=session_id,
         agent_slug=state.agent_slug,
     )
+    event_stream = runtime_session.events()
 
     # Mapping of tool_use_id → original tool metadata, shared across all events in the loop
     tool_use_metadata: dict[str, dict[str, Any]] = {}
@@ -166,12 +169,16 @@ async def _run_tool_loop(
                 await update_session_health(db, session_id, "calling_model", commit=True)
         else:
             exhausted = True
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await runtime_session.interrupt()
+        raise
     finally:
         # Only force-close provider streams when the loop exits early. Redundant
         # close after natural exhaustion can re-enter provider cleanup on a
         # foreign task and inject cancellation into the caller.
-        if hasattr(event_stream, "aclose") and not exhausted:
-            await event_stream.aclose()
+        if not exhausted:
+            await runtime_session.close()
 
     if terminal_error_message:
         return build_error_result(

@@ -24,7 +24,7 @@ interface MemoryTabsProps {
 
 export function MemoryTabs({ activeTab, onTabChange }: MemoryTabsProps) {
   return (
-    <div className="flex items-center gap-1 px-4 lg:px-6 border-b border-slate-800 bg-slate-900/80 overflow-x-auto">
+    <div className="flex items-center gap-1 px-6 lg:px-8 border-b border-slate-800/60 bg-slate-900/60 overflow-x-auto">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
