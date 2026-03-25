@@ -4,9 +4,14 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import suppress
+from typing import cast
 
 from app.adapters.base import Message, StreamEvent
-from app.adapters.claude_tools_helpers import _build_mcp_server, _wrap_prompt_as_stream
+from app.adapters.claude_tools_helpers import (
+    _build_mcp_server,
+    _ClaudeSDKQuerySession,
+    _wrap_prompt_as_stream,
+)
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
@@ -53,17 +58,36 @@ def _events_for_block(block: object, is_assistant: bool) -> list[StreamEvent]:
     return []
 
 
-async def _yield_sdk_events(prompt: object, options: object) -> AsyncIterator[StreamEvent]:
+async def _yield_sdk_events(
+    prompt: object,
+    options: object,
+    abort_event: asyncio.Event | None = None,
+) -> AsyncIterator[StreamEvent]:
     """Yield StreamEvents from SDK query; prompt may be str or async iterable."""
-    from claude_agent_sdk import query
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
+    session = _ClaudeSDKQuerySession(prompt=prompt, options=options)
     done_emitted = False
-    message_iter = query(prompt=prompt, options=options).__aiter__()
+    await session.start()
+    message_iter = session.message_iter
+    if message_iter is None:
+        raise RuntimeError("Claude SDK query session did not initialize an iterator")
+
+    abort_watch_task: asyncio.Task[None] | None = None
+    if abort_event is not None:
+        async def _watch_abort() -> None:
+            await abort_event.wait()
+            await session.interrupt()
+
+        abort_watch_task = asyncio.create_task(_watch_abort())
+
     try:
         while True:
+            if abort_event is not None and abort_event.is_set():
+                await session.interrupt()
+                raise asyncio.CancelledError("Abort signal received")
             try:
-                message = await anext(message_iter)
+                message = await anext(cast(AsyncIterator[object], message_iter))
             except StopAsyncIteration:
                 return
             if isinstance(message, ResultMessage):
@@ -88,9 +112,11 @@ async def _yield_sdk_events(prompt: object, options: object) -> AsyncIterator[St
                 for event in _events_for_block(block, is_assistant):
                     yield event
     finally:
-        if hasattr(message_iter, "aclose"):
-            with suppress(Exception):
-                await message_iter.aclose()
+        if abort_watch_task is not None:
+            abort_watch_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await abort_watch_task
+        await session.close()
 
 
 def _build_oauth_options(
@@ -121,10 +147,14 @@ def _build_oauth_options(
     )
 
 
-async def _gated_sdk_events(prompt: object, options: object) -> AsyncIterator[StreamEvent]:
+async def _gated_sdk_events(
+    prompt: object,
+    options: object,
+    abort_event: asyncio.Event | None = None,
+) -> AsyncIterator[StreamEvent]:
     """Yield SDK events under the global concurrency semaphore."""
     async with _sdk_semaphore:
-        async for event in _yield_sdk_events(prompt, options):
+        async for event in _yield_sdk_events(prompt, options, abort_event=abort_event):
             yield event
 
 
@@ -140,6 +170,7 @@ async def stream_oauth(
     tools = kwargs.pop("tools", None)
     working_dir = kwargs.get("working_dir", ".")
     project_id = kwargs.get("project_id")
+    abort_event = kwargs.get("abort_event")
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
     options, use_streaming_prompt = _build_oauth_options(
         tools, working_dir, project_id, cli_path, model, model_map, system_prompt)
@@ -150,7 +181,11 @@ async def stream_oauth(
     total_content = ""
     got_done = False
     try:
-        async for event in _gated_sdk_events(prompt, options):
+        async for event in _gated_sdk_events(
+            prompt,
+            options,
+            abort_event=abort_event if isinstance(abort_event, asyncio.Event) else None,
+        ):
             if event.type == "content":
                 total_content += event.content or ""
             if event.type == "done":

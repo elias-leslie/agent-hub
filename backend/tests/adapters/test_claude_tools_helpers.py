@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.adapters.claude_tools_helpers import (
+    _ClaudeInternalQuerySession,
     _ClaudeSDKQuerySession,
     _close_internal_query,
     _sdk_query_via_internal_api,
@@ -673,7 +674,7 @@ async def test_claude_sdk_query_session_falls_back_to_public_query_api(
 
     session = _ClaudeSDKQuerySession(
         "hello",
-        types.SimpleNamespace(cli_path="/usr/bin/claude", system_prompt="system"),
+        types.SimpleNamespace(cli_path="/usr/bin/claude", system_prompt="system", cwd="/tmp"),
     )
     await session.start()
     await session.close()
@@ -682,6 +683,40 @@ async def test_claude_sdk_query_session_falls_back_to_public_query_api(
     assert session.internal_session is None
     assert session.message_iter is iterator_holder["iterator"]
     assert iterator_holder["iterator"].closed is True
+
+
+@pytest.mark.asyncio
+async def test_claude_sdk_query_session_interrupt_delegates_to_internal_query(
+) -> None:
+    lifecycle: list[str] = []
+
+    class FakeInternalSession:
+        async def interrupt(self) -> None:
+            lifecycle.append("interrupt")
+
+    session = _ClaudeSDKQuerySession("hello", types.SimpleNamespace())
+    session.internal_session = FakeInternalSession()
+    await session.interrupt()
+
+    assert lifecycle == ["interrupt"]
+
+
+@pytest.mark.asyncio
+async def test_claude_internal_query_session_interrupt_ignores_transport_shutdown_race() -> None:
+    class FakeQuery:
+        async def interrupt(self) -> None:
+            raise RuntimeError("ProcessTransport is not ready for writing")
+
+    session = _ClaudeInternalQuerySession(
+        prompt="hello",
+        options=types.SimpleNamespace(),
+        query_cls=None,
+        parse_message=None,
+        transport=object(),
+        query_obj=FakeQuery(),
+    )
+
+    await session.interrupt()
 
 
 @pytest.mark.asyncio
