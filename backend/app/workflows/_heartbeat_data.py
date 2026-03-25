@@ -102,6 +102,16 @@ class SummitFlowHeartbeatState:
         return raw.strip() if isinstance(raw, str) else ""
 
 
+@dataclass(frozen=True)
+class AgentHubHeartbeatState:
+    """Canonical Agent Hub truth bundle for one heartbeat assembly pass."""
+
+    collected_at: datetime
+    active_sessions: list[dict[str, object]]
+    active_specialist_sessions: list[dict[str, object]]
+    workstream_rows: list[dict[str, object]]
+
+
 def _read_project_index(project_id: str) -> dict[str, object] | None:
     """Read and parse a project's .index.yaml, returning None on failure."""
     index_path = _WORKSPACE_BASE / project_id / ".index.yaml"
@@ -259,6 +269,24 @@ async def _collect_summitflow_heartbeat_state(
         task_overview_response=task_overview_response,
         cleanup_status_response=cleanup_status_response,
         git_status_rows=git_status_rows,
+    )
+
+
+async def _collect_agent_hub_heartbeat_state(
+    target_project_id: str | None = None,
+) -> AgentHubHeartbeatState:
+    """Collect canonical Agent Hub truth once for heartbeat prompt assembly."""
+    collected_at = datetime.now(UTC)
+    active_sessions, active_specialist_sessions, workstream_rows = await asyncio.gather(
+        _query_active_sessions_for_heartbeat(target_project_id, now=collected_at),
+        _query_active_specialist_sessions(target_project_id, now=collected_at),
+        _query_recent_workstream_sessions(target_project_id, now=collected_at),
+    )
+    return AgentHubHeartbeatState(
+        collected_at=collected_at,
+        active_sessions=active_sessions,
+        active_specialist_sessions=active_specialist_sessions,
+        workstream_rows=workstream_rows,
     )
 
 
@@ -455,16 +483,20 @@ def _format_active_session_entry(session: dict[str, object], *, now: datetime) -
     return f"- {' | '.join(parts)}"
 
 
-async def _query_active_sessions(target_project_id: str | None = None) -> tuple[list, datetime]:
+async def _query_active_sessions(
+    target_project_id: str | None = None,
+    *,
+    now: datetime | None = None,
+) -> tuple[list, datetime]:
     """Query active sessions from DB; returns (rows, now)."""
     from sqlalchemy import and_, func, or_, select
 
     from app.db import async_session
     from app.models import Agent, Session, SessionEvent
 
-    now = datetime.now(UTC)
-    cutoff = now - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
-    ghost_cutoff = now - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
+    collected_at = now or datetime.now(UTC)
+    cutoff = collected_at - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
+    ghost_cutoff = collected_at - timedelta(minutes=_ACTIVE_SESSION_GHOST_MINUTES)
     event_count = (
         select(func.count(SessionEvent.id))
         .where(SessionEvent.session_id == Session.id)
@@ -497,7 +529,7 @@ async def _query_active_sessions(target_project_id: str | None = None) -> tuple[
                 .limit(5)
             )
         ).all()
-    return list(rows), now
+    return list(rows), collected_at
 
 
 def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
@@ -522,22 +554,36 @@ def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
 
 async def _query_active_sessions_for_heartbeat(
     target_project_id: str | None = None,
+    *,
+    now: datetime | None = None,
 ) -> list[dict[str, object]]:
     """Query and map active sessions for heartbeat display."""
-    rows, now = await _query_active_sessions(target_project_id)
-    return [_map_active_session_row(r, now=now) for r in rows]
+    rows, collected_at = await _query_active_sessions(target_project_id, now=now)
+    return [_map_active_session_row(r, now=collected_at) for r in rows]
 
 
-async def _fetch_active_sessions_section(target_project_id: str | None = None) -> str:
+async def _fetch_active_sessions_section(
+    target_project_id: str | None = None,
+    *,
+    agent_hub_state: AgentHubHeartbeatState | None = None,
+) -> str:
     """Return a formatted section string for active sessions, or empty string."""
     try:
-        sessions = await _query_active_sessions_for_heartbeat(target_project_id)
+        sessions = (
+            agent_hub_state.active_sessions
+            if agent_hub_state is not None
+            else await _query_active_sessions_for_heartbeat(target_project_id)
+        )
         if not sessions:
             return ""
-        now = datetime.now(UTC)
+        collected_at = (
+            agent_hub_state.collected_at
+            if agent_hub_state is not None
+            else datetime.now(UTC)
+        )
         lines = [f"Active agent sessions: {len(sessions)}"]
         for s in sessions:
-            lines.append(_format_active_session_entry(s, now=now))
+            lines.append(_format_active_session_entry(s, now=collected_at))
         return "\n".join(lines)
     except Exception:
         logger.debug("Failed to fetch active sessions for heartbeat prompt", exc_info=True)
@@ -631,6 +677,8 @@ async def _fetch_recently_completed_sessions_section(target_project_id: str | No
 
 async def _query_active_specialist_sessions(
     target_project_id: str | None = None,
+    *,
+    now: datetime | None = None,
 ) -> list[dict[str, object]]:
     """Query active specialist sessions and return as dicts with age_minutes."""
     from sqlalchemy import and_, select
@@ -638,8 +686,8 @@ async def _query_active_specialist_sessions(
     from app.db import async_session
     from app.models import Session
 
-    now = datetime.now(UTC)
-    cutoff = now - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
+    collected_at = now or datetime.now(UTC)
+    cutoff = collected_at - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
     async with async_session() as db:
         raw_rows = (
             await db.execute(
@@ -668,7 +716,7 @@ async def _query_active_specialist_sessions(
             "parent_session_id": row.parent_session_id,
             "request_source": row.request_source,
             "created_at": row.created_at,
-            "age_minutes": int((now - row.created_at).total_seconds() / 60),
+            "age_minutes": int((collected_at - row.created_at).total_seconds() / 60),
         }
         for row in raw_rows
     ]
@@ -701,10 +749,18 @@ def _format_specialist_group_line(
     return " | ".join(parts)
 
 
-async def _get_active_specialist_inventory(target_project_id: str | None = None) -> str:
+async def _get_active_specialist_inventory(
+    target_project_id: str | None = None,
+    *,
+    agent_hub_state: AgentHubHeartbeatState | None = None,
+) -> str:
     """Build a heartbeat section for active read-only/planning specialist sessions."""
     try:
-        rows = await _query_active_specialist_sessions(target_project_id)
+        rows = (
+            agent_hub_state.active_specialist_sessions
+            if agent_hub_state is not None
+            else await _query_active_specialist_sessions(target_project_id)
+        )
         if not rows:
             return ""
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -821,6 +877,8 @@ def _map_workstream_row(row: object, *, now: datetime) -> dict[str, object]:
 
 async def _query_recent_workstream_sessions(
     target_project_id: str | None = None,
+    *,
+    now: datetime | None = None,
 ) -> list[dict[str, object]]:
     """Query workstream sessions from DB and collapse to deduplicated active rows."""
     from sqlalchemy import and_, or_, select
@@ -828,7 +886,8 @@ async def _query_recent_workstream_sessions(
     from app.db import async_session
     from app.models import Session
 
-    cutoff = datetime.now(UTC) - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+    collected_at = now or datetime.now(UTC)
+    cutoff = collected_at - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
     async with async_session() as db:
         raw_rows = (
             await db.execute(
@@ -848,8 +907,9 @@ async def _query_recent_workstream_sessions(
                 .limit(50)
             )
         ).all()
-    now = datetime.now(UTC)
-    return collapse_active_workstream_rows([_map_workstream_row(r, now=now) for r in raw_rows])
+    return collapse_active_workstream_rows(
+        [_map_workstream_row(r, now=collected_at) for r in raw_rows]
+    )
 
 
 def _parse_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
@@ -1023,6 +1083,7 @@ async def _get_workstream_inventory(
     task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
     heartbeat_state: SummitFlowHeartbeatState | None = None,
+    agent_hub_state: AgentHubHeartbeatState | None = None,
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
@@ -1059,7 +1120,11 @@ async def _get_workstream_inventory(
             visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
             queue_truth_available = bool(task_overview)
 
-        rows = await _query_recent_workstream_sessions(target_project_id)
+        rows = (
+            agent_hub_state.workstream_rows
+            if agent_hub_state is not None
+            else await _query_recent_workstream_sessions(target_project_id)
+        )
         if not rows and not stale_tasks:
             return ""
         grouped = _group_rows_by_lane(rows)
@@ -1088,6 +1153,7 @@ async def _get_active_work_summary(
     task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
     heartbeat_state: SummitFlowHeartbeatState | None = None,
+    agent_hub_state: AgentHubHeartbeatState | None = None,
 ) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
     if task_overview_payload is None and heartbeat_state is not None:
@@ -1108,7 +1174,10 @@ async def _get_active_work_summary(
         if task_overview_payload is not None
         else parse_task_overview_stats(task_overview)
     )
-    sessions_section = await _fetch_active_sessions_section(target_project_id)
+    sessions_section = await _fetch_active_sessions_section(
+        target_project_id,
+        agent_hub_state=agent_hub_state,
+    )
     suppress_completed = not target_project_id and (
         overview_stats.ready > 0 and overview_stats.active == 0 and overview_stats.stale == 0
     )
@@ -1323,6 +1392,7 @@ async def _get_feedback_summary_section() -> str:
 __all__ = [
     "_build_workstream_next_action",
     "_classify_workstream_lane",
+    "_collect_agent_hub_heartbeat_state",
     "_collect_summitflow_heartbeat_state",
     "_fetch_active_sessions_section",
     "_fetch_backup_schedule",
