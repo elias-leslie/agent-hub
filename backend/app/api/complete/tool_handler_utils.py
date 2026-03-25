@@ -135,6 +135,7 @@ class _ExecutionState:
     agent_slug: str | None
     messages_for_adapter: list[Message]
     external_id: str | None = None
+    requires_progress_tags: bool = False
     content_parts: list[str] = field(default_factory=list)
     thinking_parts: list[str] = field(default_factory=list)
     tool_result_summaries: list[str] = field(default_factory=list)
@@ -156,6 +157,9 @@ def _init_execution_state(
     return _ExecutionState(
         agent_slug=agent_slug,
         external_id=external_id,
+        requires_progress_tags=bool(
+            external_id and str(external_id).startswith("task-")
+        ),
         messages_for_adapter=messages_for_adapter,
     )
 
@@ -218,6 +222,7 @@ async def _run_tool_loop(
             ) = await process_tool_event(
                 event, state.event_turn, state.turn, state.awaiting_tool_results, session_id, db, state.content_parts,
                 state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
+                requires_progress_tags=state.requires_progress_tags,
                 tool_use_id_to_name=tool_use_metadata,
                 tool_result_summaries=state.tool_result_summaries,
             )

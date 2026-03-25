@@ -20,11 +20,6 @@ async def test_process_assistant_event_marks_task_session_missing_progress_tags(
 
     with (
         patch(
-            "app.api.complete.tool_event_processor._session_requires_progress_tags",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-        patch(
             "app.api.complete.tool_event_processor._extract_narration_from_text",
             new_callable=AsyncMock,
         ) as mock_extract,
@@ -43,6 +38,7 @@ async def test_process_assistant_event_marks_task_session_missing_progress_tags(
             tracker=tracker,
             model_used="codex/gpt-5.4",
             agent_id="coder",
+            requires_progress_tags=True,
         )
 
     assert tool_calls == 0
@@ -68,11 +64,6 @@ async def test_process_assistant_event_marks_task_session_progress_present() -> 
 
     with (
         patch(
-            "app.api.complete.tool_event_processor._session_requires_progress_tags",
-            new_callable=AsyncMock,
-            return_value=True,
-        ),
-        patch(
             "app.api.complete.tool_event_processor._extract_narration_from_text",
             new_callable=AsyncMock,
         ) as mock_extract,
@@ -91,6 +82,7 @@ async def test_process_assistant_event_marks_task_session_progress_present() -> 
             tracker=tracker,
             model_used="codex/gpt-5.4",
             agent_id="coder",
+            requires_progress_tags=True,
         )
 
     assert tool_calls == 0
@@ -98,4 +90,44 @@ async def test_process_assistant_event_marks_task_session_progress_present() -> 
     assert [call.args[2] for call in mock_health.await_args_list] == [
         "processing_response",
         "progress_tags_present",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_process_assistant_event_skips_progress_tag_health_for_non_task_sessions() -> None:
+    event = SimpleNamespace(
+        message=SimpleNamespace(
+            content=[SimpleNamespace(type="text", text="Investigating the task lane.")]
+        )
+    )
+    db = AsyncMock()
+    tracker = AsyncMock()
+
+    with (
+        patch(
+            "app.api.complete.tool_event_processor._extract_narration_from_text",
+            new_callable=AsyncMock,
+        ) as mock_extract,
+        patch(
+            "app.api.complete.tool_event_processor.update_session_health",
+            new_callable=AsyncMock,
+        ) as mock_health,
+    ):
+        tool_calls = await _process_assistant_event(
+            event,
+            turn=1,
+            session_id="session-3",
+            db=db,
+            content_parts=[],
+            thinking_parts=[],
+            tracker=tracker,
+            model_used="codex/gpt-5.4",
+            agent_id="coder",
+            requires_progress_tags=False,
+        )
+
+    assert tool_calls == 0
+    mock_extract.assert_not_awaited()
+    assert [call.args[2] for call in mock_health.await_args_list] == [
+        "processing_response",
     ]

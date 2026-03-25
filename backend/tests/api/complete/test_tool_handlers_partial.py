@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.api.complete.tool_handler_utils import _ExecutionState, _run_tool_loop
+from app.api.complete.tool_handler_utils import (
+    _ExecutionState,
+    _init_execution_state,
+    _run_tool_loop,
+)
 from app.api.complete.tool_handlers import _execute_and_handle_errors, _store_partial_response
 from app.constants.models import CLAUDE_SONNET
 
@@ -18,6 +22,19 @@ def _mock_session() -> MagicMock:
     session = MagicMock()
     session.status = "active"
     return session
+
+
+def test_init_execution_state_marks_task_sessions_for_progress_tags() -> None:
+    session = MagicMock(agent_slug="coder", external_id="task-1234")
+
+    state = _init_execution_state(
+        session,
+        messages=[{"role": "user", "content": "Inspect the tool loop."}],
+    )
+
+    assert state.agent_slug == "coder"
+    assert state.external_id == "task-1234"
+    assert state.requires_progress_tags is True
 
 
 class TestStorePartialResponse:
