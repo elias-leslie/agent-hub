@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.adapters.base import ProviderError
-from app.api.complete.claude_event_adapter import adapt_claude_message, adapt_claude_stream
+from app.adapters.claude_tool_events import adapt_claude_message, adapt_claude_stream
 
 
 class ResultMessage:

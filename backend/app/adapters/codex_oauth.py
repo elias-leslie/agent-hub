@@ -512,6 +512,36 @@ class CodexOAuthAdapter(ProviderAdapter):
 
         yield StreamEvent(type="done", finish_reason="max_turns")
 
+    def complete_with_tool_events(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        working_dir: str | None,
+        permission_config: dict[str, Any] | None,
+        max_turns: int,
+        project_id: str | None,
+        session_id: str,
+        agent_slug: str | None,
+        tool_catalog: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[tuple[Any, str]]:
+        """Return canonical ToolEvents for the shared tool execution pipeline."""
+        from app.adapters.openai_tool_events import adapt_openai_stream
+
+        return adapt_openai_stream(
+            self,
+            messages,
+            model,
+            tools,
+            working_dir,
+            permission_config,
+            max_turns,
+            project_id,
+            session_id,
+            agent_slug=agent_slug,
+            tool_catalog=tool_catalog,
+        )
+
     async def health_check(self) -> bool:
         """Check if Codex credentials are valid (zero tokens consumed)."""
         try:

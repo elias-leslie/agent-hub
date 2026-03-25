@@ -1,9 +1,8 @@
-"""Adapt OpenAI-compatible adapter tool calling to unified ToolEvent format.
+"""Canonical ToolEvent adaptation for StreamEvent-based providers.
 
-OpenAI-compat adapters' complete_with_tools() yields StreamEvent objects
-and requires a tool_handler callback. This module bridges the gap by:
-1. Creating a tool_handler from the DirectToolExecutor
-2. Converting yielded StreamEvents to ToolEvent objects
+OpenAI-compatible adapters and the Codex adapter already expose tool-capable
+turns as StreamEvent sequences. This module converts those streams into the
+canonical ToolEvent format used by the shared tool execution pipeline.
 """
 
 from __future__ import annotations
@@ -20,14 +19,7 @@ def adapt_stream_event(
     event: StreamEvent,
     tool_start_times: dict[str, float] | None = None,
 ) -> ToolEvent | None:
-    """Convert a single StreamEvent to a ToolEvent.
-
-    Args:
-        event: StreamEvent from OpenAI-compat adapter
-
-    Returns:
-        ToolEvent or None if the event type is not relevant
-    """
+    """Convert a single StreamEvent to a ToolEvent."""
     timing_state = tool_start_times if tool_start_times is not None else {}
 
     if event.type == "tool_use":
@@ -74,7 +66,7 @@ def adapt_stream_event(
         return ToolEvent(
             type="result",
             subtype="success",
-            result="",  # Content already yielded via "content" events
+            result="",
             finish_reason=getattr(event, "finish_reason", None),
         )
 
@@ -95,11 +87,7 @@ def create_tool_handler(
     agent_slug: str | None = None,
     tool_catalog: list[dict[str, Any]] | None = None,
 ) -> Any:
-    """Create an async tool_handler callback for OpenAI-compat adapters.
-
-    Returns an async function with signature ``(tool_name, tool_input) -> str``
-    that uses DirectToolExecutor for tool execution.
-    """
+    """Create an async tool_handler callback for StreamEvent-based providers."""
     from app.services.tools.base import ToolCall
     from app.services.tools.tool_handler import create_direct_handler
 
@@ -113,7 +101,11 @@ def create_tool_handler(
     )
 
     async def tool_handler(tool_name: str, tool_input: dict[str, Any]) -> str:
-        tool_call = ToolCall(id=f"openai_{tool_name}_{id(tool_input)}", name=tool_name, input=tool_input)
+        tool_call = ToolCall(
+            id=f"openai_{tool_name}_{id(tool_input)}",
+            name=tool_name,
+            input=tool_input,
+        )
         result = await handler.execute(tool_call)
         return result.content
 
@@ -133,21 +125,7 @@ async def adapt_openai_stream(
     agent_slug: str | None = None,
     tool_catalog: list[dict[str, Any]] | None = None,
 ) -> AsyncIterator[tuple[ToolEvent, str]]:
-    """Run an OpenAI-compat adapter's complete_with_tools and yield ToolEvents.
-
-    Args:
-        adapter: OpenAI-compatible adapter instance
-        messages: Conversation messages
-        model: Model identifier
-        tools: Tool definitions
-        working_dir: Working directory for tool execution
-        permission_config: Permission configuration
-        max_turns: Maximum tool execution turns
-        project_id: Project ID for agent consultation
-
-    Yields:
-        (ToolEvent, session_id) tuples (session_id is empty for OpenAI-compat)
-    """
+    """Run a StreamEvent-based provider's complete_with_tools and yield ToolEvents."""
     handler = create_tool_handler(
         working_dir,
         permission_config,

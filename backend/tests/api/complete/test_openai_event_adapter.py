@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from unittest.mock import patch
 
+from app.adapters.openai_tool_events import adapt_stream_event
 from app.adapters.types import StreamEvent
-from app.api.complete.openai_event_adapter import adapt_stream_event
 
 
 class TestAdaptStreamEvent:
@@ -40,7 +40,7 @@ class TestAdaptStreamEvent:
         tool_start_times: dict[str, float] = {}
         # Mock time.monotonic to control timing: first call returns 0.0 for start time,
         # second call returns 0.1 for end time, ensuring deterministic 100ms duration
-        with patch("app.api.complete.openai_event_adapter.time.monotonic") as mock_monotonic:
+        with patch("app.adapters.openai_tool_events.time.monotonic") as mock_monotonic:
             mock_monotonic.side_effect = [0.0, 0.1]  # Start at 0.0, then return 0.1 (100ms later)
             tool_start_times["tc_2"] = mock_monotonic()  # Use mocked value for start time
             event = StreamEvent(type="tool_result", tool_id="tc_2", content="file contents")
