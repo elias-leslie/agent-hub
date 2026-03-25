@@ -120,7 +120,7 @@ export default function PromptEditPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -128,7 +128,7 @@ export default function PromptEditPage() {
 
   if (error || !prompt) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-10 w-10 text-red-500 mx-auto mb-3" />
           <p className="text-sm text-slate-400">

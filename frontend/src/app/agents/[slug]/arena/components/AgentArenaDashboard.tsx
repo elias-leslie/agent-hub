@@ -41,7 +41,7 @@ function SkeletonBlock({ className }: { className: string }) {
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
       <div className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
         <div className="px-6 lg:px-8 py-3">
@@ -266,7 +266,7 @@ export function AgentArenaDashboard({
   if (error) {
     const errorMessage = error instanceof Error ? error.message : "Failed to load Arena";
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+      <div className="flex min-h-screen items-center justify-center px-6">
         <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
         <div className="relative max-w-md rounded-2xl border border-rose-900 bg-slate-900/90 p-8 text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
@@ -279,7 +279,7 @@ export function AgentArenaDashboard({
 
   if (!agent) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
         <div className="relative text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
@@ -290,7 +290,7 @@ export function AgentArenaDashboard({
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
 
       <ArenaHeader
