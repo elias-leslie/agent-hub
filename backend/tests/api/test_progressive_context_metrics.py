@@ -11,7 +11,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.memory_agent_context_builder import build_progressive_context_with_variant
+from app.api.memory_agent_context_builder import (
+    build_progressive_context_with_variant,
+    format_context_with_continuity,
+)
 from app.api.memory_agent_handlers import build_progressive_context_response
 from app.services.memory.context_builder import ProgressiveContext
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
@@ -242,3 +245,64 @@ async def test_build_progressive_context_with_variant_uses_active_variant_settin
         active_variant="ENHANCED",
     )
     assert mock_build.await_args.kwargs["variant"] == "ENHANCED"
+
+
+@pytest.mark.asyncio
+async def test_format_context_with_continuity_prefixes_startup_prompt_for_codex() -> None:
+    ctx = ProgressiveContext(total_tokens=0)
+
+    with (
+        patch(
+            "app.services.memory.context_injector.format_progressive_context",
+            return_value="## Mandates\n- [M:12345678] Use dt",
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.build_startup_prompt_markdown",
+            new=AsyncMock(return_value="## Progress Tags [[P:type:content]]"),
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.build_continuity_markdown",
+            new=AsyncMock(return_value=""),
+        ),
+    ):
+        result = await format_context_with_continuity(
+            context=ctx,
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            current_branch=None,
+            session_id=None,
+            consumer_profile="codex_startup",
+        )
+
+    assert result.startswith("## Progress Tags [[P:type:content]]")
+    assert result.endswith("## Mandates\n- [M:12345678] Use dt")
+
+
+@pytest.mark.asyncio
+async def test_format_context_with_continuity_does_not_prefix_startup_prompt_for_agent_runtime() -> None:
+    ctx = ProgressiveContext(total_tokens=0)
+
+    with (
+        patch(
+            "app.services.memory.context_injector.format_progressive_context",
+            return_value="## Mandates\n- [M:12345678] Use dt",
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.build_startup_prompt_markdown",
+            new=AsyncMock(return_value=""),
+        ),
+        patch(
+            "app.api.memory_agent_context_builder.build_continuity_markdown",
+            new=AsyncMock(return_value=""),
+        ),
+    ):
+        result = await format_context_with_continuity(
+            context=ctx,
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            current_branch=None,
+            session_id=None,
+            consumer_profile="agent_runtime",
+        )
+
+    assert result == "## Mandates\n- [M:12345678] Use dt"

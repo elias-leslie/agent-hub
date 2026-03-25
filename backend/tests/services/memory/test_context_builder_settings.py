@@ -136,6 +136,7 @@ def test_format_progressive_context_omits_mandate_line_for_reference_only_contex
 
     assert "Mandates/Guardrails below are authoritative" not in rendered
     assert "## Selected References" in rendered
+    assert "Summarize your work:" not in rendered
 
 
 def test_format_progressive_context_includes_mandate_line_when_present() -> None:
@@ -158,3 +159,4 @@ def test_format_progressive_context_includes_mandate_line_when_present() -> None
 
     assert "Mandates/Guardrails below are authoritative" in rendered
     assert "Applied: [M:uuid8] or [G:uuid8]" in rendered
+    assert "Summarize your work:" not in rendered

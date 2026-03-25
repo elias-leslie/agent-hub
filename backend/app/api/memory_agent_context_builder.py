@@ -3,10 +3,13 @@
 import logging
 import time
 
+from app.db import async_session
 from app.services.memory.context_injector import ProgressiveContext, build_progressive_context
+from app.services.memory.context_profiles import startup_prompt_slugs_for_profile
 from app.services.memory.service import MemoryScope
 from app.services.memory.settings import get_memory_settings
 from app.services.memory.variants import assign_variant
+from app.services.prompt_service import get_prompt_by_slug
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +112,9 @@ async def format_context_with_continuity(
         include_citations=True,
         consumer_profile=consumer_profile,
     )
+    startup_prompt_md = await build_startup_prompt_markdown(consumer_profile)
+    if startup_prompt_md:
+        formatted = f"{startup_prompt_md}\n\n{formatted}" if formatted else startup_prompt_md
 
     continuity_md = await build_continuity_markdown(
         scope, scope_id, current_branch, session_id=session_id,
@@ -117,6 +123,21 @@ async def format_context_with_continuity(
         formatted = continuity_md + formatted
 
     return formatted
+
+
+async def build_startup_prompt_markdown(consumer_profile: str | None) -> str:
+    """Load DB-backed startup prompt content for wrapper startup profiles."""
+    prompt_slugs = startup_prompt_slugs_for_profile(consumer_profile)
+    if not prompt_slugs:
+        return ""
+
+    sections: list[str] = []
+    async with async_session() as db:
+        for slug in prompt_slugs:
+            prompt = await get_prompt_by_slug(db, slug)
+            if prompt and prompt.enabled and prompt.content.strip():
+                sections.append(prompt.content.strip())
+    return "\n\n".join(sections)
 
 
 async def track_and_record_metrics(
