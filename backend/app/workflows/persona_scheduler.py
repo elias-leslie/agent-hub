@@ -19,8 +19,20 @@ from app.hatchet_app import hatchet
 
 logger = logging.getLogger(__name__)
 
+# Project / memory constants
 SCHEDULER_PROJECT = "agent-hub"
 SCHEDULER_MEMORY_GROUP = "agent-hub:scheduler"
+
+# Payload type constants
+PAYLOAD_TYPE_AGENT_TURN = "agent_turn"
+PAYLOAD_TYPE_PUSH = "push"
+PAYLOAD_TYPE_SELF_HONING = "self_honing"
+
+# Misc string constants
+DELIVERY_PUSH = "push"
+PERMISSION_TIER_OFF = "off"
+
+# Self-honing configuration
 _SELF_HONING_AGENT_SLUGS = frozenset({"persona", "supervisor"})
 _SELF_HONING_ROOT = Path(__file__).resolve().parents[2] / ".tmp" / "persona-scheduled-honing"
 _SELF_HONING_TIMEOUT_SECONDS: float | None = None
@@ -32,16 +44,16 @@ _SELF_HONING_COHORT_REPETITIONS = 2
 
 async def query_active_sessions(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
     """Lazily import active-session lookup for patchable scheduler tests."""
-    from app.services.memory.continuity_query import query_active_sessions as _query_active_sessions
+    from app.services.memory.continuity_query import query_active_sessions as _impl
 
-    return await _query_active_sessions(*args, **kwargs)
+    return await _impl(*args, **kwargs)
 
 
 async def run_honing_loop(*args: Any, **kwargs: Any) -> dict[str, Any]:
     """Lazily import the honing loop so tests can patch the scheduler seam."""
-    from scripts.run_persona_honing_loop import run_honing_loop as _run_honing_loop
+    from scripts.run_persona_honing_loop import run_honing_loop as _impl
 
-    return await _run_honing_loop(*args, **kwargs)
+    return await _impl(*args, **kwargs)
 
 
 class SchedulerResult(BaseModel):
@@ -70,38 +82,31 @@ def compute_next_run(
     now = datetime.now(UTC)
 
     if schedule_type == "at":
-        # One-shot — parse ISO datetime
         target = datetime.fromisoformat(schedule_value)
         if target.tzinfo is None:
             target = target.replace(tzinfo=UTC)
         return target if target > now else None
 
     if schedule_type == "every":
-        # Interval in milliseconds
-        interval_ms = int(schedule_value)
-        interval = timedelta(milliseconds=interval_ms)
+        interval = timedelta(milliseconds=int(schedule_value))
         base = last_run_at if last_run_at else now
         next_time = base + interval
-        # If next_time is in the past (e.g., after long downtime), snap to now + interval
         if next_time <= now:
             next_time = now + interval
         return next_time
 
     if schedule_type == "cron":
+        import zoneinfo
+
         from croniter import croniter
 
         try:
-            import zoneinfo
             tz = zoneinfo.ZoneInfo(timezone)
         except Exception:
             logger.debug("Invalid timezone %r, falling back to UTC", timezone, exc_info=True)
-            import zoneinfo
             tz = zoneinfo.ZoneInfo("UTC")
-
         base = (last_run_at or now).astimezone(tz)
-        cron = croniter(schedule_value, base)
-        next_time = cron.get_next(datetime)
-        return next_time.astimezone(UTC)
+        return croniter(schedule_value, base).get_next(datetime).astimezone(UTC)
 
     return None
 
@@ -116,10 +121,9 @@ async def _execute_agent_turn(job: Any) -> str:
     from app.services.agent_service import get_agent_service
     from app.services.project_permission_service import get_project_permission
 
-    # Check project permission — skip if tier is "off"
     async with async_session() as perm_db:
         perm = await get_project_permission(perm_db, SCHEDULER_PROJECT)
-        if perm and perm.permission_tier == "off":
+        if perm and perm.permission_tier == PERMISSION_TIER_OFF:
             return "Skipped: project permission tier is off"
 
     async with async_session() as db:
@@ -128,21 +132,19 @@ async def _execute_agent_turn(job: Any) -> str:
         if not agent:
             return "Error: persona agent not found"
 
+        from app.services.persona_service import get_persona
+
         provider = get_provider_for_model(agent.primary_model_id)
         mandate = await inject_agent_mandates(
             agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT, task_type="scheduled_job"
         )
+        persona = await get_persona(db)
+        max_turns = get_persona_limit(persona, "max_turns")
 
         messages: list[dict[str, Any]] = []
         if mandate.system_content:
             messages.append({"role": "system", "content": mandate.system_content})
         messages.append({"role": "user", "content": job.payload_message})
-
-        # Get configurable max_turns from persona
-        from app.services.persona_service import get_persona
-
-        persona = await get_persona(db)
-        max_turns = get_persona_limit(persona, "max_turns")
 
         result = await complete_internal(
             messages=messages,
@@ -175,16 +177,12 @@ async def _execute_push(job: Any) -> str:
         "title": job.payload_title or job.name,
         "body": job.payload_message,
     }
-
     async with async_session() as db:
         sent = await send_push(db, payload=payload)
-
     return f"Push sent to {sent} device(s)"
 
 
-def _scheduled_self_honing_paths(
-    now: datetime | None = None,
-) -> tuple[Path, Path, Path]:
+def _scheduled_self_honing_paths(now: datetime | None = None) -> tuple[Path, Path, Path]:
     timestamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
     run_root = _SELF_HONING_ROOT / timestamp
     return run_root / "work", run_root / "reports", run_root / "result.json"
@@ -210,12 +208,7 @@ async def _active_self_honing_conflicts() -> list[dict[str, Any]]:
 
     async with async_session() as db:
         sessions = await query_active_sessions(db, max_entries=20)
-
-    return [
-        session
-        for session in sessions
-        if str(session.get("agent_slug") or "") in _SELF_HONING_AGENT_SLUGS
-    ]
+    return [s for s in sessions if str(s.get("agent_slug") or "") in _SELF_HONING_AGENT_SLUGS]
 
 
 async def _execute_self_honing(job: Any) -> str:
@@ -270,6 +263,44 @@ async def _execute_self_honing(job: Any) -> str:
     )
 
 
+async def _execute_job(job: Any) -> str:
+    """Dispatch to the correct executor based on payload type."""
+    if job.payload_type == PAYLOAD_TYPE_PUSH:
+        return await _execute_push(job)
+    if job.payload_type == PAYLOAD_TYPE_SELF_HONING:
+        return await _execute_self_honing(job)
+    return await _execute_agent_turn(job)
+
+
+async def _maybe_send_delivery_push(job: Any, output: str) -> None:
+    """Send a post-execution push notification if the job is configured for it."""
+    if job.delivery != DELIVERY_PUSH or job.payload_type != PAYLOAD_TYPE_AGENT_TURN:
+        return
+    try:
+        from app.db import async_session
+        from app.services.push_service import send_push
+
+        async with async_session() as push_db:
+            await send_push(push_db, payload={
+                "title": f"Scheduled: {job.name}",
+                "body": output[:200],
+                "tag": f"scheduled:{job.id}",
+            })
+    except Exception:
+        logger.debug("Delivery push failed for job %s", job.id)
+
+
+def _update_job_state(job: Any, now: datetime) -> None:
+    """Update run tracking fields and compute the next scheduled run time."""
+    job.last_run_at = now
+    job.run_count += 1
+    job.next_run_at = compute_next_run(
+        job.schedule_type, job.schedule_value, job.schedule_timezone, now
+    )
+    if job.max_runs is not None and job.run_count >= job.max_runs:
+        job.enabled = False
+
+
 @hatchet.task(
     name="persona-scheduler",
     input_validator=BaseModel,
@@ -307,44 +338,11 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
 
         for job in jobs:
             try:
-                if job.payload_type == "push":
-                    output = await _execute_push(job)
-                elif job.payload_type == "self_honing":
-                    output = await _execute_self_honing(job)
-                else:
-                    output = await _execute_agent_turn(job)
-
-                # Delivery notification
-                if job.delivery == "push" and job.payload_type == "agent_turn":
-                    try:
-                        from app.services.push_service import send_push
-
-                        async with async_session() as push_db:
-                            await send_push(push_db, payload={
-                                "title": f"Scheduled: {job.name}",
-                                "body": output[:200],
-                                "tag": f"scheduled:{job.id}",
-                            })
-                    except Exception:
-                        logger.debug("Delivery push failed for job %s", job.id)
-
-                job.last_run_at = now
-                job.run_count += 1
-
-                # Compute next run
-                next_run = compute_next_run(
-                    job.schedule_type, job.schedule_value,
-                    job.schedule_timezone, job.last_run_at,
-                )
-                job.next_run_at = next_run
-
-                # Auto-disable completed one-shots or max-run jobs
-                if job.max_runs is not None and job.run_count >= job.max_runs:
-                    job.enabled = False
-
+                output = await _execute_job(job)
+                await _maybe_send_delivery_push(job, output)
+                _update_job_state(job, now)
                 executed += 1
                 logger.info("Scheduled job %s (%s) executed", job.name, job.id)
-
             except Exception as e:
                 logger.exception("Scheduled job %s failed", job.id)
                 errors.append(f"{job.name}: {e}")

@@ -122,13 +122,17 @@ async def test_get_agent_details_includes_memory_config() -> None:
         version=4,
         memory_config={
             "injection_enabled": True,
+            "project_index_enabled": True,
+            "tool_capabilities_enabled": True,
             "include_mandates": True,
             "include_guardrails": True,
             "include_references": True,
+            "reference_index_enabled": True,
             "continuity_enabled": True,
             "continuity_max_sessions": 5,
             "audience_tags": ["debugger-relevant"],
             "exclude_tags": [],
+            "exclude_memory_uuids": [],
         },
     )
 
@@ -187,14 +191,18 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
     assert kwargs["changed_by"] == "persona"
     assert kwargs["memory_config"] == {
         "injection_enabled": True,
+        "project_index_enabled": True,
+        "tool_capabilities_enabled": True,
         "include_mandates": True,
         "include_guardrails": True,
         "include_references": True,
+        "reference_index_enabled": True,
         "continuity_enabled": True,
         "continuity_max_sessions": 5,
         "query_reference_selection_enabled": True,
         "audience_tags": ["persona-relevant", "memory-routing"],
         "exclude_tags": ["archive"],
+        "exclude_memory_uuids": [],
     }
 
 
@@ -237,13 +245,17 @@ async def test_update_agent_memory_canonicalizes_disabled_injection_state() -> N
         id="agent-1",
         memory_config={
             "injection_enabled": True,
+            "project_index_enabled": True,
+            "tool_capabilities_enabled": True,
             "include_mandates": True,
             "include_guardrails": True,
             "include_references": True,
+            "reference_index_enabled": True,
             "continuity_enabled": True,
             "continuity_max_sessions": 5,
             "audience_tags": [],
             "exclude_tags": [],
+            "exclude_memory_uuids": [],
         },
     )
     updated = SimpleNamespace(version=10)
@@ -272,11 +284,15 @@ async def test_update_agent_memory_canonicalizes_disabled_injection_state() -> N
     kwargs = service.update.await_args.kwargs
     assert kwargs["memory_config"] == {
         "injection_enabled": False,
+        "project_index_enabled": True,
+        "tool_capabilities_enabled": True,
         "include_mandates": False,
         "include_guardrails": False,
         "include_references": False,
+        "reference_index_enabled": False,
         "continuity_enabled": False,
         "continuity_max_sessions": 5,
         "audience_tags": [],
         "exclude_tags": [],
+        "exclude_memory_uuids": [],
     }

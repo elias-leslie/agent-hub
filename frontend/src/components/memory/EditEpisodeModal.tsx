@@ -24,6 +24,12 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
     setPinned,
     summary,
     setSummary,
+    contextKind,
+    setContextKind,
+    applicability,
+    setApplicability,
+    triggerPhases,
+    setTriggerPhases,
     isSaving,
     error,
     hasChanges,
@@ -38,7 +44,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl mx-4 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
+      <div className="relative w-full max-w-3xl mx-4 rounded-xl bg-slate-900 shadow-2xl border border-slate-800">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -72,6 +78,12 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
             onPinnedChange={setPinned}
             content={content}
             onContentChange={setContent}
+            contextKind={contextKind}
+            onContextKindChange={setContextKind}
+            applicability={applicability}
+            onApplicabilityChange={setApplicability}
+            triggerPhases={triggerPhases}
+            onTriggerPhasesChange={setTriggerPhases}
             episodeUuid={episode.uuid}
             disabled={isSaving}
           />

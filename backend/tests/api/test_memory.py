@@ -1,5 +1,6 @@
 """Tests for memory API endpoints."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -236,6 +237,65 @@ class TestSaveLearningEndpoint:
         assert body["error"] == "validation_error"
         assert "bold topic header" in body["message"].lower()
         assert "FORMAT_STANDARD" in body["hint"]
+
+    @pytest.mark.asyncio
+    async def test_save_learning_persists_context_routing_fields(self, client: AsyncClient):
+        """Valid save-learning requests should persist routing metadata on the created memory."""
+        creator = SimpleNamespace(
+            create=AsyncMock(
+                return_value=SimpleNamespace(
+                    success=True,
+                    uuid="a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                    validation_error=None,
+                )
+            )
+        )
+
+        with (
+            patch("app.api.memory_agent_learning_saver.check_duplicate", new=AsyncMock(return_value=None)),
+            patch("app.services.memory.episode_creator.get_episode_creator", return_value=creator),
+            patch("app.api.memory_agent_learning_saver.set_episode_properties", new=AsyncMock()) as mock_set_properties,
+        ):
+            response = await client.post(
+                "/api/memory/save-learning",
+                json={
+                    "content": "**Reference Targeting**: Use applicability rules to scope reference memories to the agents that need them.",
+                    "summary": "Scope references",
+                    "injection_tier": "reference",
+                    "pinned": True,
+                    "trigger_task_types": ["backend"],
+                    "trigger_phases": ["implementation", "verification"],
+                    "context_kind": "capability",
+                    "applicability": {
+                        "consumer_profiles": ["codex_startup"],
+                        "exclude_consumer_profiles": ["agent_runtime"],
+                        "agent_slugs": ["jenny"],
+                        "exclude_agent_slugs": ["formatter"],
+                        "audience_tags": ["operator-tooling"],
+                        "exclude_audience_tags": ["narrow-output"],
+                    },
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["uuid"] == "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        mock_set_properties.assert_awaited_once_with(
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            True,
+            ["backend"],
+            ["implementation", "verification"],
+            "capability",
+            {
+                "consumer_profiles": ["codex_startup"],
+                "exclude_consumer_profiles": ["agent_runtime"],
+                "agent_slugs": ["jenny"],
+                "exclude_agent_slugs": ["formatter"],
+                "audience_tags": ["operator-tooling"],
+                "exclude_audience_tags": ["narrow-output"],
+            },
+            change_reason="Learning properties updated",
+        )
 
 
 class TestBulkDeleteEndpoint:

@@ -22,6 +22,13 @@ from typing import Any
 from app.services.memory.memory_utils import resolve_uuid_prefix
 from app.services.memory.repository import get_memory_repository
 
+from .applicability import (
+    normalize_applicability,
+    normalize_context_kind,
+    normalize_trigger_phases,
+    normalize_trigger_task_types,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,9 +136,10 @@ async def set_episode_trigger_task_types(
     change_reason: str | None = None,
 ) -> bool:
     """Set trigger_task_types on a memory record."""
+    normalized = normalize_trigger_task_types(trigger_task_types)
     return await _set_episode_property(
-        episode_uuid, "trigger_task_types", trigger_task_types,
-        f"set trigger_task_types={trigger_task_types}",
+        episode_uuid, "trigger_task_types", normalized,
+        f"set trigger_task_types={normalized}",
         change_reason=change_reason,
     )
 
@@ -143,9 +151,10 @@ async def set_episode_trigger_phases(
     change_reason: str | None = None,
 ) -> bool:
     """Set trigger_phases on a memory record."""
+    normalized = normalize_trigger_phases(trigger_phases)
     return await _set_episode_property(
-        episode_uuid, "trigger_phases", trigger_phases,
-        f"set trigger_phases={trigger_phases}",
+        episode_uuid, "trigger_phases", normalized,
+        f"set trigger_phases={normalized}",
         change_reason=change_reason,
     )
 
@@ -160,6 +169,40 @@ async def set_episode_tags(
     return await _set_episode_property(
         episode_uuid, "tags", tags,
         f"set tags={tags}",
+        change_reason=change_reason,
+    )
+
+
+async def set_episode_context_kind(
+    episode_uuid: str,
+    context_kind: str,
+    *,
+    change_reason: str | None = None,
+) -> bool:
+    """Set context_kind on a memory record."""
+    normalized = normalize_context_kind(context_kind).value
+    return await _set_episode_property(
+        episode_uuid,
+        "context_kind",
+        normalized,
+        f"set context_kind={normalized}",
+        change_reason=change_reason,
+    )
+
+
+async def set_episode_applicability(
+    episode_uuid: str,
+    applicability: dict[str, Any],
+    *,
+    change_reason: str | None = None,
+) -> bool:
+    """Set applicability on a memory record."""
+    normalized = normalize_applicability(applicability).model_dump()
+    return await _set_episode_property(
+        episode_uuid,
+        "applicability",
+        normalized,
+        "set applicability",
         change_reason=change_reason,
     )
 

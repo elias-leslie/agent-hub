@@ -174,13 +174,19 @@ async def get_query_relevant_references(
             )
 
     ranked: dict[str, tuple[float, dict[str, Any]]] = {}
-    for scope, scope_id in scopes_to_query:
-        group_id = build_group_id(scope, scope_id)
+
+    # Parallelize per-scope queries with asyncio.gather
+    import asyncio
+
+    async def _fetch_scope(
+        scope: MemoryScope, scope_id: str | None
+    ) -> list[tuple[MemoryScope, dict[str, Any]]]:
+        gid = build_group_id(scope, scope_id)
         semantic_rows: list[dict[str, Any]] = []
         if query_embedding is not None:
             semantic_rows = await repo.semantic_search(
                 query_embedding,
-                group_id=group_id,
+                group_id=gid,
                 tier=TIER_MAP["reference"],
                 limit=_REFERENCE_SEARCH_LIMIT,
                 min_score=_REFERENCE_MIN_SCORE,
@@ -189,13 +195,19 @@ async def get_query_relevant_references(
             MemoryRepository._to_dict(mem)
             for mem in await repo.text_search(
                 query,
-                group_id=group_id,
+                group_id=gid,
                 category="reference",
                 limit=_REFERENCE_SEARCH_LIMIT,
             )
         ]
+        return [(scope, row) for row in [*semantic_rows, *text_rows]]
 
-        for row in [*semantic_rows, *text_rows]:
+    scope_results = await asyncio.gather(
+        *(_fetch_scope(scope, scope_id) for scope, scope_id in scopes_to_query)
+    )
+
+    for scope_rows in scope_results:
+        for scope, row in scope_rows:
             uuid = str(row.get("id") or row.get("uuid") or "")
             if not uuid or not _is_reference_candidate(row):
                 continue

@@ -19,6 +19,8 @@ CHARS_PER_TOKEN = 4
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
 REFERENCE_DIRECTIVE = "## Selected References"
+REFERENCE_INDEX_DIRECTIVE = "## Reference Index"
+CAPABILITY_INDEX_DIRECTIVE = "## Capability Index"
 
 
 def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:
@@ -36,25 +38,32 @@ def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:
     mandate_chars = sum(len(get_rendered_content(r)) for r in context.mandates)
     guardrail_chars = sum(len(get_rendered_content(r)) for r in context.guardrails)
     reference_chars = sum(len(get_rendered_content(r)) for r in context.reference)
+    reference_index_chars = sum(len(get_rendered_content(r)) for r in context.reference_index)
 
     # Add overhead for formatting (headers, bullets, newlines)
     format_overhead = (
         len(MANDATE_DIRECTIVE) + len(context.mandates) * 3 if context.mandates else 0
     ) + (len(GUARDRAIL_DIRECTIVE) + len(context.guardrails) * 3 if context.guardrails else 0) + (
         len(REFERENCE_DIRECTIVE) + len(context.reference) * 3 if context.reference else 0
+    ) + (
+        len(REFERENCE_INDEX_DIRECTIVE) + len(context.reference_index) * 3
+        if context.reference_index
+        else 0
     )
 
     return {
         "mandates_tokens": mandate_chars // CHARS_PER_TOKEN,
         "guardrails_tokens": guardrail_chars // CHARS_PER_TOKEN,
         "reference_tokens": reference_chars // CHARS_PER_TOKEN,
+        "reference_index_tokens": reference_index_chars // CHARS_PER_TOKEN,
         "format_overhead_tokens": format_overhead // CHARS_PER_TOKEN,
         "total_tokens": (
-            mandate_chars + guardrail_chars + reference_chars + format_overhead
+            mandate_chars + guardrail_chars + reference_chars + reference_index_chars + format_overhead
         ) // CHARS_PER_TOKEN,
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
         "reference_count": len(context.reference),
+        "reference_index_count": len(context.reference_index),
     }
 
 
@@ -83,6 +92,7 @@ def get_relevance_debug_info(context: ProgressiveContext) -> dict[str, Any]:
     return {
         "mandates": [_format_item(r) for r in context.mandates],
         "guardrails": [_format_item(r) for r in context.guardrails],
+        "reference_index": [_format_item(r) for r in context.reference_index],
         "reference": [_format_item(r) for r in context.reference],
         "stats": get_context_token_stats(context),
         "query": context.debug_info.get("query", ""),
@@ -109,7 +119,8 @@ def format_relevance_debug_block(context: ProgressiveContext) -> str:
     lines.append(
         "Tokens: "
         f"{stats['total_tokens']} "
-        f"(M:{stats['mandates_tokens']} G:{stats['guardrails_tokens']} R:{stats['reference_tokens']})"
+        f"(M:{stats['mandates_tokens']} G:{stats['guardrails_tokens']} "
+        f"R:{stats['reference_tokens']} I:{stats['reference_index_tokens']})"
     )
     lines.append("")
 
@@ -123,12 +134,22 @@ def format_relevance_debug_block(context: ProgressiveContext) -> str:
         for g in debug["guardrails"]:
             lines.append(f"  [{g['id']}] score={g['score']}: {g['snippet']}")
 
+    if debug["reference_index"]:
+        lines.append("REFERENCE INDEX:")
+        for r in debug["reference_index"]:
+            lines.append(f"  [{r['id']}] score={r['score']}: {r['snippet']}")
+
     if debug["reference"]:
         lines.append("REFERENCES:")
         for r in debug["reference"]:
             lines.append(f"  [{r['id']}] score={r['score']}: {r['snippet']}")
 
-    if not (debug["mandates"] or debug["guardrails"] or debug["reference"]):
+    if not (
+        debug["mandates"]
+        or debug["guardrails"]
+        or debug["reference_index"]
+        or debug["reference"]
+    ):
         lines.append("No memories matched query")
 
     lines.append("</memory-debug>")

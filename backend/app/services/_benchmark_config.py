@@ -13,6 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import async_session
 from app.models import Agent, Memory, MemoryRevision, Persona, Prompt
 from app.services.agent_crud import get_agent_by_slug
+from app.services.memory.context_builder_settings import (
+    default_agent_memory_config,
+    normalize_memory_config,
+)
+from app.services.memory.governance import collect_memory_governance_snapshot
+from app.services.memory.project_index_context import format_project_index_context
+from app.services.memory.tool_capability_context import format_tool_capability_context
 from app.services.prompt_catalog import (
     COMPLETION_REVIEW_PROMPT_SLUG,
     COMPLETION_REVIEW_RULES_PROMPT_SLUG,
@@ -99,6 +106,67 @@ def _task_prompt_slugs(task_type: str | None) -> list[str]:
 
 def _content_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
+
+
+def _effective_memory_config_for_agent(agent: Agent) -> dict[str, Any]:
+    return normalize_memory_config(getattr(agent, "memory_config", None)) or default_agent_memory_config()
+
+
+def _descriptor_for_generated_channel(channel: str, content: str) -> str | None:
+    if not content:
+        return None
+    return f"generated:{channel}:{_content_hash(content)}"
+
+
+def _capture_generated_context(
+    agent: Agent,
+    *,
+    task_type: str | None,
+    project_id: str | None = None,
+) -> dict[str, Any]:
+    memory_config = _effective_memory_config_for_agent(agent)
+    descriptors: list[str] = []
+
+    project_index_enabled = bool(memory_config.get("project_index_enabled", True))
+    project_index_text = (
+        format_project_index_context(
+            project_id,
+            consumer_profile="agent_runtime",
+            task_type=task_type,
+        )
+        if project_index_enabled
+        else ""
+    )
+    if descriptor := _descriptor_for_generated_channel("project_index", project_index_text):
+        descriptors.append(descriptor)
+
+    tool_capabilities_enabled = bool(memory_config.get("tool_capabilities_enabled", True))
+    tool_capability_text = (
+        format_tool_capability_context(
+            consumer_profile="agent_runtime",
+            task_type=task_type,
+            project_id=project_id,
+        )
+        if tool_capabilities_enabled
+        else ""
+    )
+    if descriptor := _descriptor_for_generated_channel("tool_capabilities", tool_capability_text):
+        descriptors.append(descriptor)
+
+    return {
+        "memory_config": memory_config,
+        "descriptors": descriptors,
+        "project_index": {
+            "enabled": project_index_enabled,
+            "content_hash": _content_hash(project_index_text) if project_index_text else None,
+            "content_length": len(project_index_text),
+        },
+        "tool_capabilities": {
+            "enabled": tool_capabilities_enabled,
+            "content_hash": _content_hash(tool_capability_text) if tool_capability_text else None,
+            "content_length": len(tool_capability_text),
+        },
+    }
 
 
 async def _capture_persona_snapshot(db: AsyncSession, agent: Agent) -> dict[str, Any]:
@@ -206,6 +274,7 @@ async def _capture_memory_state(
         ),
         "latest_memory_uuid": latest_memory_revision.memory_uuid if latest_memory_revision else None,
         "active_count": int(active_memory_count or 0),
+        "governance": await collect_memory_governance_snapshot(db),
     }
     if memory_variant_override:
         snapshot["variant_override"] = memory_variant_override
@@ -217,6 +286,7 @@ async def capture_benchmark_config_snapshot(
     *,
     task_type: str | None = None,
     memory_variant_override: str | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Capture the live agent/model/prompt state for a benchmark run."""
     async with async_session() as db:
@@ -235,6 +305,11 @@ async def capture_benchmark_config_snapshot(
         }
 
         snapshot["prompt_stack"] = await _capture_prompt_stack(db, agent, task_type)
+        snapshot["generated_context"] = _capture_generated_context(
+            agent,
+            task_type=task_type,
+            project_id=project_id,
+        )
         snapshot["memory_state"] = await _capture_memory_state(
             db,
             memory_variant_override=memory_variant_override,

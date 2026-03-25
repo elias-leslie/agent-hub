@@ -31,7 +31,9 @@ from app.services.memory.episode_property_queries import (
 
 # Re-export all individual setters
 from app.services.memory.episode_property_setters import (
+    set_episode_applicability,
     set_episode_auto_inject,
+    set_episode_context_kind,
     set_episode_display_order,
     set_episode_injection_tier,
     set_episode_pinned,
@@ -56,7 +58,9 @@ __all__ = [
     "get_phase_triggered_references",
     "get_triggered_references",
     "init_episode_usage_properties",
+    "set_episode_applicability",
     "set_episode_auto_inject",
+    "set_episode_context_kind",
     "set_episode_display_order",
     "set_episode_injection_tier",
     "set_episode_pinned",
@@ -163,6 +167,8 @@ async def copy_episode_stats(
             trigger_task_types=source.get("trigger_task_types"),
             trigger_phases=source.get("trigger_phases"),
             tags=source.get("tags"),
+            context_kind=source.get("context_kind", "reference"),
+            applicability=source.get("applicability") or {},
         )
 
         if ok:

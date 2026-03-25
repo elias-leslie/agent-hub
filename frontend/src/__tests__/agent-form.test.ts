@@ -25,13 +25,17 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     memory_config: null,
     effective_memory_config: {
       injection_enabled: true,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: true,
       include_guardrails: true,
       include_references: true,
+      reference_index_enabled: true,
       continuity_enabled: true,
       continuity_max_sessions: 5,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     },
     max_concurrency: 4,
     max_subagent_concurrency: 2,
@@ -81,13 +85,17 @@ describe("agent form helpers", () => {
   it("preserves memory_config as a single payload", () => {
     const memoryConfig = {
       injection_enabled: false,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
       continuity_max_sessions: 5,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     };
 
     const payload = buildAgentUpdatePayload({
@@ -104,13 +112,17 @@ describe("agent form helpers", () => {
       makeAgent({
         effective_memory_config: {
           injection_enabled: false,
+          project_index_enabled: true,
+          tool_capabilities_enabled: true,
           include_mandates: false,
           include_guardrails: false,
           include_references: false,
+          reference_index_enabled: false,
           continuity_enabled: false,
           continuity_max_sessions: 7,
           audience_tags: ["voice"],
           exclude_tags: ["draft"],
+          exclude_memory_uuids: [],
         },
       })
     );
@@ -118,13 +130,17 @@ describe("agent form helpers", () => {
     expect(formData.memory_config).toBeNull();
     expect(formData.effective_memory_config).toEqual({
       injection_enabled: false,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
       continuity_max_sessions: 7,
       audience_tags: ["voice"],
       exclude_tags: ["draft"],
+      exclude_memory_uuids: [],
     });
   });
 
@@ -137,26 +153,34 @@ describe("agent form helpers", () => {
         } as unknown as Agent["memory_config"],
         effective_memory_config: {
           injection_enabled: false,
+          project_index_enabled: true,
+          tool_capabilities_enabled: true,
           include_mandates: false,
           include_guardrails: false,
           include_references: false,
+          reference_index_enabled: false,
           continuity_enabled: false,
           continuity_max_sessions: 6,
           audience_tags: [],
           exclude_tags: ["draft"],
+          exclude_memory_uuids: [],
         },
       })
     );
 
     expect(formData.memory_config).toEqual({
       injection_enabled: false,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
       continuity_max_sessions: 6,
       audience_tags: [],
       exclude_tags: ["draft"],
+      exclude_memory_uuids: [],
       cross_project_enabled: true,
     });
   });

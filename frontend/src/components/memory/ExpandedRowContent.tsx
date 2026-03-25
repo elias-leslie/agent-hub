@@ -38,6 +38,11 @@ export function ExpandedRowContent({
             currentCategory={episode.category}
             onTierChange={onTierChange}
           />
+          {episode.context_kind && (
+            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-cyan-950/40 text-cyan-300 uppercase">
+              {episode.context_kind}
+            </span>
+          )}
           <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-400 uppercase">
             {episode.source}
           </span>

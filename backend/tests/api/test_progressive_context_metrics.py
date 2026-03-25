@@ -248,17 +248,13 @@ async def test_build_progressive_context_with_variant_uses_active_variant_settin
 
 
 @pytest.mark.asyncio
-async def test_format_context_with_continuity_prefixes_startup_prompt_for_codex() -> None:
+async def test_format_context_with_continuity_relies_on_retrieved_context_for_codex_startup() -> None:
     ctx = ProgressiveContext(total_tokens=0)
 
     with (
         patch(
             "app.services.memory.context_injector.format_progressive_context",
             return_value="## Mandates\n- [M:12345678] Use dt",
-        ),
-        patch(
-            "app.api.memory_agent_context_builder.build_startup_prompt_markdown",
-            new=AsyncMock(return_value="## Progress Tags [[P:type:content]]"),
         ),
         patch(
             "app.api.memory_agent_context_builder.build_continuity_markdown",
@@ -274,8 +270,7 @@ async def test_format_context_with_continuity_prefixes_startup_prompt_for_codex(
             consumer_profile="codex_startup",
         )
 
-    assert result.startswith("## Progress Tags [[P:type:content]]")
-    assert result.endswith("## Mandates\n- [M:12345678] Use dt")
+    assert result == "## Mandates\n- [M:12345678] Use dt"
 
 
 @pytest.mark.asyncio
@@ -286,10 +281,6 @@ async def test_format_context_with_continuity_does_not_prefix_startup_prompt_for
         patch(
             "app.services.memory.context_injector.format_progressive_context",
             return_value="## Mandates\n- [M:12345678] Use dt",
-        ),
-        patch(
-            "app.api.memory_agent_context_builder.build_startup_prompt_markdown",
-            new=AsyncMock(return_value=""),
         ),
         patch(
             "app.api.memory_agent_context_builder.build_continuity_markdown",

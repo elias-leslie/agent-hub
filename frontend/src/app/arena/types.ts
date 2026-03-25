@@ -54,6 +54,45 @@ export interface ArenaMemoryUtilizationSummary {
   memory_debug_coverage_rate: number;
 }
 
+export interface ArenaMemoryGovernanceIssueSample {
+  uuid: string;
+  label: string;
+  details: string | null;
+  load_count: number;
+  invalid_types: string[];
+}
+
+export interface ArenaMemoryGovernanceSummary {
+  active_count: number;
+  active_agent_count: number;
+  health_status: string;
+  by_context_kind: Record<string, number>;
+  targeted_count: number;
+  explicit_exclusion_count: number;
+  untargeted_reference_count: number;
+  untargeted_reference_samples: ArenaMemoryGovernanceIssueSample[];
+  policy_with_targeting_count: number;
+  missing_reference_summary_count: number;
+  missing_capability_summary_count: number;
+  oversized_policy_count: number;
+  oversized_policy_samples: ArenaMemoryGovernanceIssueSample[];
+  alias_trigger_task_type_count: number;
+  startup_profile_agent_target_count: number;
+  startup_profile_agent_target_samples: ArenaMemoryGovernanceIssueSample[];
+  invalid_trigger_task_type_count: number;
+  invalid_trigger_task_type_samples: ArenaMemoryGovernanceIssueSample[];
+  custom_memory_config_agent_count: number;
+  project_index_disabled_agent_count: number;
+  tool_capabilities_disabled_agent_count: number;
+  reference_index_disabled_agent_count: number;
+  memory_exclusion_agent_count: number;
+  excluded_memory_uuid_count: number;
+  hard_issue_count: number;
+  soft_issue_count: number;
+  soft_limit_breach_count: number;
+  issue_count: number;
+}
+
 export interface ArenaReferenceYieldSummary {
   uuid: string;
   label: string;
@@ -102,6 +141,7 @@ export interface ArenaOverview {
   recent_benchmark_experiments: ArenaBenchmarkExperimentSignal[];
   open_regression_clusters: ArenaOpenRegressionSignal[];
   memory_utilization: ArenaMemoryUtilizationSummary;
+  memory_governance: ArenaMemoryGovernanceSummary;
   low_yield_references: ArenaReferenceYieldSummary[];
   agents: ArenaAgentSummary[];
 }

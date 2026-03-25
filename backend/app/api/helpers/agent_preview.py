@@ -10,14 +10,18 @@ from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
     resolve_memory_config_includes,
+    resolve_project_index_enabled,
     resolve_runtime_prompt_includes,
+    resolve_tool_capabilities_enabled,
 )
 from app.services.memory.context_injector import (
     build_progressive_context,
     extract_query_from_messages,
     format_progressive_context,
 )
+from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.service import MemoryScope
+from app.services.memory.tool_capability_context import format_tool_capability_context
 from app.services.runtime_prompt_stack import (
     RuntimePromptSection,
     collect_runtime_prompt_sections,
@@ -29,12 +33,17 @@ class _EmptyPreviewContext:
     def __init__(self) -> None:
         self.mandates: list[Any] = []
         self.guardrails: list[Any] = []
+        self.reference: list[Any] = []
+        self.reference_index: list[Any] = []
         self.debug_info: dict[str, Any] = {}
 
     def get_loaded_uuids(self) -> list[str]:
         return []
 
     def get_reference_uuids(self) -> list[str]:
+        return []
+
+    def get_reference_index_uuids(self) -> list[str]:
         return []
 
 
@@ -122,6 +131,42 @@ async def build_agent_preview(
         include_guardrails=runtime_include_guardrails,
     )
     combined = join_runtime_prompt_sections(runtime_sections)
+    project_index_block = ""
+    if resolve_project_index_enabled(agent_memory_config):
+        project_index_block = format_project_index_context(
+            project_id,
+            consumer_profile="agent_preview",
+            task_type=task_type,
+        )
+        if project_index_block:
+            combined = f"{combined}\n\n{project_index_block}" if combined else project_index_block
+            runtime_sections.append(
+                RuntimePromptSection(
+                    label="Project Index",
+                    source_kind="project_index",
+                    source_id=project_id or "global",
+                    placement="system",
+                    content=project_index_block,
+                )
+            )
+    tool_capability_block = ""
+    if resolve_tool_capabilities_enabled(agent_memory_config):
+        tool_capability_block = format_tool_capability_context(
+            consumer_profile="agent_preview",
+            task_type=task_type,
+            project_id=project_id,
+        )
+        if tool_capability_block:
+            combined = f"{combined}\n\n{tool_capability_block}" if combined else tool_capability_block
+            runtime_sections.append(
+                RuntimePromptSection(
+                    label="Tool Capabilities",
+                    source_kind="tool_capabilities",
+                    source_id=agent.slug,
+                    placement="system",
+                    content=tool_capability_block,
+                )
+            )
 
     task_prompt = await _build_task_prompt_preview(
         agent,
@@ -156,6 +201,8 @@ async def build_agent_preview(
             phase=phase,
             memory_config=agent_memory_config,
             consumer_profile="agent_preview",
+            consumer_agent_slug=agent.slug,
+            consumer_tags=list(agent_memory_config.get("audience_tags", [])) if agent_memory_config else None,
         )
         formatted_memory = format_progressive_context(
             context,
@@ -182,6 +229,16 @@ async def build_agent_preview(
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
     full_context = "\n\n".join(section.content for section in runtime_sections if section.content)
+    reference_index_uuids_getter = getattr(context, "get_reference_index_uuids", None)
+    reference_index_uuids = (
+        reference_index_uuids_getter()
+        if callable(reference_index_uuids_getter)
+        else [
+            r.uuid
+            for r in getattr(context, "reference_index", [])
+            if getattr(r, "uuid", None)
+        ]
+    )
 
     return {
         "combined_prompt": combined,
@@ -190,6 +247,7 @@ async def build_agent_preview(
         "memory_debug": dict(getattr(context, "debug_info", {})),
         "loaded_memory_uuids": context.get_loaded_uuids(),
         "reference_uuids": context.get_reference_uuids(),
+        "reference_index_uuids": reference_index_uuids,
         "mandate_count": len(context.mandates),
         "guardrail_count": len(context.guardrails),
         "mandate_uuids": [u for u in mandate_uuids if u],

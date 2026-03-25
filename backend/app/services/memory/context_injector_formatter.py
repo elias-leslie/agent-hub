@@ -15,10 +15,12 @@ from .citation_parser import (
 )
 from .context_builder_tiers import get_rendered_content
 from .context_injector_debug import (
+    CAPABILITY_INDEX_DIRECTIVE,
     CHARS_PER_TOKEN,
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
     REFERENCE_DIRECTIVE,
+    REFERENCE_INDEX_DIRECTIVE,
     format_relevance_debug_block,
     get_context_token_stats,
     get_relevance_debug_info,
@@ -69,27 +71,60 @@ def format_progressive_context(
     """Format progressive context into a string for injection."""
     parts: list[str] = []
     profile = resolve_consumer_profile(consumer_profile)
+    mandates = getattr(context, "mandates", [])
+    guardrails = getattr(context, "guardrails", [])
+    reference_index = getattr(context, "reference_index", [])
+    references = getattr(context, "reference", [])
 
-    if context.mandates or context.guardrails or context.reference:
+    if mandates or guardrails or reference_index or references:
         parts.append(_build_memory_context_header(context, include_citations, profile))
         parts.append("")
 
     # 2. Mandates
-    if context.mandates:
+    if mandates:
         parts.append(MANDATE_DIRECTIVE)
-        for m in context.mandates:
+        for m in mandates:
             parts.append(_format_memory_item(m, "M", include_citations))
 
     # 3. Guardrails
-    if context.guardrails:
+    if guardrails:
         if parts:
             parts.append("")
         parts.append(GUARDRAIL_DIRECTIVE)
-        for g in context.guardrails:
+        for g in guardrails:
             parts.append(_format_memory_item(g, "G", include_citations))
 
+    capability_index = [
+        item for item in reference_index if getattr(item, "context_kind", None) == "capability"
+    ]
+    general_index = [
+        item for item in reference_index if getattr(item, "context_kind", None) != "capability"
+    ]
+
+    if capability_index:
+        if parts:
+            parts.append("")
+        parts.append(CAPABILITY_INDEX_DIRECTIVE)
+        parts.append(
+            "- Lightweight catalog of tools and control surfaces for this consumer."
+            "\n- Open the exact episode with `st memory get <uuid8>` before acting when command or workflow shape matters."
+        )
+        for item in capability_index:
+            parts.append(_format_index_item(item, "R", include_citations))
+
+    if general_index:
+        if parts:
+            parts.append("")
+        parts.append(REFERENCE_INDEX_DIRECTIVE)
+        parts.append(
+            "- Passive lookup index for adjacent docs that may matter soon."
+            "\n- Keep these as lookup hints; fetch the exact episode before relying on one."
+        )
+        for item in general_index:
+            parts.append(_format_index_item(item, "R", include_citations))
+
     # 4. Directly injected references
-    if context.reference:
+    if references:
         if parts:
             parts.append("")
         parts.append(REFERENCE_DIRECTIVE)
@@ -97,7 +132,7 @@ def format_progressive_context(
             "- Likely direct fits for this task. Use `st memory get <uuid8>` before broad search if one may affect behavior."
             "\n- When a reference informs your work, cite it inline as [R:uuid8] so the system can measure reference quality."
         )
-        for r in context.reference:
+        for r in references:
             parts.append(_format_memory_item(r, "R", include_citations))
 
     return "\n".join(parts)
@@ -110,7 +145,7 @@ def _build_memory_context_header(
 ) -> str:
     header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
     lines = header.splitlines()
-    if context.mandates or context.guardrails:
+    if getattr(context, "mandates", []) or getattr(context, "guardrails", []):
         lines.insert(1, "- Mandates/Guardrails below are authoritative - follow them exactly")
         if include_citations:
             lines.insert(2, "- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]")
@@ -123,6 +158,23 @@ def _format_memory_item(
     item: MemorySearchResult, type_prefix: str, include_citations: bool
 ) -> str:
     """Helper to format a single mandate or guardrail item."""
+    render_text = get_rendered_content(item)
+    if include_citations and item.uuid:
+        citation = {
+            "M": format_mandate_citation,
+            "G": format_guardrail_citation,
+            "R": format_reference_citation,
+        }[type_prefix](item.uuid)
+        return f"- {citation} {render_text}"
+    return f"- {render_text}"
+
+
+def _format_index_item(
+    item: MemorySearchResult,
+    type_prefix: str,
+    include_citations: bool,
+) -> str:
+    """Format a reference-index line using the compact rendered content."""
     render_text = get_rendered_content(item)
     if include_citations and item.uuid:
         citation = {

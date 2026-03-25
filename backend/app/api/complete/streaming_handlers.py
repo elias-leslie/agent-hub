@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _memory_block_len(progressive_context: object, field_name: str) -> int:
+    """Return the size of a progressive-context block, tolerating legacy test doubles."""
+    return len(getattr(progressive_context, field_name, []))
+
+
 async def _setup_streaming_session(
     request: CompletionRequest,
     provider: str,
@@ -116,11 +121,13 @@ async def _inject_streaming_memory(
             external_id=request.external_id,
             memory_config=agent_memory_config,
             current_branch=request.current_branch,
+            consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
         )
         memory_facts_count = (
-            len(progressive_context.mandates)
-            + len(progressive_context.guardrails)
-            + len(progressive_context.reference)
+            _memory_block_len(progressive_context, "mandates")
+            + _memory_block_len(progressive_context, "guardrails")
+            + _memory_block_len(progressive_context, "reference_index")
+            + _memory_block_len(progressive_context, "reference")
         )
         if memory_facts_count > 0:
             logger.info(

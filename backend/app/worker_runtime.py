@@ -18,6 +18,7 @@ from app.workflows.persona_heartbeat import persona_heartbeat_task
 from app.workflows.persona_scheduler import persona_scheduler_task
 from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
+    data_retention_task,
     feedback_cleanup_task,
     memory_cleanup_task,
     session_cleanup_task,
@@ -47,6 +48,7 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     tier_optimizer_task,
     memory_cleanup_task,
     feedback_cleanup_task,
+    data_retention_task,
     webhook_delivery_task,
     session_summary_task,
     observation_processing_task,

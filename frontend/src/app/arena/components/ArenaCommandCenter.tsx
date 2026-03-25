@@ -50,6 +50,16 @@ function formatDateTime(value: string | null | undefined) {
   });
 }
 
+function deriveMemoryGovernanceTone(status: string) {
+  if (status === "critical") {
+    return "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800";
+  }
+  if (status === "warn") {
+    return "bg-amber-950/30 text-amber-300 ring-1 ring-amber-800";
+  }
+  return "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800";
+}
+
 function deriveSystemStatus(overview: ArenaOverview) {
   if (overview.system.total_regressions >= 8 || (overview.system.avg_pass_rate ?? 100) < 60) {
     return {
@@ -150,6 +160,36 @@ export function ArenaCommandCenter() {
     () => (overview ? deriveSystemStatus(overview) : null),
     [overview],
   );
+  const memoryGovernance = useMemo(() => {
+    if (!overview) {
+      return null;
+    }
+    return {
+      ...overview.memory_governance,
+      active_agent_count: overview.memory_governance.active_agent_count ?? 0,
+      custom_memory_config_agent_count:
+        overview.memory_governance.custom_memory_config_agent_count ?? 0,
+      project_index_disabled_agent_count:
+        overview.memory_governance.project_index_disabled_agent_count ?? 0,
+      tool_capabilities_disabled_agent_count:
+        overview.memory_governance.tool_capabilities_disabled_agent_count ?? 0,
+      reference_index_disabled_agent_count:
+        overview.memory_governance.reference_index_disabled_agent_count ?? 0,
+      memory_exclusion_agent_count:
+        overview.memory_governance.memory_exclusion_agent_count ?? 0,
+      excluded_memory_uuid_count: overview.memory_governance.excluded_memory_uuid_count ?? 0,
+      hard_issue_count: overview.memory_governance.hard_issue_count ?? 0,
+      soft_issue_count: overview.memory_governance.soft_issue_count ?? 0,
+      soft_limit_breach_count: overview.memory_governance.soft_limit_breach_count ?? 0,
+      untargeted_reference_samples:
+        overview.memory_governance.untargeted_reference_samples ?? [],
+      oversized_policy_samples: overview.memory_governance.oversized_policy_samples ?? [],
+      invalid_trigger_task_type_samples:
+        overview.memory_governance.invalid_trigger_task_type_samples ?? [],
+      startup_profile_agent_target_samples:
+        overview.memory_governance.startup_profile_agent_target_samples ?? [],
+    };
+  }, [overview]);
   const pressuredAgents = useMemo(
     () => (overview ? derivePressureCount(overview.agents) : 0),
     [overview],
@@ -436,6 +476,12 @@ export function ArenaCommandCenter() {
                   {formatPercent(overview.memory_utilization.memory_debug_coverage_rate * 100)}
                 </dd>
               </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-slate-400">Governance issues</dt>
+                <dd className="font-semibold text-slate-100">
+                  {memoryGovernance?.issue_count ?? 0}
+                </dd>
+              </div>
             </dl>
           </article>
         </section>
@@ -509,6 +555,157 @@ export function ArenaCommandCenter() {
                     No obvious noisy references in the current window.
                   </div>
                 )}
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">Memory governance</h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Structural context-shape issues: broad references, bloated policy, and trigger drift.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    "rounded-full px-2 py-1 text-[11px] font-semibold",
+                    deriveMemoryGovernanceTone(memoryGovernance?.health_status ?? "healthy"),
+                  )}
+                >
+                    {memoryGovernance?.health_status ?? "healthy"}
+                  </span>
+                  <Brain className="h-5 w-5 text-cyan-400" />
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Untargeted refs</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-100">
+                      {memoryGovernance?.untargeted_reference_count ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Missing summaries</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-100">
+                      {memoryGovernance?.missing_reference_summary_count ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Oversized policy</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-100">
+                      {memoryGovernance?.oversized_policy_count ?? 0}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Invalid triggers</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-100">
+                      {memoryGovernance?.invalid_trigger_task_type_count ?? 0}
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm text-slate-300">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Agent delivery controls</p>
+                  <p className="mt-2 text-slate-400">
+                    hard issues {memoryGovernance?.hard_issue_count ?? 0}
+                    {" · "}
+                    soft issues {memoryGovernance?.soft_issue_count ?? 0}
+                    {" · "}
+                    threshold breaches {memoryGovernance?.soft_limit_breach_count ?? 0}
+                  </p>
+                  <p className="mt-2">
+                    custom configs {memoryGovernance?.custom_memory_config_agent_count ?? 0} / {memoryGovernance?.active_agent_count ?? 0}
+                  </p>
+                  <p className="mt-1 text-slate-400">
+                    tool ctx off {memoryGovernance?.tool_capabilities_disabled_agent_count ?? 0}
+                    {" · "}
+                    project index off {memoryGovernance?.project_index_disabled_agent_count ?? 0}
+                    {" · "}
+                    ref index off {memoryGovernance?.reference_index_disabled_agent_count ?? 0}
+                  </p>
+                  <p className="mt-1 text-slate-400">
+                    agents with UUID exclusions {memoryGovernance?.memory_exclusion_agent_count ?? 0}
+                    {" · "}
+                    excluded UUIDs {memoryGovernance?.excluded_memory_uuid_count ?? 0}
+                  </p>
+                </div>
+                {memoryGovernance && memoryGovernance.untargeted_reference_samples.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Top untargeted references</p>
+                    {memoryGovernance.untargeted_reference_samples.slice(0, 3).map((item) => (
+                      <div
+                        key={item.uuid}
+                        className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm"
+                      >
+                        <p className="font-semibold text-slate-100">{item.label}</p>
+                        {item.details ? (
+                          <p className="mt-1 text-xs text-slate-400">{item.details}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {memoryGovernance && memoryGovernance.oversized_policy_samples.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Top oversized policies</p>
+                    {memoryGovernance.oversized_policy_samples.slice(0, 3).map((item) => (
+                      <div
+                        key={item.uuid}
+                        className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm"
+                      >
+                        <p className="font-semibold text-slate-100">{item.label}</p>
+                        {item.details ? (
+                          <p className="mt-1 text-xs text-slate-400">{item.details}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {memoryGovernance && memoryGovernance.invalid_trigger_task_type_samples.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Invalid trigger samples</p>
+                    {memoryGovernance.invalid_trigger_task_type_samples
+                      .slice(0, 3)
+                      .map((item) => (
+                        <div
+                          key={item.uuid}
+                          className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm"
+                        >
+                          <p className="font-semibold text-slate-100">{item.label}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            invalid trigger types: {item.invalid_types.join(", ")}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                ) : null}
+                {memoryGovernance && memoryGovernance.startup_profile_agent_target_samples.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">Broken startup routes</p>
+                    {memoryGovernance.startup_profile_agent_target_samples
+                      .slice(0, 3)
+                      .map((item) => (
+                        <div
+                          key={item.uuid}
+                          className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3 text-sm"
+                        >
+                          <p className="font-semibold text-slate-100">{item.label}</p>
+                          {item.details ? (
+                            <p className="mt-1 text-xs text-slate-400">{item.details}</p>
+                          ) : null}
+                        </div>
+                      ))}
+                  </div>
+                ) : null}
+                {memoryGovernance
+                && memoryGovernance.untargeted_reference_samples.length === 0
+                && memoryGovernance.oversized_policy_samples.length === 0
+                && memoryGovernance.invalid_trigger_task_type_samples.length === 0
+                && memoryGovernance.startup_profile_agent_target_samples.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-emerald-900 bg-emerald-950/20 px-4 py-6 text-center text-sm text-slate-300">
+                    No structural memory-governance issues surfaced in the current snapshot.
+                  </div>
+                ) : null}
               </div>
             </article>
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MemorySource(StrEnum):
@@ -35,6 +35,16 @@ class MemoryCategory(StrEnum):
     MANDATE = "mandate"  # Critical rules that must always be followed
     GUARDRAIL = "guardrail"  # Anti-patterns and things to avoid
     REFERENCE = "reference"  # Best practices and patterns
+
+
+class MemoryContextKind(StrEnum):
+    """Semantic channel for a memory record."""
+
+    POLICY = "policy"
+    REFERENCE = "reference"
+    CAPABILITY = "capability"
+    CONTINUITY = "continuity"
+    SIGNAL = "signal"
 
 
 class InjectionTier(StrEnum):
@@ -65,6 +75,17 @@ class EpisodeStatus(StrEnum):
     SUPERSEDED = "superseded"  # Replaced by a newer version
 
 
+class MemoryApplicability(BaseModel):
+    """Targeting rules for when a memory should be eligible."""
+
+    consumer_profiles: list[str] = Field(default_factory=list)
+    exclude_consumer_profiles: list[str] = Field(default_factory=list)
+    agent_slugs: list[str] = Field(default_factory=list)
+    exclude_agent_slugs: list[str] = Field(default_factory=list)
+    audience_tags: list[str] = Field(default_factory=list)
+    exclude_audience_tags: list[str] = Field(default_factory=list)
+
+
 class MemorySearchResult(BaseModel):
     """Search result from memory system."""
 
@@ -90,6 +111,8 @@ class MemorySearchResult(BaseModel):
     last_accessed_at: datetime | None = None
     source_description: str | None = None
     auto_inject: bool = False
+    context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
+    applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
 
     @property
     def prompt_content(self) -> str:
@@ -131,6 +154,10 @@ class MemoryEpisode(BaseModel):
     utility_score: float | None = None
     pinned: bool | None = None
     tags: list[str] = []
+    trigger_task_types: list[str] = []
+    trigger_phases: list[str] = []
+    context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
+    applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
 
 
 class MemoryListResult(BaseModel):

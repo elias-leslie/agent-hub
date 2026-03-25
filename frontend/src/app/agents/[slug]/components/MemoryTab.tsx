@@ -42,26 +42,27 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
   };
 
   const handleUpdateTags = (
-    field: "audience_tags" | "exclude_tags",
+    field: "audience_tags" | "exclude_tags" | "exclude_memory_uuids",
     tags: string[]
   ) => {
     if (isCustomEnabled) {
       updateConfig({ [field]: tags });
     } else {
-      const otherField =
-        field === "audience_tags" ? "exclude_tags" : "audience_tags";
-      const otherTags = [...config[otherField]];
+      const candidateConfig = {
+        ...effectiveConfig,
+        [field]: tags,
+      } as MemoryConfig;
+      const hasExplicitFilters =
+        candidateConfig.audience_tags.length > 0 ||
+        candidateConfig.exclude_tags.length > 0 ||
+        candidateConfig.exclude_memory_uuids.length > 0;
 
-      if (tags.length === 0 && otherTags.length === 0) {
+      if (!hasExplicitFilters) {
         updateField("memory_config", null);
       } else {
         updateField(
           "memory_config",
-          {
-            ...effectiveConfig,
-            [field]: tags,
-            [otherField]: otherTags,
-          } as unknown as Agent["memory_config"]
+          candidateConfig as unknown as Agent["memory_config"]
         );
       }
     }
@@ -114,6 +115,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
       <TagFilteringSection
         audienceTags={config.audience_tags}
         excludeTags={config.exclude_tags}
+        excludeMemoryUuids={config.exclude_memory_uuids}
         onUpdateTags={handleUpdateTags}
       />
     </div>

@@ -112,6 +112,49 @@ async def test_collect_improvement_signal_snapshot_returns_structured_evidence()
             new=AsyncMock(return_value=memory_utilization),
         ),
         patch(
+            "app.services.improvement_signals.collect_memory_governance_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "active_count": 12,
+                    "active_agent_count": 4,
+                    "health_status": "warn",
+                    "by_context_kind": {"policy": 4, "reference": 8},
+                    "targeted_count": 3,
+                    "explicit_exclusion_count": 1,
+                    "untargeted_reference_count": 5,
+                    "untargeted_reference_samples": [
+                        {
+                            "uuid": "broad-ref",
+                            "label": "broad-ref",
+                            "details": "reference · loaded 42",
+                            "load_count": 42,
+                            "invalid_types": [],
+                        }
+                    ],
+                    "policy_with_targeting_count": 0,
+                    "missing_reference_summary_count": 1,
+                    "missing_capability_summary_count": 0,
+                    "oversized_policy_count": 0,
+                    "oversized_policy_samples": [],
+                    "alias_trigger_task_type_count": 1,
+                    "startup_profile_agent_target_count": 0,
+                    "startup_profile_agent_target_samples": [],
+                    "invalid_trigger_task_type_count": 0,
+                    "invalid_trigger_task_type_samples": [],
+                    "custom_memory_config_agent_count": 2,
+                    "project_index_disabled_agent_count": 1,
+                    "tool_capabilities_disabled_agent_count": 0,
+                    "reference_index_disabled_agent_count": 1,
+                    "memory_exclusion_agent_count": 0,
+                    "excluded_memory_uuid_count": 0,
+                    "hard_issue_count": 1,
+                    "soft_issue_count": 5,
+                    "soft_limit_breach_count": 0,
+                    "issue_count": 6,
+                }
+            ),
+        ),
+        patch(
             "app.services.improvement_signals.batch_get_episodes",
             new=AsyncMock(
                 return_value={
@@ -146,6 +189,7 @@ async def test_collect_improvement_signal_snapshot_returns_structured_evidence()
     assert snapshot["open_regression_clusters"][0]["case_id"] == "rebuild_rule_reconsideration"
     assert len(snapshot["open_regression_clusters"]) == 1
     assert snapshot["memory_utilization"]["selected_reference_citation_rate"] == 0.333
+    assert snapshot["memory_governance"]["active_count"] == 12
     assert snapshot["low_yield_references"][0]["label"] == "noisy-ref"
 
 
@@ -267,6 +311,48 @@ async def test_build_improvement_signal_digest_combines_evidence_sources() -> No
             new=AsyncMock(return_value=memory_utilization),
         ),
         patch(
+            "app.services.improvement_signals.collect_memory_governance_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "active_count": 12,
+                    "active_agent_count": 2,
+                    "health_status": "warn",
+                    "by_context_kind": {"policy": 4, "reference": 8},
+                    "targeted_count": 3,
+                    "explicit_exclusion_count": 1,
+                    "untargeted_reference_count": 5,
+                    "untargeted_reference_samples": [
+                        {
+                            "uuid": "broad-ref-1",
+                            "label": "broad-ref",
+                            "details": "reference · loaded 4",
+                            "load_count": 4,
+                        }
+                    ],
+                    "policy_with_targeting_count": 0,
+                    "missing_reference_summary_count": 1,
+                    "missing_capability_summary_count": 0,
+                    "oversized_policy_count": 0,
+                    "oversized_policy_samples": [],
+                    "alias_trigger_task_type_count": 1,
+                    "startup_profile_agent_target_count": 0,
+                    "startup_profile_agent_target_samples": [],
+                    "invalid_trigger_task_type_count": 0,
+                    "invalid_trigger_task_type_samples": [],
+                    "custom_memory_config_agent_count": 1,
+                    "project_index_disabled_agent_count": 0,
+                    "tool_capabilities_disabled_agent_count": 1,
+                    "reference_index_disabled_agent_count": 0,
+                    "memory_exclusion_agent_count": 1,
+                    "excluded_memory_uuid_count": 2,
+                    "hard_issue_count": 0,
+                    "soft_issue_count": 1,
+                    "soft_limit_breach_count": 1,
+                    "issue_count": 1,
+                }
+            ),
+        ),
+        patch(
             "app.services.improvement_signals.batch_get_episodes",
             new=AsyncMock(
                 return_value={
@@ -309,6 +395,10 @@ async def test_build_improvement_signal_digest_combines_evidence_sources() -> No
     assert "suite=persona-suite-self-correction decision=hold" in digest
     assert "rebuild_rule_reconsideration [3x, behavior" in digest
     assert "selected_reference_citation_rate=0.333" in digest
+    assert "## Memory governance" in digest
+    assert "health_status=warn" in digest
+    assert "untargeted_reference_count=5" in digest
+    assert "broad-ref (broad-re)" in digest
     assert "noisy-ref" in digest
     assert "selected=2 cited=0 rate=0.000" in digest
 
@@ -367,6 +457,26 @@ async def test_collect_improvement_signal_snapshot_scopes_queries_to_recent_proj
         patch(
             "app.services.improvement_signals.get_memory_utilization_summary",
             new=AsyncMock(return_value=memory_utilization),
+        ),
+        patch(
+            "app.services.improvement_signals.collect_memory_governance_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "active_count": 0,
+                    "by_context_kind": {},
+                    "targeted_count": 0,
+                    "explicit_exclusion_count": 0,
+                    "untargeted_reference_count": 0,
+                    "policy_with_targeting_count": 0,
+                    "missing_reference_summary_count": 0,
+                    "missing_capability_summary_count": 0,
+                    "oversized_policy_count": 0,
+                    "alias_trigger_task_type_count": 0,
+                    "invalid_trigger_task_type_count": 0,
+                    "invalid_trigger_task_type_samples": [],
+                    "issue_count": 0,
+                }
+            ),
         ),
         patch(
             "app.services.improvement_signals.batch_get_episodes",

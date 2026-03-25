@@ -49,6 +49,12 @@ async def handle_add_episode(
         source_description=request.source_description,
         reference_time=request.reference_time,
         source=request.source,
+        context_kind=request.context_kind.value if request.context_kind is not None else None,
+        applicability=(
+            request.applicability.model_dump()
+            if request.applicability is not None
+            else None
+        ),
         changed_by="api",
         change_reason=request.change_reason or "Episode added",
     )
@@ -121,7 +127,9 @@ async def handle_update_episode_properties(
 ) -> UpdateEpisodePropertiesResponse:
     """Update episode properties (pinned, auto_inject, display_order, triggers, summary)."""
     from app.services.memory.episode_property_setters import (
+        set_episode_applicability,
         set_episode_auto_inject,
+        set_episode_context_kind,
         set_episode_display_order,
         set_episode_pinned,
         set_episode_summary,
@@ -138,6 +146,8 @@ async def handle_update_episode_properties(
         final_display_order = None
         final_trigger_task_types = None
         final_trigger_phases = None
+        final_context_kind = None
+        final_applicability = None
         final_summary = None
 
         if request.pinned is not None:
@@ -195,6 +205,28 @@ async def handle_update_episode_properties(
             final_trigger_phases = request.trigger_phases
             messages.append(f"trigger_phases={request.trigger_phases}")
 
+        if request.context_kind is not None:
+            success = await set_episode_context_kind(
+                full_uuid,
+                request.context_kind.value,
+                change_reason=request.change_reason,
+            )
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+            final_context_kind = request.context_kind
+            messages.append(f"context_kind={request.context_kind.value}")
+
+        if request.applicability is not None:
+            success = await set_episode_applicability(
+                full_uuid,
+                request.applicability.model_dump(),
+                change_reason=request.change_reason,
+            )
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+            final_applicability = request.applicability
+            messages.append("applicability")
+
         if request.summary is not None:
             success = await set_episode_summary(
                 full_uuid,
@@ -220,6 +252,8 @@ async def handle_update_episode_properties(
             display_order=final_display_order,
             trigger_task_types=final_trigger_task_types,
             trigger_phases=final_trigger_phases,
+            context_kind=final_context_kind,
+            applicability=final_applicability,
             summary=final_summary,
             message=f"Updated: {', '.join(messages)}",
             version=version,

@@ -215,6 +215,7 @@ async def get_arena_overview(
         "recent_benchmark_experiments": signal_snapshot["recent_benchmark_experiments"],
         "open_regression_clusters": signal_snapshot["open_regression_clusters"],
         "memory_utilization": signal_snapshot["memory_utilization"],
+        "memory_governance": signal_snapshot["memory_governance"],
         "low_yield_references": signal_snapshot["low_yield_references"],
         "agents": agent_summaries,
     }

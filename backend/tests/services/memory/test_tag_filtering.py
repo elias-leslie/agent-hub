@@ -6,10 +6,19 @@ from datetime import UTC, datetime
 
 from app.services.memory.context_builder import _apply_tag_filters
 from app.services.memory.context_builder_filters import filter_by_tags
-from app.services.memory.memory_models import MemorySearchResult, MemorySource
+from app.services.memory.memory_models import (
+    MemoryApplicability,
+    MemorySearchResult,
+    MemorySource,
+)
 
 
-def _make_result(uuid: str = "abc-123", content: str = "test content", tags: list[str] | None = None) -> MemorySearchResult:
+def _make_result(
+    uuid: str = "abc-123",
+    content: str = "test content",
+    tags: list[str] | None = None,
+    applicability: MemoryApplicability | None = None,
+) -> MemorySearchResult:
     """Create a MemorySearchResult with optional tags."""
     return MemorySearchResult(
         uuid=uuid,
@@ -19,6 +28,7 @@ def _make_result(uuid: str = "abc-123", content: str = "test content", tags: lis
         created_at=datetime.now(UTC),
         facts=[content],
         tags=tags or [],
+        applicability=applicability or MemoryApplicability(),
     )
 
 
@@ -80,22 +90,24 @@ class TestFilterByTags:
 
 
 class TestApplyTagFilters:
-    """Tests for _apply_tag_filters — audience tags scope eligible memories."""
+    """Tests for _apply_tag_filters — exclude tags are global, audience tags are legacy-only."""
 
-    def test_audience_tags_apply_to_all_memory_types(self):
-        """audience_tags should filter mandates, guardrails, and references."""
+    def test_legacy_audience_tags_filter_only_untargeted_references(self):
         from app.services.memory.context_builder import ProgressiveContext
 
         mandate = _make_result(uuid="m1", tags=["persona-relevant"])
         guardrail = _make_result(uuid="g1", tags=["persona-relevant"])
         ref_tagged = _make_result(uuid="r1", tags=["persona-relevant"])
-        ref_untagged = _make_result(uuid="r2", tags=[])
+        ref_targeted = _make_result(
+            uuid="r2",
+            applicability=MemoryApplicability(agent_slugs=["persona"]),
+        )
         ref_other = _make_result(uuid="r3", tags=["coder-only"])
 
         context = ProgressiveContext(
             mandates=[mandate],
             guardrails=[guardrail],
-            reference=[ref_tagged, ref_untagged, ref_other],
+            reference=[ref_tagged, ref_targeted, ref_other],
         )
         memory_config = {"audience_tags": ["persona-relevant"], "exclude_tags": []}
 
@@ -103,8 +115,7 @@ class TestApplyTagFilters:
 
         assert len(context.mandates) == 1
         assert len(context.guardrails) == 1
-        assert len(context.reference) == 1
-        assert context.reference[0].uuid == "r1"
+        assert [item.uuid for item in context.reference] == ["r1", "r2"]
 
     def test_exclude_tags_applied_to_all_tiers(self):
         """exclude_tags should filter mandates, guardrails, AND references."""

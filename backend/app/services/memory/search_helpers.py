@@ -8,6 +8,7 @@ and category mapping. Works with dict results from MemoryRepository.
 from datetime import datetime
 from typing import Any
 
+from .applicability import normalize_applicability, normalize_context_kind
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 from .repository import TIER_REVERSE
 
@@ -63,6 +64,12 @@ def build_search_result_from_dict(
         category=category,
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],
+        context_kind=normalize_context_kind(
+            result.get("context_kind"),
+            memory_type=result.get("memory_type"),
+            tier=result.get("tier"),
+        ),
+        applicability=normalize_applicability(result.get("applicability")),
     )
 
 

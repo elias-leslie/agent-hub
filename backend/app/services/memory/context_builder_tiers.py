@@ -28,6 +28,7 @@ def get_rendered_content(item: MemorySearchResult) -> str:
 def plan_context_render_tiers(
     mandates: list[MemorySearchResult],
     guardrails: list[MemorySearchResult],
+    reference_index: list[MemorySearchResult],
     references: list[MemorySearchResult],
     query: str,
     consumer_profile: str | None = None,
@@ -38,6 +39,7 @@ def plan_context_render_tiers(
     for block, items in (
         ("mandate", mandates),
         ("guardrail", guardrails),
+        ("reference_index", reference_index),
         ("reference", references),
     ):
         for item in items:
@@ -69,6 +71,7 @@ def demote_item_to_fit_budget(item: MemorySearchResult) -> bool:
 def build_memory_plan_debug(
     mandates: list[MemorySearchResult],
     guardrails: list[MemorySearchResult],
+    reference_index: list[MemorySearchResult],
     references: list[MemorySearchResult],
 ) -> dict[str, object]:
     """Return compact debug metadata describing the final render plan."""
@@ -80,6 +83,7 @@ def build_memory_plan_debug(
     for block, items in (
         ("mandate", mandates),
         ("guardrail", guardrails),
+        ("reference_index", reference_index),
         ("reference", references),
     ):
         for item in items:
@@ -129,6 +133,9 @@ def _select_initial_tier(
 
     if block == "guardrail":
         return PROMPT_TIER_L2, "guardrail"
+
+    if block == "reference_index":
+        return PROMPT_TIER_L0, "reference_index"
 
     # References use progressive disclosure (query-dependent tiers).
     query_overlap = _query_overlap(item, query_terms)

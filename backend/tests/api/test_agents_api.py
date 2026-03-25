@@ -146,13 +146,17 @@ class TestAgentDetailEndpoint:
             data = response.json()
             assert data["memory_config"] == {
                 "injection_enabled": False,
+                "project_index_enabled": True,
+                "tool_capabilities_enabled": True,
                 "include_mandates": False,
                 "include_guardrails": False,
                 "include_references": False,
+                "reference_index_enabled": False,
                 "continuity_enabled": False,
                 "continuity_max_sessions": 5,
                 "audience_tags": [],
                 "exclude_tags": [],
+                "exclude_memory_uuids": [],
             }
             assert data["effective_memory_config"] == data["memory_config"]
 

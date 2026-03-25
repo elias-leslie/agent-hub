@@ -35,7 +35,7 @@ WORKSPACES_ROOT="${ST_WORKSPACES_ROOT:-/srv/workspaces}"
 # Source credentials from ~/.env.local
 if [[ -f ~/.env.local ]]; then
     # shellcheck disable=SC1090
-    source <(grep -E '^(DATABASE_URL|AGENT_HUB_DB_URL|PORTFOLIO_AI_DB_URL|PORTFOLIO_DB_URL|TERMINAL_DB_URL|HATCHET_DATABASE_URL)=' ~/.env.local)
+    source <(grep -E '^(DATABASE_URL|[A-Z0-9_]+_DB_URL|[A-Z0-9_]+_DATABASE_URL)=' ~/.env.local)
 fi
 
 # Database connection strings from environment
@@ -117,7 +117,7 @@ Migration Commands:
   migrate create "msg"      Create new migration with message
 
 Options:
-  -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai, terminal, hatchet)
+  -P, --project <name>      Target specific project (core projects or any <PROJECT>_DB_URL env)
   --help, -h                Show this help
 
 Dump Commands:
@@ -139,7 +139,8 @@ Notes:
   - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE/CREATE)
   - db ddl allows safe DDL: CREATE INDEX, CREATE INDEX IF NOT EXISTS, ALTER TABLE ADD
   - Auto-detects project from git root directory name
-  - Migration commands require alembic in the project's backend/
+  - Auxiliary projects use <PROJECT>_DB_URL (example: test2 -> TEST2_DB_URL)
+  - Migration commands require alembic in <root>/backend/ or <root>/
 EOF
 }
 
@@ -148,21 +149,45 @@ error() {
     exit 1
 }
 
+project_db_env_var() {
+    local project="$1"
+
+    if [[ "$project" == "summitflow" ]]; then
+        printf 'DATABASE_URL\n'
+        return 0
+    fi
+
+    local normalized="${project//-/_}"
+    printf '%s_DB_URL\n' "${normalized^^}"
+}
+
 get_db_url() {
     local project="$1"
     local url="${DB_URLS[$project]}"
 
-    if [[ -z "$url" ]]; then
-        error "Unknown project: $project. Known: ${!DB_URLS[*]}"
+    if [[ -n "$url" ]]; then
+        DB_URL_RESULT="$url"
+        return 0
     fi
 
-    echo "$url"
+    local env_var
+    env_var=$(project_db_env_var "$project")
+    url="${!env_var:-}"
+
+    if [[ -z "$url" ]]; then
+        echo -e "${RED}ERROR:${NC} Unknown project: $project. Set $env_var in ~/.env.local or your environment." >&2
+        return 1
+    fi
+
+    DB_URL_RESULT="$url"
+    return 0
 }
 
 run_psql() {
     local query="$1"
     local db_url
-    db_url=$(get_db_url "$PROJECT_NAME")
+    get_db_url "$PROJECT_NAME" || return 1
+    db_url="$DB_URL_RESULT"
 
     psql "$db_url" -t -A -c "$query" 2>&1
 }
@@ -170,7 +195,8 @@ run_psql() {
 run_psql_formatted() {
     local query="$1"
     local db_url
-    db_url=$(get_db_url "$PROJECT_NAME")
+    get_db_url "$PROJECT_NAME" || return 1
+    db_url="$DB_URL_RESULT"
 
     psql "$db_url" -c "$query" 2>&1
 }
@@ -495,21 +521,38 @@ get_alembic_dir() {
     local dir="${ALEMBIC_DIRS[$project]}"
 
     if [[ -z "$dir" ]]; then
-        error "No alembic config for project: $project. Known: ${!ALEMBIC_DIRS[*]}"
+        local project_root
+        project_root=$(resolve_project_root "$project" || true)
+        if [[ -n "$project_root" ]]; then
+            if [[ -d "$project_root/backend/alembic" ]]; then
+                dir="$project_root/backend"
+            elif [[ -d "$project_root/alembic" ]]; then
+                dir="$project_root"
+            fi
+        fi
+    fi
+
+    if [[ -z "$dir" ]]; then
+        echo -e "${RED}ERROR:${NC} No alembic config for project: $project. Expected <root>/backend/alembic or <root>/alembic." >&2
+        return 1
     fi
 
     if [[ ! -d "$dir/alembic" ]]; then
-        error "Alembic directory not found: $dir/alembic"
+        echo -e "${RED}ERROR:${NC} Alembic directory not found: $dir/alembic" >&2
+        return 1
     fi
 
-    echo "$dir"
+    ALEMBIC_DIR_RESULT="$dir"
+    return 0
 }
 
 run_alembic() {
     local alembic_dir
-    alembic_dir=$(get_alembic_dir "$PROJECT_NAME")
+    get_alembic_dir "$PROJECT_NAME" || return 1
+    alembic_dir="$ALEMBIC_DIR_RESULT"
     local db_url
-    db_url=$(get_db_url "$PROJECT_NAME")
+    get_db_url "$PROJECT_NAME" || return 1
+    db_url="$DB_URL_RESULT"
 
     # Prefer project venv alembic so migrations run with project-local deps.
     if [[ -x "$alembic_dir/.venv/bin/alembic" ]]; then
@@ -729,7 +772,8 @@ cmd_dump() {
     case "$subcmd" in
         schema)
             local db_url
-            db_url=$(get_db_url "$PROJECT_NAME")
+            get_db_url "$PROJECT_NAME" || return 1
+            db_url="$DB_URL_RESULT"
             local outfile="${1:-}"
             if [[ -n "$outfile" ]]; then
                 pg_dump "$db_url" --schema-only --no-owner --no-acl > "$outfile" 2>&1
@@ -740,7 +784,8 @@ cmd_dump() {
             ;;
         data)
             local db_url
-            db_url=$(get_db_url "$PROJECT_NAME")
+            get_db_url "$PROJECT_NAME" || return 1
+            db_url="$DB_URL_RESULT"
             local outfile="${1:-}"
             if [[ -n "$outfile" ]]; then
                 pg_dump "$db_url" --no-owner --no-acl > "$outfile" 2>&1

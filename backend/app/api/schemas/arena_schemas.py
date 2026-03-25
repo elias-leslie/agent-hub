@@ -61,6 +61,53 @@ class ArenaMemoryUtilizationSummary(BaseModel):
     memory_debug_coverage_rate: float = 0.0
 
 
+class ArenaMemoryGovernanceIssueSample(BaseModel):
+    uuid: str
+    label: str
+    details: str | None = None
+    load_count: int = 0
+    invalid_types: list[str] = Field(default_factory=list)
+
+
+class ArenaMemoryGovernanceSummary(BaseModel):
+    active_count: int = 0
+    active_agent_count: int = 0
+    health_status: str = "healthy"
+    by_context_kind: dict[str, int] = Field(default_factory=dict)
+    targeted_count: int = 0
+    explicit_exclusion_count: int = 0
+    untargeted_reference_count: int = 0
+    untargeted_reference_samples: list[ArenaMemoryGovernanceIssueSample] = Field(
+        default_factory=list
+    )
+    policy_with_targeting_count: int = 0
+    missing_reference_summary_count: int = 0
+    missing_capability_summary_count: int = 0
+    oversized_policy_count: int = 0
+    oversized_policy_samples: list[ArenaMemoryGovernanceIssueSample] = Field(
+        default_factory=list
+    )
+    alias_trigger_task_type_count: int = 0
+    startup_profile_agent_target_count: int = 0
+    startup_profile_agent_target_samples: list[ArenaMemoryGovernanceIssueSample] = Field(
+        default_factory=list
+    )
+    invalid_trigger_task_type_count: int = 0
+    invalid_trigger_task_type_samples: list[ArenaMemoryGovernanceIssueSample] = Field(
+        default_factory=list
+    )
+    custom_memory_config_agent_count: int = 0
+    project_index_disabled_agent_count: int = 0
+    tool_capabilities_disabled_agent_count: int = 0
+    reference_index_disabled_agent_count: int = 0
+    memory_exclusion_agent_count: int = 0
+    excluded_memory_uuid_count: int = 0
+    hard_issue_count: int = 0
+    soft_issue_count: int = 0
+    soft_limit_breach_count: int = 0
+    issue_count: int = 0
+
+
 class ArenaReferenceYieldSummary(BaseModel):
     uuid: str
     label: str
@@ -109,5 +156,6 @@ class ArenaOverviewResponse(BaseModel):
     recent_benchmark_experiments: list[ArenaBenchmarkExperimentSignal] = Field(default_factory=list)
     open_regression_clusters: list[ArenaOpenRegressionSignal] = Field(default_factory=list)
     memory_utilization: ArenaMemoryUtilizationSummary
+    memory_governance: ArenaMemoryGovernanceSummary
     low_yield_references: list[ArenaReferenceYieldSummary] = Field(default_factory=list)
     agents: list[ArenaAgentSummary] = Field(default_factory=list)

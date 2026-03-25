@@ -119,6 +119,11 @@ def _collect_prompt_versions(scored_runs: list[AgentBenchmarkRun]) -> list[str]:
             if isinstance(raw, list):
                 prompt_version_set.update(str(item) for item in raw if item)
                 continue
+        generated_context = cs.get("generated_context")
+        if isinstance(generated_context, dict):
+            raw_generated = generated_context.get("descriptors")
+            if isinstance(raw_generated, list):
+                prompt_version_set.update(str(item) for item in raw_generated if item)
         hd = heartbeat_prompt_descriptor(cs)
         if hd:
             prompt_version_set.add(hd)

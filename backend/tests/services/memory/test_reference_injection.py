@@ -11,6 +11,7 @@ from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_injector import format_progressive_context
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
 from app.services.memory.context_profiles import CODEX_STARTUP_FULL_TAG
+from app.services.memory.memory_models import MemoryApplicability
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -85,6 +86,82 @@ class TestReferenceInjection:
         assert context.debug_info["reference_count"] == 1
         assert context.budget_usage is not None
         assert context.budget_usage.reference_tokens > 0
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_keeps_explicitly_targeted_reference_when_legacy_tags_do_not_match(self) -> None:
+        settings = MemorySettingsDTO(
+            enabled=True,
+            budget_enabled=True,
+            total_budget=3500,
+            max_mandates=0,
+            max_guardrails=0,
+            reference_index_enabled=True,
+            continuity_enabled=True,
+            continuity_max_sessions=5,
+        )
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(
+                    return_value=(
+                        [],
+                        [],
+                        [
+                            MemorySearchResult(
+                                uuid="persona-targeted",
+                                content="Use st persona first for Jenny work.",
+                                summary="Persona CLI first",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=1.0,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                                applicability=MemoryApplicability(agent_slugs=["persona"]),
+                            ),
+                            MemorySearchResult(
+                                uuid="legacy-tagged",
+                                content="Use debugger-only workflow.",
+                                summary="Debugger reference",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=0.8,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                                tags=["debugger-relevant"],
+                            ),
+                        ],
+                    )
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="persona tooling",
+                scope=MemoryScope.GLOBAL,
+                memory_config={
+                    "injection_enabled": True,
+                    "include_mandates": False,
+                    "include_guardrails": False,
+                    "include_references": True,
+                    "reference_index_enabled": True,
+                    "audience_tags": ["persona-relevant"],
+                    "exclude_tags": [],
+                    "exclude_memory_uuids": [],
+                },
+                include_mandates=False,
+                include_guardrails=False,
+                consumer_profile="agent_preview",
+                consumer_agent_slug="persona",
+                consumer_tags=["persona-relevant"],
+            )
+
+        assert [item.uuid for item in context.reference] == ["persona-targeted"]
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_assigns_render_tiers_and_saves_chars(self) -> None:

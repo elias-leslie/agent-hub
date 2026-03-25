@@ -111,6 +111,44 @@ describe("ArenaCommandCenter", () => {
         memory_get_calls: 1,
         memory_debug_coverage_rate: 1,
       },
+      memory_governance: {
+        active_count: 18,
+        active_agent_count: 2,
+        health_status: "warn",
+        by_context_kind: { policy: 7, reference: 11 },
+        targeted_count: 4,
+        explicit_exclusion_count: 1,
+        untargeted_reference_count: 7,
+        policy_with_targeting_count: 0,
+        missing_reference_summary_count: 2,
+        missing_capability_summary_count: 0,
+        oversized_policy_count: 1,
+        alias_trigger_task_type_count: 1,
+        startup_profile_agent_target_count: 0,
+        invalid_trigger_task_type_count: 1,
+        custom_memory_config_agent_count: 1,
+        project_index_disabled_agent_count: 0,
+        tool_capabilities_disabled_agent_count: 1,
+        reference_index_disabled_agent_count: 0,
+        memory_exclusion_agent_count: 1,
+        excluded_memory_uuid_count: 2,
+        invalid_trigger_task_type_samples: [
+          {
+            uuid: "ref-3",
+            label: "outdated trigger",
+            details: "invalid trigger types: security",
+            load_count: 3,
+            invalid_types: ["security"],
+          },
+        ],
+        untargeted_reference_samples: [],
+        oversized_policy_samples: [],
+        startup_profile_agent_target_samples: [],
+        hard_issue_count: 1,
+        soft_issue_count: 3,
+        soft_limit_breach_count: 0,
+        issue_count: 4,
+      },
       low_yield_references: [
         {
           uuid: "ref-2",
@@ -178,6 +216,9 @@ describe("ArenaCommandCenter", () => {
     expect(screen.getByText("1 benchmarked")).toBeInTheDocument();
     expect(screen.getByText("Experiment + regression pulse")).toBeInTheDocument();
     expect(screen.getByText("Memory watchlist")).toBeInTheDocument();
+    expect(screen.getByText("Memory governance")).toBeInTheDocument();
+    expect(screen.getByText("Agent delivery controls")).toBeInTheDocument();
+    expect(screen.getByText("outdated trigger")).toBeInTheDocument();
     expect(screen.getAllByText("behavior")).toHaveLength(1);
     expect(screen.getAllByText("missed rebuild.sh before verification")).toHaveLength(2);
     expect(screen.getByText("noisy-ref")).toBeInTheDocument();

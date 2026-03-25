@@ -14,6 +14,8 @@ export function MemoryConfigSection({
   onUpdateConfig,
 }: MemoryConfigSectionProps) {
   const subordinateControlsDisabled = !isCustomEnabled || !config.injection_enabled;
+  const referenceIndexDisabled =
+    subordinateControlsDisabled || !config.include_references;
 
   return (
     <div
@@ -47,6 +49,7 @@ export function MemoryConfigSection({
                 include_mandates: false,
                 include_guardrails: false,
                 include_references: false,
+                reference_index_enabled: false,
                 continuity_enabled: false,
               });
               return;
@@ -55,6 +58,48 @@ export function MemoryConfigSection({
           }}
           disabled={!isCustomEnabled}
           ariaLabel="Memory Injection"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-200">
+            Project Index Context
+          </p>
+          <p className="text-xs text-slate-400">
+            Inject compact canonical `.index.yaml` project metadata for project-scoped work
+          </p>
+        </div>
+        <Toggle
+          enabled={config.project_index_enabled}
+          onToggle={() =>
+            onUpdateConfig({
+              project_index_enabled: !config.project_index_enabled,
+            })
+          }
+          disabled={!isCustomEnabled}
+          ariaLabel="Project Index Context"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-200">
+            Tool Capability Context
+          </p>
+          <p className="text-xs text-slate-400">
+            Inject compact wrapper-tool discovery hints and canonical `--help` entrypoints
+          </p>
+        </div>
+        <Toggle
+          enabled={config.tool_capabilities_enabled}
+          onToggle={() =>
+            onUpdateConfig({
+              tool_capabilities_enabled: !config.tool_capabilities_enabled,
+            })
+          }
+          disabled={!isCustomEnabled}
+          ariaLabel="Tool Capability Context"
         />
       </div>
 
@@ -112,6 +157,27 @@ export function MemoryConfigSection({
           }
           disabled={subordinateControlsDisabled}
           ariaLabel="Include References"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-200">
+            Passive Reference Index
+          </p>
+          <p className="text-xs text-slate-400">
+            Inject a lightweight lookup catalog before pulling full reference details
+          </p>
+        </div>
+        <Toggle
+          enabled={config.reference_index_enabled}
+          onToggle={() =>
+            onUpdateConfig({
+              reference_index_enabled: !config.reference_index_enabled,
+            })
+          }
+          disabled={referenceIndexDisabled}
+          ariaLabel="Passive Reference Index"
         />
       </div>
 

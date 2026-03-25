@@ -785,3 +785,81 @@ async def test_inject_progressive_context_uses_active_variant_before_hash_assign
     )
     assert injected.debug_info["variant"] == "AGGRESSIVE"
     assert mock_metrics.call_args.kwargs["variant"] == "AGGRESSIVE"
+
+
+@pytest.mark.asyncio
+async def test_inject_progressive_context_adds_project_index_block_when_enabled() -> None:
+    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.settings import MemorySettingsDTO
+    from app.services.memory.variants import MemoryVariant
+
+    settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+    with (
+        patch(
+            "app.services.memory.context_injector.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
+        patch(
+            "app.services.memory.context_injector._build_context_and_format",
+            new=AsyncMock(return_value=(ProgressiveContext(total_tokens=0), "")),
+        ),
+        patch(
+            "app.services.memory.context_injector.format_project_index_context",
+            return_value="<project-index>\nproject: agent-hub\n</project-index>",
+        ),
+        patch(
+            "app.services.memory.context_injector.assign_variant",
+            return_value=MemoryVariant.BASELINE,
+        ),
+    ):
+        injected_messages, _ = await inject_progressive_context(
+            messages=[{"role": "user", "content": "Need help"}],
+            project_id="agent-hub",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+        )
+
+    assert injected_messages[0]["role"] == "system"
+    assert "<project-index>" in injected_messages[0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_inject_progressive_context_adds_tool_capability_block_when_enabled() -> None:
+    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.settings import MemorySettingsDTO
+    from app.services.memory.variants import MemoryVariant
+
+    settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+    with (
+        patch(
+            "app.services.memory.context_injector.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
+        patch(
+            "app.services.memory.context_injector._build_context_and_format",
+            new=AsyncMock(return_value=(ProgressiveContext(total_tokens=0), "")),
+        ),
+        patch(
+            "app.services.memory.context_injector.format_project_index_context",
+            return_value="",
+        ),
+        patch(
+            "app.services.memory.context_injector.format_tool_capability_context",
+            return_value="<tool-capabilities>\ntools:\n  - tool: st\n</tool-capabilities>",
+        ),
+        patch(
+            "app.services.memory.context_injector.assign_variant",
+            return_value=MemoryVariant.BASELINE,
+        ),
+    ):
+        injected_messages, context = await inject_progressive_context(
+            messages=[{"role": "user", "content": "Need help"}],
+            project_id="agent-hub",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+        )
+
+    assert "<tool-capabilities>" in injected_messages[0]["content"]
+    assert context.debug_info["tool_capabilities_included"] is True

@@ -10,7 +10,19 @@ interface TriggerTaskTypesProps {
   initialTriggerTypes: string[];
 }
 
-const COMMON_TASK_TYPES = ["database", "frontend", "backend", "testing", "deployment", "migration", "refactor", "security"];
+const COMMON_TASK_TYPES = [
+  "backend",
+  "frontend",
+  "ui-design",
+  "refactor",
+  "bug-fix",
+  "test",
+  "performance",
+  "config",
+  "devops",
+  "database",
+  "exploration",
+];
 
 export function TriggerTaskTypes({ episodeUuid, initialTriggerTypes }: TriggerTaskTypesProps) {
   const [triggerTypes, setTriggerTypes] = useState<string[]>(initialTriggerTypes);

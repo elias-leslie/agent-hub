@@ -13,6 +13,7 @@ from .context_injector_blocks import (
     get_pinned_episodes_as_search_results,
     get_triggered_references_as_search_results,
 )
+from .memory_utils import build_group_id
 from .service import MemoryScope, MemorySearchResult
 
 logger = logging.getLogger(__name__)
@@ -143,20 +144,28 @@ async def fetch_all_episodes(
     )
 
     if include_references and task_type:
-        tasks.append(
-            asyncio.create_task(
-                get_triggered_references_as_search_results(task_type=task_type, group_id="global")
+        for query_scope, query_scope_id in scopes_to_query:
+            tasks.append(
+                asyncio.create_task(
+                    get_triggered_references_as_search_results(
+                        task_type=task_type,
+                        group_id=build_group_id(query_scope, query_scope_id),
+                    )
+                )
             )
-        )
-        task_keys.append("reference_triggered")
+            task_keys.append(f"reference_triggered_{query_scope.value}")
 
     if include_references and phase:
-        tasks.append(
-            asyncio.create_task(
-                get_phase_triggered_references_as_search_results(phase=phase, group_id="global")
+        for query_scope, query_scope_id in scopes_to_query:
+            tasks.append(
+                asyncio.create_task(
+                    get_phase_triggered_references_as_search_results(
+                        phase=phase,
+                        group_id=build_group_id(query_scope, query_scope_id),
+                    )
+                )
             )
-        )
-        task_keys.append("reference_phase_triggered")
+            task_keys.append(f"reference_phase_triggered_{query_scope.value}")
 
     if not tasks:
         return [], [], []
