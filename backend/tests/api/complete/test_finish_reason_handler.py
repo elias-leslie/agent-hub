@@ -147,6 +147,35 @@ async def test_handle_finish_reason_retries_empty_end_turn_in_grace_window() -> 
 
 
 @pytest.mark.asyncio
+async def test_handle_finish_reason_retries_narration_only_end_turn_once() -> None:
+    messages_for_adapter: list[Message] = []
+    messages_dict: list[dict[str, str]] = []
+    progress_log: list = []
+    state = {"closeout_audit_used": False, "closeout_recovery_used": False}
+
+    should_break, status, error = await handle_finish_reason(
+        finish_reason="end_turn",
+        turn=2,
+        max_turns=10,
+        result=SimpleNamespace(content="[[P:started:retrieving current git branch name via git]]"),
+        messages_for_adapter=messages_for_adapter,
+        messages_dict=messages_dict,
+        progress_log=progress_log,
+        progress_callback=AsyncMock(),
+        state=state,
+        agent_slug="coder",
+        task_type="task",
+    )
+
+    assert should_break is False
+    assert status == "success"
+    assert error is None
+    assert state["closeout_recovery_used"] is True
+    assert messages_for_adapter[-1].role == "user"
+    assert "final user-facing response" in messages_for_adapter[-1].content.lower()
+
+
+@pytest.mark.asyncio
 async def test_handle_finish_reason_does_not_repeat_empty_end_turn_retry() -> None:
     should_break, status, error = await handle_finish_reason(
         finish_reason="end_turn",

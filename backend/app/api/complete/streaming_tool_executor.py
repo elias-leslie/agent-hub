@@ -17,7 +17,6 @@ from .streaming_tool_messages import (
     build_tool_result_blocks,
     sse_for_simple_event,
 )
-from .streaming_tool_retry import execute_tool_with_retry
 
 if TYPE_CHECKING:
     from app.adapters.types import StreamEvent
@@ -55,7 +54,7 @@ async def _iter_tool_execution(
 
     yield f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
 
-    exec_task = asyncio.create_task(execute_tool_with_retry(handler, tool_call))
+    exec_task = asyncio.create_task(handler.execute(tool_call))
     while not exec_task.done():
         done, _ = await asyncio.wait({exec_task}, timeout=_TOOL_HEARTBEAT_INTERVAL_S)
         if not done:
