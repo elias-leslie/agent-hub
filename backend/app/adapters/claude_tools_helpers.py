@@ -135,18 +135,22 @@ class _ClaudeSDKMessageStreamSession:
 
     def __post_init__(self) -> None:
         self.configured_max_turns = getattr(self.options, "max_turns", None)
-        self.message_iter = _sdk_query_messages(self.prompt, self.options).__aiter__()
+        self.query_session = _ClaudeSDKQuerySession(self.prompt, self.options)
 
     async def _close_iterator(self) -> None:
-        await _close_sdk_message_iter(self.message_iter)
+        await self.query_session.close()
         self.iterator_closed = True
 
     async def iterate(self) -> AsyncGenerator[tuple[Any, str | None]]:
         """Yield (message, session_id) pairs while owning iterator cleanup."""
+        await self.query_session.start()
+        message_iter = self.query_session.message_iter
+        if message_iter is None:
+            raise RuntimeError("Claude SDK query session did not initialize an iterator")
         try:
             while True:
                 try:
-                    message = await anext(self.message_iter)
+                    message = await anext(message_iter)
                 except StopAsyncIteration:
                     if self.saw_payload and not self.done_emitted:
                         finish_reason = "end_turn"
@@ -185,8 +189,7 @@ class _ClaudeSDKMessageStreamSession:
                 yield (message, self.session_id)
         finally:
             if not self.iterator_closed:
-                with suppress(asyncio.CancelledError):
-                    await _close_sdk_message_iter(self.message_iter)
+                await self.query_session.close()
                 self.iterator_closed = True
 
 
@@ -328,28 +331,60 @@ async def _sdk_query_via_internal_api(
         await session.close()
 
 
-async def _sdk_query_messages(prompt: str | AsyncIterable[dict[str, Any]], options: Any) -> AsyncIterator[Any]:
-    """Yield parsed Claude SDK messages while owning Query lifecycle in this task."""
-    if not hasattr(options, "cli_path") or not hasattr(options, "system_prompt"):
-        from claude_agent_sdk import query as sdk_query
+@dataclass
+class _ClaudeSDKQuerySession:
+    """Own one Claude SDK query iterator and its cleanup lifecycle."""
 
-        message_iter = sdk_query(prompt=prompt, options=options).__aiter__()
+    prompt: str | AsyncIterable[dict[str, Any]]
+    options: Any
+    internal_session: _ClaudeInternalQuerySession | None = None
+    message_iter: Any | None = None
+    started: bool = False
+    closed: bool = False
+
+    async def start(self) -> None:
+        """Initialize the best available SDK query path once."""
+        if self.started:
+            return
+        self.started = True
+        if not hasattr(self.options, "cli_path") or not hasattr(self.options, "system_prompt"):
+            from claude_agent_sdk import query as sdk_query
+
+            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+            return
+
         try:
-            async for message in message_iter:
-                yield message
-        finally:
-            await _close_sdk_message_iter(message_iter)
-        return
+            from claude_agent_sdk._internal.message_parser import parse_message
+            from claude_agent_sdk._internal.query import Query
+            from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
+        except ImportError:
+            logger.debug("Claude SDK internal imports unavailable, using public query API", exc_info=True)
+            from claude_agent_sdk import query as sdk_query
 
-    try:
-        async for message in _sdk_query_via_internal_api(prompt, options):
-            yield message
-    except ImportError:
-        logger.debug("Claude SDK internal imports unavailable, using public query API", exc_info=True)
-        from claude_agent_sdk import query as sdk_query
+            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+            return
 
-        async for message in sdk_query(prompt=prompt, options=options):
-            yield message
+        self.internal_session = _ClaudeInternalQuerySession(
+            prompt=self.prompt,
+            options=self.options,
+            query_cls=Query,
+            parse_message=parse_message,
+            transport=SubprocessCLITransport(prompt=self.prompt, options=self.options),
+        )
+        await self.internal_session.start()
+        self.message_iter = self.internal_session.iter_messages().__aiter__()
+
+    async def close(self) -> None:
+        """Close the iterator and owned internal session once."""
+        if self.closed:
+            return
+        self.closed = True
+        if self.message_iter is not None and hasattr(self.message_iter, "aclose"):
+            with suppress(asyncio.CancelledError):
+                await self.message_iter.aclose()
+        if self.internal_session is not None:
+            with suppress(asyncio.CancelledError):
+                await self.internal_session.close()
 
 
 def _build_can_use_tool(
