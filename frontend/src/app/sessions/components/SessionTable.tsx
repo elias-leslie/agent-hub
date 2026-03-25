@@ -43,10 +43,13 @@ export function SessionTable({
 }) {
   if (sessions.length === 0) {
     return (
-      <div className="text-center py-20 text-slate-400">
-        <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
-        <p className="text-sm font-medium">
+      <div className="empty-surface animate-fade-up">
+        <MessageSquare className="h-10 w-10 mx-auto mb-3 text-slate-600" />
+        <p className="text-sm font-medium text-slate-400">
           {modelFilter ? `No sessions with model: ${modelFilter}` : "No sessions found"}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          Sessions will appear here as agents interact with the system.
         </p>
       </div>
     );

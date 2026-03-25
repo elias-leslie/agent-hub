@@ -118,9 +118,9 @@ export function MemoryTable({
 
       {/* Empty State */}
       {!isLoading && items.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="p-4 rounded-full bg-slate-800 mb-4">
-            <Database className="w-8 h-8 text-slate-400" />
+        <div className="empty-surface animate-fade-up">
+          <div className="page-title-icon mx-auto !rounded-2xl mb-4">
+            <Database className="w-5 h-5" />
           </div>
           <h3 className="text-lg font-medium text-slate-100 mb-1">
             No memories found

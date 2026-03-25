@@ -168,7 +168,7 @@ export function BulkToolbar({
       <button
         onClick={onClear}
         disabled={isDeleting}
-        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 disabled:opacity-50"
+        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 disabled:opacity-50"
         title="Clear selection"
       >
         <X className="w-4 h-4" />
