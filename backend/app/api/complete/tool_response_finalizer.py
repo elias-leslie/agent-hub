@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
+from app.services.memory.citation_parser import normalize_terminal_summary_tag
 
 from .closeout_policy import (
     append_closeout_turn,
@@ -117,6 +118,7 @@ async def finalize_response(
                 or "Using deterministic tool summary after closeout recovery failed",
             )
 
+    final_content = normalize_terminal_summary_tag(final_content)
     thinking_content = "\n".join(thinking_parts) if thinking_parts else None
     thinking_tokens = len(thinking_content) // 4 if thinking_content else None
     estimated_tokens = len(final_content) // 4
@@ -162,10 +164,9 @@ async def _attempt_closeout_recovery(
 ) -> tuple[str | None, str | None, bool]:
     """Request one final text-only closeout turn after tool execution."""
     recovery_messages = list(base_messages)
-    recovery_dicts: list[dict[str, str]] = []
     append_closeout_turn(
         recovery_messages,
-        recovery_dicts,
+        None,
         initial_content,
         recovery_prompt,
     )

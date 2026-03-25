@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
-from app.services.memory.citation_parser import parse_summary_tags
+from app.services.memory.citation_parser import normalize_terminal_summary_tag, parse_summary_tags
 from app.services.narration_tags import parse_narration_tags
 from app.services.session_display_summary import has_unresolved_completed_summary
 
@@ -32,12 +32,13 @@ def inline_summary_contract_issues(content: str | None) -> list[str]:
     if not content:
         return ["missing inline [[S:...]] summary tag"]
 
-    parsed = parse_summary_tags(content).tags
+    normalized_content = normalize_terminal_summary_tag(content)
+    parsed = parse_summary_tags(normalized_content).tags
     if not parsed:
         return ["missing inline [[S:...]] summary tag"]
 
     issues: list[str] = []
-    if not _SUMMARY_AT_END_RE.search(content):
+    if not _SUMMARY_AT_END_RE.search(normalized_content):
         issues.append("inline summary tag is not the final line")
 
     last_description = parsed[-1].description.strip()

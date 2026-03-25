@@ -144,7 +144,7 @@ def build_tool_closeout_fallback(
 
 def append_closeout_turn(
     messages_for_adapter: list[Message],
-    messages_dict: list[dict[str, str]],
+    messages_dict: list[dict[str, str]] | None,
     assistant_content: str | None,
     prompt: str,
 ) -> None:
@@ -154,8 +154,9 @@ def append_closeout_turn(
     text = assistant_content or ""
     messages_for_adapter.append(Message(role="assistant", content=text))
     messages_for_adapter.append(Message(role="user", content=prompt))
-    messages_dict.append({"role": "assistant", "content": text})
-    messages_dict.append({"role": "user", "content": prompt})
+    if messages_dict is not None:
+        messages_dict.append({"role": "assistant", "content": text})
+        messages_dict.append({"role": "user", "content": prompt})
 
 
 def _build_recovery_message(issue: CloseoutIssue) -> str:

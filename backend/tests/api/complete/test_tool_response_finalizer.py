@@ -204,6 +204,45 @@ async def test_finalize_response_preserves_substantive_content(mocker) -> None:
 
 
 @pytest.mark.asyncio
+async def test_finalize_response_normalizes_terminal_summary_tag_near_miss(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="coder"),
+        session_id="sess-near-miss",
+        is_new_session=True,
+        model="codex/gpt-5.4",
+        provider="codex",
+        content_parts=["main\n[[S:completed:Reported the current git branch name]}"],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=2,
+        tool_calls_count=1,
+        finish_reason="stop",
+        tracker=_tracker(),
+        adapter=SimpleNamespace(complete=AsyncMock()),
+        base_messages=[Message(role="user", content="Print ONLY the current git branch name.")],
+        temperature=0.0,
+        working_dir="/srv/workspaces/projects/agent-hub",
+        tool_result_summaries=["Bash: main"],
+    )
+
+    stored_content = mock_store.await_args.args[2]
+    assert stored_content == "main\n[[S:completed:Reported the current git branch name]]"
+    assert mock_finalize.await_args.kwargs["content"] == stored_content
+
+
+@pytest.mark.asyncio
 async def test_finalize_response_prefers_progress_turns_for_reported_turn_count(mocker) -> None:
     mocker.patch(
         "app.api.complete.tool_event_storage.store_assistant_response",

@@ -30,6 +30,14 @@ def test_inline_summary_contract_flags_completed_summary_with_unresolved_blocker
     assert "completed inline summary tag still describes an unresolved blocker" in issues
 
 
+def test_inline_summary_contract_accepts_repaired_terminal_near_miss() -> None:
+    issues = inline_summary_contract_issues(
+        "[[S:completed:Reported the current git branch name]}"
+    )
+
+    assert issues == []
+
+
 def test_progress_tag_contract_requires_start_and_later_proof() -> None:
     issues = progress_tag_contract_issues(
         (

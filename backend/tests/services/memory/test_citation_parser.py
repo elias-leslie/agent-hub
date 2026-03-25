@@ -541,3 +541,12 @@ class TestParseSummaryTags:
         assert len(tags) == 1
         assert tags[0].outcome == "completed"
         assert tags[0].description == "Done"
+
+    def test_parse_summary_repairs_terminal_curly_brace_near_miss(self):
+        """A terminal `]}` near-miss should be normalized for parsing."""
+        text = "[[S:completed:Reported the current git branch name]}"
+        result = parse_summary_tags(text)
+
+        assert len(result.tags) == 1
+        assert result.tags[0].outcome == "completed"
+        assert result.tags[0].description == "Reported the current git branch name"
