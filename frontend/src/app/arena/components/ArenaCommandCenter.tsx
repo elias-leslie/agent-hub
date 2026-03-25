@@ -577,9 +577,9 @@ export function ArenaCommandCenter() {
               ))}
             </div>
           ) : (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 px-6 py-12 text-center">
-              <p className="text-sm font-medium text-slate-100">No agents found.</p>
-              <p className="mt-2 text-sm text-slate-400">
+            <div className="mt-4 empty-surface animate-fade-up">
+              <p className="text-sm font-medium text-slate-300">No agents found.</p>
+              <p className="mt-2 text-xs text-slate-500">
                 Create an agent to start building Arena evidence.
               </p>
             </div>

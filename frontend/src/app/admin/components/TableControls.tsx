@@ -137,7 +137,7 @@ export function TableControls({
               )}
             >
               Client: {clientFilter === "<unknown>" ? "UNKNOWN" : clientFilter}
-              <button onClick={() => onClientFilterChange(null)} className="hover:text-white">
+              <button onClick={() => onClientFilterChange(null)} className="hover:text-slate-100">
                 <X className="h-3 w-3" />
               </button>
             </span>
