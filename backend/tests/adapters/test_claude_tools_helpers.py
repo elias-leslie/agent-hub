@@ -14,6 +14,7 @@ from app.adapters.claude_tools_helpers import (
     _sdk_query_via_internal_api,
     _stream_sdk_messages,
 )
+from app.adapters.runtime_session import StreamBackedRuntimeSession
 
 
 class ResultMessage:
@@ -125,6 +126,60 @@ async def test_stream_sdk_messages_closes_after_result_message(monkeypatch: pyte
     assert seen == [("SimpleNamespace", None), ("ResultMessage", None)]
     assert yielded == ["assistant", "result"]
     assert iterator.closed is True
+
+
+@pytest.mark.asyncio
+async def test_build_tool_runtime_session_uses_owned_sdk_session_callbacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.adapters.claude_tools_helpers as helpers
+
+    fake_sdk_session = types.SimpleNamespace(
+        interrupt=AsyncMock(),
+        close=AsyncMock(),
+    )
+
+    async def fake_build_tool_message_session(**kwargs):
+        return fake_sdk_session
+
+    async def fake_stream_sdk_session_messages(session, provider_name):
+        assert session is fake_sdk_session
+        assert provider_name == "claude"
+        yield (types.SimpleNamespace(type="result", result="done", finish_reason="end_turn"), "sdk-session")
+
+    monkeypatch.setattr(helpers, "_build_tool_message_session", fake_build_tool_message_session)
+    monkeypatch.setattr(helpers, "_stream_sdk_session_messages", fake_stream_sdk_session_messages)
+    monkeypatch.setitem(
+        sys.modules,
+        "app.adapters.claude_tool_events",
+        types.SimpleNamespace(adapt_claude_stream=lambda stream: stream),
+    )
+
+    runtime_session = await helpers.build_tool_runtime_session(
+        messages=[],
+        model="claude-sonnet-4-6",
+        tools=[],
+        yolo_mode=False,
+        permission_checker=None,
+        working_dir=None,
+        resume_session_id=None,
+        cli_path="/usr/bin/claude",
+        model_map={},
+        provider_name="claude",
+    )
+
+    assert isinstance(runtime_session, StreamBackedRuntimeSession)
+    events = []
+    async for event, session_id in runtime_session.events():
+        events.append((event.type, session_id))
+
+    assert events == [("result", "sdk-session")]
+
+    await runtime_session.interrupt()
+    fake_sdk_session.interrupt.assert_awaited_once()
+
+    await runtime_session.close()
+    fake_sdk_session.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

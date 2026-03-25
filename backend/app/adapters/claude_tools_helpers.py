@@ -28,6 +28,7 @@ from app.adapters.claude_utils import (
     build_sdk_options,
     extract_system_and_conversation,
 )
+from app.adapters.runtime_session import StreamBackedRuntimeSession
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,17 @@ class _ClaudeSDKMessageStreamSession:
     async def _close_iterator(self) -> None:
         await self.query_session.close()
         self.iterator_closed = True
+
+    async def interrupt(self) -> None:
+        """Interrupt the active SDK query session."""
+        with suppress(asyncio.CancelledError):
+            await self.query_session.interrupt()
+
+    async def close(self) -> None:
+        """Close the active SDK query session once."""
+        if self.iterator_closed:
+            return
+        await self._close_iterator()
 
     async def iterate(self) -> AsyncGenerator[tuple[Any, str | None]]:
         """Yield (message, session_id) pairs while owning iterator cleanup."""
@@ -582,6 +594,28 @@ async def _stream_sdk_messages(
                 await inner_iter.aclose()
 
 
+async def _stream_sdk_session_messages(
+    session: _ClaudeSDKMessageStreamSession,
+    provider_name: str,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Yield (message, session_id) pairs from an owned SDK message session."""
+    del provider_name  # Reserved for future per-provider streaming specialization.
+    async with _sdk_semaphore:
+        inner_iter = session.iterate()
+        exhausted = False
+        try:
+            async for item in inner_iter:
+                yield item
+            exhausted = True
+        except Exception as e:
+            error_msg = f"Claude tool error: {e}"
+            logger.error(error_msg)
+            yield (ErrorMessage(error=error_msg), None)
+        finally:
+            if not exhausted:
+                await inner_iter.aclose()
+
+
 def _build_tool_infra(
     tools: list[dict[str, Any]],
     working_dir: str | None,
@@ -607,7 +641,7 @@ def _build_tool_infra(
     return can_use_tool_cb, mcp_servers, allowed_tools
 
 
-async def complete_with_tools(
+async def _build_tool_message_session(
     messages: list[Message],
     model: str,
     tools: list[dict[str, Any]],
@@ -620,8 +654,8 @@ async def complete_with_tools(
     provider_name: str,
     max_turns: int | None = None,
     **kwargs: Any,
-) -> AsyncIterator[tuple[Any, str | None]]:
-    """Generate with native tool calling using SDK-native permission mechanisms."""
+) -> _ClaudeSDKMessageStreamSession:
+    """Build the owned Claude SDK message session for one tool turn."""
     project_id = kwargs.get("project_id")
     agent_slug = kwargs.get("agent_slug")
     tool_catalog = kwargs.get("tool_catalog")
@@ -649,5 +683,78 @@ async def complete_with_tools(
         if use_streaming_prompt
         else conversation_prompt
     )
-    async for item in _stream_sdk_messages(prompt, options, provider_name):
+    del provider_name
+    return _ClaudeSDKMessageStreamSession(prompt=prompt, options=options)
+
+
+async def build_tool_runtime_session(
+    messages: list[Message],
+    model: str,
+    tools: list[dict[str, Any]],
+    yolo_mode: bool,
+    permission_checker: Any | None,
+    working_dir: str | None,
+    resume_session_id: str | None,
+    cli_path: str,
+    model_map: dict[str, str],
+    provider_name: str,
+    max_turns: int | None = None,
+    **kwargs: Any,
+) -> StreamBackedRuntimeSession:
+    """Build an owned Claude runtime session with canonical ToolEvents."""
+    from app.adapters.claude_tool_events import adapt_claude_stream
+
+    sdk_session = await _build_tool_message_session(
+        messages=messages,
+        model=model,
+        tools=tools,
+        yolo_mode=yolo_mode,
+        permission_checker=permission_checker,
+        working_dir=working_dir,
+        resume_session_id=resume_session_id,
+        cli_path=cli_path,
+        model_map=model_map,
+        provider_name=provider_name,
+        max_turns=max_turns,
+        **kwargs,
+    )
+    return StreamBackedRuntimeSession(
+        stream=adapt_claude_stream(
+            _stream_sdk_session_messages(sdk_session, provider_name),
+        ),
+        interrupt_callback=sdk_session.interrupt,
+        close_callback=sdk_session.close,
+    )
+
+
+async def complete_with_tools(
+    messages: list[Message],
+    model: str,
+    tools: list[dict[str, Any]],
+    yolo_mode: bool,
+    permission_checker: Any | None,
+    working_dir: str | None,
+    resume_session_id: str | None,
+    cli_path: str,
+    model_map: dict[str, str],
+    provider_name: str,
+    max_turns: int | None = None,
+    **kwargs: Any,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Generate with native tool calling using SDK-native permission mechanisms."""
+    sdk_session = await _build_tool_message_session(
+        messages=messages,
+        model=model,
+        tools=tools,
+        yolo_mode=yolo_mode,
+        permission_checker=permission_checker,
+        working_dir=working_dir,
+        resume_session_id=resume_session_id,
+        cli_path=cli_path,
+        model_map=model_map,
+        provider_name=provider_name,
+        max_turns=max_turns,
+        **kwargs,
+    )
+    async for item in _stream_sdk_session_messages(sdk_session, provider_name):
         yield item

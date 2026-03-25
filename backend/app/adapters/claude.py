@@ -9,6 +9,7 @@ from app.adapters.base import (
     CompletionResult,
     Message,
     ProviderAdapter,
+    ProviderRuntimeSession,
     StreamEvent,
 )
 from app.adapters.claude_direct import (
@@ -292,3 +293,55 @@ class ClaudeAdapter(ProviderAdapter):
             tool_catalog=tool_catalog,
         )
         return adapt_claude_stream(raw_stream)
+
+    async def start_tool_session(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        working_dir: str | None,
+        permission_config: dict[str, Any] | None,
+        max_turns: int,
+        project_id: str | None,
+        session_id: str,
+        agent_slug: str | None,
+        tool_catalog: list[dict[str, Any]] | None,
+    ) -> ProviderRuntimeSession:
+        """Start an owned Claude runtime session for one tool turn."""
+        if self._use_direct_api:
+            return await super().start_tool_session(
+                messages=messages,
+                model=model,
+                tools=tools,
+                working_dir=working_dir,
+                permission_config=permission_config,
+                max_turns=max_turns,
+                project_id=project_id,
+                session_id=session_id,
+                agent_slug=agent_slug,
+                tool_catalog=tool_catalog,
+            )
+
+        from app.adapters.claude_tools_helpers import (
+            build_tool_runtime_session as _build_tool_runtime_session,
+        )
+        from app.adapters.claude_utils import build_permission_checker
+
+        checker, yolo_mode = build_permission_checker(permission_config)
+        assert self._cli_path is not None
+        return await _build_tool_runtime_session(
+            messages=messages,
+            model=model,
+            tools=tools,
+            yolo_mode=yolo_mode,
+            permission_checker=checker,
+            working_dir=working_dir,
+            resume_session_id=None,
+            cli_path=self._cli_path,
+            model_map=self.MODEL_MAP,
+            provider_name=self.provider_name,
+            max_turns=max_turns,
+            project_id=project_id,
+            agent_slug=agent_slug,
+            tool_catalog=tool_catalog,
+        )

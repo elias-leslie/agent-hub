@@ -97,7 +97,7 @@ async def _run_tool_loop(
     """
     await update_session_health(db, session_id, "calling_model", commit=True)
 
-    runtime_session = adapter.start_tool_session(
+    runtime_session = await adapter.start_tool_session(
         messages=state.messages_for_adapter,
         model=model,
         tools=tools,
