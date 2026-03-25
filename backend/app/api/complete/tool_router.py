@@ -60,7 +60,6 @@ async def route_tool_execution(
         is_new_session: Whether this is a new session
         loaded_memory_uuids: Memory UUIDs that were loaded
         memory_group_id: Memory group for isolation
-        skip_cache: Skip response cache
         progress_callback: Progress callback function
         max_turns: Maximum turns for multi-turn execution
         project_id: Project ID
@@ -90,7 +89,6 @@ async def route_tool_execution(
         is_new_session=is_new_session,
         loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id,
-        skip_cache=skip_cache,
         progress_callback=progress_callback,
         max_turns=max_turns,
         project_id=project_id,

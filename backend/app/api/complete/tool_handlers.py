@@ -187,7 +187,6 @@ async def _complete_with_tools(
     is_new_session: bool,
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
-    skip_cache: bool,
     progress_callback: Callable[[AgentProgress], Any] | None,
     max_turns: int = 1,
     project_id: str | None = None,
