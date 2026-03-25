@@ -138,7 +138,7 @@ async def _append_dynamic_sections(
         _collect_agent_hub_heartbeat_state(target_project_id),
     )
     task_overview_payload = heartbeat_state.task_overview_payload
-    task_overview = "" if task_overview_payload is not None else heartbeat_state.task_overview_raw
+    task_overview = None if task_overview_payload is not None else heartbeat_state.task_overview_raw
     (
         active_work,
         protection_status,

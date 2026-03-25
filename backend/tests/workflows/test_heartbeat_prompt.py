@@ -386,7 +386,7 @@ class TestAppendDynamicSections:
         mock_collect_summitflow.assert_awaited_once_with("agent-hub")
         mock_collect_agent_hub.assert_awaited_once_with("agent-hub")
         mock_active_work.assert_awaited_once_with(
-            task_overview="",
+            task_overview=None,
             task_overview_payload={"projects": []},
             target_project_id="agent-hub",
             heartbeat_state=summitflow_state,
@@ -404,7 +404,7 @@ class TestAppendDynamicSections:
         mock_roster.assert_awaited_once_with()
         mock_workstreams.assert_awaited_once_with(
             "codex",
-            task_overview="",
+            task_overview=None,
             task_overview_payload={"projects": []},
             target_project_id="agent-hub",
             heartbeat_state=summitflow_state,
