@@ -24,6 +24,12 @@ def _mock_session() -> MagicMock:
     return session
 
 
+def _mock_adapter_with_stream(stream: object) -> MagicMock:
+    adapter = MagicMock()
+    adapter.complete_with_tool_events.return_value = stream
+    return adapter
+
+
 def test_init_execution_state_marks_task_sessions_for_progress_tags() -> None:
     session = MagicMock(agent_slug="coder", external_id="task-1234")
 
@@ -142,27 +148,24 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
             self.closed = True
 
     fake_stream = FakeEventStream()
+    adapter = _mock_adapter_with_stream(fake_stream)
 
-    with patch(
-        "app.api.complete.tool_handler_utils.build_event_stream",
-        return_value=fake_stream,
-    ):
-        result = await _run_tool_loop(
-            adapter=MagicMock(),
-            state=state,
-            provider="claude",
-            model="claude-sonnet-4-6",
-            tools=[],
-            tool_catalog=None,
-            working_dir=None,
-            permission_config=None,
-            session_id="session-123",
-            loaded_memory_uuids=[],
-            db=db,
-            tracker=tracker,
-            max_turns=1,
-            project_id="persona-sandbox",
-        )
+    result = await _run_tool_loop(
+        adapter=adapter,
+        state=state,
+        provider="claude",
+        model="claude-sonnet-4-6",
+        tools=[],
+        tool_catalog=None,
+        working_dir=None,
+        permission_config=None,
+        session_id="session-123",
+        loaded_memory_uuids=[],
+        db=db,
+        tracker=tracker,
+        max_turns=1,
+        project_id="persona-sandbox",
+    )
 
     assert result is not None
     assert result.status == "error"
@@ -192,30 +195,91 @@ async def test_run_tool_loop_does_not_reclose_exhausted_stream() -> None:
             self.aclose_calls += 1
 
     fake_stream = FakeEventStream()
+    adapter = _mock_adapter_with_stream(fake_stream)
 
-    with patch(
-        "app.api.complete.tool_handler_utils.build_event_stream",
-        return_value=fake_stream,
-    ):
-        result = await _run_tool_loop(
-            adapter=MagicMock(),
-            state=state,
-            provider="claude",
-            model="claude-sonnet-4-6",
-            tools=[],
-            tool_catalog=None,
-            working_dir=None,
-            permission_config=None,
-            session_id="session-789",
-            loaded_memory_uuids=[],
-            db=db,
-            tracker=tracker,
-            max_turns=1,
-            project_id="agent-hub",
-        )
+    result = await _run_tool_loop(
+        adapter=adapter,
+        state=state,
+        provider="claude",
+        model="claude-sonnet-4-6",
+        tools=[],
+        tool_catalog=None,
+        working_dir=None,
+        permission_config=None,
+        session_id="session-789",
+        loaded_memory_uuids=[],
+        db=db,
+        tracker=tracker,
+        max_turns=1,
+        project_id="agent-hub",
+    )
 
     assert result is None
     assert fake_stream.aclose_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_floors_codex_tool_turns_before_adapter_call() -> None:
+    state = _ExecutionState(agent_slug="memory-curator", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    async def fake_stream():
+        yield types.SimpleNamespace(type="result", result="done", finish_reason="end_turn"), None
+
+    adapter = _mock_adapter_with_stream(fake_stream())
+
+    result = await _run_tool_loop(
+        adapter=adapter,
+        state=state,
+        provider="codex",
+        model="codex/gpt-5.4",
+        tools=[],
+        tool_catalog=None,
+        working_dir=None,
+        permission_config=None,
+        session_id="sess-1",
+        loaded_memory_uuids=[],
+        db=db,
+        tracker=tracker,
+        max_turns=1,
+        project_id="agent-hub",
+    )
+
+    assert result is None
+    assert adapter.complete_with_tool_events.call_args.kwargs["max_turns"] == 3
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_preserves_claude_tool_turns_before_adapter_call() -> None:
+    state = _ExecutionState(agent_slug="debugger", messages_for_adapter=[])
+    tracker = AsyncMock()
+    db = AsyncMock()
+
+    async def fake_stream():
+        yield types.SimpleNamespace(type="result", result="done", finish_reason="end_turn"), None
+
+    adapter = _mock_adapter_with_stream(fake_stream())
+
+    result = await _run_tool_loop(
+        adapter=adapter,
+        state=state,
+        provider="claude",
+        model="claude-sonnet-4-6",
+        tools=[],
+        tool_catalog=None,
+        working_dir=None,
+        permission_config=None,
+        session_id="sess-2",
+        loaded_memory_uuids=[],
+        db=db,
+        tracker=tracker,
+        max_turns=7,
+        project_id="agent-hub",
+    )
+
+    assert result is None
+    assert adapter.complete_with_tool_events.call_args.kwargs["max_turns"] == 7
 
 
 @pytest.mark.asyncio
@@ -254,11 +318,9 @@ async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -269,7 +331,7 @@ async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="claude",
             model="claude-sonnet-4-6",
@@ -333,12 +395,9 @@ async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_que
             self.aclose_calls += 1
 
     fake_stream = FakeEventStream()
+    adapter = _mock_adapter_with_stream(fake_stream)
 
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=fake_stream,
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -349,7 +408,7 @@ async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_que
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="codex",
             model="codex/gpt-5.4",
@@ -420,11 +479,9 @@ async def test_run_tool_loop_formats_detached_rebuild_closeout_for_task_session(
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -435,7 +492,7 @@ async def test_run_tool_loop_formats_detached_rebuild_closeout_for_task_session(
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="codex",
             model="codex/gpt-5.4",
@@ -503,11 +560,9 @@ async def test_run_tool_loop_preserves_max_turn_finish_reason() -> None:
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -518,7 +573,7 @@ async def test_run_tool_loop_preserves_max_turn_finish_reason() -> None:
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="claude",
             model="claude-sonnet-4-6",
@@ -592,11 +647,9 @@ async def test_run_tool_loop_counts_one_model_turn_for_multiple_tool_results_in_
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -607,7 +660,7 @@ async def test_run_tool_loop_counts_one_model_turn_for_multiple_tool_results_in_
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="claude",
             model="claude-sonnet-4-6",
@@ -669,18 +722,16 @@ async def test_run_tool_loop_counts_one_model_turn_for_batched_top_level_claude_
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="claude",
             model="claude-sonnet-4-6",
@@ -761,11 +812,9 @@ async def test_run_tool_loop_counts_one_model_turn_for_consecutive_assistant_too
         async def aclose(self) -> None:
             return None
 
+    adapter = _mock_adapter_with_stream(FakeEventStream())
+
     with (
-        patch(
-            "app.api.complete.tool_handler_utils.build_event_stream",
-            return_value=FakeEventStream(),
-        ),
         patch(
             "app.api.complete.tool_event_storage.store_tool_use",
             new_callable=AsyncMock,
@@ -776,7 +825,7 @@ async def test_run_tool_loop_counts_one_model_turn_for_consecutive_assistant_too
         ),
     ):
         result = await _run_tool_loop(
-            adapter=MagicMock(),
+            adapter=adapter,
             state=state,
             provider="claude",
             model="claude-sonnet-4-6",

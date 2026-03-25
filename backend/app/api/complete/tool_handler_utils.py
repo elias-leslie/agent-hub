@@ -21,36 +21,6 @@ if TYPE_CHECKING:
 __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
 
 
-def build_event_stream(
-    adapter: Any,
-    messages: list[Message],
-    provider: str,
-    model: str,
-    tools: list[dict[str, Any]] | None,
-    tool_catalog: list[dict[str, Any]] | None,
-    working_dir: str | None,
-    permission_config: dict[str, Any] | None,
-    max_turns: int,
-    project_id: str | None,
-    session_id: str,
-    agent_slug: str | None,
-) -> Any:
-    """Return the adapter-owned ToolEvent stream for a tool loop."""
-    effective_max_turns = resolve_tool_max_turns(provider, max_turns)
-    return adapter.complete_with_tool_events(
-        messages=messages,
-        model=model,
-        tools=tools or [],
-        working_dir=working_dir,
-        permission_config=permission_config,
-        max_turns=effective_max_turns,
-        project_id=project_id,
-        session_id=session_id,
-        agent_slug=agent_slug,
-        tool_catalog=tool_catalog,
-    )
-
-
 def _extract_tool_metadata(
     tool_use_metadata: dict[str, dict[str, Any]],
     tool_use_id: str | None,
@@ -190,16 +160,14 @@ async def _run_tool_loop(
     """
     await update_session_health(db, session_id, "calling_model", commit=True)
 
-    event_stream = build_event_stream(
-        adapter=adapter,
+    event_stream = adapter.complete_with_tool_events(
         messages=state.messages_for_adapter,
-        provider=provider,
         model=model,
         tools=tools,
         tool_catalog=tool_catalog,
         working_dir=working_dir,
         permission_config=permission_config,
-        max_turns=max_turns,
+        max_turns=resolve_tool_max_turns(provider, max_turns),
         project_id=project_id,
         session_id=session_id,
         agent_slug=state.agent_slug,
