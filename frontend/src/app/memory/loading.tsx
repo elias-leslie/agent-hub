@@ -6,8 +6,8 @@ export default function MemoryLoading() {
         <div className="px-4 lg:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
-              <div className="p-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <div className="w-5 h-5 bg-emerald-300 dark:bg-emerald-600 rounded animate-pulse" />
+              <div className="p-1.5 rounded-lg bg-emerald-900/30">
+                <div className="w-5 h-5 bg-emerald-600 rounded animate-pulse" />
               </div>
               <div className="h-6 w-20 bg-slate-700 rounded animate-pulse" />
               <div className="hidden sm:flex items-center gap-3">

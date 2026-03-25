@@ -29,12 +29,12 @@ const EVENT_CONFIG: Record<
 > = {
   session_start: {
     icon: Radio,
-    color: "text-purple-500 bg-purple-100 dark:bg-purple-900/30",
+    color: "text-purple-500 bg-purple-900/30",
     label: "Started",
   },
   message: {
     icon: MessageSquare,
-    color: "text-amber-500 bg-blue-100 dark:bg-blue-900/30",
+    color: "text-amber-500 bg-blue-900/30",
     label: "Message",
   },
   tool_use: {
@@ -44,17 +44,17 @@ const EVENT_CONFIG: Record<
   },
   tool_result: {
     icon: CheckCircle,
-    color: "text-emerald-500 bg-emerald-100 dark:bg-emerald-900/30",
+    color: "text-emerald-500 bg-emerald-900/30",
     label: "Result",
   },
   complete: {
     icon: CheckCircle,
-    color: "text-green-500 bg-green-100 dark:bg-green-900/30",
+    color: "text-green-500 bg-green-900/30",
     label: "Complete",
   },
   error: {
     icon: AlertCircle,
-    color: "text-red-500 bg-red-100 dark:bg-red-900/30",
+    color: "text-red-500 bg-red-900/30",
     label: "Error",
   },
 };

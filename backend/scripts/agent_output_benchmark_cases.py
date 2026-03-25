@@ -25,26 +25,22 @@ class AgentOutputBenchmarkCase:
 
 
 _DEFAULT_FORBIDDEN_TERMS = ("[[P:", "[[S:", "Applied:", "```")
-
-_EXECUTION_CONTRACT_AGENTS: tuple[tuple[str, str], ...] = (
-    ("coder", "Code Generator"),
-    ("worker", "Self-Healing Worker"),
-    ("debugger", "Debugger"),
-    ("refactor", "Refactoring Agent"),
-    ("reviewer", "Code Reviewer"),
-    ("fixer", "Bug Fixer"),
-    ("optimizer", "Performance Optimizer"),
-    ("tester", "Smoke Tester"),
-    ("test-writer", "Test Writer"),
-    ("validator", "Quick Validator"),
-    ("triager", "Task Triager"),
-)
+_SUMMARY_TAG_CASE_SUFFIX = "_summary_tag_override"
 
 
-def _tool_backed_summary_case(agent_slug: str, agent_name: str) -> AgentOutputBenchmarkCase:
+def _humanize_agent_slug(agent_slug: str) -> str:
+    return agent_slug.replace("-", " ").title()
+
+
+def _summary_tag_case_id(agent_slug: str) -> str:
+    return f"{agent_slug.replace('-', '_')}{_SUMMARY_TAG_CASE_SUFFIX}"
+
+
+def _tool_backed_summary_case(agent_slug: str) -> AgentOutputBenchmarkCase:
     """Build the shared tool-backed summary-tag contract case for one execution agent."""
+    agent_name = _humanize_agent_slug(agent_slug)
     return AgentOutputBenchmarkCase(
-        case_id=f"{agent_slug.replace('-', '_')}_summary_tag_override",
+        case_id=_summary_tag_case_id(agent_slug),
         agent_slug=agent_slug,
         name=f"{agent_name} Summary Tag Override",
         description=(
@@ -64,11 +60,7 @@ def _tool_backed_summary_case(agent_slug: str, agent_name: str) -> AgentOutputBe
     )
 
 
-_CASES: tuple[AgentOutputBenchmarkCase, ...] = (
-    *tuple(
-        _tool_backed_summary_case(agent_slug, agent_name)
-        for agent_slug, agent_name in _EXECUTION_CONTRACT_AGENTS
-    ),
+_EXPLICIT_CASES: tuple[AgentOutputBenchmarkCase, ...] = (
     AgentOutputBenchmarkCase(
         case_id="note_titler_plain_title",
         agent_slug="note-titler",
@@ -120,12 +112,24 @@ _CASES: tuple[AgentOutputBenchmarkCase, ...] = (
     ),
 )
 
+_EXPLICIT_CASES_BY_AGENT: dict[str, tuple[AgentOutputBenchmarkCase, ...]] = {
+    agent_slug: tuple(case for case in _EXPLICIT_CASES if case.agent_slug == agent_slug)
+    for agent_slug in {case.agent_slug for case in _EXPLICIT_CASES}
+}
+
 
 def get_agent_output_benchmark_cases(agent_slug: str | None = None) -> list[AgentOutputBenchmarkCase]:
-    """Return all agent output benchmark cases, optionally scoped to one agent."""
+    """Return output benchmark cases for one agent.
+
+    Bare-output helpers keep explicit custom cases. Every other agent gets the
+    shared tool-backed summary-tag contract by default.
+    """
     if not agent_slug:
-        return list(_CASES)
-    return [case for case in _CASES if case.agent_slug == agent_slug]
+        return list(_EXPLICIT_CASES)
+    explicit_cases = _EXPLICIT_CASES_BY_AGENT.get(agent_slug)
+    if explicit_cases:
+        return list(explicit_cases)
+    return [_tool_backed_summary_case(agent_slug)]
 
 
 def get_default_case_ids(agent_slug: str) -> list[str]:
@@ -138,4 +142,6 @@ def get_case_by_id(agent_slug: str, case_id: str) -> AgentOutputBenchmarkCase:
     for case in get_agent_output_benchmark_cases(agent_slug):
         if case.case_id == case_id:
             return case
+    if case_id == _summary_tag_case_id(agent_slug) and agent_slug not in _EXPLICIT_CASES_BY_AGENT:
+        return _tool_backed_summary_case(agent_slug)
     raise KeyError(f"Unknown agent output benchmark case for {agent_slug}: {case_id}")

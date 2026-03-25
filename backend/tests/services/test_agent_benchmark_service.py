@@ -596,9 +596,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
         memory_uuid="mem-uuid-001",
     )
     mock_db = AsyncMock()
-    mock_db.scalar = AsyncMock(
-        side_effect=[persona_agent, memory_revision, 5, persona, heartbeat_prompt, supervisor_agent]
-    )
+    mock_db.scalar = AsyncMock(side_effect=[memory_revision, 5, persona, heartbeat_prompt, supervisor_agent])
 
     from contextlib import asynccontextmanager
 
@@ -608,6 +606,10 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
 
     with (
         patch("app.services._benchmark_config.async_session", _session),
+        patch(
+            "app.services._benchmark_config.get_agent_by_slug",
+            new=AsyncMock(return_value=persona_agent),
+        ),
         patch(
             "app.services.persona_document_prompt_service.get_persona_personality_document",
             new=AsyncMock(return_value=persona.personality),
@@ -667,7 +669,7 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
         memory_uuid="mem-uuid-001",
     )
     mock_db = AsyncMock()
-    mock_db.scalar = AsyncMock(side_effect=[agent, memory_revision, 5])
+    mock_db.scalar = AsyncMock(side_effect=[memory_revision, 5])
 
     from contextlib import asynccontextmanager
 
@@ -677,6 +679,10 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
 
     with (
         patch("app.services._benchmark_config.async_session", _session),
+        patch(
+            "app.services._benchmark_config.get_agent_by_slug",
+            new=AsyncMock(return_value=agent),
+        ),
         patch(
             "app.services._benchmark_config.collect_runtime_prompt_sections",
             new=AsyncMock(return_value=[]),
@@ -691,3 +697,26 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
 
     assert snapshot["memory_state"]["variant_override"] == "MINIMAL"
     assert memory_state_descriptor(snapshot) == "2026-03-12T08:00:00+00:00:42:MINIMAL"
+
+
+@pytest.mark.asyncio
+async def test_capture_benchmark_config_snapshot_skips_inactive_agents() -> None:
+    mock_db = AsyncMock()
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with (
+        patch("app.services._benchmark_config.async_session", _session),
+        patch(
+            "app.services._benchmark_config.get_agent_by_slug",
+            new=AsyncMock(return_value=None),
+        ),
+    ):
+        snapshot = await capture_benchmark_config_snapshot("worker", task_type="task")
+
+    assert snapshot == {}
+    mock_db.scalar.assert_not_called()

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from scripts.agent_output_benchmark_cases import get_case_by_id, get_default_case_ids
+from scripts.agent_output_benchmark_cases import (
+    get_agent_output_benchmark_cases,
+    get_case_by_id,
+    get_default_case_ids,
+)
 from scripts.agent_output_benchmark_eval import (
     AgentOutputBenchmarkRun,
     score_output_contract_attempt,
@@ -91,6 +95,25 @@ def test_derive_suite_id_uses_agent_default_suite() -> None:
     suite_id = derive_suite_id("note-formatter", get_default_case_ids("note-formatter"))
 
     assert suite_id == "output-contract-note-formatter"
+
+
+def test_get_default_case_ids_generates_generic_case_for_unlisted_agent() -> None:
+    assert get_default_case_ids("ux-polisher") == ["ux_polisher_summary_tag_override"]
+
+
+def test_get_case_by_id_generates_generic_summary_case_for_unlisted_agent() -> None:
+    case = get_case_by_id("ux-polisher", "ux_polisher_summary_tag_override")
+
+    assert case.agent_slug == "ux-polisher"
+    assert case.execute_tools is True
+    assert case.require_tool_call is True
+    assert case.required_terms == ("branch_ok", "[[S:")
+
+
+def test_get_agent_output_benchmark_cases_returns_explicit_helper_case() -> None:
+    cases = get_agent_output_benchmark_cases("note-titler")
+
+    assert [case.case_id for case in cases] == ["note_titler_plain_title"]
 
 
 def test_build_persistence_payload_maps_output_summary() -> None:

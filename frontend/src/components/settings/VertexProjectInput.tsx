@@ -64,7 +64,7 @@ export function VertexProjectInput({ value, onSave }: VertexProjectInputProps) {
       />
       <button
         onClick={handleSave}
-        className="p-0.5 rounded text-green-500 hover:bg-green-50 dark:hover:bg-green-950/30"
+        className="p-0.5 rounded text-green-500 hover:bg-green-950/30 cursor-pointer"
       >
         <Check className="h-3 w-3" />
       </button>
