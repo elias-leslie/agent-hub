@@ -125,6 +125,38 @@ class TestAgentDetailEndpoint:
             assert data["effective_memory_config"]["continuity_max_sessions"] == 5
 
     @pytest.mark.asyncio
+    async def test_get_agent_normalizes_sparse_memory_config_in_response(self, api_client):
+        """Agent API should return canonical memory config shapes."""
+        mock_dto = make_mock_dto(
+            system_prompt="You are a coder.",
+            memory_config={
+                "injection_enabled": False,
+                "include_mandates": True,
+            },
+        )
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.get("/api/agents/coder")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["memory_config"] == {
+                "injection_enabled": False,
+                "include_mandates": False,
+                "include_guardrails": False,
+                "include_references": False,
+                "continuity_enabled": False,
+                "continuity_max_sessions": 5,
+                "audience_tags": [],
+                "exclude_tags": [],
+            }
+            assert data["effective_memory_config"] == data["memory_config"]
+
+    @pytest.mark.asyncio
     async def test_get_agent_returns_404_for_missing(self, api_client):
         """Test getting missing agent returns 404."""
         with patch("app.api.agents.get_agent_service") as mock_get_service:

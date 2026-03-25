@@ -124,6 +124,31 @@ describe("agent form helpers", () => {
     });
   });
 
+  it("canonicalizes disabled memory_config before saving", () => {
+    const payload = buildAgentUpdatePayload({
+      name: "Git Agent",
+      primary_model_id: "claude-sonnet-4-6",
+      memory_config: {
+        injection_enabled: false,
+        include_mandates: true,
+        include_guardrails: true,
+        include_references: true,
+        continuity_enabled: true,
+      } as unknown as Agent["memory_config"],
+    });
+
+    expect(payload.memory_config).toEqual({
+      injection_enabled: false,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: false,
+      continuity_enabled: false,
+      continuity_max_sessions: 5,
+      audience_tags: [],
+      exclude_tags: [],
+    });
+  });
+
   it("strips effective_memory_config from update payloads", () => {
     const payload = buildAgentUpdatePayload({
       name: "Voice Responder",

@@ -44,24 +44,31 @@ export function parseConfig(raw: Record<string, unknown> | null): MemoryConfig {
   const enabled = typeof raw.enabled === "boolean" ? raw.enabled : true;
   const injectionEnabled =
     typeof raw.injection_enabled === "boolean" ? raw.injection_enabled : true;
+  const memoryInjectionEnabled = enabled && injectionEnabled;
   const extras = Object.fromEntries(
     Object.entries(raw).filter(([key]) => !KNOWN_KEYS.has(key))
   );
   return {
     ...extras,
-    injection_enabled: enabled && injectionEnabled,
+    injection_enabled: memoryInjectionEnabled,
     include_mandates:
-      typeof raw.include_mandates === "boolean" ? raw.include_mandates : true,
+      memoryInjectionEnabled &&
+      (typeof raw.include_mandates === "boolean" ? raw.include_mandates : true),
     include_guardrails:
-      typeof raw.include_guardrails === "boolean" ? raw.include_guardrails : true,
+      memoryInjectionEnabled &&
+      (typeof raw.include_guardrails === "boolean"
+        ? raw.include_guardrails
+        : true),
     include_references:
-      typeof raw.include_references === "boolean"
+      memoryInjectionEnabled &&
+      (typeof raw.include_references === "boolean"
         ? raw.include_references
-        : true,
+        : true),
     continuity_enabled:
-      typeof raw.continuity_enabled === "boolean"
+      memoryInjectionEnabled &&
+      (typeof raw.continuity_enabled === "boolean"
         ? raw.continuity_enabled
-        : true,
+        : true),
     continuity_max_sessions:
       typeof raw.continuity_max_sessions === "number" &&
       Number.isInteger(raw.continuity_max_sessions) &&

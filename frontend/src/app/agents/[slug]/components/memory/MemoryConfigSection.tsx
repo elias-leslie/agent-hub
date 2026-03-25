@@ -13,6 +13,8 @@ export function MemoryConfigSection({
   isCustomEnabled,
   onUpdateConfig,
 }: MemoryConfigSectionProps) {
+  const subordinateControlsDisabled = !isCustomEnabled || !config.injection_enabled;
+
   return (
     <div
       className={cn(
@@ -38,10 +40,21 @@ export function MemoryConfigSection({
         </div>
         <Toggle
           enabled={config.injection_enabled}
-          onToggle={() =>
-            onUpdateConfig({ injection_enabled: !config.injection_enabled })
-          }
+          onToggle={() => {
+            if (config.injection_enabled) {
+              onUpdateConfig({
+                injection_enabled: false,
+                include_mandates: false,
+                include_guardrails: false,
+                include_references: false,
+                continuity_enabled: false,
+              });
+              return;
+            }
+            onUpdateConfig({ injection_enabled: true });
+          }}
           disabled={!isCustomEnabled}
+          ariaLabel="Memory Injection"
         />
       </div>
 
@@ -59,7 +72,8 @@ export function MemoryConfigSection({
           onToggle={() =>
             onUpdateConfig({ include_mandates: !config.include_mandates })
           }
-          disabled={!isCustomEnabled}
+          disabled={subordinateControlsDisabled}
+          ariaLabel="Include Mandates"
         />
       </div>
 
@@ -77,7 +91,8 @@ export function MemoryConfigSection({
           onToggle={() =>
             onUpdateConfig({ include_guardrails: !config.include_guardrails })
           }
-          disabled={!isCustomEnabled}
+          disabled={subordinateControlsDisabled}
+          ariaLabel="Include Guardrails"
         />
       </div>
 
@@ -95,7 +110,8 @@ export function MemoryConfigSection({
           onToggle={() =>
             onUpdateConfig({ include_references: !config.include_references })
           }
-          disabled={!isCustomEnabled}
+          disabled={subordinateControlsDisabled}
+          ariaLabel="Include References"
         />
       </div>
 
@@ -114,7 +130,8 @@ export function MemoryConfigSection({
           onToggle={() =>
             onUpdateConfig({ continuity_enabled: !config.continuity_enabled })
           }
-          disabled={!isCustomEnabled}
+          disabled={subordinateControlsDisabled}
+          ariaLabel="Session Continuity"
         />
       </div>
 

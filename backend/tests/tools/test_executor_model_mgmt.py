@@ -228,3 +228,55 @@ async def test_update_agent_memory_returns_noop_when_patch_is_effectively_empty(
 
     assert "No memory config changes required" in result
     service.update.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_update_agent_memory_canonicalizes_disabled_injection_state() -> None:
+    mock_db = AsyncMock()
+    agent = SimpleNamespace(
+        id="agent-1",
+        memory_config={
+            "injection_enabled": True,
+            "include_mandates": True,
+            "include_guardrails": True,
+            "include_references": True,
+            "continuity_enabled": True,
+            "continuity_max_sessions": 5,
+            "audience_tags": [],
+            "exclude_tags": [],
+        },
+    )
+    updated = SimpleNamespace(version=10)
+
+    with (
+        patch("app.db.async_session", _mock_async_session(mock_db)),
+        patch("app.services.agent_service.get_agent_service") as mock_get_service,
+    ):
+        service = mock_get_service.return_value
+        service.get_by_slug = AsyncMock(return_value=agent)
+        service.update = AsyncMock(return_value=updated)
+
+        result = await update_agent_memory(
+            agent_slug="git-agent",
+            memory_config_patch={"injection_enabled": False},
+            add_audience_tags=None,
+            remove_audience_tags=None,
+            clear_audience_tags=False,
+            add_exclude_tags=None,
+            remove_exclude_tags=None,
+            clear_exclude_tags=False,
+            change_reason="disable helper-agent memory",
+        )
+
+    assert "Agent 'git-agent' memory updated (version 10)." in result
+    kwargs = service.update.await_args.kwargs
+    assert kwargs["memory_config"] == {
+        "injection_enabled": False,
+        "include_mandates": False,
+        "include_guardrails": False,
+        "include_references": False,
+        "continuity_enabled": False,
+        "continuity_max_sessions": 5,
+        "audience_tags": [],
+        "exclude_tags": [],
+    }

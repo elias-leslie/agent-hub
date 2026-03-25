@@ -88,7 +88,11 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             </p>
           </div>
         </div>
-        <Toggle enabled={isCustomEnabled} onToggle={toggleCustomSettings} />
+        <Toggle
+          enabled={isCustomEnabled}
+          onToggle={toggleCustomSettings}
+          ariaLabel="Enable Custom Memory Settings"
+        />
       </div>
 
       {/* Settings Panel */}
