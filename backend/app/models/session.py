@@ -21,6 +21,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .field_lengths import EXTERNAL_ID_MAX_LENGTH
 
 
 class SessionEventType:
@@ -89,7 +90,9 @@ class Session(Base):
     # Agent that processed this session (e.g., "coder", "validator")
     agent_slug: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     # External ID for caller-defined cost aggregation (e.g., task ID, user ID, billing entity)
-    external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    external_id: Mapped[str | None] = mapped_column(
+        String(EXTERNAL_ID_MAX_LENGTH), nullable=True, index=True
+    )
     # Session type for categorizing workflows
     session_type: Mapped[str] = mapped_column(
         Enum(

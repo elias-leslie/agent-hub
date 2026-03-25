@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+
 
 class MessageInput(BaseModel):
     """Input message in conversation.
@@ -99,6 +101,7 @@ class CompletionRequest(BaseModel):
     project_id: str = Field(..., description="Project ID for session tracking (required)")
     external_id: str | None = Field(
         default=None,
+        max_length=EXTERNAL_ID_MAX_LENGTH,
         description="External ID for cost aggregation (e.g., task-123, user-456)",
     )
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")

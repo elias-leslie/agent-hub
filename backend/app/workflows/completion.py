@@ -13,6 +13,7 @@ from hatchet_sdk import Context
 from pydantic import BaseModel, Field
 
 from app.hatchet_app import hatchet
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.completion_events import (
     CompletionEventType,
     CompletionProgressEvent,
@@ -30,7 +31,7 @@ class CompletionInput(BaseModel):
     temperature: float = 0.7
     project_id: str | None = None
     session_id: str = ""
-    external_id: str | None = None
+    external_id: str | None = Field(default=None, max_length=EXTERNAL_ID_MAX_LENGTH)
     client_id: str | None = None
     request_source: str | None = None
     agent_slug: str | None = None

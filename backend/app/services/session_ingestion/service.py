@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.agent_routing import resolve_agent
 from app.services.event_storage import get_max_sequence, get_max_turn
 from app.services.memory.session_analysis import analyze_session
@@ -54,6 +55,14 @@ def _append_unique(values: list[str] | None, item: str | None) -> list[str]:
     if item and item not in result:
         result.append(item)
     return result
+
+
+def _validate_external_id(external_id: str | None) -> None:
+    """Reject external IDs that exceed the persisted session field length."""
+    if external_id and len(external_id) > EXTERNAL_ID_MAX_LENGTH:
+        raise ValueError(
+            f"external_id exceeds max length {EXTERNAL_ID_MAX_LENGTH}: {len(external_id)}"
+        )
 
 
 def _build_new_session(
@@ -138,6 +147,7 @@ async def upsert_session(
 ) -> tuple[Session, SessionUpsertResult]:
     """Create or update a session using the canonical ingestion contract."""
     await _validate_project_id(request.project_id)
+    _validate_external_id(request.external_id)
     provider = request.provider
     model = request.model
     if request.agent_slug:
