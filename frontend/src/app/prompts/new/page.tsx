@@ -80,35 +80,34 @@ export default function PromptNewPage() {
       )}
 
       {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="page-header">
+        <div className="page-header-row px-4 lg:px-8">
+          <div className="page-title-group">
             <button
               onClick={() => router.push("/prompts")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+              className="icon-button"
+              aria-label="Go back"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold text-slate-100">
-              New Prompt
-            </h1>
+            <h1 className="page-title">New Prompt</h1>
           </div>
           <button
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !slug || !name || !content}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-50 transition-colors"
+            className="button-primary"
           >
             {createMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <span className="flex items-center gap-2">
+              <>
                 <Save className="h-4 w-4" />
                 Create
-              </span>
+              </>
             )}
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Form */}
       <div className="max-w-4xl mx-auto px-6 py-8">
@@ -123,7 +122,7 @@ export default function PromptNewPage() {
               value={name}
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder="My Prompt"
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="control-input"
             />
           </div>
 
@@ -137,7 +136,7 @@ export default function PromptNewPage() {
               value={slug}
               onChange={(e) => handleSlugChange(e.target.value)}
               placeholder="my-prompt"
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="control-input font-mono"
             />
             {autoSlug && name && (
               <p className="text-xs text-slate-400">
@@ -170,7 +169,7 @@ export default function PromptNewPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Optional description..."
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+              className="control-input resize-y"
             />
           </div>
 
@@ -186,7 +185,7 @@ export default function PromptNewPage() {
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   isGlobal
                     ? "bg-amber-950/40 border-amber-800 text-amber-500"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
+                    : "border-slate-700 text-slate-400 hover:bg-slate-800",
                 )}
               >
                 <Globe className="h-4 w-4" />
@@ -197,8 +196,8 @@ export default function PromptNewPage() {
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                   !isGlobal
-                    ? "bg-slate-800 border-slate-600 text-slate-700"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
+                    ? "bg-slate-800 border-slate-600 text-slate-200"
+                    : "border-slate-700 text-slate-400 hover:bg-slate-800",
                 )}
               >
                 Non-Global

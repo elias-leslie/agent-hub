@@ -190,7 +190,7 @@ export default function ProjectPermissionsPage() {
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-14 bg-slate-800/40 rounded animate-pulse" />
+              <div key={i} className="h-14 rounded-xl animate-shimmer" />
             ))}
           </div>
         ) : permissions?.length === 0 ? (

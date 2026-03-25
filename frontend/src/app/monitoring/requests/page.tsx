@@ -230,7 +230,7 @@ export default function MonitoringRequestsPage() {
               Request Distribution by Tool Type
             </h2>
             {metricsLoading ? (
-              <div className="h-16 bg-slate-800 rounded animate-pulse" />
+              <div className="h-16 rounded-xl animate-shimmer" />
             ) : (
               <ToolTypeDistribution data={metrics?.by_tool_type || []} />
             )}
@@ -244,7 +244,7 @@ export default function MonitoringRequestsPage() {
             {metricsLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-12 bg-slate-800 rounded animate-pulse" />
+                  <div key={i} className="h-12 rounded-xl animate-shimmer" />
                 ))}
               </div>
             ) : (
@@ -260,7 +260,7 @@ export default function MonitoringRequestsPage() {
             {metricsLoading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-12 bg-slate-800 rounded animate-pulse" />
+                  <div key={i} className="h-12 rounded-xl animate-shimmer" />
                 ))}
               </div>
             ) : (

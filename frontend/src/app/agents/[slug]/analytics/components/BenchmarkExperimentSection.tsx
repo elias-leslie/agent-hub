@@ -81,7 +81,7 @@ export function BenchmarkExperimentSection({
               )}
 
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-slate-50 p-3 bg-slate-950/50">
+                <div className="rounded-lg bg-slate-950/50 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-400">
                     {experiment.baseline.label}
                   </p>
@@ -98,7 +98,7 @@ export function BenchmarkExperimentSection({
                     Tools {formatMetric(experiment.baseline.avg_tool_calls)}
                   </p>
                 </div>
-                <div className="rounded-lg bg-slate-50 p-3 bg-slate-950/50">
+                <div className="rounded-lg bg-slate-950/50 p-3">
                   <p className="text-xs uppercase tracking-wide text-slate-400">
                     {experiment.candidate.label}
                   </p>
