@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 
 from app.adapters.base import Message
 
+from .closeout_policy import build_closeout_recovery_prompt, detect_closeout_issue
 from .schemas import StreamingChunk
 from .streaming_context import StreamContext
 from .streaming_persistence import build_done_sse
@@ -22,15 +23,6 @@ logger = logging.getLogger(__name__)
 # Match CompletionRequest.max_turns default; shared tool budget resolution lifts
 # low values to the minimum viable tool loop when tools are actually enabled.
 DEFAULT_MAX_TOOL_TURNS = 1
-_EMPTY_FINAL_RESPONSE_MSG = (
-    "<system-final-response>"
-    "You have finished tool work but have not produced a final user-facing response. "
-    "Write the final response now. "
-    "If no changes were needed, say so plainly. "
-    "If changes were made, summarize the exact changes and evidence. "
-    "Do not call more tools unless a missing fact blocks the response."
-    "</system-final-response>"
-)
 
 __all__ = [
     "DEFAULT_MAX_TOOL_TURNS",
@@ -60,7 +52,7 @@ async def iter_stream_sse_with_tools(
         session_id=ctx.session_id,
     )
     current_messages = list(messages)
-    empty_closeout_used = False
+    closeout_recovery_used = False
 
     for turn in range(1, max_tool_turns + 1):
         turn_sses, pending_calls, resolved_ids, turn_text, done_event = await collect_turn_events(
@@ -73,14 +65,22 @@ async def iter_stream_sse_with_tools(
             return
         unresolved = [tc for tc in pending_calls if tc.tool_id not in resolved_ids]
         if not unresolved:
-            if (
-                not content_buf[0].strip()
-                and not empty_closeout_used
-                and turn < max_tool_turns
-            ):
+            closeout_issue = detect_closeout_issue(
+                turn_text,
+                tool_calls_count=len(pending_calls),
+            )
+            if closeout_issue and not closeout_recovery_used and turn < max_tool_turns:
                 current_messages.append(Message(role="assistant", content=turn_text))
-                current_messages.append(Message(role="user", content=_EMPTY_FINAL_RESPONSE_MSG))
-                empty_closeout_used = True
+                current_messages.append(
+                    Message(
+                        role="user",
+                        content=build_closeout_recovery_prompt(
+                            turn_text,
+                            tool_calls_count=len(pending_calls),
+                        ),
+                    )
+                )
+                closeout_recovery_used = True
                 continue
             yield await build_done_sse(
                 event=done_event, ctx=ctx,

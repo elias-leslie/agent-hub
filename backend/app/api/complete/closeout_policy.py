@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from app.services.session_display_summary import clean_display_summary_text
+
 if TYPE_CHECKING:
     from app.adapters.base import Message
 
@@ -38,7 +40,10 @@ def detect_closeout_issue(
     text = (content or "").strip()
     if not text:
         return "empty"
-    if tool_calls_count > 0 and text in _TOOL_PLACEHOLDER_CLOSEOUTS:
+    cleaned = clean_display_summary_text(text)
+    if not cleaned:
+        return "empty"
+    if tool_calls_count > 0 and cleaned in _TOOL_PLACEHOLDER_CLOSEOUTS:
         return "tool_placeholder"
     return None
 
