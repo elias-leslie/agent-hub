@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.ownership_inventory import query_project_ownership
+from app.services.ownership_inventory import (
+    query_project_active_specialists,
+    query_project_ownership,
+)
 
 
 @pytest.mark.asyncio
@@ -142,3 +145,92 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
     assert owners[0].declared_scope_paths == ["backend/app/services/ownership_inventory.py"]
     assert owners[0].observed_read_paths == ["backend/app/services/session_live_activity.py"]
     assert owners[0].observed_write_paths == ["backend/app/services/ownership_inventory.py"]
+
+
+@pytest.mark.asyncio
+async def test_query_project_active_specialists_excludes_dead_candidate_sessions() -> None:
+    now = datetime.now(UTC)
+    persona_session = SimpleNamespace(
+        id="sess-persona",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=3),
+        updated_at=now - timedelta(minutes=1),
+        agent_slug="persona",
+        parent_session_id=None,
+        request_source="heartbeat",
+        status="active",
+        external_id=None,
+        current_branch=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Heartbeat running",
+                "last_event_type": "heartbeat",
+                "last_event_at": now.isoformat(),
+                "last_model_activity_at": now.isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 1,
+            }
+        },
+    )
+    live_session = SimpleNamespace(
+        id="sess-live",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=8),
+        updated_at=now - timedelta(minutes=1),
+        agent_slug="reviewer",
+        parent_session_id="parent-live",
+        request_source="dispatch",
+        status="active",
+        external_id=None,
+        current_branch=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Waiting for model after Read",
+                "last_event_type": "tool_result",
+                "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 1,
+            }
+        },
+    )
+    dead_candidate = SimpleNamespace(
+        id="sess-dead",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=50),
+        updated_at=now - timedelta(minutes=45),
+        agent_slug="reviewer",
+        parent_session_id="parent-dead",
+        request_source="dispatch",
+        status="active",
+        external_id=None,
+        current_branch=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Transcript sync heartbeat",
+                "last_event_type": "heartbeat",
+                "last_event_at": (now - timedelta(minutes=45)).isoformat(),
+                "last_model_activity_at": (now - timedelta(hours=2)).isoformat(),
+                "last_heartbeat_at": now.isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            }
+        },
+    )
+
+    db = AsyncMock()
+    mock_result = MagicMock()
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = [persona_session, live_session, dead_candidate]
+    mock_result.scalars.return_value = mock_scalars
+    db.execute.return_value = mock_result
+
+    specialists = await query_project_active_specialists(db, "agent-hub")
+
+    assert [specialist.session_id for specialist in specialists] == ["sess-live"]

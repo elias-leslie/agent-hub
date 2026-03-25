@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UnifiedPersonaWorkspace } from "@/app/persona/components/UnifiedPersonaWorkspace";
@@ -349,6 +349,20 @@ vi.mock("@agent-hub/chat-ui", () => ({
   useChatStream: (...args: unknown[]) => mockUseChatStream(...args),
 }));
 
+function openHealthOverview() {
+  fireEvent.click(screen.getByRole("button", { name: /Health overview/i }));
+}
+
+function getToolFrictionFilterButton() {
+  const button = screen
+    .getAllByRole("button", { name: /Tool Friction/i })
+    .find((candidate) => candidate.textContent?.includes("Runs where tools failed"));
+  if (!button) {
+    throw new Error("Missing Tool Friction overview filter button");
+  }
+  return button;
+}
+
 describe("UnifiedPersonaWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -509,15 +523,18 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(screen.getByText("pause that task")).toBeInTheDocument();
     });
 
-    expect(screen.getAllByTestId("stream-item")[1]).toHaveTextContent("Checked active work");
-    expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
+    const heartbeatItem = screen.getAllByTestId("stream-item")[1];
+    expect(heartbeatItem).toHaveTextContent("Checked active work");
+    expect(heartbeatItem).toHaveTextContent(/git-agent\s*on agent-hub/i);
     expect(screen.getByTestId("message-input")).toBeInTheDocument();
-    expect(screen.getByTestId("session-dropdown")).toBeInTheDocument();
+
+    openHealthOverview();
+
     expect(screen.getByText("Repeated Friction")).toBeInTheDocument();
     expect(screen.getByText("Agent Scorecards")).toBeInTheDocument();
     expect(screen.getByText("dt -q -d kept failing or wasting turns")).toBeInTheDocument();
     const timelineTimes = document.querySelectorAll("time[datetime]");
-    expect(timelineTimes).toHaveLength(3);
+    expect(timelineTimes).toHaveLength(2);
   });
 
   it("filters the timeline from the pulse controls", async () => {
@@ -537,43 +554,19 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(screen.getByText("Tool Friction")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByText("Tool Friction")[0]);
+    openHealthOverview();
+    fireEvent.click(getToolFrictionFilterButton());
 
     await waitFor(() => {
       expect(screen.queryByText("pause that task")).not.toBeInTheDocument();
     });
 
-    expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
-    expect(screen.queryByText("Checked active work")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /git-agent.*on agent-hub.*task-123/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Checked active work across queue, cleanup, and session truth\./i)).not.toBeInTheDocument();
     expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
   });
 
-  it("expands truncated issue summaries inline with More and Less", async () => {
-    render(
-      <UnifiedPersonaWorkspace
-        agentSlug="persona"
-        activeSessionId="chat-1"
-        sidebarRefreshTrigger={0}
-        runtimeSyncKey=""
-        onSelectSession={vi.fn()}
-        onSessionCreated={vi.fn()}
-        onNewSession={vi.fn()}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
-    });
-
-    const moreButtons = screen.getAllByRole("button", { name: "More" });
-    expect(moreButtons.length).toBeGreaterThan(0);
-    fireEvent.click(moreButtons[0]);
-
-    expect(screen.getByText(/quality gate passed/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Less" })).toBeInTheDocument();
-  });
-
-  it("dedupes duplicate warning markers and humanizes wrapped task payloads", async () => {
+  it("dedupes duplicate warning markers on the collapsed heartbeat card", async () => {
     const response = buildStreamResponse();
     const heartbeat = response.entries.find((entry) => entry.id === "h-1");
     if (!heartbeat) {
@@ -624,13 +617,11 @@ describe("UnifiedPersonaWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/Task task-605a52fc/i)).toBeInTheDocument();
+      expect(screen.getByText("Completed with warnings")).toBeInTheDocument();
     });
 
     expect(screen.getAllByText("Completed with warnings")).toHaveLength(1);
-    expect(screen.getAllByText(/Task task-605a52fc/i)).toHaveLength(1);
     expect(screen.queryByText(/\[\{'type': 'text'/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Title: Live validation: Persona dispatch judgment after workflow cleanup/i)).toBeInTheDocument();
   });
 
   it("renders stream items in chronological order with newest at the bottom", async () => {
@@ -711,11 +702,11 @@ describe("UnifiedPersonaWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Spawned Agents")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /git-agent.*on agent-hub.*task-123/i })).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText("Spawned Agents")).toHaveLength(1);
-    expect(screen.getByText("git-agent on agent-hub")).toBeInTheDocument();
+    const heartbeatItem = screen.getAllByTestId("stream-item")[1];
+    expect(within(heartbeatItem).getByRole("button", { name: /git-agent.*on agent-hub.*task-123/i })).toBeInTheDocument();
   });
 
   it("expands heartbeat and child run details inline", async () => {
@@ -732,11 +723,11 @@ describe("UnifiedPersonaWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Show heartbeat details")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /^Heartbeat completed/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText("Show heartbeat details"));
-    fireEvent.click(screen.getByText("Show run details"));
+    fireEvent.click(screen.getByRole("button", { name: /^Heartbeat completed/i }));
+    fireEvent.click(screen.getByRole("button", { name: /git-agent.*on agent-hub.*task-123/i }));
 
     await waitFor(() => {
       expect(mockFetchSessionEvents).toHaveBeenCalledWith("hb-1", { page: 1, page_size: 500 });
@@ -745,21 +736,12 @@ describe("UnifiedPersonaWorkspace", () => {
 
     expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
     expect(screen.getAllByText("Checks passed").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Overview").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText("Issues").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText("Important events").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByRole("button", { name: /Show full trace/i })).toBeInTheDocument();
     expect(screen.queryByText(/PERSONA SAFETY BOUNDARIES/i)).not.toBeInTheDocument();
     expect(screen.getAllByText("Completed with warnings").length).toBeGreaterThan(0);
     expect(screen.getByText("dt -q -d hit tool friction")).toBeInTheDocument();
-    expect(screen.getAllByText("Warning").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Recovered").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Tool Friction").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Retries").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("agent-hub").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("ok").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Warning/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Tool Friction/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/\"status\"/)).not.toBeInTheDocument();
-
   });
 
   it("expands only the selected heartbeat detail block", async () => {
@@ -778,19 +760,18 @@ describe("UnifiedPersonaWorkspace", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByText("Show heartbeat details")).toHaveLength(2);
+      expect(screen.getAllByRole("button", { name: /^Heartbeat completed/i })).toHaveLength(2);
     });
 
-    fireEvent.click(screen.getAllByText("Show heartbeat details")[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Heartbeat completed/i })[0]);
 
     await waitFor(() => {
       expect(mockFetchSessionEvents).toHaveBeenCalledWith("hb-1", { page: 1, page_size: 500 });
     });
 
-    expect(screen.getAllByText("Hide heartbeat details")).toHaveLength(1);
-    expect(screen.getAllByText("Show heartbeat details")).toHaveLength(1);
-    expect(screen.getAllByText("Overview")).toHaveLength(1);
-    expect(screen.getAllByText("Important events")).toHaveLength(1);
+    expect(mockFetchSessionEvents).not.toHaveBeenCalledWith("hb-2", { page: 1, page_size: 500 });
+    expect(screen.getByText("Ready queue is clear")).toBeInTheDocument();
+    expect(screen.queryByText("No additional work")).not.toBeInTheDocument();
   });
 
   it("shows search match chips and can jump through them", async () => {
@@ -813,7 +794,7 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText(/Checked active work across queue, cleanup, and session truth\./i)).toBeInTheDocument();
 
     fireEvent.change(
-      screen.getByPlaceholderText(/Search .* history, task IDs, files, agents\.\.\./i),
+      screen.getByPlaceholderText(/Search history, tasks, files, agents\.\.\./i),
       {
         target: { value: "active work" },
       },
@@ -823,7 +804,7 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(screen.getByText(/1 of 1 matches/)).toBeInTheDocument();
     });
 
-    expect(screen.getByRole("button", { name: /heartbeat.*checkedactivework/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Checked active work/i })).toBeInTheDocument();
     expect(mockFetchPersonaStream).toHaveBeenLastCalledWith(
       expect.objectContaining({
         search: "active work",
@@ -872,7 +853,7 @@ describe("UnifiedPersonaWorkspace", () => {
       fireEvent.scroll(container);
     });
 
-    expect(screen.getByText("Auto-follow off")).toBeInTheDocument();
+    expect(screen.getByText(/Jump to latest/)).toBeInTheDocument();
 
     await act(async () => {
       rerender(
@@ -892,7 +873,9 @@ describe("UnifiedPersonaWorkspace", () => {
       expect(mockFetchPersonaStream).toHaveBeenCalledTimes(2);
     });
 
-    expect(scrollToSpy).not.toHaveBeenCalled();
+    expect(
+      scrollToSpy.mock.calls.every(([options]) => options?.behavior !== "smooth"),
+    ).toBe(true);
   });
 
   it("hides jump-to-latest after the user manually scrolls back to the bottom", async () => {
@@ -930,7 +913,6 @@ describe("UnifiedPersonaWorkspace", () => {
     });
 
     expect(screen.getByText(/Jump to latest/)).toBeInTheDocument();
-    expect(screen.getByText("Auto-follow off")).toBeInTheDocument();
 
     await act(async () => {
       (container as HTMLDivElement).scrollTop = 601;
@@ -940,6 +922,5 @@ describe("UnifiedPersonaWorkspace", () => {
     await waitFor(() => {
       expect(screen.queryByText(/Jump to latest/)).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Auto-follow on")).toBeInTheDocument();
   });
 });

@@ -268,6 +268,14 @@ _STRONG_DEAD_SIGNALS = {
     "no_structured_activity", "heartbeat_only", "heartbeat_missing",
     "heartbeat_absent_6h", "termination_signal", "detached_control_plane_rebuild",
 }
+_NON_ACTIONABLE_LIFECYCLE_STATES = {
+    "dead_candidate",
+    "reapable",
+    "completed",
+    "failed",
+    "error",
+    "idle",
+}
 
 
 def _apply_lifecycle_state(
@@ -650,3 +658,21 @@ def build_live_activity_response(
         has_owner_lane=has_owner_lane, has_specialist_lane=has_specialist_lane,
     )
     return response
+
+
+def is_session_actionably_active(
+    session: Session,
+    *,
+    has_owner_lane: bool = False,
+    has_specialist_lane: bool = False,
+) -> bool:
+    """Return whether a session should count as active work for coordination views."""
+    response = build_live_activity_response(
+        session,
+        has_owner_lane=has_owner_lane,
+        has_specialist_lane=has_specialist_lane,
+    )
+    if not response:
+        return False
+    lifecycle_state = str(response.get("lifecycle_state") or "idle")
+    return lifecycle_state not in _NON_ACTIONABLE_LIFECYCLE_STATES

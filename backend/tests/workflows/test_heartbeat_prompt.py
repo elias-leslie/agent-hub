@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,6 +23,7 @@ from app.workflows._heartbeat_data import (
     _get_git_status_summary,
     _get_protection_status_summary,
     _get_workstream_inventory,
+    _query_active_specialist_sessions,
 )
 
 
@@ -31,6 +32,22 @@ def _mock_async_session_with_rows(rows: list[object]):
     mock_db = AsyncMock()
     mock_result = MagicMock()
     mock_result.all.return_value = rows
+    mock_db.execute.return_value = mock_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    return _session, mock_db
+
+
+def _mock_async_session_with_scalars(rows: list[object]):
+    """Create an async_session context manager whose execute().scalars().all() yields rows."""
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_scalars = MagicMock()
+    mock_scalars.all.return_value = rows
+    mock_result.scalars.return_value = mock_scalars
     mock_db.execute.return_value = mock_result
 
     @asynccontextmanager
@@ -723,6 +740,92 @@ class TestActiveSpecialistInventory:
 
         mock_query.assert_awaited_once_with("agent-hub")
 
+    @pytest.mark.asyncio
+    async def test_query_excludes_dead_candidate_specialists(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_scalars(
+            [
+                MagicMock(
+                    id="sess-persona",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    parent_session_id=None,
+                    request_source="heartbeat",
+                    created_at=now,
+                    updated_at=now,
+                    status="active",
+                    external_id=None,
+                    current_branch=None,
+                    provider_metadata={
+                        "live_activity": {
+                            "phase": "waiting_for_model",
+                            "status": "active",
+                            "summary": "Heartbeat running",
+                            "last_event_type": "heartbeat",
+                            "last_event_at": now.isoformat(),
+                            "last_model_activity_at": now.isoformat(),
+                            "outstanding_tool_calls": 0,
+                            "tool_calls_count": 1,
+                        }
+                    },
+                ),
+                MagicMock(
+                    id="sess-live",
+                    agent_slug="reviewer",
+                    project_id="agent-hub",
+                    parent_session_id="parent-live",
+                    request_source="dispatch",
+                    created_at=now,
+                    updated_at=now,
+                    status="active",
+                    external_id=None,
+                    current_branch=None,
+                    provider_metadata={
+                        "live_activity": {
+                            "phase": "waiting_for_model",
+                            "status": "active",
+                            "summary": "Waiting for model after Read",
+                            "last_event_type": "tool_result",
+                            "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                            "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                            "outstanding_tool_calls": 0,
+                            "tool_calls_count": 1,
+                        }
+                    },
+                ),
+                MagicMock(
+                    id="sess-dead",
+                    agent_slug="reviewer",
+                    project_id="agent-hub",
+                    parent_session_id="parent-dead",
+                    request_source="dispatch",
+                    created_at=now - timedelta(minutes=45),
+                    updated_at=now - timedelta(minutes=45),
+                    status="active",
+                    external_id=None,
+                    current_branch=None,
+                    provider_metadata={
+                        "live_activity": {
+                            "phase": "waiting_for_model",
+                            "status": "active",
+                            "summary": "Transcript sync heartbeat",
+                            "last_event_type": "heartbeat",
+                            "last_event_at": (now - timedelta(minutes=45)).isoformat(),
+                            "last_model_activity_at": (now - timedelta(hours=2)).isoformat(),
+                            "last_heartbeat_at": now.isoformat(),
+                            "outstanding_tool_calls": 0,
+                            "tool_calls_count": 2,
+                        }
+                    },
+                ),
+            ]
+        )
+
+        with patch("app.db.async_session", session_factory):
+            result = await _query_active_specialist_sessions("agent-hub", now=now)
+
+        assert [row["session_id"] for row in result] == ["sess-live"]
+
 
 class TestRecentlyCompletedSessionsSection:
     """Tests for recently completed session summaries in heartbeat context."""
@@ -878,6 +981,58 @@ class TestRecentlyCompletedSessionsSection:
             result = await _fetch_recently_completed_sessions_section()
 
         assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_skips_benchmark_sessions_from_completed_summary(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                MagicMock(
+                    id="sess-benchmark",
+                    agent_slug="coder",
+                    project_id="agent-hub",
+                    external_id="benchmark:coder:1:abc12345",
+                    summary_oneliner="Printed BRANCH_OK via bash",
+                    created_at=now,
+                ),
+                MagicMock(
+                    id="sess-real",
+                    agent_slug="debugger",
+                    project_id="summitflow",
+                    external_id="task-d2754718",
+                    summary_oneliner="Reconciled the stale lane and verified runtime truth.",
+                    created_at=now,
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "sess-benchmark": MagicMock(
+                        summary="Printed BRANCH_OK via bash",
+                        has_summary_tag=True,
+                        summary_outcome="completed",
+                        has_unresolved_blocker=False,
+                    ),
+                    "sess-real": MagicMock(
+                        summary="Reconciled the stale lane and verified runtime truth.",
+                        has_summary_tag=True,
+                        summary_outcome="completed",
+                        has_unresolved_blocker=False,
+                    ),
+                },
+            ),
+        ):
+            result = await _fetch_recently_completed_sessions_section()
+
+        assert "Recently completed sessions: 1" in result
+        assert "Printed BRANCH_OK" not in result
+        assert "debugger on summitflow" in result
+        assert "Reconciled the stale lane and verified runtime truth." in result
 
 
 class TestActiveWorkSummary:
@@ -1198,14 +1353,14 @@ class TestGetWorkstreamInventory:
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_omits_persona_completed_lanes_without_task_ids(self) -> None:
+    async def test_omits_completed_lanes_without_task_ids(self) -> None:
         fake_rows = [
             {
-                "session_id": "sess-persona",
-                "agent_slug": "persona",
+                "session_id": "sess-coder",
+                "agent_slug": "coder",
                 "project_id": "agent-hub",
                 "external_id": None,
-                "current_branch": None,
+                "current_branch": "branch-ok",
                 "status": "completed",
                 "created_at": "ignored",
                 "updated_at": "ignored",

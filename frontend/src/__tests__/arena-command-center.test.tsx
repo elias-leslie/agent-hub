@@ -175,9 +175,9 @@ describe("ArenaCommandCenter", () => {
     expect(screen.getByText("Daily review")).toBeInTheDocument();
     expect(screen.getByText("Nightly honing")).toBeInTheDocument();
     expect(screen.getByText("Memory health")).toBeInTheDocument();
-    expect(screen.getByText("Benchmark coverage")).toBeInTheDocument();
-    expect(screen.getByText("Open decision regressions")).toBeInTheDocument();
-    expect(screen.getByText("Read This First")).toBeInTheDocument();
+    expect(screen.getByText("1 benchmarked")).toBeInTheDocument();
+    expect(screen.getByText("Experiment + regression pulse")).toBeInTheDocument();
+    expect(screen.getByText("Memory watchlist")).toBeInTheDocument();
     expect(screen.getAllByText("behavior")).toHaveLength(1);
     expect(screen.getAllByText("missed rebuild.sh before verification")).toHaveLength(2);
     expect(screen.getByText("noisy-ref")).toBeInTheDocument();
