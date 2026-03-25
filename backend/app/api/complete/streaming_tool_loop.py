@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 
 from app.adapters.base import Message
 
-from .closeout_policy import build_closeout_recovery_prompt, detect_closeout_issue
+from .closeout_policy import plan_user_facing_closeout
 from .schemas import StreamingChunk
 from .streaming_context import StreamContext
 from .streaming_persistence import build_done_sse
@@ -65,19 +65,18 @@ async def iter_stream_sse_with_tools(
             return
         unresolved = [tc for tc in pending_calls if tc.tool_id not in resolved_ids]
         if not unresolved:
-            closeout_issue = detect_closeout_issue(
+            closeout_plan = plan_user_facing_closeout(
                 turn_text,
                 tool_calls_count=len(pending_calls),
+                allow_recovery=turn < max_tool_turns,
+                recovery_used=closeout_recovery_used,
             )
-            if closeout_issue and not closeout_recovery_used and turn < max_tool_turns:
+            if closeout_plan.action == "recover":
                 current_messages.append(Message(role="assistant", content=turn_text))
                 current_messages.append(
                     Message(
                         role="user",
-                        content=build_closeout_recovery_prompt(
-                            turn_text,
-                            tool_calls_count=len(pending_calls),
-                        ),
+                        content=closeout_plan.prompt or "",
                     )
                 )
                 closeout_recovery_used = True
