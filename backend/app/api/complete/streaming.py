@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -27,33 +26,8 @@ logger = logging.getLogger(__name__)
 # Heartbeat interval in seconds — keeps SSE connections alive through proxies
 _HEARTBEAT_INTERVAL_S = 15
 
-# Registry of active streaming sessions for cooperative cancellation.
-# Maps session_id → asyncio.Event (set when cancellation is requested).
-_active_streams: dict[str, asyncio.Event] = {}
-
 # Re-export private alias used historically as _StreamContext
 _StreamContext = StreamContext
-
-
-def register_active_stream(session_id: str) -> asyncio.Event:
-    """Register an active stream for cancellation support. Returns the cancel event."""
-    event = asyncio.Event()
-    _active_streams[session_id] = event
-    return event
-
-
-def cancel_active_stream(session_id: str) -> bool:
-    """Signal an active stream to cancel tool execution. Returns True if stream was found."""
-    event = _active_streams.get(session_id)
-    if event is not None:
-        event.set()
-        return True
-    return False
-
-
-def _unregister_active_stream(session_id: str) -> None:
-    """Remove a stream from the active registry."""
-    _active_streams.pop(session_id, None)
 
 
 async def _iter_stream_sse(
@@ -110,29 +84,6 @@ async def _with_heartbeat(
         last_yield = time.monotonic()
 
 
-def _build_stream_context(
-    session_id: str,
-    model: str,
-    provider: str,
-    agent_used: str | None,
-    model_used: str | None,
-    fallback_used: bool,
-    user_messages: list[MessageInput] | None,
-    is_new_session: bool,
-    is_one_shot: bool,
-    project_id: str | None,
-) -> StreamContext:
-    """Build a StreamContext with a registered cancel event."""
-    cancel_event = register_active_stream(session_id)
-    return StreamContext(
-        session_id=session_id, model=model, provider=provider,
-        agent_used=agent_used, model_used=model_used, fallback_used=fallback_used,
-        user_messages=user_messages, stream_start=time.monotonic(),
-        is_new_session=is_new_session, is_one_shot=is_one_shot,
-        cancel_event=cancel_event, project_id=project_id,
-    )
-
-
 def _choose_inner_stream(
     adapter: object,
     messages: list[Message],
@@ -186,9 +137,18 @@ async def stream_completion(
     adapter = get_adapter(provider)
     content_buf: list[str] = [""]
     stream_kwargs: dict[str, object] = {"tools": tools} if tools else {}
-    ctx = _build_stream_context(
-        session_id, model, provider, agent_used, model_used, fallback_used,
-        user_messages, is_new_session, is_one_shot, project_id,
+    ctx = StreamContext.open(
+        session_id=session_id,
+        model=model,
+        provider=provider,
+        agent_used=agent_used,
+        model_used=model_used,
+        fallback_used=fallback_used,
+        user_messages=user_messages,
+        stream_start=time.monotonic(),
+        is_new_session=is_new_session,
+        is_one_shot=is_one_shot,
+        project_id=project_id,
     )
     stream_kwargs["abort_event"] = ctx.cancel_event
     if working_dir:
@@ -206,5 +166,5 @@ async def stream_completion(
         logger.error("Streaming error: %s", exc)
         yield f"data: {StreamingChunk(type='error', seq=ctx.next_seq(), error=str(exc)).model_dump_json()}\n\n"
     finally:
-        _unregister_active_stream(session_id)
+        ctx.close()
         yield "data: [DONE]\n\n"

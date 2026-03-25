@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from typing import ClassVar
 
 from .schemas import MessageInput
 
 
 class StreamContext:
     """Holds context needed while iterating stream events."""
+
+    _active_contexts: ClassVar[dict[str, StreamContext]] = {}
 
     __slots__ = (
         "_seq", "agent_used", "cancel_event", "fallback_used", "is_new_session",
@@ -44,6 +47,53 @@ class StreamContext:
         self.is_one_shot = is_one_shot
         self.cancel_event = cancel_event
         self.project_id = project_id
+
+    @classmethod
+    def open(
+        cls,
+        *,
+        session_id: str,
+        model: str,
+        provider: str,
+        agent_used: str | None,
+        model_used: str | None,
+        fallback_used: bool,
+        user_messages: list[MessageInput] | None,
+        stream_start: float,
+        is_new_session: bool,
+        is_one_shot: bool,
+        project_id: str | None = None,
+    ) -> StreamContext:
+        """Create and register an active stream context for cooperative cancel."""
+        ctx = cls(
+            session_id=session_id,
+            model=model,
+            provider=provider,
+            agent_used=agent_used,
+            model_used=model_used,
+            fallback_used=fallback_used,
+            user_messages=user_messages,
+            stream_start=stream_start,
+            is_new_session=is_new_session,
+            is_one_shot=is_one_shot,
+            cancel_event=asyncio.Event(),
+            project_id=project_id,
+        )
+        cls._active_contexts[session_id] = ctx
+        return ctx
+
+    @classmethod
+    def cancel(cls, session_id: str) -> bool:
+        """Signal an active streaming session to stop after the current boundary."""
+        ctx = cls._active_contexts.get(session_id)
+        if ctx is None or ctx.cancel_event is None:
+            return False
+        ctx.cancel_event.set()
+        return True
+
+    def close(self) -> None:
+        """Unregister the active stream context."""
+        self._active_contexts.pop(self.session_id, None)
 
     def next_seq(self) -> int:
         """Return the next monotonic sequence number."""

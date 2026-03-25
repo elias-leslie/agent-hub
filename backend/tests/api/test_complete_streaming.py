@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.base import Message, StreamEvent
 from app.api.complete import StreamingChunk, stream_completion
+from app.api.complete.streaming_context import StreamContext
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
 
 
@@ -153,6 +154,33 @@ class TestStreamCompletionGenerator:
 
         assert "abort_event" in captured
         assert captured["abort_event"] is not None
+
+    @pytest.mark.asyncio
+    async def test_stream_completion_unregisters_context_when_finished(self):
+        """Completed streams should release cancel ownership."""
+        from unittest.mock import AsyncMock, patch
+
+        async def mock_stream(*args, **kwargs):
+            yield StreamEvent(
+                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
+            )
+
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.stream = mock_stream
+            mock_get_adapter.return_value = mock_adapter
+
+            async for _ in stream_completion(
+                messages=[Message(role="user", content="Hi")],
+                model=CLAUDE_SONNET,
+                provider="claude",
+                max_tokens=100,
+                temperature=0.7,
+                session_id="cleanup-session",
+            ):
+                pass
+
+        assert StreamContext.cancel("cleanup-session") is False
 
     @pytest.mark.asyncio
     async def test_done_event_includes_metadata(self):

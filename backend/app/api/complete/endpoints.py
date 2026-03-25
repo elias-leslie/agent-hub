@@ -57,9 +57,9 @@ async def cancel_stream(request: CancelStreamRequest) -> dict[str, object]:
     tool completes. Used by frontends when the user sends a new message
     during tool execution (steering) or explicitly cancels.
     """
-    from app.api.complete.streaming import cancel_active_stream
+    from app.api.complete.streaming_context import StreamContext
 
-    cancelled = cancel_active_stream(request.session_id)
+    cancelled = StreamContext.cancel(request.session_id)
     return {"cancelled": cancelled, "session_id": request.session_id}
 
 
