@@ -1,8 +1,9 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { fetchSession, fetchSessionEvents } from "@/lib/api";
 import { summarizeSessionMemoryObservability } from "@/lib/session-memory-observability";
@@ -16,7 +17,20 @@ export default function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [activeTab, setActiveTab] = useState<"timeline" | "info">("timeline");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get("tab") === "info" ? "info" : "timeline";
+  const setActiveTab = useCallback((tab: "timeline" | "info") => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (tab === "timeline") {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", tab);
+    }
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const {
     data: session,

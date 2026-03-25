@@ -89,28 +89,37 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
 
   return (
     <div className="space-y-8">
-      {/* Session Reset Section */}
-      <div className="space-y-4">
+      <div>
+        <p className="section-kicker">Session Lifecycles</p>
+        <h2 className="section-heading mt-2">Reset Policy & Limits</h2>
+        <p className="section-copy mt-2 max-w-3xl">
+          Control when long-running conversations roll over and set the safety limits
+          that shape autonomous execution length.
+        </p>
+      </div>
+
+      <div className="space-y-4 section-card">
         <div>
-          <h2 className="text-lg font-semibold text-slate-100 mb-1">
+          <h2 className="section-heading">
             Session Reset
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="section-copy mt-2">
             Control when conversation sessions automatically reset.
           </p>
         </div>
 
         {/* Mode Selector — segmented control */}
-        <div className="flex gap-1 p-1 rounded-lg bg-slate-800 max-w-md">
+        <div className="segmented-control max-w-md">
           {RESET_MODES.map((opt) => (
             <button
               key={opt.value}
+              type="button"
               onClick={() => handleModeChange(opt.value)}
               className={cn(
-                "flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150",
+                "segmented-option flex-1 justify-center",
                 mode === opt.value
-                  ? "bg-slate-700 text-slate-100 shadow-sm"
-                  : "text-slate-400 hover:text-slate-300",
+                  ? "border-amber-500/20 bg-amber-500/12 text-amber-100"
+                  : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
               )}
             >
               {opt.label}
@@ -119,7 +128,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
         </div>
 
         {/* Mode Description + Controls */}
-        <div className="p-3 rounded-lg border border-slate-700 bg-slate-800/50 max-w-md">
+        <div className="detail-card max-w-md">
           <div className="flex items-center gap-2 mb-2">
             <span
               className={cn(
@@ -141,7 +150,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 aria-label="Session reset hour"
                 value={persona.session_reset_hour}
                 onChange={(e) => handleHourChange(Number(e.target.value))}
-                className="px-2 py-1 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="control-select"
               >
                 {HOUR_OPTIONS.map((h) => (
                   <option key={h.value} value={h.value}>
@@ -166,12 +175,13 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 {IDLE_PRESETS.map((preset) => (
                   <button
                     key={preset.value}
+                    type="button"
                     onClick={() => handleIdleChange(preset.value)}
                     className={cn(
-                      "flex-1 px-2 py-1 text-xs rounded-md transition-colors",
+                      "flex-1 rounded-xl border px-2 py-1.5 text-xs transition-colors",
                       persona.session_reset_idle_minutes === preset.value
-                        ? "bg-amber-900/30 text-amber-400 font-medium"
-                        : "text-slate-400 hover:bg-slate-700 border border-slate-700",
+                        ? "border-amber-500/20 bg-amber-500/12 text-amber-100 font-medium"
+                        : "border-slate-700/80 text-slate-400 hover:bg-slate-900/80",
                     )}
                   >
                     {preset.label}
@@ -184,12 +194,12 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
       </div>
 
       {/* Limits Section */}
-      <div className="space-y-4">
+      <div className="space-y-4 section-card">
         <div>
-          <h2 className="text-lg font-semibold text-slate-100 mb-1">
+          <h2 className="section-heading">
             Limits
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="section-copy mt-2">
             Configurable limits for autonomous operations. Leave at defaults for normal use.
           </p>
         </div>
@@ -198,14 +208,15 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
           {Object.entries(DEFAULT_LIMITS).map(([key, config]) => (
             <div
               key={key}
-              className="p-3 rounded-lg border border-slate-700 bg-slate-800/50"
+              className="detail-card"
             >
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-slate-400">
+                <label className="detail-label">
                   {config.label}
                 </label>
                 {isLimitCustom(key) && (
                   <button
+                    type="button"
                     onClick={() => handleLimitReset(key)}
                     className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
                   >
@@ -227,7 +238,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 }}
                 min={1}
                 placeholder={String(config.value)}
-                className="w-full px-3 py-1.5 text-sm font-mono rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="control-input font-mono"
               />
               {!isLimitCustom(key) && (
                 <p className="text-[10px] text-slate-400 mt-1">
