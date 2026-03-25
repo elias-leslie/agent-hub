@@ -181,6 +181,10 @@ async def heartbeat_session(
     session.provider_metadata = metadata
     if request.current_branch is not None:
         session.current_branch = request.current_branch
+    if request.client_id is not None:
+        session.client_id = request.client_id
+    if request.request_source is not None:
+        session.request_source = request.request_source
     if request.status is not None:
         session.status = request.status
 

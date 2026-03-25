@@ -258,6 +258,44 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_heartbeat_session_backfills_request_identity_and_source_metadata() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-heartbeat-identity",
+        project_id="agent-hub",
+        provider="codex",
+        model="codex/gpt-5.4",
+        status="active",
+        session_type="agent",
+        provider_metadata={},
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute.return_value = MagicMock(scalar_one_or_none=lambda: session)
+
+    await heartbeat_session(
+        db=db,
+        session_id="session-heartbeat-identity",
+        request=SessionHeartbeatRequest(
+            client_id="client-123",
+            request_source="codex-transcript-sync",
+            provider_metadata={
+                "source_client": "summitflow/codex-session-sync",
+                "source_path": "/home/kasadis/bin/codex-session-sync.py",
+            },
+        ),
+    )
+
+    assert session.client_id == "client-123"
+    assert session.request_source == "codex-transcript-sync"
+    assert session.provider_metadata["source_client"] == "summitflow/codex-session-sync"
+    assert session.provider_metadata["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_heartbeat_session_reactivates_completed_session() -> None:
     db = AsyncMock()
     session = Session(

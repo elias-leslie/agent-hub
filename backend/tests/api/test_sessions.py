@@ -107,6 +107,8 @@ class TestGetSession:
         mock_db_session.status = "active"
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
+        mock_db_session.client_id = "client-123"
+        mock_db_session.request_source = "codex-transcript-sync"
         mock_db_session.workstream_status = "completed_ready_for_closure"
         mock_db_session.summary_oneliner = "Closed the loop on session detail observability"
         mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
@@ -118,6 +120,8 @@ class TestGetSession:
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
+            "source_client": "summitflow/codex-session-sync",
+            "source_path": "/home/kasadis/bin/codex-session-sync.py",
             "live_activity": {
                 "phase": "reading_file",
                 "status": "active",
@@ -206,6 +210,10 @@ class TestGetSession:
         assert data["effective_model"] == "codex/gpt-5.4"
         assert data["fallback_used"] is True
         assert data["fallback_reason"] == "TimeoutError: primary timed out"
+        assert data["client_id"] == "client-123"
+        assert data["request_source"] == "codex-transcript-sync"
+        assert data["source_client"] == "summitflow/codex-session-sync"
+        assert data["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
         assert data["live_activity"]["phase"] == "reading_file"
         assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
         assert data["workstream_status"] == "completed_ready_for_closure"
@@ -307,6 +315,8 @@ class TestListSessions:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
+        mock_db_session.client_id = "client-123"
+        mock_db_session.request_source = "codex-transcript-sync"
         mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
         mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.parent_session_id = "parent-1"
@@ -321,6 +331,8 @@ class TestListSessions:
             "effective_provider": "codex",
             "fallback_used": True,
             "fallback_reason": "TimeoutError: primary timed out",
+            "source_client": "summitflow/codex-session-sync",
+            "source_path": "/home/kasadis/bin/codex-session-sync.py",
             "live_activity": {
                 "phase": "waiting_for_model",
                 "status": "active",
@@ -392,6 +404,10 @@ class TestListSessions:
         assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["sessions"][0]["parent_session_id"] == "parent-1"
         assert data["sessions"][0]["external_id"] == "task-123"
+        assert data["sessions"][0]["client_id"] == "client-123"
+        assert data["sessions"][0]["request_source"] == "codex-transcript-sync"
+        assert data["sessions"][0]["source_client"] == "summitflow/codex-session-sync"
+        assert data["sessions"][0]["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
         assert data["sessions"][0]["current_branch"] == "task-123/main"
         assert data["sessions"][0]["working_dir"] == str(tmp_path)
         assert data["sessions"][0]["is_worktree"] is False
@@ -421,6 +437,8 @@ class TestListSessions:
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.summary_oneliner = None
+        mock_db_session.client_id = None
+        mock_db_session.request_source = None
         mock_db_session.models_used = [CLAUDE_SONNET]
         mock_db_session.providers_used = ["claude"]
         mock_db_session.parent_session_id = None

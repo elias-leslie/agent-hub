@@ -80,6 +80,10 @@ export interface Session {
   status: string;
   agent_slug: string | null;
   session_type: string;
+  client_id?: string | null;
+  request_source?: string | null;
+  source_client?: string | null;
+  source_path?: string | null;
   created_at: string;
   updated_at: string;
   live_activity?: LiveActivity | null;
@@ -108,6 +112,10 @@ export interface SessionListItem {
   session_type: string;
   parent_session_id?: string | null;
   external_id?: string | null;
+  client_id?: string | null;
+  request_source?: string | null;
+  source_client?: string | null;
+  source_path?: string | null;
   current_branch?: string | null;
   live_activity?: LiveActivity | null;
   message_count: number;

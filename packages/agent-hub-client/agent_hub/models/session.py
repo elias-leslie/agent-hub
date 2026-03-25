@@ -24,6 +24,12 @@ class SessionResponse(BaseModel):
     provider: str
     model: str
     status: str
+    agent_slug: str | None = None
+    session_type: str | None = None
+    client_id: str | None = None
+    request_source: str | None = None
+    source_client: str | None = None
+    source_path: str | None = None
     created_at: datetime
     updated_at: datetime
     messages: list[Message] = Field(default_factory=list)
@@ -38,6 +44,12 @@ class SessionListItem(BaseModel):
     provider: str
     model: str
     status: str
+    agent_slug: str | None = None
+    session_type: str | None = None
+    client_id: str | None = None
+    request_source: str | None = None
+    source_client: str | None = None
+    source_path: str | None = None
     message_count: int
     created_at: datetime
     updated_at: datetime

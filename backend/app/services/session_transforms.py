@@ -90,6 +90,14 @@ def _fallback_reason(session: Session) -> str | None:
     return _metadata_value(session, "fallback_reason")
 
 
+def _source_client(session: Session) -> str | None:
+    return _metadata_value(session, "source_client")
+
+
+def _source_path(session: Session) -> str | None:
+    return _metadata_value(session, "source_path")
+
+
 def _optional_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
@@ -270,6 +278,10 @@ def _session_list_item(
         session_type=session.session_type or "completion",
         parent_session_id=_optional_str(session.parent_session_id),
         external_id=_optional_str(session.external_id),
+        client_id=_optional_str(session.client_id),
+        request_source=_optional_str(session.request_source),
+        source_client=_source_client(session),
+        source_path=_source_path(session),
         current_branch=_optional_str(session.current_branch),
         working_dir=working_dir,
         repo_root=_repo_root(session),
@@ -345,6 +357,10 @@ def build_session_response(
         session_type=session.session_type or "completion",
         parent_session_id=_optional_str(session.parent_session_id),
         external_id=_optional_str(session.external_id),
+        client_id=_optional_str(session.client_id),
+        request_source=_optional_str(session.request_source),
+        source_client=_source_client(session),
+        source_path=_source_path(session),
         current_branch=_optional_str(session.current_branch),
         working_dir=_working_dir(session),
         repo_root=_repo_root(session),

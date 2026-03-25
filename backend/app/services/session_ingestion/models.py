@@ -58,6 +58,8 @@ class SessionUpsertResult(BaseModel):
 class SessionHeartbeatRequest(BaseModel):
     """Canonical heartbeat request for live session/process state."""
 
+    client_id: str | None = Field(default=None, description="Authenticated client ID")
+    request_source: str | None = Field(default=None, description="Request source header")
     cwd: str | None = Field(default=None, description="Current working directory")
     current_branch: str | None = Field(default=None, description="Current git branch")
     declared_scope_paths: list[str] = Field(default_factory=list)
