@@ -32,6 +32,7 @@ from app.services.ownership_lanes import (
     idle_minutes_from_timestamps,
     infer_task_id,
 )
+from app.services.persona_identity import PERSONA_SLUG
 from app.services.session_display_summary import (
     SessionDisplaySummaryCandidate,
     fetch_session_display_summary_results,
@@ -54,6 +55,11 @@ _ACTIVE_SESSION_LOOKBACK_HOURS = 24
 _ACTIVE_SESSION_GHOST_MINUTES = 15
 _DEFAULT_SESSION_STALE_MINUTES = 15
 _CODING_AGENT_SESSION_STALE_MINUTES = 30
+_BENCHMARK_EXTERNAL_ID_PREFIXES = (
+    "benchmark:",
+    "agent-output-benchmark:",
+    "persona-benchmark:",
+)
 _STALE_READY_ALL_LINE = re.compile(r"^\s+\?\s+(task-[^\s]+).*\[stale-running\]$")
 _COMPACT_STALE_LINE = re.compile(r"^- (?P<project>[a-z0-9-]+) \| (?P<task_id>task-[^\s|]+) \| ")
 _TASK_ID_PATTERN = re.compile(r"\btask-[a-z0-9]+\b")
@@ -610,6 +616,7 @@ async def _fetch_recently_completed_sessions_section(target_project_id: str | No
                     Session.id,
                     Session.agent_slug,
                     Session.project_id,
+                    Session.external_id,
                     Session.summary_oneliner,
                     Session.created_at,
                 )
@@ -642,6 +649,9 @@ async def _fetch_recently_completed_sessions_section(target_project_id: str | No
 
         rendered_rows: list[tuple[object, str]] = []
         for row in rows:
+            external_id = str(row.external_id or "")
+            if external_id.startswith(_BENCHMARK_EXTERNAL_ID_PREFIXES):
+                continue
             ago = int((now - row.created_at).total_seconds() / 60)
             time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
             summary_result = display_summaries.get(row.id)
@@ -685,19 +695,18 @@ async def _query_active_specialist_sessions(
 
     from app.db import async_session
     from app.models import Session
+    from app.services.session_live_activity import is_session_actionably_active
 
     collected_at = now or datetime.now(UTC)
     cutoff = collected_at - timedelta(hours=_ACTIVE_SPECIALIST_LOOKBACK_HOURS)
     async with async_session() as db:
         raw_rows = (
             await db.execute(
-                select(
-                    Session.id, Session.agent_slug, Session.project_id,
-                    Session.parent_session_id, Session.request_source, Session.created_at,
-                )
+                select(Session)
                 .where(and_(
                     Session.status == "active",
                     Session.agent_slug.isnot(None),
+                    Session.agent_slug != PERSONA_SLUG,
                     Session.project_id != "persona-sandbox",
                     Session.project_id == target_project_id if target_project_id else True,
                     Session.created_at >= cutoff,
@@ -707,7 +716,7 @@ async def _query_active_specialist_sessions(
                 .order_by(Session.created_at.desc())
                 .limit(50)
             )
-        ).all()
+        ).scalars().all()
     return [
         {
             "session_id": row.id,
@@ -719,6 +728,8 @@ async def _query_active_specialist_sessions(
             "age_minutes": int((collected_at - row.created_at).total_seconds() / 60),
         }
         for row in raw_rows
+        if row.agent_slug != PERSONA_SLUG
+        if is_session_actionably_active(row, has_specialist_lane=True)
     ]
 
 
@@ -984,10 +995,7 @@ def _should_skip_lane(
         return True
     if lane_state == "completed_ready_for_closure" and task_id and queue_truth_available:
         return task_id not in visible_task_ids
-    if lane_state == "completed_ready_for_closure" and not task_id:
-        agents = {str(r["agent_slug"]) for r in lane_rows if r.get("agent_slug")}
-        return agents == {"persona"}
-    return False
+    return lane_state == "completed_ready_for_closure" and not task_id
 
 
 def _build_lane_line(

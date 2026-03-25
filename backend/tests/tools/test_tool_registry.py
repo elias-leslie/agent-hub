@@ -142,6 +142,13 @@ class TestGetCommandRedirect:
                     "redirect_patterns": ["(\\.venv/bin/)?mypy\\b"],
                     "redirect_message": "Use 'dt types [args]'",
                 },
+                {
+                    "name": "vitest",
+                    "redirect_patterns": [
+                        "(npx\\s+|pnpm(?:\\s+exec)?\\s+)?vitest\\b",
+                    ],
+                    "redirect_message": "Use 'dt vitest [args]'",
+                },
             ],
             "service_redirects": [
                 {
@@ -193,6 +200,20 @@ class TestGetCommandRedirect:
             result = get_command_redirect("mypy app/")
             assert result is not None
             assert "dt types" in result
+
+    def test_blocks_pnpm_vitest(self, registry_file: Path) -> None:
+        """Test that pnpm vitest is redirected."""
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
+            result = get_command_redirect("pnpm vitest src/__tests__/foo.test.tsx --run")
+            assert result is not None
+            assert "dt vitest" in result
+
+    def test_blocks_pnpm_exec_vitest(self, registry_file: Path) -> None:
+        """Test that pnpm exec vitest is redirected."""
+        with patch("app.services.tools.registry.resolve_summitflow_scripts_dir", return_value=registry_file.parent.parent):
+            result = get_command_redirect("pnpm exec vitest src/__tests__/foo.test.tsx --run")
+            assert result is not None
+            assert "dt vitest" in result
 
     def test_blocks_psql(self, registry_file: Path) -> None:
         """Test that raw psql is redirected to db CLI."""

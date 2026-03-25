@@ -14,6 +14,8 @@ from app.services.ownership_lanes import (
     collapse_ownership_owners,
     infer_task_id,
 )
+from app.services.persona_identity import PERSONA_SLUG
+from app.services.session_live_activity import is_session_actionably_active
 from app.services.session_scope import merge_scope_paths, normalize_scope_paths
 from app.services.tools.project_env import is_worktree_path
 
@@ -151,6 +153,7 @@ async def _fetch_active_specialists(
                     Session.project_id == project_id,
                     Session.status == "active",
                     Session.agent_slug.isnot(None),
+                    Session.agent_slug != PERSONA_SLUG,
                     Session.created_at >= cutoff,
                     Session.external_id.is_(None),
                     Session.current_branch.is_(None),
@@ -163,6 +166,10 @@ async def _fetch_active_specialists(
 
     specialists: list[ActiveSpecialistSession] = []
     for session in rows:
+        if session.agent_slug == PERSONA_SLUG:
+            continue
+        if not is_session_actionably_active(session, has_specialist_lane=True):
+            continue
         specialists.append(
             ActiveSpecialistSession(
                 session_id=session.id,
