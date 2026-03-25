@@ -142,6 +142,69 @@ def build_tool_closeout_fallback(
     return "\n".join(lines)
 
 
+def detached_agent_hub_rebuild_closeout(
+    *,
+    project_id: str | None,
+    tool_name: str,
+    tool_input: dict[str, object],
+    tool_content: str,
+    agent_slug: str | None,
+    external_id: str | None,
+) -> str | None:
+    """Return a deterministic closeout when a detached Agent Hub rebuild was queued."""
+    if project_id != "agent-hub" or tool_name.lower() != "bash":
+        return None
+
+    command = str(tool_input.get("command") or "").lower()
+    if "agent-hub" not in command or "--detach" not in command:
+        return None
+    if "rebuild.sh" not in command and "restart.sh" not in command:
+        return None
+
+    output = tool_content.lower()
+    if "detached rebuild queued" not in output and "detached restart queued" not in output:
+        return None
+
+    unit_line = next(
+        (line.strip() for line in str(tool_content).splitlines() if "Running as unit:" in line),
+        None,
+    )
+    unit_name = unit_line.removeprefix("Running as unit:").strip() if unit_line else None
+    unit_note = f" as {unit_name}" if unit_name else ""
+    if agent_slug == "persona":
+        return (
+            f"HEARTBEAT_ACTION — Detached Agent Hub rebuild queued{unit_note}. "
+            "Post-restart verification is deferred to a fresh session.\n"
+            "[[P:started:ending the heartbeat after queueing a detached Agent Hub rebuild]]\n"
+            f"[[P:decision:queued detached Agent Hub rebuild{unit_note} and ended before "
+            "post-restart verification]]\n"
+            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+            "must verify health and task completion.]]"
+        )
+    if external_id and str(external_id).startswith("task-"):
+        return (
+            f"Detached Agent Hub rebuild queued{unit_note}. "
+            "This session is ending before post-restart verification.\n"
+            "[[P:started:ending the task session after queueing a detached Agent Hub rebuild]]\n"
+            f"[[P:decision:queued detached Agent Hub rebuild{unit_note} and ended before "
+            "post-restart verification]]\n"
+            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+            "must verify health and task completion.]]"
+        )
+    if unit_line:
+        return (
+            "Detached Agent Hub rebuild queued successfully.\n"
+            f"{unit_line}\n"
+            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+            "must verify health and task completion.]]"
+        )
+    return (
+        "Detached Agent Hub rebuild queued successfully.\n"
+        "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
+        "must verify health and task completion.]]"
+    )
+
+
 def append_closeout_turn(
     messages_for_adapter: list[Message],
     messages_dict: list[dict[str, str]] | None,
