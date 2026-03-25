@@ -40,6 +40,7 @@ __all__ = [
     "format_guardrail_citation",
     "format_mandate_citation",
     "format_reference_citation",
+    "normalize_terminal_summary_tag",
     "parse_citations",
     "parse_feedback_tags",
     "parse_summary_tags",
@@ -202,13 +203,40 @@ def extract_feedback_tag_strings(response_text: str) -> list[str]:
     return [match.group(0).strip() for match in FEEDBACK_TAG_PATTERN_LEGACY.finditer(response_text)]
 
 
+def normalize_terminal_summary_tag(response_text: str) -> str:
+    """Repair a common near-miss where the final summary tag ends with `]}`.
+
+    This keeps the repair narrow: only a terminal `[[S:...]}`
+    candidate is normalized, and only when the repaired form becomes a valid
+    summary tag.
+    """
+    if not response_text or "[[S:" not in response_text:
+        return response_text
+
+    stripped = response_text.rstrip()
+    if not stripped.endswith("]}"):
+        return response_text
+
+    trailing = response_text[len(stripped):]
+    start = stripped.rfind("[[S:")
+    if start == -1:
+        return response_text
+
+    candidate = stripped[start:]
+    repaired = f"{candidate[:-2]}]]"
+    if SUMMARY_TAG_PATTERN.fullmatch(repaired) is None:
+        return response_text
+    return f"{stripped[:start]}{repaired}{trailing}"
+
+
 def parse_summary_tags(response_text: str) -> SummaryParseResult:
     """Parse [[S:outcome:description]] tags from response text."""
     if not response_text:
         return SummaryParseResult(tags=[])
 
+    normalized_text = normalize_terminal_summary_tag(response_text)
     tags: list[SummaryTag] = []
-    for match in SUMMARY_TAG_PATTERN.finditer(response_text):
+    for match in SUMMARY_TAG_PATTERN.finditer(normalized_text):
         outcome = match.group(1).lower()
         if outcome not in VALID_SUMMARY_OUTCOMES:
             continue
@@ -227,4 +255,5 @@ def extract_summary_tag_strings(response_text: str) -> list[str]:
     """Extract raw summary tag strings from response text."""
     if not response_text:
         return []
-    return [match.group(0) for match in SUMMARY_TAG_PATTERN.finditer(response_text)]
+    normalized_text = normalize_terminal_summary_tag(response_text)
+    return [match.group(0) for match in SUMMARY_TAG_PATTERN.finditer(normalized_text)]
