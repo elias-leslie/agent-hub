@@ -136,6 +136,7 @@ export default function AgentsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
         <div className="px-4 lg:px-8">
           <div className="flex min-h-14 flex-col gap-3 py-3 lg:h-14 lg:flex-row lg:items-center lg:justify-between lg:py-0">
@@ -211,7 +212,7 @@ export default function AgentsPage() {
         </div>
       </header>
 
-      <main className="px-4 py-5 lg:px-8">
+      <main className="relative px-4 py-5 lg:px-8">
         <PlatformContextPanel activeAgentCount={activeCount} />
 
         {archiveCandidate && (

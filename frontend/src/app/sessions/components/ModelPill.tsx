@@ -36,11 +36,11 @@ export function ModelPill({
         isActive && "ring-2 ring-offset-1 ring-offset-slate-900",
         isClaude
           ? cn(
-              "border-purple-400/60 text-purple-400 bg-purple-50/80 dark:bg-purple-950/40",
+              "border-purple-400/60 text-purple-400 bg-purple-950/40",
               isActive && "ring-purple-400"
             )
           : cn(
-              "border-emerald-400/60 text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40",
+              "border-emerald-400/60 text-emerald-400 bg-emerald-950/40",
               isActive && "ring-emerald-400"
             )
       )}

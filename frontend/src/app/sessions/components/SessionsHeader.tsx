@@ -1,4 +1,4 @@
-import { Search, RefreshCw, Zap, TrendingUp } from "lucide-react";
+import { Search, RefreshCw, Zap, TrendingUp, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCost, formatTokens } from "../utils";
 
@@ -22,13 +22,16 @@ export function SessionsHeader({
   onRefresh: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
       <div className="px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-12">
           <div className="flex items-center gap-4">
-            <h1 className="text-lg font-bold text-slate-100 tracking-tight">
-              Sessions
-            </h1>
+            <div className="flex items-center gap-2.5">
+              <History className="h-4.5 w-4.5 text-slate-400" />
+              <h1 className="text-base font-semibold text-slate-100 tracking-tight">
+                Sessions
+              </h1>
+            </div>
             <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
               <span className="text-slate-400">
                 {total} total
