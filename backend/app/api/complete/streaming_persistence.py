@@ -152,34 +152,18 @@ async def _track_citations(
     """Track inline tags (feedback, summaries, citations) in streaming content."""
     if not accumulated_content:
         return
-    # Process inline feedback + summary tags (same code non-streaming path uses)
-    summary_stored = False
+    # Process inline feedback + summary tags through the shared non-streaming path.
     try:
         from app.db import async_session
 
-        from .citation_tracker import (
-            _ensure_synthetic_summary,
-            track_inline_feedback,
-            track_inline_summaries,
-        )
+        from .citation_tracker import _track_inline_tags
 
         async with async_session() as db:
-            await track_inline_feedback(accumulated_content, db, session_id)
-            summary_stored = await track_inline_summaries(accumulated_content, db, session_id)
-            if not summary_stored:
-                summary_stored = await _ensure_synthetic_summary(
-                    accumulated_content, session_id, db=db
-                )
+            await _track_inline_tags(accumulated_content, db, session_id, agent_id, model_used)
             await db.commit()
     except Exception as exc:
         logger.warning("Streaming inline tag tracking failed: %s", exc)
 
-    # Fallback: generate synthetic summary if no inline [[S:...]] tag was found
-    if not summary_stored:
-        try:
-            await _ensure_synthetic_summary(accumulated_content, session_id)
-        except Exception as exc:
-            logger.warning("Streaming synthetic summary failed: %s", exc)
     # Process citations separately
     try:
         from app.services.memory.citation_parser import extract_uuid_prefixes
