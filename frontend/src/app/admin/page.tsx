@@ -76,51 +76,34 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      {/* Subtle grid pattern overlay */}
-      <div
-        className="fixed inset-0 pointer-events-none opacity-[0.015]"
-        style={{
-          backgroundImage: `linear-gradient(rgba(251,191,36,0.5) 1px, transparent 1px),
-                            linear-gradient(90deg, rgba(251,191,36,0.5) 1px, transparent 1px)`,
-          backgroundSize: "64px 64px",
-        }}
-      />
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
 
       {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30">
-                <Shield className="w-6 h-6 text-amber-400" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-100 tracking-tight">Usage Control</h1>
-                <p className="text-xs text-slate-500">Kill switch administration</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              {/* Live indicator */}
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/50 border border-emerald-800/50">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </span>
-                <span className="text-xs font-medium text-emerald-400">Live</span>
-              </div>
-
-              <button
-                onClick={refresh}
-                disabled={isRefreshing}
-                aria-label="Refresh client and request data"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border border-slate-700"
-              >
-                <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} />
-                Refresh
-              </button>
+      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
+        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-slate-400" />
+            <h1 className="text-base font-semibold text-slate-100">
+              Usage Control
+            </h1>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-950/50 border border-emerald-800/50">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              <span className="text-[10px] font-medium text-emerald-400">Live</span>
             </div>
           </div>
+
+          <button
+            onClick={refresh}
+            disabled={isRefreshing}
+            aria-label="Refresh client and request data"
+            className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
+            title="Refresh"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+          </button>
         </div>
       </header>
 

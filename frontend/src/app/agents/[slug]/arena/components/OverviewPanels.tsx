@@ -15,6 +15,7 @@ import type {
 } from "@/app/agents/[slug]/analytics/types";
 import { ArenaPreviewCard } from "@/app/agents/[slug]/analytics/components/ArenaPreviewCard";
 import { formatPercent, formatRelativeTime, formatScore } from "@/app/arena/utils";
+import { formatLatency, formatNumber } from "@/lib/formatters";
 
 import { RecentRunsCard } from "./RecentRunsCard";
 import { RegressionWatchlist } from "./RegressionWatchlist";
@@ -163,9 +164,9 @@ export function OverviewPanels({
           ) : (
             <div className="space-y-4">
               {[
-                { label: "Requests", value: analytics.totalRequests },
+                { label: "Requests", value: formatNumber(analytics.totalRequests) },
                 { label: "Success rate", value: `${analytics.successRate}%` },
-                { label: "Average latency", value: `${analytics.avgLatencyMs} ms` },
+                { label: "Average latency", value: formatLatency(analytics.avgLatencyMs) },
                 { label: "Primary model", value: primaryModel ?? "Unassigned" },
               ].map(({ label, value }) => (
                 <div key={label} className="flex items-center justify-between text-sm">
