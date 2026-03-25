@@ -15,11 +15,11 @@ from typing import Any
 from app.adapters.base import Message, StreamEvent
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 
-# Track tool start times for duration_ms calculation
-_tool_start_times: dict[str, float] = {}
 
-
-def adapt_stream_event(event: StreamEvent) -> ToolEvent | None:
+def adapt_stream_event(
+    event: StreamEvent,
+    tool_start_times: dict[str, float] | None = None,
+) -> ToolEvent | None:
     """Convert a single StreamEvent to a ToolEvent.
 
     Args:
@@ -28,10 +28,12 @@ def adapt_stream_event(event: StreamEvent) -> ToolEvent | None:
     Returns:
         ToolEvent or None if the event type is not relevant
     """
+    timing_state = tool_start_times if tool_start_times is not None else {}
+
     if event.type == "tool_use":
         tool_id = getattr(event, "tool_id", "") or ""
         if tool_id:
-            _tool_start_times[tool_id] = time.monotonic()
+            timing_state[tool_id] = time.monotonic()
         return ToolEvent(
             type="assistant",
             message=ToolMessage(content=[
@@ -46,7 +48,7 @@ def adapt_stream_event(event: StreamEvent) -> ToolEvent | None:
 
     if event.type == "tool_result":
         tool_id = getattr(event, "tool_id", "") or ""
-        start = _tool_start_times.pop(tool_id, None)
+        start = timing_state.pop(tool_id, None)
         duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
         is_error = bool(getattr(event, "is_error", False) or getattr(event, "error", None))
         return ToolEvent(
@@ -154,6 +156,7 @@ async def adapt_openai_stream(
         agent_slug=agent_slug,
         tool_catalog=tool_catalog,
     )
+    tool_start_times: dict[str, float] = {}
 
     async for stream_event in adapter.complete_with_tools(
         messages=messages,
@@ -162,6 +165,6 @@ async def adapt_openai_stream(
         tool_handler=handler,
         max_turns=max_turns,
     ):
-        tool_event = adapt_stream_event(stream_event)
+        tool_event = adapt_stream_event(stream_event, tool_start_times)
         if tool_event is not None:
             yield tool_event, ""

@@ -17,11 +17,11 @@ from app.adapters.base import ProviderError
 from app.adapters.claude_utils import extract_block_content, is_thinking_block, is_tool_use_block
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 
-# Track tool start times for duration_ms calculation
-_tool_start_times: dict[str, float] = {}
 
-
-def _convert_assistant_message(msg: Any) -> list[ToolEvent]:
+def _convert_assistant_message(
+    msg: Any,
+    tool_start_times: dict[str, float],
+) -> list[ToolEvent]:
     """Convert a Claude AssistantMessage into ToolEvent(s)."""
     blocks: list[ToolContentBlock] = []
     for block in msg.content:
@@ -35,7 +35,7 @@ def _convert_assistant_message(msg: Any) -> list[ToolEvent]:
         elif extracted["type"] == "tool_use":
             tool_id = str(extracted.get("id") or "")
             if tool_id:
-                _tool_start_times[tool_id] = time.monotonic()
+                tool_start_times[tool_id] = time.monotonic()
             blocks.append(ToolContentBlock(
                 type="tool_use",
                 name=str(extracted.get("name") or "unknown"),
@@ -45,7 +45,10 @@ def _convert_assistant_message(msg: Any) -> list[ToolEvent]:
     return [ToolEvent(type="assistant", message=ToolMessage(content=blocks))]
 
 
-def _convert_user_message(msg: Any) -> list[ToolEvent]:
+def _convert_user_message(
+    msg: Any,
+    tool_start_times: dict[str, float],
+) -> list[ToolEvent]:
     """Convert a Claude UserMessage (tool results) into ToolEvent(s)."""
     events: list[ToolEvent] = []
     if not hasattr(msg, "content"):
@@ -54,7 +57,7 @@ def _convert_user_message(msg: Any) -> list[ToolEvent]:
         if type(block).__name__ != "ToolResultBlock":
             continue
         tool_use_id = getattr(block, "tool_use_id", "")
-        start = _tool_start_times.pop(tool_use_id, None)
+        start = tool_start_times.pop(tool_use_id, None)
         duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
         events.append(ToolEvent(
             type="tool_result",
@@ -76,7 +79,10 @@ def _convert_result_message(msg: Any) -> list[ToolEvent]:
     return [ToolEvent(type="result", subtype=subtype, result="", finish_reason=finish_reason)]
 
 
-def _convert_top_level_assistant_block(msg: Any) -> ToolContentBlock | None:
+def _convert_top_level_assistant_block(
+    msg: Any,
+    tool_start_times: dict[str, float],
+) -> ToolContentBlock | None:
     """Convert a top-level Claude thinking/tool_use block into assistant content."""
     if is_thinking_block(msg):
         thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
@@ -87,7 +93,7 @@ def _convert_top_level_assistant_block(msg: Any) -> ToolContentBlock | None:
     if is_tool_use_block(msg):
         tool_id = getattr(msg, "id", "")
         if tool_id:
-            _tool_start_times[tool_id] = time.monotonic()
+            tool_start_times[tool_id] = time.monotonic()
         return ToolContentBlock(
             type="tool_use",
             name=getattr(msg, "name", "unknown"),
@@ -103,7 +109,10 @@ def _assistant_event(blocks: list[ToolContentBlock]) -> ToolEvent:
     return ToolEvent(type="assistant", message=ToolMessage(content=list(blocks)))
 
 
-def adapt_claude_message(msg: Any) -> list[ToolEvent]:
+def adapt_claude_message(
+    msg: Any,
+    tool_start_times: dict[str, float] | None = None,
+) -> list[ToolEvent]:
     """Convert a single Claude SDK message into a list of ToolEvents.
 
     Args:
@@ -115,15 +124,17 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     """
     from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
-    top_level_block = _convert_top_level_assistant_block(msg)
+    timing_state = tool_start_times if tool_start_times is not None else {}
+
+    top_level_block = _convert_top_level_assistant_block(msg, timing_state)
     if top_level_block is not None:
         return [_assistant_event([top_level_block])]
 
     if isinstance(msg, AssistantMessage):
-        return _convert_assistant_message(msg)
+        return _convert_assistant_message(msg, timing_state)
 
     if isinstance(msg, UserMessage):
-        return _convert_user_message(msg)
+        return _convert_user_message(msg, timing_state)
 
     if isinstance(msg, ResultMessage) or type(msg).__name__ == "ResultMessage":
         return _convert_result_message(msg)
@@ -147,6 +158,7 @@ async def adapt_claude_stream(
     """
     last_session_id = ""
     pending_assistant_blocks: list[ToolContentBlock] = []
+    tool_start_times: dict[str, float] = {}
 
     def _flush_pending() -> list[tuple[ToolEvent, str]]:
         if not pending_assistant_blocks:
@@ -158,12 +170,12 @@ async def adapt_claude_stream(
     try:
         async for msg, session_id in stream:
             last_session_id = session_id or last_session_id
-            pending_block = _convert_top_level_assistant_block(msg)
+            pending_block = _convert_top_level_assistant_block(msg, tool_start_times)
             if pending_block is not None:
                 pending_assistant_blocks.append(pending_block)
                 continue
 
-            events = adapt_claude_message(msg)
+            events = adapt_claude_message(msg, tool_start_times)
             if pending_assistant_blocks:
                 if events and events[0].type == "assistant" and events[0].message is not None:
                     events[0].message.content = [*pending_assistant_blocks, *events[0].message.content]
