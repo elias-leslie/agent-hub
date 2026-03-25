@@ -141,17 +141,29 @@ export default function MonitoringRequestsPage() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(parseInt(e.target.value))}
-              className="px-2 py-1 text-xs rounded bg-slate-800 border border-slate-700 text-slate-300"
-            >
-              <option value={1}>Last 1h</option>
-              <option value={6}>Last 6h</option>
-              <option value={24}>Last 24h</option>
-              <option value={72}>Last 3d</option>
-              <option value={168}>Last 7d</option>
-            </select>
+            <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
+              {[
+                { value: 1, label: "1h" },
+                { value: 6, label: "6h" },
+                { value: 24, label: "24h" },
+                { value: 72, label: "3d" },
+                { value: 168, label: "7d" },
+              ].map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTimeRange(value)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                    timeRange === value
+                      ? "bg-amber-600 text-white shadow-sm"
+                      : "text-slate-400 hover:text-slate-200"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => refetch()}
               disabled={isFetching}
@@ -273,9 +285,10 @@ export default function MonitoringRequestsPage() {
             ))}
           </div>
         ) : requests.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-            <Clock className="h-12 w-12 mb-4 opacity-50" />
-            <p className="text-lg">No requests found</p>
+          <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-dashed border-slate-700 bg-slate-900/40">
+            <Clock className="h-10 w-10 mb-3 text-slate-600" />
+            <p className="text-sm font-medium text-slate-300">No requests found</p>
+            <p className="mt-1 text-xs text-slate-500">Try adjusting your filters or time range</p>
           </div>
         ) : (
           <RequestTable
