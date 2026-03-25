@@ -156,6 +156,7 @@ def build_completion_payload(
     skip_cache: bool = False,
     response_format: dict[str, Any] | None = None,
     disable_agent_fallbacks: bool = False,
+    stream: bool = False,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -179,6 +180,8 @@ def build_completion_payload(
         resume_session_id, include_roles, current_branch, skip_cache,
         response_format,
     )
+    if stream:
+        payload["stream"] = True
     return payload
 
 

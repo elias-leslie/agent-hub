@@ -1,5 +1,8 @@
 """Tests for streaming functionality."""
 
+import json
+
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -99,6 +102,60 @@ class TestStreamSSE:
         assert chunks[0].type == "content"
         assert chunks[0].content == "Text"
 
+    @pytest.mark.asyncio
+    async def test_stream_sse_supports_agentic_payload_and_tool_events(
+        self,
+        httpx_mock: HTTPXMock,
+    ) -> None:
+        sse_body = (
+            'data: {"type":"thinking","content":"considering"}\n\n'
+            'data: {"type":"tool_use","tool_id":"tool-1","tool_name":"bash","tool_input":{"command":"git rev-parse --abbrev-ref HEAD"}}\n\n'
+            'data: {"type":"tool_result","tool_id":"tool-1","tool_result":"main","tool_status":"complete"}\n\n'
+            'data: {"type":"done","finish_reason":"stop","session_id":"sess-1"}\n\n'
+        )
+        captured_payload: dict[str, object] = {}
+        captured_headers: dict[str, str] = {}
+
+        def handler(request):
+            nonlocal captured_payload, captured_headers
+            captured_payload = json.loads(request.content.decode())
+            captured_headers = dict(request.headers)
+            return httpx.Response(
+                status_code=200,
+                content=sse_body.encode(),
+                headers={"content-type": "text/event-stream"},
+            )
+
+        httpx_mock.add_callback(
+            handler,
+            url="http://localhost:8003/api/complete",
+            method="POST",
+        )
+
+        async with AsyncAgentHubClient() as client:
+            chunks = []
+            async for chunk in client.stream_sse(
+                agent_slug="coder",
+                messages=[{"role": "user", "content": "Check branch"}],
+                project_id="test-project",
+                execute_tools=True,
+                max_turns=2,
+                working_dir="/tmp/worktree",
+                skip_cache=True,
+            ):
+                chunks.append(chunk)
+
+        assert captured_payload["stream"] is True
+        assert captured_payload["execute_tools"] is True
+        assert captured_payload["max_turns"] == 2
+        assert captured_payload["working_dir"] == "/tmp/worktree"
+        assert captured_headers["x-skip-cache"] == "true"
+        assert [chunk.type for chunk in chunks] == ["thinking", "tool_use", "tool_result", "done"]
+        assert chunks[1].tool_call is not None
+        assert chunks[1].tool_call.name == "bash"
+        assert chunks[2].tool_result == "main"
+        assert chunks[2].tool_status == "complete"
+
 
 class TestStreamChunkModel:
     """Tests for StreamChunk model."""
@@ -139,3 +196,16 @@ class TestStreamChunkModel:
         )
         assert chunk.type == "cancelled"
         assert chunk.finish_reason == "cancelled"
+
+    def test_stream_chunk_tool_result(self) -> None:
+        """Test tool result chunk."""
+        chunk = StreamChunk(
+            type="tool_result",
+            tool_id="tool-1",
+            tool_result="main",
+            tool_status="complete",
+        )
+        assert chunk.type == "tool_result"
+        assert chunk.tool_id == "tool-1"
+        assert chunk.tool_result == "main"
+        assert chunk.tool_status == "complete"

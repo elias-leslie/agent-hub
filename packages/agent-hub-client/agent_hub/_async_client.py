@@ -204,12 +204,25 @@ class AsyncAgentHubClient(
 
     async def stream_sse(
         self,
-        messages: list[dict[str, str] | MessageInput],
+        messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
         agent_slug: str | None = None,
         model: str | None = None,
         temperature: float = 1.0,
+        session_id: str | None = None,
+        use_memory: bool = False,
+        memory_group_id: str | None = None,
+        tools: list[dict[str, Any] | ToolDefinition] | None = None,
+        max_turns: int = 1,
+        working_dir: str | None = None,
+        execute_tools: bool = False,
+        task_type: str | None = None,
+        trace_id: str | None = None,
+        thinking_level: str | None = None,
+        include_roles: list[str] | None = None,
+        current_branch: str | None = None,
+        skip_cache: bool = False,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion using SSE.
 
@@ -219,6 +232,19 @@ class AsyncAgentHubClient(
             agent_slug: Agent slug for routing. PREFERRED.
             model: DEPRECATED - Use agent_slug instead.
             temperature: Sampling temperature.
+            session_id: Existing session to continue.
+            use_memory: Whether to inject memory context.
+            memory_group_id: Optional memory scope override.
+            tools: Explicit tool definitions.
+            max_turns: Maximum turn budget for streaming execution.
+            working_dir: Working directory for tool-capable sessions.
+            execute_tools: Enable direct tool execution.
+            task_type: Optional task type label.
+            trace_id: Optional trace ID for correlation.
+            thinking_level: Optional provider thinking level.
+            include_roles: Optional prompt roles to include.
+            current_branch: Optional git branch context.
+            skip_cache: Bypass response cache.
 
         Yields:
             StreamChunk for each streaming event.
@@ -230,16 +256,34 @@ class AsyncAgentHubClient(
             )
 
         client = await self._get_client()
-        headers = self._inject_tracking_headers("sdk.stream_sse")
-
-        async for chunk in stream_completion_sse(
-            client=client,
+        payload = build_completion_payload(
             messages=messages,
             project_id=project_id,
-            headers=headers,
             agent_slug=agent_slug,
             model=model,
             temperature=temperature,
+            session_id=session_id,
+            use_memory=use_memory,
+            memory_group_id=memory_group_id,
+            tools=tools,
+            max_turns=max_turns,
+            working_dir=working_dir,
+            execute_tools=execute_tools,
+            task_type=task_type,
+            trace_id=trace_id,
+            thinking_level=thinking_level,
+            include_roles=include_roles,
+            current_branch=current_branch,
+            skip_cache=skip_cache,
+            stream=True,
+        )
+        extra_headers = {"X-Skip-Cache": "true"} if skip_cache else None
+        headers = self._inject_tracking_headers("sdk.stream_sse", extra_headers=extra_headers)
+
+        async for chunk in stream_completion_sse(
+            client=client,
+            payload=payload,
+            headers=headers,
         ):
             yield chunk
 
