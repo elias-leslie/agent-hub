@@ -2,8 +2,8 @@
 
 Replaces the separate tool_claude_processor.py and tool_gemini_processor.py
 with a single processor that handles ToolEvent objects regardless of source.
-Claude SDK messages and OpenAI StreamEvents are converted to ToolEvent by
-their respective adapters before reaching this processor.
+Provider adapters normalize provider-native runtime output to ToolEvent before
+reaching this processor.
 """
 
 from __future__ import annotations

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import sentinel
-
 import pytest
 
 from app.adapters.base import Message
@@ -9,20 +7,12 @@ from app.api.complete.tool_stream_builder import build_event_stream
 
 
 def test_build_event_stream_floors_openai_compat_tool_turns(monkeypatch) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_adapt_openai_stream(*args, **kwargs):
-        captured["args"] = args
-        captured["kwargs"] = kwargs
-        return sentinel.stream
-
-    monkeypatch.setattr(
-        "app.api.complete.openai_event_adapter.adapt_openai_stream",
-        fake_adapt_openai_stream,
-    )
+    class Adapter:
+        def complete_with_tool_events(self, **kwargs):
+            return kwargs
 
     stream = build_event_stream(
-        adapter=sentinel.adapter,
+        adapter=Adapter(),
         messages=[Message(role="user", content="hi")],
         provider="codex",
         model="codex/gpt-5.4",
@@ -36,23 +26,18 @@ def test_build_event_stream_floors_openai_compat_tool_turns(monkeypatch) -> None
         agent_slug="memory-curator",
     )
 
-    assert stream is sentinel.stream
-    assert captured["args"][6] == 3
+    assert stream["max_turns"] == 3
+    assert stream["session_id"] == "sess-1"
 
 
 @pytest.mark.asyncio
-async def test_build_event_stream_preserves_claude_tool_turns(monkeypatch) -> None:
+async def test_build_event_stream_preserves_claude_tool_turns() -> None:
     class Adapter:
-        def complete_with_tools(self, **kwargs):
+        def complete_with_tool_events(self, **kwargs):
             async def _gen():
                 yield kwargs, None
 
             return _gen()
-
-    monkeypatch.setattr(
-        "app.api.complete.claude_event_adapter.adapt_claude_stream",
-        lambda raw_stream: raw_stream,
-    )
 
     stream = build_event_stream(
         adapter=Adapter(),

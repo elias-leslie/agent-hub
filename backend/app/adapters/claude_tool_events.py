@@ -1,10 +1,4 @@
-"""Adapt Claude Agent SDK messages to unified ToolEvent format.
-
-Claude's complete_with_tools() yields (sdk_message, session_id) tuples
-where sdk_message can be AssistantMessage, UserMessage, ThinkingBlock,
-or ToolUseBlock. This module converts each into ToolEvent objects that
-the unified tool_event_processor can handle.
-"""
+"""Canonical ToolEvent adaptation for Claude SDK tool streams."""
 
 from __future__ import annotations
 
@@ -113,15 +107,7 @@ def adapt_claude_message(
     msg: Any,
     tool_start_times: dict[str, float] | None = None,
 ) -> list[ToolEvent]:
-    """Convert a single Claude SDK message into a list of ToolEvents.
-
-    Args:
-        msg: A Claude SDK message (AssistantMessage, UserMessage,
-             ThinkingBlock, or ToolUseBlock)
-
-    Returns:
-        List of ToolEvent objects (may be empty for unrecognized types)
-    """
+    """Convert a single Claude SDK message into a list of ToolEvents."""
     from claude_agent_sdk.types import AssistantMessage, ResultMessage, UserMessage
 
     timing_state = tool_start_times if tool_start_times is not None else {}
@@ -148,14 +134,7 @@ def adapt_claude_message(
 async def adapt_claude_stream(
     stream: AsyncIterator[tuple[Any, str]],
 ) -> AsyncIterator[tuple[ToolEvent, str]]:
-    """Wrap a Claude complete_with_tools stream, yielding ToolEvents.
-
-    Args:
-        stream: AsyncIterator of (sdk_message, session_id) tuples
-
-    Yields:
-        (ToolEvent, session_id) tuples
-    """
+    """Wrap a Claude complete_with_tools stream, yielding ToolEvents."""
     last_session_id = ""
     pending_assistant_blocks: list[ToolContentBlock] = []
     tool_start_times: dict[str, float] = {}

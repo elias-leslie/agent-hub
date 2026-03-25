@@ -9,17 +9,18 @@ Create Date: 2026-03-24 22:51:39.022874
 from __future__ import annotations
 
 import json
-from typing import Any, Sequence, Union
+from collections.abc import Sequence
+from typing import Any
 
 import sqlalchemy as sa
-from alembic import op
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'e960dc14ef2f'
-down_revision: Union[str, Sequence[str], None] = 'b217f2377552'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = 'b217f2377552'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _CANONICAL_BOOL_KEYS = {

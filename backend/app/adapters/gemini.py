@@ -151,6 +151,33 @@ class GeminiAdapter(ProviderAdapter):
         ):
             yield event
 
+    def complete_with_tool_events(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        working_dir: str | None,
+        permission_config: dict[str, Any] | None,
+        max_turns: int,
+        project_id: str | None,
+        session_id: str,
+        agent_slug: str | None,
+        tool_catalog: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[tuple[Any, str | None]]:
+        """Return canonical ToolEvents for the shared tool execution pipeline."""
+        del session_id  # Gemini generates its own tool-loop session ids today.
+        return self.complete_with_tools(
+            messages=messages,
+            model=model,
+            tools=tools,
+            working_dir=working_dir,
+            permission_config=permission_config,
+            max_turns=max_turns,
+            project_id=project_id,
+            agent_slug=agent_slug,
+            tool_catalog=tool_catalog,
+        )
+
 
 __all__ = [
     "GeminiAdapter",

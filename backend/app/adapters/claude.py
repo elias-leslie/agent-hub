@@ -262,3 +262,33 @@ class ClaudeAdapter(ProviderAdapter):
             **kwargs,
         ):
             yield message
+
+    def complete_with_tool_events(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        working_dir: str | None,
+        permission_config: dict[str, Any] | None,
+        max_turns: int,
+        project_id: str | None,
+        session_id: str,
+        agent_slug: str | None,
+        tool_catalog: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[tuple[Any, str]]:
+        """Return canonical ToolEvents for the shared tool execution pipeline."""
+        del session_id  # Claude SDK emits its own session id stream.
+        del project_id
+        from app.adapters.claude_tool_events import adapt_claude_stream
+
+        raw_stream = self.complete_with_tools(
+            messages=messages,
+            model=model,
+            tools=tools,
+            permission_config=permission_config,
+            working_dir=working_dir,
+            max_turns=max_turns,
+            agent_slug=agent_slug,
+            tool_catalog=tool_catalog,
+        )
+        return adapt_claude_stream(raw_stream)
