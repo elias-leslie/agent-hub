@@ -169,18 +169,23 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-100 mb-4">
-          Generation Parameters
-        </h2>
+      <div className="section-header">
+        <div>
+          <p className="section-kicker">Generation Controls</p>
+          <h2 className="section-heading mt-2">Generation Parameters</h2>
+          <p className="section-copy mt-2 max-w-3xl">
+            Tune creativity, reasoning depth, verbosity, and execution budgets for
+            this agent&apos;s runtime profile.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-6">
-        <div className="space-y-2">
+        <div className="section-card space-y-2">
           <div className="flex items-center justify-between">
             <label
               htmlFor="temperature"
-              className="text-xs font-medium text-slate-400"
+              className="detail-label"
             >
               Temperature
             </label>
@@ -198,7 +203,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
             onChange={(e) =>
               updateField("temperature", parseFloat(e.target.value))
             }
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-800 accent-amber-500"
           />
           <div className="flex justify-between text-[10px] text-slate-400">
             <span>Precise (0)</span>
@@ -208,10 +213,10 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
         </div>
 
         {supportsThinking ? (
-          <div className="space-y-2">
+          <div className="section-card space-y-2">
             <label
               htmlFor="thinking_level"
-              className="text-xs font-medium text-slate-400"
+              className="detail-label"
             >
               Thinking Level
             </label>
@@ -221,7 +226,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               onChange={(e) =>
                 updateField("thinking_level", e.target.value || null)
               }
-              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200"
+              className="control-select w-full"
             >
               {thinkingLevels.map((level) => (
                 <option key={level.value} value={level.value}>
@@ -234,16 +239,16 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
             </p>
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 border-slate-800 bg-slate-900 text-slate-400">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
             This model does not support configurable reasoning effort.
           </div>
         )}
 
         {supportsVerbosity ? (
-          <div className="space-y-2">
+          <div className="section-card space-y-2">
             <label
               htmlFor="verbosity_level"
-              className="text-xs font-medium text-slate-400"
+              className="detail-label"
             >
               Verbosity Level
             </label>
@@ -253,7 +258,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
               onChange={(e) =>
                 updateField("verbosity_level", e.target.value || null)
               }
-              className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200"
+              className="control-select w-full"
             >
               {VERBOSITY_LEVELS.map((level) => (
                 <option key={level.value} value={level.value}>
@@ -266,16 +271,16 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
             </p>
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 border-slate-800 bg-slate-900 text-slate-400">
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
             This model ignores verbosity overrides.
           </div>
         )}
 
-        <div className="space-y-2">
+        <div className="section-card space-y-2">
           <div className="flex items-center justify-between">
             <label
               htmlFor="timeout_seconds"
-              className="text-xs font-medium text-slate-400"
+              className="detail-label"
             >
               Timeout (seconds)
             </label>
@@ -301,7 +306,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                 setFieldError("timeout_seconds", "Enter a value between 1 and 600 seconds.");
               }
             }}
-            className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-400"
+            className="control-input"
           />
           <p className="text-[10px] text-slate-400">
             Override the model&apos;s default timeout. Leave empty to use the model&apos;s timeout hint (based on speed tier).
@@ -311,22 +316,22 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="section-card space-y-4">
           <div>
-            <h3 className="text-sm font-medium text-slate-200">
+            <h3 className="section-heading text-sm">
               Execution limits
             </h3>
-            <p className="text-[10px] text-slate-400 mt-1">
+            <p className="mt-2 text-xs text-slate-400">
               Agent-specific caps for concurrency, request volume, and spend controls.
             </p>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {LIMIT_FIELDS.map((config) => (
-              <div key={config.field} className="space-y-2">
+              <div key={config.field} className="detail-card space-y-2">
                 <label
                   htmlFor={config.field}
-                  className="text-xs font-medium text-slate-400"
+                  className="detail-label"
                 >
                   {config.label}
                 </label>
@@ -353,7 +358,7 @@ export function ParametersTab({ formData, availableModels, updateField }: Parame
                       )
                     }
                   }}
-                  className="w-full px-3 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200 placeholder-slate-400"
+                  className="control-input font-mono"
                 />
                 <p className="text-[10px] text-slate-400">{config.description}</p>
                 {fieldErrors[config.field] && (

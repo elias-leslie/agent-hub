@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Agent, PreviewScenario, PreviewTaskType, TabId } from "./types";
@@ -18,9 +18,15 @@ import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
 import { useAgentPreview } from "./hooks/useAgentPreview";
 import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
 
+function isAgentTab(value: string | null): value is TabId {
+  return AGENT_EDITOR_TABS.some((tab) => tab.id === value);
+}
+
 export default function AgentEditorPage() {
   const params = useParams();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const slug = params.slug as string;
 
@@ -31,7 +37,6 @@ export default function AgentEditorPage() {
     }
   }, [slug, router]);
 
-  const [activeTab, setActiveTab] = useState<TabId>("general");
   const [formData, setFormData] = useState<Partial<Agent>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [showInlinePreview, setShowInlinePreview] = useState(false);
@@ -95,6 +100,16 @@ export default function AgentEditorPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setHasChanges(true);
   }, []);
+  const setActiveTab = useCallback((tab: TabId) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (tab === "general") {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", tab);
+    }
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
   const updatePreviewScenario = useCallback((updates: Partial<PreviewScenario>) => {
     setPreviewScenario((prev) => ({ ...prev, ...updates }));
   }, []);
@@ -116,6 +131,8 @@ export default function AgentEditorPage() {
       : previewQueryError
         ? "Failed to load preview"
         : null;
+  const tabParam = searchParams.get("tab");
+  const activeTab: TabId = isAgentTab(tabParam) ? tabParam : "general";
 
   if (isLoading) {
     return (

@@ -30,12 +30,19 @@ export function FallbackModelsList({
   };
 
   return (
-    <div className="space-y-2">
-      <label className="text-xs font-medium text-slate-400">
+    <div className="section-card space-y-3">
+      <div>
+        <label className="detail-label">
         Fallback Models (in order)
-      </label>
+        </label>
+        <p className="mt-2 text-sm text-slate-400">
+          Define the ordered fallback chain used when the primary model is unavailable.
+        </p>
+      </div>
       {selectedModels.length === 0 ? (
-        <p className="text-xs text-slate-400 italic">No fallback models configured</p>
+        <div className="rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/60 px-4 py-4 text-sm text-slate-400">
+          No fallback models configured yet.
+        </div>
       ) : (
         <div className="space-y-2">
           {selectedModels.map((model, index) => (
@@ -43,7 +50,7 @@ export function FallbackModelsList({
               <select
                 value={model}
                 onChange={(e) => updateModel(index, e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="control-select flex-1"
               >
                 {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -52,8 +59,9 @@ export function FallbackModelsList({
                 ))}
               </select>
               <button
+                type="button"
                 onClick={() => removeModel(index)}
-                className="p-2 rounded-lg hover:bg-red-950/20 text-red-500"
+                className="icon-button h-10 w-10 border-rose-500/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -62,11 +70,12 @@ export function FallbackModelsList({
         </div>
       )}
       <button
+        type="button"
         onClick={addModel}
         disabled={selectedModels.length >= availableModels.length - 1}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-500 hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+        className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <Plus className="h-3.5 w-3.5" />
+        <Plus className="h-4 w-4" />
         Add Fallback
       </button>
     </div>

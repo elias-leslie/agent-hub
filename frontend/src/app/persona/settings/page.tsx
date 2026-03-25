@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { Loader2, Menu } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import type { PersonaTabId } from "./types";
 import { usePersonaSettings } from "./hooks/usePersonaSettings";
@@ -25,10 +25,15 @@ import type { PreviewScenario, PreviewTaskType } from "@/app/agents/[slug]/types
 import { useAgentPreview } from "@/app/agents/[slug]/hooks/useAgentPreview";
 import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
 
+function isPersonaTab(value: string | null): value is PersonaTabId {
+  return PERSONA_SETTINGS_TABS.some((tab) => tab.id === value);
+}
+
 export default function PersonaSettingsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  const [activeTab, setActiveTab] = useState<PersonaTabId>("identity");
   const [showInlinePreview, setShowInlinePreview] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewTaskType>("heartbeat");
   const [previewScenario, setPreviewScenario] = useState<PreviewScenario>(() => ({
@@ -69,12 +74,24 @@ export default function PersonaSettingsPage() {
   const updatePreviewScenario = useCallback((updates: Partial<PreviewScenario>) => {
     setPreviewScenario((prev) => ({ ...prev, ...updates }));
   }, []);
+  const setActiveTab = useCallback((tab: PersonaTabId) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (tab === "identity") {
+      nextParams.delete("tab");
+    } else {
+      nextParams.set("tab", tab);
+    }
+    const query = nextParams.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
   const previewError =
     previewQueryError instanceof Error
       ? previewQueryError.message
       : previewQueryError
         ? "Failed to load preview"
         : null;
+  const tabParam = searchParams.get("tab");
+  const activeTab: PersonaTabId = isPersonaTab(tabParam) ? tabParam : "identity";
   const activeTabMeta =
     PERSONA_SETTINGS_TABS.find((tab) => tab.id === activeTab) ?? PERSONA_SETTINGS_TABS[0];
 
