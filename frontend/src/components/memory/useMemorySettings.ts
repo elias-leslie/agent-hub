@@ -39,8 +39,8 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
       setUsage(usageData);
       setLlmConfig(llmData);
       setEnabled(settingsData.enabled);
-      setContinuityEnabled(settingsData.continuity_enabled ?? true);
-      setContinuityMaxSessions(settingsData.continuity_max_sessions ?? 5);
+      setContinuityEnabled(settingsData.continuity_enabled);
+      setContinuityMaxSessions(settingsData.continuity_max_sessions);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {

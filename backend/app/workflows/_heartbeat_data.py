@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -76,6 +77,29 @@ _SUMMITFLOW_PROJECT_ID = "summitflow"
 # - stale_running_task (from ready-all): safe to reconcile stale task state
 # - stale_active: advisory only until explicitly verified/reconciled
 # - mixed / orphaned / reconciled / retired / superseded: informational, no new automatic close path here
+
+
+@dataclass(frozen=True)
+class SummitFlowHeartbeatState:
+    """Canonical SummitFlow truth bundle for one heartbeat assembly pass."""
+
+    task_overview_response: dict[str, Any] | None
+    cleanup_status_response: dict[str, Any] | None
+    git_status_rows: list[RepoGitStatus]
+
+    @property
+    def task_overview_payload(self) -> dict[str, Any] | None:
+        if not isinstance(self.task_overview_response, dict):
+            return None
+        payload = self.task_overview_response.get("payload")
+        return payload if isinstance(payload, dict) else None
+
+    @property
+    def task_overview_raw(self) -> str:
+        if not isinstance(self.task_overview_response, dict):
+            return ""
+        raw = self.task_overview_response.get("raw")
+        return raw.strip() if isinstance(raw, str) else ""
 
 
 def _read_project_index(project_id: str) -> dict[str, object] | None:
@@ -214,6 +238,27 @@ async def _fetch_task_overview_response(target_project_id: str | None = None) ->
     return await _fetch_summitflow_json(
         endpoint,
         failure_log="Failed to fetch task overview for heartbeat prompt from SummitFlow API",
+    )
+
+
+async def _collect_summitflow_heartbeat_state(
+    target_project_id: str | None = None,
+) -> SummitFlowHeartbeatState:
+    """Collect canonical SummitFlow truth once for heartbeat prompt assembly.
+
+    Task overview remains the global ready-all surface so downstream sections can
+    filter per target project without losing cross-project queue truth.
+    Cleanup and git state are targeted because they drive per-project action.
+    """
+    task_overview_response, cleanup_status_response, git_status_rows = await asyncio.gather(
+        _fetch_task_overview_response(),
+        _fetch_cleanup_status_response(target_project_id),
+        _fetch_git_status_rows(target_project_id),
+    )
+    return SummitFlowHeartbeatState(
+        task_overview_response=task_overview_response,
+        cleanup_status_response=cleanup_status_response,
+        git_status_rows=git_status_rows,
     )
 
 
@@ -977,9 +1022,15 @@ async def _get_workstream_inventory(
     task_overview: str | None = None,
     task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
+    heartbeat_state: SummitFlowHeartbeatState | None = None,
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     try:
+        if task_overview_payload is None and heartbeat_state is not None:
+            task_overview_payload = heartbeat_state.task_overview_payload
+        if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
+            task_overview = heartbeat_state.task_overview_raw
+
         queue_truth_available = False
         if task_overview_payload is not None:
             stale_tasks = [
@@ -1036,8 +1087,13 @@ async def _get_active_work_summary(
     task_overview: str | None = None,
     task_overview_payload: dict[str, Any] | None = None,
     target_project_id: str | None = None,
+    heartbeat_state: SummitFlowHeartbeatState | None = None,
 ) -> str:
     """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
+    if task_overview_payload is None and heartbeat_state is not None:
+        task_overview_payload = heartbeat_state.task_overview_payload
+    if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
+        task_overview = heartbeat_state.task_overview_raw
     if task_overview is None and task_overview_payload is not None:
         task_overview = build_compact_task_overview_from_payload(task_overview_payload)
     if task_overview is None:
@@ -1100,9 +1156,15 @@ async def _fetch_cleanup_status_response(target_project_id: str | None = None) -
     )
 
 
-async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
+async def _get_cleanup_status_summary(
+    target_project_id: str | None = None,
+    *,
+    cleanup_status_response: dict[str, Any] | None = None,
+) -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
-    response = await _fetch_cleanup_status_response(target_project_id)
+    response = cleanup_status_response
+    if response is None:
+        response = await _fetch_cleanup_status_response(target_project_id)
     if not response:
         return ""
     output = response.get("compact")
@@ -1189,9 +1251,13 @@ def _filter_git_status_for_project(git_status: str, project_id: str) -> str:
     return "\n\n".join(sections)
 
 
-async def _get_git_status_summary(target_project_id: str | None = None) -> str:
+async def _get_git_status_summary(
+    target_project_id: str | None = None,
+    *,
+    git_status_rows: list[RepoGitStatus] | None = None,
+) -> str:
     """Build a <git_state> XML block from the canonical `st git status` surface."""
-    rows = await _fetch_git_status_rows(target_project_id)
+    rows = git_status_rows if git_status_rows is not None else await _fetch_git_status_rows(target_project_id)
     if not rows:
         return ""
 
@@ -1257,6 +1323,7 @@ async def _get_feedback_summary_section() -> str:
 __all__ = [
     "_build_workstream_next_action",
     "_classify_workstream_lane",
+    "_collect_summitflow_heartbeat_state",
     "_fetch_active_sessions_section",
     "_fetch_backup_schedule",
     "_fetch_backup_status",

@@ -11,6 +11,7 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _collect_summitflow_heartbeat_state,
     _fetch_cleanup_status,
     _fetch_git_status_compact,
     _fetch_recently_completed_sessions_section,
@@ -195,6 +196,68 @@ class TestFetchGitStatusCompact:
             "agent-hub       main            dirty   uncommitted:2 ahead:1 behind:0"
         )
         assert fake_client.requested_urls == ["http://localhost:8001/api/git/status"]
+
+
+class TestCollectSummitflowHeartbeatState:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._fetch_task_overview_response", new_callable=AsyncMock)
+    async def test_collects_canonical_sections_once(
+        self,
+        mock_task_overview: AsyncMock,
+        mock_cleanup_status: AsyncMock,
+        mock_git_rows: AsyncMock,
+    ) -> None:
+        from app.services.git_status_summary import RepoGitStatus
+
+        mock_task_overview.return_value = {
+            "raw": "READY-ALL[1]\n...",
+            "payload": {"projects": [{"project_id": "agent-hub"}]},
+        }
+        mock_cleanup_status.return_value = {
+            "compact": "CLEANUP[all]:repos=1 needs_cleanup=0",
+            "payload": {"summary": {"needs_cleanup": 0}},
+        }
+        mock_git_rows.return_value = [
+            RepoGitStatus(
+                project_id="agent-hub",
+                branch="main",
+                state="clean",
+                uncommitted=0,
+                ahead=0,
+                behind=0,
+            )
+        ]
+
+        state = await _collect_summitflow_heartbeat_state("agent-hub")
+
+        assert state.task_overview_response == mock_task_overview.return_value
+        assert state.task_overview_payload == {"projects": [{"project_id": "agent-hub"}]}
+        assert state.task_overview_raw == "READY-ALL[1]\n..."
+        assert state.cleanup_status_response == mock_cleanup_status.return_value
+        assert len(state.git_status_rows) == 1
+        mock_task_overview.assert_awaited_once_with()
+        mock_cleanup_status.assert_awaited_once_with("agent-hub")
+        mock_git_rows.assert_awaited_once_with("agent-hub")
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock, return_value=[])
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock, return_value=None)
+    @patch("app.workflows._heartbeat_data._fetch_task_overview_response", new_callable=AsyncMock, return_value=None)
+    async def test_handles_missing_state_gracefully(
+        self,
+        _mock_task_overview: AsyncMock,
+        _mock_cleanup_status: AsyncMock,
+        _mock_git_rows: AsyncMock,
+    ) -> None:
+        state = await _collect_summitflow_heartbeat_state()
+
+        assert state.task_overview_response is None
+        assert state.task_overview_payload is None
+        assert state.task_overview_raw == ""
+        assert state.cleanup_status_response is None
+        assert state.git_status_rows == []
 
 
 class TestBuildHeartbeatPromptIncludesGitState:

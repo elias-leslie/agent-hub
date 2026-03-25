@@ -10,8 +10,8 @@ from datetime import UTC, datetime
 from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
 from app.services.prompt_service import require_prompt_content
 from app.workflows._heartbeat_data import (
+    _collect_summitflow_heartbeat_state,
     _fetch_task_overview,
-    _fetch_task_overview_payload,
     _get_active_specialist_inventory,
     _get_active_work_summary,
     _get_agent_roster_summary,
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TIMEZONE = "America/New_York"
 _IANA_TZ_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b")
+_LEGACY_FETCH_SEAMS = (_fetch_task_overview,)
 
 
 def _validate_iana_timezone(tz_value: str) -> bool:
@@ -131,12 +132,9 @@ async def _append_dynamic_sections(
     provider: str | None = None,
 ) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
-    task_overview_payload = await _fetch_task_overview_payload()
-    task_overview = (
-        await _fetch_task_overview()
-        if task_overview_payload is None
-        else ""
-    )
+    heartbeat_state = await _collect_summitflow_heartbeat_state(target_project_id)
+    task_overview_payload = heartbeat_state.task_overview_payload
+    task_overview = "" if task_overview_payload is not None else heartbeat_state.task_overview_raw
     (
         active_work,
         protection_status,
@@ -151,9 +149,13 @@ async def _append_dynamic_sections(
             task_overview=task_overview,
             task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
+            heartbeat_state=heartbeat_state,
         ),
         _get_protection_status_summary(target_project_id),
-        _get_cleanup_status_summary(target_project_id),
+        _get_cleanup_status_summary(
+            target_project_id,
+            cleanup_status_response=heartbeat_state.cleanup_status_response,
+        ),
         _get_active_specialist_inventory(target_project_id),
         _get_agent_roster_summary(),
         _get_workstream_inventory(
@@ -161,8 +163,12 @@ async def _append_dynamic_sections(
             task_overview=task_overview,
             task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
+            heartbeat_state=heartbeat_state,
         ),
-        _get_git_status_summary(target_project_id),
+        _get_git_status_summary(
+            target_project_id,
+            git_status_rows=heartbeat_state.git_status_rows,
+        ),
         _get_feedback_summary_section(),
     )
     for section in (

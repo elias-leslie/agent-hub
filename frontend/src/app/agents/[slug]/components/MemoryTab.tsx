@@ -2,7 +2,7 @@
 
 import { Brain, Settings2 } from "lucide-react";
 import { Agent } from "../types";
-import { parseConfig } from "./memory/utils";
+import { cloneConfig, parseConfig } from "./memory/utils";
 import { Toggle } from "./memory/Toggle";
 import { MemoryConfigSection } from "./memory/MemoryConfigSection";
 import { TagFilteringSection } from "./memory/TagFilteringSection";
@@ -15,10 +15,18 @@ interface MemoryTabProps {
 
 export function MemoryTab({ formData, updateField }: MemoryTabProps) {
   const isCustomEnabled = formData.memory_config != null;
-  const effectiveConfig = parseConfig(formData.effective_memory_config ?? null);
+  const effectiveSource = formData.effective_memory_config as MemoryConfig | undefined;
+
+  if (!effectiveSource) {
+    return null;
+  }
+
+  const effectiveConfig = cloneConfig(effectiveSource);
   const config = isCustomEnabled
-    ? parseConfig(formData.memory_config ?? null)
-    : effectiveConfig;
+    ? formData.memory_config
+      ? parseConfig(formData.memory_config, effectiveConfig)
+      : cloneConfig(effectiveConfig)
+    : cloneConfig(effectiveConfig);
 
   const updateConfig = (updates: Partial<MemoryConfig>) => {
     const newConfig = { ...config, ...updates };
@@ -29,7 +37,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
     if (isCustomEnabled) {
       updateField("memory_config", null);
     } else {
-      updateField("memory_config", { ...effectiveConfig });
+      updateField("memory_config", cloneConfig(effectiveConfig) as Agent["memory_config"]);
     }
   };
 
@@ -42,7 +50,7 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
     } else {
       const otherField =
         field === "audience_tags" ? "exclude_tags" : "audience_tags";
-      const otherTags = config[otherField];
+      const otherTags = [...config[otherField]];
 
       if (tags.length === 0 && otherTags.length === 0) {
         updateField("memory_config", null);

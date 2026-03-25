@@ -1,7 +1,9 @@
 import type { Agent } from "./types"
-import { parseConfig } from "./components/memory/utils"
+import { cloneConfig, parseConfig } from "./components/memory/utils"
 
 export function createAgentFormData(agent: Agent): Partial<Agent> {
+  const effectiveMemoryConfig = cloneConfig(agent.effective_memory_config)
+
   return {
     name: agent.name,
     description: agent.description,
@@ -14,8 +16,10 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
     is_active: agent.is_active,
     is_coding_agent: agent.is_coding_agent,
     tool_permissions: agent.tool_permissions,
-    memory_config: agent.memory_config ? parseConfig(agent.memory_config) : null,
-    effective_memory_config: parseConfig(agent.effective_memory_config),
+    memory_config: agent.memory_config
+      ? parseConfig(agent.memory_config, effectiveMemoryConfig)
+      : null,
+    effective_memory_config: effectiveMemoryConfig,
     max_concurrency: agent.max_concurrency ?? null,
     max_subagent_concurrency: agent.max_subagent_concurrency ?? null,
     daily_token_budget: agent.daily_token_budget ?? null,
@@ -32,7 +36,9 @@ export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent
   delete payload.system_prompt
   delete payload.effective_memory_config
   if (payload.memory_config) {
-    payload.memory_config = parseConfig(payload.memory_config)
+    payload.memory_config = cloneConfig(
+      payload.memory_config as NonNullable<Agent["memory_config"]>
+    )
   }
 
   return payload
