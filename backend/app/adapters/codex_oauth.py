@@ -85,8 +85,8 @@ def _is_benign_interrupt_error(exc: Exception) -> bool:
     ))
 
 
-class _CodexStreamSession:
-    """Own the HTTP client and SSE response lifetime for one Codex stream."""
+class _CodexResponseSession:
+    """Own the HTTP client and SSE response lifetime for one Codex request."""
 
     def __init__(
         self,
@@ -345,16 +345,18 @@ class CodexOAuthAdapter(ProviderAdapter):
         headers = build_headers(creds)
 
         try:
-            async with (
-                httpx.AsyncClient(timeout=request_timeout) as client,
-                client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response,
-            ):
-                if response.status_code != 200:
-                    error_body = await response.aread()
-                    handle_error_response(
-                        response.status_code, error_body.decode("utf-8", errors="replace")
-                    )
-                return await collect_completion(response, resolved_model)
+            session = _CodexResponseSession(
+                body=body,
+                headers=headers,
+                request_timeout=request_timeout,
+            )
+            await session.start()
+            if session.response is None:
+                raise RuntimeError("Codex response session did not initialize a response")
+            try:
+                return await collect_completion(session.response, resolved_model)
+            finally:
+                await session.close()
         except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
             logger.error("Codex HTTP error: %s", exc)
             raise ProviderError(str(exc), provider="codex", retriable=True) from exc
@@ -384,7 +386,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         headers = build_headers(creds)
         abort_event = kwargs.get("abort_event")
         owned_abort_event = abort_event if _is_abort_event(abort_event) else None
-        session = _CodexStreamSession(body=body, headers=headers)
+        session = _CodexResponseSession(body=body, headers=headers)
         total_content = ""
         abort_watch_task: asyncio.Task[None] | None = None
 
