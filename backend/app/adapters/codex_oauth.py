@@ -11,6 +11,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import AsyncExitStack, suppress
 from typing import Any
 
 import httpx
@@ -49,6 +50,83 @@ _EMPTY_FINAL_RESPONSE_MSG = (
 )
 
 ToolHandler = Callable[[str, dict[str, Any]], Awaitable[str]]
+
+
+def _cancelled_done_event(total_content: str) -> StreamEvent:
+    """Build a consistent cancelled done event for interrupted Codex streams."""
+    return StreamEvent(
+        type="done",
+        input_tokens=0,
+        output_tokens=len(total_content) // 4,
+        finish_reason="cancelled",
+    )
+
+
+def _is_abort_event(value: object) -> bool:
+    """Return True when the provider kwargs contain an abort event."""
+    return isinstance(value, asyncio.Event)
+
+
+def _abort_requested(abort_event: asyncio.Event | None) -> bool:
+    """Return True when an abort event exists and is already set."""
+    return abort_event is not None and abort_event.is_set()
+
+
+def _is_benign_interrupt_error(exc: Exception) -> bool:
+    """Return True for transport errors expected when a stream is interrupted."""
+    if isinstance(exc, (httpx.ReadError, httpx.StreamClosed)):
+        return True
+    message = str(exc).lower()
+    return any(snippet in message for snippet in (
+        "stream closed",
+        "connection closed",
+        "closed resource",
+        "response stream consumed",
+    ))
+
+
+class _CodexStreamSession:
+    """Own the HTTP client and SSE response lifetime for one Codex stream."""
+
+    def __init__(
+        self,
+        *,
+        body: dict[str, Any],
+        headers: dict[str, str],
+        request_timeout: float | None = DEFAULT_TIMEOUT,
+    ) -> None:
+        self.body = body
+        self.headers = headers
+        self.request_timeout = request_timeout
+        self.response: httpx.Response | None = None
+        self._exit_stack = AsyncExitStack()
+        self._closed = False
+
+    async def start(self) -> None:
+        """Open the owned client + stream response and validate status."""
+        client = await self._exit_stack.enter_async_context(httpx.AsyncClient(timeout=self.request_timeout))
+        self.response = await self._exit_stack.enter_async_context(
+            client.stream("POST", CODEX_API_URL, json=self.body, headers=self.headers)
+        )
+        if self.response.status_code != 200:
+            error_body = await self.response.aread()
+            await self.close()
+            handle_error_response(
+                self.response.status_code,
+                error_body.decode("utf-8", errors="replace"),
+            )
+
+    async def interrupt(self) -> None:
+        """Interrupt the active Codex stream by closing owned transport state."""
+        await self.close()
+
+    async def close(self) -> None:
+        """Close the owned client + response once."""
+        if self._closed:
+            return
+        self._closed = True
+        with suppress(asyncio.CancelledError, RuntimeError, httpx.StreamError):
+            await self._exit_stack.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -304,22 +382,50 @@ class CodexOAuthAdapter(ProviderAdapter):
             **kwargs,
         )
         headers = build_headers(creds)
+        abort_event = kwargs.get("abort_event")
+        owned_abort_event = abort_event if _is_abort_event(abort_event) else None
+        session = _CodexStreamSession(body=body, headers=headers)
+        total_content = ""
+        abort_watch_task: asyncio.Task[None] | None = None
 
         try:
-            async with (
-                httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client,
-                client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response,
-            ):
-                if response.status_code != 200:
-                    error_body = await response.aread()
-                    handle_error_response(
-                        response.status_code, error_body.decode("utf-8", errors="replace")
-                    )
-                async for event in iter_stream_events(response):
-                    yield event
-        except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
+            if _abort_requested(owned_abort_event):
+                yield _cancelled_done_event(total_content)
+                return
+
+            await session.start()
+            if owned_abort_event is not None:
+                async def _watch_abort() -> None:
+                    await owned_abort_event.wait()
+                    await session.interrupt()
+
+                abort_watch_task = asyncio.create_task(_watch_abort())
+
+            if session.response is None:
+                raise RuntimeError("Codex stream session did not initialize a response")
+
+            async for event in iter_stream_events(session.response):
+                if event.type == "content":
+                    total_content += event.content or ""
+                if _abort_requested(owned_abort_event):
+                    raise asyncio.CancelledError("Abort signal received")
+                yield event
+        except asyncio.CancelledError:
+            logger.warning("Codex stream cancelled (cancel scope); emitting cancelled done")
+            yield _cancelled_done_event(total_content)
+        except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError, httpx.StreamError, RuntimeError) as exc:
+            if _abort_requested(owned_abort_event) and _is_benign_interrupt_error(exc):
+                logger.warning("Codex stream interrupted during cancellation; emitting cancelled done")
+                yield _cancelled_done_event(total_content)
+                return
             logger.error("Codex stream HTTP error: %s", exc)
             yield StreamEvent(type="error", error=str(exc))
+        finally:
+            if abort_watch_task is not None:
+                abort_watch_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await abort_watch_task
+            await session.close()
 
     async def complete_with_tools(
         self,

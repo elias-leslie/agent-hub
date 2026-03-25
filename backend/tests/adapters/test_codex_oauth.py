@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 
-from app.adapters.base import CompletionResult, Message, ToolCallResult
+from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
 from app.adapters.codex_auth import CodexCredentials
 from app.adapters.codex_oauth import CodexOAuthAdapter
 
@@ -349,3 +350,114 @@ async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_
     assert len(events) == 2
     assert [event.type for event in events] == ["content", "done"]
     tool_handler.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_stream_preserves_events_and_closes_owned_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+
+    lifecycle: list[str] = []
+
+    class FakeSession:
+        def __init__(self, **_: object) -> None:
+            self.response = object()
+
+        async def start(self) -> None:
+            lifecycle.append("start")
+
+        async def interrupt(self) -> None:
+            lifecycle.append("interrupt")
+
+        async def close(self) -> None:
+            lifecycle.append("close")
+
+    async def fake_iter_stream_events(response: object) -> asyncio.AsyncIterator[StreamEvent]:
+        assert response is not None
+        yield StreamEvent(type="content", content="hello")
+        yield StreamEvent(type="done", input_tokens=3, output_tokens=2, finish_reason="stop")
+
+    monkeypatch.setattr("app.adapters.codex_oauth._CodexStreamSession", FakeSession)
+    monkeypatch.setattr("app.adapters.codex_oauth.iter_stream_events", fake_iter_stream_events)
+
+    events = []
+    async for event in adapter.stream(
+        messages=[Message(role="user", content="hello")],
+        model="codex/gpt-5.4",
+    ):
+        events.append(event)
+
+    assert [(event.type, event.content, event.finish_reason) for event in events] == [
+        ("content", "hello", None),
+        ("done", "", "stop"),
+    ]
+    assert lifecycle == ["start", "close"]
+
+
+@pytest.mark.asyncio
+async def test_stream_interrupts_owned_session_on_abort_event(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+
+    lifecycle: list[str] = []
+    holder: dict[str, object] = {}
+
+    class FakeSession:
+        def __init__(self, **_: object) -> None:
+            self.response = object()
+            self.interrupted = asyncio.Event()
+            holder["session"] = self
+
+        async def start(self) -> None:
+            lifecycle.append("start")
+
+        async def interrupt(self) -> None:
+            lifecycle.append("interrupt")
+            self.interrupted.set()
+
+        async def close(self) -> None:
+            lifecycle.append("close")
+
+    async def fake_iter_stream_events(response: object) -> asyncio.AsyncIterator[StreamEvent]:
+        assert response is not None
+        yield StreamEvent(type="content", content="hello")
+        session = holder["session"]
+        assert isinstance(session, FakeSession)
+        await session.interrupted.wait()
+        raise httpx.ReadError("stream closed during interrupt")
+
+    monkeypatch.setattr("app.adapters.codex_oauth._CodexStreamSession", FakeSession)
+    monkeypatch.setattr("app.adapters.codex_oauth.iter_stream_events", fake_iter_stream_events)
+
+    abort_event = asyncio.Event()
+    events = []
+    async for event in adapter.stream(
+        messages=[Message(role="user", content="hello")],
+        model="codex/gpt-5.4",
+        abort_event=abort_event,
+    ):
+        events.append(event)
+        if event.type == "content":
+            abort_event.set()
+
+    assert [(event.type, event.content, event.finish_reason) for event in events] == [
+        ("content", "hello", None),
+        ("done", "", "cancelled"),
+    ]
+    assert lifecycle == ["start", "interrupt", "close"]
