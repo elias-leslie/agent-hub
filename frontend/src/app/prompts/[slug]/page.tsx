@@ -146,7 +146,8 @@ export default function PromptEditPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
+      <div className="page-backdrop" />
       {/* Toast notifications */}
       {saveMutation.isSuccess && (
         <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-sm shadow-lg">
@@ -167,25 +168,57 @@ export default function PromptEditPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="border-b border-slate-800 bg-slate-900 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
             <button
               onClick={() => router.push("/prompts")}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+              className="icon-button"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-            <h1 className="text-lg font-semibold text-slate-100">
-              {prompt.name}
-            </h1>
-          </div>
-          <div className="flex items-center gap-3">
+              <div className="page-title-icon">
+                <Globe className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="page-title">{prompt.name}</h1>
+                  <span className="page-pill font-mono">{prompt.slug}</span>
+                </div>
+                <div className="page-meta">
+                  <span
+                    className={cn(
+                      "page-pill",
+                      prompt.enabled
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                        : "border-rose-500/20 bg-rose-500/10 text-rose-200",
+                    )}
+                  >
+                    {prompt.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <span
+                    className={cn(
+                      "page-pill",
+                      prompt.is_global
+                        ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                        : "border-slate-700/80 bg-slate-900/90 text-slate-400",
+                    )}
+                  >
+                    {prompt.is_global ? "Global prompt" : "Scoped prompt"}
+                  </span>
+                  {prompt.owner_agent_slug ? (
+                    <span className="page-pill">Owner {prompt.owner_agent_slug}</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+            <div className="page-toolbar">
             <button
+              type="button"
               onClick={handleDelete}
               disabled={deleteMutation.isPending || prompt.deletion_locked}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-red-800 text-red-400 hover:bg-red-950/40 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-200 transition hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {deleteMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -197,9 +230,10 @@ export default function PromptEditPage() {
               )}
             </button>
             <button
+              type="button"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
+              className="button-primary disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
             >
               {saveMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -212,199 +246,232 @@ export default function PromptEditPage() {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      </header>
 
-      {/* Form */}
-      <div className="max-w-5xl mx-auto px-6 py-8">
-        <div className="space-y-6">
-          {/* Slug (readonly) */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Slug
-            </label>
-            <div className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 text-sm font-mono text-slate-400">
-              {prompt.slug}
-            </div>
-            {prompt.owner_agent_slug && (
-              <p className="text-[11px] text-slate-400">
-                Owned by agent: {prompt.owner_agent_slug}
-              </p>
-            )}
-            {prompt.deletion_locked && (
-              <p className="text-[11px] text-amber-300">
-                This prompt is locked and cannot be deleted.
-              </p>
-            )}
-          </div>
+      <div className="page-container">
+        <div className="page-frame">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_22rem]">
+            <section className="panel-surface animate-fade-up">
+              <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
+                <p className="section-kicker">Prompt Document</p>
+                <h2 className="section-heading mt-2">Source Content</h2>
+                <p className="section-copy mt-2 max-w-3xl">
+                  Edit the prompt body, operator-facing description, and change reason
+                  that downstream Arena and benchmark runs use for attribution.
+                </p>
+              </div>
+              <div className="space-y-5 px-5 py-5 lg:px-6 lg:py-6">
+                <div className="space-y-1.5">
+                  <label className="detail-label">
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="control-input"
+                  />
+                </div>
 
-          {/* Name */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-            />
-          </div>
+                <div className="space-y-1.5">
+                  <label className="detail-label">
+                    Content
+                  </label>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="control-input min-h-[26rem] resize-y font-mono text-[13px] leading-6"
+                  />
+                </div>
 
-          {/* Content */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Content
-            </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              style={{ minHeight: "300px" }}
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
-            />
-          </div>
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="detail-label">
+                      Description
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={5}
+                      className="control-input min-h-36 resize-y"
+                    />
+                  </div>
 
-          {/* Description */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Description
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
-            />
-          </div>
+                  <div className="section-card space-y-3">
+                    <div>
+                      <p className="detail-label">Change Reason</p>
+                      <p className="mt-2 text-sm text-slate-400">
+                        Saved with every update and restore so regressions can be tied to
+                        a concrete prompt change.
+                      </p>
+                    </div>
+                    <input
+                      type="text"
+                      value={changeReason}
+                      onChange={(e) => setChangeReason(e.target.value)}
+                      placeholder="Why are you changing this prompt?"
+                      className="control-input"
+                    />
+                  </div>
+                </div>
+              </div>
+            </section>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Change Reason
-            </label>
-            <input
-              type="text"
-              value={changeReason}
-              onChange={(e) => setChangeReason(e.target.value)}
-              placeholder="Why are you changing this prompt?"
-              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-            />
-            <p className="text-[11px] text-slate-400">
-              Saved with every update and restore so Arena and benchmark runs can
-              attribute regressions to prompt changes.
-            </p>
-          </div>
+            <aside className="space-y-6">
+              <section className="panel-surface animate-fade-up stagger-1 p-5 lg:p-6">
+                <div className="section-header gap-4">
+                  <div>
+                    <p className="section-kicker">Prompt Identity</p>
+                    <h2 className="section-heading mt-2">Overview</h2>
+                  </div>
+                </div>
+                <div className="mt-5 space-y-3">
+                  <div className="detail-card">
+                    <p className="detail-label">Slug</p>
+                    <p className="detail-value font-mono">{prompt.slug}</p>
+                  </div>
+                  <div className="detail-card">
+                    <p className="detail-label">Ownership</p>
+                    <p className="detail-value">
+                      {prompt.owner_agent_slug ? `Owned by ${prompt.owner_agent_slug}` : "Shared system prompt"}
+                    </p>
+                  </div>
+                  {prompt.deletion_locked && (
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                      This prompt is locked and cannot be deleted.
+                    </div>
+                  )}
+                </div>
+              </section>
 
-          {/* Is Global toggle */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-slate-400">
-              Scope & Status
-            </label>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => setIsGlobal(true)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                  isGlobal
-                    ? "bg-amber-950/40 border-amber-800 text-amber-500"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
-                )}
-              >
-                <Globe className="h-4 w-4" />
-                Global
-              </button>
-              <button
-                onClick={() => setIsGlobal(false)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                  !isGlobal
-                    ? "bg-slate-800 border-slate-600 text-slate-700"
-                    : "border-slate-700 text-slate-400 hover:bg-slate-50",
-                )}
-              >
-                Non-Global
-              </button>
-              <button
-                onClick={() => setEnabled(!enabled)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                  enabled
-                    ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
-                    : "bg-slate-800 border-slate-600 text-slate-400",
-                )}
-              >
-                {enabled ? "Enabled" : "Disabled"}
-              </button>
-            </div>
-          </div>
-
-          {/* Excluded Agents (only relevant for global prompts) */}
-          {isGlobal && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-400">
-                Excluded Agents
-              </label>
-              <p className="text-[10px] text-slate-400">
-                Agent slugs that will NOT receive this global prompt.
-              </p>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {excludeAgents.map((agent) => (
-                  <span
-                    key={agent}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-mono bg-red-950/30 border border-red-800 text-red-400"
-                  >
-                    {agent}
+              <section className="panel-surface animate-fade-up stagger-2 p-5 lg:p-6">
+                <p className="section-kicker">Distribution</p>
+                <h2 className="section-heading mt-2">Scope & Status</h2>
+                <div className="mt-5 space-y-4">
+                  <div className="segmented-control">
                     <button
-                      onClick={() =>
-                        setExcludeAgents(excludeAgents.filter((a) => a !== agent))
-                      }
-                      className="ml-0.5 hover:text-red-200 cursor-pointer"
+                      type="button"
+                      onClick={() => setIsGlobal(true)}
+                      className={cn(
+                        "segmented-option",
+                        isGlobal
+                          ? "border-amber-500/20 bg-amber-500/12 text-amber-100"
+                          : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                      )}
                     >
-                      x
+                      <Globe className="h-4 w-4" />
+                      Global
                     </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={excludeInput}
-                  onChange={(e) => setExcludeInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && excludeInput.trim()) {
-                      e.preventDefault();
-                      const val = excludeInput.trim();
-                      if (!excludeAgents.includes(val)) {
-                        setExcludeAgents([...excludeAgents, val]);
-                      }
-                      setExcludeInput("");
-                    }
-                  }}
-                  placeholder="Agent slug..."
-                  className="flex-1 px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                />
-                <button
-                  onClick={() => {
-                    const val = excludeInput.trim();
-                    if (val && !excludeAgents.includes(val)) {
-                      setExcludeAgents([...excludeAgents, val]);
-                    }
-                    setExcludeInput("");
-                  }}
-                  disabled={!excludeInput.trim()}
-                  className="px-3 py-2 text-sm font-medium rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          )}
+                    <button
+                      type="button"
+                      onClick={() => setIsGlobal(false)}
+                      className={cn(
+                        "segmented-option",
+                        !isGlobal
+                          ? "border-slate-600 bg-slate-900/90 text-slate-100"
+                          : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                      )}
+                    >
+                      Scoped
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnabled(!enabled)}
+                      className={cn(
+                        "segmented-option",
+                        enabled
+                          ? "border-emerald-500/20 bg-emerald-500/12 text-emerald-100"
+                          : "border-rose-500/20 bg-rose-500/12 text-rose-200",
+                      )}
+                    >
+                      {enabled ? "Enabled" : "Disabled"}
+                    </button>
+                  </div>
 
-          <PromptRevisionHistory
-            prompt={prompt}
-            revisions={revisions}
-            isLoading={revisionsLoading}
-            restoringRevisionId={restoreMutation.isPending ? restoreMutation.variables ?? null : null}
-            onRestore={(revisionId) => restoreMutation.mutate(revisionId)}
-          />
+                  {isGlobal ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="detail-label">Excluded Agents</p>
+                        <p className="mt-2 text-sm text-slate-400">
+                          Agent slugs that should not receive this global prompt.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {excludeAgents.length === 0 ? (
+                          <span className="page-pill">No exclusions</span>
+                        ) : (
+                          excludeAgents.map((agent) => (
+                            <span
+                              key={agent}
+                              className="inline-flex items-center gap-1 rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-xs font-mono text-rose-200"
+                            >
+                              {agent}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExcludeAgents(excludeAgents.filter((a) => a !== agent))
+                                }
+                                className="ml-0.5 rounded-full p-0.5 text-rose-200 transition hover:bg-rose-500/15"
+                                aria-label={`Remove excluded agent ${agent}`}
+                              >
+                                x
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={excludeInput}
+                          onChange={(e) => setExcludeInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && excludeInput.trim()) {
+                              e.preventDefault();
+                              const val = excludeInput.trim();
+                              if (!excludeAgents.includes(val)) {
+                                setExcludeAgents([...excludeAgents, val]);
+                              }
+                              setExcludeInput("");
+                            }
+                          }}
+                          placeholder="Agent slug..."
+                          className="control-input flex-1 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = excludeInput.trim();
+                            if (val && !excludeAgents.includes(val)) {
+                              setExcludeAgents([...excludeAgents, val]);
+                            }
+                            setExcludeInput("");
+                          }}
+                          disabled={!excludeInput.trim()}
+                          className="button-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 px-4 py-3 text-sm text-slate-400">
+                      Scoped prompts follow their assignment target only, so exclusions are not needed.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <PromptRevisionHistory
+                prompt={prompt}
+                revisions={revisions}
+                isLoading={revisionsLoading}
+                restoringRevisionId={restoreMutation.isPending ? restoreMutation.variables ?? null : null}
+                onRestore={(revisionId) => restoreMutation.mutate(revisionId)}
+              />
+            </aside>
+          </div>
         </div>
       </div>
     </div>

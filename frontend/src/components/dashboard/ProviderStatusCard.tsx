@@ -21,9 +21,9 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
   const config = stateConfig[state] || stateConfig.unknown;
 
   return (
-    <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/30 border border-slate-800/50">
+    <div className="flex items-center justify-between rounded-2xl border border-slate-800/70 bg-slate-900/75 p-3.5 transition-colors hover:border-slate-700/80 hover:bg-slate-900/95">
       <div className="flex items-center gap-3">
-        <div className={cn("p-1.5 rounded-md", config.bg)}>
+        <div className={cn("rounded-xl border border-slate-800/70 p-2", config.bg)}>
           {provider.name === "claude" ? (
             <Cpu className="h-4 w-4 text-orange-400" />
           ) : (
@@ -38,7 +38,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
             <span className={cn("w-1.5 h-1.5 rounded-full", config.dot, state === "healthy" && "animate-pulse")} />
           </div>
           {health && (
-            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono">
+            <div className="mt-1 flex items-center gap-2 text-[10px] font-mono text-slate-500">
               <span>{formatLatency(health.latency_ms)}</span>
               <span className="text-slate-700">|</span>
               <span>{(health.availability * 100).toFixed(0)}% avail</span>
@@ -46,7 +46,7 @@ export function ProviderStatusCard({ provider }: { provider: ProviderStatus }) {
           )}
         </div>
       </div>
-      <span className={cn("text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded", config.bg, config.color)}>
+      <span className={cn("rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]", config.bg, config.color)}>
         {config.label}
       </span>
     </div>

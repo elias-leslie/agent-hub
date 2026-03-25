@@ -59,8 +59,8 @@ export default function SessionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
       <SessionsHeader
         total={total}
         pageStats={pageStats}
@@ -72,7 +72,8 @@ export default function SessionsPage() {
         onRefresh={handleRefresh}
       />
 
-      <main className="relative px-6 lg:px-8 py-5">
+      <main className="page-frame">
+        <div className="page-container">
         {error && <ErrorAlert />}
         <ModelFilterBadge modelFilter={modelFilter} onClear={() => setModelFilter("")} />
         {isLoading && <LoadingState />}
@@ -106,6 +107,7 @@ export default function SessionsPage() {
             />
           </>
         )}
+        </div>
       </main>
     </div>
   );

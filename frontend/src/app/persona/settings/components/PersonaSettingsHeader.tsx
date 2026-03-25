@@ -25,37 +25,58 @@ export function PersonaSettingsHeader({
   const displayName = getPersonaDisplayName(personaName);
 
   return (
-    <header className="flex-shrink-0 border-b border-slate-800 bg-slate-900/80 backdrop-blur-lg z-20">
-      <div className="flex items-center justify-between px-4 h-14">
-        <div className="flex items-center gap-3">
+    <header className="page-header">
+      <div className="page-container px-4 lg:px-8">
+        <div className="page-header-row">
+          <div className="page-title-group">
           <Link
             href={backHref}
-            className="p-1.5 rounded-md text-slate-400 hover:bg-slate-800 transition-colors"
+            className="icon-button"
             title="Back to chat"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          <h1 className="text-lg font-semibold text-slate-100">
-            Persona Settings
-          </h1>
-        </div>
+            <div className="page-title-icon">
+              <FlaskConical className="h-5 w-5" />
+            </div>
+            <div className="page-title-stack">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="page-title">Persona Settings</h1>
+                <span className="page-pill">{displayName}</span>
+              </div>
+              <div className="page-meta">
+                <span className="page-pill">Identity and runtime</span>
+                <span
+                  className={cn(
+                    "page-pill",
+                    hasChanges
+                      ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                      : "border-slate-700/80 bg-slate-900/90 text-slate-400",
+                  )}
+                >
+                  {hasChanges ? "Pending changes" : "Saved"}
+                </span>
+              </div>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-3">
+          <div className="page-toolbar">
           <Link
             href="/persona/arena"
-            className="p-1.5 rounded-md text-slate-400 hover:bg-slate-800 transition-colors"
+            className="button-secondary"
             title={`Open ${displayName} Arena`}
           >
-            <FlaskConical className="h-4.5 w-4.5" />
+            <FlaskConical className="h-4 w-4" />
+            Arena
           </Link>
           {saveSuccess && !hasChanges && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+            <span className="page-pill border-emerald-500/20 bg-emerald-500/10 text-emerald-200">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Saved
             </span>
           )}
           {saveError && (
-            <span className="flex items-center gap-1.5 text-xs text-red-400">
+            <span className="page-pill border-rose-500/20 bg-rose-500/10 text-rose-200">
               <AlertCircle className="h-3.5 w-3.5" />
               Failed to save
             </span>
@@ -65,8 +86,7 @@ export function PersonaSettingsHeader({
               onClick={onSave}
               disabled={isSaving}
               className={cn(
-                "px-4 py-1.5 text-sm font-medium rounded-lg transition-colors",
-                "bg-amber-600 text-white hover:bg-amber-700",
+                "button-primary",
                 "disabled:opacity-50 disabled:cursor-not-allowed",
               )}
             >
@@ -79,7 +99,8 @@ export function PersonaSettingsHeader({
                 "Save Changes"
               )}
             </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </header>

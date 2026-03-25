@@ -11,8 +11,7 @@ export function ContextUsageBar({ usage }: { usage: ContextUsage }) {
   return (
     <div
       className={cn(
-        "p-4 rounded-lg",
-        "bg-slate-900/60 border border-slate-800/60"
+        "section-card"
       )}
     >
       <div className="flex items-center justify-between mb-3">

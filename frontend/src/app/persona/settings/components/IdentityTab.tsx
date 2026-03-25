@@ -110,72 +110,134 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-slate-100 mb-1">
+        <p className="section-kicker">Persona Identity</p>
+        <h2 className="section-heading mt-2">
           Identity
         </h2>
-        <p className="text-sm text-slate-400">
+        <p className="section-copy mt-2">
           Core identity settings for your persona.
         </p>
       </div>
 
       <div className="space-y-5">
         {/* Display Name */}
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
+        <section className="section-card space-y-5">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="space-y-5">
+              <div>
+                <label className="detail-label mb-2 block">
             Display Name
-          </label>
-          <input
-            type="text"
-            value={nameValue}
-            onChange={(e) => setNameValue(e.target.value)}
-            onBlur={handleNameBlur}
-            onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
-            maxLength={100}
-            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-          />
-          <p className="text-[10px] text-slate-400 mt-1">
-            Injected into every conversation via the identity tag.
-          </p>
-        </div>
+                </label>
+                <input
+                  type="text"
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onBlur={handleNameBlur}
+                  onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
+                  maxLength={100}
+                  className="control-input max-w-xl"
+                />
+                <p className="mt-2 text-xs text-slate-400">
+                  Injected into every conversation via the identity tag.
+                </p>
+              </div>
 
-        {/* Agent Slug */}
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
-            Agent Slug
-          </label>
-          <div className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 max-w-md">
-            {persona.agent_slug}
+              <div>
+                <label className="detail-label mb-2 block">
+                  Agent Slug
+                </label>
+                <div className="detail-card max-w-xl">
+                  <p className="text-sm font-mono text-slate-300">{persona.agent_slug}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="detail-label mb-2 block">
+                  Greeting Message
+                </label>
+                <textarea
+                  value={greetingValue}
+                  onChange={(e) => setGreetingValue(e.target.value)}
+                  onBlur={handleGreetingBlur}
+                  rows={4}
+                  className="control-input min-h-32 max-w-xl resize-y"
+                  placeholder="Custom greeting for new sessions..."
+                />
+              </div>
+            </div>
+
+            <div className="detail-card space-y-4">
+              <div>
+                <p className="detail-label">Onboarding Status</p>
+                <p className="mt-2 text-sm font-medium text-slate-100">
+                  {config.label}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {config.description}
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    "h-2.5 w-2.5 rounded-full",
+                    config.color,
+                    config.pulse && "animate-pulse",
+                  )}
+                />
+                <span className="text-xs text-slate-400">
+                  {persona.onboarding_attempts > 0
+                    ? `${persona.onboarding_attempts} onboarding attempt${persona.onboarding_attempts !== 1 ? "s" : ""}`
+                    : "No onboarding attempts yet"}
+                </span>
+              </div>
+              {showReset && (
+                <button
+                  onClick={handleResetOnboarding}
+                  disabled={resetting}
+                  className="button-secondary"
+                  title="Re-run onboarding bootstrap on next conversation"
+                >
+                  {resetting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-4 w-4" />
+                  )}
+                  Reset Onboarding
+                </button>
+              )}
+              {resetState.message && (
+                <div
+                  className={cn(
+                    "rounded-2xl border px-4 py-3 text-sm",
+                    resetState.status === "success"
+                      ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-300"
+                      : "border-rose-800/50 bg-rose-950/30 text-rose-300",
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {resetState.status === "success" ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    ) : (
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    )}
+                    <p>{resetState.message}</p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Greeting */}
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-1.5 block">
-            Greeting Message
-          </label>
-          <textarea
-            value={greetingValue}
-            onChange={(e) => setGreetingValue(e.target.value)}
-            onBlur={handleGreetingBlur}
-            rows={3}
-            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-800 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
-            placeholder="Custom greeting for new sessions..."
-          />
-        </div>
-
-        <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5 max-w-4xl">
-          <div>
-            <h3 className="text-base font-semibold text-slate-100">
-              User Profile
-            </h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Structured user preferences this persona can rely on consistently at runtime.
-            </p>
-          </div>
-          <div className="grid gap-4">
+          <div className="space-y-4">
+            <div>
+              <h3 className="section-heading">User Profile</h3>
+              <p className="section-copy mt-2">
+                Structured user preferences this persona can rely on consistently at runtime.
+              </p>
+            </div>
+            <div className="grid gap-4">
             {USER_PROFILE_FIELDS.map(([field, label, placeholder]) => (
-              <label key={field} className="space-y-2">
-                <span className="block text-sm font-medium text-slate-300">
+              <label key={field} className="detail-card space-y-2">
+                <span className="block text-sm font-medium text-slate-200">
                   {label}
                 </span>
                 <textarea
@@ -190,72 +252,13 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
                     })
                   }
                   rows={field === "timezone" ? 2 : 3}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 placeholder-slate-500"
+                  className="control-input min-h-24 resize-y"
                 />
               </label>
             ))}
-          </div>
-        </section>
-
-        {/* Onboarding Status */}
-        <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700 bg-slate-800/50 max-w-md">
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "w-2.5 h-2.5 rounded-full flex-shrink-0",
-                config.color,
-                config.pulse && "animate-pulse",
-              )}
-            />
-            <div>
-              <p className="text-sm font-medium text-slate-300">
-                {config.label}
-              </p>
-              <p className="text-[10px] text-slate-400">
-                {config.description}
-              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {persona.onboarding_attempts > 0 && (
-              <span className="text-[10px] font-mono text-slate-500">
-                {persona.onboarding_attempts} attempt{persona.onboarding_attempts !== 1 ? "s" : ""}
-              </span>
-            )}
-            {showReset && (
-              <button
-                onClick={handleResetOnboarding}
-                disabled={resetting}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-900/20 hover:bg-amber-900/40 transition-colors disabled:opacity-50 cursor-pointer"
-                title="Re-run onboarding bootstrap on next conversation"
-              >
-                {resetting ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RotateCcw className="h-3 w-3" />
-                )}
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
-        {resetState.message && (
-          <div
-            className={cn(
-              "flex max-w-md items-start gap-2 rounded-lg border px-3 py-2 text-xs",
-              resetState.status === "success"
-                ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-300"
-                : "border-rose-800/50 bg-rose-950/30 text-rose-300",
-            )}
-          >
-            {resetState.status === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            )}
-            <p>{resetState.message}</p>
-          </div>
-        )}
+        </section>
       </div>
     </div>
   );

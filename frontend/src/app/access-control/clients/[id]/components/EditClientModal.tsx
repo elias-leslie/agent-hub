@@ -54,48 +54,51 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-lg w-full mx-4">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">Edit Client Settings</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm">
+      <div className="panel-surface max-w-lg w-full p-6">
+        <div className="mb-5">
+          <p className="section-kicker">Client Policy</p>
+          <h3 className="section-heading mt-2">Edit Client Settings</h3>
+        </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Display Name</label>
+            <label className="detail-label mb-2 block">Display Name</label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+              className="control-input"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Rate Limit (RPM)</label>
+              <label className="detail-label mb-2 block">Rate Limit (RPM)</label>
               <input
                 type="number"
                 value={rateLimitRpm}
                 onChange={(e) => setRateLimitRpm(parseInt(e.target.value) || 60)}
                 min={1}
                 max={10000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+                className="control-input"
               />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Rate Limit (TPM)</label>
+              <label className="detail-label mb-2 block">Rate Limit (TPM)</label>
               <input
                 type="number"
                 value={rateLimitTpm}
                 onChange={(e) => setRateLimitTpm(parseInt(e.target.value) || 100000)}
                 min={1000}
                 max={10000000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+                className="control-input"
               />
             </div>
           </div>
 
-          <div>
-            <label className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+          <div className="section-card space-y-3">
+            <label className="flex items-center gap-2 text-sm text-slate-300">
               <input
                 type="checkbox"
                 checked={allowUnrestricted}
@@ -106,7 +109,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
             </label>
             {!allowUnrestricted && (
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="detail-label mb-2 block">
                   Allowed Projects (comma-separated)
                 </label>
                 <input
@@ -114,7 +117,7 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
                   value={allowedProjects}
                   onChange={(e) => setAllowedProjects(e.target.value)}
                   placeholder="project-1, project-2, project-3"
-                  className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  className="control-input"
                 />
                 <p className="text-xs text-slate-500 mt-1">
                   Enter project IDs separated by commas. Leave empty to block all projects.
@@ -127,14 +130,14 @@ export function EditClientModal({ client, isOpen, onClose, onUpdate, isPending }
         <div className="flex gap-3 mt-6">
           <button
             onClick={onClose}
-            className="flex-1 py-2 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm transition-colors"
+            className="button-secondary flex-1 justify-center"
           >
             Cancel
           </button>
           <button
             onClick={handleUpdate}
             disabled={isPending}
-            className="flex-1 py-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm transition-colors disabled:opacity-50"
+            className="button-primary flex-1 justify-center disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500 disabled:shadow-none"
           >
             {isPending ? "Saving..." : "Save Changes"}
           </button>

@@ -34,7 +34,7 @@ export function AgentsTable({
     const hasSearch = searchQuery.trim().length > 0;
 
     return (
-      <div className="rounded-lg border border-dashed border-slate-700 bg-slate-900 px-6 py-16 text-center">
+      <div className="empty-surface">
         <Bot className="mx-auto mb-4 h-10 w-10 text-slate-600" />
         <p className="text-sm font-semibold text-slate-200">
           {hasSearch ? `No agents match "${searchQuery.trim()}"` : "No agents to show"}
@@ -51,7 +51,7 @@ export function AgentsTable({
             <button
               type="button"
               onClick={onClearSearch}
-              className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              className="button-secondary px-3 py-2 text-xs"
             >
               Clear search
             </button>
@@ -60,14 +60,14 @@ export function AgentsTable({
             <button
               type="button"
               onClick={onShowActiveOnly}
-              className="rounded-md border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-800"
+              className="button-secondary px-3 py-2 text-xs"
             >
               Include inactive agents
             </button>
           )}
           <a
             href="/agents/new"
-            className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+            className="button-primary px-3 py-2 text-xs"
           >
             New Agent
           </a>
@@ -77,7 +77,7 @@ export function AgentsTable({
   }
 
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
+    <div className="table-surface overflow-x-auto">
       <AgentsTableHeader
         sortField={sortField}
         sortDirection={sortDirection}

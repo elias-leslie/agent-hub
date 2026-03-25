@@ -43,8 +43,8 @@ export default function SessionDetailPage({
     : null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell text-slate-100">
+      <div className="page-backdrop" />
       {/* Header */}
       {session && (
         <SessionHeader
@@ -59,10 +59,10 @@ export default function SessionDetailPage({
       )}
 
       {/* Main content */}
-      <main className="h-[calc(100vh-3.5rem)]">
+      <main className={cn("page-container", activeTab === "timeline" ? "h-[calc(100vh-3.5rem)]" : "page-frame")}>
         {/* Error State */}
         {error && (
-          <div className="p-6">
+          <div className="px-4 py-6 lg:px-8">
             <div
               className={cn(
                 "flex items-center gap-2 p-4 rounded-lg",
@@ -78,7 +78,7 @@ export default function SessionDetailPage({
 
         {/* Loading State */}
         {isLoading && (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full min-h-[24rem]">
             <div className="flex flex-col items-center gap-3 text-slate-500">
               <div className="w-8 h-8 border-2 border-slate-700 border-t-slate-400 rounded-full animate-spin" />
               <p className="text-sm">Loading session...</p>
@@ -93,7 +93,9 @@ export default function SessionDetailPage({
               <EventTimeline events={eventsData.events} className="h-full" />
             )}
             {activeTab === "info" && (
-              <SessionInfo session={session} memorySummary={memorySummary} />
+              <section className="panel-surface animate-fade-up">
+                <SessionInfo session={session} memorySummary={memorySummary} />
+              </section>
             )}
           </>
         )}

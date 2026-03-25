@@ -23,9 +23,9 @@ export function AgentRow({
   return (
     <div
       className={cn(
-        "grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 items-center transition-colors",
+        "grid grid-cols-[220px_1fr_130px_130px_110px_40px] items-center gap-3 px-5 py-4 transition-colors",
         agent.is_active
-          ? "hover:bg-slate-800/30"
+          ? "hover:bg-slate-800/35"
           : "hover:bg-slate-800/20"
       )}
     >
@@ -42,7 +42,7 @@ export function AgentRow({
           <a
             href={`/agents/${agent.slug}`}
             className={cn(
-              "text-sm font-semibold hover:text-amber-400 truncate block",
+              "block truncate text-sm font-semibold transition-colors hover:text-amber-300",
               agent.is_active
                 ? "text-slate-100"
                 : "text-slate-400"
@@ -66,7 +66,7 @@ export function AgentRow({
       {/* Model Stack */}
       <div className="flex flex-wrap gap-1 items-center">
         <ModelPill model={agent.primary_model_id} />
-        <span className="text-[10px] font-mono text-slate-400">v{agent.version}</span>
+        <span className="rounded-full border border-slate-800/70 bg-slate-900/80 px-2 py-1 text-[10px] font-mono text-slate-400">v{agent.version}</span>
         {agent.fallback_models.length > 0 && (
           <span className="text-[10px] text-slate-400">
             +{agent.fallback_models.length} fallback

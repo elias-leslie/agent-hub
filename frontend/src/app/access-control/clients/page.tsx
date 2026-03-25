@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Users, Plus, Shield, Ban, Clock } from "lucide-react";
+import Link from "next/link";
+import { Users, Plus, Shield, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/formatters";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
@@ -44,58 +45,86 @@ export default function ClientsPage() {
     suspended: { color: "text-amber-400", bg: "bg-amber-500/10", label: "Suspended" },
     blocked: { color: "text-red-400", bg: "bg-red-500/10", label: "Blocked" },
   };
+  const clients = data?.clients ?? [];
+  const activeCount = clients.filter((client) => client.status === "active").length;
+  const serviceCount = clients.filter((client) => client.client_type === "service").length;
+  const internalCount = clients.filter((client) => client.client_type === "internal").length;
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop" />
 
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">Clients</h1>
-            {data && (
-              <span className="text-xs text-slate-500">({data.total})</span>
-            )}
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
+              <div className="page-title-icon">
+                <Users className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="page-title">Clients</h1>
+                  <span className="page-pill">{data?.total ?? 0} registered</span>
+                </div>
+                <p className="page-subtitle">
+                  Manage authenticated client identities, throttles, and project access.
+                </p>
+              </div>
+            </div>
+            <div className="page-toolbar">
+              <Link href="/access-control/clients/new" className="button-primary">
+                <Plus className="h-4 w-4" />
+                New Client
+              </Link>
+            </div>
           </div>
-          <a
-            href="/access-control/clients/new"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            New Client
-          </a>
         </div>
       </header>
 
-      <main className="relative px-6 lg:px-8 py-6">
+      <main className="page-container">
+        <div className="page-frame space-y-6">
+        <section className="detail-grid">
+          <article className="detail-card animate-fade-up">
+            <p className="detail-label">Active Clients</p>
+            <p className="detail-value text-2xl font-semibold text-slate-50">{activeCount}</p>
+            <p className="mt-1 text-sm text-slate-400">Ready to make authenticated requests.</p>
+          </article>
+          <article className="detail-card animate-fade-up stagger-1">
+            <p className="detail-label">Service Clients</p>
+            <p className="detail-value text-2xl font-semibold text-slate-50">{serviceCount}</p>
+            <p className="mt-1 text-sm text-slate-400">Machine-to-machine callers and automation.</p>
+          </article>
+          <article className="detail-card animate-fade-up stagger-2">
+            <p className="detail-label">Internal Clients</p>
+            <p className="detail-value text-2xl font-semibold text-slate-50">{internalCount}</p>
+            <p className="mt-1 text-sm text-slate-400">First-party dashboards and internal tooling.</p>
+          </article>
+        </section>
+
         {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/50">
+          <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-3">
             <p className="text-sm text-red-400">Failed to load clients</p>
           </div>
         )}
 
         {isLoading ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 bg-slate-800 rounded animate-pulse" />
+              <div key={i} className="h-24 rounded-2xl bg-slate-800/70 animate-pulse" />
             ))}
           </div>
         ) : data?.clients.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+          <div className="empty-surface flex flex-col items-center justify-center text-slate-400">
             <Users className="h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg mb-2">No clients registered</p>
-            <a
-              href="/access-control/clients/new"
-              className="text-amber-400 hover:text-amber-300"
-            >
+            <Link href="/access-control/clients/new" className="text-amber-300 hover:text-amber-200">
               Register your first client
-            </a>
+            </Link>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-lg border border-slate-800/80">
+          <div className="table-surface animate-fade-up stagger-3">
             <table className="w-full">
-              <thead className="bg-slate-800/50">
+              <thead className="bg-slate-900/80">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
                     Client
@@ -120,8 +149,15 @@ export default function ClientsPage() {
                   return (
                     <tr
                       key={client.client_id}
-                      className="hover:bg-slate-800/30 cursor-pointer"
+                      className="cursor-pointer transition hover:bg-slate-800/30"
                       onClick={() => window.location.href = `/access-control/clients/${client.client_id}`}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          window.location.href = `/access-control/clients/${client.client_id}`;
+                        }
+                      }}
+                      tabIndex={0}
                     >
                       <td className="px-4 py-3">
                         <div>
@@ -134,12 +170,13 @@ export default function ClientsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs px-2 py-1 rounded bg-slate-800 text-slate-300 capitalize">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-slate-700/80 bg-slate-900/80 px-2.5 py-1 text-xs text-slate-300 capitalize">
+                          {client.client_type === "service" ? <Layers className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
                           {client.client_type}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={cn("text-xs px-2 py-1 rounded", config.bg, config.color)}>
+                        <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium", config.bg, config.color)}>
                           {config.label}
                         </span>
                       </td>
@@ -156,6 +193,7 @@ export default function ClientsPage() {
             </table>
           </div>
         )}
+        </div>
       </main>
     </div>
   );

@@ -52,7 +52,7 @@
 .dark {
   --radius: 0.625rem;
   --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
+  --foreground: oklch(0.94 0.01 265);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
@@ -90,6 +90,42 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-height: 100vh;
+    position: relative;
+    background:
+      radial-gradient(circle at 14% -4%, oklch(0.72 0.18 55 / 18%), transparent 34%),
+      radial-gradient(circle at 100% 0%, oklch(0.68 0.14 220 / 10%), transparent 28%),
+      linear-gradient(180deg, oklch(0.16 0.01 264) 0%, oklch(0.125 0.01 264) 42%, oklch(0.105 0.01 264) 100%);
+    color: oklch(0.94 0.01 265);
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, oklch(0.62 0.12 42 / 6%), transparent 22%),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 96px,
+        oklch(1 0 0 / 1.5%) 96px,
+        oklch(1 0 0 / 1.5%) 97px
+      );
+    opacity: 0.8;
+    z-index: -2;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 50% 0%, oklch(0.7 0.16 55 / 8%), transparent 32%),
+      radial-gradient(circle at 84% 12%, oklch(0.68 0.11 215 / 7%), transparent 24%);
+    z-index: -1;
   }
 }
 
@@ -133,9 +169,9 @@
 /* Subtle grid background pattern */
 .bg-grid-pattern {
   background-image:
-    linear-gradient(to right, oklch(1 0 0 / 3%) 1px, transparent 1px),
-    linear-gradient(to bottom, oklch(1 0 0 / 3%) 1px, transparent 1px);
-  background-size: 24px 24px;
+    linear-gradient(to right, oklch(1 0 0 / 2.2%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 2.2%) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 /* Status indicator pulse */
@@ -274,3 +310,166 @@
 .stagger-4 { animation-delay: 200ms; }
 .stagger-5 { animation-delay: 250ms; }
 .stagger-6 { animation-delay: 300ms; }
+
+@layer components {
+  .page-shell {
+    @apply relative min-h-screen;
+  }
+
+  .page-backdrop {
+    @apply pointer-events-none fixed inset-0;
+    background:
+      radial-gradient(circle at 12% 6%, oklch(0.68 0.15 55 / 11%), transparent 22%),
+      radial-gradient(circle at 84% 10%, oklch(0.65 0.11 215 / 9%), transparent 26%),
+      linear-gradient(180deg, oklch(0.2 0.01 264 / 20%), transparent 40%);
+    z-index: 0;
+  }
+
+  .page-container {
+    @apply mx-auto w-full max-w-[1600px];
+  }
+
+  .page-frame {
+    @apply relative px-4 py-6 lg:px-8 lg:py-7;
+  }
+
+  .page-header {
+    @apply sticky top-0 z-30 border-b border-slate-800/70 backdrop-blur-xl;
+    background: linear-gradient(180deg, rgb(8 11 19 / 96%), rgb(8 11 19 / 84%));
+    box-shadow: 0 20px 60px -42px rgb(0 0 0 / 95%);
+  }
+
+  .page-header-row {
+    @apply flex min-h-16 flex-col gap-3 py-3 lg:min-h-[4.25rem] lg:flex-row lg:items-center lg:justify-between lg:py-0;
+  }
+
+  .page-title-group {
+    @apply flex flex-wrap items-center gap-3;
+  }
+
+  .page-title-icon {
+    @apply flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-500/15 bg-slate-900/80 text-amber-300;
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 4%),
+      0 18px 36px -30px rgb(245 158 11 / 45%);
+  }
+
+  .page-title-stack {
+    @apply flex min-w-0 flex-col gap-1;
+  }
+
+  .page-title {
+    @apply text-lg font-semibold tracking-tight text-slate-50;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-slate-400;
+  }
+
+  .page-meta {
+    @apply flex flex-wrap items-center gap-2 text-xs text-slate-400;
+  }
+
+  .page-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-900/70 px-2.5 py-1 text-[11px] font-medium text-slate-300;
+  }
+
+  .page-toolbar {
+    @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end;
+  }
+
+  .panel-surface {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/65 backdrop-blur-sm;
+    box-shadow:
+      0 28px 80px -52px rgb(0 0 0 / 95%),
+      inset 0 1px 0 rgb(255 255 255 / 3%);
+  }
+
+  .table-surface {
+    @apply overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/65 backdrop-blur-sm;
+    box-shadow:
+      0 28px 80px -52px rgb(0 0 0 / 95%),
+      inset 0 1px 0 rgb(255 255 255 / 3%);
+  }
+
+  .control-strip {
+    @apply flex flex-col gap-3 rounded-2xl border border-slate-800/75 bg-slate-900/60 p-3 backdrop-blur-sm md:flex-row md:items-center md:justify-between;
+    box-shadow:
+      0 20px 50px -42px rgb(0 0 0 / 90%),
+      inset 0 1px 0 rgb(255 255 255 / 2%);
+  }
+
+  .control-input {
+    @apply w-full rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2.5 text-sm text-slate-100 placeholder-slate-500 outline-none transition focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20;
+  }
+
+  .control-select {
+    @apply rounded-xl border border-slate-700/80 bg-slate-900/90 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-amber-500/60 focus:ring-2 focus:ring-amber-500/20;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-amber-400;
+    box-shadow: 0 18px 38px -28px rgb(245 158 11 / 72%);
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/80 px-3.5 py-2.5 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800/90;
+  }
+
+  .icon-button {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700/80 bg-slate-900/80 text-slate-300 transition hover:border-slate-600 hover:bg-slate-800/90;
+  }
+
+  .empty-surface {
+    @apply rounded-2xl border border-dashed border-slate-700/70 bg-slate-900/50 px-6 py-16 text-center;
+  }
+
+  .section-card {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-950/55 p-5 lg:p-6;
+    box-shadow:
+      0 24px 60px -48px rgb(0 0 0 / 95%),
+      inset 0 1px 0 rgb(255 255 255 / 2%);
+  }
+
+  .section-header {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between;
+  }
+
+  .section-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500;
+  }
+
+  .section-heading {
+    @apply text-base font-semibold tracking-tight text-slate-100;
+  }
+
+  .section-copy {
+    @apply text-sm text-slate-400;
+  }
+
+  .detail-grid {
+    @apply grid gap-4 md:grid-cols-2 xl:grid-cols-3;
+  }
+
+  .detail-card {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-950/70 p-4;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+  }
+
+  .detail-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500;
+  }
+
+  .detail-value {
+    @apply mt-2 text-sm text-slate-100;
+  }
+
+  .segmented-control {
+    @apply inline-flex flex-wrap gap-2 rounded-2xl border border-slate-800/80 bg-slate-950/55 p-1.5;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 2%);
+  }
+
+  .segmented-option {
+    @apply inline-flex items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-sm font-medium text-slate-400 transition;
+  }
+}

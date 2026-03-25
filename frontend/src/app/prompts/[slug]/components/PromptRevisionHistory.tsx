@@ -63,7 +63,7 @@ export function PromptRevisionHistory({
     })?.id ?? null;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-slate-900 p-5 border-slate-800">
+    <section className="panel-surface animate-fade-up stagger-3 p-5 lg:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-slate-100">
@@ -74,7 +74,7 @@ export function PromptRevisionHistory({
             Immutable prompt snapshots for rollback and benchmark attribution.
           </p>
         </div>
-        <div className="rounded-full bg-slate-800 px-3 py-1 text-xs font-medium text-slate-300">
+        <div className="page-pill">
           {revisions.length} revisions
         </div>
       </div>
@@ -84,7 +84,7 @@ export function PromptRevisionHistory({
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : revisions.length === 0 ? (
-        <div className="mt-4 rounded-xl border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-400">
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-700/80 bg-slate-950/55 px-4 py-8 text-center text-sm text-slate-400">
           No revisions recorded yet.
         </div>
       ) : (
@@ -97,7 +97,7 @@ export function PromptRevisionHistory({
             return (
               <article
                 key={revision.id}
-                className="rounded-xl border border-slate-800 px-4 py-4"
+                className="rounded-2xl border border-slate-800/80 bg-slate-950/45 px-4 py-4"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-2">
@@ -112,7 +112,7 @@ export function PromptRevisionHistory({
                         {revision.action}
                       </span>
                       {isCurrent && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-900">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-100">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           Current state
                         </span>
@@ -149,10 +149,10 @@ export function PromptRevisionHistory({
                     }}
                     disabled={isRestoring}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors",
                       isPending
-                        ? "border-amber-900 bg-amber-950/30 text-amber-300"
-                        : "border-slate-700 text-slate-300 hover:bg-slate-800",
+                        ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                        : "border-slate-700/80 bg-slate-900/80 text-slate-300 hover:border-slate-600 hover:bg-slate-800/90",
                     )}
                   >
                     {isRestoring ? (

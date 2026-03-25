@@ -1,5 +1,4 @@
 import { Ban, Play, Trash2, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface ActionButtonsProps {
   clientStatus: string;
@@ -19,12 +18,19 @@ export function ActionButtons({
   isActivating,
 }: ActionButtonsProps) {
   return (
-    <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
-      <h2 className="text-sm font-semibold text-slate-300 mb-4">Actions</h2>
-      <div className="flex flex-wrap gap-3">
+    <section className="panel-surface p-5 lg:p-6">
+      <div>
+        <p className="section-kicker">Controls</p>
+        <h2 className="section-heading mt-2">Actions</h2>
+        <p className="section-copy mt-2">
+          Change policy, pause the client, or permanently block it from requesting access.
+        </p>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-3">
         <button
+          type="button"
           onClick={onEdit}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-sm transition-colors"
+          className="button-primary"
         >
           <Pencil className="h-4 w-4" />
           Edit Settings
@@ -32,8 +38,9 @@ export function ActionButtons({
 
         {clientStatus === "active" && (
           <button
+            type="button"
             onClick={onSuspend}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-sm transition-colors"
+            className="button-secondary border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
           >
             <Ban className="h-4 w-4" />
             Suspend
@@ -42,9 +49,10 @@ export function ActionButtons({
 
         {clientStatus === "suspended" && (
           <button
+            type="button"
             onClick={onActivate}
             disabled={isActivating}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-sm transition-colors disabled:opacity-50"
+            className="button-secondary border-emerald-500/20 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Play className="h-4 w-4" />
             Activate
@@ -53,14 +61,15 @@ export function ActionButtons({
 
         {clientStatus !== "blocked" && (
           <button
+            type="button"
             onClick={onBlock}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 text-sm transition-colors"
+            className="button-secondary border-rose-500/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
           >
             <Trash2 className="h-4 w-4" />
             Block Permanently
           </button>
         )}
       </div>
-    </div>
+    </section>
   );
 }
