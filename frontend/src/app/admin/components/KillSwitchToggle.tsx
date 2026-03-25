@@ -80,7 +80,7 @@ export function KillSwitchToggle({
             onMouseUp={!enabled ? cancel : undefined}
             onMouseLeave={!enabled ? cancel : undefined}
             className={cn(
-              "relative overflow-hidden px-4 py-2 rounded-lg font-medium text-sm transition-all",
+              "relative overflow-hidden px-4 py-2 rounded-lg font-medium text-sm transition-all cursor-pointer",
               enabled
                 ? "bg-red-600/20 text-red-400 hover:bg-red-600/30"
                 : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"

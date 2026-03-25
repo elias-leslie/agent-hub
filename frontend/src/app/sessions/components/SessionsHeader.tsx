@@ -71,7 +71,7 @@ export function SessionsHeader({
               data-testid="filter-status"
               value={statusFilter}
               onChange={(e) => onStatusFilterChange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+              className="px-2.5 py-1.5 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
             >
               <option value="">All status</option>
               <option value="active">Active</option>

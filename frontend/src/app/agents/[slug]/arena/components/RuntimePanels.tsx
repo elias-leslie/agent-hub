@@ -4,6 +4,7 @@ import { ChartCard } from "@/app/agents/[slug]/analytics/components/ChartCard";
 import { ChartSection } from "@/app/agents/[slug]/analytics/components/ChartSection";
 import { KPICard } from "@/app/agents/[slug]/analytics/components/KPICard";
 import type { AnalyticsData } from "@/app/agents/[slug]/analytics/types";
+import { formatLatency } from "@/lib/formatters";
 
 interface RuntimePanelsProps {
   analytics: AnalyticsData | null;
@@ -32,7 +33,7 @@ export function RuntimePanels({ analytics, primaryModel, hasRuntimeActivity, run
     <>
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KPICard label="24h Cost" value={`$${analytics.totalCostUsd.toFixed(2)}`} icon={DollarSign} color="blue" />
-        <KPICard label="Avg Latency" value={analytics.avgLatencyMs} unit="ms" icon={Clock} color="amber" />
+        <KPICard label="Avg Latency" value={formatLatency(analytics.avgLatencyMs)} icon={Clock} color="amber" />
         <KPICard label="Error Rate" value={`${analytics.errorRate}%`} icon={AlertTriangle} color="red" />
         <KPICard label="Success Rate" value={`${analytics.successRate}%`} icon={Activity} color="green" />
       </div>
