@@ -103,8 +103,8 @@ export default function BudgetManagementPage() {
   const overviewStatus = criticalCount > 0 ? "error" : warningCount > 0 ? "warning" : "success";
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
 
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">

@@ -64,7 +64,7 @@ export default function PromptNewPage() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       {/* Toast notifications */}
       {createMutation.isSuccess && (
         <div className="fixed top-6 right-6 z-50 flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-sm shadow-lg">
@@ -96,7 +96,7 @@ export default function PromptNewPage() {
           <button
             onClick={() => createMutation.mutate()}
             disabled={createMutation.isPending || !slug || !name || !content}
-            className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-500 text-slate-950 hover:bg-amber-400 disabled:opacity-50 transition-colors"
           >
             {createMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

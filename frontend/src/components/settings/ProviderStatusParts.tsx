@@ -299,7 +299,7 @@ export function PreferenceToggle({
           className={cn(
             "px-2 py-0.5 text-[10px] font-medium transition-colors",
             preferredAuth === "api_key"
-              ? "bg-amber-600 text-white"
+              ? "bg-amber-500 text-slate-950"
               : "bg-slate-800 text-slate-500 hover:bg-slate-700",
           )}
         >

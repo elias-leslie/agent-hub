@@ -213,7 +213,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
               "absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity",
               "px-2 py-1 rounded-md text-xs font-medium border",
               isSelected
-                ? "bg-amber-500 text-white border-amber-600"
+                ? "bg-amber-500 text-slate-950 border-amber-400"
                 : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700",
             )}
           >

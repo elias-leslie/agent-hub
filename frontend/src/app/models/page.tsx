@@ -175,8 +175,8 @@ export default function ModelsPage() {
   }, [filteredModels, groupByProvider]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
       {/* HEADER */}
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
         <div className="px-6 lg:px-8">
@@ -225,7 +225,7 @@ export default function ModelsPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedModels([])}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-colors"
                 >
                   Compare {selectedModels.length} Model{selectedModels.length !== 1 ? "s" : ""}
                 </button>

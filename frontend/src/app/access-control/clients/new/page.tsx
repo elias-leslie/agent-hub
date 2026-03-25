@@ -148,7 +148,7 @@ export default function NewClientPage() {
         <div className="page-container px-4 lg:px-8">
           <div className="page-header-row">
             <div className="page-title-group">
-              <Link href="/access-control/clients" className="icon-button">
+              <Link href="/access-control/clients" className="icon-button" aria-label="Go back">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
               <div className="page-title-icon">

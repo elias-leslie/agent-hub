@@ -1,7 +1,14 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Users, Ban, Clock, FolderLock, DollarSign } from "lucide-react";
+import {
+  Shield,
+  Users,
+  Ban,
+  Clock,
+  FolderLock,
+  DollarSign,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
@@ -64,8 +71,8 @@ function StatCard({
         "border border-slate-800/80",
         "border-l-[3px]",
         config.border,
-        "rounded-lg",
-        "p-5"
+        "rounded-2xl",
+        "p-5",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -78,11 +85,7 @@ function StatCard({
           <p className="mt-2 text-3xl font-semibold tracking-tight text-slate-50 font-mono tabular-nums">
             {value}
           </p>
-          {subtext && (
-            <p className="mt-1 text-xs text-slate-400">
-              {subtext}
-            </p>
-          )}
+          {subtext && <p className="mt-1 text-xs text-slate-400">{subtext}</p>}
         </div>
         <div className="p-2 rounded-md bg-slate-800/80">
           <Icon className="h-5 w-5 text-slate-400" />
@@ -93,149 +96,167 @@ function StatCard({
 }
 
 export default function AccessControlPage() {
-  const { data: stats, isLoading, error } = useQuery({
+  const {
+    data: stats,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["access-control-stats"],
     queryFn: fetchAccessControlStats,
     refetchInterval: 30000,
   });
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
 
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Shield className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">
-              Access Control
-            </h1>
+      <header className="page-header">
+        <div className="page-header-row px-4 lg:px-8">
+          <div className="page-title-group">
+            <div className="page-title-icon">
+              <Shield className="h-5 w-5" />
+            </div>
+            <h1 className="page-title">Access Control</h1>
           </div>
         </div>
       </header>
 
-      <main className="relative px-6 lg:px-8 py-6">
-        {error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/50">
-            <p className="text-sm text-red-400">
-              Unable to load access control statistics
-            </p>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-32 bg-slate-800 rounded animate-pulse" />
-            ))}
-          </div>
-        ) : stats ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <div className="animate-fade-up stagger-1">
-                <StatCard
-                  label="Total Clients"
-                  value={stats.total_clients}
-                  icon={Users}
-                  status="neutral"
-                />
-              </div>
-              <div className="animate-fade-up stagger-2">
-                <StatCard
-                  label="Active Clients"
-                  value={stats.active_clients}
-                  icon={Shield}
-                  status="success"
-                />
-              </div>
-              <div className="animate-fade-up stagger-3">
-                <StatCard
-                  label="Blocked Requests"
-                  value={stats.blocked_requests_today}
-                  subtext="Today"
-                  icon={Ban}
-                  status={stats.blocked_requests_today > 0 ? "warning" : "success"}
-                />
-              </div>
-              <div className="animate-fade-up stagger-4">
-                <StatCard
-                  label="Total Requests"
-                  value={stats.total_requests_today}
-                  subtext="Today"
-                  icon={Clock}
-                  status="neutral"
-                />
-              </div>
+      <main className="page-frame">
+        <div className="page-container">
+          {error && (
+            <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/50">
+              <p className="text-sm text-red-400">
+                Unable to load access control statistics
+              </p>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-              <a
-                href="/access-control/clients"
-                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-1"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <Users className="h-5 w-5 text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Clients</h2>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Manage registered clients and rate limits
-                </p>
-              </a>
-
-              <a
-                href="/access-control/permissions"
-                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-2"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <FolderLock className="h-5 w-5 text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Permissions</h2>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Per-project automation tiers and execution control
-                </p>
-              </a>
-
-              <a
-                href="/access-control/budgets"
-                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-3"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <DollarSign className="h-5 w-5 text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Cost Budgets</h2>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Daily and monthly cost limits and alerts
-                </p>
-              </a>
-
-              <a
-                href="/monitoring/requests"
-                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-4"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <Clock className="h-5 w-5 text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Monitoring</h2>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Request history, metrics, and attribution
-                </p>
-              </a>
-
-              <a
-                href="/access-control/clients/new"
-                className="block p-5 rounded-xl border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 hover:border-amber-700/50 transition-all card-hover-lift animate-fade-up stagger-5"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <Shield className="h-5 w-5 text-amber-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">New Client</h2>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Register a new API client
-                </p>
-              </a>
+          {isLoading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-32 rounded-2xl animate-shimmer" />
+              ))}
             </div>
-          </>
-        ) : null}
+          ) : stats ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="animate-fade-up stagger-1">
+                  <StatCard
+                    label="Total Clients"
+                    value={stats.total_clients}
+                    icon={Users}
+                    status="neutral"
+                  />
+                </div>
+                <div className="animate-fade-up stagger-2">
+                  <StatCard
+                    label="Active Clients"
+                    value={stats.active_clients}
+                    icon={Shield}
+                    status="success"
+                  />
+                </div>
+                <div className="animate-fade-up stagger-3">
+                  <StatCard
+                    label="Blocked Requests"
+                    value={stats.blocked_requests_today}
+                    subtext="Today"
+                    icon={Ban}
+                    status={
+                      stats.blocked_requests_today > 0 ? "warning" : "success"
+                    }
+                  />
+                </div>
+                <div className="animate-fade-up stagger-4">
+                  <StatCard
+                    label="Total Requests"
+                    value={stats.total_requests_today}
+                    subtext="Today"
+                    icon={Clock}
+                    status="neutral"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+                <a
+                  href="/access-control/clients"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-1"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Users className="h-5 w-5 text-amber-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Clients
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Manage registered clients and rate limits
+                  </p>
+                </a>
+
+                <a
+                  href="/access-control/permissions"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-2"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <FolderLock className="h-5 w-5 text-amber-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Permissions
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Per-project automation tiers and execution control
+                  </p>
+                </a>
+
+                <a
+                  href="/access-control/budgets"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-3"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <DollarSign className="h-5 w-5 text-emerald-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Cost Budgets
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Daily and monthly cost limits and alerts
+                  </p>
+                </a>
+
+                <a
+                  href="/monitoring/requests"
+                  className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-4"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Clock className="h-5 w-5 text-emerald-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      Monitoring
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Request history, metrics, and attribution
+                  </p>
+                </a>
+
+                <a
+                  href="/access-control/clients/new"
+                  className="block p-5 rounded-xl border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 hover:border-amber-700/50 transition-all card-hover-lift animate-fade-up stagger-5"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <Shield className="h-5 w-5 text-amber-400" />
+                    <h2 className="text-sm font-semibold text-slate-100">
+                      New Client
+                    </h2>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Register a new API client
+                  </p>
+                </a>
+              </div>
+            </>
+          ) : null}
+        </div>
       </main>
     </div>
   );

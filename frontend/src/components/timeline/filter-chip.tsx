@@ -33,7 +33,7 @@ export function FilterChip({ label, eventType, isActive, count, onClick }: Filte
       <span
         className={cn(
           "px-1.5 py-0.5 rounded text-[10px] font-mono",
-          isActive ? "bg-white/10" : "bg-slate-800/60"
+          isActive ? "bg-slate-400/10" : "bg-slate-800/60"
         )}
       >
         {count}

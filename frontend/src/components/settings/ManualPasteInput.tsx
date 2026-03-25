@@ -66,7 +66,7 @@ export function ManualPasteInput({
         <button
           onClick={handleSubmit}
           disabled={!value.trim() || submitting}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors disabled:opacity-50"
         >
           {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
           Submit

@@ -23,6 +23,7 @@ from app.workflows._heartbeat_data import (
     _get_git_status_summary,
     _get_protection_status_summary,
     _get_workstream_inventory,
+    _query_active_sessions_for_heartbeat,
     _query_active_specialist_sessions,
 )
 
@@ -825,6 +826,70 @@ class TestActiveSpecialistInventory:
             result = await _query_active_specialist_sessions("agent-hub", now=now)
 
         assert [row["session_id"] for row in result] == ["sess-live"]
+
+
+class TestActiveSessionInventory:
+    """Tests for active session inventory in heartbeat prompt context."""
+
+    @pytest.mark.asyncio
+    async def test_query_excludes_dead_candidate_sessions(self) -> None:
+        now = datetime.now(UTC)
+        live_session = MagicMock(
+            id="sess-live",
+            agent_slug="coder",
+            external_id="task-live",
+            current_branch=None,
+            health_detail="executing_tool:Bash",
+            last_activity_at=now - timedelta(minutes=2),
+            created_at=now - timedelta(minutes=10),
+            status="active",
+            provider_metadata={
+                "live_activity": {
+                    "phase": "waiting_for_model",
+                    "status": "active",
+                    "summary": "Waiting after tool result",
+                    "last_event_type": "tool_result",
+                    "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                    "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                    "outstanding_tool_calls": 0,
+                    "tool_calls_count": 4,
+                }
+            },
+        )
+        dead_session = MagicMock(
+            id="sess-dead",
+            agent_slug="coder",
+            external_id="task-dead",
+            current_branch=None,
+            health_detail="waiting_for_model",
+            last_activity_at=now - timedelta(minutes=45),
+            created_at=now - timedelta(minutes=55),
+            status="active",
+            provider_metadata={
+                "live_activity": {
+                    "phase": "waiting_for_model",
+                    "status": "active",
+                    "summary": "Transcript sync heartbeat",
+                    "last_event_type": "heartbeat",
+                    "last_event_at": (now - timedelta(minutes=45)).isoformat(),
+                    "last_model_activity_at": (now - timedelta(minutes=45)).isoformat(),
+                    "last_heartbeat_at": now.isoformat(),
+                    "outstanding_tool_calls": 0,
+                    "tool_calls_count": 2,
+                }
+            },
+        )
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                (live_session, True, 7),
+                (dead_session, True, 2),
+            ]
+        )
+
+        with patch("app.db.async_session", session_factory):
+            result = await _query_active_sessions_for_heartbeat("agent-hub", now=now)
+
+        assert [row["task_ref"] for row in result] == ["task-live"]
 
 
 class TestRecentlyCompletedSessionsSection:

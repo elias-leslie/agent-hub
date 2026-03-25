@@ -175,6 +175,7 @@ export default function PromptEditPage() {
             <button
               onClick={() => router.push("/prompts")}
               className="icon-button"
+              aria-label="Go back"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
