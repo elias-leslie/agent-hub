@@ -27,7 +27,7 @@ export function Filters({
 }: FiltersProps) {
   return (
     <div className="flex flex-wrap gap-3">
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 focus-within:ring-2 focus-within:ring-amber-500/40 focus-within:border-amber-500/50 transition-colors">
         <Filter className="h-4 w-4 text-slate-400" />
         <input
           type="text"
@@ -38,7 +38,7 @@ export function Filters({
         />
       </div>
 
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700">
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 focus-within:ring-2 focus-within:ring-amber-500/40 focus-within:border-amber-500/50 transition-colors">
         <Bot className="h-4 w-4 text-slate-400" />
         <input
           type="text"
@@ -52,7 +52,7 @@ export function Filters({
       <select
         value={toolTypeFilter || ""}
         onChange={(e) => { setToolTypeFilter(e.target.value || undefined); }}
-        className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100"
+        className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50"
       >
         <option value="">All Tool Types</option>
         <option value="api">API</option>
@@ -63,7 +63,7 @@ export function Filters({
       <select
         value={statusFilter || ""}
         onChange={(e) => { setStatusFilter(e.target.value ? parseInt(e.target.value) : undefined); }}
-        className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100"
+        className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50"
       >
         <option value="">All Status Codes</option>
         <option value="200">200 OK</option>

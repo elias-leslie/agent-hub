@@ -71,7 +71,7 @@ export function CreatePromptForm({
   });
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 border-slate-800 dark:bg-slate-900">
+    <div className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-4">
       <h3 className="text-sm font-semibold text-slate-100">Create Prompt</h3>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-1.5">
@@ -127,7 +127,7 @@ export function CreatePromptForm({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition border-slate-700 text-slate-200 dark:hover:bg-slate-800"
+          className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-slate-800 cursor-pointer"
         >
           Cancel
         </button>
