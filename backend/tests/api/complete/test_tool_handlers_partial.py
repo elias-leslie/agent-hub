@@ -13,7 +13,7 @@ from app.api.complete.tool_handler_utils import (
     _init_execution_state,
     _run_tool_loop,
 )
-from app.api.complete.tool_handlers import _execute_and_handle_errors, _store_partial_response
+from app.api.complete.tool_handlers import _store_partial_response
 from app.constants.models import CLAUDE_SONNET
 
 
@@ -857,7 +857,7 @@ async def test_complete_with_tools_returns_error_result_when_finalize_response_i
             new_callable=AsyncMock,
         ),
         patch(
-            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            "app.api.complete.tool_handlers._run_tool_loop",
             new_callable=AsyncMock,
             return_value=None,
         ),
@@ -913,7 +913,7 @@ async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer()
             new_callable=AsyncMock,
         ),
         patch(
-            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            "app.api.complete.tool_handlers._run_tool_loop",
             new_callable=AsyncMock,
             return_value=None,
         ),
@@ -967,7 +967,7 @@ async def test_complete_with_tools_returns_error_result_when_partial_store_is_ca
             new_callable=AsyncMock,
         ),
         patch(
-            "app.api.complete.tool_handlers._execute_and_handle_errors",
+            "app.api.complete.tool_handlers._run_tool_loop",
             new_callable=AsyncMock,
             return_value=None,
         ),
@@ -1013,16 +1013,9 @@ async def test_complete_with_tools_returns_error_result_when_partial_store_is_ca
 
 
 @pytest.mark.asyncio
-async def test_execute_and_handle_errors_handles_cancelled_tool_loop() -> None:
+async def test_complete_with_tools_handles_cancelled_tool_loop() -> None:
     session = _mock_session()
     db = AsyncMock()
-    state = _ExecutionState(
-        agent_slug="persona",
-        messages_for_adapter=[],
-        content_parts=["partial result"],
-        thinking_parts=[],
-    )
-    tracker = MagicMock()
 
     with (
         patch(
@@ -1031,24 +1024,34 @@ async def test_execute_and_handle_errors_handles_cancelled_tool_loop() -> None:
             side_effect=asyncio.CancelledError("tool loop cancelled"),
         ),
         patch(
+            "app.api.complete.tool_handlers.store_user_messages",
+            new_callable=AsyncMock,
+        ),
+        patch(
             "app.api.complete.tool_handlers._store_partial_response",
             new_callable=AsyncMock,
         ) as store_partial,
     ):
-        result = await _execute_and_handle_errors(
+        from app.api.complete.tool_handlers import _complete_with_tools
+
+        result = await _complete_with_tools(
             adapter=MagicMock(),
-            state=state,
+            messages=[{"role": "user", "content": "hello"}],
+            messages_for_db=[],
+            temperature=0.0,
             provider="claude",
             model="claude-sonnet-4-6",
             tools=[],
             tool_catalog=None,
             working_dir=None,
             permission_config=None,
-            session_id="session-123",
-            loaded_memory_uuids=[],
             db=db,
             session=session,
-            tracker=tracker,
+            session_id="session-123",
+            is_new_session=True,
+            loaded_memory_uuids=[],
+            memory_group_id=None,
+            progress_callback=None,
             max_turns=1,
             project_id="agent-hub",
         )

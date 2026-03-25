@@ -106,70 +106,6 @@ async def _rollback_after_cancellation(db: AsyncSession) -> None:
     except Exception:
         logger.warning("Rollback failed during cancelled tool execution", exc_info=True)
 
-
-async def _execute_and_handle_errors(
-    adapter: Any,
-    state: _ExecutionState,
-    provider: str,
-    model: str,
-    tools: list[dict[str, Any]] | None,
-    tool_catalog: list[dict[str, Any]] | None,
-    working_dir: str | None,
-    permission_config: dict[str, Any] | None,
-    session_id: str,
-    loaded_memory_uuids: list[str],
-    db: AsyncSession,
-    session: DBSession,
-    tracker: ProgressTracker,
-    max_turns: int,
-    project_id: str | None,
-) -> ToolExecutionResult | None:
-    """Run the tool loop and handle errors. Returns an error result or None on success."""
-    try:
-        error_result = await _run_tool_loop(
-            adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
-            session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
-        )
-        if error_result is not None:
-            await _store_partial_response(db, session_id, session, state, model, error_detail=error_result.error)
-            return error_result
-        await db.commit()
-        return None
-    except asyncio.CancelledError as e:
-        logger.exception("%s complete_with_tools cancelled: %s", provider, e)
-        error_detail = str(e) or "Completion cancelled unexpectedly."
-        await _store_partial_response_best_effort(
-            db,
-            session_id,
-            session,
-            state,
-            model,
-            error_detail=error_detail,
-        )
-        return build_error_result(
-            Exception(error_detail),
-            model,
-            provider,
-            session_id,
-            loaded_memory_uuids,
-            turns=state.turn,
-            tool_calls_count=state.tool_calls_count,
-        )
-    except Exception as e:
-        logger.exception(f"{provider} complete_with_tools error: {e}")
-        await update_session_health(
-            db,
-            session_id,
-            health_detail_for_error(e),
-            commit=True,
-        )
-        await _store_partial_response(db, session_id, session, state, model, error_detail=str(e))
-        return build_error_result(
-            e, model, provider, session_id, loaded_memory_uuids,
-            turns=state.turn, tool_calls_count=state.tool_calls_count,
-        )
-
-
 async def _complete_with_tools(
     adapter: Any,
     messages: list[dict[str, Any]],
@@ -199,14 +135,23 @@ async def _complete_with_tools(
     tracker = ProgressTracker(progress_callback)
     await store_user_messages(db, session_id, messages_for_db, agent_id=state.agent_slug)
 
-    error_result = await _execute_and_handle_errors(
-        adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
-        session_id, loaded_memory_uuids, db, session, tracker, max_turns, project_id,
-    )
-    if error_result is not None:
-        return error_result
-
     try:
+        error_result = await _run_tool_loop(
+            adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
+            session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
+        )
+        if error_result is not None:
+            await _store_partial_response(
+                db,
+                session_id,
+                session,
+                state,
+                model,
+                error_detail=error_result.error,
+            )
+            return error_result
+
+        await db.commit()
         return await finalize_response(
             db, session, session_id, is_new_session, model, provider,
             state.content_parts, state.thinking_parts, loaded_memory_uuids,
@@ -218,7 +163,7 @@ async def _complete_with_tools(
             tool_result_summaries=state.tool_result_summaries,
         )
     except asyncio.CancelledError as e:
-        logger.exception("%s finalize_response cancelled: %s", provider, e)
+        logger.exception("%s tool execution cancelled: %s", provider, e)
         error_detail = str(e) or "Completion cancelled unexpectedly."
         await _store_partial_response_best_effort(
             db,
@@ -238,7 +183,7 @@ async def _complete_with_tools(
             tool_calls_count=state.tool_calls_count,
         )
     except Exception as e:
-        logger.exception("%s finalize_response error: %s", provider, e)
+        logger.exception("%s tool execution error: %s", provider, e)
         await update_session_health(
             db,
             session_id,
