@@ -58,23 +58,6 @@ async def _extract_narration_from_text(
         logger.debug("Failed to extract narration from tool-loop text", exc_info=True)
 
 
-async def _session_requires_progress_tags(
-    db: AsyncSession,
-    session_id: str,
-) -> bool:
-    """Return True when the session is task-linked and should emit [[P:...]] tags."""
-    from sqlalchemy import select
-
-    from app.models import Session
-
-    external_id = (
-        await db.execute(
-            select(Session.external_id).where(Session.id == session_id).limit(1)
-        )
-    ).scalar_one_or_none()
-    return bool(external_id and str(external_id).startswith("task-"))
-
-
 async def _process_thinking_block(
     block: Any,
     thinking_parts: list[str],
@@ -150,6 +133,7 @@ async def _process_assistant_event(
     tracker: ProgressTracker,
     model_used: str | None,
     agent_id: str | None,
+    requires_progress_tags: bool,
     tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
 ) -> int:
     """Process an assistant event; returns total tool_calls_increment."""
@@ -181,7 +165,7 @@ async def _process_assistant_event(
                 block, turn, session_id, db, tracker, model_used, agent_id,
                 tool_use_id_to_name=tool_use_id_to_name,
             )
-    if saw_text_block and await _session_requires_progress_tags(db, session_id):
+    if saw_text_block and requires_progress_tags:
         await update_session_health(
             db,
             session_id,
@@ -252,6 +236,7 @@ async def process_tool_event(
     tracker: ProgressTracker,
     model_used: str | None = None,
     agent_id: str | None = None,
+    requires_progress_tags: bool = False,
     tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
     tool_result_summaries: list[str] | None = None,
 ) -> tuple[int, int, str | None, int, bool]:
@@ -293,7 +278,7 @@ async def process_tool_event(
         assistant_turn = model_turn if awaiting_tool_results and model_turn > 0 else model_turn + 1
         tool_calls_increment = await _process_assistant_event(
             event, assistant_turn, session_id, db, content_parts, thinking_parts,
-            tracker, model_used, agent_id,
+            tracker, model_used, agent_id, requires_progress_tags,
             tool_use_id_to_name=tool_use_id_to_name,
         )
         if tool_calls_increment > 0 and not awaiting_tool_results:
