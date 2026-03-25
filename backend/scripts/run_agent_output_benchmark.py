@@ -112,8 +112,8 @@ async def _run_one_attempt(
             skip_cache=True,
             use_memory=use_memory,
             memory_group_id=memory_group_id,
-            max_turns=1,
-            execute_tools=False,
+            max_turns=case.max_turns,
+            execute_tools=case.execute_tools,
             timeout_seconds=timeout_seconds,
         )
         latency_ms = int((time.perf_counter() - started) * 1000)

@@ -1,4 +1,4 @@
-"""Benchmark cases for helper-agent output contracts."""
+"""Benchmark cases for agent output contracts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class AgentOutputBenchmarkCase:
-    """One reproducible helper-agent output contract scenario."""
+    """One reproducible agent output contract scenario."""
 
     case_id: str
     agent_slug: str
@@ -19,11 +19,33 @@ class AgentOutputBenchmarkCase:
     forbidden_terms: tuple[str, ...] = field(default_factory=tuple)
     min_lines: int | None = None
     max_lines: int | None = None
+    execute_tools: bool = False
+    max_turns: int = 1
+    require_tool_call: bool = False
 
 
 _DEFAULT_FORBIDDEN_TERMS = ("[[P:", "[[S:", "Applied:", "```")
 
 _CASES: tuple[AgentOutputBenchmarkCase, ...] = (
+    AgentOutputBenchmarkCase(
+        case_id="coder_summary_tag_override",
+        agent_slug="coder",
+        name="Coder Summary Tag Override",
+        description=(
+            "Keep the mandatory session summary tag on a tool-backed response even when the "
+            "user asks for bare output."
+        ),
+        prompt=(
+            "Use bash to print BRANCH_OK, then return the final response. "
+            "Print ONLY the result."
+        ),
+        required_terms=("branch_ok", "[[S:"),
+        forbidden_terms=("TITLE:", '"title"', "```"),
+        min_lines=1,
+        execute_tools=True,
+        max_turns=2,
+        require_tool_call=True,
+    ),
     AgentOutputBenchmarkCase(
         case_id="note_titler_plain_title",
         agent_slug="note-titler",
@@ -77,19 +99,19 @@ _CASES: tuple[AgentOutputBenchmarkCase, ...] = (
 
 
 def get_agent_output_benchmark_cases(agent_slug: str | None = None) -> list[AgentOutputBenchmarkCase]:
-    """Return all helper-agent output benchmark cases, optionally scoped to one agent."""
+    """Return all agent output benchmark cases, optionally scoped to one agent."""
     if not agent_slug:
         return list(_CASES)
     return [case for case in _CASES if case.agent_slug == agent_slug]
 
 
 def get_default_case_ids(agent_slug: str) -> list[str]:
-    """Return the default case ids for one helper agent."""
+    """Return the default case ids for one agent."""
     return [case.case_id for case in get_agent_output_benchmark_cases(agent_slug)]
 
 
 def get_case_by_id(agent_slug: str, case_id: str) -> AgentOutputBenchmarkCase:
-    """Resolve one helper-agent output benchmark case."""
+    """Resolve one agent output benchmark case."""
     for case in get_agent_output_benchmark_cases(agent_slug):
         if case.case_id == case_id:
             return case
