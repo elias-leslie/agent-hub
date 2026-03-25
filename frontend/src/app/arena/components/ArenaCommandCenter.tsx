@@ -230,8 +230,10 @@ export function ArenaCommandCenter() {
                 <Sparkles className="h-3.5 w-3.5" />
                 Jenny + Agent Pulse
               </div>
-              <h2 className="mt-4 text-3xl font-semibold tracking-tight text-slate-50 lg:text-4xl">
-                See autonomy, memory, and benchmark pressure in one place.
+              <h2 className="mt-4 text-3xl font-semibold tracking-tight lg:text-4xl">
+                <span className="gradient-text-amber">See autonomy, memory, and benchmark</span>
+                <br />
+                <span className="text-slate-50">pressure in one place.</span>
               </h2>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
                 Arena now tracks the operational loop itself: scheduled review, scheduled honing,
