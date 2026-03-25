@@ -16,6 +16,7 @@ import {
   Trophy,
 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { fetchArenaOverview } from "@/lib/api";
 import type {
   ArenaAgentBenchmarkSummary,
@@ -199,15 +200,23 @@ export function ArenaCommandCenter() {
               Command Center
             </span>
           </div>
-          <select
-            value={windowDays}
-            onChange={(event) => setWindowDays(Number(event.target.value) as ArenaWindow)}
-            className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-          >
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
+            {([7, 30, 90] as ArenaWindow[]).map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setWindowDays(days)}
+                className={cn(
+                  "px-3 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                  windowDays === days
+                    ? "bg-amber-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                {days}d
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
@@ -285,29 +294,39 @@ export function ArenaCommandCenter() {
         </section>
 
         <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Benchmark coverage</p>
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-emerald-900/60">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Coverage</p>
+              <div className="h-2 w-2 rounded-full bg-emerald-500/60" />
+            </div>
             <p className="mt-3 text-3xl font-semibold text-slate-50">
-              {overview.system.agents_with_history}/{overview.system.total_agents}
+              {overview.system.agents_with_history}<span className="text-lg text-slate-500">/{overview.system.total_agents}</span>
             </p>
             <p className="mt-2 text-sm text-slate-400">
-              {formatPercent(coverageRate)} of active agents have recent Arena evidence
+              {formatPercent(coverageRate)} with Arena evidence
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Benchmark runs</p>
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-blue-900/60">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Runs</p>
+              <div className="h-2 w-2 rounded-full bg-blue-500/60" />
+            </div>
             <p className="mt-3 text-3xl font-semibold text-slate-50">{overview.system.total_runs}</p>
-            <p className="mt-2 text-sm text-slate-400">Across the current Arena window</p>
+            <p className="mt-2 text-sm text-slate-400">In current {windowDays}-day window</p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Benchmarked average</p>
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-amber-900/60">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Avg Score</p>
+              <div className="h-2 w-2 rounded-full bg-amber-500/60" />
+            </div>
             <p className="mt-3 text-3xl font-semibold text-slate-50">{formatScore(overview.system.avg_score)}</p>
-            <p className="mt-2 text-sm text-slate-400">
-              Across agents with recent benchmark history only
-            </p>
+            <p className="mt-2 text-sm text-slate-400">Benchmarked agents only</p>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Open decision regressions</p>
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-rose-900/60">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Regressions</p>
+              <div className={cn("h-2 w-2 rounded-full", overview.system.total_regressions > 0 ? "bg-rose-500/80" : "bg-slate-600")} />
+            </div>
             <p className="mt-3 text-3xl font-semibold text-slate-50">{overview.system.total_regressions}</p>
             {Object.keys(overview.system.regressions_by_category ?? {}).length > 0 && (
               <p className="mt-1 text-xs text-slate-500">
@@ -316,17 +335,20 @@ export function ArenaCommandCenter() {
                   .join(" · ")}
               </p>
             )}
-            <p className="mt-2 text-sm text-slate-400">Headline counts behavior misses; breakdown shows all categories</p>
+            <p className="mt-2 text-sm text-slate-400">Decision-quality misses</p>
           </div>
         </section>
 
-        <section className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Read This First</p>
+        <section className="mt-4 rounded-2xl border border-amber-900/30 bg-amber-950/10 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <div className="h-1 w-1 rounded-full bg-amber-500" />
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-400/80">Context</p>
+          </div>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Treat Arena as a triage surface, not a single blended score. The benchmark average only covers
+            Arena is a triage surface, not a single blended score. The average covers
             {` ${overview.system.agents_with_history} of ${overview.system.total_agents} `}
-            active agents in this window, and the headline regression count only tracks decision-quality misses.
-            JSON/summary-term failures and tool-requirement misses still matter, but they are shown below as labeled pulse items instead of being mixed into the main regression number.
+            agents in this window. The regression count tracks decision-quality misses only —
+            JSON/summary-term failures and tool-requirement misses are shown as labeled pulse items below.
           </p>
         </section>
 

@@ -34,13 +34,9 @@ async def _startup() -> None:
     init_telemetry()
     logger.info("OpenTelemetry initialized")
 
-    try:
-        async with async_session() as db:
-            credential_manager = get_credential_manager()
-            loaded = await credential_manager.load(db)
-            logger.info("Loaded %d credentials at startup", loaded)
-    except Exception as e:
-        logger.warning("Failed to load credentials at startup: %s", e)
+    credential_manager = get_credential_manager()
+    loaded = await credential_manager.load_with_retry(async_session)
+    logger.info("Loaded %d credentials at startup", loaded)
 
     await start_usage_tracker()
     logger.info("Usage tracker started")

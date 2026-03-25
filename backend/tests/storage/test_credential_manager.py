@@ -146,6 +146,65 @@ class TestCredentialManagerLoad:
 
         assert manager.get_api_keys("gemini") == ["new-key"]
 
+    @pytest.mark.asyncio
+    async def test_load_with_retry_recovers_from_transient_failure(self, mock_db):
+        """Boot-time retry should recover from a transient DB/load failure."""
+        fernet = Fernet(TEST_KEY.encode())
+
+        mock_credential = MagicMock()
+        mock_credential.provider = "gemini"
+        mock_credential.credential_type = "api_key"
+        mock_credential.value_encrypted = fernet.encrypt(b"gemini-key")
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_credential]
+
+        manager = CredentialManager.get_instance()
+
+        class _Session:
+            def __init__(self, db):
+                self._db = db
+
+            async def __aenter__(self):
+                return self._db
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        mock_db.execute.side_effect = [RuntimeError("db not ready"), mock_result]
+
+        with patch("app.services.credential_manager.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            loaded = await manager.load_with_retry(lambda: _Session(mock_db), attempts=2, initial_delay_seconds=0.1)
+
+        assert loaded == 1
+        assert manager.get_api_key("gemini") == "gemini-key"
+        mock_sleep.assert_awaited_once_with(0.1)
+
+    @pytest.mark.asyncio
+    async def test_load_with_retry_raises_after_exhausting_attempts(self, mock_db):
+        """Startup must fail visibly when credential cache never becomes available."""
+        manager = CredentialManager.get_instance()
+
+        class _Session:
+            def __init__(self, db):
+                self._db = db
+
+            async def __aenter__(self):
+                return self._db
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        mock_db.execute.side_effect = RuntimeError("db unavailable")
+
+        with (
+            patch("app.services.credential_manager.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+            pytest.raises(RuntimeError, match="Failed to load credentials after 3 attempts"),
+        ):
+            await manager.load_with_retry(lambda: _Session(mock_db), attempts=3, initial_delay_seconds=0.1)
+
+        assert mock_sleep.await_count == 2
+
 
 class TestCredentialManagerCache:
     """Tests for cache operations."""

@@ -8,7 +8,7 @@ export function StatusCell({ status, isLive }: { status: string; isLive?: boolea
       label: "Active",
     },
     completed: {
-      dot: "bg-slate-400 dark:bg-slate-500",
+      dot: "bg-slate-500",
       bg: "",
       label: "Done",
     },

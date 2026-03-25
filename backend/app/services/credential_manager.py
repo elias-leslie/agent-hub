@@ -10,7 +10,10 @@ Gemini OAuth → key1 → key2).
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,6 +109,49 @@ class CredentialManager:
         except Exception as e:
             logger.error(f"Failed to load credentials: {e}")
             raise
+
+    async def load_with_retry(
+        self,
+        db_factory: Callable[[], AbstractAsyncContextManager[AsyncSession]],
+        *,
+        attempts: int = 5,
+        initial_delay_seconds: float = 1.0,
+    ) -> int:
+        """Load credentials with bounded retry for boot-time DB races.
+
+        This is for runtime startup paths only. We should not keep serving with
+        an empty credential cache after a transient boot failure.
+        """
+        delay_seconds = initial_delay_seconds
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                async with db_factory() as db:
+                    loaded = await self.load(db)
+                logger.info(
+                    "Loaded %d credentials into cache on attempt %d/%d",
+                    loaded,
+                    attempt,
+                    attempts,
+                )
+                return loaded
+            except Exception as e:
+                last_error = e
+                if attempt >= attempts:
+                    break
+                logger.warning(
+                    "Credential load attempt %d/%d failed: %s; retrying in %.1fs",
+                    attempt,
+                    attempts,
+                    e,
+                    delay_seconds,
+                )
+                await asyncio.sleep(delay_seconds)
+                delay_seconds *= 2
+
+        raise RuntimeError(
+            f"Failed to load credentials after {attempts} attempts"
+        ) from last_error
 
     def get(self, provider: str, credential_type: str) -> str | None:
         """

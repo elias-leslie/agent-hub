@@ -26,7 +26,7 @@ export function AgentRow({
         "grid grid-cols-[220px_1fr_130px_130px_110px_40px] gap-3 px-4 py-3 items-center transition-colors",
         agent.is_active
           ? "hover:bg-slate-800/30"
-          : "hover:bg-slate-50/80 dark:hover:bg-slate-800/20"
+          : "hover:bg-slate-800/20"
       )}
     >
       {/* Agent Name & Slug */}
@@ -42,7 +42,7 @@ export function AgentRow({
           <a
             href={`/agents/${agent.slug}`}
             className={cn(
-              "text-sm font-semibold hover:text-amber-500 dark:hover:text-amber-400 truncate block",
+              "text-sm font-semibold hover:text-amber-400 truncate block",
               agent.is_active
                 ? "text-slate-100"
                 : "text-slate-400"

@@ -73,10 +73,11 @@ async def init_worker_credentials() -> None:
 
     engine = create_async_engine(db_url, pool_pre_ping=True)
     try:
-        async with AsyncSession(engine, expire_on_commit=False) as db:
-            cm = get_credential_manager()
-            loaded = await cm.load(db)
-            logger.info("Worker: loaded %d credentials", loaded)
+        cm = get_credential_manager()
+        loaded = await cm.load_with_retry(
+            lambda: AsyncSession(engine, expire_on_commit=False)
+        )
+        logger.info("Worker: loaded %d credentials", loaded)
     finally:
         await engine.dispose()
 
