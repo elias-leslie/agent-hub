@@ -52,6 +52,8 @@ async def _create_and_finalize(
     reference_time: datetime,
     config: IngestionConfig,
     injection_tier: str | None,
+    context_kind: str | None,
+    applicability: dict[str, object] | None,
     summary: str | None,
     changed_by: str | None,
     change_reason: str | None,
@@ -70,6 +72,8 @@ async def _create_and_finalize(
             source_description=source_description,
             reference_time=reference_time,
             embedding=embedding,
+            context_kind=context_kind,
+            applicability=applicability,
             tier=tier_num,
             summary=summary,
             token_count=token_count_value,
@@ -100,6 +104,8 @@ async def create_episode_internal(
     source_description: str | None,
     reference_time: datetime,
     injection_tier: str | None,
+    context_kind: str | None,
+    applicability: dict[str, object] | None,
     summary: str | None,
     changed_by: str | None,
     change_reason: str | None,
@@ -117,5 +123,5 @@ async def create_episode_internal(
     return await _create_and_finalize(
         repo, embedder, group_id, content, name,
         source_description, reference_time,
-        config, injection_tier, summary, changed_by, change_reason,
+        config, injection_tier, context_kind, applicability, summary, changed_by, change_reason,
     )

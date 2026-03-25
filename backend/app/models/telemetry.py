@@ -12,7 +12,7 @@ class RequestLog(Base):
     """Audit log for all API requests with full attribution.
 
     Every request is logged with client, source, outcome, and performance metrics.
-    Retained for 30 days for compliance and debugging.
+    Retained for 14 days (dashboards use 7d windows). See data_retention task.
     """
 
     __tablename__ = "request_logs"
@@ -54,7 +54,7 @@ class RequestLog(Base):
     )
     # Granular tool tracking
     tool_name: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, index=True
+        String(100), nullable=True
     )  # e.g., "st complete", "client.complete"
     source_path: Mapped[str | None] = mapped_column(
         String(500), nullable=True
@@ -69,10 +69,8 @@ class RequestLog(Base):
     client = relationship("Client", back_populates="request_logs", lazy="raise")
 
     __table_args__ = (
-        Index("ix_request_logs_client_id", "client_id"),
         Index("ix_request_logs_created_at", "created_at"),
         Index("ix_request_logs_status_code", "status_code"),
-        Index("ix_request_logs_client_created", "client_id", "created_at"),
         Index("ix_request_logs_agent_slug", "agent_slug"),
     )
 

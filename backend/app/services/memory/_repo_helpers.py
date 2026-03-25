@@ -37,6 +37,8 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "source": mem.source,
         "source_description": mem.source_description,
         "tags": mem.tags or [],
+        "context_kind": mem.context_kind,
+        "applicability": mem.applicability or {},
         "injection_tier": mem.injection_tier,
         "tier": mem.tier,
         "pinned": mem.pinned,

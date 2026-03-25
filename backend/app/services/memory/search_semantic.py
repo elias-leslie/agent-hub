@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from ._repo_helpers import to_dict
+from .applicability import normalize_applicability, normalize_context_kind
 from .embedder import get_embedder_or_none
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 from .repository import TIER_REVERSE, get_memory_repository
@@ -55,6 +56,12 @@ def _create_search_result(
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],
         summary=result.get("summary"),
+        context_kind=normalize_context_kind(
+            result.get("context_kind"),
+            memory_type=result.get("memory_type"),
+            tier=result.get("tier"),
+        ),
+        applicability=normalize_applicability(result.get("applicability")),
     )
 
 

@@ -3,13 +3,17 @@ import { MemoryConfig } from "./types";
 const KNOWN_KEYS = new Set([
   "enabled",
   "injection_enabled",
+  "project_index_enabled",
+  "tool_capabilities_enabled",
   "include_mandates",
   "include_guardrails",
   "include_references",
+  "reference_index_enabled",
   "continuity_enabled",
   "continuity_max_sessions",
   "audience_tags",
   "exclude_tags",
+  "exclude_memory_uuids",
 ]);
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -37,6 +41,7 @@ export function cloneConfig<T extends MemoryConfig>(config: T): T {
     ...config,
     audience_tags: [...config.audience_tags],
     exclude_tags: [...config.exclude_tags],
+    exclude_memory_uuids: [...config.exclude_memory_uuids],
   };
 }
 
@@ -55,6 +60,14 @@ export function parseConfig(
     ...cloneConfig(fallback),
     ...extras,
     injection_enabled: memoryInjectionEnabled,
+    project_index_enabled: parseBoolean(
+      raw.project_index_enabled,
+      fallback.project_index_enabled
+    ),
+    tool_capabilities_enabled: parseBoolean(
+      raw.tool_capabilities_enabled,
+      fallback.tool_capabilities_enabled
+    ),
     include_mandates:
       memoryInjectionEnabled &&
       parseBoolean(raw.include_mandates, fallback.include_mandates),
@@ -64,6 +77,9 @@ export function parseConfig(
     include_references:
       memoryInjectionEnabled &&
       parseBoolean(raw.include_references, fallback.include_references),
+    reference_index_enabled:
+      memoryInjectionEnabled &&
+      parseBoolean(raw.reference_index_enabled, fallback.reference_index_enabled),
     continuity_enabled:
       memoryInjectionEnabled &&
       parseBoolean(raw.continuity_enabled, fallback.continuity_enabled),
@@ -73,6 +89,10 @@ export function parseConfig(
     ),
     audience_tags: parseStringArray(raw.audience_tags, fallback.audience_tags),
     exclude_tags: parseStringArray(raw.exclude_tags, fallback.exclude_tags),
+    exclude_memory_uuids: parseStringArray(
+      raw.exclude_memory_uuids,
+      fallback.exclude_memory_uuids
+    ),
   };
 }
 

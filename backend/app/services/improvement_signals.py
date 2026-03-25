@@ -18,6 +18,7 @@ from app.services.benchmark_failure_classification import (
 )
 from app.services.memory._analytics_utilization import get_memory_utilization_summary
 from app.services.memory.episode_operations import batch_get_episodes
+from app.services.memory.governance import collect_memory_governance_snapshot
 
 from ._benchmark_dashboard import query_open_regression_clusters, query_signal_experiments
 
@@ -305,6 +306,7 @@ async def collect_improvement_signal_snapshot(
                     (summary.get("pass_rate_delta") or {}).get("mean_delta") or 0.0
                 ),
             })
+        memory_governance = await collect_memory_governance_snapshot(db)
 
     memory_utilization = await get_memory_utilization_summary(
         timedelta(days=days_back),
@@ -327,6 +329,7 @@ async def collect_improvement_signal_snapshot(
         **performance_snapshot,
         **benchmark_snapshot,
         "memory_utilization": _build_memory_snapshot(memory_utilization),
+        "memory_governance": memory_governance,
         "low_yield_references": low_yield_references,
     }
 
@@ -406,6 +409,70 @@ def _build_memory_section(memory_snapshot: dict[str, Any]) -> str:
     ])
 
 
+def _build_memory_governance_section(snapshot: dict[str, Any]) -> str:
+    startup_profile_agent_target_count = int(snapshot.get("startup_profile_agent_target_count", 0))
+    startup_profile_agent_target_samples = snapshot.get("startup_profile_agent_target_samples", [])
+    invalid_trigger_task_type_samples = snapshot.get("invalid_trigger_task_type_samples", [])
+    untargeted_reference_samples = snapshot.get("untargeted_reference_samples", [])
+    oversized_policy_samples = snapshot.get("oversized_policy_samples", [])
+    lines = [
+        "## Memory governance",
+        (
+            f"- health_status={snapshot.get('health_status', 'healthy')} "
+            f"hard_issue_count={snapshot.get('hard_issue_count', 0)} "
+            f"soft_issue_count={snapshot.get('soft_issue_count', 0)} "
+            f"soft_limit_breach_count={snapshot.get('soft_limit_breach_count', 0)} "
+            f"issue_count={snapshot['issue_count']}"
+        ),
+        (
+            f"- active_count={snapshot['active_count']} "
+            f"active_agent_count={snapshot.get('active_agent_count', 0)} "
+            f"targeted_count={snapshot['targeted_count']} "
+            f"explicit_exclusion_count={snapshot['explicit_exclusion_count']} "
+            f"untargeted_reference_count={snapshot['untargeted_reference_count']}"
+        ),
+        (
+            f"- policy_with_targeting_count={snapshot['policy_with_targeting_count']} "
+            f"missing_reference_summary_count={snapshot['missing_reference_summary_count']} "
+            f"oversized_policy_count={snapshot['oversized_policy_count']}"
+        ),
+        (
+            f"- alias_trigger_task_type_count={snapshot['alias_trigger_task_type_count']} "
+            f"startup_profile_agent_target_count={startup_profile_agent_target_count} "
+            f"invalid_trigger_task_type_count={snapshot['invalid_trigger_task_type_count']}"
+        ),
+        (
+            f"- custom_memory_config_agent_count={snapshot.get('custom_memory_config_agent_count', 0)} "
+            f"tool_capabilities_disabled_agent_count={snapshot.get('tool_capabilities_disabled_agent_count', 0)} "
+            f"project_index_disabled_agent_count={snapshot.get('project_index_disabled_agent_count', 0)} "
+            f"reference_index_disabled_agent_count={snapshot.get('reference_index_disabled_agent_count', 0)} "
+            f"memory_exclusion_agent_count={snapshot.get('memory_exclusion_agent_count', 0)} "
+            f"excluded_memory_uuid_count={snapshot.get('excluded_memory_uuid_count', 0)}"
+        ),
+    ]
+    if untargeted_reference_samples:
+        lines.append("- top untargeted references:")
+        for item in untargeted_reference_samples:
+            detail = item.get("details") or "untargeted reference"
+            lines.append(f"  - {item['label']} ({item['uuid'][:8]}): {detail}")
+    if oversized_policy_samples:
+        lines.append("- top oversized policies:")
+        for item in oversized_policy_samples:
+            detail = item.get("details") or "oversized policy"
+            lines.append(f"  - {item['label']} ({item['uuid'][:8]}): {detail}")
+    if startup_profile_agent_target_samples:
+        lines.append("- startup profile + agent target samples:")
+        for item in startup_profile_agent_target_samples:
+            lines.append(f"  - {item['label']} ({item['uuid'][:8]})")
+    if invalid_trigger_task_type_samples:
+        lines.append("- invalid trigger samples:")
+        for item in invalid_trigger_task_type_samples:
+            lines.append(
+                f"  - {item['label']} ({item['uuid'][:8]}): {', '.join(item['invalid_types'])}"
+            )
+    return "\n".join(lines)
+
+
 def _build_reference_yield_section(reference_items: list[dict[str, Any]]) -> str:
     lines = ["## Low-yield references"]
     if reference_items:
@@ -457,5 +524,6 @@ async def build_improvement_signal_digest(
         _build_performance_section(snapshot),
         _build_benchmark_section(snapshot),
         _build_memory_section(snapshot["memory_utilization"]),
+        _build_memory_governance_section(snapshot["memory_governance"]),
         _build_reference_yield_section(snapshot["low_yield_references"]),
     ])

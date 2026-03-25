@@ -592,11 +592,10 @@ class TestPersonaBashWorkflowGuards:
 
     @pytest.mark.asyncio
     async def test_review_improvement_signals_dispatches(self, executor: DirectToolExecutor):
-        with patch(
-            "app.services.tools._executor_performance.review_improvement_signals",
-            new=AsyncMock(return_value="# Improvement Signals\n- persona: friction=2"),
-        ):
-            result = await executor.dispatch("review_improvement_signals", {})
+        executor._registry["review_improvement_signals"] = AsyncMock(
+            return_value="# Improvement Signals\n- persona: friction=2"
+        )
+        result = await executor.dispatch("review_improvement_signals", {})
         assert "Improvement Signals" in result
 
     @pytest.mark.asyncio

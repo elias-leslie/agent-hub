@@ -8,22 +8,29 @@ from .settings import MemorySettingsDTO
 
 DEFAULT_AGENT_MEMORY_CONFIG: dict[str, Any] = {
     "injection_enabled": True,
+    "project_index_enabled": True,
+    "tool_capabilities_enabled": True,
     "include_mandates": True,
     "include_guardrails": True,
     "include_references": True,
+    "reference_index_enabled": True,
     "continuity_enabled": True,
     "continuity_max_sessions": 5,
     "audience_tags": [],
     "exclude_tags": [],
+    "exclude_memory_uuids": [],
 }
 _CANONICAL_BOOL_KEYS = (
     "injection_enabled",
+    "project_index_enabled",
+    "tool_capabilities_enabled",
     "include_mandates",
     "include_guardrails",
     "include_references",
+    "reference_index_enabled",
     "continuity_enabled",
 )
-_CANONICAL_LIST_KEYS = ("audience_tags", "exclude_tags")
+_CANONICAL_LIST_KEYS = ("audience_tags", "exclude_tags", "exclude_memory_uuids")
 _CANONICAL_INT_DEFAULTS = {"continuity_max_sessions": 5}
 _LEGACY_KEYS = {"enabled"}
 
@@ -87,18 +94,23 @@ def normalize_memory_config(memory_config: dict[str, Any] | None) -> dict[str, A
     normalized = {
         **extras,
         "injection_enabled": injection_enabled,
+        "project_index_enabled": _coerce_bool(raw.get("project_index_enabled"), True),
+        "tool_capabilities_enabled": _coerce_bool(raw.get("tool_capabilities_enabled"), True),
         "include_mandates": _coerce_bool(raw.get("include_mandates"), True),
         "include_guardrails": _coerce_bool(raw.get("include_guardrails"), True),
         "include_references": _coerce_bool(raw.get("include_references"), True),
+        "reference_index_enabled": _coerce_bool(raw.get("reference_index_enabled"), True),
         "continuity_enabled": _coerce_bool(raw.get("continuity_enabled"), True),
         "continuity_max_sessions": _coerce_int(raw.get("continuity_max_sessions"), 5),
         "audience_tags": _normalize_string_list(raw.get("audience_tags")),
         "exclude_tags": _normalize_string_list(raw.get("exclude_tags")),
+        "exclude_memory_uuids": _normalize_string_list(raw.get("exclude_memory_uuids")),
     }
     if not injection_enabled:
         normalized["include_mandates"] = False
         normalized["include_guardrails"] = False
         normalized["include_references"] = False
+        normalized["reference_index_enabled"] = False
         normalized["continuity_enabled"] = False
     return normalized
 
@@ -145,6 +157,26 @@ def resolve_memory_config_includes(
     )
 
 
+def resolve_project_index_enabled(
+    memory_config: dict[str, Any] | None,
+) -> bool:
+    """Resolve whether compact project-index metadata is enabled for an agent."""
+    normalized = normalize_memory_config(memory_config)
+    if normalized is None:
+        return True
+    return bool(normalized.get("project_index_enabled", True))
+
+
+def resolve_tool_capabilities_enabled(
+    memory_config: dict[str, Any] | None,
+) -> bool:
+    """Resolve whether generated wrapper-tool capability context is enabled."""
+    normalized = normalize_memory_config(memory_config)
+    if normalized is None:
+        return True
+    return bool(normalized.get("tool_capabilities_enabled", True))
+
+
 def resolve_runtime_prompt_includes(
     memory_config: dict[str, Any] | None,
 ) -> tuple[bool, bool]:
@@ -153,6 +185,16 @@ def resolve_runtime_prompt_includes(
         return False, False
     include_mandates, include_guardrails, _ = resolve_memory_config_includes(memory_config)
     return include_mandates, include_guardrails
+
+
+def resolve_reference_index_enabled(
+    memory_config: dict[str, Any] | None,
+) -> bool:
+    """Resolve whether passive reference index content is enabled for an agent."""
+    normalized = normalize_memory_config(memory_config)
+    if normalized is None:
+        return True
+    return bool(normalized.get("reference_index_enabled", True))
 
 
 def resolve_continuity_settings(
@@ -177,6 +219,14 @@ def resolve_memory_tags(memory_config: dict[str, Any] | None) -> tuple[list[str]
     if normalized is None:
         return [], []
     return normalized["audience_tags"], normalized["exclude_tags"]
+
+
+def resolve_excluded_memory_uuids(memory_config: dict[str, Any] | None) -> list[str]:
+    """Resolve explicit per-agent memory UUID suppressions."""
+    normalized = normalize_memory_config(memory_config)
+    if normalized is None:
+        return []
+    return normalized["exclude_memory_uuids"]
 
 
 def apply_memory_config_overrides(

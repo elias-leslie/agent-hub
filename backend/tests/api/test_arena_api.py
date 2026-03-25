@@ -91,6 +91,21 @@ class TestArenaOverviewEndpoint:
                 "memory_get_calls": 1,
                 "memory_debug_coverage_rate": 1.0,
             },
+            "memory_governance": {
+                "active_count": 18,
+                "by_context_kind": {"policy": 7, "reference": 11},
+                "targeted_count": 4,
+                "explicit_exclusion_count": 1,
+                "untargeted_reference_count": 7,
+                "policy_with_targeting_count": 0,
+                "missing_reference_summary_count": 2,
+                "missing_capability_summary_count": 0,
+                "oversized_policy_count": 1,
+                "alias_trigger_task_type_count": 1,
+                "invalid_trigger_task_type_count": 0,
+                "invalid_trigger_task_type_samples": [],
+                "issue_count": 3,
+            },
             "low_yield_references": [
                 {
                     "uuid": "ref-2",

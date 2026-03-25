@@ -3,13 +3,17 @@ import { parseConfig } from "../app/agents/[slug]/components/memory/utils";
 
 const fallback = {
   injection_enabled: false,
+  project_index_enabled: true,
+  tool_capabilities_enabled: true,
   include_mandates: false,
   include_guardrails: false,
   include_references: false,
+  reference_index_enabled: false,
   continuity_enabled: false,
   continuity_max_sessions: 7,
   audience_tags: ["persona"],
   exclude_tags: ["draft"],
+  exclude_memory_uuids: [],
 };
 
 describe("parseConfig", () => {
@@ -51,6 +55,7 @@ describe("parseConfig", () => {
           include_mandates: true,
           include_guardrails: true,
           include_references: true,
+          reference_index_enabled: true,
           continuity_enabled: true,
         },
         {
@@ -59,6 +64,7 @@ describe("parseConfig", () => {
           include_mandates: true,
           include_guardrails: true,
           include_references: true,
+          reference_index_enabled: true,
           continuity_enabled: true,
         }
       )
@@ -67,6 +73,7 @@ describe("parseConfig", () => {
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
     });
   });
@@ -85,6 +92,7 @@ describe("parseConfig", () => {
           include_mandates: true,
           include_guardrails: true,
           include_references: false,
+          reference_index_enabled: true,
           continuity_enabled: true,
         }
       )

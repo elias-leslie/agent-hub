@@ -26,13 +26,17 @@ def test_normalize_memory_config_materializes_core_fields_and_preserves_extensio
     assert normalized == {
         "cross_project_enabled": True,
         "injection_enabled": True,
+        "project_index_enabled": True,
+        "tool_capabilities_enabled": True,
         "include_mandates": False,
         "include_guardrails": True,
         "include_references": True,
+        "reference_index_enabled": True,
         "continuity_enabled": True,
         "continuity_max_sessions": 5,
         "audience_tags": ["finance-relevant"],
         "exclude_tags": ["draft"],
+        "exclude_memory_uuids": [],
     }
 
 
@@ -41,6 +45,8 @@ def test_normalize_memory_config_folds_legacy_enabled_into_injection_enabled() -
 
     assert normalized is not None
     assert normalized["injection_enabled"] is False
+    assert normalized["project_index_enabled"] is True
+    assert normalized["tool_capabilities_enabled"] is True
     assert normalized["include_mandates"] is False
     assert normalized["include_guardrails"] is False
     assert normalized["include_references"] is False
@@ -83,13 +89,17 @@ def test_resolve_effective_memory_config_inherits_global_defaults_when_custom_di
 
     assert resolved == {
         "injection_enabled": False,
+        "project_index_enabled": True,
+        "tool_capabilities_enabled": True,
         "include_mandates": False,
         "include_guardrails": False,
         "include_references": False,
+        "reference_index_enabled": False,
         "continuity_enabled": False,
         "continuity_max_sessions": 7,
         "audience_tags": [],
         "exclude_tags": [],
+        "exclude_memory_uuids": [],
     }
 
 
@@ -106,14 +116,35 @@ def test_normalize_memory_config_clears_subordinate_flags_when_injection_disable
 
     assert normalized == {
         "injection_enabled": False,
+        "project_index_enabled": True,
+        "tool_capabilities_enabled": True,
         "include_mandates": False,
         "include_guardrails": False,
         "include_references": False,
+        "reference_index_enabled": False,
         "continuity_enabled": False,
         "continuity_max_sessions": 5,
         "audience_tags": [],
         "exclude_tags": [],
+        "exclude_memory_uuids": [],
     }
+
+
+def test_normalize_memory_config_preserves_project_index_when_memory_injection_disabled() -> None:
+    normalized = normalize_memory_config(
+        {
+            "injection_enabled": False,
+            "project_index_enabled": False,
+            "tool_capabilities_enabled": False,
+            "include_references": True,
+        }
+    )
+
+    assert normalized is not None
+    assert normalized["injection_enabled"] is False
+    assert normalized["project_index_enabled"] is False
+    assert normalized["tool_capabilities_enabled"] is False
+    assert normalized["include_references"] is False
 
 
 def test_format_progressive_context_omits_mandate_line_for_reference_only_context() -> None:

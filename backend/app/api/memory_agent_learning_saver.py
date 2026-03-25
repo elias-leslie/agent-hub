@@ -81,6 +81,9 @@ async def store_learning_episode(
         new_uuid,
         request.pinned,
         request.trigger_task_types,
+        request.trigger_phases,
+        request.context_kind.value if request.context_kind is not None else None,
+        request.applicability.model_dump() if request.applicability is not None else None,
         change_reason=request.change_reason or "Learning properties updated",
     )
 

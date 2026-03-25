@@ -64,6 +64,12 @@ class Memory(Base):
     )  # human, agent:<slug>, system:summarizer, chat, voice
     source_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    context_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="reference"
+    )
+    applicability: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default="{}"
+    )
 
     # Tier system (determines injection behavior)
     tier: Mapped[int] = mapped_column(
@@ -183,6 +189,8 @@ class MemoryRevision(Base):
     source: Mapped[str | None] = mapped_column(String(100), nullable=True)
     source_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, server_default="{}")
+    context_kind: Mapped[str] = mapped_column(String(32), nullable=False, server_default="reference")
+    applicability: Mapped[dict] = mapped_column("applicability", JSONB, nullable=False, server_default="{}")
     tier: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     auto_inject: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")

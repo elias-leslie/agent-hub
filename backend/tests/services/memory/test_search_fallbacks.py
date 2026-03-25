@@ -33,6 +33,8 @@ def _mem(
         name=name or content[:20],
         summary=summary,
         memory_type="memory",
+        context_kind="reference" if tier == 3 else "policy",
+        applicability={},
         scope="global",
         scope_id=None,
         group_id="global",

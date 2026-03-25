@@ -8,7 +8,23 @@ export type MemoryScope = "global" | "project" | "task";
 // Memory category types (tier-first taxonomy)
 export type MemoryCategory = "mandate" | "guardrail" | "reference";
 
+export type MemoryContextKind =
+  | "policy"
+  | "reference"
+  | "capability"
+  | "continuity"
+  | "signal";
+
 export type MemorySource = "chat" | "voice" | "system";
+
+export interface MemoryApplicability {
+  consumer_profiles: string[];
+  exclude_consumer_profiles: string[];
+  agent_slugs: string[];
+  exclude_agent_slugs: string[];
+  audience_tags: string[];
+  exclude_audience_tags: string[];
+}
 
 // Memory episode for display
 export interface MemoryEpisode {
@@ -37,6 +53,9 @@ export interface MemoryEpisode {
   tags?: string[];
   // TOON reference index
   summary?: string;
+  trigger_phases?: string[];
+  context_kind?: MemoryContextKind;
+  applicability?: MemoryApplicability;
 }
 
 // Sort options for memory list
@@ -104,6 +123,8 @@ export interface AddEpisodeRequest {
   source_description?: string;
   injection_tier?: MemoryCategory;
   preserve_stats_from?: string;
+  context_kind?: MemoryContextKind;
+  applicability?: MemoryApplicability;
 }
 
 export interface AddEpisodeResponse {
@@ -125,7 +146,10 @@ export interface UpdateEpisodePropertiesRequest {
   auto_inject?: boolean;
   display_order?: number;
   trigger_task_types?: string[];
+  trigger_phases?: string[];
   summary?: string;
+  context_kind?: MemoryContextKind;
+  applicability?: MemoryApplicability;
 }
 
 // Update episode properties response
@@ -136,7 +160,10 @@ export interface UpdateEpisodePropertiesResponse {
   auto_inject?: boolean;
   display_order?: number;
   trigger_task_types?: string[];
+  trigger_phases?: string[];
   summary?: string;
+  context_kind?: MemoryContextKind;
+  applicability?: MemoryApplicability;
   message: string;
 }
 

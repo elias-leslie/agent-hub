@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from .applicability import normalize_applicability, normalize_context_kind
 from .service import MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,12 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
         source_description=ep.get("source_description"),
         auto_inject=bool(ep.get("auto_inject", False)),
+        context_kind=normalize_context_kind(
+            ep.get("context_kind"),
+            memory_type=ep.get("memory_type"),
+            tier=ep.get("tier"),
+        ),
+        applicability=normalize_applicability(ep.get("applicability")),
     )
 
 
@@ -115,6 +122,12 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
             source_description=ep.get("source_description"),
             auto_inject=bool(ep.get("auto_inject", False)),
+            context_kind=normalize_context_kind(
+                ep.get("context_kind"),
+                memory_type=ep.get("memory_type"),
+                tier=ep.get("tier"),
+            ),
+            applicability=normalize_applicability(ep.get("applicability")),
         )
     except Exception as e:
         logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
@@ -150,4 +163,10 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         last_accessed_at=_safe_optional_datetime(ep.get("last_accessed_at")),
         source_description=ep.get("source_description"),
         auto_inject=bool(ep.get("auto_inject", False)),
+        context_kind=normalize_context_kind(
+            ep.get("context_kind"),
+            memory_type=ep.get("memory_type"),
+            tier=ep.get("tier"),
+        ),
+        applicability=normalize_applicability(ep.get("applicability")),
     )

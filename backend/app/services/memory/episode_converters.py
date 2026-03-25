@@ -6,6 +6,7 @@ SimpleNamespace objects from record_to_episode()) to MemoryEpisode objects.
 
 from typing import Any
 
+from .applicability import normalize_applicability, normalize_context_kind
 from .memory_models import MemoryEpisode, MemoryScope, MemorySource
 from .memory_utils import parse_group_id
 from .search_helpers import map_tier_to_category
@@ -101,6 +102,14 @@ def convert_raw_episode_to_memory_episode(
         utility_score=_get_attr_or_key(ep, "utility_score"),
         pinned=_get_attr_or_key(ep, "pinned"),
         tags=_get_attr_or_key(ep, "tags") or [],
+        trigger_task_types=_get_attr_or_key(ep, "trigger_task_types") or [],
+        trigger_phases=_get_attr_or_key(ep, "trigger_phases") or [],
+        context_kind=normalize_context_kind(
+            _get_attr_or_key(ep, "context_kind"),
+            memory_type=_get_attr_or_key(ep, "memory_type"),
+            tier=_get_attr_or_key(ep, "tier") or tier,
+        ),
+        applicability=normalize_applicability(_get_attr_or_key(ep, "applicability")),
     )
 
 

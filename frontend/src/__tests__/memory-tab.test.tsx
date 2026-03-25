@@ -8,23 +8,31 @@ function makeFormData(overrides: Partial<Agent> = {}): Partial<Agent> {
   return {
     memory_config: {
       injection_enabled: true,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: true,
       include_guardrails: true,
       include_references: true,
+      reference_index_enabled: true,
       continuity_enabled: true,
       continuity_max_sessions: 5,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     },
     effective_memory_config: {
       injection_enabled: true,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: true,
       include_guardrails: true,
       include_references: true,
+      reference_index_enabled: true,
       continuity_enabled: true,
       continuity_max_sessions: 5,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     },
     ...overrides,
   };
@@ -35,13 +43,17 @@ describe("MemoryTab", () => {
     const updateField = vi.fn();
     const inheritedConfig = {
       injection_enabled: false,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
       continuity_max_sessions: 7,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     };
 
     render(
@@ -70,13 +82,17 @@ describe("MemoryTab", () => {
 
     expect(updateField).toHaveBeenCalledWith("memory_config", {
       injection_enabled: false,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
+      reference_index_enabled: false,
       continuity_enabled: false,
       continuity_max_sessions: 5,
       audience_tags: [],
       exclude_tags: [],
+      exclude_memory_uuids: [],
     });
   });
 
@@ -88,13 +104,17 @@ describe("MemoryTab", () => {
         formData={makeFormData({
           memory_config: {
             injection_enabled: false,
+            project_index_enabled: true,
+            tool_capabilities_enabled: true,
             include_mandates: false,
             include_guardrails: false,
             include_references: false,
+            reference_index_enabled: false,
             continuity_enabled: false,
             continuity_max_sessions: 5,
             audience_tags: [],
             exclude_tags: [],
+            exclude_memory_uuids: [],
           },
         })}
         updateField={updateField}
@@ -104,6 +124,7 @@ describe("MemoryTab", () => {
     expect(screen.getByRole("button", { name: "Include Mandates" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Include Guardrails" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Include References" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Passive Reference Index" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Session Continuity" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Memory Injection" })).not.toBeDisabled();
   });

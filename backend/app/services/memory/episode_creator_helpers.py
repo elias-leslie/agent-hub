@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from .applicability import normalize_applicability, normalize_context_kind
 from .embedder import EMBEDDING_MODEL
 from .episode_creator_models import CreateResult
 from .episode_validation import EpisodeValidator
@@ -40,6 +41,8 @@ async def insert_memory(
     source_description: str,
     reference_time: datetime,
     embedding: list[float],
+    context_kind: str | None,
+    applicability: dict[str, object] | None,
     tier: int,
     summary: str | None,
     token_count: int,
@@ -47,6 +50,12 @@ async def insert_memory(
     change_reason: str | None = None,
 ) -> str:
     """Insert a memory row via MemoryRepository.create() and return its UUID."""
+    normalized_context_kind = normalize_context_kind(
+        context_kind,
+        memory_type="episode",
+        tier=tier,
+    ).value
+    normalized_applicability = normalize_applicability(applicability).model_dump()
     memory = await repo.create(
         content=content,
         name=name,
@@ -54,6 +63,8 @@ async def insert_memory(
         group_id=group_id,
         source_description=source_description,
         embedding=embedding,
+        context_kind=normalized_context_kind,
+        applicability=normalized_applicability,
         tier=tier,
         summary=summary,
         token_count=token_count,

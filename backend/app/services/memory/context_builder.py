@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from .applicability import (
+    applicability_has_exclusions,
+    applicability_has_targets,
+    applicability_matches,
+)
 from .budget import BudgetUsage
 from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
@@ -14,11 +19,14 @@ from .context_builder_processors import compute_token_counts
 from .context_builder_settings import (
     apply_memory_config_overrides,
     normalize_memory_config,
+    resolve_excluded_memory_uuids,
     resolve_memory_tags,
+    resolve_reference_index_enabled,
 )
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .context_profiles import priority_tags_for_profile
+from .memory_models import MemoryContextKind
 from .scoring import MemoryScoreInput, score_memory
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
@@ -34,13 +42,19 @@ class ProgressiveContext:
     mandates: list[MemorySearchResult] = field(default_factory=list)
     guardrails: list[MemorySearchResult] = field(default_factory=list)
     reference: list[MemorySearchResult] = field(default_factory=list)
+    reference_index: list[MemorySearchResult] = field(default_factory=list)
     total_tokens: int = 0
     debug_info: dict[str, Any] = field(default_factory=dict)
     budget_usage: BudgetUsage | None = None
 
     def get_loaded_uuids(self) -> list[str]:
         """Get all UUIDs loaded into context (for usage tracking)."""
-        return [r.uuid for block in (self.mandates, self.guardrails, self.reference) for r in block if r.uuid]
+        return [
+            r.uuid
+            for block in (self.mandates, self.guardrails, self.reference_index, self.reference)
+            for r in block
+            if r.uuid
+        ]
 
     def get_mandate_uuids(self) -> list[str]:
         """Get mandate UUIDs (for citation tracking)."""
@@ -54,22 +68,83 @@ class ProgressiveContext:
         """Get directly selected reference UUIDs."""
         return [r.uuid for r in self.reference if r.uuid]
 
+    def get_reference_index_uuids(self) -> list[str]:
+        """Get passive reference-index UUIDs."""
+        return [r.uuid for r in self.reference_index if r.uuid]
+
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
-    """Apply audience and exclude tag filters to context blocks in-place.
+    """Apply exclude tags universally and audience tags only for legacy references.
 
     Mandates and guardrails are universal instructions — all agents see all of
     them regardless of audience_tags.  Only exclude_tags can remove them (e.g.
-    for deprecated episodes).  audience_tags filtering applies exclusively to
-    references, where role/domain-specific selection is appropriate.
+    for deprecated episodes). Explicit applicability targeting is authoritative;
+    audience_tags remain only as a backward-compatible fallback for legacy
+    references that still rely on ordinary memory tags for routing.
     """
     audience_tags, exclude_tags = resolve_memory_tags(memory_config)
     if exclude_tags:
         context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
         context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
         context.reference = filter_by_tags(context.reference, [], exclude_tags)
+        context.reference_index = filter_by_tags(context.reference_index, [], exclude_tags)
     if audience_tags:
-        context.reference = filter_by_tags(context.reference, audience_tags, [])
+        context.reference = _filter_legacy_reference_audience_tags(
+            context.reference,
+            audience_tags,
+        )
+        context.reference_index = _filter_legacy_reference_audience_tags(
+            context.reference_index,
+            audience_tags,
+        )
+
+
+def _filter_legacy_reference_audience_tags(
+    items: list[MemorySearchResult],
+    audience_tags: list[str],
+) -> list[MemorySearchResult]:
+    """Apply tag-based audience routing only to references without applicability."""
+    retained: list[MemorySearchResult] = []
+    for item in items:
+        applicability = item.applicability
+        if applicability_has_targets(applicability) or applicability_has_exclusions(applicability):
+            retained.append(item)
+            continue
+        if filter_by_tags([item], audience_tags, []):
+            retained.append(item)
+    return retained
+
+
+def _apply_applicability_filters(
+    context: ProgressiveContext,
+    *,
+    consumer_profile: str | None,
+    consumer_agent_slug: str | None,
+    consumer_tags: list[str],
+) -> None:
+    """Filter all context blocks against explicit applicability targeting."""
+    for field_name in ("mandates", "guardrails", "reference", "reference_index"):
+        items = getattr(context, field_name)
+        filtered = [
+            item
+            for item in items
+            if applicability_matches(
+                item.applicability,
+                consumer_profile=consumer_profile,
+                consumer_agent_slug=consumer_agent_slug,
+                consumer_tags=consumer_tags,
+            )
+        ]
+        setattr(context, field_name, filtered)
+
+
+def _apply_uuid_exclusions(context: ProgressiveContext, excluded_uuids: set[str]) -> None:
+    """Remove explicitly excluded memory UUIDs from all context blocks."""
+    if not excluded_uuids:
+        return
+    for field_name in ("mandates", "guardrails", "reference", "reference_index"):
+        items = getattr(context, field_name)
+        setattr(context, field_name, [item for item in items if item.uuid not in excluded_uuids])
 
 
 def _prioritize_items_for_profile(
@@ -159,11 +234,11 @@ def _build_usage_snapshot(context: ProgressiveContext) -> BudgetUsage:
     budget = BudgetUsage()
     budget.mandates_total = len(context.mandates)
     budget.guardrails_total = len(context.guardrails)
-    budget.reference_total = len(context.reference)
+    budget.reference_total = len(context.reference) + len(context.reference_index)
     budget.mandates_tokens, budget.guardrails_tokens, budget.reference_tokens = compute_token_counts(
         context.mandates,
         context.guardrails,
-        context.reference,
+        [*context.reference_index, *context.reference],
     )
     return budget
 
@@ -181,6 +256,7 @@ def _finalize_context(
     plan_debug = build_memory_plan_debug(
         context.mandates,
         context.guardrails,
+        context.reference_index,
         context.reference,
     )
     context.budget_usage = budget
@@ -189,7 +265,8 @@ def _finalize_context(
         **context.debug_info,
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
-        "reference_count": len(context.reference),
+        "reference_count": len(context.reference) + len(context.reference_index),
+        "reference_index_count": len(context.reference_index),
         "total_tokens": context.total_tokens,
         "query": query[:100] if query else "",
         "task_type": task_type,
@@ -200,7 +277,7 @@ def _finalize_context(
     }
     logger.info(
         "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d%s%s",
-        len(context.mandates), len(context.guardrails), len(context.reference),
+        len(context.mandates), len(context.guardrails), len(context.reference) + len(context.reference_index),
         context.total_tokens,
         f" task_type={task_type}" if task_type else "",
         f" phase={phase}" if phase else "",
@@ -231,6 +308,8 @@ async def build_progressive_context(
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     consumer_profile: str | None = None,
+    consumer_agent_slug: str | None = None,
+    consumer_tags: list[str] | None = None,
     variant: str | None = None,
 ) -> ProgressiveContext:
     """Build tier-aware context for mandates, guardrails, and direct references.
@@ -243,6 +322,14 @@ async def build_progressive_context(
     """
     context = ProgressiveContext()
     variant_config = get_variant_config(variant)
+    settings = await get_memory_settings()
+    apply_memory_config_overrides(settings, memory_config)
+
+    if not settings.enabled:
+        logger.info("Memory injection disabled - returning empty context")
+        context.budget_usage = BudgetUsage()
+        context.total_tokens = 0
+        return context
 
     scopes_to_query: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
     if include_global and scope == MemoryScope.PROJECT and scope_id:
@@ -251,15 +338,23 @@ async def build_progressive_context(
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
         scopes_to_query, include_mandates, include_guardrails, include_references, task_type, phase
     )
+    if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
+        context.reference_index = [
+            item for item in context.reference if item.context_kind == MemoryContextKind.CAPABILITY
+        ]
+        context.reference = [
+            item for item in context.reference if item.context_kind != MemoryContextKind.CAPABILITY
+        ]
     if not include_references:
         context.reference = []
+        context.reference_index = []
     if include_references and _should_select_query_references(task_type, memory_config):
         selected_reference_payloads = await get_query_relevant_references_as_search_results(
             query,
             scopes_to_query,
         )
         if selected_reference_payloads:
-            existing = {item.uuid for item in context.reference}
+            existing = {item.uuid for item in [*context.reference_index, *context.reference]}
             selected_results: list[MemorySearchResult] = []
             for payload in selected_reference_payloads:
                 result = MemorySearchResult.model_validate(payload)
@@ -267,6 +362,11 @@ async def build_progressive_context(
                     continue
                 existing.add(result.uuid)
                 selected_results.append(result)
+            if selected_results:
+                context.reference_index = [
+                    item for item in context.reference_index
+                    if item.uuid not in {result.uuid for result in selected_results}
+                ]
             context.reference.extend(
                 _limit_references_for_variant(
                     selected_results,
@@ -274,14 +374,27 @@ async def build_progressive_context(
                     consumer_profile,
                 )
             )
-
-    settings = await get_memory_settings()
-    apply_memory_config_overrides(settings, memory_config)
+    resolved_consumer_tags = list(consumer_tags or [])
+    if not resolved_consumer_tags:
+        resolved_consumer_tags, _ = resolve_memory_tags(memory_config)
+    _apply_applicability_filters(
+        context,
+        consumer_profile=consumer_profile,
+        consumer_agent_slug=consumer_agent_slug,
+        consumer_tags=resolved_consumer_tags,
+    )
     if memory_config:
         _apply_tag_filters(context, memory_config)
+        _apply_uuid_exclusions(context, set(resolve_excluded_memory_uuids(memory_config)))
 
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
     context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
+    context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
+    context.reference_index = _limit_references_for_variant(
+        context.reference_index,
+        variant_config.max_reference_items,
+        consumer_profile,
+    )
     context.reference = _prioritize_items_for_profile(context.reference, consumer_profile)
     context.reference = _apply_reference_variant_scoring(
         context.reference,
@@ -298,20 +411,11 @@ async def build_progressive_context(
     plan_context_render_tiers(
         context.mandates,
         context.guardrails,
+        context.reference_index,
         context.reference,
         query,
         consumer_profile=consumer_profile,
     )
-
-    budget = BudgetUsage()
-    if not settings.enabled:
-        logger.info("Memory injection disabled - returning empty context")
-        context.mandates = []
-        context.guardrails = []
-        context.reference = []
-        context.budget_usage = budget
-        context.total_tokens = 0
-        return context
 
     budget = _build_usage_snapshot(context)
     _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)

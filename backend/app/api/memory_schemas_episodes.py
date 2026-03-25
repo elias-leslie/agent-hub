@@ -4,7 +4,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.services.memory.memory_models import InjectionTier
+from app.services.memory.memory_models import (
+    InjectionTier,
+    MemoryApplicability,
+    MemoryContextKind,
+)
 from app.services.memory.service import MemorySource
 
 
@@ -24,6 +28,14 @@ class AddEpisodeRequest(BaseModel):
     preserve_stats_from: str | None = Field(
         None,
         description="UUID of episode to copy usage stats from (for edit flows)",
+    )
+    context_kind: MemoryContextKind | None = Field(
+        None,
+        description="Semantic channel for this memory (policy, reference, capability, continuity, signal)",
+    )
+    applicability: MemoryApplicability | None = Field(
+        None,
+        description="Audience targeting rules for this memory",
     )
     change_reason: str | None = Field(None, description="Why this memory was created")
 
@@ -51,7 +63,10 @@ class EpisodeDetailResponse(BaseModel):
     auto_inject: bool = False
     display_order: int = 50
     trigger_task_types: list[str] = Field(default_factory=list)
+    trigger_phases: list[str] = Field(default_factory=list)
     summary: str | None = Field(None, description="Short action phrase for TOON index (~20 chars)")
+    context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
+    applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
     # Usage stats
     loaded_count: int = 0
     referenced_count: int = 0
@@ -106,6 +121,14 @@ class UpdateEpisodePropertiesRequest(BaseModel):
         None,
         description="Subtask phases that trigger this reference (e.g., ['backend', 'frontend'])",
     )
+    context_kind: MemoryContextKind | None = Field(
+        None,
+        description="Semantic channel for this memory",
+    )
+    applicability: MemoryApplicability | None = Field(
+        None,
+        description="Audience targeting rules for this memory",
+    )
     summary: str | None = Field(
         None,
         max_length=40,
@@ -124,6 +147,8 @@ class UpdateEpisodePropertiesResponse(BaseModel):
     display_order: int | None = None
     trigger_task_types: list[str] | None = None
     trigger_phases: list[str] | None = None
+    context_kind: MemoryContextKind | None = None
+    applicability: MemoryApplicability | None = None
     summary: str | None = None
     message: str
     version: int | None = None

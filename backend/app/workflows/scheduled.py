@@ -50,6 +50,30 @@ class FeedbackCleanupResult(BaseModel):
     purged: int = 0
 
 
+class DataRetentionResult(BaseModel):
+    status: str
+    request_logs_deleted: int = 0
+    usage_stats_deleted: int = 0
+    session_events_deleted: int = 0
+
+
+class MemoryGovernanceResult(BaseModel):
+    status: str
+    active_count: int = 0
+    active_agent_count: int = 0
+    health_status: str = "healthy"
+    issue_count: int = 0
+    untargeted_reference_count: int = 0
+    missing_reference_summary_count: int = 0
+    oversized_policy_count: int = 0
+    invalid_trigger_task_type_count: int = 0
+    custom_memory_config_agent_count: int = 0
+    tool_capabilities_disabled_agent_count: int = 0
+    project_index_disabled_agent_count: int = 0
+    reference_index_disabled_agent_count: int = 0
+    memory_exclusion_agent_count: int = 0
+
+
 @hatchet.task(
     name="session-cleanup",
     input_validator=EmptyInput,
@@ -167,5 +191,91 @@ async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, An
     )
     ctx.log(
         f"Feedback cleanup: archived={result.archived}, purged={result.purged}"
+    )
+    return result.model_dump()
+
+
+@hatchet.task(
+    name="data-retention",
+    input_validator=EmptyInput,
+    on_crons=["0 4 * * *"],
+    execution_timeout="600s",
+    concurrency=ConcurrencyExpression(
+        expression="'data_retention'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+    ),
+)
+async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
+    from app.db import async_session
+    from app.tasks.data_retention import run_data_retention
+
+    async with async_session() as db:
+        result_data = await run_data_retention(db)
+
+    result = DataRetentionResult(status="success", **result_data)
+    ctx.log(
+        f"Data retention: request_logs={result.request_logs_deleted}, "
+        f"usage_stats={result.usage_stats_deleted}, "
+        f"session_events={result.session_events_deleted}"
+    )
+    return result.model_dump()
+
+
+@hatchet.task(
+    name="memory-governance",
+    input_validator=EmptyInput,
+    on_crons=["15 3 * * *"],
+    execution_timeout="180s",
+    concurrency=ConcurrencyExpression(
+        expression="'memory_governance'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+    ),
+)
+async def memory_governance_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
+    from app.db import async_session
+    from app.services.memory.governance import collect_memory_governance_snapshot
+
+    async with async_session() as db:
+        snapshot = await collect_memory_governance_snapshot(db)
+
+    result = MemoryGovernanceResult(
+        status="success",
+        active_count=int(snapshot.get("active_count", 0)),
+        active_agent_count=int(snapshot.get("active_agent_count", 0)),
+        health_status=str(snapshot.get("health_status", "healthy")),
+        issue_count=int(snapshot.get("issue_count", 0)),
+        untargeted_reference_count=int(snapshot.get("untargeted_reference_count", 0)),
+        missing_reference_summary_count=int(snapshot.get("missing_reference_summary_count", 0)),
+        oversized_policy_count=int(snapshot.get("oversized_policy_count", 0)),
+        invalid_trigger_task_type_count=int(snapshot.get("invalid_trigger_task_type_count", 0)),
+        custom_memory_config_agent_count=int(snapshot.get("custom_memory_config_agent_count", 0)),
+        tool_capabilities_disabled_agent_count=int(
+            snapshot.get("tool_capabilities_disabled_agent_count", 0)
+        ),
+        project_index_disabled_agent_count=int(
+            snapshot.get("project_index_disabled_agent_count", 0)
+        ),
+        reference_index_disabled_agent_count=int(
+            snapshot.get("reference_index_disabled_agent_count", 0)
+        ),
+        memory_exclusion_agent_count=int(snapshot.get("memory_exclusion_agent_count", 0)),
+    )
+    ctx.log(
+        "Memory governance: "
+        f"active={result.active_count} "
+        f"agents={result.active_agent_count} "
+        f"health={result.health_status} "
+        f"issues={result.issue_count} "
+        f"untargeted_refs={result.untargeted_reference_count} "
+        f"missing_summary={result.missing_reference_summary_count} "
+        f"oversized_policy={result.oversized_policy_count} "
+        f"invalid_triggers={result.invalid_trigger_task_type_count} "
+        f"custom_configs={result.custom_memory_config_agent_count} "
+        f"tool_ctx_off={result.tool_capabilities_disabled_agent_count} "
+        f"project_index_off={result.project_index_disabled_agent_count} "
+        f"reference_index_off={result.reference_index_disabled_agent_count} "
+        f"memory_exclusions={result.memory_exclusion_agent_count}"
     )
     return result.model_dump()

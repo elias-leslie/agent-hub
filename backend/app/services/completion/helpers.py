@@ -20,6 +20,11 @@ from app.services.memory import inject_progressive_context, parse_memory_group_i
 logger = logging.getLogger(__name__)
 
 
+def _memory_block_len(progressive_context: object, field_name: str) -> int:
+    """Return the size of a progressive-context block, tolerating legacy test doubles."""
+    return len(getattr(progressive_context, field_name, []))
+
+
 async def inject_memory_context(
     options: CompletionOptions, messages: list[dict[str, Any]], is_stream: bool = False
 ) -> tuple[list[dict[str, Any]], int]:
@@ -42,7 +47,12 @@ async def inject_memory_context(
             memory_config=options.memory_config,
             current_branch=options.current_branch,
         )
-        count = len(context.mandates) + len(context.guardrails)
+        count = (
+            _memory_block_len(context, "mandates")
+            + _memory_block_len(context, "guardrails")
+            + _memory_block_len(context, "reference_index")
+            + _memory_block_len(context, "reference")
+        )
         if count > 0:
             prefix = "Streaming: " if is_stream else ""
             logger.info(f"{prefix}Injected {count} memories (scope={scope.value})")

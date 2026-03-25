@@ -94,15 +94,27 @@ async def set_episode_properties(
     uuid: str,
     pinned: bool,
     trigger_task_types: list[str] | None,
+    trigger_phases: list[str] | None,
+    context_kind: str | None,
+    applicability: dict[str, object] | None,
     *,
     change_reason: str | None = None,
 ) -> None:
     """Set additional properties on episode if provided."""
-    if not uuid or (not pinned and not trigger_task_types):
+    if not uuid or (
+        not pinned
+        and not trigger_task_types
+        and not trigger_phases
+        and not context_kind
+        and not applicability
+    ):
         return
 
     from app.services.memory.episode_property_setters import (
+        set_episode_applicability,
+        set_episode_context_kind,
         set_episode_pinned,
+        set_episode_trigger_phases,
         set_episode_trigger_task_types,
     )
 
@@ -110,3 +122,9 @@ async def set_episode_properties(
         await set_episode_pinned(uuid, True, change_reason=change_reason)
     if trigger_task_types:
         await set_episode_trigger_task_types(uuid, trigger_task_types, change_reason=change_reason)
+    if trigger_phases:
+        await set_episode_trigger_phases(uuid, trigger_phases, change_reason=change_reason)
+    if context_kind:
+        await set_episode_context_kind(uuid, context_kind, change_reason=change_reason)
+    if applicability is not None:
+        await set_episode_applicability(uuid, applicability, change_reason=change_reason)

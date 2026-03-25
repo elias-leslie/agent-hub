@@ -4,7 +4,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.services.memory.memory_models import InjectionTier
+from app.services.memory.memory_models import (
+    InjectionTier,
+    MemoryApplicability,
+    MemoryContextKind,
+)
 
 from .memory_schemas import BudgetUsageResponse
 
@@ -85,6 +89,17 @@ class SaveLearningRequest(BaseModel):
     )
     trigger_task_types: list[str] | None = Field(
         None, description="Task types that trigger this reference (e.g., ['database', 'memory'])"
+    )
+    trigger_phases: list[str] | None = Field(
+        None, description="Subtask phases that trigger this memory"
+    )
+    context_kind: MemoryContextKind | None = Field(
+        None,
+        description="Semantic channel for this memory (policy, reference, capability, continuity, signal)",
+    )
+    applicability: MemoryApplicability | None = Field(
+        None,
+        description="Audience targeting rules for this memory",
     )
     change_reason: str | None = Field(None, description="Why this learning is being recorded")
 

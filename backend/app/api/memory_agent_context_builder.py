@@ -3,13 +3,10 @@
 import logging
 import time
 
-from app.db import async_session
 from app.services.memory.context_injector import ProgressiveContext, build_progressive_context
-from app.services.memory.context_profiles import startup_prompt_slugs_for_profile
 from app.services.memory.service import MemoryScope
 from app.services.memory.settings import get_memory_settings
 from app.services.memory.variants import assign_variant
-from app.services.prompt_service import get_prompt_by_slug
 
 logger = logging.getLogger(__name__)
 
@@ -99,10 +96,13 @@ async def format_context_with_continuity(
 ) -> str:
     """Format context and prepend continuity."""
     selected_reference_uuids = context.get_reference_uuids()
+    indexed_reference_uuids = context.get_reference_index_uuids()
     context.debug_info.update(
         {
             "reference_selected_count": len(selected_reference_uuids),
             "reference_selected_uuids": selected_reference_uuids,
+            "reference_index_count": len(indexed_reference_uuids),
+            "reference_index_uuids": indexed_reference_uuids,
         }
     )
     from app.services.memory.context_injector import format_progressive_context
@@ -112,9 +112,6 @@ async def format_context_with_continuity(
         include_citations=True,
         consumer_profile=consumer_profile,
     )
-    startup_prompt_md = await build_startup_prompt_markdown(consumer_profile)
-    if startup_prompt_md:
-        formatted = f"{startup_prompt_md}\n\n{formatted}" if formatted else startup_prompt_md
 
     continuity_md = await build_continuity_markdown(
         scope, scope_id, current_branch, session_id=session_id,
@@ -123,21 +120,6 @@ async def format_context_with_continuity(
         formatted = continuity_md + formatted
 
     return formatted
-
-
-async def build_startup_prompt_markdown(consumer_profile: str | None) -> str:
-    """Load DB-backed startup prompt content for wrapper startup profiles."""
-    prompt_slugs = startup_prompt_slugs_for_profile(consumer_profile)
-    if not prompt_slugs:
-        return ""
-
-    sections: list[str] = []
-    async with async_session() as db:
-        for slug in prompt_slugs:
-            prompt = await get_prompt_by_slug(db, slug)
-            if prompt and prompt.enabled and prompt.content.strip():
-                sections.append(prompt.content.strip())
-    return "\n\n".join(sections)
 
 
 async def track_and_record_metrics(
@@ -164,11 +146,13 @@ async def track_and_record_metrics(
             injection_latency_ms=latency_ms,
             mandates_count=len(context.mandates),
             guardrails_count=len(context.guardrails),
-            reference_count=len(context.reference),
+            reference_count=len(context.reference) + len(context.reference_index),
             reference_selected_count=int(
                 context.debug_info.get("reference_selected_count", len(context.reference))
             ),
-            reference_index_count=0,
+            reference_index_count=int(
+                context.debug_info.get("reference_index_count", len(context.reference_index))
+            ),
             total_tokens=context.total_tokens,
             query=query,
             variant=variant,
@@ -179,7 +163,9 @@ async def track_and_record_metrics(
             reference_selected_uuids=list(
                 context.debug_info.get("reference_selected_uuids", [])
             ),
-            reference_index_uuids=[],
+            reference_index_uuids=list(
+                context.debug_info.get("reference_index_uuids", [])
+            ),
         ))
         logger.info(
             "Progressive-context metrics: session=%s external=%s loaded=%d latency=%dms",

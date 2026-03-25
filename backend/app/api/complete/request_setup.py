@@ -34,6 +34,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _memory_block_len(progressive_context: Any, field_name: str) -> int:
+    """Return the size of a progressive-context block, tolerating legacy test doubles."""
+    return len(getattr(progressive_context, field_name, []))
+
+
 async def setup_session(
     request: CompletionRequest,
     provider: str,
@@ -148,26 +153,29 @@ async def inject_memory(
                 external_id=request.external_id,
                 memory_config=agent_memory_config,
                 current_branch=request.current_branch,
+                consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
             )
             memory_facts_injected = (
-                len(progressive_context.mandates)
-                + len(progressive_context.guardrails)
-                + len(progressive_context.reference)
+                _memory_block_len(progressive_context, "mandates")
+                + _memory_block_len(progressive_context, "guardrails")
+                + _memory_block_len(progressive_context, "reference_index")
+                + _memory_block_len(progressive_context, "reference")
             )
             loaded_memory_uuids = progressive_context.get_loaded_uuids()
             if memory_facts_injected > 0:
                 await track_loaded_batch(loaded_memory_uuids)
                 if db:
                     agent_slug = resolved_agent.agent.slug if resolved_agent else None
+                    memory_debug = dict(getattr(progressive_context, "debug_info", {}))
                     await store_memory_inject_event(
                         db, session_id, loaded_memory_uuids, memory_facts_injected,
                         reference_selected_uuids=list(
-                            progressive_context.debug_info.get("reference_selected_uuids", [])
+                            memory_debug.get("reference_selected_uuids", [])
                         ),
                         reference_index_uuids=list(
-                            progressive_context.debug_info.get("reference_index_uuids", [])
+                            memory_debug.get("reference_index_uuids", [])
                         ),
-                        memory_debug=dict(progressive_context.debug_info),
+                        memory_debug=memory_debug,
                         agent_id=agent_slug,
                     )
         except Exception as e:
