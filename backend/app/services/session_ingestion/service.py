@@ -173,22 +173,13 @@ async def upsert_session(
     return existing, SessionUpsertResult(session_id=existing.id, created=False)
 
 
-async def heartbeat_session(
-    db: AsyncSession,
-    session_id: str,
-    request: SessionHeartbeatRequest,
-) -> tuple[Session, SessionHeartbeatResult]:
-    """Apply a live heartbeat update to an existing session."""
-    session = (
-        await db.execute(select(Session).where(Session.id == session_id).limit(1))
-    ).scalar_one_or_none()
-    if session is None:
-        raise ValueError(f"Session not found: {session_id}")
-
+def _apply_heartbeat_update(session: Session, request: SessionHeartbeatRequest) -> None:
+    """Apply all in-place field mutations for a heartbeat request."""
     metadata = _merge_metadata(session.provider_metadata, request.provider_metadata)
     if request.cwd:
         metadata = _merge_metadata(metadata, {"cwd": request.cwd})
     session.provider_metadata = metadata
+
     if request.current_branch is not None:
         session.current_branch = request.current_branch
     if request.client_id is not None:
@@ -224,6 +215,19 @@ async def heartbeat_session(
     )
     session.updated_at = datetime.now(UTC)
 
+
+async def heartbeat_session(
+    db: AsyncSession,
+    session_id: str,
+    request: SessionHeartbeatRequest,
+) -> tuple[Session, SessionHeartbeatResult]:
+    """Apply a live heartbeat update to an existing session."""
+    session = (
+        await db.execute(select(Session).where(Session.id == session_id).limit(1))
+    ).scalar_one_or_none()
+    if session is None:
+        raise ValueError(f"Session not found: {session_id}")
+    _apply_heartbeat_update(session, request)
     await db.commit()
     return session, SessionHeartbeatResult(session_id=session.id, updated=True)
 
