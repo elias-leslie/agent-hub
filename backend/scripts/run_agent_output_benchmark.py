@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -34,6 +35,7 @@ sys.path.insert(0, str(ROOT / "packages" / "agent-hub-client"))
 from agent_hub import AsyncAgentHubClient
 
 from app.db import async_session
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.agent_benchmark_service import (
     capture_benchmark_config_snapshot,
     get_benchmark_experiment_summary_by_key,
@@ -76,6 +78,14 @@ def derive_suite_id(agent_slug: str, case_ids: list[str]) -> str:
     return f"output-contract-{agent_slug}-custom"
 
 
+def _build_benchmark_external_id(agent_slug: str, case_id: str, run_number: int) -> str:
+    """Build a stable benchmark correlation id that fits the session persistence limit."""
+    case_fragment = case_id.replace("_summary_tag_override", "").replace("_", "-")[:60]
+    digest = hashlib.sha1(f"{agent_slug}:{case_id}:{run_number}".encode()).hexdigest()[:8]
+    external_id = f"benchmark:{case_fragment}:{run_number}:{digest}"
+    return external_id[:EXTERNAL_ID_MAX_LENGTH]
+
+
 async def _run_one_attempt(
     *,
     client: AsyncAgentHubClient,
@@ -99,7 +109,7 @@ async def _run_one_attempt(
             project_id=project_id,
             agent_slug=agent_slug,
             task_type="task",
-            external_id=f"agent-output-benchmark:{benchmark_id}:{case.case_id}:run-{run_number}",
+            external_id=_build_benchmark_external_id(agent_slug, case.case_id, run_number),
             enable_caching=False,
             skip_cache=True,
             use_memory=use_memory,

@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
+
 
 class SessionUpsertRequest(BaseModel):
     """Canonical request for creating or updating a session."""
@@ -17,7 +19,11 @@ class SessionUpsertRequest(BaseModel):
     model: str = Field(..., description="Model identifier")
     session_type: str = Field(default="completion", description="Logical session type")
     agent_slug: str | None = Field(default=None, description="Optional agent slug")
-    external_id: str | None = Field(default=None, description="Caller-defined correlation ID")
+    external_id: str | None = Field(
+        default=None,
+        max_length=EXTERNAL_ID_MAX_LENGTH,
+        description="Caller-defined correlation ID",
+    )
     client_id: str | None = Field(default=None, description="Authenticated client ID")
     request_source: str | None = Field(default=None, description="Request source header")
     current_branch: str | None = Field(default=None, description="Git branch at session start")

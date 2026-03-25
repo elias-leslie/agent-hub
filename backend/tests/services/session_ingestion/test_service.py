@@ -217,6 +217,30 @@ async def test_upsert_session_reactivates_existing_completed_session() -> None:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_upsert_session_rejects_overlong_external_id() -> None:
+    db = AsyncMock()
+
+    with patch(
+        "app.services.session_ingestion.service._validate_project_id",
+        new_callable=AsyncMock,
+    ), pytest.raises(ValueError, match="external_id exceeds max length"):
+        await upsert_session(
+            db=db,
+            request=SessionUpsertRequest.model_construct(
+                session_id="session-new",
+                project_id="agent-hub",
+                provider="codex",
+                model="codex/gpt-5.4",
+                session_type="agent",
+                external_id="x" * 101,
+            ),
+        )
+
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_heartbeat_session_updates_without_refresh() -> None:
     db = AsyncMock()
     session = Session(

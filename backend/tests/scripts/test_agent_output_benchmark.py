@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from scripts.agent_output_benchmark_cases import (
     get_agent_output_benchmark_cases,
     get_case_by_id,
@@ -12,7 +13,11 @@ from scripts.agent_output_benchmark_eval import (
     score_output_contract_attempt,
     summarize_output_contract_attempts,
 )
-from scripts.run_agent_output_benchmark import build_persistence_payload, derive_suite_id
+from scripts.run_agent_output_benchmark import (
+    _build_benchmark_external_id,
+    build_persistence_payload,
+    derive_suite_id,
+)
 
 
 def test_score_output_contract_attempt_passes_note_titler_case() -> None:
@@ -114,6 +119,17 @@ def test_get_agent_output_benchmark_cases_returns_explicit_helper_case() -> None
     cases = get_agent_output_benchmark_cases("note-titler")
 
     assert [case.case_id for case in cases] == ["note_titler_plain_title"]
+
+
+def test_build_benchmark_external_id_stays_within_session_limit() -> None:
+    external_id = _build_benchmark_external_id(
+        "memory-curator",
+        "memory_curator_summary_tag_override",
+        12,
+    )
+
+    assert len(external_id) <= EXTERNAL_ID_MAX_LENGTH
+    assert external_id.startswith("benchmark:")
 
 
 def test_build_persistence_payload_maps_output_summary() -> None:

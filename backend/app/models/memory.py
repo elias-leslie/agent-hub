@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+from .field_lengths import EXTERNAL_ID_MAX_LENGTH
 
 
 class MemoryInjectionMetric(Base):
@@ -33,7 +34,9 @@ class MemoryInjectionMetric(Base):
     session_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
     )
-    external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    external_id: Mapped[str | None] = mapped_column(
+        String(EXTERNAL_ID_MAX_LENGTH), nullable=True, index=True
+    )
     project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     # Performance metrics
     injection_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -158,6 +158,24 @@ class TestSessionIngestionAPI:
         assert data["session"] is None
 
     @pytest.mark.asyncio
+    async def test_upsert_session_endpoint_rejects_overlong_external_id(
+        self, client: AsyncClient
+    ) -> None:
+        response = await client.post(
+            "/api/session-ingestion/sessions/upsert",
+            json={
+                "session_id": "session-123",
+                "project_id": "agent-hub",
+                "provider": "codex",
+                "model": "codex/gpt-5.4",
+                "external_id": "x" * 101,
+            },
+        )
+
+        assert response.status_code == 422
+        assert "external_id" in response.text
+
+    @pytest.mark.asyncio
     async def test_heartbeat_session_endpoint(self, client: AsyncClient) -> None:
         """Heartbeat returns updated flag and refreshed session snapshot."""
         session = MagicMock()
