@@ -97,7 +97,7 @@ export default function PersonaSettingsPage() {
 
   if (personaLoading || agentLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
     );
@@ -105,7 +105,7 @@ export default function PersonaSettingsPage() {
 
   if (personaError || agentError) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+      <div className="flex min-h-screen items-center justify-center px-6">
         <div className="max-w-md text-center space-y-2">
           <p className="text-sm font-medium text-rose-400">
             Failed to load persona settings
@@ -120,7 +120,7 @@ export default function PersonaSettingsPage() {
 
   if (!persona || !agent) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <p className="text-sm text-slate-500">Persona not configured</p>
       </div>
     );

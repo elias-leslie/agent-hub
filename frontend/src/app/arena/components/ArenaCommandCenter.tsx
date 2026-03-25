@@ -96,7 +96,7 @@ function SkeletonCard({ className }: { className: string }) {
 
 function LoadingState() {
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3 lg:px-8">
@@ -176,7 +176,7 @@ export function ArenaCommandCenter() {
   if (error || !overview) {
     const message = error instanceof Error ? error.message : "Failed to load Arena";
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+      <div className="flex min-h-screen items-center justify-center px-6">
         <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
         <div className="relative max-w-md rounded-2xl border border-rose-900 bg-slate-900/90 p-8 text-center">
           <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-rose-500" />
@@ -188,7 +188,7 @@ export function ArenaCommandCenter() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
 
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
