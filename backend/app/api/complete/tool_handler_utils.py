@@ -13,12 +13,42 @@ from .tool_event_processor import process_tool_event
 from .tool_models import ToolExecutionResult
 from .tool_progress import ProgressTracker
 from .tool_result_builder import build_error_result
-from .tool_stream_builder import build_event_stream
+from .turn_budget import resolve_tool_max_turns
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
+
+
+def build_event_stream(
+    adapter: Any,
+    messages: list[Message],
+    provider: str,
+    model: str,
+    tools: list[dict[str, Any]] | None,
+    tool_catalog: list[dict[str, Any]] | None,
+    working_dir: str | None,
+    permission_config: dict[str, Any] | None,
+    max_turns: int,
+    project_id: str | None,
+    session_id: str,
+    agent_slug: str | None,
+) -> Any:
+    """Return the adapter-owned ToolEvent stream for a tool loop."""
+    effective_max_turns = resolve_tool_max_turns(provider, max_turns)
+    return adapter.complete_with_tool_events(
+        messages=messages,
+        model=model,
+        tools=tools or [],
+        working_dir=working_dir,
+        permission_config=permission_config,
+        max_turns=effective_max_turns,
+        project_id=project_id,
+        session_id=session_id,
+        agent_slug=agent_slug,
+        tool_catalog=tool_catalog,
+    )
 
 
 def _extract_tool_metadata(
