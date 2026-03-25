@@ -353,6 +353,65 @@ async def test_complete_with_tools_allows_slow_post_tool_progress_without_force_
 
 
 @pytest.mark.asyncio
+async def test_complete_from_input_uses_owned_response_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token="token",
+            refresh_token="refresh",
+            account_id="acct",
+            expires_at=9_999_999_999,
+        )
+    )
+
+    lifecycle: list[str] = []
+
+    class FakeSession:
+        def __init__(self, **_: object) -> None:
+            self.response = object()
+
+        async def start(self) -> None:
+            lifecycle.append("start")
+
+        async def interrupt(self) -> None:
+            lifecycle.append("interrupt")
+
+        async def close(self) -> None:
+            lifecycle.append("close")
+
+    async def fake_collect_completion(
+        response: object,
+        resolved_model: str,
+    ) -> CompletionResult:
+        assert response is not None
+        assert resolved_model == "gpt-5.4"
+        return CompletionResult(
+            content="Done",
+            model=resolved_model,
+            provider="codex",
+            input_tokens=11,
+            output_tokens=7,
+            finish_reason="stop",
+        )
+
+    monkeypatch.setattr("app.adapters.codex_oauth._CodexResponseSession", FakeSession)
+    monkeypatch.setattr("app.adapters.codex_oauth.collect_completion", fake_collect_completion)
+
+    result = await adapter._complete_from_input(
+        input_items=[{"role": "user", "content": [{"type": "input_text", "text": "Hi"}]}],
+        instructions=None,
+        resolved_model="gpt-5.4",
+        max_tokens=None,
+        temperature=1.0,
+    )
+
+    assert result.content == "Done"
+    assert result.finish_reason == "stop"
+    assert lifecycle == ["start", "close"]
+
+
+@pytest.mark.asyncio
 async def test_stream_preserves_events_and_closes_owned_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -385,7 +444,7 @@ async def test_stream_preserves_events_and_closes_owned_session(
         yield StreamEvent(type="content", content="hello")
         yield StreamEvent(type="done", input_tokens=3, output_tokens=2, finish_reason="stop")
 
-    monkeypatch.setattr("app.adapters.codex_oauth._CodexStreamSession", FakeSession)
+    monkeypatch.setattr("app.adapters.codex_oauth._CodexResponseSession", FakeSession)
     monkeypatch.setattr("app.adapters.codex_oauth.iter_stream_events", fake_iter_stream_events)
 
     events = []
@@ -442,7 +501,7 @@ async def test_stream_interrupts_owned_session_on_abort_event(
         await session.interrupted.wait()
         raise httpx.ReadError("stream closed during interrupt")
 
-    monkeypatch.setattr("app.adapters.codex_oauth._CodexStreamSession", FakeSession)
+    monkeypatch.setattr("app.adapters.codex_oauth._CodexResponseSession", FakeSession)
     monkeypatch.setattr("app.adapters.codex_oauth.iter_stream_events", fake_iter_stream_events)
 
     abort_event = asyncio.Event()
