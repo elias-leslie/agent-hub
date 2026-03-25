@@ -13,6 +13,7 @@ from .errors import (
     is_retriable_error,
     with_retry,
 )
+from .runtime_session import ProviderRuntimeSession, StreamBackedRuntimeSession
 from .types import (
     CacheMetrics,
     CompletionResult,
@@ -32,7 +33,9 @@ __all__ = [
     "Message",
     "ProviderAdapter",
     "ProviderError",
+    "ProviderRuntimeSession",
     "RateLimitError",
+    "StreamBackedRuntimeSession",
     "StreamEvent",
     "ToolCallIdNormalizer",
     "ToolCallResult",
@@ -89,6 +92,45 @@ class ProviderAdapter(ABC):
     async def health_check(self) -> bool:
         """Check if the provider is available and working."""
         ...
+
+    def start_tool_session(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        working_dir: str | None,
+        permission_config: dict[str, Any] | None,
+        max_turns: int,
+        project_id: str | None,
+        session_id: str,
+        agent_slug: str | None,
+        tool_catalog: list[dict[str, Any]] | None,
+    ) -> ProviderRuntimeSession:
+        """Start a provider-owned tool runtime session.
+
+        Tool-capable adapters may override this to expose richer session
+        ownership. The default path wraps the legacy canonical tool-event
+        stream so callers can treat all providers as session-shaped.
+        """
+        complete_with_tool_events = getattr(self, "complete_with_tool_events", None)
+        if complete_with_tool_events is None:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not support tool runtime sessions",
+            )
+        return StreamBackedRuntimeSession(
+            complete_with_tool_events(
+                messages=messages,
+                model=model,
+                tools=tools,
+                working_dir=working_dir,
+                permission_config=permission_config,
+                max_turns=max_turns,
+                project_id=project_id,
+                session_id=session_id,
+                agent_slug=agent_slug,
+                tool_catalog=tool_catalog,
+            ),
+        )
 
     async def stream(
         self,

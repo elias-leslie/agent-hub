@@ -176,14 +176,15 @@ export default function ModelsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
       {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
         <div className="px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between h-12">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Cpu className="h-5 w-5 text-slate-400" />
-                <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+              <div className="flex items-center gap-2.5">
+                <Cpu className="h-4.5 w-4.5 text-slate-400" />
+                <h1 className="text-base font-semibold text-slate-100 tracking-tight">
                   Models
                 </h1>
               </div>

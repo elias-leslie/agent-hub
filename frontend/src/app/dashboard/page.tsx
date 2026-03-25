@@ -14,7 +14,6 @@ import { ChartsSection } from "./components/ChartsSection";
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabId>("sessions");
   const [daysRange, setDaysRange] = useState(7);
-  const [showRangeDropdown, setShowRangeDropdown] = useState(false);
 
   const {
     activeSessionCount,
@@ -36,7 +35,6 @@ export default function DashboardPage() {
 
   const handleRangeChange = (days: number) => {
     setDaysRange(days);
-    setShowRangeDropdown(false);
   };
 
   return (
@@ -47,8 +45,8 @@ export default function DashboardPage() {
       <DashboardHeader
         status={status}
         daysRange={daysRange}
-        showRangeDropdown={showRangeDropdown}
-        onToggleDropdown={() => setShowRangeDropdown(!showRangeDropdown)}
+        showRangeDropdown={false}
+        onToggleDropdown={() => {}}
         onRangeChange={handleRangeChange}
       />
 

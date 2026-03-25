@@ -70,15 +70,13 @@ export default function MemoryPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-900/95 backdrop-blur-sm">
-        <div className="px-4 lg:px-6">
-          <div className="flex items-center justify-between h-14">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
+        <div className="px-6 lg:px-8">
+          <div className="flex items-center justify-between h-12">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-emerald-900/30">
-                  <Brain className="w-5 h-5 text-emerald-400" />
-                </div>
-                <h1 className="text-lg font-bold text-slate-100 tracking-tight">
+              <div className="flex items-center gap-2.5">
+                <Brain className="w-5 h-5 text-emerald-400" />
+                <h1 className="text-base font-semibold text-slate-100 tracking-tight">
                   Memory
                 </h1>
               </div>

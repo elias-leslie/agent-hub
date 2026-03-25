@@ -1,4 +1,4 @@
-import { Clock, ChevronDown } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DashboardHeaderProps {
@@ -9,19 +9,23 @@ interface DashboardHeaderProps {
   onRangeChange: (days: number) => void;
 }
 
+const TIME_RANGE_OPTIONS = [
+  { value: 1, label: "1d" },
+  { value: 7, label: "7d" },
+  { value: 14, label: "14d" },
+  { value: 30, label: "30d" },
+];
+
 export function DashboardHeader({
   status,
   daysRange,
-  showRangeDropdown,
-  onToggleDropdown,
   onRangeChange,
 }: DashboardHeaderProps) {
-  const timeRangeOptions = [1, 7, 14, 30];
-
   return (
     <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
       <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <LayoutDashboard className="h-4.5 w-4.5 text-slate-400" />
           <h1 className="text-base font-semibold text-slate-100">
             Dashboard
           </h1>
@@ -40,33 +44,22 @@ export function DashboardHeader({
             </div>
           )}
         </div>
-        <div className="relative">
-          <button
-            onClick={onToggleDropdown}
-            className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors font-mono"
-          >
-            <Clock className="h-3.5 w-3.5" />
-            <span>{daysRange}-day view</span>
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          {showRangeDropdown && (
-            <div className="absolute right-0 top-full mt-1 py-1 w-28 rounded-lg bg-slate-800 border border-slate-700 shadow-xl z-30">
-              {timeRangeOptions.map((days) => (
-                <button
-                  key={days}
-                  onClick={() => onRangeChange(days)}
-                  className={cn(
-                    "w-full px-3 py-1.5 text-left text-xs font-mono",
-                    days === daysRange
-                      ? "text-emerald-400 bg-emerald-500/10"
-                      : "text-slate-300 hover:bg-slate-700"
-                  )}
-                >
-                  {days === 1 ? "Today" : `${days} days`}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
+          {TIME_RANGE_OPTIONS.map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onRangeChange(value)}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                daysRange === value
+                  ? "bg-amber-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
     </header>
