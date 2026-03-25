@@ -87,7 +87,7 @@ export function Sidebar({
           ))}
         </div>
 
-        <div className="mt-8 border-t border-slate-200 pt-4 dark:border-slate-700">
+        <div className="mt-8 border-t border-slate-700 pt-4">
           <p className="mb-2 text-[10px] uppercase tracking-wider text-slate-400">
             Version
           </p>

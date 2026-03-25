@@ -55,10 +55,10 @@ function StatCard({
   accentColor?: "emerald" | "amber" | "blue" | "purple";
 }) {
   const colors = {
-    emerald: "border-l-emerald-500 dark:border-l-emerald-400",
+    emerald: "border-l-emerald-400",
     amber: "border-l-amber-400",
     blue: "border-l-amber-400",
-    purple: "border-l-purple-500 dark:border-l-purple-400",
+    purple: "border-l-purple-400",
   };
 
   return (
@@ -91,7 +91,7 @@ function StatCard({
 
 function SkeletonCard() {
   return (
-    <div className="border-l-4 border-l-slate-300 dark:border-l-slate-700 rounded-lg p-4 bg-slate-900/50 border border-slate-800">
+    <div className="border-l-4 border-l-slate-700 rounded-lg p-4 bg-slate-900/50 border border-slate-800">
       <div className="animate-pulse">
         <div className="h-4 w-20 bg-slate-700 rounded" />
         <div className="h-8 w-16 bg-slate-700 rounded mt-2" />

@@ -156,24 +156,35 @@ async def get_query_relevant_references(
     if not query.strip():
         return []
 
-    from .embedder import get_embedder
+    from .embedder import get_embedder_or_none
     from .repository import TIER_MAP
 
-    embedder = get_embedder()
     repo = get_memory_repository()
-    query_embedding = await embedder.embed(query)
     query_terms = _tokenize(query)
+    embedder = get_embedder_or_none("progressive context reference selection")
+    query_embedding: list[float] | None = None
+    if embedder is not None:
+        try:
+            query_embedding = await embedder.embed(query)
+        except Exception:
+            logger.warning(
+                "Reference semantic retrieval unavailable for query=%s; using text-only selection",
+                query[:80],
+                exc_info=True,
+            )
 
     ranked: dict[str, tuple[float, dict[str, Any]]] = {}
     for scope, scope_id in scopes_to_query:
         group_id = build_group_id(scope, scope_id)
-        semantic_rows = await repo.semantic_search(
-            query_embedding,
-            group_id=group_id,
-            tier=TIER_MAP["reference"],
-            limit=_REFERENCE_SEARCH_LIMIT,
-            min_score=_REFERENCE_MIN_SCORE,
-        )
+        semantic_rows: list[dict[str, Any]] = []
+        if query_embedding is not None:
+            semantic_rows = await repo.semantic_search(
+                query_embedding,
+                group_id=group_id,
+                tier=TIER_MAP["reference"],
+                limit=_REFERENCE_SEARCH_LIMIT,
+                min_score=_REFERENCE_MIN_SCORE,
+            )
         text_rows = [
             MemoryRepository._to_dict(mem)
             for mem in await repo.text_search(

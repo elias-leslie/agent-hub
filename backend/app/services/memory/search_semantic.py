@@ -8,7 +8,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from .embedder import get_embedder
+from ._repo_helpers import to_dict
+from .embedder import get_embedder_or_none
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 from .repository import TIER_REVERSE, get_memory_repository
 
@@ -81,22 +82,12 @@ async def search_memory(
     """
     from .repository import TIER_MAP
 
-    embedder = get_embedder()
     repo = get_memory_repository()
 
     tier_filter = TIER_MAP.get(category) if category else None
 
-    # Run semantic search
-    query_vec = await embedder.embed(query)
-    semantic_results = await repo.semantic_search(
-        query_vec,
-        group_id=group_id,
-        tier=tier_filter,
-        limit=limit * 3,
-        min_score=min_score,
-    )
-
-    # Run text search for keyword boosting
+    # Run text search for keyword boosting and as a read-side fallback when
+    # semantic embeddings are temporarily unavailable.
     text_hit_uuids: set[str] = set()
     text_matches: list[Any] = []
     try:
@@ -110,6 +101,25 @@ async def search_memory(
             text_hit_uuids.add(str(mem.id))
     except Exception:
         logger.debug("Text search fallback failed, using semantic only", exc_info=True)
+
+    semantic_results: list[dict[str, Any]] = []
+    embedder = get_embedder_or_none("memory search")
+    if embedder is not None:
+        try:
+            query_vec = await embedder.embed(query)
+            semantic_results = await repo.semantic_search(
+                query_vec,
+                group_id=group_id,
+                tier=tier_filter,
+                limit=limit * 3,
+                min_score=min_score,
+            )
+        except Exception:
+            logger.warning(
+                "Semantic memory search unavailable for query=%s; using text-only results",
+                query[:80],
+                exc_info=True,
+            )
 
     # Merge: boost semantic scores for text hits, collect text-only hits
     best_scores: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -128,8 +138,6 @@ async def search_memory(
     for mem in text_matches:
         uuid_str = str(mem.id)
         if uuid_str not in best_scores:
-            from ._repo_helpers import to_dict
-
             mem_dict = to_dict(mem)
             mem_dict["relevance_score"] = _TEXT_MATCH_BONUS
             best_scores[uuid_str] = (_TEXT_MATCH_BONUS, mem_dict)

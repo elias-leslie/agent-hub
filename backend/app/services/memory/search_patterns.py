@@ -8,7 +8,8 @@ using PostgreSQL pgvector search.
 import logging
 from typing import Any
 
-from .embedder import get_embedder
+from ._repo_helpers import to_dict
+from .embedder import get_embedder_or_none
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult
 from .repository import get_memory_repository
 from .search_helpers import build_search_result_from_dict, get_result_score, map_tier_to_category
@@ -65,26 +66,45 @@ async def get_patterns_and_gotchas(
         num_results: Maximum results per category.
         min_score: Minimum relevance score threshold.
     """
-    embedder = get_embedder()
     repo = get_memory_repository()
+    pattern_results: list[dict[str, Any]] = []
+    gotcha_results: list[dict[str, Any]] = []
 
-    # Embed both query variants
-    pattern_vec = await embedder.embed(f"coding standard pattern: {query}")
-    gotcha_vec = await embedder.embed(f"troubleshooting gotcha pitfall: {query}")
+    embedder = get_embedder_or_none("pattern and gotcha search")
+    if embedder is not None:
+        try:
+            pattern_vec = await embedder.embed(f"coding standard pattern: {query}")
+            gotcha_vec = await embedder.embed(f"troubleshooting gotcha pitfall: {query}")
 
-    pattern_results = await repo.semantic_search(
-        pattern_vec,
-        group_id=group_id,
-        limit=num_results * 2,
-        min_score=min_score,
-    )
+            pattern_results = await repo.semantic_search(
+                pattern_vec,
+                group_id=group_id,
+                limit=num_results * 2,
+                min_score=min_score,
+            )
 
-    gotcha_results = await repo.semantic_search(
-        gotcha_vec,
-        group_id=group_id,
-        limit=num_results * 2,
-        min_score=min_score,
-    )
+            gotcha_results = await repo.semantic_search(
+                gotcha_vec,
+                group_id=group_id,
+                limit=num_results * 2,
+                min_score=min_score,
+            )
+        except Exception:
+            logger.warning(
+                "Semantic pattern search unavailable for query=%s; using text-only results",
+                query[:80],
+                exc_info=True,
+            )
+
+    if not pattern_results and not gotcha_results:
+        try:
+            text_rows = [to_dict(mem) for mem in await repo.text_search(query, group_id=group_id, limit=num_results * 4)]
+            for row in text_rows:
+                row["relevance_score"] = max(float(row.get("relevance_score") or 0.0), min_score)
+            pattern_results = text_rows
+            gotcha_results = text_rows
+        except Exception:
+            logger.debug("Text pattern fallback failed", exc_info=True)
 
     patterns, pattern_uuids = _filter_by_category(
         pattern_results, scope, MemoryCategory.REFERENCE, min_score, num_results

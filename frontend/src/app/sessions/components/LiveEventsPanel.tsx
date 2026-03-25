@@ -8,7 +8,7 @@ interface LiveEventsPanelProps {
 export function LiveEventsPanel({ events }: LiveEventsPanelProps) {
   return (
     <div className="mb-5 rounded-lg border border-green-800 bg-slate-900 overflow-hidden">
-      <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-800 flex items-center gap-2">
+      <div className="px-4 py-2 bg-green-950/30 border-b border-green-800 flex items-center gap-2">
         <LiveBadge size="sm" />
         <span className="text-xs font-semibold text-green-300">
           Real-time Events

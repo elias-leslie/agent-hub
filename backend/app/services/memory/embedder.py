@@ -91,3 +91,12 @@ class EmbedderService:
 def get_embedder() -> EmbedderService:
     """Get cached singleton EmbedderService instance."""
     return EmbedderService()
+
+
+def get_embedder_or_none(operation: str) -> EmbedderService | None:
+    """Return the embedder when available, otherwise degrade read-side flows."""
+    try:
+        return get_embedder()
+    except AuthenticationError as exc:
+        logger.warning("Gemini embedder unavailable for %s: %s", operation, exc)
+        return None
