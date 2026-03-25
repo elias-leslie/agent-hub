@@ -28,6 +28,13 @@ interface ClientResponse {
   suspension_reason: string | null;
 }
 
+interface ClientUpdateRequest {
+  display_name?: string;
+  rate_limit_rpm?: number;
+  rate_limit_tpm?: number;
+  allowed_projects?: string[];
+}
+
 async function fetchClient(clientId: string): Promise<ClientResponse> {
   const response = await fetchApi(buildApiUrl(`/api/access-control/clients/${clientId}`));
   if (!response.ok) {
@@ -71,7 +78,7 @@ export default function ClientDetailPage() {
     });
   }
 
-  function handleUpdate(updates: any) {
+  function handleUpdate(updates: ClientUpdateRequest) {
     updateMutation.mutate(updates, {
       onSuccess: () => setShowEditModal(false),
     });
@@ -109,38 +116,70 @@ export default function ClientDetailPage() {
   const config = statusConfig[client.status as keyof typeof statusConfig] || statusConfig.active;
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop" />
 
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
             <button
               onClick={() => router.push("/access-control/clients")}
-              className="p-1 rounded hover:bg-slate-800 transition-colors"
+              className="icon-button"
             >
-              <ArrowLeft className="h-5 w-5 text-slate-400" />
+              <ArrowLeft className="h-5 w-5" />
             </button>
-            <Shield className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">{client.display_name}</h1>
-            <span className={cn("text-xs px-2 py-1 rounded", config.bg, config.color)}>
-              {config.label}
-            </span>
+              <div className="page-title-icon">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="page-title">{client.display_name}</h1>
+                  <span className={cn("page-pill", config.bg, config.color)}>
+                    {config.label}
+                  </span>
+                </div>
+                <div className="page-meta">
+                  <span className="page-pill capitalize">{client.client_type}</span>
+                  <span className="page-pill font-mono">{client.client_id.slice(0, 12)}...</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="relative max-w-3xl mx-auto px-6 py-8">
-        <ClientDetailsCard client={client} formatDate={formatDate} statusConfig={config} />
+      <main className="page-container">
+        <div className="page-frame">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_23rem]">
+            <ClientDetailsCard client={client} formatDate={formatDate} statusConfig={config} />
 
-        <ActionButtons
-          clientStatus={client.status}
-          onEdit={() => setShowEditModal(true)}
-          onSuspend={() => setShowSuspendModal(true)}
-          onActivate={() => activateMutation.mutate()}
-          onBlock={() => setShowBlockModal(true)}
-          isActivating={activateMutation.isPending}
-        />
+            <div className="space-y-6">
+              <ActionButtons
+                clientStatus={client.status}
+                onEdit={() => setShowEditModal(true)}
+                onSuspend={() => setShowSuspendModal(true)}
+                onActivate={() => activateMutation.mutate()}
+                onBlock={() => setShowBlockModal(true)}
+                isActivating={activateMutation.isPending}
+              />
+              <section className="panel-surface p-5 lg:p-6">
+                <p className="section-kicker">Request Budget</p>
+                <h2 className="section-heading mt-2">Throttle Snapshot</h2>
+                <div className="mt-5 detail-grid">
+                  <div className="detail-card">
+                    <p className="detail-label">RPM</p>
+                    <p className="detail-value font-mono">{client.rate_limit_rpm}</p>
+                  </div>
+                  <div className="detail-card">
+                    <p className="detail-label">TPM</p>
+                    <p className="detail-value font-mono">{client.rate_limit_tpm.toLocaleString()}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       </main>
 
       <ConfirmationModal

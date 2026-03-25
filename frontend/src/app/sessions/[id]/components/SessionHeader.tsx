@@ -42,98 +42,78 @@ export function SessionHeader({
     : null;
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-30",
-        "border-b border-slate-800/60",
-        "bg-slate-950/95 backdrop-blur-sm"
-      )}
-    >
-      <div className="px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
-          {/* Left: Back + Session info */}
-          <div className="flex items-center gap-4">
+    <header className="page-header">
+      <div className="page-container px-4 lg:px-8">
+        <div className="page-header-row">
+          <div className="page-title-group">
             <Link
               href="/sessions"
-              className={cn(
-                "p-1.5 -ml-1.5 rounded-lg",
-                "text-slate-500 hover:text-slate-300",
-                "hover:bg-slate-800/60 transition-colors"
-              )}
+              className="icon-button"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
 
-            <div className="flex items-center gap-3">
-              <div
-                className={cn(
-                  "p-2 rounded-lg",
-                  "bg-slate-900/80 border border-slate-800/60"
-                )}
-              >
+            <div className="page-title-icon">
                 {getProviderIcon(effectiveProvider)}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base font-semibold font-mono text-slate-200">
-                    {sessionId.slice(0, 8)}
-                  </h1>
+            </div>
+            <div className="page-title-stack">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="page-title font-mono">{sessionId.slice(0, 8)}</h1>
                   <span
                     className={cn(
-                      "px-2 py-0.5 rounded text-xs font-medium",
+                    "page-pill",
                       session.status === "active"
-                        ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/50"
+                        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
                         : session.status === "failed"
-                          ? "bg-red-950/60 text-red-400 border border-red-800/50"
-                          : "bg-slate-800/60 text-slate-400 border border-slate-700/50"
+                          ? "border-rose-500/20 bg-rose-500/10 text-rose-200"
+                          : "border-slate-700/80 bg-slate-900/90 text-slate-400"
                     )}
                   >
                     {session.status}
                   </span>
-                </div>
-                <div className="text-xs text-slate-500">
-                  <p>{effectiveModel}</p>
+              </div>
+              <div className="page-meta">
+                <span className="page-pill">{effectiveProvider}</span>
+                <span className="page-pill">{effectiveModel}</span>
                   {showsFallback && (
-                    <p className="text-amber-500/80">
+                  <span className="page-pill border-amber-500/20 bg-amber-500/10 text-amber-100">
                       requested {requestedModel}
-                    </p>
+                  </span>
                   )}
                   {liveLabel && (
-                    <p className="text-sky-400/80">{liveLabel}</p>
+                  <span className="page-pill border-sky-500/20 bg-sky-500/10 text-sky-100">{liveLabel}</span>
                   )}
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Right: Tabs + Stats */}
-          <div className="flex items-center gap-4">
-            {/* Tab switcher */}
+          <div className="page-toolbar">
             <div
               className={cn(
-                "flex items-center gap-1 p-1 rounded-lg",
-                "bg-slate-900/60 border border-slate-800/60"
+                "segmented-control"
               )}
             >
               <button
+                type="button"
                 onClick={() => onTabChange("timeline")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  "segmented-option",
                   activeTab === "timeline"
-                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
-                    : "text-slate-500 hover:text-slate-400"
+                    ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200"
                 )}
               >
                 <Activity className="h-3.5 w-3.5" />
                 Timeline
               </button>
               <button
+                type="button"
                 onClick={() => onTabChange("info")}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                  "segmented-option",
                   activeTab === "info"
-                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
-                    : "text-slate-500 hover:text-slate-400"
+                    ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200"
                 )}
               >
                 <LayoutList className="h-3.5 w-3.5" />
@@ -141,19 +121,18 @@ export function SessionHeader({
               </button>
             </div>
 
-            {/* Quick stats */}
             {eventsTotal !== undefined && maxTurn !== undefined && (
-              <div className="hidden md:flex items-center gap-3 text-xs text-slate-500">
-                <div className="flex items-center gap-1">
+              <div className="hidden md:flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <div className="page-pill">
                   <Hash className="h-3.5 w-3.5" />
                   <span className="font-mono">{eventsTotal} events</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="page-pill">
                   <Layers className="h-3.5 w-3.5" />
                   <span className="font-mono">{maxTurn} turns</span>
                 </div>
                 {memorySummary && (
-                  <div className="flex items-center gap-1">
+                  <div className="page-pill">
                     <BookOpen className="h-3.5 w-3.5" />
                     <span className="font-mono">
                       refs {memorySummary.selectedCount}/{memorySummary.indexCount} cited{" "}
@@ -164,7 +143,7 @@ export function SessionHeader({
               </div>
             )}
 
-            <div className="flex items-center gap-1 text-xs text-slate-500">
+            <div className="page-pill">
               <Clock className="h-3.5 w-3.5" />
               <span>{formatDate(session.created_at)}</span>
             </div>

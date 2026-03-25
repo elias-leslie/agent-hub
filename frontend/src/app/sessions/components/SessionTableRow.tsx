@@ -58,7 +58,7 @@ export function SessionTableRow({
       {/* ROW */}
       <button
         onClick={() => onToggleExpand(session.id)}
-        className="w-full grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center text-left hover:bg-slate-800/30 transition-colors group"
+        className="group grid w-full grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-800/30"
       >
         {/* Status */}
         <StatusCell status={session.status} isLive={isLive} />

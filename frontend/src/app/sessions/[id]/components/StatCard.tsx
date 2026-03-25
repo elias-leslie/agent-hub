@@ -10,19 +10,14 @@ interface StatCardProps {
 
 export function StatCard({ icon: Icon, label, value, subValue }: StatCardProps) {
   return (
-    <div
-      className={cn(
-        "p-3 rounded-lg",
-        "bg-slate-900/60 border border-slate-800/60"
-      )}
-    >
+    <div className={cn("detail-card")}>
       <div className="flex items-center gap-2 mb-1">
         <Icon className="h-3.5 w-3.5 text-slate-500" />
-        <span className="text-xs text-slate-500">{label}</span>
+        <span className="detail-label tracking-[0.16em]">{label}</span>
       </div>
-      <p className="text-sm font-medium text-slate-300 truncate">{value}</p>
+      <p className="mt-2 text-sm font-medium text-slate-200 truncate">{value}</p>
       {subValue && (
-        <p className="text-xs text-slate-600 mt-0.5 truncate">{subValue}</p>
+        <p className="mt-1 text-xs text-slate-500 truncate">{subValue}</p>
       )}
     </div>
   );

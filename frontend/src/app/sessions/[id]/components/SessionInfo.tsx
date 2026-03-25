@@ -22,14 +22,25 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
   const live = session.live_activity;
 
   return (
-    <div className="p-6 max-w-4xl space-y-6">
+    <div className="space-y-6 p-5 lg:p-6">
+      <div className="section-header gap-4">
+        <div>
+          <p className="section-kicker">Session Intel</p>
+          <h2 className="section-heading mt-2">Execution Summary</h2>
+          <p className="section-copy mt-2 max-w-3xl">
+            Review the provider fallback path, context pressure, token totals, and
+            any live health signals captured for this session.
+          </p>
+        </div>
+      </div>
+
       {/* Context Usage */}
       {session.context_usage && (
         <ContextUsageBar usage={session.context_usage} />
       )}
 
       {/* Session Info Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="detail-grid">
         <StatCard icon={Layers} label="Project" value={session.project_id} />
         <StatCard
           icon={Cpu}
@@ -56,7 +67,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {live && (
         <div
           className={cn(
-            "p-4 rounded-lg",
+            "section-card",
             live.health === "stalled"
               ? "bg-red-950/20 border border-red-800/40"
               : live.health === "quiet"
@@ -100,7 +111,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {session.fallback_used && session.fallback_reason && (
         <div
           className={cn(
-            "p-4 rounded-lg",
+            "section-card",
             "bg-amber-950/20 border border-amber-800/40"
           )}
         >
@@ -118,8 +129,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
         session.agent_token_breakdown.length > 0 && (
           <div
             className={cn(
-              "p-4 rounded-lg",
-              "bg-slate-900/60 border border-slate-800/60"
+              "section-card"
             )}
           >
             <h3 className="text-sm font-medium text-slate-300 mb-3">
@@ -159,7 +169,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
         <div className="grid grid-cols-2 gap-3">
           <div
             className={cn(
-              "p-4 rounded-lg text-center",
+              "section-card text-center",
               "bg-sky-950/30 border border-sky-800/40"
             )}
           >
@@ -170,7 +180,7 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
           </div>
           <div
             className={cn(
-              "p-4 rounded-lg text-center",
+              "section-card text-center",
               "bg-violet-950/30 border border-violet-800/40"
             )}
           >

@@ -127,21 +127,31 @@ export default function MonitoringRequestsPage() {
   }, [metrics]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
 
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Activity className="h-5 w-5 text-amber-500" />
-            <h1 className="text-base font-semibold text-slate-100">Request Monitoring</h1>
-            {total > 0 && (
-              <span className="text-xs text-slate-500">({formatNumber(total)} total)</span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
+              <div className="page-title-icon">
+                <Activity className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="page-title">Request Monitoring</h1>
+                  {total > 0 && (
+                    <span className="page-pill">{formatNumber(total)} total</span>
+                  )}
+                </div>
+                <div className="page-meta">
+                  <span>Inspect request traffic, tool mix, response quality, and live endpoint pressure.</span>
+                </div>
+              </div>
+            </div>
+            <div className="page-toolbar">
+              <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-1 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.9)]">
+                <div className="flex items-center gap-1">
               {[
                 { value: 1, label: "1h" },
                 { value: 6, label: "6h" },
@@ -154,29 +164,32 @@ export default function MonitoringRequestsPage() {
                   type="button"
                   onClick={() => setTimeRange(value)}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-150",
                     timeRange === value
-                      ? "bg-amber-600 text-white shadow-sm"
-                      : "text-slate-400 hover:text-slate-200"
+                      ? "bg-amber-500 text-slate-950 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                   )}
                 >
                   {label}
                 </button>
               ))}
+                </div>
+              </div>
+              <button
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="button-secondary"
+              >
+                <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
+                Refresh
+              </button>
             </div>
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm transition-colors"
-            >
-              <RefreshCw className={cn("h-4 w-4", isFetching && "animate-spin")} />
-              Refresh
-            </button>
           </div>
         </div>
       </header>
 
-      <main className="relative px-6 lg:px-8 py-6 space-y-6">
+      <main className="page-frame">
+        <div className="page-container space-y-6">
         {/* Metrics Summary Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
@@ -212,7 +225,7 @@ export default function MonitoringRequestsPage() {
         {/* Distribution & Top Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Tool Type Distribution */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5">
+          <div className="panel-surface p-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-4">
               Request Distribution by Tool Type
             </h2>
@@ -224,7 +237,7 @@ export default function MonitoringRequestsPage() {
           </div>
 
           {/* Top Tools */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5">
+          <div className="panel-surface p-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-4">
               Top Tools (CLI/SDK)
             </h2>
@@ -240,7 +253,7 @@ export default function MonitoringRequestsPage() {
           </div>
 
           {/* Top Endpoints */}
-          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5">
+          <div className="panel-surface p-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-4">
               Top Endpoints
             </h2>
@@ -272,7 +285,7 @@ export default function MonitoringRequestsPage() {
 
         {/* Error State */}
         {error && (
-          <div className="p-3 rounded-lg bg-red-900/20 border border-red-800/50">
+          <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-4">
             <p className="text-sm text-red-400">Failed to load request log</p>
           </div>
         )}
@@ -281,11 +294,11 @@ export default function MonitoringRequestsPage() {
         {isLoading ? (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-14 bg-slate-800 rounded animate-pulse" />
+              <div key={i} className="h-14 rounded-2xl bg-slate-800 animate-pulse" />
             ))}
           </div>
         ) : requests.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 rounded-xl border border-dashed border-slate-700 bg-slate-900/40">
+          <div className="empty-surface flex flex-col items-center justify-center">
             <Clock className="h-10 w-10 mb-3 text-slate-600" />
             <p className="text-sm font-medium text-slate-300">No requests found</p>
             <p className="mt-1 text-xs text-slate-500">Try adjusting your filters or time range</p>
@@ -302,6 +315,7 @@ export default function MonitoringRequestsPage() {
             onFetchNextPage={fetchNextPage}
           />
         )}
+        </div>
       </main>
     </div>
   );

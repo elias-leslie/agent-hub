@@ -22,39 +22,37 @@ export function SessionsHeader({
   onRefresh: () => void;
 }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-      <div className="px-6 lg:px-8">
-        <div className="flex items-center justify-between h-12">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
-              <History className="h-4.5 w-4.5 text-slate-400" />
-              <h1 className="text-base font-semibold text-slate-100 tracking-tight">
-                Sessions
-              </h1>
+    <header className="page-header">
+      <div className="page-container px-4 lg:px-8">
+        <div className="page-header-row">
+          <div className="page-title-group">
+            <div className="page-title-icon">
+              <History className="h-5 w-5" />
             </div>
-            <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
-              <span className="text-slate-400">
-                {total} total
-              </span>
-              {pageStats && (
-                <>
-                  <span className="text-slate-600">|</span>
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <Zap className="h-3 w-3" />
-                    {formatTokens(pageStats.totalTokens)}
-                  </span>
-                  <span className="flex items-center gap-1 text-amber-400">
-                    <TrendingUp className="h-3 w-3" />
-                    {formatCost(pageStats.totalCost)}
-                  </span>
-                </>
-              )}
+            <div className="page-title-stack">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="page-title">Sessions</h1>
+                <span className="page-pill">{total} total</span>
+                {pageStats && (
+                  <>
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                      <Zap className="h-3 w-3" />
+                      {formatTokens(pageStats.totalTokens)}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs text-amber-300">
+                      <TrendingUp className="h-3 w-3" />
+                      {formatCost(pageStats.totalCost)}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="page-meta">
+                <span>Track live and historical sessions, inspect token spend, and jump into detailed timelines.</span>
+              </div>
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-2">
-            {/* Search */}
+          <div className="page-toolbar">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
@@ -62,16 +60,15 @@ export function SessionsHeader({
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-8 pr-3 py-1.5 w-44 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500"
+                className="control-input w-56 py-2 pl-9"
               />
             </div>
 
-            {/* Status Filter */}
             <select
               data-testid="filter-status"
               value={statusFilter}
               onChange={(e) => onStatusFilterChange(e.target.value)}
-              className="px-2.5 py-1.5 rounded-md border border-slate-700 bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/40 cursor-pointer"
+              className="control-select cursor-pointer"
             >
               <option value="">All status</option>
               <option value="active">Active</option>
@@ -79,10 +76,9 @@ export function SessionsHeader({
               <option value="error">Error</option>
             </select>
 
-            {/* Refresh */}
             <button
               onClick={onRefresh}
-              className="p-1.5 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-colors cursor-pointer"
+              className="icon-button"
               title="Refresh"
             >
               <RefreshCw

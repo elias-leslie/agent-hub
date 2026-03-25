@@ -20,23 +20,23 @@ export function SidebarFooter({
   onCollapseToggle,
 }: SidebarFooterProps) {
   return (
-    <div className="px-2 py-2 border-t border-slate-800">
+    <div className="border-t border-slate-800/70 bg-slate-950/30 px-3 py-3">
       {/* System status summary */}
       {!isCollapsed && status && (
-        <div className="hidden lg:flex items-center gap-2 px-2.5 py-1.5 mb-1.5 rounded-lg bg-slate-800/50">
+        <div className="mb-2 hidden items-center gap-3 rounded-2xl border border-slate-800/70 bg-slate-900/75 px-3 py-2.5 lg:flex">
           <Activity
             className={cn(
-              "h-3.5 w-3.5 flex-shrink-0",
+              "h-4 w-4 flex-shrink-0",
               status.status === "healthy"
                 ? "text-emerald-500"
                 : "text-amber-500",
             )}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-medium text-slate-300 capitalize">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
               {status.status}
             </p>
-            <p className="text-[9px] text-slate-400 font-mono">
+            <p className="text-[10px] text-slate-500 font-mono">
               {Math.floor(status.uptime_seconds / 3600)}h uptime
             </p>
           </div>
@@ -47,9 +47,9 @@ export function SidebarFooter({
       <button
         onClick={onSettingsClick}
         className={cn(
-          "flex items-center gap-2 w-full px-2.5 py-1.5 mb-0.5 rounded-lg",
+          "mb-1 flex w-full items-center gap-2 rounded-xl px-3 py-2",
           "text-slate-400",
-          "hover:bg-slate-800",
+          "border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80",
           "transition-colors duration-150",
           isCollapsed && "justify-center",
         )}
@@ -65,9 +65,9 @@ export function SidebarFooter({
       <button
         onClick={onCollapseToggle}
         className={cn(
-          "hidden lg:flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg",
+          "hidden w-full items-center gap-2 rounded-xl px-3 py-2 lg:flex",
           "text-slate-400",
-          "hover:bg-slate-800",
+          "border border-transparent hover:border-slate-700/70 hover:bg-slate-800/80",
           "transition-colors duration-150",
           isCollapsed && "justify-center",
         )}

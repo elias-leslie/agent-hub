@@ -96,7 +96,7 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
   };
 
   return (
-    <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+    <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href);
         const Icon = item.icon;
@@ -109,34 +109,41 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
             prefetch={false}
             data-active={active}
             className={cn(
-              "nav-item-hover flex items-center gap-2.5 px-2.5 py-2 rounded-lg",
-              "transition-colors duration-150",
+              "nav-item-hover flex items-center gap-3 rounded-2xl px-3 py-3",
+              "transition-all duration-150",
               "focus-ring-amber",
               active
-                ? "bg-amber-950/30 text-amber-400 shadow-sm shadow-amber-950/20"
-                : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
-              isCollapsed && "lg:justify-center lg:px-0",
+                ? "bg-[linear-gradient(135deg,rgba(120,53,15,0.7),rgba(69,26,3,0.2))] text-amber-100 shadow-[0_16px_40px_-30px_rgba(245,158,11,0.6)] ring-1 ring-amber-400/15"
+                : "text-slate-400 hover:bg-slate-800/80 hover:text-slate-100",
+              isCollapsed && "lg:justify-center lg:px-0 lg:py-3.5",
             )}
             title={isCollapsed ? label : undefined}
           >
-            <Icon
+            <div
               className={cn(
-                "h-[18px] w-[18px] flex-shrink-0",
-                active && "text-amber-400",
+                "flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border transition-colors",
+                active
+                  ? "border-amber-400/20 bg-amber-500/10 text-amber-300"
+                  : "border-slate-800 bg-slate-900/70 text-slate-500",
               )}
-            />
-            {!isCollapsed && (
-              <span className="text-[13px] font-medium hidden lg:block truncate">
-                {label}
-              </span>
-            )}
-            {/* Mobile always shows labels */}
-            <div className="lg:hidden">
-              <span className="text-[13px] font-medium">{label}</span>
-              <p className="text-[10px] text-slate-500">
-                {item.description}
-              </p>
+            >
+              <Icon className="h-[18px] w-[18px]" />
             </div>
+            {!isCollapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium leading-tight">
+                  {label}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 text-[11px] leading-tight",
+                    active ? "text-amber-100/60" : "text-slate-500",
+                  )}
+                >
+                  {item.description}
+                </p>
+              </div>
+            )}
           </Link>
         );
       })}

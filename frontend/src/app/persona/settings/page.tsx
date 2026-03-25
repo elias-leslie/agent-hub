@@ -75,6 +75,8 @@ export default function PersonaSettingsPage() {
       : previewQueryError
         ? "Failed to load preview"
         : null;
+  const activeTabMeta =
+    PERSONA_SETTINGS_TABS.find((tab) => tab.id === activeTab) ?? PERSONA_SETTINGS_TABS[0];
 
   if (personaLoading || agentLoading) {
     return (
@@ -108,7 +110,8 @@ export default function PersonaSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="page-shell flex flex-col">
+      <div className="page-backdrop" />
       <PersonaSettingsHeader
         personaName={persona.name}
         hasChanges={hasAgentChanges}
@@ -119,7 +122,9 @@ export default function PersonaSettingsPage() {
         backHref={sessionId ? `/persona?session_id=${sessionId}` : "/persona"}
       />
 
-      <div className="flex flex-1 h-[calc(100vh-3.5rem)] overflow-hidden">
+      <div className="page-container flex-1">
+        <div className="page-frame">
+          <div className="flex flex-col gap-6 xl:flex-row">
         <PersonaSettingsSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -130,13 +135,13 @@ export default function PersonaSettingsPage() {
           onMobileClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 overflow-y-auto">
+            <main className="min-w-0 flex-1 overflow-y-auto">
           {/* Mobile tab bar */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-900 lg:hidden">
+          <div className="panel-surface mb-4 flex items-center gap-2 px-4 py-3 lg:hidden">
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              className="p-1.5 rounded-md text-slate-400 hover:bg-slate-800 transition-colors"
+              className="icon-button h-10 w-10"
               aria-label="Open settings menu"
             >
               <Menu className="h-5 w-5" />
@@ -153,8 +158,24 @@ export default function PersonaSettingsPage() {
             })()}
           </div>
 
-          <div className="p-6 lg:p-8">
-            <div className="max-w-2xl">
+              <section className="panel-surface animate-fade-up">
+                <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
+                  <div className="section-header gap-4">
+                    <div>
+                      <p className="section-kicker">Editing Surface</p>
+                      <h2 className="section-heading mt-2">{activeTabMeta.label}</h2>
+                      <p className="section-copy mt-2 max-w-3xl">
+                        {activeTabMeta.description}
+                      </p>
+                    </div>
+                    <div className="page-meta">
+                      <span className="page-pill">Persona config</span>
+                      <span className="page-pill">Autosave for identity</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-5 py-5 lg:px-6 lg:py-6">
+                  <div className="max-w-5xl">
               {activeTab === "identity" && (
                 <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />
               )}
@@ -209,9 +230,12 @@ export default function PersonaSettingsPage() {
                   updateField={updateAgentField}
                 />
               )}
-            </div>
+                  </div>
+                </div>
+              </section>
+            </main>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

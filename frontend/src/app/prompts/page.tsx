@@ -87,34 +87,41 @@ export default function PromptsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
 
-      {/* Sticky header — matches dashboard/access-control pattern */}
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ScrollText className="h-5 w-5 text-slate-400" />
-            <h1 className="text-base font-semibold text-slate-100">
-              Prompts
-            </h1>
-            <span className="text-xs font-mono text-slate-500 tabular-nums">
-              {filtered.length} of {prompts?.length ?? 0}
-            </span>
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
+              <div className="page-title-icon">
+                <ScrollText className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="page-title">Prompts</h1>
+                  <span className="page-pill">{filtered.length} of {prompts?.length ?? 0}</span>
+                </div>
+                <div className="page-meta">
+                  <span>Browse canonical prompts, review scope, and jump into revision-safe editing.</span>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push("/prompts/new")}
+              className="button-primary"
+            >
+              <Plus className="h-4 w-4" />
+              New Prompt
+            </button>
           </div>
-          <button
-            onClick={() => router.push("/prompts/new")}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-amber-600 text-white hover:bg-amber-500 transition-colors cursor-pointer"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New Prompt
-          </button>
         </div>
       </header>
 
-      <main className="relative px-6 lg:px-8 py-5">
+      <main className="page-frame">
+        <div className="page-container">
         {/* Filter bar */}
-        <div className="flex items-center gap-3 mb-5 animate-fade-up">
+        <div className="control-strip mb-5 animate-fade-up">
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <input
@@ -122,18 +129,23 @@ export default function PromptsPage() {
               placeholder="Search prompts..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 transition-colors"
+              className="control-input pl-9"
             />
           </div>
-          <select
-            value={scopeFilter}
-            onChange={(e) => setScopeFilter(e.target.value as FilterScope)}
-            className="px-3 py-2 text-sm rounded-lg border border-slate-700 bg-slate-900 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 cursor-pointer transition-colors"
-          >
-            <option value="all">All</option>
-            <option value="global">Global Only</option>
-            <option value="non-global">Non-Global</option>
-          </select>
+          <div className="flex items-center gap-3">
+            <select
+              value={scopeFilter}
+              onChange={(e) => setScopeFilter(e.target.value as FilterScope)}
+              className="control-select cursor-pointer"
+            >
+              <option value="all">All</option>
+              <option value="global">Global Only</option>
+              <option value="non-global">Non-Global</option>
+            </select>
+            <span className="hidden text-xs text-slate-500 md:block">
+              Filter by search text or prompt scope.
+            </span>
+          </div>
         </div>
 
         {/* Error state */}
@@ -145,14 +157,14 @@ export default function PromptsPage() {
 
         {/* Empty state */}
         {!isError && filtered.length === 0 && (
-          <div className="text-center py-16 animate-fade-up">
+          <div className="empty-surface animate-fade-up">
             <FileText className="h-12 w-12 mx-auto mb-4 text-slate-600" />
             <p className="text-slate-400 mb-4">
               No prompts found
             </p>
             <button
               onClick={() => router.push("/prompts/new")}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-colors cursor-pointer"
+              className="button-primary"
             >
               <Plus className="h-4 w-4" />
               Create Prompt
@@ -162,10 +174,10 @@ export default function PromptsPage() {
 
         {/* Prompts table */}
         {!isError && filtered.length > 0 && (
-          <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm animate-fade-up stagger-1">
+          <div className="table-surface overflow-x-auto animate-fade-up stagger-1">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700/60 bg-slate-800/30">
+                <tr className="border-b border-slate-700/60 bg-slate-900/95">
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-left px-4 py-3">
                     Slug
                   </th>
@@ -194,12 +206,12 @@ export default function PromptsPage() {
                   <tr
                     key={prompt.slug}
                     onClick={() => handleRowClick(prompt.slug)}
-                    className="border-t border-slate-800/50 hover:bg-slate-800/40 cursor-pointer transition-colors group"
+                    className="border-t border-slate-800/50 cursor-pointer transition-colors group hover:bg-slate-800/40"
                   >
                     <td className="px-4 py-3">
-                      <code className="text-xs font-mono text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded">
-                        {prompt.slug}
-                      </code>
+                        <code className="rounded-full border border-slate-800/70 bg-slate-900/80 px-2 py-1 text-xs font-mono text-slate-300">
+                          {prompt.slug}
+                        </code>
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-100">
                       {prompt.name}
@@ -271,6 +283,7 @@ export default function PromptsPage() {
             </table>
           </div>
         )}
+        </div>
       </main>
     </div>
   );

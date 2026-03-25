@@ -38,10 +38,8 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      {/* Subtle background pattern */}
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
-
+    <div className="page-shell">
+      <div className="page-backdrop bg-grid-pattern opacity-60" />
       <DashboardHeader
         status={status}
         daysRange={daysRange}
@@ -50,10 +48,11 @@ export default function DashboardPage() {
         onRangeChange={handleRangeChange}
       />
 
-      <main className="relative px-6 lg:px-8 py-5">
+      <main className="page-frame">
+        <div className="page-container">
         {/* Error Banner */}
         {statusError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-900/20 border border-red-800/50 flex items-center gap-2">
+          <div className="mb-5 flex items-center gap-2 rounded-2xl border border-red-800/50 bg-red-900/20 p-4">
             <AlertTriangle className="h-4 w-4 text-red-500" />
             <p className="text-sm text-red-400">
               Unable to connect to backend
@@ -62,7 +61,7 @@ export default function DashboardPage() {
         )}
 
         {/* BENTO GRID LAYOUT */}
-        <div className="grid grid-cols-12 gap-4 auto-rows-min">
+        <div className="grid auto-rows-min grid-cols-12 gap-5">
           <KPISection
             dashboardStats={dashboardStats}
             activeSessionCount={activeSessionCount}
@@ -80,13 +79,23 @@ export default function DashboardPage() {
           />
 
           {/* ROW 3: Tabbed Section (full width) */}
-          <div className="col-span-12 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5 overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
+          <div className="panel-surface col-span-12 overflow-hidden p-5 lg:p-6">
+            <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Operational Focus
+                </p>
+                <p className="mt-1 text-sm text-slate-300">
+                  Inspect recent sessions, key analytics, and current health from one workspace.
+                </p>
+              </div>
               <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+            </div>
+            <div className="mb-4 flex items-center justify-end">
               {activeTab === "sessions" && (
                 <a
                   href="/sessions"
-                  className="text-[10px] font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                  className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 transition-colors hover:text-slate-300"
                 >
                   View all
                 </a>
@@ -117,6 +126,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>

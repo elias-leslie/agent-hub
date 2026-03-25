@@ -146,9 +146,13 @@ export default function AgentEditorPage() {
 
   const activeTabLabel =
     AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.label ?? "Editor";
+  const activeTabDescription =
+    AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.description ??
+    "Adjust this slice of the agent runtime profile.";
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
+      <div className="page-backdrop" />
       <AgentEditorHeader
         agent={agent}
         hasChanges={hasChanges}
@@ -172,57 +176,80 @@ export default function AgentEditorPage() {
         </div>
       )}
 
-      <div className="flex">
-        <Sidebar
-          activeTab={activeTab}
-          agent={agent}
-          onTabChange={setActiveTab}
-          mobileOpen={sidebarOpen}
-          onMobileClose={() => setSidebarOpen(false)}
-        />
+      <div className="page-container">
+        <div className="page-frame">
+          <div className="flex flex-col gap-6 xl:flex-row">
+            <Sidebar
+              activeTab={activeTab}
+              agent={agent}
+              onTabChange={setActiveTab}
+              mobileOpen={sidebarOpen}
+              onMobileClose={() => setSidebarOpen(false)}
+            />
 
-        <main className="flex-1 p-4 lg:p-8">
-          <div className="max-w-2xl">
-            {activeTab === "general" && (
-              <GeneralTab formData={formData} updateField={updateField} />
-            )}
-            {activeTab === "models" && (
-              <ModelsTab
-                formData={formData}
-                availableModels={availableModels}
-                updateField={updateField}
-              />
-            )}
-            {activeTab === "parameters" && (
-              <ParametersTab
-                formData={formData}
-                availableModels={availableModels}
-                updateField={updateField}
-              />
-            )}
-            {activeTab === "permissions" && (
-              <PermissionsTab formData={formData} updateField={updateField} />
-            )}
-            {activeTab === "prompts" && (
-              <PromptsTab
-                agentSlug={slug}
-                preview={preview}
-                previewFetching={previewFetching}
-                previewError={previewError}
-                showInlinePreview={showInlinePreview}
-                setShowInlinePreview={setShowInlinePreview}
-                previewMode={previewMode}
-                setPreviewMode={setPreviewMode}
-                previewScenario={previewScenario}
-                onPreviewScenarioChange={updatePreviewScenario}
-                refetchPreview={refetchPreview}
-              />
-            )}
-            {activeTab === "memory" && (
-              <MemoryTab formData={formData} updateField={updateField} />
-            )}
+            <main className="min-w-0 flex-1">
+              <section className="panel-surface animate-fade-up">
+                <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
+                  <div className="section-header gap-4">
+                    <div>
+                      <p className="section-kicker">Editing Surface</p>
+                      <h2 className="section-heading mt-2">{activeTabLabel}</h2>
+                      <p className="section-copy mt-2 max-w-3xl">
+                        {activeTabDescription}
+                      </p>
+                    </div>
+                    <div className="page-meta">
+                      <span className="page-pill">Agent config</span>
+                      <span className="page-pill">Live preview available</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-5 py-5 lg:px-6 lg:py-6">
+                  <div className="max-w-5xl">
+                    {activeTab === "general" && (
+                      <GeneralTab formData={formData} updateField={updateField} />
+                    )}
+                    {activeTab === "models" && (
+                      <ModelsTab
+                        formData={formData}
+                        availableModels={availableModels}
+                        updateField={updateField}
+                      />
+                    )}
+                    {activeTab === "parameters" && (
+                      <ParametersTab
+                        formData={formData}
+                        availableModels={availableModels}
+                        updateField={updateField}
+                      />
+                    )}
+                    {activeTab === "permissions" && (
+                      <PermissionsTab formData={formData} updateField={updateField} />
+                    )}
+                    {activeTab === "prompts" && (
+                      <PromptsTab
+                        agentSlug={slug}
+                        preview={preview}
+                        previewFetching={previewFetching}
+                        previewError={previewError}
+                        showInlinePreview={showInlinePreview}
+                        setShowInlinePreview={setShowInlinePreview}
+                        previewMode={previewMode}
+                        setPreviewMode={setPreviewMode}
+                        previewScenario={previewScenario}
+                        onPreviewScenarioChange={updatePreviewScenario}
+                        refetchPreview={refetchPreview}
+                      />
+                    )}
+                    {activeTab === "memory" && (
+                      <MemoryTab formData={formData} updateField={updateField} />
+                    )}
+                  </div>
+                </div>
+              </section>
+            </main>
           </div>
-        </main>
+        </div>
       </div>
 
     </div>

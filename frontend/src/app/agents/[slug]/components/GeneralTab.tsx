@@ -10,99 +10,124 @@ interface GeneralTabProps {
 export function GeneralTab({ formData, updateField }: GeneralTabProps) {
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-100 mb-4">
-          General Settings
-        </h2>
+      <div className="section-header">
+        <div>
+          <p className="section-kicker">Identity</p>
+          <h2 className="section-heading mt-2">General Settings</h2>
+          <p className="section-copy mt-2 max-w-2xl">
+            Set the operator-facing name, description, runtime availability, and
+            whether this agent should be exposed to autonomous coding workflows.
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-4">
+      <div className="section-card space-y-5">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-400">
+          <label className="detail-label">
             Name
           </label>
           <input
             type="text"
             value={formData.name ?? ""}
             onChange={(e) => updateField("name", e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            className="control-input"
           />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-400">
+          <label className="detail-label">
             Description
           </label>
           <textarea
             value={formData.description ?? ""}
             onChange={(e) => updateField("description", e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+            className="control-input min-h-28 resize-y"
           />
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-400">
-            Status
-          </label>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => updateField("is_active", true)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                formData.is_active
-                  ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
-              )}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Active
-            </button>
-            <button
-              onClick={() => updateField("is_active", false)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                !formData.is_active
-                  ? "bg-slate-800 border-slate-600 text-slate-300"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
-              )}
-            >
-              Inactive
-            </button>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="detail-card space-y-3">
+            <div>
+              <p className="detail-label">Status</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Decide whether this agent is available for routing and operator use.
+              </p>
+            </div>
+            <div className="segmented-control">
+              <button
+                onClick={() => updateField("is_active", true)}
+                className={cn(
+                  "segmented-option",
+                  formData.is_active
+                    ? "border-emerald-500/20 bg-emerald-500/12 text-emerald-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Active
+              </button>
+              <button
+                onClick={() => updateField("is_active", false)}
+                className={cn(
+                  "segmented-option",
+                  !formData.is_active
+                    ? "border-slate-600 bg-slate-900/90 text-slate-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                )}
+              >
+                Inactive
+              </button>
+            </div>
+          </div>
+
+          <div className="detail-card space-y-3">
+            <div>
+              <p className="detail-label">Autonomy Posture</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Expose this agent to autonomous coding lanes when it should take implementation work.
+              </p>
+            </div>
+            <div className="segmented-control">
+              <button
+                onClick={() => updateField("is_coding_agent", true)}
+                className={cn(
+                  "segmented-option",
+                  formData.is_coding_agent
+                    ? "border-cyan-500/20 bg-cyan-500/12 text-cyan-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                )}
+              >
+                <Code className="h-4 w-4" />
+                Coding
+              </button>
+              <button
+                onClick={() => updateField("is_coding_agent", false)}
+                className={cn(
+                  "segmented-option",
+                  !formData.is_coding_agent
+                    ? "border-slate-600 bg-slate-900/90 text-slate-100"
+                    : "hover:border-slate-700/80 hover:bg-slate-900/80 hover:text-slate-200",
+                )}
+              >
+                Non-coding
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-slate-400">
-            Coding Agent
-          </label>
-          <p className="text-xs text-slate-500 mb-2">
-            Enable to make this agent available for autonomous task execution
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => updateField("is_coding_agent", true)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                formData.is_coding_agent
-                  ? "bg-cyan-950/40 border-cyan-800 text-cyan-400"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
-              )}
-            >
-              <Code className="h-4 w-4" />
-              Coding
-            </button>
-            <button
-              onClick={() => updateField("is_coding_agent", false)}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
-                !formData.is_coding_agent
-                  ? "bg-slate-800 border-slate-600 text-slate-300"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
-              )}
-            >
-              Non-coding
-            </button>
+        <div className="detail-grid">
+          <div className="detail-card">
+            <p className="detail-label">Runtime State</p>
+            <p className="detail-value">
+              {formData.is_active ? "Included in the live catalog and ready for dispatch." : "Hidden from active routing until re-enabled."}
+            </p>
+          </div>
+          <div className="detail-card">
+            <p className="detail-label">Execution Role</p>
+            <p className="detail-value">
+              {formData.is_coding_agent ? "Can take autonomous coding tasks and lane work." : "Reserved for analysis, review, or conversational work."}
+            </p>
           </div>
         </div>
       </div>

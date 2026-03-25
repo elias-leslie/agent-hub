@@ -11,21 +11,20 @@ interface SidebarLogoProps {
 
 export function SidebarLogo({
   isCollapsed,
-  isMobileOpen,
   statusIndicator = "unknown",
   onMobileClose,
 }: SidebarLogoProps) {
   return (
-    <div className="flex items-center justify-between h-14 px-3 border-b border-slate-800">
+    <div className="flex items-center justify-between border-b border-slate-800/70 px-3 py-3">
       <Link
         href="/"
         className={cn(
-          "flex items-center gap-2.5",
+          "flex items-center gap-3",
           isCollapsed && "lg:justify-center",
         )}
       >
         <div className="relative flex-shrink-0">
-          <div className="p-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg glow-amber">
+          <div className="rounded-2xl border border-amber-400/20 bg-gradient-to-br from-amber-500 to-orange-600 p-2 shadow-[0_18px_38px_-28px_rgba(245,158,11,0.8)]">
             <Zap className="h-4 w-4 text-white" />
           </div>
           {/* Status indicator */}
@@ -45,7 +44,7 @@ export function SidebarLogo({
             <h1 className="text-sm font-semibold text-slate-100 tracking-tight leading-tight">
               Agent Hub
             </h1>
-            <p className="text-[9px] font-medium text-slate-400 uppercase tracking-wider">
+            <p className="text-[10px] font-medium text-slate-500 uppercase tracking-[0.24em]">
               Command Center
             </p>
           </div>
@@ -61,9 +60,9 @@ export function SidebarLogo({
       {/* Mobile close */}
       <button
         onClick={onMobileClose}
-        className="p-2 lg:hidden rounded-lg hover:bg-slate-800"
+        className="rounded-xl border border-slate-800 bg-slate-900/70 p-2 text-slate-400 transition hover:border-slate-700 hover:bg-slate-800/70 lg:hidden"
       >
-        <X className="h-5 w-5 text-slate-500" />
+        <X className="h-5 w-5" />
       </button>
     </div>
   );

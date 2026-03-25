@@ -58,11 +58,11 @@ export function SessionTable({
       tabIndex={0}
       onKeyDown={onKeyDown}
       onScroll={onScroll}
-      className="bg-slate-900 rounded-lg border border-slate-800 overflow-auto shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 max-h-[calc(100vh-280px)]"
+      className="table-surface max-h-[calc(100vh-280px)] overflow-auto focus:outline-none focus:ring-2 focus:ring-amber-500/40"
     >
       {/* TABLE HEADER - Sticky */}
-      <div className="sticky top-0 z-20 bg-slate-800/95 backdrop-blur-sm border-b border-slate-700">
-        <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
+      <div className="sticky top-0 z-20 border-b border-slate-700 bg-slate-900/95 backdrop-blur-sm">
+        <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] items-center gap-3 px-5 py-3">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
             Status
           </span>

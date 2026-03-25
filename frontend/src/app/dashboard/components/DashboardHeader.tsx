@@ -22,44 +22,57 @@ export function DashboardHeader({
   onRangeChange,
 }: DashboardHeaderProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-      <div className="px-6 lg:px-8 h-12 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <LayoutDashboard className="h-4.5 w-4.5 text-slate-400" />
-          <h1 className="text-base font-semibold text-slate-100">
-            Dashboard
-          </h1>
-          {status && (
-            <div className={cn(
-              "flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide",
-              status.status === "healthy"
-                ? "bg-emerald-500/10 text-emerald-400"
-                : "bg-amber-500/10 text-amber-400"
-            )}>
-              <span className={cn(
-                "w-1.5 h-1.5 rounded-full",
-                status.status === "healthy" ? "bg-emerald-500" : "bg-amber-500"
-              )} />
-              {status.status}
+    <header className="page-header">
+      <div className="page-container px-4 lg:px-8">
+        <div className="page-header-row">
+          <div className="page-title-group">
+            <div className="page-title-icon">
+              <LayoutDashboard className="h-5 w-5" />
             </div>
-          )}
-        </div>
-        <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
-          {TIME_RANGE_OPTIONS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onRangeChange(value)}
-              className={cn(
-                "px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-150",
-                daysRange === value
-                  ? "bg-amber-600 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+            <div className="page-title-stack">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="page-title">Dashboard</h1>
+                {status && (
+                  <div className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
+                    status.status === "healthy"
+                      ? "border-emerald-500/15 bg-emerald-500/10 text-emerald-300"
+                      : "border-amber-500/15 bg-amber-500/10 text-amber-300"
+                  )}>
+                    <span className={cn(
+                      "h-1.5 w-1.5 rounded-full",
+                      status.status === "healthy" ? "bg-emerald-400" : "bg-amber-400"
+                    )} />
+                    {status.status}
+                  </div>
+                )}
+              </div>
+              <div className="page-meta">
+                <span>Live command-center overview for requests, health, cost, and memory.</span>
+                <span className="page-pill">{daysRange}-day view</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-800/80 bg-slate-900/80 p-1 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.9)]">
+            <div className="flex items-center gap-1">
+              {TIME_RANGE_OPTIONS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onRangeChange(value)}
+                  className={cn(
+                    "rounded-xl px-3 py-1.5 text-xs font-semibold transition-all duration-150",
+                    daysRange === value
+                      ? "bg-amber-500 text-slate-950 shadow-[0_16px_28px_-22px_rgba(245,158,11,0.9)]"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </header>

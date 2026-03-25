@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Copy, Check } from "lucide-react";
+import Link from "next/link";
+import { Shield, Copy, Check, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
@@ -70,10 +71,11 @@ export default function NewClientPage() {
 
   if (createdClient) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
-        <div className="max-w-lg w-full bg-slate-900/80 border border-slate-800 rounded-xl p-6">
+      <div className="page-shell flex items-center justify-center p-6">
+        <div className="page-backdrop" />
+        <div className="panel-surface max-w-lg w-full p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 rounded-lg bg-emerald-500/10">
+            <div className="page-title-icon border-emerald-500/20 bg-emerald-500/10 text-emerald-200">
               <Shield className="h-6 w-6 text-emerald-400" />
             </div>
             <div>
@@ -119,7 +121,7 @@ export default function NewClientPage() {
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => router.push("/access-control/clients")}
-              className="flex-1 py-2 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-medium transition-colors"
+              className="button-secondary flex-1 justify-center"
             >
               View All Clients
             </button>
@@ -128,7 +130,7 @@ export default function NewClientPage() {
                 setCreatedClient(null);
                 setDisplayName("");
               }}
-              className="flex-1 py-2 px-4 rounded-lg bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium transition-colors"
+              className="button-primary flex-1 justify-center"
             >
               Create Another
             </button>
@@ -139,26 +141,47 @@ export default function NewClientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
+    <div className="page-shell">
+      <div className="page-backdrop" />
 
-      <header className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
-        <div className="px-6 lg:px-8 h-12 flex items-center">
-          <Shield className="h-5 w-5 text-slate-400 mr-3" />
-          <h1 className="text-base font-semibold text-slate-100">Register New Client</h1>
+      <header className="page-header">
+        <div className="page-container px-4 lg:px-8">
+          <div className="page-header-row">
+            <div className="page-title-group">
+              <Link href="/access-control/clients" className="icon-button">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <div className="page-title-icon">
+                <Shield className="h-5 w-5" />
+              </div>
+              <div className="page-title-stack">
+                <h1 className="page-title">Register New Client</h1>
+                <p className="page-subtitle">
+                  Create a caller identity with a display name, type, and throttle policy.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="relative max-w-xl mx-auto px-6 py-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <main className="page-container">
+        <div className="page-frame">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <form onSubmit={handleSubmit} className="panel-surface space-y-6 p-5 lg:p-6">
           {error && (
-            <div className="p-3 rounded-lg bg-red-900/20 border border-red-800/50">
+            <div className="rounded-2xl border border-red-800/50 bg-red-900/20 p-3">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <p className="section-kicker">Client Identity</p>
+            <h2 className="section-heading mt-2">Core Details</h2>
+          </div>
+
+          <div>
+            <label className="detail-label mb-2 block">
               Display Name
             </label>
             <input
@@ -169,18 +192,21 @@ export default function NewClientPage() {
               required
               minLength={1}
               maxLength={100}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className="control-input"
             />
+            <p className="mt-2 text-xs text-slate-400">
+              Use a descriptive label operators can recognize quickly in access-control lists.
+            </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="detail-label mb-2 block">
               Client Type
             </label>
             <select
               value={clientType}
               onChange={(e) => setClientType(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+              className="control-select w-full"
             >
               <option value="external">External</option>
               <option value="internal">Internal</option>
@@ -190,7 +216,7 @@ export default function NewClientPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="detail-label mb-2 block">
                 Rate Limit (RPM)
               </label>
               <input
@@ -199,11 +225,11 @@ export default function NewClientPage() {
                 onChange={(e) => setRateLimitRpm(parseInt(e.target.value) || 60)}
                 min={1}
                 max={10000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+                className="control-input"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className="detail-label mb-2 block">
                 Rate Limit (TPM)
               </label>
               <input
@@ -212,7 +238,7 @@ export default function NewClientPage() {
                 onChange={(e) => setRateLimitTpm(parseInt(e.target.value) || 100000)}
                 min={1000}
                 max={10000000}
-                className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-amber-500"
+                className="control-input"
               />
             </div>
           </div>
@@ -221,15 +247,35 @@ export default function NewClientPage() {
             type="submit"
             disabled={isSubmitting || !displayName.trim()}
             className={cn(
-              "w-full py-3 px-4 rounded-lg text-white font-medium transition-colors",
+              "button-primary w-full justify-center",
               isSubmitting || !displayName.trim()
-                ? "bg-slate-700 cursor-not-allowed"
-                : "bg-amber-600 hover:bg-amber-500"
+                ? "cursor-not-allowed border-slate-700 bg-slate-800 text-slate-500 shadow-none"
+                : ""
             )}
           >
             {isSubmitting ? "Creating..." : "Create Client"}
           </button>
         </form>
+            <aside className="panel-surface p-5 lg:p-6">
+              <p className="section-kicker">Provisioning Notes</p>
+              <h2 className="section-heading mt-2">Policy Guide</h2>
+              <div className="mt-5 space-y-3">
+                <div className="detail-card">
+                  <p className="detail-label">External</p>
+                  <p className="detail-value">Use for third-party callers and partner integrations.</p>
+                </div>
+                <div className="detail-card">
+                  <p className="detail-label">Internal</p>
+                  <p className="detail-value">Use for first-party dashboards and trusted internal tooling.</p>
+                </div>
+                <div className="detail-card">
+                  <p className="detail-label">Service</p>
+                  <p className="detail-value">Use for background workers, automation, and server-to-server jobs.</p>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
       </main>
     </div>
   );
