@@ -45,6 +45,8 @@ class TestSessionIngestionAPI:
         session.agent_slug = None
         session.session_type = "agent"
         session.external_id = "task-123"
+        session.client_id = "client-123"
+        session.request_source = "codex-transcript-sync"
         session.current_branch = "task-123/main"
         session.provider_metadata = {
             "cwd": "/repo",
@@ -53,6 +55,8 @@ class TestSessionIngestionAPI:
             "host": "devbox",
             "tmux_session_name": "codex-agent-hub",
             "tmux_pane_id": "%11",
+            "source_client": "summitflow/codex-session-sync",
+            "source_path": "/tmp/codex-session-sync.py",
         }
         session.declared_scope_paths = ["backend/app/services/session_scope.py"]
         session.observed_read_paths = ["backend/app/services/session_ingestion/service.py"]
@@ -68,7 +72,7 @@ class TestSessionIngestionAPI:
                 session,
                 SessionUpsertResult(session_id="session-123", created=True),
             ),
-        ):
+        ) as mock_upsert:
             response = await client.post(
                 "/api/session-ingestion/sessions/upsert",
                 json={
@@ -92,6 +96,13 @@ class TestSessionIngestionAPI:
                         "tmux_pane_id": "%11",
                     },
                 },
+                headers={
+                    **TEST_HEADERS,
+                    "X-Client-Id": "client-123",
+                    "X-Request-Source": "codex-transcript-sync",
+                    "X-Source-Client": "summitflow/codex-session-sync",
+                    "X-Source-Path": "/tmp/codex-session-sync.py",
+                },
             )
 
         assert response.status_code == 200
@@ -99,6 +110,10 @@ class TestSessionIngestionAPI:
         assert data["session_id"] == "session-123"
         assert data["created"] is True
         assert data["session"]["id"] == "session-123"
+        assert data["session"]["client_id"] == "client-123"
+        assert data["session"]["request_source"] == "codex-transcript-sync"
+        assert data["session"]["source_client"] == "summitflow/codex-session-sync"
+        assert data["session"]["source_path"] == "/tmp/codex-session-sync.py"
         assert data["session"]["declared_scope_paths"] == ["backend/app/services/session_scope.py"]
         assert data["session"]["observed_read_paths"] == [
             "backend/app/services/session_ingestion/service.py"
@@ -108,6 +123,11 @@ class TestSessionIngestionAPI:
         assert data["session"]["repo_root"] == "/repo"
         assert data["session"]["worktree_path"] == "/repo/.worktrees/task-123"
         assert data["session"]["tmux_session_name"] == "codex-agent-hub"
+        request_payload = mock_upsert.await_args.args[1]
+        assert request_payload.client_id == "client-123"
+        assert request_payload.request_source == "codex-transcript-sync"
+        assert request_payload.provider_metadata["source_client"] == "summitflow/codex-session-sync"
+        assert request_payload.provider_metadata["source_path"] == "/tmp/codex-session-sync.py"
 
     @pytest.mark.asyncio
     async def test_upsert_session_endpoint_can_skip_session_snapshot(self, client: AsyncClient) -> None:
@@ -149,6 +169,8 @@ class TestSessionIngestionAPI:
         session.agent_slug = "coder"
         session.session_type = "claude_code"
         session.external_id = "task-123"
+        session.client_id = "client-234"
+        session.request_source = "claude-tool-loop"
         session.current_branch = "task-123/main"
         session.provider_metadata = {
             "cwd": "/repo",
@@ -157,6 +179,8 @@ class TestSessionIngestionAPI:
             "host": "devbox",
             "tmux_session_name": "claude-agent-hub",
             "tmux_pane_id": "%12",
+            "source_client": "agent-hub/claude-tools",
+            "source_path": "/backend/app/adapters/claude_tools.py",
             "live_activity": {
                 "phase": "running_tool",
                 "status": "active",
@@ -179,7 +203,7 @@ class TestSessionIngestionAPI:
                 session,
                 SessionHeartbeatResult(session_id="session-123", updated=True),
             ),
-        ):
+        ) as mock_heartbeat:
             response = await client.post(
                 "/api/session-ingestion/sessions/session-123/heartbeat",
                 json={
@@ -199,12 +223,23 @@ class TestSessionIngestionAPI:
                         "tmux_pane_id": "%12",
                     },
                 },
+                headers={
+                    **TEST_HEADERS,
+                    "X-Client-Id": "client-234",
+                    "X-Request-Source": "claude-tool-loop",
+                    "X-Source-Client": "agent-hub/claude-tools",
+                    "X-Source-Path": "/backend/app/adapters/claude_tools.py",
+                },
             )
 
         assert response.status_code == 200
         data = response.json()
         assert data["session_id"] == "session-123"
         assert data["updated"] is True
+        assert data["session"]["client_id"] == "client-234"
+        assert data["session"]["request_source"] == "claude-tool-loop"
+        assert data["session"]["source_client"] == "agent-hub/claude-tools"
+        assert data["session"]["source_path"] == "/backend/app/adapters/claude_tools.py"
         assert data["session"]["live_activity"]["phase"] == "running_tool"
         assert data["session"]["live_activity"]["last_heartbeat_at"] == "2026-03-10T14:00:00+00:00"
         assert data["session"]["observed_read_paths"] == [
@@ -213,6 +248,11 @@ class TestSessionIngestionAPI:
         assert data["session"]["observed_write_paths"] == [
             "backend/app/services/ownership_inventory.py"
         ]
+        heartbeat_payload = mock_heartbeat.await_args.args[2]
+        assert heartbeat_payload.client_id == "client-234"
+        assert heartbeat_payload.request_source == "claude-tool-loop"
+        assert heartbeat_payload.provider_metadata["source_client"] == "agent-hub/claude-tools"
+        assert heartbeat_payload.provider_metadata["source_path"] == "/backend/app/adapters/claude_tools.py"
 
     @pytest.mark.asyncio
     async def test_heartbeat_session_endpoint_can_skip_session_snapshot(self, client: AsyncClient) -> None:

@@ -5,6 +5,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._session_request_identity import (
+    enrich_session_heartbeat_request,
+    enrich_session_upsert_request,
+)
 from app.api.schemas.sessions import (
     CloseSessionResponse,
     CreateSessionEventRequest,
@@ -61,25 +65,29 @@ async def create_session(
     """Create session (idempotent - returns existing if session_id provided)."""
     if request.agent_slug:
         http_request.state.agent_slug = request.agent_slug
+    session_request = enrich_session_upsert_request(
+        SessionUpsertRequest(
+            session_id=request.session_id,
+            project_id=request.project_id,
+            provider=request.provider,
+            model=request.model,
+            session_type=request.session_type,
+            agent_slug=request.agent_slug,
+            external_id=request.external_id,
+            current_branch=request.current_branch,
+            cwd=request.cwd,
+            declared_scope_paths=request.declared_scope_paths,
+            observed_read_paths=request.observed_read_paths,
+            observed_write_paths=request.observed_write_paths,
+            scope_confidence=request.scope_confidence,
+            provider_metadata=request.provider_metadata,
+        ),
+        http_request,
+    )
     try:
         session, _ = await upsert_session(
             db,
-            SessionUpsertRequest(
-                session_id=request.session_id,
-                project_id=request.project_id,
-                provider=request.provider,
-                model=request.model,
-                session_type=request.session_type,
-                agent_slug=request.agent_slug,
-                external_id=request.external_id,
-                current_branch=request.current_branch,
-                cwd=request.cwd,
-                declared_scope_paths=request.declared_scope_paths,
-                observed_read_paths=request.observed_read_paths,
-                observed_write_paths=request.observed_write_paths,
-                scope_confidence=request.scope_confidence,
-                provider_metadata=request.provider_metadata,
-            ),
+            session_request,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -90,11 +98,13 @@ async def create_session(
 async def heartbeat_existing_session(
     session_id: str,
     request: SessionHeartbeatRequest,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
     """Update live session/process state for an existing session."""
+    heartbeat_request = enrich_session_heartbeat_request(request, http_request)
     try:
-        session, _ = await heartbeat_session(db, session_id, request)
+        session, _ = await heartbeat_session(db, session_id, heartbeat_request)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return build_session_response(session)

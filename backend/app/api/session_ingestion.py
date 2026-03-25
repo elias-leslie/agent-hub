@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._session_request_identity import (
+    enrich_session_heartbeat_request,
+    enrich_session_upsert_request,
+)
 from app.api.schemas.sessions import SessionResponse
 from app.db import get_db
 from app.services.session_helpers import build_session_response, get_session_or_404
@@ -46,12 +50,14 @@ class SessionHeartbeatResponse(SessionHeartbeatResult):
 @router.post("/sessions/upsert", response_model=SessionUpsertResponse)
 async def upsert_session_endpoint(
     request: SessionUpsertRequest,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionUpsertResponse:
     """Create or update a session using the canonical ingestion contract."""
+    enriched_request = enrich_session_upsert_request(request, http_request)
     try:
-        session, result = await upsert_session(db, request)
+        session, result = await upsert_session(db, enriched_request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -69,12 +75,14 @@ async def upsert_session_endpoint(
 async def heartbeat_session_endpoint(
     session_id: str,
     request: SessionHeartbeatRequest,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionHeartbeatResponse:
     """Apply a canonical heartbeat update to an existing session."""
+    enriched_request = enrich_session_heartbeat_request(request, http_request)
     try:
-        session, result = await heartbeat_session(db, session_id, request)
+        session, result = await heartbeat_session(db, session_id, enriched_request)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
