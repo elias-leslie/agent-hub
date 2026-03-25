@@ -33,9 +33,9 @@ export function ToggleSetting({
           ? "border-slate-700 hover:bg-slate-800/50"
           : "border-red-900 bg-red-900/20";
       case "sky":
-        return "border-sky-200 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20";
+        return "border-sky-700 hover:bg-sky-900/20";
       case "violet":
-        return "border-violet-200 dark:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20";
+        return "border-violet-700 hover:bg-violet-900/20";
       default:
         return "border-slate-700 hover:bg-slate-800/50";
     }

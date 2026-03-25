@@ -163,7 +163,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
           />
         </div>
 
-        <section className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900 max-w-4xl">
+        <section className="space-y-4 rounded-xl border border-slate-800 bg-slate-900 p-5 max-w-4xl">
           <div>
             <h3 className="text-base font-semibold text-slate-100">
               User Profile
@@ -190,7 +190,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
                     })
                   }
                   rows={field === "timezone" ? 2 : 3}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none transition focus:ring-2 focus:ring-amber-500/40 focus:border-amber-500/50 placeholder-slate-500"
                 />
               </label>
             ))}
@@ -226,7 +226,7 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               <button
                 onClick={handleResetOnboarding}
                 disabled={resetting}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-400 bg-amber-900/20 hover:bg-amber-900/40 transition-colors disabled:opacity-50 cursor-pointer"
                 title="Re-run onboarding bootstrap on next conversation"
               >
                 {resetting ? (
@@ -244,8 +244,8 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             className={cn(
               "flex max-w-md items-start gap-2 rounded-lg border px-3 py-2 text-xs",
               resetState.status === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-300"
-                : "border-rose-200 bg-rose-50 text-rose-300 bg-rose-950/30 dark:text-rose-300",
+                ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-300"
+                : "border-rose-800/50 bg-rose-950/30 text-rose-300",
             )}
           >
             {resetState.status === "success" ? (

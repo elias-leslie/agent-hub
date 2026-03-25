@@ -52,7 +52,7 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 formData.is_active
                   ? "bg-emerald-950/40 border-emerald-800 text-emerald-600"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-50"
+                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
               )}
             >
               <CheckCircle2 className="h-4 w-4" />
@@ -63,8 +63,8 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 !formData.is_active
-                  ? "bg-slate-800 border-slate-600 text-slate-700"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-50"
+                  ? "bg-slate-800 border-slate-600 text-slate-300"
+                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
               )}
             >
               Inactive
@@ -85,8 +85,8 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 formData.is_coding_agent
-                  ? "bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-600"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-50"
+                  ? "bg-cyan-950/40 border-cyan-800 text-cyan-400"
+                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
               )}
             >
               <Code className="h-4 w-4" />
@@ -97,8 +97,8 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
                 !formData.is_coding_agent
-                  ? "bg-slate-800 border-slate-600 text-slate-700"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-50"
+                  ? "bg-slate-800 border-slate-600 text-slate-300"
+                  : "border-slate-700 text-slate-400 hover:bg-slate-800"
               )}
             >
               Non-coding

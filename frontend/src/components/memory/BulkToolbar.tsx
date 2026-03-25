@@ -49,8 +49,8 @@ export function BulkToolbar({
       className={cn(
         "fixed bottom-6 left-1/2 -translate-x-1/2 z-40",
         "flex items-center gap-3 px-4 py-3 rounded-xl",
-        "bg-slate-900 dark:bg-slate-800 shadow-2xl",
-        "border border-slate-700 dark:border-slate-600",
+        "bg-slate-800 shadow-2xl",
+        "border border-slate-700",
         "animate-in slide-in-from-bottom-4 fade-in duration-200"
       )}
     >

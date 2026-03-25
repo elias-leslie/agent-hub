@@ -68,14 +68,14 @@ export function EpisodeFormFields({
           className={cn(
             "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg border text-sm transition-all",
             pinned
-              ? "border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20"
+              ? "border-violet-700 bg-violet-900/20"
               : "border-slate-700",
             "hover:ring-2 hover:ring-offset-1 hover:ring-slate-600",
             "disabled:opacity-50 disabled:cursor-not-allowed"
           )}
         >
           <Pin className={cn("w-4 h-4", pinned ? "text-violet-400" : "text-slate-400")} />
-          <span className={pinned ? "text-violet-700 dark:text-violet-300 font-medium" : "text-slate-400"}>
+          <span className={pinned ? "text-violet-300 font-medium" : "text-slate-400"}>
             {pinned ? "Pinned (always shown)" : "Not pinned"}
           </span>
         </button>

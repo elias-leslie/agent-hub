@@ -49,7 +49,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
     enabled !== prompt.enabled;
 
   return (
-    <div className="rounded-xl border border-slate-200 border-slate-800 dark:bg-slate-900">
+    <div className="rounded-xl border border-slate-800 bg-slate-900">
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
@@ -65,7 +65,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
             <span className="truncate text-sm font-medium text-slate-100">
               {prompt.name}
             </span>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-400 bg-slate-800 dark:text-slate-300">
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
               linked
             </span>
           </div>
@@ -73,7 +73,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
         </div>
       </button>
       {expanded ? (
-        <div className="space-y-4 border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+        <div className="space-y-4 border-t border-slate-800 px-4 py-4">
           <label className="space-y-1.5">
             <span className="text-xs font-medium text-slate-400">Name</span>
             <input

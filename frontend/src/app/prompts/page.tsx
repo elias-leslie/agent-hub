@@ -194,7 +194,7 @@ export default function PromptsPage() {
                   <tr
                     key={prompt.slug}
                     onClick={() => handleRowClick(prompt.slug)}
-                    className="border-t border-slate-800/50 hover:bg-slate-800/40 cursor-pointer transition-colors"
+                    className="border-t border-slate-800/50 hover:bg-slate-800/40 cursor-pointer transition-colors group"
                   >
                     <td className="px-4 py-3">
                       <code className="text-xs font-mono text-slate-300 bg-slate-800 px-1.5 py-0.5 rounded">

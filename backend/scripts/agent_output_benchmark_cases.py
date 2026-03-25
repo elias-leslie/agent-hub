@@ -26,11 +26,27 @@ class AgentOutputBenchmarkCase:
 
 _DEFAULT_FORBIDDEN_TERMS = ("[[P:", "[[S:", "Applied:", "```")
 
-_CASES: tuple[AgentOutputBenchmarkCase, ...] = (
-    AgentOutputBenchmarkCase(
-        case_id="coder_summary_tag_override",
-        agent_slug="coder",
-        name="Coder Summary Tag Override",
+_EXECUTION_CONTRACT_AGENTS: tuple[tuple[str, str], ...] = (
+    ("coder", "Code Generator"),
+    ("worker", "Self-Healing Worker"),
+    ("debugger", "Debugger"),
+    ("refactor", "Refactoring Agent"),
+    ("reviewer", "Code Reviewer"),
+    ("fixer", "Bug Fixer"),
+    ("optimizer", "Performance Optimizer"),
+    ("tester", "Smoke Tester"),
+    ("test-writer", "Test Writer"),
+    ("validator", "Quick Validator"),
+    ("triager", "Task Triager"),
+)
+
+
+def _tool_backed_summary_case(agent_slug: str, agent_name: str) -> AgentOutputBenchmarkCase:
+    """Build the shared tool-backed summary-tag contract case for one execution agent."""
+    return AgentOutputBenchmarkCase(
+        case_id=f"{agent_slug.replace('-', '_')}_summary_tag_override",
+        agent_slug=agent_slug,
+        name=f"{agent_name} Summary Tag Override",
         description=(
             "Keep the mandatory session summary tag on a tool-backed response even when the "
             "user asks for bare output."
@@ -45,6 +61,13 @@ _CASES: tuple[AgentOutputBenchmarkCase, ...] = (
         execute_tools=True,
         max_turns=2,
         require_tool_call=True,
+    )
+
+
+_CASES: tuple[AgentOutputBenchmarkCase, ...] = (
+    *tuple(
+        _tool_backed_summary_case(agent_slug, agent_name)
+        for agent_slug, agent_name in _EXECUTION_CONTRACT_AGENTS
     ),
     AgentOutputBenchmarkCase(
         case_id="note_titler_plain_title",

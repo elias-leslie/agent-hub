@@ -42,7 +42,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-violet-100 dark:bg-violet-900/30">
+            <div className="p-2 rounded-full bg-violet-900/30">
               <Pencil className="w-5 h-5 text-violet-400" />
             </div>
             <div>
@@ -55,7 +55,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
             onClick={onClose}
             disabled={isSaving}
             aria-label="Close dialog"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-800 disabled:opacity-50"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -93,7 +93,7 @@ export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpis
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-4 border-t border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+        <div className="flex items-center justify-between p-4 border-t border-slate-800 bg-slate-800/30">
           <div className="text-xs text-slate-500">
             {hasChanges ? (
               <span className="text-violet-400">Unsaved changes</span>

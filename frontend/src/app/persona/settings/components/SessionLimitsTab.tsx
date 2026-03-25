@@ -109,7 +109,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
               className={cn(
                 "flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-150",
                 mode === opt.value
-                  ? "bg-white dark:bg-slate-700 text-slate-100 shadow-sm"
+                  ? "bg-slate-700 text-slate-100 shadow-sm"
                   : "text-slate-400 hover:text-slate-300",
               )}
             >
@@ -170,7 +170,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                     className={cn(
                       "flex-1 px-2 py-1 text-xs rounded-md transition-colors",
                       persona.session_reset_idle_minutes === preset.value
-                        ? "bg-amber-50 dark:bg-amber-900/30 text-amber-400 font-medium"
+                        ? "bg-amber-900/30 text-amber-400 font-medium"
                         : "text-slate-400 hover:bg-slate-700 border border-slate-700",
                     )}
                   >
@@ -207,7 +207,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 {isLimitCustom(key) && (
                   <button
                     onClick={() => handleLimitReset(key)}
-                    className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
+                    className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-2.5 h-2.5" />
                     Reset
