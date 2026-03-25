@@ -93,7 +93,7 @@ class ProviderAdapter(ABC):
         """Check if the provider is available and working."""
         ...
 
-    def start_tool_session(
+    async def start_tool_session(
         self,
         messages: list[Message],
         model: str,

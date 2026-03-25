@@ -27,7 +27,9 @@ def _mock_session() -> MagicMock:
 
 def _mock_adapter_with_stream(stream: object) -> MagicMock:
     adapter = MagicMock()
-    adapter.start_tool_session.return_value = StreamBackedRuntimeSession(stream=stream)
+    adapter.start_tool_session = AsyncMock(
+        return_value=StreamBackedRuntimeSession(stream=stream),
+    )
     return adapter
 
 
@@ -232,11 +234,11 @@ async def test_run_tool_loop_interrupts_owned_runtime_session_on_cancellation() 
         yield
 
     adapter = MagicMock()
-    adapter.start_tool_session.return_value = StreamBackedRuntimeSession(
+    adapter.start_tool_session = AsyncMock(return_value=StreamBackedRuntimeSession(
         stream=fake_stream(),
         interrupt_callback=interrupt,
         close_callback=close,
-    )
+    ))
 
     with pytest.raises(asyncio.CancelledError):
         await _run_tool_loop(
