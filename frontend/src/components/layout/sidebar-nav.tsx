@@ -113,8 +113,8 @@ export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavPro
               "transition-colors duration-150",
               "focus-ring-amber",
               active
-                ? "bg-amber-950/30 text-amber-400"
-                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200",
+                ? "bg-amber-950/30 text-amber-400 shadow-sm shadow-amber-950/20"
+                : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-200",
               isCollapsed && "lg:justify-center lg:px-0",
             )}
             title={isCollapsed ? label : undefined}

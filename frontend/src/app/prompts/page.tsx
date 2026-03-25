@@ -165,7 +165,7 @@ export default function PromptsPage() {
           <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm animate-fade-up stagger-1">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-800/80">
+                <tr className="border-b border-slate-700/60 bg-slate-800/30">
                   <th className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest text-left px-4 py-3">
                     Slug
                   </th>
@@ -245,24 +245,24 @@ export default function PromptsPage() {
                         onClick={(e) => handleDelete(e, prompt.slug)}
                         disabled={prompt.deletion_locked}
                         className={cn(
-                          "inline-flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors cursor-pointer",
+                          "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-all duration-200 cursor-pointer",
                           prompt.deletion_locked &&
                             "cursor-not-allowed opacity-40 hover:bg-transparent hover:text-slate-400",
                           pendingDeleteSlug === prompt.slug
-                            ? "bg-red-600 text-white hover:bg-red-700"
-                            : "text-slate-400 hover:text-red-400 hover:bg-red-950/30",
+                            ? "bg-red-600 text-white hover:bg-red-500 ring-1 ring-red-500 shadow-sm shadow-red-900/30"
+                            : "text-slate-500 hover:text-red-400 hover:bg-red-950/30",
                         )}
                         title={
                           prompt.deletion_locked
                             ? "Locked prompts cannot be deleted"
                             :
                           pendingDeleteSlug === prompt.slug
-                            ? "Click again to confirm"
+                            ? "Click again to confirm deletion"
                             : "Delete prompt"
                         }
                       >
                         <Trash2 className="h-3.5 w-3.5" />
-                        {pendingDeleteSlug === prompt.slug && "Confirm"}
+                        {pendingDeleteSlug === prompt.slug ? "Confirm?" : null}
                       </button>
                     </td>
                   </tr>
