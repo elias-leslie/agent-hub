@@ -9,6 +9,7 @@ from app.adapters.base import Message
 from app.models import Session as DBSession
 from app.services.session_health import health_detail_for_error, update_session_health
 
+from .closeout_policy import detached_agent_hub_rebuild_closeout
 from .tool_event_processor import process_tool_event
 from .tool_models import ToolExecutionResult
 from .tool_progress import ProgressTracker
@@ -30,72 +31,6 @@ def _extract_tool_metadata(
     tool_name = str(metadata.get("name") or tool_use_id or "unknown")
     tool_input = metadata.get("input")
     return tool_name, tool_input if isinstance(tool_input, dict) else {}
-
-
-def _is_detached_agent_hub_rebuild_handoff(
-    *,
-    project_id: str | None,
-    tool_name: str,
-    tool_input: dict[str, Any],
-    tool_content: str,
-) -> bool:
-    """Return True when a bash tool result queued a detached Agent Hub self-rebuild."""
-    if project_id != "agent-hub" or tool_name.lower() != "bash":
-        return False
-    command = str(tool_input.get("command") or "").lower()
-    if "agent-hub" not in command or "--detach" not in command:
-        return False
-    if "rebuild.sh" not in command and "restart.sh" not in command:
-        return False
-    output = tool_content.lower()
-    return "detached rebuild queued" in output or "detached restart queued" in output
-
-
-def _build_detached_agent_hub_rebuild_closeout(
-    *,
-    agent_slug: str | None,
-    external_id: str | None,
-    tool_content: str,
-) -> str:
-    """Return a deterministic closeout after queuing detached Agent Hub rebuild."""
-    unit_line = next(
-        (line.strip() for line in str(tool_content).splitlines() if "Running as unit:" in line),
-        None,
-    )
-    unit_name = unit_line.removeprefix("Running as unit:").strip() if unit_line else None
-    unit_note = f" as {unit_name}" if unit_name else ""
-    if agent_slug == "persona":
-        return (
-            f"HEARTBEAT_ACTION — Detached Agent Hub rebuild queued{unit_note}. "
-            "Post-restart verification is deferred to a fresh session.\n"
-            "[[P:started:ending the heartbeat after queueing a detached Agent Hub rebuild]]\n"
-            f"[[P:decision:queued detached Agent Hub rebuild{unit_note} and ended before "
-            "post-restart verification]]\n"
-            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
-            "must verify health and task completion.]]"
-        )
-    if external_id and str(external_id).startswith("task-"):
-        return (
-            f"Detached Agent Hub rebuild queued{unit_note}. "
-            "This session is ending before post-restart verification.\n"
-            "[[P:started:ending the task session after queueing a detached Agent Hub rebuild]]\n"
-            f"[[P:decision:queued detached Agent Hub rebuild{unit_note} and ended before "
-            "post-restart verification]]\n"
-            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
-            "must verify health and task completion.]]"
-        )
-    if unit_line:
-        return (
-            "Detached Agent Hub rebuild queued successfully.\n"
-            f"{unit_line}\n"
-            "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
-            "must verify health and task completion.]]"
-        )
-    return (
-        "Detached Agent Hub rebuild queued successfully.\n"
-        "[[S:partial:Queued detached Agent Hub rebuild; a fresh post-restart session "
-        "must verify health and task completion.]]"
-    )
 
 
 @dataclass
@@ -202,18 +137,17 @@ async def _run_tool_loop(
                     tool_use_metadata,
                     getattr(event, "tool_use_id", None),
                 )
-                if _is_detached_agent_hub_rebuild_handoff(
+                detached_closeout = detached_agent_hub_rebuild_closeout(
                     project_id=project_id,
                     tool_name=tool_name,
                     tool_input=tool_input,
                     tool_content=str(getattr(event, "content", "") or ""),
-                ):
+                    agent_slug=state.agent_slug,
+                    external_id=state.external_id,
+                )
+                if detached_closeout is not None:
                     state.content_parts = [
-                        _build_detached_agent_hub_rebuild_closeout(
-                            agent_slug=state.agent_slug,
-                            external_id=state.external_id,
-                            tool_content=str(getattr(event, "content", "") or ""),
-                        )
+                        detached_closeout
                     ]
                     state.terminal_finish_reason = "end_turn"
                     break
