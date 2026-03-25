@@ -39,7 +39,7 @@ export function ArenaAgentCard({ agent }: ArenaAgentCardProps) {
               {agent.name}
             </h3>
           </div>
-          <p className="mt-1 text-xs text-slate-400">{agent.slug}</p>
+          <p className="mt-1 text-[11px] font-mono text-slate-500">{agent.slug}</p>
         </div>
         <span
           className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${status.tone}`}
@@ -50,66 +50,63 @@ export function ArenaAgentCard({ agent }: ArenaAgentCardProps) {
 
       {hasHistory ? (
         <>
-          <dl className="relative mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-400">
-                Score
-              </dt>
-              <dd className="mt-1 inline-flex items-center gap-1.5 font-semibold text-slate-100">
-                <Trophy className="h-3.5 w-3.5 text-amber-500" />
-                {formatScore(agent.benchmark.avg_score)}
-              </dd>
+          {/* Score bar */}
+          <div className="relative mt-4">
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-[11px] uppercase tracking-wide text-slate-500">Score</span>
+              <span className="text-sm font-semibold tabular-nums text-slate-100">{formatScore(agent.benchmark.avg_score)}</span>
             </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-400">
-                Pass rate
-              </dt>
-              <dd className="mt-1 font-semibold text-slate-100">
+            <div className="h-1.5 w-full rounded-full bg-slate-800">
+              <div
+                className="h-1.5 rounded-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-500"
+                style={{ width: `${Math.min(100, agent.benchmark.avg_score ?? 0)}%` }}
+              />
+            </div>
+          </div>
+
+          <dl className="relative mt-3 grid grid-cols-3 gap-2 text-sm">
+            <div className="rounded-lg bg-slate-800/50 px-2.5 py-2 text-center">
+              <dd className="text-sm font-semibold tabular-nums text-slate-100">
                 {formatPercent(agent.benchmark.pass_rate)}
               </dd>
+              <dt className="mt-0.5 text-[10px] text-slate-500">Pass</dt>
             </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-400">
-                Runs
-              </dt>
-              <dd className="mt-1 font-semibold text-slate-100">
+            <div className="rounded-lg bg-slate-800/50 px-2.5 py-2 text-center">
+              <dd className="text-sm font-semibold tabular-nums text-slate-100">
                 {agent.benchmark.total_runs}
               </dd>
+              <dt className="mt-0.5 text-[10px] text-slate-500">Runs</dt>
             </div>
-            <div>
-              <dt className="text-xs uppercase tracking-wide text-slate-400">
-                Regressions
-              </dt>
-              <dd className="mt-1 inline-flex items-center gap-1.5 font-semibold text-slate-100">
-                {agent.benchmark.open_regressions > 0 && (
-                  <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
-                )}
+            <div className="rounded-lg bg-slate-800/50 px-2.5 py-2 text-center">
+              <dd className={`text-sm font-semibold tabular-nums ${agent.benchmark.open_regressions > 0 ? "text-rose-400" : "text-slate-100"}`}>
                 {agent.benchmark.open_regressions}
               </dd>
+              <dt className="mt-0.5 text-[10px] text-slate-500">Regress</dt>
             </div>
           </dl>
 
-          <div className="relative mt-4 flex flex-wrap gap-2 text-[11px]">
-            <span className="rounded-full bg-slate-800 px-2 py-1 text-slate-200 ring-1 ring-slate-700">
-              Last run: {formatRelativeTime(agent.benchmark.latest_completed_at)}
+          <div className="relative mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-slate-300 ring-1 ring-slate-700">
+              {formatRelativeTime(agent.benchmark.latest_completed_at)}
             </span>
             {signalCount > 0 ? (
-              <span className="rounded-full bg-amber-950/30 px-2 py-1 text-amber-200 ring-1 ring-amber-900">
-                {signalCount} recent signals
+              <span className="rounded-full bg-amber-950/30 px-2 py-0.5 text-amber-200 ring-1 ring-amber-900">
+                {signalCount} signals
               </span>
             ) : null}
           </div>
           {agent.top_issue ? (
-            <p className="relative mt-3 line-clamp-2 text-xs text-slate-400" title={agent.top_issue.content}>
+            <p className="relative mt-2.5 line-clamp-2 text-xs leading-relaxed text-slate-400" title={agent.top_issue.content}>
               {summarizeArenaIssue(agent.top_issue.content, 120)}
             </p>
           ) : null}
         </>
       ) : (
         <>
-          <p className="relative mt-4 text-sm text-slate-400">
-            No benchmark history yet
-          </p>
+          <div className="relative mt-4 rounded-lg border border-dashed border-slate-700 bg-slate-800/20 px-3 py-4 text-center">
+            <p className="text-sm text-slate-400">No benchmark history</p>
+            <p className="mt-1 text-[11px] text-slate-500">Run Arena to generate evidence</p>
+          </div>
           {agent.top_issue ? (
             <p className="relative mt-3 line-clamp-2 text-xs text-slate-400" title={agent.top_issue.content}>
               {summarizeArenaIssue(agent.top_issue.content, 120)}

@@ -296,7 +296,7 @@ export function ArenaCommandCenter() {
         </section>
 
         <section className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-emerald-900/60">
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-emerald-900/60 animate-fade-up stagger-1">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Coverage</p>
               <div className="h-2 w-2 rounded-full bg-emerald-500/60" />
@@ -308,7 +308,7 @@ export function ArenaCommandCenter() {
               {formatPercent(coverageRate)} with Arena evidence
             </p>
           </div>
-          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-blue-900/60">
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-blue-900/60 animate-fade-up stagger-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Runs</p>
               <div className="h-2 w-2 rounded-full bg-blue-500/60" />
@@ -316,7 +316,7 @@ export function ArenaCommandCenter() {
             <p className="mt-3 text-3xl font-semibold text-slate-50">{overview.system.total_runs}</p>
             <p className="mt-2 text-sm text-slate-400">In current {windowDays}-day window</p>
           </div>
-          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-amber-900/60">
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-amber-900/60 animate-fade-up stagger-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Avg Score</p>
               <div className="h-2 w-2 rounded-full bg-amber-500/60" />
@@ -324,7 +324,7 @@ export function ArenaCommandCenter() {
             <p className="mt-3 text-3xl font-semibold text-slate-50">{formatScore(overview.system.avg_score)}</p>
             <p className="mt-2 text-sm text-slate-400">Benchmarked agents only</p>
           </div>
-          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-rose-900/60">
+          <div className="group rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-rose-900/60 animate-fade-up stagger-4">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Regressions</p>
               <div className={cn("h-2 w-2 rounded-full", overview.system.total_regressions > 0 ? "bg-rose-500/80" : "bg-slate-600")} />
@@ -355,7 +355,7 @@ export function ArenaCommandCenter() {
         </section>
 
         <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-emerald-900/40">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-100">Daily review</p>
@@ -363,7 +363,7 @@ export function ArenaCommandCenter() {
                   Jenny’s evidence review loop for small justified changes.
                 </p>
               </div>
-              <CalendarClock className="h-5 w-5 text-amber-500" />
+              <CalendarClock className="h-5 w-5 text-emerald-500" />
             </div>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between">
@@ -381,7 +381,7 @@ export function ArenaCommandCenter() {
             </dl>
           </article>
 
-          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-violet-900/40">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-100">Nightly honing</p>
@@ -389,7 +389,7 @@ export function ArenaCommandCenter() {
                   Benchmark-backed self-correction for Jenny and her routing choices.
                 </p>
               </div>
-              <FlaskConical className="h-5 w-5 text-amber-500" />
+              <FlaskConical className="h-5 w-5 text-violet-400" />
             </div>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between">
@@ -407,7 +407,7 @@ export function ArenaCommandCenter() {
             </dl>
           </article>
 
-          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+          <article className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 transition-colors hover:border-blue-900/40">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-slate-100">Memory health</p>
@@ -415,7 +415,7 @@ export function ArenaCommandCenter() {
                   Whether injected memory is getting cited, searched, and debugged properly.
                 </p>
               </div>
-              <Brain className="h-5 w-5 text-amber-500" />
+              <Brain className="h-5 w-5 text-blue-400" />
             </div>
             <dl className="mt-4 space-y-3 text-sm">
               <div className="flex items-center justify-between">
@@ -560,9 +560,9 @@ export function ArenaCommandCenter() {
         <section className="mt-8">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Agents</h3>
-              <p className="mt-2 text-sm text-slate-300">
-                Worst-first ordering blends regressions, benchmark score, and recent agent signal volume.
+              <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Agent Breakdown</h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Sorted by pressure — regressions, score, and signal volume.
               </p>
             </div>
           </div>
