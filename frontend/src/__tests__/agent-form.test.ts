@@ -99,53 +99,65 @@ describe("agent form helpers", () => {
     expect(payload.memory_config).toEqual(memoryConfig);
   });
 
-  it("normalizes sparse memory_config while preserving extra keys", () => {
-    const payload = buildAgentUpdatePayload({
-      name: "Voice Responder",
-      primary_model_id: "claude-sonnet-4-6",
-      memory_config: {
-        include_mandates: false,
-        include_guardrails: false,
-        include_references: true,
-        cross_project_enabled: true,
-      } as unknown as Agent["memory_config"],
-    });
+  it("uses the backend effective config as the inherited baseline", () => {
+    const formData = createAgentFormData(
+      makeAgent({
+        effective_memory_config: {
+          injection_enabled: false,
+          include_mandates: false,
+          include_guardrails: false,
+          include_references: false,
+          continuity_enabled: false,
+          continuity_max_sessions: 7,
+          audience_tags: ["voice"],
+          exclude_tags: ["draft"],
+        },
+      })
+    );
 
-    expect(payload.memory_config).toEqual({
-      injection_enabled: true,
-      include_mandates: false,
-      include_guardrails: false,
-      include_references: true,
-      continuity_enabled: true,
-      continuity_max_sessions: 5,
-      audience_tags: [],
-      exclude_tags: [],
-      cross_project_enabled: true,
-    });
-  });
-
-  it("canonicalizes disabled memory_config before saving", () => {
-    const payload = buildAgentUpdatePayload({
-      name: "Git Agent",
-      primary_model_id: "claude-sonnet-4-6",
-      memory_config: {
-        injection_enabled: false,
-        include_mandates: true,
-        include_guardrails: true,
-        include_references: true,
-        continuity_enabled: true,
-      } as unknown as Agent["memory_config"],
-    });
-
-    expect(payload.memory_config).toEqual({
+    expect(formData.memory_config).toBeNull();
+    expect(formData.effective_memory_config).toEqual({
       injection_enabled: false,
       include_mandates: false,
       include_guardrails: false,
       include_references: false,
       continuity_enabled: false,
-      continuity_max_sessions: 5,
+      continuity_max_sessions: 7,
+      audience_tags: ["voice"],
+      exclude_tags: ["draft"],
+    });
+  });
+
+  it("normalizes sparse agent memory config against the backend effective config", () => {
+    const formData = createAgentFormData(
+      makeAgent({
+        memory_config: {
+          include_references: true,
+          cross_project_enabled: true,
+        } as unknown as Agent["memory_config"],
+        effective_memory_config: {
+          injection_enabled: false,
+          include_mandates: false,
+          include_guardrails: false,
+          include_references: false,
+          continuity_enabled: false,
+          continuity_max_sessions: 6,
+          audience_tags: [],
+          exclude_tags: ["draft"],
+        },
+      })
+    );
+
+    expect(formData.memory_config).toEqual({
+      injection_enabled: false,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: false,
+      continuity_enabled: false,
+      continuity_max_sessions: 6,
       audience_tags: [],
-      exclude_tags: [],
+      exclude_tags: ["draft"],
+      cross_project_enabled: true,
     });
   });
 

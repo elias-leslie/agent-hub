@@ -31,6 +31,36 @@ function makeFormData(overrides: Partial<Agent> = {}): Partial<Agent> {
 }
 
 describe("MemoryTab", () => {
+  it("seeds custom settings from the effective backend config", () => {
+    const updateField = vi.fn();
+    const inheritedConfig = {
+      injection_enabled: false,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: false,
+      continuity_enabled: false,
+      continuity_max_sessions: 7,
+      audience_tags: [],
+      exclude_tags: [],
+    };
+
+    render(
+      <MemoryTab
+        formData={makeFormData({
+          memory_config: null,
+          effective_memory_config: inheritedConfig,
+        })}
+        updateField={updateField}
+      />
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enable Custom Memory Settings" })
+    );
+
+    expect(updateField).toHaveBeenCalledWith("memory_config", inheritedConfig);
+  });
+
   it("clears subordinate options when memory injection is turned off", () => {
     const updateField = vi.fn();
 
