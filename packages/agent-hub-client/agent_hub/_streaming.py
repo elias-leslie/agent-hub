@@ -8,28 +8,20 @@ import httpx
 
 from agent_hub._utils import handle_error
 from agent_hub.exceptions import AgentHubError
-from agent_hub.models import MessageInput, StreamChunk
+from agent_hub.models import StreamChunk, ToolCall
 
 
 async def stream_completion_sse(
     client: httpx.AsyncClient,
-    messages: list[dict[str, str] | MessageInput],
-    project_id: str,
+    payload: dict[str, Any],
     headers: dict[str, str],
-    agent_slug: str | None = None,
-    model: str | None = None,
-    temperature: float = 1.0,
 ) -> AsyncIterator[StreamChunk]:
     """Stream a completion using SSE (Server-Sent Events).
 
     Args:
         client: Async httpx client.
-        messages: Conversation messages.
-        project_id: Project ID for session tracking.
+        payload: Completion request payload.
         headers: Request headers.
-        agent_slug: Agent slug for routing.
-        model: Direct model specification.
-        temperature: Sampling temperature.
 
     Yields:
         StreamChunk for each streaming event.
@@ -37,25 +29,6 @@ async def stream_completion_sse(
     Raises:
         AgentHubError: If connection or streaming fails.
     """
-    # Normalize messages
-    msg_dicts = []
-    for msg in messages:
-        if isinstance(msg, MessageInput):
-            msg_dicts.append(msg.model_dump())
-        else:
-            msg_dicts.append(msg)
-
-    payload: dict[str, Any] = {
-        "messages": msg_dicts,
-        "project_id": project_id,
-        "temperature": temperature,
-        "stream": True,
-    }
-    if agent_slug:
-        payload["agent_slug"] = agent_slug
-    if model:
-        payload["model"] = model
-
     try:
         async with client.stream(
             "POST", "/api/complete", json=payload, headers=headers
@@ -83,9 +56,50 @@ async def stream_completion_sse(
                                 type="content", content=data.get("content", "")
                             )
 
+                        elif event_type == "thinking":
+                            yield StreamChunk(
+                                type="thinking", content=data.get("content", "")
+                            )
+
+                        elif event_type == "tool_use":
+                            tool_id = data.get("tool_id")
+                            tool_name = data.get("tool_name")
+                            tool_input = data.get("tool_input")
+                            yield StreamChunk(
+                                type="tool_use",
+                                tool_id=tool_id,
+                                tool_name=tool_name,
+                                tool_input=tool_input,
+                                tool_call=ToolCall(
+                                    id=tool_id or "",
+                                    name=tool_name or "",
+                                    input=tool_input or {},
+                                ),
+                            )
+
+                        elif event_type == "tool_result":
+                            yield StreamChunk(
+                                type="tool_result",
+                                tool_id=data.get("tool_id"),
+                                tool_result=data.get("tool_result"),
+                                tool_status=data.get("tool_status"),
+                            )
+
                         elif event_type == "done":
                             yield StreamChunk(
                                 type="done",
+                                finish_reason=data.get("finish_reason"),
+                                model=data.get("model"),
+                                provider=data.get("provider"),
+                                input_tokens=data.get("input_tokens"),
+                                output_tokens=data.get("output_tokens"),
+                                session_id=data.get("session_id"),
+                            )
+                            return
+
+                        elif event_type == "cancelled":
+                            yield StreamChunk(
+                                type="cancelled",
                                 finish_reason=data.get("finish_reason"),
                                 model=data.get("model"),
                                 provider=data.get("provider"),
