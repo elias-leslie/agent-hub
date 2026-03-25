@@ -11,6 +11,7 @@ import pytest
 from app.workflows._heartbeat_data import (
     _build_workstream_next_action,
     _classify_workstream_lane,
+    _collect_agent_hub_heartbeat_state,
     _collect_summitflow_heartbeat_state,
     _fetch_cleanup_status,
     _fetch_git_status_compact,
@@ -258,6 +259,141 @@ class TestCollectSummitflowHeartbeatState:
         assert state.task_overview_raw == ""
         assert state.cleanup_status_response is None
         assert state.git_status_rows == []
+
+
+class TestCollectAgentHubHeartbeatState:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._query_recent_workstream_sessions", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._query_active_specialist_sessions", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_data._query_active_sessions_for_heartbeat", new_callable=AsyncMock)
+    async def test_collects_canonical_sections_once(
+        self,
+        mock_active_sessions: AsyncMock,
+        mock_specialists: AsyncMock,
+        mock_workstreams: AsyncMock,
+    ) -> None:
+        mock_active_sessions.return_value = [{"session_id": "s-1"}]
+        mock_specialists.return_value = [{"agent_slug": "reviewer"}]
+        mock_workstreams.return_value = [{"task_id": "task-1"}]
+
+        state = await _collect_agent_hub_heartbeat_state("agent-hub")
+
+        assert state.active_sessions == [{"session_id": "s-1"}]
+        assert state.active_specialist_sessions == [{"agent_slug": "reviewer"}]
+        assert state.workstream_rows == [{"task_id": "task-1"}]
+        mock_active_sessions.assert_awaited_once()
+        mock_specialists.assert_awaited_once()
+        mock_workstreams.assert_awaited_once()
+        assert mock_active_sessions.await_args.args == ("agent-hub",)
+        assert mock_specialists.await_args.args == ("agent-hub",)
+        assert mock_workstreams.await_args.args == ("agent-hub",)
+        assert mock_active_sessions.await_args.kwargs["now"] == state.collected_at
+        assert mock_specialists.await_args.kwargs["now"] == state.collected_at
+        assert mock_workstreams.await_args.kwargs["now"] == state.collected_at
+
+    @pytest.mark.asyncio
+    @patch(
+        "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+        new_callable=AsyncMock,
+        return_value=[],
+    )
+    @patch(
+        "app.workflows._heartbeat_data._query_active_specialist_sessions",
+        new_callable=AsyncMock,
+        return_value=[],
+    )
+    @patch(
+        "app.workflows._heartbeat_data._query_active_sessions_for_heartbeat",
+        new_callable=AsyncMock,
+        return_value=[],
+    )
+    async def test_handles_missing_state_gracefully(
+        self,
+        _mock_active_sessions: AsyncMock,
+        _mock_specialists: AsyncMock,
+        _mock_workstreams: AsyncMock,
+    ) -> None:
+        state = await _collect_agent_hub_heartbeat_state()
+
+        assert state.active_sessions == []
+        assert state.active_specialist_sessions == []
+        assert state.workstream_rows == []
+
+
+class TestAppendDynamicSections:
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt._get_feedback_summary_section", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_workstream_inventory", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_active_work_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._collect_agent_hub_heartbeat_state", new_callable=AsyncMock)
+    @patch("app.workflows._heartbeat_prompt._collect_summitflow_heartbeat_state", new_callable=AsyncMock)
+    async def test_threads_canonical_states_into_section_builders(
+        self,
+        mock_collect_summitflow: AsyncMock,
+        mock_collect_agent_hub: AsyncMock,
+        mock_active_work: AsyncMock,
+        mock_protection: AsyncMock,
+        mock_cleanup: AsyncMock,
+        mock_active_specialists: AsyncMock,
+        mock_roster: AsyncMock,
+        mock_workstreams: AsyncMock,
+        mock_git: AsyncMock,
+        mock_feedback: AsyncMock,
+    ) -> None:
+        from app.workflows._heartbeat_data import AgentHubHeartbeatState, SummitFlowHeartbeatState
+        from app.workflows._heartbeat_prompt import _append_dynamic_sections
+
+        summitflow_state = SummitFlowHeartbeatState(
+            task_overview_response={"raw": "READY-ALL[1]", "payload": {"projects": []}},
+            cleanup_status_response={"compact": "CLEANUP[all]:repos=0 needs_cleanup=0"},
+            git_status_rows=[],
+        )
+        agent_hub_state = AgentHubHeartbeatState(
+            collected_at=datetime(2026, 3, 25, tzinfo=UTC),
+            active_sessions=[{"session_id": "s-1"}],
+            active_specialist_sessions=[{"agent_slug": "reviewer"}],
+            workstream_rows=[{"task_id": "task-1"}],
+        )
+        mock_collect_summitflow.return_value = summitflow_state
+        mock_collect_agent_hub.return_value = agent_hub_state
+
+        result = await _append_dynamic_sections("base", "agent-hub", "codex")
+
+        assert result == "base"
+        mock_collect_summitflow.assert_awaited_once_with("agent-hub")
+        mock_collect_agent_hub.assert_awaited_once_with("agent-hub")
+        mock_active_work.assert_awaited_once_with(
+            task_overview="",
+            task_overview_payload={"projects": []},
+            target_project_id="agent-hub",
+            heartbeat_state=summitflow_state,
+            agent_hub_state=agent_hub_state,
+        )
+        mock_protection.assert_awaited_once_with("agent-hub")
+        mock_cleanup.assert_awaited_once_with(
+            "agent-hub",
+            cleanup_status_response=summitflow_state.cleanup_status_response,
+        )
+        mock_active_specialists.assert_awaited_once_with(
+            "agent-hub",
+            agent_hub_state=agent_hub_state,
+        )
+        mock_roster.assert_awaited_once_with()
+        mock_workstreams.assert_awaited_once_with(
+            "codex",
+            task_overview="",
+            task_overview_payload={"projects": []},
+            target_project_id="agent-hub",
+            heartbeat_state=summitflow_state,
+            agent_hub_state=agent_hub_state,
+        )
+        mock_git.assert_awaited_once_with("agent-hub", git_status_rows=[])
+        mock_feedback.assert_awaited_once_with()
 
 
 class TestBuildHeartbeatPromptIncludesGitState:

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from app.services.prompt_catalog import PERSONA_HEARTBEAT_PROMPT_SLUG
 from app.services.prompt_service import require_prompt_content
 from app.workflows._heartbeat_data import (
+    _collect_agent_hub_heartbeat_state,
     _collect_summitflow_heartbeat_state,
     _fetch_task_overview,
     _get_active_specialist_inventory,
@@ -132,7 +133,10 @@ async def _append_dynamic_sections(
     provider: str | None = None,
 ) -> str:
     """Append optional dynamic data sections to the heartbeat prompt."""
-    heartbeat_state = await _collect_summitflow_heartbeat_state(target_project_id)
+    heartbeat_state, agent_hub_state = await asyncio.gather(
+        _collect_summitflow_heartbeat_state(target_project_id),
+        _collect_agent_hub_heartbeat_state(target_project_id),
+    )
     task_overview_payload = heartbeat_state.task_overview_payload
     task_overview = "" if task_overview_payload is not None else heartbeat_state.task_overview_raw
     (
@@ -150,13 +154,17 @@ async def _append_dynamic_sections(
             task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
             heartbeat_state=heartbeat_state,
+            agent_hub_state=agent_hub_state,
         ),
         _get_protection_status_summary(target_project_id),
         _get_cleanup_status_summary(
             target_project_id,
             cleanup_status_response=heartbeat_state.cleanup_status_response,
         ),
-        _get_active_specialist_inventory(target_project_id),
+        _get_active_specialist_inventory(
+            target_project_id,
+            agent_hub_state=agent_hub_state,
+        ),
         _get_agent_roster_summary(),
         _get_workstream_inventory(
             provider,
@@ -164,6 +172,7 @@ async def _append_dynamic_sections(
             task_overview_payload=task_overview_payload,
             target_project_id=target_project_id,
             heartbeat_state=heartbeat_state,
+            agent_hub_state=agent_hub_state,
         ),
         _get_git_status_summary(
             target_project_id,
