@@ -110,7 +110,7 @@ export default function ClientsPage() {
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 rounded-2xl bg-slate-800/70 animate-pulse" />
+              <div key={i} className="h-24 rounded-2xl animate-shimmer" />
             ))}
           </div>
         ) : data?.clients.length === 0 ? (

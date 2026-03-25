@@ -52,7 +52,7 @@ export function ChartsSection({
         </div>
         <div className="h-40 rounded-2xl border border-slate-800/70 bg-slate-950/55 p-3">
           {dailyLoading ? (
-            <div className="h-full rounded-xl bg-slate-800 animate-pulse" />
+            <div className="h-full rounded-xl animate-shimmer" />
           ) : (
             <Sparkline data={requestsByDay} color="emerald" showDot />
           )}
@@ -104,8 +104,8 @@ export function ChartsSection({
         <div className="space-y-2.5">
           {statusLoading ? (
             <>
-              <div className="h-18 rounded-2xl bg-slate-800 animate-pulse" />
-              <div className="h-18 rounded-2xl bg-slate-800 animate-pulse" />
+              <div className="h-18 rounded-2xl animate-shimmer" />
+              <div className="h-18 rounded-2xl animate-shimmer" />
             </>
           ) : status?.providers ? (
             status.providers.map((provider) => (

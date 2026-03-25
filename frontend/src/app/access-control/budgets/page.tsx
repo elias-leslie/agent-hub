@@ -239,12 +239,12 @@ function LoadingSkeletons() {
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-32 bg-slate-800/40 rounded-lg animate-pulse" />
+          <div key={i} className="h-32 rounded-2xl animate-shimmer" />
         ))}
       </div>
       <div className="space-y-2">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-14 bg-slate-800/40 rounded animate-pulse" />
+          <div key={i} className="h-14 rounded-xl animate-shimmer" />
         ))}
       </div>
     </>

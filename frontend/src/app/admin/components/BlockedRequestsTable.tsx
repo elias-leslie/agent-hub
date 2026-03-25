@@ -103,11 +103,11 @@ export function BlockedRequestsTable({
           <div className="divide-y divide-slate-800/50">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className={`grid ${TABLE_GRID_COLS} gap-3 px-4 py-3 items-center`}>
-                <div className="h-4 w-16 rounded bg-slate-800 animate-pulse" />
-                <div className="h-4 w-24 rounded bg-slate-800 animate-pulse" />
-                <div className="h-4 w-full max-w-xs rounded bg-slate-800 animate-pulse" />
-                <div className="h-4 w-32 rounded bg-slate-800 animate-pulse" />
-                <div className="h-4 w-4 rounded bg-slate-800 animate-pulse" />
+                <div className="h-4 w-16 rounded animate-shimmer" />
+                <div className="h-4 w-24 rounded animate-shimmer" />
+                <div className="h-4 w-full max-w-xs rounded animate-shimmer" />
+                <div className="h-4 w-32 rounded animate-shimmer" />
+                <div className="h-4 w-4 rounded animate-shimmer" />
               </div>
             ))}
           </div>
