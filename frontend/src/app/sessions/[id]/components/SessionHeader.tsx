@@ -120,7 +120,7 @@ export function SessionHeader({
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                   activeTab === "timeline"
-                    ? "bg-slate-800 text-slate-200 shadow-sm"
+                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
                     : "text-slate-500 hover:text-slate-400"
                 )}
               >
@@ -132,7 +132,7 @@ export function SessionHeader({
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
                   activeTab === "info"
-                    ? "bg-slate-800 text-slate-200 shadow-sm"
+                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
                     : "text-slate-500 hover:text-slate-400"
                 )}
               >

@@ -63,15 +63,23 @@ export function ArenaHeader({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-              <select
-                value={windowDays}
-                onChange={(event) => onWindowDaysChange(Number(event.target.value) as ArenaWindow)}
-                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-              >
-                <option value="7">Last 7 days</option>
-                <option value="30">Last 30 days</option>
-                <option value="90">Last 90 days</option>
-              </select>
+              <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-0.5">
+                {([7, 30, 90] as ArenaWindow[]).map((days) => (
+                  <button
+                    key={days}
+                    type="button"
+                    onClick={() => onWindowDaysChange(days)}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-md transition-all duration-150",
+                      windowDays === days
+                        ? "bg-amber-600 text-white shadow-sm"
+                        : "text-slate-400 hover:text-slate-200"
+                    )}
+                  >
+                    {days}d
+                  </button>
+                ))}
+              </div>
               <button
                 onClick={onRefresh}
                 disabled={isRefreshing}
@@ -92,7 +100,7 @@ export function ArenaHeader({
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-all duration-200",
                   activeView === view.id
-                    ? "bg-slate-900 text-slate-50 shadow-sm"
+                    ? "bg-amber-950/50 text-amber-200 shadow-sm ring-1 ring-amber-800/50"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60",
                 )}
                 aria-pressed={activeView === view.id}

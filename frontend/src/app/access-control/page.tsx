@@ -132,38 +132,46 @@ export default function AccessControlPage() {
         ) : stats ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <StatCard
-                label="Total Clients"
-                value={stats.total_clients}
-                icon={Users}
-                status="neutral"
-              />
-              <StatCard
-                label="Active Clients"
-                value={stats.active_clients}
-                icon={Shield}
-                status="success"
-              />
-              <StatCard
-                label="Blocked Requests"
-                value={stats.blocked_requests_today}
-                subtext="Today"
-                icon={Ban}
-                status={stats.blocked_requests_today > 0 ? "warning" : "success"}
-              />
-              <StatCard
-                label="Total Requests"
-                value={stats.total_requests_today}
-                subtext="Today"
-                icon={Clock}
-                status="neutral"
-              />
+              <div className="animate-fade-up stagger-1">
+                <StatCard
+                  label="Total Clients"
+                  value={stats.total_clients}
+                  icon={Users}
+                  status="neutral"
+                />
+              </div>
+              <div className="animate-fade-up stagger-2">
+                <StatCard
+                  label="Active Clients"
+                  value={stats.active_clients}
+                  icon={Shield}
+                  status="success"
+                />
+              </div>
+              <div className="animate-fade-up stagger-3">
+                <StatCard
+                  label="Blocked Requests"
+                  value={stats.blocked_requests_today}
+                  subtext="Today"
+                  icon={Ban}
+                  status={stats.blocked_requests_today > 0 ? "warning" : "success"}
+                />
+              </div>
+              <div className="animate-fade-up stagger-4">
+                <StatCard
+                  label="Total Requests"
+                  value={stats.total_requests_today}
+                  subtext="Today"
+                  icon={Clock}
+                  status="neutral"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <a
                 href="/access-control/clients"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
+                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-1"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Users className="h-5 w-5 text-amber-400" />
@@ -176,7 +184,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/permissions"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
+                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-2"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <FolderLock className="h-5 w-5 text-amber-400" />
@@ -189,7 +197,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/budgets"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
+                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-3"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <DollarSign className="h-5 w-5 text-emerald-400" />
@@ -202,7 +210,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/monitoring/requests"
-                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors card-hover-lift"
+                className="block p-5 rounded-xl border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 hover:border-slate-700 transition-all card-hover-lift animate-fade-up stagger-4"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Clock className="h-5 w-5 text-emerald-400" />
@@ -215,7 +223,7 @@ export default function AccessControlPage() {
 
               <a
                 href="/access-control/clients/new"
-                className="block p-5 rounded-lg border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 transition-colors card-hover-lift"
+                className="block p-5 rounded-xl border border-amber-800/40 bg-amber-950/20 hover:bg-amber-950/30 hover:border-amber-700/50 transition-all card-hover-lift animate-fade-up stagger-5"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Shield className="h-5 w-5 text-amber-400" />

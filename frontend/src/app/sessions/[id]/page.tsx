@@ -44,6 +44,7 @@ export default function SessionDetailPage({
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
       {/* Header */}
       {session && (
         <SessionHeader
