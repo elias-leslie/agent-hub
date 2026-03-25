@@ -83,9 +83,10 @@ def normalize_memory_config(memory_config: dict[str, Any] | None) -> dict[str, A
         and key not in _LEGACY_KEYS
     }
     enabled = _coerce_bool(raw.get("enabled"), True)
+    injection_enabled = enabled and _coerce_bool(raw.get("injection_enabled"), True)
     normalized = {
         **extras,
-        "injection_enabled": enabled and _coerce_bool(raw.get("injection_enabled"), True),
+        "injection_enabled": injection_enabled,
         "include_mandates": _coerce_bool(raw.get("include_mandates"), True),
         "include_guardrails": _coerce_bool(raw.get("include_guardrails"), True),
         "include_references": _coerce_bool(raw.get("include_references"), True),
@@ -94,6 +95,11 @@ def normalize_memory_config(memory_config: dict[str, Any] | None) -> dict[str, A
         "audience_tags": _normalize_string_list(raw.get("audience_tags")),
         "exclude_tags": _normalize_string_list(raw.get("exclude_tags")),
     }
+    if not injection_enabled:
+        normalized["include_mandates"] = False
+        normalized["include_guardrails"] = False
+        normalized["include_references"] = False
+        normalized["continuity_enabled"] = False
     return normalized
 
 
@@ -114,7 +120,7 @@ def resolve_effective_memory_config(
     inherited["injection_enabled"] = settings.enabled
     inherited["continuity_enabled"] = settings.continuity_enabled
     inherited["continuity_max_sessions"] = settings.continuity_max_sessions
-    return inherited
+    return normalize_memory_config(inherited) or inherited
 
 
 def memory_injection_enabled(memory_config: dict[str, Any] | None) -> bool:

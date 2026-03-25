@@ -41,6 +41,10 @@ def test_normalize_memory_config_folds_legacy_enabled_into_injection_enabled() -
 
     assert normalized is not None
     assert normalized["injection_enabled"] is False
+    assert normalized["include_mandates"] is False
+    assert normalized["include_guardrails"] is False
+    assert normalized["include_references"] is False
+    assert normalized["continuity_enabled"] is False
     assert "enabled" not in normalized
 
 
@@ -79,11 +83,34 @@ def test_resolve_effective_memory_config_inherits_global_defaults_when_custom_di
 
     assert resolved == {
         "injection_enabled": False,
-        "include_mandates": True,
-        "include_guardrails": True,
-        "include_references": True,
+        "include_mandates": False,
+        "include_guardrails": False,
+        "include_references": False,
         "continuity_enabled": False,
         "continuity_max_sessions": 7,
+        "audience_tags": [],
+        "exclude_tags": [],
+    }
+
+
+def test_normalize_memory_config_clears_subordinate_flags_when_injection_disabled() -> None:
+    normalized = normalize_memory_config(
+        {
+            "injection_enabled": False,
+            "include_mandates": True,
+            "include_guardrails": True,
+            "include_references": True,
+            "continuity_enabled": True,
+        }
+    )
+
+    assert normalized == {
+        "injection_enabled": False,
+        "include_mandates": False,
+        "include_guardrails": False,
+        "include_references": False,
+        "continuity_enabled": False,
+        "continuity_max_sessions": 5,
         "audience_tags": [],
         "exclude_tags": [],
     }

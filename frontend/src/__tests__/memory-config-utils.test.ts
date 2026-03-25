@@ -25,6 +25,24 @@ describe("parseConfig", () => {
     expect(parseConfig({}).injection_enabled).toBe(true);
   });
 
+  it("clears subordinate flags when memory injection is disabled", () => {
+    expect(
+      parseConfig({
+        injection_enabled: false,
+        include_mandates: true,
+        include_guardrails: true,
+        include_references: true,
+        continuity_enabled: true,
+      })
+    ).toMatchObject({
+      injection_enabled: false,
+      include_mandates: false,
+      include_guardrails: false,
+      include_references: false,
+      continuity_enabled: false,
+    });
+  });
+
   it("preserves unknown extension keys while normalizing core fields", () => {
     expect(
       parseConfig({

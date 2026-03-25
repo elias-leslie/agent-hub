@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.services.agent_dto import AgentDTO
+from app.services.memory.context_builder_settings import normalize_memory_config
 
 
 class ToolPermissionSchema(BaseModel):
@@ -138,7 +139,7 @@ class AgentResponse(BaseModel):
             is_active=dto.is_active,
             is_coding_agent=dto.is_coding_agent,
             tool_permissions=dto.tool_permissions,
-            memory_config=dto.memory_config,
+            memory_config=normalize_memory_config(dto.memory_config),
             effective_memory_config=effective_memory_config,
             max_concurrency=dto.max_concurrency,
             max_subagent_concurrency=dto.max_subagent_concurrency,
