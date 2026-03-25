@@ -22,7 +22,7 @@ export function ErrorPage({
   message = "An unexpected error occurred. Please try again.",
   icon: Icon = AlertCircle,
   iconColor = "text-red-500",
-  buttonColor = "bg-amber-600 hover:bg-amber-500",
+  buttonColor = "bg-amber-500 hover:bg-amber-400",
   label = "Error",
 }: ErrorPageProps) {
   useEffect(() => {
@@ -42,7 +42,7 @@ export function ErrorPage({
       </p>
       <button
         onClick={reset}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg ${buttonColor} text-white font-medium transition-colors`}
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl ${buttonColor} text-slate-950 font-semibold transition-colors cursor-pointer`}
       >
         <RefreshCw className="h-4 w-4" />
         Try again

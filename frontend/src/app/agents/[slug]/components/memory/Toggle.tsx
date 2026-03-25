@@ -23,7 +23,7 @@ export function Toggle({ enabled, onToggle, disabled, ariaLabel }: ToggleProps) 
     >
       <span
         className={cn(
-          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+          "inline-block h-4 w-4 transform rounded-full bg-slate-200 transition-transform",
           enabled ? "translate-x-6" : "translate-x-1"
         )}
       />

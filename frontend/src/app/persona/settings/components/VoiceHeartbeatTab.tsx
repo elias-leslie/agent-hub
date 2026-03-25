@@ -101,7 +101,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate, autosave }: VoiceHeartbea
           >
             <span
               className={cn(
-                "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200",
+                "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-slate-200 shadow transition-transform duration-200",
                 ttsEnabled && "translate-x-5",
               )}
             />

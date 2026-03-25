@@ -122,6 +122,75 @@ async def test_query_sessions_includes_live_activity_health_phase_and_quiet() ->
 
 
 @pytest.mark.asyncio
+async def test_query_sessions_excludes_dead_candidate_active_sessions() -> None:
+    """Active session queries should ignore heartbeat-only dead candidates."""
+    mock_db = AsyncMock()
+    now = datetime.now(UTC)
+    live_session = SimpleNamespace(
+        id="sess-live",
+        agent_slug="reviewer",
+        project_id="agent-hub",
+        provider="claude",
+        model="claude-opus-4-6",
+        external_id=None,
+        current_branch=None,
+        workstream_status=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "last_event_type": "tool_result",
+                "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            }
+        },
+        status="active",
+        created_at=now - timedelta(minutes=6),
+        summary_oneliner=None,
+    )
+    dead_session = SimpleNamespace(
+        id="sess-dead",
+        agent_slug="reviewer",
+        project_id="agent-hub",
+        provider="codex",
+        model="gpt-5.4",
+        external_id=None,
+        current_branch=None,
+        workstream_status=None,
+        provider_metadata={
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "last_event_type": "heartbeat",
+                "last_event_at": (now - timedelta(minutes=45)).isoformat(),
+                "last_model_activity_at": (now - timedelta(minutes=45)).isoformat(),
+                "last_heartbeat_at": now.isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            }
+        },
+        status="active",
+        created_at=now - timedelta(minutes=50),
+        summary_oneliner=None,
+    )
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [live_session, dead_session]
+    mock_db.execute.return_value = mock_result
+
+    @asynccontextmanager
+    async def _session():
+        yield mock_db
+
+    with patch("app.db.async_session", _session):
+        result = await query_sessions(status="active")
+
+    assert "sess-live" in result
+    assert "sess-dead" not in result
+
+
+@pytest.mark.asyncio
 async def test_inspect_session_returns_summary_and_latest_message() -> None:
     mock_db = AsyncMock()
     session = SimpleNamespace(

@@ -103,7 +103,7 @@ export function ProviderForm({
           <button
             onClick={handleSave}
             disabled={!allFilled || isSaving}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -157,7 +157,7 @@ export function ProviderForm({
         <button
           onClick={handleSave}
           disabled={!keyValue.trim() || isSaving}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-amber-500 hover:bg-amber-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSaving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

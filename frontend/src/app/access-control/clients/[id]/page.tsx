@@ -126,6 +126,7 @@ export default function ClientDetailPage() {
             <button
               onClick={() => router.push("/access-control/clients")}
               className="icon-button"
+              aria-label="Go back"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>

@@ -72,7 +72,7 @@ export function ArenaHeader({
                     className={cn(
                       "px-3 py-1 text-xs font-medium rounded-md transition-all duration-150",
                       windowDays === days
-                        ? "bg-amber-600 text-white shadow-sm"
+                        ? "bg-amber-500 text-slate-950 shadow-sm"
                         : "text-slate-400 hover:text-slate-200"
                     )}
                   >

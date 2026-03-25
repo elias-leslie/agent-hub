@@ -357,6 +357,7 @@ async def query_sessions(
 
         from app.db import async_session
         from app.models import Session as DBSession
+        from app.services.session_live_activity import is_session_actionably_active
 
         cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
         conditions = [DBSession.created_at >= cutoff, DBSession.agent_slug.is_not(None)]
@@ -370,10 +371,13 @@ async def query_sessions(
         async with async_session() as db:
             result = await db.execute(
                 select(DBSession).where(and_(*conditions))
-                .order_by(DBSession.created_at.desc()).limit(limit)
+                .order_by(DBSession.created_at.desc()).limit(max(limit * 5, 25))
             )
             sessions = result.scalars().all()
 
+        if status == "active":
+            sessions = [session for session in sessions if is_session_actionably_active(session)]
+        sessions = sessions[:limit]
         if not sessions:
             return _empty_sessions_msg(hours_back, agent_slug, status, parent_session_id)
         now = datetime.now(UTC)

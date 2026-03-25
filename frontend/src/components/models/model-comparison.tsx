@@ -38,6 +38,7 @@ export function ModelComparison({ models, onClose, onRemoveModel }: ModelCompari
             type="button"
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+            aria-label="Close comparison"
           >
             <X className="h-5 w-5 text-slate-500" />
           </button>

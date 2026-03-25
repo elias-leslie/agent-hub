@@ -49,6 +49,7 @@ export function SessionHeader({
             <Link
               href="/sessions"
               className="icon-button"
+              aria-label="Back to sessions"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>

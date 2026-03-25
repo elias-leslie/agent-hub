@@ -53,6 +53,8 @@ _STALE_ACTIVE_MINUTES = STALE_WORKSTREAM_IDLE_MINUTES
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
 _ACTIVE_SESSION_LOOKBACK_HOURS = 24
 _ACTIVE_SESSION_GHOST_MINUTES = 15
+_ACTIVE_SESSION_DISPLAY_LIMIT = 5
+_ACTIVE_SESSION_PREFILTER_LIMIT = 25
 _DEFAULT_SESSION_STALE_MINUTES = 15
 _CODING_AGENT_SESSION_STALE_MINUTES = 30
 _BENCHMARK_EXTERNAL_ID_PREFIXES = (
@@ -493,12 +495,13 @@ async def _query_active_sessions(
     target_project_id: str | None = None,
     *,
     now: datetime | None = None,
-) -> tuple[list, datetime]:
-    """Query active sessions from DB; returns (rows, now)."""
+) -> tuple[list[dict[str, object]], datetime]:
+    """Query actionable active sessions from DB; returns (mapped sessions, now)."""
     from sqlalchemy import and_, func, or_, select
 
     from app.db import async_session
     from app.models import Agent, Session, SessionEvent
+    from app.services.session_live_activity import is_session_actionably_active
 
     collected_at = now or datetime.now(UTC)
     cutoff = collected_at - timedelta(hours=_ACTIVE_SESSION_LOOKBACK_HOURS)
@@ -519,9 +522,9 @@ async def _query_active_sessions(
         rows = (
             await db.execute(
                 select(
-                    Session.agent_slug, Session.external_id, Session.current_branch,
-                    Session.health_detail, Session.last_activity_at, Session.created_at,
-                    Agent.is_coding_agent, turn_count.label("turn_count"),
+                    Session,
+                    Agent.is_coding_agent,
+                    turn_count.label("turn_count"),
                 )
                 .outerjoin(Agent, Agent.slug == Session.agent_slug)
                 .where(and_(
@@ -532,27 +535,46 @@ async def _query_active_sessions(
                     Session.project_id == target_project_id if target_project_id else True,
                 ))
                 .order_by(func.coalesce(Session.last_activity_at, Session.created_at).desc())
-                .limit(5)
+                .limit(_ACTIVE_SESSION_PREFILTER_LIMIT)
             )
         ).all()
-    return list(rows), collected_at
+    sessions = [
+        _map_active_session_row(
+            session,
+            is_coding_agent=is_coding_agent,
+            turn_count=turn_count_value,
+            now=collected_at,
+        )
+        for session, is_coding_agent, turn_count_value in rows
+        if is_session_actionably_active(session)
+    ]
+    return sessions[:_ACTIVE_SESSION_DISPLAY_LIMIT], collected_at
 
 
-def _map_active_session_row(row: object, *, now: datetime) -> dict[str, object]:
-    """Map a DB row to an active-session dict with staleness metadata."""
-    last_activity_at = getattr(row, "last_activity_at", None) or getattr(row, "created_at", now)
-    threshold = _session_stale_threshold_minutes(getattr(row, "is_coding_agent", None))
+def _map_active_session_row(
+    session: object,
+    *,
+    is_coding_agent: bool | None,
+    turn_count: int | None,
+    now: datetime,
+) -> dict[str, object]:
+    """Map a live session row to an active-session dict with staleness metadata."""
+    last_activity_at = getattr(session, "last_activity_at", None) or getattr(session, "created_at", now)
+    threshold = _session_stale_threshold_minutes(is_coding_agent)
     idle_minutes = max(int((now - last_activity_at).total_seconds() / 60), 0)
     return {
-        "agent_slug": getattr(row, "agent_slug", None),
+        "agent_slug": getattr(session, "agent_slug", None),
         "task_ref": (
-            infer_task_id(getattr(row, "external_id", None), getattr(row, "current_branch", None))
-            or getattr(row, "external_id", None)
-            or getattr(row, "current_branch", None)
+            infer_task_id(
+                getattr(session, "external_id", None),
+                getattr(session, "current_branch", None),
+            )
+            or getattr(session, "external_id", None)
+            or getattr(session, "current_branch", None)
         ),
-        "health_detail": getattr(row, "health_detail", None),
+        "health_detail": getattr(session, "health_detail", None),
         "last_activity_at": last_activity_at,
-        "turn_count": int(getattr(row, "turn_count", None) or 0),
+        "turn_count": int(turn_count or 0),
         "idle_minutes": idle_minutes,
         "is_stale": idle_minutes >= threshold,
     }
@@ -564,8 +586,8 @@ async def _query_active_sessions_for_heartbeat(
     now: datetime | None = None,
 ) -> list[dict[str, object]]:
     """Query and map active sessions for heartbeat display."""
-    rows, collected_at = await _query_active_sessions(target_project_id, now=now)
-    return [_map_active_session_row(r, now=collected_at) for r in rows]
+    sessions, _ = await _query_active_sessions(target_project_id, now=now)
+    return sessions
 
 
 async def _fetch_active_sessions_section(

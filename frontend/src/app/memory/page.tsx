@@ -69,7 +69,7 @@ export default function MemoryPage() {
   }, [stats]);
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="page-shell">
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-xl">
         <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-12">

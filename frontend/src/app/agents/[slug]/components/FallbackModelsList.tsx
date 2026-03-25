@@ -62,6 +62,7 @@ export function FallbackModelsList({
                 type="button"
                 onClick={() => removeModel(index)}
                 className="icon-button h-10 w-10 border-rose-500/20 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
+                aria-label="Remove model"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

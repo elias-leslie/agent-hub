@@ -272,7 +272,7 @@ export default function AgentsPage() {
               type="button"
               onClick={dismissArchiveMessage}
               aria-label="Dismiss archive message"
-              className="rounded p-1 hover:bg-white/10"
+              className="rounded p-1 hover:bg-slate-400/10"
             >
               <X className="h-4 w-4" />
             </button>

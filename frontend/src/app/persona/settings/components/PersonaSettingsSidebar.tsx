@@ -74,6 +74,7 @@ export function PersonaSettingsSidebar({
           <button
             type="button"
             onClick={onMobileClose}
+            aria-label="Close sidebar"
             className="icon-button h-9 w-9 lg:hidden"
           >
             <X className="h-4 w-4" />

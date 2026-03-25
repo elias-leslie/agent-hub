@@ -130,7 +130,7 @@ export function KillSwitchToggle({
               )}
             >
               {isHolding && (
-                <div className="absolute inset-0 bg-white opacity-20" style={{ width: `${progress}%` }} />
+                <div className="absolute inset-0 bg-slate-200 opacity-20" style={{ width: `${progress}%` }} />
               )}
               <span className="relative">Hold to Confirm</span>
             </button>

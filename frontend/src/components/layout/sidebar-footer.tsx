@@ -54,6 +54,7 @@ export function SidebarFooter({
           isCollapsed && "justify-center",
         )}
         title={isCollapsed ? "Settings" : undefined}
+        aria-label="Settings"
       >
         <Settings className="h-3.5 w-3.5" />
         {!isCollapsed && <span className="text-[13px] hidden lg:block">Settings</span>}
@@ -71,6 +72,7 @@ export function SidebarFooter({
           "transition-colors duration-150",
           isCollapsed && "justify-center",
         )}
+        aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
         {isCollapsed ? (
           <ChevronRight className="h-3.5 w-3.5" />
