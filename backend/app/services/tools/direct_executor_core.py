@@ -172,6 +172,43 @@ def _in_band_agent_hub_restart_block_reason(command: str) -> str | None:
     return None
 
 
+def _rewrite_in_band_agent_hub_restart(command: str) -> tuple[str, str] | None:
+    """Canonicalize simple Agent Hub self-restarts to detached rebuilds."""
+    segments = _split_shell_segments(command)
+    if len(segments) != 1:
+        return None
+
+    segment = segments[0]
+    if not segment:
+        return None
+
+    script_index = 0
+    if Path(segment[0]).name.lower() == "bash":
+        if len(segment) < 2:
+            return None
+        script_index = 1
+
+    script_name = Path(segment[script_index]).name.lower()
+    if script_name not in _RESTART_SCRIPT_BASENAMES:
+        return None
+
+    args = segment[script_index + 1:]
+    if any(arg in {"--help", "-h", "--status", "--detach"} for arg in args):
+        return None
+
+    positional = [arg.lower() for arg in args if not arg.startswith("-")]
+    if positional != ["agent-hub"]:
+        return None
+
+    rewritten = list(segment)
+    rewritten.insert(script_index + 1, "--detach")
+    rewritten_command = shlex.join(rewritten)
+    return (
+        rewritten_command,
+        f"Command auto-detached for runtime safety. Running `{rewritten_command}` instead.",
+    )
+
+
 def _self_hosting_restart_block_reason(command: str, env: dict[str, str]) -> str | None:
     """Return a block reason when a command would restart its hosting worker."""
     host_service = env.get("AGENT_HUB_HOST_SERVICE", "").strip().lower()
@@ -332,6 +369,20 @@ class DirectToolExecutor:
         """Execute a bash command with environment inheritance."""
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
+
+        auto_detached = _rewrite_in_band_agent_hub_restart(command)
+        if auto_detached:
+            rewritten_command, message = auto_detached
+            result = await run_bash(
+                rewritten_command,
+                self.working_dir,
+                self._env,
+                agent_slug=self._agent_slug,
+            )
+            result = result.strip()
+            if result:
+                return f"{message}\n{result}"
+            return message
 
         in_band_restart_reason = _in_band_agent_hub_restart_block_reason(command)
         if in_band_restart_reason:
