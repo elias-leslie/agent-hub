@@ -43,6 +43,17 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
 _STREAM_STOP = object()  # Sentinel: async iteration exhausted
 
 
+def _is_benign_interrupt_error(exc: Exception) -> bool:
+    """Return True when interrupt raced with transport shutdown."""
+    message = str(exc).lower()
+    return (
+        "not ready for writing" in message
+        or "closed resource" in message
+        or "broken pipe" in message
+        or "connection lost" in message
+    )
+
+
 @dataclass
 class ResultMessage:
     """Fallback terminal message when the Claude SDK omits its final result frame."""
@@ -110,6 +121,23 @@ class _ClaudeInternalQuerySession:
             message = self.parse_message(data)
             if message is not None:
                 yield message
+
+    async def interrupt(self) -> None:
+        """Interrupt the owned Query when the SDK exposes that control surface."""
+        if self.query_obj is None:
+            return
+        interrupt = getattr(self.query_obj, "interrupt", None)
+        if interrupt is None:
+            return
+        try:
+            result = interrupt()
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:
+            if _is_benign_interrupt_error(exc):
+                logger.debug("Ignoring Claude interrupt race during transport shutdown: %s", exc)
+                return
+            raise
 
     async def close(self) -> None:
         """Close the owned Query from the correct task when possible."""
@@ -347,7 +375,7 @@ class _ClaudeSDKQuerySession:
         if self.started:
             return
         self.started = True
-        if not hasattr(self.options, "cli_path") or not hasattr(self.options, "system_prompt"):
+        if not all(hasattr(self.options, attr) for attr in ("cli_path", "system_prompt", "cwd")):
             from claude_agent_sdk import query as sdk_query
 
             self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
@@ -364,15 +392,22 @@ class _ClaudeSDKQuerySession:
             self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
             return
 
-        self.internal_session = _ClaudeInternalQuerySession(
-            prompt=self.prompt,
-            options=self.options,
-            query_cls=Query,
-            parse_message=parse_message,
-            transport=SubprocessCLITransport(prompt=self.prompt, options=self.options),
-        )
-        await self.internal_session.start()
-        self.message_iter = self.internal_session.iter_messages().__aiter__()
+        try:
+            self.internal_session = _ClaudeInternalQuerySession(
+                prompt=self.prompt,
+                options=self.options,
+                query_cls=Query,
+                parse_message=parse_message,
+                transport=SubprocessCLITransport(prompt=self.prompt, options=self.options),
+            )
+            await self.internal_session.start()
+            self.message_iter = self.internal_session.iter_messages().__aiter__()
+        except (AttributeError, TypeError):
+            logger.debug("Claude SDK internal transport unavailable for options; using public query API", exc_info=True)
+            self.internal_session = None
+            from claude_agent_sdk import query as sdk_query
+
+            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
 
     async def close(self) -> None:
         """Close the iterator and owned internal session once."""
@@ -385,6 +420,22 @@ class _ClaudeSDKQuerySession:
         if self.internal_session is not None:
             with suppress(asyncio.CancelledError):
                 await self.internal_session.close()
+
+    async def interrupt(self) -> None:
+        """Interrupt the active query without forcing cross-task close semantics."""
+        if self.internal_session is not None:
+            with suppress(asyncio.CancelledError):
+                await self.internal_session.interrupt()
+            return
+        if self.message_iter is None:
+            return
+        interrupt = getattr(self.message_iter, "interrupt", None)
+        if interrupt is None:
+            return
+        result = interrupt()
+        if asyncio.iscoroutine(result):
+            with suppress(asyncio.CancelledError):
+                await result
 
 
 def _build_can_use_tool(

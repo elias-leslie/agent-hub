@@ -124,6 +124,37 @@ class TestStreamCompletionGenerator:
             assert len(content_chunks) == 2
 
     @pytest.mark.asyncio
+    async def test_stream_completion_forwards_abort_event_to_adapter_stream(self):
+        """Non-tool streaming should pass the registered cancel event to the adapter."""
+        from unittest.mock import AsyncMock, patch
+
+        captured: dict[str, object] = {}
+
+        async def mock_stream(*args, **kwargs):
+            captured.update(kwargs)
+            yield StreamEvent(
+                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
+            )
+
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.stream = mock_stream
+            mock_get_adapter.return_value = mock_adapter
+
+            async for _ in stream_completion(
+                messages=[Message(role="user", content="Hi")],
+                model=CLAUDE_SONNET,
+                provider="claude",
+                max_tokens=100,
+                temperature=0.7,
+                session_id="test-session",
+            ):
+                pass
+
+        assert "abort_event" in captured
+        assert captured["abort_event"] is not None
+
+    @pytest.mark.asyncio
     async def test_done_event_includes_metadata(self):
         """Test done event includes all metadata."""
         import json
@@ -225,6 +256,7 @@ class TestStreamCompletionGenerator:
             max_tool_turns: int,
         ):
             captured["max_tool_turns"] = max_tool_turns
+            captured["has_abort_event"] = int(stream_kwargs.get("abort_event") is not None)
             yield "data: done\n\n"
 
         with (
@@ -246,4 +278,5 @@ class TestStreamCompletionGenerator:
                 chunks.append(chunk)
 
         assert captured["max_tool_turns"] == 3
+        assert captured["has_abort_event"] == 1
         assert chunks[0].startswith("data: ")

@@ -186,12 +186,13 @@ async def stream_completion(
     adapter = get_adapter(provider)
     content_buf: list[str] = [""]
     stream_kwargs: dict[str, object] = {"tools": tools} if tools else {}
-    if working_dir:
-        stream_kwargs["working_dir"] = working_dir
     ctx = _build_stream_context(
         session_id, model, provider, agent_used, model_used, fallback_used,
         user_messages, is_new_session, is_one_shot, project_id,
     )
+    stream_kwargs["abort_event"] = ctx.cancel_event
+    if working_dir:
+        stream_kwargs["working_dir"] = working_dir
     yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
     try:
         effective_tool_turns = resolve_tool_max_turns(provider, max_tool_turns) if tools else max_tool_turns
