@@ -216,12 +216,21 @@ async def list_sessions(
     agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
     parent_session_id: Annotated[str | None, Query(description="Filter by parent session")] = None,
     session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
+    external_id: Annotated[str | None, Query(description="Filter by linked external work item")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
     sessions, total, msg_counts, token_stats = await list_sessions_with_stats(
-        db, project_id, status, agent_slug, session_type, page, page_size, parent_session_id
+        db,
+        project_id=project_id,
+        status=status,
+        agent_slug=agent_slug,
+        session_type=session_type,
+        page=page,
+        page_size=page_size,
+        parent_session_id=parent_session_id,
+        external_id=external_id,
     )
     owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
         db,

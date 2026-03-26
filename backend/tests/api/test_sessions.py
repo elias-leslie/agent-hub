@@ -517,6 +517,24 @@ class TestListSessions:
 
         assert response.status_code == 200
 
+    @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
+    @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
+    def test_list_sessions_filter_by_external_id(
+        self,
+        mock_list_sessions: AsyncMock,
+        mock_lane_session_ids: AsyncMock,
+        client: APITestClient,
+    ) -> None:
+        """Test filtering by linked external_id."""
+        mock_list_sessions.return_value = ([], 0, {}, {})
+        mock_lane_session_ids.return_value = (set(), set())
+
+        response = client.get("/api/sessions?external_id=task-12345678")
+
+        assert response.status_code == 200
+        mock_list_sessions.assert_awaited_once()
+        assert mock_list_sessions.await_args.kwargs["external_id"] == "task-12345678"
+
     def test_list_sessions_pagination(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test pagination parameters."""
         mock_count_result = MagicMock()
