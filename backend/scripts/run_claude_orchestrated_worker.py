@@ -19,6 +19,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 VENV_DIR = ROOT / "backend" / ".venv"
 VENV_PYTHON = VENV_DIR / "bin" / "python"
+_ASYNC_LOOP: asyncio.AbstractEventLoop | None = None
 
 if (
     VENV_PYTHON.exists()
@@ -90,6 +91,13 @@ def _parse_args() -> argparse.Namespace:
     if args.task_id and not args.task_root:
         parser.error("--task-root is required when --task-id is used")
     return args
+
+
+def _run_async(awaitable):
+    global _ASYNC_LOOP
+    if _ASYNC_LOOP is None or _ASYNC_LOOP.is_closed():
+        _ASYNC_LOOP = asyncio.new_event_loop()
+    return _ASYNC_LOOP.run_until_complete(awaitable)
 
 
 def _read_text(path_str: str) -> str:
@@ -712,6 +720,8 @@ def _stream_claude_pipe(
     stdout_path: Path,
     stderr_path: Path,
     metadata_path: Path,
+    project_id: str,
+    external_id: str | None,
 ) -> None:
     with sink_path.open("w") as sink:
         for line in iter(stream.readline, ""):
@@ -726,10 +736,24 @@ def _stream_claude_pipe(
                         state=state,
                         emit_updates=True,
                     )
+                    metadata_changed = _sync_session_metadata_if_needed(
+                        state=state,
+                        workdir=workdir,
+                        project_id=project_id,
+                        external_id=external_id,
+                    )
+                    ingest_changed = _sync_transcript_events_if_needed(
+                        state=state,
+                        workdir=workdir,
+                        project_id=project_id,
+                        external_id=external_id,
+                    )
                     if (
                         state.get("session_id") != old_session_id
                         or state.get("transcript_path") != old_transcript_path
                         or progress_changed
+                        or metadata_changed
+                        or ingest_changed
                     ):
                         _write_live_summary(
                             metadata_path=metadata_path,
@@ -783,6 +807,8 @@ def _run_claude(
     allowed_tools: str,
     permission_mode: str,
     timeout_seconds: int,
+    project_id: str,
+    external_id: str | None,
 ) -> dict[str, Any]:
     artifact_dir = Path(tempfile.mkdtemp(prefix="claude-orchestrated-worker-"))
     stdout_path = artifact_dir / "stdout.jsonl"
@@ -858,6 +884,8 @@ def _run_claude(
             "stdout_path": stdout_path,
             "stderr_path": stderr_path,
             "metadata_path": metadata_path,
+            "project_id": project_id,
+            "external_id": external_id,
         },
         daemon=True,
     )
@@ -875,44 +903,80 @@ def _run_claude(
             "stdout_path": stdout_path,
             "stderr_path": stderr_path,
             "metadata_path": metadata_path,
+            "project_id": project_id,
+            "external_id": external_id,
         },
         daemon=True,
     )
     stdout_thread.start()
     stderr_thread.start()
-    transcript_monitor_stop = threading.Event()
-    transcript_monitor_thread = threading.Thread(
-        target=_monitor_transcript_progress,
-        kwargs={
-            "stop_event": transcript_monitor_stop,
-            "state": state,
-            "state_lock": state_lock,
-            "command": command,
-            "artifact_dir": artifact_dir,
-            "stdout_path": stdout_path,
-            "stderr_path": stderr_path,
-            "metadata_path": metadata_path,
-        },
-        daemon=True,
-    )
-    transcript_monitor_thread.start()
-    try:
-        process.stdin.write(prompt)
-        process.stdin.close()
-        process.wait(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
-        state["timed_out"] = True
-        state["status"] = "timed_out"
-        _emit_status("TIMEOUT_SECONDS", timeout_seconds)
-        process.kill()
-        process.wait()
+    process.stdin.write(prompt)
+    process.stdin.close()
+    deadline = time.time() + timeout_seconds
+    while True:
+        try:
+            process.wait(timeout=0.5)
+            break
+        except subprocess.TimeoutExpired:
+            with state_lock:
+                progress_changed = _refresh_transcript_progress(
+                    state=state,
+                    emit_updates=False,
+                )
+                metadata_changed = _sync_session_metadata_if_needed(
+                    state=state,
+                    workdir=workdir,
+                    project_id=project_id,
+                    external_id=external_id,
+                )
+                ingest_changed = _sync_transcript_events_if_needed(
+                    state=state,
+                    workdir=workdir,
+                    project_id=project_id,
+                    external_id=external_id,
+                )
+                if progress_changed or metadata_changed or ingest_changed:
+                    _write_live_summary(
+                        metadata_path=metadata_path,
+                        command=command,
+                        artifact_dir=artifact_dir,
+                        stdout_path=stdout_path,
+                        stderr_path=stderr_path,
+                        state=state,
+                    )
+            if time.time() >= deadline:
+                state["timed_out"] = True
+                state["status"] = "timed_out"
+                _emit_status("TIMEOUT_SECONDS", timeout_seconds)
+                process.kill()
+                process.wait()
+                break
 
     stdout_thread.join(timeout=5)
     stderr_thread.join(timeout=5)
-    transcript_monitor_stop.set()
-    transcript_monitor_thread.join(timeout=2)
     with state_lock:
-        _refresh_transcript_progress(state=state, emit_updates=False)
+        progress_changed = _refresh_transcript_progress(state=state, emit_updates=False)
+        metadata_changed = _sync_session_metadata_if_needed(
+            state=state,
+            workdir=workdir,
+            project_id=project_id,
+            external_id=external_id,
+        )
+        ingest_changed = _sync_transcript_events_if_needed(
+            state=state,
+            workdir=workdir,
+            project_id=project_id,
+            external_id=external_id,
+        )
+        if progress_changed or metadata_changed or ingest_changed:
+            _write_live_summary(
+                metadata_path=metadata_path,
+                command=command,
+                artifact_dir=artifact_dir,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                state=state,
+            )
 
     duration_seconds = round(time.time() - started_at, 3)
     state["duration_seconds"] = duration_seconds
@@ -964,8 +1028,9 @@ async def _ensure_session_metadata(
     *,
     session_id: str,
     project_id: str,
-    transcript_path: Path,
+    transcript_path: Path | None,
     workdir: Path,
+    external_id: str | None = None,
 ) -> None:
     from sqlalchemy import select
 
@@ -979,6 +1044,11 @@ async def _ensure_session_metadata(
             await db.execute(select(Session).where(Session.id == session_id).limit(1))
         ).scalar_one_or_none()
         if existing is None:
+            provider_metadata = {
+                "repo_root": str(workdir.resolve()),
+            }
+            if transcript_path is not None:
+                provider_metadata["transcript_path"] = str(transcript_path)
             await upsert_session(
                 db,
                 SessionUpsertRequest(
@@ -987,19 +1057,96 @@ async def _ensure_session_metadata(
                     provider="claude",
                     model="unknown",
                     session_type="claude_code",
-                    provider_metadata={
-                        "transcript_path": str(transcript_path),
-                        "repo_root": str(workdir.resolve()),
-                    },
+                    external_id=external_id,
+                    provider_metadata=provider_metadata,
                 ),
             )
             return
 
         metadata = dict(existing.provider_metadata or {})
-        metadata["transcript_path"] = str(transcript_path)
         metadata.setdefault("repo_root", str(workdir.resolve()))
+        if transcript_path is not None:
+            metadata["transcript_path"] = str(transcript_path)
         existing.provider_metadata = metadata
+        if external_id and existing.external_id != external_id:
+            existing.external_id = external_id
         await db.commit()
+
+
+def _sync_session_metadata_if_needed(
+    *,
+    state: dict[str, Any],
+    workdir: Path,
+    project_id: str,
+    external_id: str | None,
+) -> bool:
+    session_id = state.get("session_id")
+    if not isinstance(session_id, str) or not session_id:
+        return False
+    transcript_path_value = state.get("transcript_path")
+    transcript_path = (
+        Path(transcript_path_value)
+        if isinstance(transcript_path_value, str) and transcript_path_value
+        else None
+    )
+    marker = (session_id, str(transcript_path) if transcript_path is not None else None)
+    if state.get("metadata_sync_marker") == marker:
+        return False
+    _run_async(
+        _ensure_session_metadata(
+            session_id=session_id,
+            project_id=project_id,
+            transcript_path=transcript_path,
+            workdir=workdir,
+            external_id=external_id,
+        )
+    )
+    state["metadata_sync_marker"] = marker
+    return True
+
+
+def _sync_transcript_events_if_needed(
+    *,
+    state: dict[str, Any],
+    workdir: Path,
+    project_id: str,
+    external_id: str | None,
+) -> bool:
+    session_id = state.get("session_id")
+    transcript_path_value = state.get("transcript_path")
+    progress = state.get("transcript_progress")
+    if not isinstance(session_id, str) or not session_id:
+        return False
+    if not isinstance(transcript_path_value, str) or not transcript_path_value:
+        return False
+    if not isinstance(progress, dict):
+        return False
+    line_count = progress.get("line_count")
+    if not isinstance(line_count, int) or line_count <= 0:
+        return False
+    marker = (session_id, transcript_path_value, line_count)
+    if state.get("live_ingest_marker") == marker:
+        return False
+    ingest = _run_async(
+        _ingest_transcript(
+            session_id=session_id,
+            project_id=project_id,
+            transcript_path=Path(transcript_path_value),
+            workdir=workdir,
+            external_id=external_id,
+            checkpoint=state.get("live_ingest_checkpoint"),
+        )
+    )
+    state["live_ingest_checkpoint"] = ingest.get("next_checkpoint")
+    state["live_ingest_marker"] = marker
+    state["live_ingest"] = {
+        "events_appended": ingest.get("events_appended"),
+        "events_skipped": ingest.get("events_skipped"),
+        "last_turn": ingest.get("last_turn"),
+        "last_sequence": ingest.get("last_sequence"),
+        "next_checkpoint": ingest.get("next_checkpoint"),
+    }
+    return True
 
 
 async def _ingest_transcript(
@@ -1008,6 +1155,8 @@ async def _ingest_transcript(
     project_id: str,
     transcript_path: Path,
     workdir: Path,
+    external_id: str | None = None,
+    checkpoint: str | None = None,
 ) -> dict[str, Any]:
     from sqlalchemy import select
 
@@ -1021,12 +1170,17 @@ async def _ingest_transcript(
         project_id=project_id,
         transcript_path=transcript_path,
         workdir=workdir,
+        external_id=external_id,
     )
     async with async_session() as db:
         ingest_result = await ingest_transcript_events(
             db,
             session_id,
-            TranscriptIngestRequest(provider="claude", transcript_path=str(transcript_path)),
+            TranscriptIngestRequest(
+                provider="claude",
+                transcript_path=str(transcript_path),
+                checkpoint=checkpoint,
+            ),
         )
     async with async_session() as db:
         session = (
@@ -1037,6 +1191,7 @@ async def _ingest_transcript(
         "events_skipped": ingest_result.events_skipped,
         "last_turn": ingest_result.last_turn,
         "last_sequence": ingest_result.last_sequence,
+        "next_checkpoint": ingest_result.next_checkpoint,
         "session": {
             "id": session.id,
             "project_id": session.project_id,
@@ -1083,6 +1238,8 @@ def main() -> int:
         allowed_tools=allowed_tools,
         permission_mode=args.permission_mode,
         timeout_seconds=args.timeout_seconds,
+        project_id=args.project_id,
+        external_id=args.task_id,
     )
 
     output: dict[str, Any] = {
@@ -1100,12 +1257,13 @@ def main() -> int:
     output["transcript_path"] = str(transcript_path) if transcript_path else None
 
     if transcript_path is not None and not args.skip_ingest:
-        output["ingest"] = asyncio.run(
+        output["ingest"] = _run_async(
             _ingest_transcript(
                 session_id=session_id,
                 project_id=args.project_id,
                 transcript_path=transcript_path,
                 workdir=workdir,
+                external_id=args.task_id,
             )
         )
 
