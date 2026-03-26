@@ -16,9 +16,12 @@ import yaml
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
+from app.config import settings
 from app.hatchet_app import hatchet
 
 logger = logging.getLogger(__name__)
+
+_BROWSER_CDP_PORT = 9222
 
 _IN_DOCKER = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
 
@@ -66,6 +69,31 @@ async def _run_cmd(*args: str, timeout: int = 30) -> str:
             f"Command {args} failed (exit {proc.returncode}): {stderr.decode().strip()}"
         )
     return stdout.decode().strip()
+
+
+def _agent_browser_cdp_args() -> list[str]:
+    """Return --cdp args for agent-browser so it attaches to the shared Chrome on the test VM.
+
+    Reads settings in priority order: explicit web_fetch_browser_cdp_url → sf_browser_host.
+    Falls back to an empty list when neither is configured (e.g. in CI).
+    """
+    cdp_url = settings.web_fetch_browser_cdp_url.strip()
+    if cdp_url:
+        return ["--cdp", cdp_url]
+    host = settings.sf_browser_host.strip()
+    if host:
+        return ["--cdp", f"{host}:{_BROWSER_CDP_PORT}"]
+    return []
+
+
+async def _run_browser_cmd(*args: str, timeout: int = 30) -> str:
+    """Run agent-browser with CDP connection args prepended.
+
+    Without --cdp the CLI falls back to launching a bundled Chromium, which fails in
+    the native runtime because the required shared libraries (libnspr4.so, etc.) are
+    not present on the host.  Passing --cdp attaches to the existing Chrome on VM 100.
+    """
+    return await _run_cmd("agent-browser", *_agent_browser_cdp_args(), *args, timeout=timeout)
 
 
 def _get_page_paths(project_id: str) -> list[str]:
