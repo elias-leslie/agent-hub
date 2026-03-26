@@ -69,14 +69,24 @@ def _dedupe_strings(values: list[str]) -> list[str]:
     return deduped
 
 
+def _is_transcript_backed_session(session: Session | None) -> bool:
+    """Return whether a session carries transcript metadata."""
+    if session is None or not isinstance(session.provider_metadata, dict):
+        return False
+    transcript_path = session.provider_metadata.get("transcript_path")
+    return isinstance(transcript_path, str) and bool(transcript_path)
+
+
 async def _reconcile_transcript_session_models(
     db: AsyncSession,
     session_id: str,
+    session: Session | None = None,
 ) -> None:
     """Rebuild transcript-backed model fields from persisted event evidence."""
-    session = (
-        await db.execute(select(Session).where(Session.id == session_id).limit(1))
-    ).scalar_one_or_none()
+    if session is None:
+        session = (
+            await db.execute(select(Session).where(Session.id == session_id).limit(1))
+        ).scalar_one_or_none()
     if session is None:
         return
 
@@ -314,11 +324,19 @@ async def append_normalized_events(
             last_turn=current_turn or 1,
             last_sequence=current_sequence,
         )
+    result: AppendNormalizedEventsResult
     if len(request.events) == 1:
         event = request.events[0]
         if event.turn is None and event.sequence is None:
-            return await _store_single_implicit_event(db, session_id, event, session)
-    return await _store_events_general(db, session_id, request.events, session)
+            result = await _store_single_implicit_event(db, session_id, event, session)
+        else:
+            result = await _store_events_general(db, session_id, request.events, session)
+    else:
+        result = await _store_events_general(db, session_id, request.events, session)
+
+    if _is_transcript_backed_session(session):
+        await _reconcile_transcript_session_models(db, session_id, session=session)
+    return result
 
 
 async def finalize_session(
