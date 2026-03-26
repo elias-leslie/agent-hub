@@ -17,6 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.constants.projects import invalidate_project_cache
+from app.core.project_roots import resolve_project_root
+from app.middleware.access_control_auth import invalidate_client_cache
+from app.models.client import Client
 from app.models.project_permission import VALID_PERMISSION_TIERS, ProjectPermission
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,7 @@ _EXEC_REASON_OUTSIDE_HOURS = "outside_execution_hours"
 
 # Unknown tier sentinel for ExecutionPermissionResult
 _TIER_UNKNOWN = "unknown"
+_SUMMITFLOW_SYNC_CLIENTS: frozenset[str] = frozenset({"summitflow", "summitflow-backend"})
 
 
 def _get_redis() -> aioredis.Redis:
@@ -235,6 +240,128 @@ async def list_project_permissions(db: AsyncSession) -> list[ProjectPermission]:
     return list(result.scalars().all())
 
 
+def _parse_allowed_projects_json(allowed_projects: str | None) -> list[str]:
+    """Return a normalized allowed-project list from stored JSON."""
+    if not allowed_projects:
+        return []
+    try:
+        parsed = json.loads(allowed_projects)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    normalized: list[str] = []
+    for value in parsed:
+        if not isinstance(value, str):
+            continue
+        project_id = value.strip()
+        if project_id and project_id not in normalized:
+            normalized.append(project_id)
+    return normalized
+
+
+def _should_sync_registered_project_access(client: Client) -> bool:
+    """Return whether this client should mirror SummitFlow-managed projects."""
+    return client.display_name.strip().lower() in _SUMMITFLOW_SYNC_CLIENTS
+
+
+async def _sync_registered_project_access(
+    db: AsyncSession, project_id: str, *, enabled: bool
+) -> list[str]:
+    """Keep SummitFlow-owned Agent Hub clients aligned with registered projects."""
+    result = await db.execute(select(Client))
+    clients = list(result.scalars().all())
+    changed_client_ids: list[str] = []
+    for client in clients:
+        if not _should_sync_registered_project_access(client):
+            continue
+        current_projects = _parse_allowed_projects_json(client.allowed_projects)
+        has_project = project_id in current_projects
+        if enabled and not has_project:
+            current_projects.append(project_id)
+            client.allowed_projects = json.dumps(current_projects)
+            changed_client_ids.append(str(client.id))
+        elif not enabled and has_project:
+            client.allowed_projects = json.dumps(
+                [value for value in current_projects if value != project_id]
+            )
+            changed_client_ids.append(str(client.id))
+    return changed_client_ids
+
+
+async def create_project_permission(
+    db: AsyncSession,
+    project_id: str,
+    *,
+    permission_tier: str = "read",
+    auto_exec_enabled: bool = False,
+    execution_start_hour: int = 0,
+    execution_end_hour: int = 24,
+    root_path: str | None = None,
+    daily_cost_budget_usd: float | None = None,
+    monthly_cost_budget_usd: float | None = None,
+    budget_alert_threshold: float = 0.8,
+) -> ProjectPermission:
+    """Create a new project permission row.
+
+    Raises ValueError when project_id already exists or the tier is invalid.
+    """
+    existing = await get_project_permission(db, project_id)
+    if existing is not None:
+        raise ValueError(f"Project permission already exists for '{project_id}'")
+
+    if permission_tier not in VALID_PERMISSION_TIERS:
+        raise ValueError(f"Invalid tier: {permission_tier}")
+
+    resolved_root_path = root_path
+    if resolved_root_path is None:
+        resolved_root = resolve_project_root(project_id)
+        resolved_root_path = str(resolved_root) if resolved_root else None
+
+    perm = ProjectPermission(
+        project_id=project_id,
+        permission_tier=permission_tier,
+        auto_exec_enabled=auto_exec_enabled,
+        execution_start_hour=execution_start_hour,
+        execution_end_hour=execution_end_hour,
+        root_path=resolved_root_path,
+        daily_cost_budget_usd=daily_cost_budget_usd,
+        monthly_cost_budget_usd=monthly_cost_budget_usd,
+        budget_alert_threshold=budget_alert_threshold,
+    )
+    db.add(perm)
+    changed_client_ids = await _sync_registered_project_access(
+        db, project_id, enabled=permission_tier != "off"
+    )
+    await db.commit()
+    await db.refresh(perm)
+    await _invalidate_cache(project_id)
+    for client_id in changed_client_ids:
+        invalidate_client_cache(client_id)
+    invalidate_project_cache()
+    return perm
+
+
+async def delete_project_permission(
+    db: AsyncSession, project_id: str
+) -> ProjectPermission | None:
+    """Delete a project permission row and remove mirrored SummitFlow access."""
+    perm = await get_project_permission(db, project_id)
+    if perm is None:
+        return None
+
+    changed_client_ids = await _sync_registered_project_access(
+        db, project_id, enabled=False
+    )
+    await db.delete(perm)
+    await db.commit()
+    await _invalidate_cache(project_id)
+    for client_id in changed_client_ids:
+        invalidate_client_cache(client_id)
+    invalidate_project_cache()
+    return perm
+
+
 async def update_project_permission(
     db: AsyncSession,
     project_id: str,
@@ -275,11 +402,16 @@ async def update_project_permission(
     if budget_alert_threshold is not None:
         perm.budget_alert_threshold = budget_alert_threshold
 
+    changed_client_ids = await _sync_registered_project_access(
+        db, project_id, enabled=perm.permission_tier != "off"
+    )
     await db.commit()
     await db.refresh(perm)
 
     # Invalidate cache after update
     await _invalidate_cache(project_id)
+    for client_id in changed_client_ids:
+        invalidate_client_cache(client_id)
 
     return perm
 

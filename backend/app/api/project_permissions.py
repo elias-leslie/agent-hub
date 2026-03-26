@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +13,8 @@ from app.models.project_permission import VALID_PERMISSION_TIERS
 from app.services.project_permission_service import (
     ExecutionPermissionResult,
     check_execution_permission,
+    create_project_permission,
+    delete_project_permission,
     get_project_permission,
     list_project_permissions,
     update_project_permission,
@@ -53,6 +55,20 @@ class ProjectPermissionUpdate(BaseModel):
     daily_cost_budget_usd: float | None = Field(default=None, ge=0, description="Daily cost budget in USD, null=unlimited")
     monthly_cost_budget_usd: float | None = Field(default=None, ge=0, description="Monthly cost budget in USD, null=unlimited")
     budget_alert_threshold: float | None = Field(default=None, ge=0.0, le=1.0, description="Alert threshold 0.0-1.0")
+
+
+class ProjectPermissionCreate(BaseModel):
+    """Request schema for creating a project permission."""
+
+    project_id: str = Field(min_length=1)
+    permission_tier: str = Field(default="read", description="off, read, write, yolo")
+    auto_exec_enabled: bool = False
+    execution_start_hour: int = Field(default=0, ge=0, le=23)
+    execution_end_hour: int = Field(default=24, ge=1, le=24)
+    root_path: str | None = None
+    daily_cost_budget_usd: float | None = Field(default=None, ge=0, description="Daily cost budget in USD, null=unlimited")
+    monthly_cost_budget_usd: float | None = Field(default=None, ge=0, description="Monthly cost budget in USD, null=unlimited")
+    budget_alert_threshold: float = Field(default=0.8, ge=0.0, le=1.0, description="Alert threshold 0.0-1.0")
 
 
 class ExecutionPermissionResponse(BaseModel):
@@ -98,6 +114,44 @@ async def list_permissions(
     """List all project permissions."""
     perms = await list_project_permissions(db)
     return [_to_response(p) for p in perms]
+
+
+@router.post("/permissions", response_model=ProjectPermissionResponse, status_code=201)
+async def create_permission(
+    payload: ProjectPermissionCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectPermissionResponse:
+    """Create a new project permission row."""
+    if payload.permission_tier not in VALID_PERMISSION_TIERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier '{payload.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
+        )
+
+    if payload.execution_start_hour == payload.execution_end_hour:
+        raise HTTPException(
+            status_code=400,
+            detail="start_hour and end_hour cannot be the same",
+        )
+
+    try:
+        perm = await create_project_permission(
+            db,
+            payload.project_id,
+            permission_tier=payload.permission_tier,
+            auto_exec_enabled=payload.auto_exec_enabled,
+            execution_start_hour=payload.execution_start_hour,
+            execution_end_hour=payload.execution_end_hour,
+            root_path=payload.root_path,
+            daily_cost_budget_usd=payload.daily_cost_budget_usd,
+            monthly_cost_budget_usd=payload.monthly_cost_budget_usd,
+            budget_alert_threshold=payload.budget_alert_threshold,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if "already exists" in detail else 400
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    return _to_response(perm)
 
 
 @router.get("/{project_id}/permissions", response_model=ProjectPermissionResponse)
@@ -168,6 +222,18 @@ async def update_permission(
         await invalidate_budget_cache(project_id)
 
     return _to_response(perm)
+
+
+@router.delete("/{project_id}/permissions", status_code=204)
+async def delete_permission(
+    project_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Delete the permission row for a project."""
+    deleted = await delete_project_permission(db, project_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    return Response(status_code=204)
 
 
 @router.get(

@@ -243,6 +243,50 @@ async def test_finalize_response_normalizes_terminal_summary_tag_near_miss(mocke
 
 
 @pytest.mark.asyncio
+async def test_finalize_response_dedupes_exact_repeated_closeout_block(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    repeated = (
+        "[[P:started:reviewing test3 cleanup and ready work]]\n"
+        "HEARTBEAT_ACTION Dispatched task-fa0425ec and retired stale residue.\n"
+        "[[S:completed:Queued the test3 lane and cleared the matching cleanup items.]]"
+    )
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="persona"),
+        session_id="sess-dedupe",
+        is_new_session=True,
+        model="codex/gpt-5.4",
+        provider="codex",
+        content_parts=[repeated + repeated],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=3,
+        tool_calls_count=2,
+        finish_reason="stop",
+        tracker=_tracker(),
+        adapter=SimpleNamespace(complete=AsyncMock()),
+        base_messages=[Message(role="user", content="Run the heartbeat now.")],
+        temperature=0.0,
+        working_dir="/srv/workspaces/projects/agent-hub",
+        tool_result_summaries=["manage_tasks: queued task-fa0425ec"],
+    )
+
+    stored_content = mock_store.await_args.args[2]
+    assert stored_content == repeated
+    assert mock_finalize.await_args.kwargs["content"] == repeated
+
+
+@pytest.mark.asyncio
 async def test_finalize_response_prefers_progress_turns_for_reported_turn_count(mocker) -> None:
     mocker.patch(
         "app.api.complete.tool_event_storage.store_assistant_response",

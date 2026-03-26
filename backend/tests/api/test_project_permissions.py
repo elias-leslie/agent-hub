@@ -107,6 +107,59 @@ class TestListPermissions:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/projects/permissions
+# ---------------------------------------------------------------------------
+
+
+class TestCreatePermission:
+    @pytest.mark.asyncio
+    async def test_creates_permission(self, client):
+        ac, _ = client
+        created = _make_perm("test2", "yolo", True, 0, 24, "/srv/workspaces/projects/test2")
+        with patch(
+            "app.api.project_permissions.create_project_permission",
+            new_callable=AsyncMock,
+            return_value=created,
+        ):
+            resp = await ac.post(
+                "/api/projects/permissions",
+                json={
+                    "project_id": "test2",
+                    "permission_tier": "yolo",
+                    "auto_exec_enabled": True,
+                },
+            )
+            assert resp.status_code == 201
+            data = resp.json()
+            assert data["project_id"] == "test2"
+            assert data["permission_tier"] == "yolo"
+            assert data["auto_exec_enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_tier(self, client):
+        ac, _ = client
+        resp = await ac.post(
+            "/api/projects/permissions",
+            json={"project_id": "test2", "permission_tier": "invalid"},
+        )
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_returns_409_for_duplicate_project(self, client):
+        ac, _ = client
+        with patch(
+            "app.api.project_permissions.create_project_permission",
+            new_callable=AsyncMock,
+            side_effect=ValueError("Project permission already exists for 'test2'"),
+        ):
+            resp = await ac.post(
+                "/api/projects/permissions",
+                json={"project_id": "test2"},
+            )
+            assert resp.status_code == 409
+
+
+# ---------------------------------------------------------------------------
 # GET /api/projects/{project_id}/permissions
 # ---------------------------------------------------------------------------
 
@@ -140,6 +193,37 @@ class TestGetPermission:
             return_value=None,
         ):
             resp = await ac.get("/api/projects/nonexistent/permissions")
+            assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/projects/{project_id}/permissions
+# ---------------------------------------------------------------------------
+
+
+class TestDeletePermission:
+    @pytest.mark.asyncio
+    async def test_deletes_permission(self, client):
+        ac, _ = client
+        deleted = _make_perm("proj", "yolo")
+        with patch(
+            "app.api.project_permissions.delete_project_permission",
+            new_callable=AsyncMock,
+            return_value=deleted,
+        ):
+            resp = await ac.delete("/api/projects/proj/permissions")
+            assert resp.status_code == 204
+            assert resp.text == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_missing_project(self, client):
+        ac, _ = client
+        with patch(
+            "app.api.project_permissions.delete_project_permission",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = await ac.delete("/api/projects/missing/permissions")
             assert resp.status_code == 404
 
 
