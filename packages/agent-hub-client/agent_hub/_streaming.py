@@ -11,6 +11,87 @@ from agent_hub.exceptions import AgentHubError
 from agent_hub.models import StreamChunk, ToolCall
 
 
+def _build_tool_use_chunk(data: dict[str, Any]) -> StreamChunk:
+    """Build a StreamChunk for a tool_use SSE event."""
+    tool_id = data.get("tool_id")
+    tool_name = data.get("tool_name")
+    tool_input = data.get("tool_input")
+    return StreamChunk(
+        type="tool_use",
+        tool_id=tool_id,
+        tool_name=tool_name,
+        tool_input=tool_input,
+        tool_call=ToolCall(
+            id=tool_id or "",
+            name=tool_name or "",
+            input=tool_input or {},
+        ),
+    )
+
+
+def _dispatch_sse_event(data: dict[str, Any]) -> tuple[StreamChunk | None, bool]:
+    """Map a parsed SSE event dict to a StreamChunk.
+
+    Returns (chunk, is_terminal). chunk is None for unknown event types.
+    is_terminal is True for event types that end the stream.
+    """
+    event_type = data.get("type")
+
+    if event_type == "content":
+        return StreamChunk(type="content", content=data.get("content", "")), False
+
+    if event_type == "thinking":
+        return StreamChunk(type="thinking", content=data.get("content", "")), False
+
+    if event_type == "tool_use":
+        return _build_tool_use_chunk(data), False
+
+    if event_type == "tool_result":
+        return StreamChunk(
+            type="tool_result",
+            tool_id=data.get("tool_id"),
+            tool_result=data.get("tool_result"),
+            tool_status=data.get("tool_status"),
+        ), False
+
+    if event_type in ("done", "cancelled"):
+        return StreamChunk(
+            type=event_type,
+            finish_reason=data.get("finish_reason"),
+            model=data.get("model"),
+            provider=data.get("provider"),
+            input_tokens=data.get("input_tokens"),
+            output_tokens=data.get("output_tokens"),
+            session_id=data.get("session_id"),
+        ), True
+
+    if event_type == "error":
+        return StreamChunk(type="error", error=data.get("error")), True
+
+    return None, False
+
+
+async def _stream_sse_lines(
+    response: httpx.Response,
+) -> AsyncIterator[StreamChunk]:
+    """Yield StreamChunks from SSE response lines."""
+    async for line in response.aiter_lines():
+        if not line or not line.startswith("data: "):
+            continue
+        data_str = line[6:]
+        if data_str == "[DONE]":
+            return
+        try:
+            data = json.loads(data_str)
+        except json.JSONDecodeError:
+            continue
+        chunk, is_terminal = _dispatch_sse_event(data)
+        if chunk is not None:
+            yield chunk
+        if is_terminal:
+            return
+
+
 async def stream_completion_sse(
     client: httpx.AsyncClient,
     payload: dict[str, Any],
@@ -36,85 +117,7 @@ async def stream_completion_sse(
             if not response.is_success:
                 await response.aread()
                 handle_error(response)
-
-            async for line in response.aiter_lines():
-                if not line:
-                    continue
-
-                if line.startswith("data: "):
-                    data_str = line[6:]
-
-                    if data_str == "[DONE]":
-                        return
-
-                    try:
-                        data = json.loads(data_str)
-                        event_type = data.get("type")
-
-                        if event_type == "content":
-                            yield StreamChunk(
-                                type="content", content=data.get("content", "")
-                            )
-
-                        elif event_type == "thinking":
-                            yield StreamChunk(
-                                type="thinking", content=data.get("content", "")
-                            )
-
-                        elif event_type == "tool_use":
-                            tool_id = data.get("tool_id")
-                            tool_name = data.get("tool_name")
-                            tool_input = data.get("tool_input")
-                            yield StreamChunk(
-                                type="tool_use",
-                                tool_id=tool_id,
-                                tool_name=tool_name,
-                                tool_input=tool_input,
-                                tool_call=ToolCall(
-                                    id=tool_id or "",
-                                    name=tool_name or "",
-                                    input=tool_input or {},
-                                ),
-                            )
-
-                        elif event_type == "tool_result":
-                            yield StreamChunk(
-                                type="tool_result",
-                                tool_id=data.get("tool_id"),
-                                tool_result=data.get("tool_result"),
-                                tool_status=data.get("tool_status"),
-                            )
-
-                        elif event_type == "done":
-                            yield StreamChunk(
-                                type="done",
-                                finish_reason=data.get("finish_reason"),
-                                model=data.get("model"),
-                                provider=data.get("provider"),
-                                input_tokens=data.get("input_tokens"),
-                                output_tokens=data.get("output_tokens"),
-                                session_id=data.get("session_id"),
-                            )
-                            return
-
-                        elif event_type == "cancelled":
-                            yield StreamChunk(
-                                type="cancelled",
-                                finish_reason=data.get("finish_reason"),
-                                model=data.get("model"),
-                                provider=data.get("provider"),
-                                input_tokens=data.get("input_tokens"),
-                                output_tokens=data.get("output_tokens"),
-                                session_id=data.get("session_id"),
-                            )
-                            return
-
-                        elif event_type == "error":
-                            yield StreamChunk(type="error", error=data.get("error"))
-                            return
-
-                    except json.JSONDecodeError:
-                        continue
-
+            async for chunk in _stream_sse_lines(response):
+                yield chunk
     except Exception as e:
         raise AgentHubError(f"SSE streaming error: {e}") from e
