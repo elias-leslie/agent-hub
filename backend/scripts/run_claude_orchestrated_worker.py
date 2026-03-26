@@ -995,6 +995,26 @@ def _run_claude(
     state["exit_code"] = process.returncode
     if state["status"] != "timed_out":
         state["status"] = "completed"
+    session_id = state.get("session_id")
+    transcript_path_value = state.get("transcript_path")
+    if isinstance(session_id, str) and session_id:
+        transcript_path = (
+            Path(transcript_path_value)
+            if isinstance(transcript_path_value, str) and transcript_path_value
+            else None
+        )
+        _run_async(
+            _finalize_session_status(
+                session_id=session_id,
+                project_id=project_id,
+                transcript_path=transcript_path,
+                workdir=workdir,
+                external_id=external_id,
+                timed_out=bool(state.get("timed_out")),
+                exit_code=process.returncode,
+                timeout_seconds=timeout_seconds,
+            )
+        )
 
     _write_live_summary(
         metadata_path=metadata_path,
@@ -1214,6 +1234,68 @@ async def _ingest_transcript(
             "scope_confidence": session.scope_confidence,
         },
     }
+
+
+async def _finalize_session_status(
+    *,
+    session_id: str,
+    project_id: str,
+    transcript_path: Path | None,
+    workdir: Path,
+    external_id: str | None,
+    timed_out: bool,
+    exit_code: int | None,
+    timeout_seconds: int,
+) -> None:
+    from sqlalchemy import select
+
+    from app.db import async_session
+    from app.models import Session
+    from app.services.session_live_activity import (
+        mark_session_completed,
+        mark_session_terminal_state,
+    )
+
+    await _ensure_session_metadata(
+        session_id=session_id,
+        project_id=project_id,
+        transcript_path=transcript_path,
+        workdir=workdir,
+        external_id=external_id,
+    )
+    async with async_session() as db:
+        session = (
+            await db.execute(select(Session).where(Session.id == session_id).limit(1))
+        ).scalar_one_or_none()
+        if session is None:
+            return
+        if timed_out:
+            session.status = "failed"
+            session.health_detail = "timed_out"
+            mark_session_terminal_state(
+                session,
+                phase="failed",
+                status="failed",
+                summary=f"Claude worker timed out after {timeout_seconds}s",
+                termination_reason="timeout",
+            )
+        elif exit_code == 0:
+            mark_session_completed(
+                session,
+                summary="Claude worker completed",
+                termination_reason="process_exit_0",
+            )
+        else:
+            session.status = "failed"
+            session.health_detail = "failed"
+            mark_session_terminal_state(
+                session,
+                phase="failed",
+                status="failed",
+                summary=f"Claude worker exited with code {exit_code}",
+                termination_reason=f"process_exit_{exit_code}",
+            )
+        await db.commit()
 
 
 def main() -> int:
