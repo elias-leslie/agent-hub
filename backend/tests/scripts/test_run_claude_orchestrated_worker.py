@@ -106,6 +106,27 @@ def test_parse_args_honors_no_claim_if_needed(monkeypatch):
     assert args.claim_if_needed is False
 
 
+def test_parse_args_accepts_source_label(monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_claude_orchestrated_worker.py",
+            "--task-id",
+            "task-123",
+            "--task-root",
+            "/tmp/project",
+            "--source",
+            "st-batch",
+        ],
+    )
+
+    args = module._parse_args()
+
+    assert args.source == "st-batch"
+
+
 def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
     module = _load_module()
     schema_path = tmp_path / "schema.json"

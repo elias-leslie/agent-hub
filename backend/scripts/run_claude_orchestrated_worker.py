@@ -67,6 +67,11 @@ def _parse_args() -> argparse.Namespace:
         help="Do not auto-claim when --task-id is used and the task has no worktree yet",
     )
     parser.add_argument("--project-id", default="agent-hub", help="Agent Hub project id")
+    parser.add_argument(
+        "--source",
+        default="st-cli",
+        help="Caller/source label for observability and wrapper provenance",
+    )
     parser.add_argument("--workdir", default=str(ROOT), help="Working directory for the Claude run")
     parser.add_argument("--model", default="sonnet", help="Claude model alias")
     parser.add_argument(
