@@ -181,6 +181,41 @@ class _ClaudeSDKMessageStreamSession:
             return
         await self._close_iterator()
 
+    async def _iterate_messages(
+        self, message_iter: Any
+    ) -> AsyncGenerator[tuple[Any, str | None]]:
+        """Process and yield normalized (message, session_id) pairs."""
+        async for message in message_iter:
+            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                self.session_id = message.data.get("session_id")
+                if self.session_id:
+                    logger.info("Claude SDK session ID: %s", self.session_id)
+                continue
+            if type(message).__name__ == "ResultMessage":
+                message = _resolve_result_message(message, self.session_id, self.configured_max_turns)
+                yield (message, self.session_id)
+                self.done_emitted = True
+                await self._close_iterator()
+                return
+            if not self.done_emitted:
+                self.saw_payload = True
+                yield (message, self.session_id)
+        if self.saw_payload and not self.done_emitted:
+            finish_reason = "end_turn"
+            logger.warning(
+                "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
+                finish_reason,
+            )
+            yield (
+                ResultMessage(
+                    session_id=self.session_id,
+                    stop_reason=finish_reason,
+                    finish_reason=finish_reason,
+                ),
+                self.session_id,
+            )
+        await self._close_iterator()
+
     async def iterate(self) -> AsyncGenerator[tuple[Any, str | None]]:
         """Yield (message, session_id) pairs while owning iterator cleanup."""
         await self.query_session.start()
@@ -188,45 +223,8 @@ class _ClaudeSDKMessageStreamSession:
         if message_iter is None:
             raise RuntimeError("Claude SDK query session did not initialize an iterator")
         try:
-            while True:
-                try:
-                    message = await anext(message_iter)
-                except StopAsyncIteration:
-                    if self.saw_payload and not self.done_emitted:
-                        finish_reason = "end_turn"
-                        logger.warning(
-                            "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
-                            finish_reason,
-                        )
-                        yield (
-                            ResultMessage(
-                                session_id=self.session_id,
-                                stop_reason=finish_reason,
-                                finish_reason=finish_reason,
-                            ),
-                            self.session_id,
-                        )
-                    await self._close_iterator()
-                    return
-                if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                    self.session_id = message.data.get("session_id")
-                    if self.session_id:
-                        logger.info("Claude SDK session ID: %s", self.session_id)
-                    continue
-                if type(message).__name__ == "ResultMessage":
-                    message = _resolve_result_message(
-                        message,
-                        self.session_id,
-                        self.configured_max_turns,
-                    )
-                    yield (message, self.session_id)
-                    self.done_emitted = True
-                    await self._close_iterator()
-                    return
-                if self.done_emitted:
-                    continue
-                self.saw_payload = True
-                yield (message, self.session_id)
+            async for item in self._iterate_messages(message_iter):
+                yield item
         finally:
             if not self.iterator_closed:
                 await self.query_session.close()
@@ -382,28 +380,27 @@ class _ClaudeSDKQuerySession:
     started: bool = False
     closed: bool = False
 
+    def _use_public_query_api(self) -> None:
+        from claude_agent_sdk import query as sdk_query
+
+        self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+
     async def start(self) -> None:
         """Initialize the best available SDK query path once."""
         if self.started:
             return
         self.started = True
         if not all(hasattr(self.options, attr) for attr in ("cli_path", "system_prompt", "cwd")):
-            from claude_agent_sdk import query as sdk_query
-
-            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+            self._use_public_query_api()
             return
-
         try:
             from claude_agent_sdk._internal.message_parser import parse_message
             from claude_agent_sdk._internal.query import Query
             from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
         except ImportError:
             logger.debug("Claude SDK internal imports unavailable, using public query API", exc_info=True)
-            from claude_agent_sdk import query as sdk_query
-
-            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+            self._use_public_query_api()
             return
-
         try:
             self.internal_session = _ClaudeInternalQuerySession(
                 prompt=self.prompt,
@@ -417,9 +414,7 @@ class _ClaudeSDKQuerySession:
         except (AttributeError, TypeError):
             logger.debug("Claude SDK internal transport unavailable for options; using public query API", exc_info=True)
             self.internal_session = None
-            from claude_agent_sdk import query as sdk_query
-
-            self.message_iter = sdk_query(prompt=self.prompt, options=self.options).__aiter__()
+            self._use_public_query_api()
 
     async def close(self) -> None:
         """Close the iterator and owned internal session once."""
@@ -563,6 +558,29 @@ async def _iterate_sdk_messages(
             await session_iter.aclose()
 
 
+async def _run_sdk_stream_loop(
+    inner_iter: Any,
+) -> AsyncGenerator[tuple[Any, str | None]]:
+    """Yield from inner_iter with error capture and conditional close.
+
+    Skips aclose after natural exhaustion: the Claude SDK iterator unwind can
+    inject cancellation into the current task, corrupting downstream final
+    response persistence.
+    """
+    exhausted = False
+    try:
+        async for item in inner_iter:
+            yield item
+        exhausted = True
+    except Exception as e:
+        error_msg = f"Claude tool error: {e}"
+        logger.error(error_msg)
+        yield (ErrorMessage(error=error_msg), None)
+    finally:
+        if not exhausted:
+            await inner_iter.aclose()
+
+
 async def _stream_sdk_messages(
     prompt: str | Any,
     options: Any,
@@ -576,22 +594,12 @@ async def _stream_sdk_messages(
     to spin at 100 % CPU when the stream was cancelled.
     """
     async with _sdk_semaphore:
-        inner_iter = _iterate_sdk_messages(prompt, options, provider_name)
-        exhausted = False
+        run_loop = _run_sdk_stream_loop(_iterate_sdk_messages(prompt, options, provider_name))
         try:
-            async for item in inner_iter:
+            async for item in run_loop:
                 yield item
-            exhausted = True
-        except Exception as e:
-            error_msg = f"Claude tool error: {e}"
-            logger.error(error_msg)
-            yield (ErrorMessage(error=error_msg), None)
         finally:
-            # Avoid a redundant async-generator close after natural exhaustion.
-            # Claude SDK iterator unwind can inject cancellation into the current
-            # task, which then corrupts downstream final response persistence.
-            if not exhausted:
-                await inner_iter.aclose()
+            await run_loop.aclose()
 
 
 async def _stream_sdk_session_messages(
@@ -601,19 +609,12 @@ async def _stream_sdk_session_messages(
     """Yield (message, session_id) pairs from an owned SDK message session."""
     del provider_name  # Reserved for future per-provider streaming specialization.
     async with _sdk_semaphore:
-        inner_iter = session.iterate()
-        exhausted = False
+        run_loop = _run_sdk_stream_loop(session.iterate())
         try:
-            async for item in inner_iter:
+            async for item in run_loop:
                 yield item
-            exhausted = True
-        except Exception as e:
-            error_msg = f"Claude tool error: {e}"
-            logger.error(error_msg)
-            yield (ErrorMessage(error=error_msg), None)
         finally:
-            if not exhausted:
-                await inner_iter.aclose()
+            await run_loop.aclose()
 
 
 def _build_tool_infra(
