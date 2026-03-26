@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_claude_orchestrated_worker.py"
 
@@ -37,6 +39,27 @@ def test_build_claude_command_uses_stdin_input_without_prompt_arg(tmp_path):
     ]
     assert "Read,Agent" in command
     assert "Reply with the single word hi." not in command
+
+
+def test_run_text_command_strips_pythonpath_for_nested_st_calls(tmp_path):
+    module = _load_module()
+    captured: dict[str, object] = {}
+
+    def _fake_run(*args, **kwargs):
+        captured["env"] = kwargs["env"]
+        return SimpleNamespace(stdout="TASK:task-123|pending|P2|refactor|SIMPLE\n")
+
+    with (
+        patch.dict(module.os.environ, {"PYTHONPATH": "backend", "KEEP_ME": "1"}, clear=True),
+        patch.object(module.subprocess, "run", side_effect=_fake_run),
+    ):
+        output = module._run_text_command(command=["st", "context", "task-123"], cwd=tmp_path)
+
+    assert output == "TASK:task-123|pending|P2|refactor|SIMPLE\n"
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert "PYTHONPATH" not in env
+    assert env["KEEP_ME"] == "1"
 
 
 def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
