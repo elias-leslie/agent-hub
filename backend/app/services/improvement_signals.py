@@ -21,12 +21,13 @@ from app.services.memory.episode_operations import batch_get_episodes
 from app.services.memory.governance import collect_memory_governance_snapshot
 
 from ._benchmark_dashboard import query_open_regression_clusters, query_signal_experiments
-
-
-def _format_timestamp(value: datetime | None) -> str:
-    if value is None:
-        return "?"
-    return value.astimezone(UTC).strftime("%Y-%m-%d %H:%M")
+from ._improvement_digest_formatter import (
+    _build_benchmark_section,
+    _build_memory_governance_section,
+    _build_memory_section,
+    _build_performance_section,
+    _build_reference_yield_section,
+)
 
 
 def _select_agent_order(
@@ -60,18 +61,15 @@ def _canonicalize_agent_slug(agent_slug: str, *, primary_agent_slug: str) -> str
     return normalized
 
 
-def _build_performance_snapshot(
-    performance_logs: list[Any],
+def _accumulate_performance_logs(
+    logs: list[Any],
     *,
     primary_agent_slug: str,
-    include_team: bool,
-    max_agents: int,
-) -> dict[str, Any]:
+) -> tuple[dict, dict, dict]:
     counts_by_agent: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     system_counts: dict[str, int] = defaultdict(int)
     repeated_issues: dict[tuple[str, str], dict[str, Any]] = {}
-
-    for log in performance_logs:
+    for log in logs:
         agent_slug = _canonicalize_agent_slug(
             str(log.agent_slug or "unknown"),
             primary_agent_slug=primary_agent_slug,
@@ -80,7 +78,6 @@ def _build_performance_snapshot(
         counts_by_agent[agent_slug][feedback_type] += 1
         if str(getattr(log, "logged_by", "")) == "system":
             system_counts[agent_slug] += 1
-
         if feedback_type != "friction":
             continue
         content = str(log.content or "").strip()
@@ -95,18 +92,19 @@ def _build_performance_snapshot(
         current["count"] += 1
         if created_at and (current["latest"] is None or created_at > current["latest"]):
             current["latest"] = created_at
+    return counts_by_agent, system_counts, repeated_issues
 
-    ordered_agents = _select_agent_order(
-        counts_by_agent,
-        primary_agent_slug=primary_agent_slug,
-        include_team=include_team,
-        max_agents=max_agents,
-    )
 
-    repeated_issue_limit = max(1, max_agents * 2)
-    repeated_issue_items: list[dict[str, Any]] = []
+def _top_repeated_issues(
+    raw_issues: dict[tuple[str, str], dict[str, Any]],
+    *,
+    ordered_agents: list[str],
+    primary_agent_slug: str,
+    limit: int,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
     for (agent_slug, content), info in sorted(
-        repeated_issues.items(),
+        raw_issues.items(),
         key=lambda item: (
             item[0][0] != primary_agent_slug,
             -int(item[1]["count"]),
@@ -115,16 +113,40 @@ def _build_performance_snapshot(
     ):
         if agent_slug not in ordered_agents:
             continue
-        repeated_issue_items.append({
+        items.append({
             "agent_slug": agent_slug,
             "feedback_type": "friction",
             "content": content,
             "count": int(info["count"]),
             "latest_at": info["latest"].isoformat() if info["latest"] else None,
         })
-        if len(repeated_issue_items) >= repeated_issue_limit:
+        if len(items) >= limit:
             break
+    return items
 
+
+def _build_performance_snapshot(
+    performance_logs: list[Any],
+    *,
+    primary_agent_slug: str,
+    include_team: bool,
+    max_agents: int,
+) -> dict[str, Any]:
+    counts_by_agent, system_counts, repeated_issues_raw = _accumulate_performance_logs(
+        performance_logs, primary_agent_slug=primary_agent_slug,
+    )
+    ordered_agents = _select_agent_order(
+        counts_by_agent,
+        primary_agent_slug=primary_agent_slug,
+        include_team=include_team,
+        max_agents=max_agents,
+    )
+    repeated_issue_items = _top_repeated_issues(
+        repeated_issues_raw,
+        ordered_agents=ordered_agents,
+        primary_agent_slug=primary_agent_slug,
+        limit=max(1, max_agents * 2),
+    )
     return {
         "agent_signal_volume": [
             {
@@ -145,12 +167,6 @@ def _build_benchmark_snapshot(
     experiment_summaries: list[dict[str, Any]],
     open_clusters: list[Any],
 ) -> dict[str, Any]:
-    visible_clusters = []
-    for cluster in open_clusters:
-        failure_category = categorize_benchmark_failure_detail(str(cluster.failure_detail or ""))
-        if failure_category == "infra":
-            continue
-        visible_clusters.append((cluster, failure_category))
     return {
         "recent_benchmark_experiments": experiment_summaries,
         "open_regression_clusters": [
@@ -159,10 +175,11 @@ def _build_benchmark_snapshot(
                 "occurrence_count": int(cluster.occurrence_count or 0),
                 "failure_detail": str(cluster.failure_detail or ""),
                 "failure_kind": "model",
-                "failure_category": failure_category,
+                "failure_category": cat,
                 "last_seen_at": cluster.last_seen_at.isoformat() if cluster.last_seen_at else None,
             }
-            for cluster, failure_category in visible_clusters
+            for cluster in open_clusters
+            if (cat := categorize_benchmark_failure_detail(str(cluster.failure_detail or ""))) != "infra"
         ],
     }
 
@@ -218,23 +235,82 @@ async def _collect_reference_yield_snapshot(
         selected = selected_counts[uuid]
         if selected < 2:
             continue
-        cited = cited_counts.get(uuid, 0)
-        rate = cited / selected if selected else 0.0
         detail = episode_details.get(uuid) or {}
-        label = str(
-            detail.get("name") or detail.get("content") or uuid[:8]
-        ).strip().splitlines()[0]
+        rate = cited_counts.get(uuid, 0) / selected
+        label = str(detail.get("name") or detail.get("content") or uuid[:8]).strip().splitlines()[0]
         low_yield_references.append({
-            "uuid": uuid,
-            "label": label,
-            "selected": selected,
-            "cited": cited,
-            "citation_rate": rate,
+            "uuid": uuid, "label": label, "selected": selected,
+            "cited": cited_counts.get(uuid, 0), "citation_rate": rate,
             "tags": list(detail.get("tags") or []),
         })
         if len(low_yield_references) >= max_reference_items:
             break
     return low_yield_references
+
+
+async def _collect_experiment_summaries(
+    db: Any,
+    experiments: list[Any],
+) -> list[dict[str, Any]]:
+    summaries: list[dict[str, Any]] = []
+    for experiment in experiments:
+        summary = await get_benchmark_experiment_summary_by_key(db, experiment.experiment_key)
+        if summary is None:
+            continue
+        summaries.append({
+            "suite_id": str(experiment.suite_id),
+            "decision": str(summary.get("decision") or "hold"),
+            "decision_reason": summary.get("decision_reason"),
+            "score_delta": float((summary.get("score_delta") or {}).get("mean_delta") or 0.0),
+            "pass_rate_delta": float(
+                (summary.get("pass_rate_delta") or {}).get("mean_delta") or 0.0
+            ),
+        })
+    return summaries
+
+
+async def _fetch_db_data(
+    db: Any,
+    *,
+    cutoff: datetime,
+    primary_agent_slug: str,
+    project_id: str | None,
+    include_team: bool,
+    max_experiments: int,
+    max_clusters: int,
+) -> tuple[list, list, list, list, Any]:
+    performance_stmt = select(AgentPerformanceLog).where(
+        AgentPerformanceLog.created_at >= cutoff,
+    )
+    if project_id:
+        performance_stmt = performance_stmt.where(AgentPerformanceLog.project_id == project_id)
+    if not include_team:
+        performance_stmt = performance_stmt.where(
+            AgentPerformanceLog.agent_slug == primary_agent_slug
+        )
+    performance_stmt = performance_stmt.order_by(AgentPerformanceLog.created_at.desc())
+    performance_logs = list((await db.execute(performance_stmt)).scalars().all())
+    experiments = await query_signal_experiments(
+        db, agent_slug=primary_agent_slug, cutoff=cutoff, project_id=project_id, limit=max_experiments,
+    )
+    open_clusters = await query_open_regression_clusters(
+        db, agent_slug=primary_agent_slug, cutoff=cutoff, project_id=project_id, limit=max_clusters,
+    )
+    memory_event_stmt = select(SessionEvent.event_type, SessionEvent.tool_input).where(
+        SessionEvent.created_at >= cutoff,
+        SessionEvent.event_type.in_([
+            SessionEventType.MEMORY_INJECT,
+            SessionEventType.MEMORY_CITE,
+        ]),
+    )
+    if project_id:
+        memory_event_stmt = memory_event_stmt.join(
+            Session, Session.id == SessionEvent.session_id,
+        ).where(Session.project_id == project_id)
+    memory_events = list((await db.execute(memory_event_stmt)).all())
+    experiment_summaries = await _collect_experiment_summaries(db, experiments)
+    memory_governance = await collect_memory_governance_snapshot(db)
+    return performance_logs, open_clusters, memory_events, experiment_summaries, memory_governance
 
 
 async def collect_improvement_signal_snapshot(
@@ -250,64 +326,18 @@ async def collect_improvement_signal_snapshot(
 ) -> dict[str, Any]:
     """Return structured evidence for Jenny's self-improvement loops."""
     cutoff = datetime.now(UTC) - timedelta(days=days_back)
-
     async with async_session() as db:
-        performance_stmt = select(AgentPerformanceLog).where(
-            AgentPerformanceLog.created_at >= cutoff,
-        )
-        if project_id:
-            performance_stmt = performance_stmt.where(AgentPerformanceLog.project_id == project_id)
-        if not include_team:
-            performance_stmt = performance_stmt.where(
-                AgentPerformanceLog.agent_slug == primary_agent_slug
+        performance_logs, open_clusters, memory_events, experiment_summaries, memory_governance = (
+            await _fetch_db_data(
+                db,
+                cutoff=cutoff,
+                primary_agent_slug=primary_agent_slug,
+                project_id=project_id,
+                include_team=include_team,
+                max_experiments=max_experiments,
+                max_clusters=max_clusters,
             )
-        performance_stmt = performance_stmt.order_by(AgentPerformanceLog.created_at.desc())
-        performance_logs = list((await db.execute(performance_stmt)).scalars().all())
-
-        experiments = await query_signal_experiments(
-            db,
-            agent_slug=primary_agent_slug,
-            cutoff=cutoff,
-            project_id=project_id,
-            limit=max_experiments,
         )
-        open_clusters = await query_open_regression_clusters(
-            db,
-            agent_slug=primary_agent_slug,
-            cutoff=cutoff,
-            project_id=project_id,
-            limit=max_clusters,
-        )
-
-        memory_event_stmt = select(SessionEvent.event_type, SessionEvent.tool_input).where(
-            SessionEvent.created_at >= cutoff,
-            SessionEvent.event_type.in_([
-                SessionEventType.MEMORY_INJECT,
-                SessionEventType.MEMORY_CITE,
-            ]),
-        )
-        if project_id:
-            memory_event_stmt = memory_event_stmt.join(
-                Session, Session.id == SessionEvent.session_id,
-            ).where(Session.project_id == project_id)
-        memory_events = list((await db.execute(memory_event_stmt)).all())
-
-        experiment_summaries: list[dict[str, Any]] = []
-        for experiment in experiments:
-            summary = await get_benchmark_experiment_summary_by_key(db, experiment.experiment_key)
-            if summary is None:
-                continue
-            experiment_summaries.append({
-                "suite_id": str(experiment.suite_id),
-                "decision": str(summary.get("decision") or "hold"),
-                "decision_reason": summary.get("decision_reason"),
-                "score_delta": float((summary.get("score_delta") or {}).get("mean_delta") or 0.0),
-                "pass_rate_delta": float(
-                    (summary.get("pass_rate_delta") or {}).get("mean_delta") or 0.0
-                ),
-            })
-        memory_governance = await collect_memory_governance_snapshot(db)
-
     memory_utilization = await get_memory_utilization_summary(
         timedelta(days=days_back),
         project_id_filter=project_id,
@@ -318,182 +348,18 @@ async def collect_improvement_signal_snapshot(
         include_team=include_team,
         max_agents=max_agents,
     )
-    benchmark_snapshot = _build_benchmark_snapshot(experiment_summaries, open_clusters)
     low_yield_references = await _collect_reference_yield_snapshot(
         memory_events,
         max_reference_items=max_reference_items,
     )
-
     return {
         "days_back": days_back,
         **performance_snapshot,
-        **benchmark_snapshot,
+        **_build_benchmark_snapshot(experiment_summaries, open_clusters),
         "memory_utilization": _build_memory_snapshot(memory_utilization),
         "memory_governance": memory_governance,
         "low_yield_references": low_yield_references,
     }
-
-
-def _build_performance_section(snapshot: dict[str, Any]) -> str:
-    volume_lines = ["## Agent signal volume"]
-    if snapshot["agent_signal_volume"]:
-        for item in snapshot["agent_signal_volume"]:
-            volume_lines.append(
-                f"- {item['agent_slug']}: friction={item['friction']} "
-                f"improvement={item['improvement']} "
-                f"idea={item['idea']} praise={item['praise']} "
-                f"system={item['system']}"
-            )
-    else:
-        volume_lines.append("- none")
-
-    issue_lines = ["## Repeated issues"]
-    if snapshot["repeated_issues"]:
-        for item in snapshot["repeated_issues"]:
-            issue_lines.append(
-                f"- {item['agent_slug']} [{item['count']}x, latest {_format_timestamp(_parse_iso(item['latest_at']))}]: "
-                f"{item['content']}"
-            )
-    else:
-        issue_lines.append("- none")
-
-    return "\n".join([*volume_lines, "", *issue_lines])
-
-
-def _build_benchmark_section(snapshot: dict[str, Any]) -> str:
-    experiment_lines = ["## Recent benchmark experiments"]
-    if snapshot["recent_benchmark_experiments"]:
-        for summary in snapshot["recent_benchmark_experiments"]:
-            experiment_lines.append(
-                f"- suite={summary['suite_id']} decision={summary['decision']} "
-                f"score_delta={summary['score_delta']:.3f} "
-                f"pass_rate_delta={summary['pass_rate_delta']:.3f} "
-                f"reason={summary['decision_reason'] or 'n/a'}"
-            )
-    else:
-        experiment_lines.append("- none")
-
-    cluster_lines = ["## Open regression clusters"]
-    if snapshot["open_regression_clusters"]:
-        for cluster in snapshot["open_regression_clusters"]:
-            cluster_lines.append(
-                f"- {cluster['case_id']} [{cluster['occurrence_count']}x, "
-                f"{cluster['failure_category'] or 'unknown'}, "
-                f"last {_format_timestamp(_parse_iso(cluster['last_seen_at']))}]: "
-                f"{cluster['failure_detail']}"
-            )
-    else:
-        cluster_lines.append("- none")
-
-    return "\n".join([*experiment_lines, "", *cluster_lines])
-
-
-def _build_memory_section(memory_snapshot: dict[str, Any]) -> str:
-    return "\n".join([
-        "## Memory utilization",
-        (
-            f"- injection_sessions={memory_snapshot['injection_sessions']} "
-            f"citation_sessions={memory_snapshot['citation_sessions']} "
-            f"lookup_after_injection_sessions={memory_snapshot['lookup_after_injection_sessions']}"
-        ),
-        (
-            f"- citation_session_rate={memory_snapshot['citation_session_rate']:.3f} "
-            f"assistant_citation_rate={memory_snapshot['assistant_citation_rate']:.3f} "
-            f"selected_reference_citation_rate={memory_snapshot['selected_reference_citation_rate']:.3f}"
-        ),
-        (
-            f"- memory_search_calls={memory_snapshot['memory_search_calls']} "
-            f"memory_get_calls={memory_snapshot['memory_get_calls']} "
-            f"memory_debug_coverage_rate={memory_snapshot['memory_debug_coverage_rate']:.3f}"
-        ),
-    ])
-
-
-def _build_memory_governance_section(snapshot: dict[str, Any]) -> str:
-    startup_profile_agent_target_count = int(snapshot.get("startup_profile_agent_target_count", 0))
-    startup_profile_agent_target_samples = snapshot.get("startup_profile_agent_target_samples", [])
-    invalid_trigger_task_type_samples = snapshot.get("invalid_trigger_task_type_samples", [])
-    untargeted_reference_samples = snapshot.get("untargeted_reference_samples", [])
-    oversized_policy_samples = snapshot.get("oversized_policy_samples", [])
-    lines = [
-        "## Memory governance",
-        (
-            f"- health_status={snapshot.get('health_status', 'healthy')} "
-            f"hard_issue_count={snapshot.get('hard_issue_count', 0)} "
-            f"soft_issue_count={snapshot.get('soft_issue_count', 0)} "
-            f"soft_limit_breach_count={snapshot.get('soft_limit_breach_count', 0)} "
-            f"issue_count={snapshot['issue_count']}"
-        ),
-        (
-            f"- active_count={snapshot['active_count']} "
-            f"active_agent_count={snapshot.get('active_agent_count', 0)} "
-            f"targeted_count={snapshot['targeted_count']} "
-            f"explicit_exclusion_count={snapshot['explicit_exclusion_count']} "
-            f"untargeted_reference_count={snapshot['untargeted_reference_count']}"
-        ),
-        (
-            f"- policy_with_targeting_count={snapshot['policy_with_targeting_count']} "
-            f"missing_reference_summary_count={snapshot['missing_reference_summary_count']} "
-            f"oversized_policy_count={snapshot['oversized_policy_count']}"
-        ),
-        (
-            f"- alias_trigger_task_type_count={snapshot['alias_trigger_task_type_count']} "
-            f"startup_profile_agent_target_count={startup_profile_agent_target_count} "
-            f"invalid_trigger_task_type_count={snapshot['invalid_trigger_task_type_count']}"
-        ),
-        (
-            f"- custom_memory_config_agent_count={snapshot.get('custom_memory_config_agent_count', 0)} "
-            f"tool_capabilities_disabled_agent_count={snapshot.get('tool_capabilities_disabled_agent_count', 0)} "
-            f"project_index_disabled_agent_count={snapshot.get('project_index_disabled_agent_count', 0)} "
-            f"reference_index_disabled_agent_count={snapshot.get('reference_index_disabled_agent_count', 0)} "
-            f"memory_exclusion_agent_count={snapshot.get('memory_exclusion_agent_count', 0)} "
-            f"excluded_memory_uuid_count={snapshot.get('excluded_memory_uuid_count', 0)}"
-        ),
-    ]
-    if untargeted_reference_samples:
-        lines.append("- top untargeted references:")
-        for item in untargeted_reference_samples:
-            detail = item.get("details") or "untargeted reference"
-            lines.append(f"  - {item['label']} ({item['uuid'][:8]}): {detail}")
-    if oversized_policy_samples:
-        lines.append("- top oversized policies:")
-        for item in oversized_policy_samples:
-            detail = item.get("details") or "oversized policy"
-            lines.append(f"  - {item['label']} ({item['uuid'][:8]}): {detail}")
-    if startup_profile_agent_target_samples:
-        lines.append("- startup profile + agent target samples:")
-        for item in startup_profile_agent_target_samples:
-            lines.append(f"  - {item['label']} ({item['uuid'][:8]})")
-    if invalid_trigger_task_type_samples:
-        lines.append("- invalid trigger samples:")
-        for item in invalid_trigger_task_type_samples:
-            lines.append(
-                f"  - {item['label']} ({item['uuid'][:8]}): {', '.join(item['invalid_types'])}"
-            )
-    return "\n".join(lines)
-
-
-def _build_reference_yield_section(reference_items: list[dict[str, Any]]) -> str:
-    lines = ["## Low-yield references"]
-    if reference_items:
-        for item in reference_items:
-            tags = ",".join(item["tags"]) or "-"
-            lines.append(
-                f"- {item['label']} ({item['uuid'][:8]}): selected={item['selected']} "
-                f"cited={item['cited']} rate={item['citation_rate']:.3f} tags={tags}"
-            )
-    else:
-        lines.append("- none")
-    return "\n".join(lines)
-
-
-def _parse_iso(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
 
 
 async def build_improvement_signal_digest(
