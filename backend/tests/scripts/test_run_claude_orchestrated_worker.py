@@ -6,7 +6,7 @@ import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_claude_orchestrated_worker.py"
 
@@ -607,3 +607,197 @@ def test_build_live_summary_includes_transcript_progress():
 
     assert summary["transcript_progress"] == {"line_count": 3, "last_type": "progress"}
     assert summary["last_progress_at"] == "2026-03-26T12:00:00+00:00"
+
+
+def test_finalize_session_status_marks_completed_exit(tmp_path):
+    module = _load_module()
+    session = SimpleNamespace(status="active", health_detail=None)
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: session)
+    mark_completed = MagicMock()
+    mark_terminal = MagicMock()
+
+    class FakeSession:
+        id = object()
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with (
+        patch.object(module, "_ensure_session_metadata", new_callable=AsyncMock),
+        patch.dict(
+            sys.modules,
+            {
+                "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+                "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+                "app.models": types.SimpleNamespace(Session=FakeSession),
+                "app.services.session_live_activity": types.SimpleNamespace(
+                    mark_session_completed=mark_completed,
+                    mark_session_terminal_state=mark_terminal,
+                ),
+            },
+        ),
+    ):
+        asyncio.run(
+            module._finalize_session_status(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                external_id="task-123",
+                timed_out=False,
+                exit_code=0,
+                timeout_seconds=600,
+            )
+        )
+
+    mark_completed.assert_called_once_with(
+        session,
+        summary="Claude worker completed",
+        termination_reason="process_exit_0",
+    )
+    mark_terminal.assert_not_called()
+    db.commit.assert_awaited_once()
+
+
+def test_finalize_session_status_marks_timeout_as_failed(tmp_path):
+    module = _load_module()
+    session = SimpleNamespace(status="active", health_detail=None)
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: session)
+    mark_completed = MagicMock()
+    mark_terminal = MagicMock()
+
+    class FakeSession:
+        id = object()
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with (
+        patch.object(module, "_ensure_session_metadata", new_callable=AsyncMock),
+        patch.dict(
+            sys.modules,
+            {
+                "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+                "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+                "app.models": types.SimpleNamespace(Session=FakeSession),
+                "app.services.session_live_activity": types.SimpleNamespace(
+                    mark_session_completed=mark_completed,
+                    mark_session_terminal_state=mark_terminal,
+                ),
+            },
+        ),
+    ):
+        asyncio.run(
+            module._finalize_session_status(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                external_id="task-123",
+                timed_out=True,
+                exit_code=-9,
+                timeout_seconds=900,
+            )
+        )
+
+    assert session.status == "failed"
+    assert session.health_detail == "timed_out"
+    mark_completed.assert_not_called()
+    mark_terminal.assert_called_once_with(
+        session,
+        phase="failed",
+        status="failed",
+        summary="Claude worker timed out after 900s",
+        termination_reason="timeout",
+    )
+    db.commit.assert_awaited_once()
+
+
+def test_finalize_session_status_marks_nonzero_exit_as_failed(tmp_path):
+    module = _load_module()
+    session = SimpleNamespace(status="active", health_detail=None)
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: session)
+    mark_completed = MagicMock()
+    mark_terminal = MagicMock()
+
+    class FakeSession:
+        id = object()
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with (
+        patch.object(module, "_ensure_session_metadata", new_callable=AsyncMock),
+        patch.dict(
+            sys.modules,
+            {
+                "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+                "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+                "app.models": types.SimpleNamespace(Session=FakeSession),
+                "app.services.session_live_activity": types.SimpleNamespace(
+                    mark_session_completed=mark_completed,
+                    mark_session_terminal_state=mark_terminal,
+                ),
+            },
+        ),
+    ):
+        asyncio.run(
+            module._finalize_session_status(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                external_id="task-123",
+                timed_out=False,
+                exit_code=17,
+                timeout_seconds=600,
+            )
+        )
+
+    assert session.status == "failed"
+    assert session.health_detail == "failed"
+    mark_completed.assert_not_called()
+    mark_terminal.assert_called_once_with(
+        session,
+        phase="failed",
+        status="failed",
+        summary="Claude worker exited with code 17",
+        termination_reason="process_exit_17",
+    )
+    db.commit.assert_awaited_once()
