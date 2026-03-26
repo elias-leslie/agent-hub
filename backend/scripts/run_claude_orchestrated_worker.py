@@ -115,6 +115,13 @@ def _coerce_string_list(value: Any) -> list[str]:
     return [item for item in value if isinstance(item, str) and item]
 
 
+def _subprocess_env() -> dict[str, str]:
+    """Return a sanitized env for nested CLI subprocesses."""
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    return env
+
+
 def _run_text_command(*, command: list[str], cwd: Path) -> str:
     completed = subprocess.run(
         command,
@@ -122,6 +129,7 @@ def _run_text_command(*, command: list[str], cwd: Path) -> str:
         capture_output=True,
         text=True,
         check=True,
+        env=_subprocess_env(),
     )
     return completed.stdout
 
