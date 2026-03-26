@@ -226,7 +226,7 @@ class TestSaveLearningEndpoint:
         response = await client.post(
             "/api/memory/save-learning",
             json={
-                "content": "Use commit.sh --push --msg \"description\" in Agent Hub sessions.",
+                "content": "Use commit.sh --push --msg \"description\" for new commits. Use commit.sh --current --push for clean ahead branches.",
                 "summary": "Use commit flow",
                 "injection_tier": "mandate",
             },
