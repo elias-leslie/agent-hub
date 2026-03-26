@@ -25,6 +25,15 @@ export interface ProjectPermissionUpdate {
   root_path?: string | null;
 }
 
+export interface ProjectPermissionCreate {
+  project_id: string;
+  permission_tier?: "off" | "read" | "write" | "yolo";
+  auto_exec_enabled?: boolean;
+  execution_start_hour?: number;
+  execution_end_hour?: number;
+  root_path?: string | null;
+}
+
 export interface ExecutionPermission {
   allowed: boolean;
   permission_tier: string;
@@ -52,6 +61,18 @@ export async function updateProjectPermission(
     }
   );
   if (!res.ok) throw new Error(`Failed to update permission for ${projectId}`);
+  return res.json();
+}
+
+export async function createProjectPermission(
+  payload: ProjectPermissionCreate
+): Promise<ProjectPermission> {
+  const res = await fetchApi(buildApiUrl("/api/projects/permissions"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Failed to create permission for ${payload.project_id}`);
   return res.json();
 }
 
