@@ -59,6 +59,7 @@ _ACTIVE_SUMMARY_PREFIXES = (
     "Injecting memory",
     "Model planning",
 )
+_VALIDATION_COMMAND_TOKENS = ("dt ", "pytest", "ruff", "tsc", "biome", "sqlfluff", "squawk")
 
 
 def _now_iso() -> str:
@@ -113,23 +114,27 @@ def _tool_phase(
     if "write" in normalized or "edit" in normalized:
         return "writing_file", f"Writing {path or 'file'}", path
     if command:
-        validation_tokens = ("dt ", "pytest", "ruff", "tsc", "biome", "sqlfluff", "squawk")
-        if any(token in command for token in validation_tokens):
+        if any(token in command for token in _VALIDATION_COMMAND_TOKENS):
             return "running_validation", f"Running validation: {command[:100]}", path
         return "running_tool", f"Running command: {command[:100]}", path
     return "running_tool", f"Running tool: {tool_name or 'unknown'}", path
+
+
+def _dedup_append_capped(lst: list[str], items: list[str], limit: int) -> list[str]:
+    for item in items:
+        if item in lst:
+            lst = [x for x in lst if x != item]
+        lst.append(item)
+    return lst[-limit:]
 
 
 def _append_touched_file(live_activity: dict[str, Any], path: str | None) -> None:
     if not path:
         return
     touched = live_activity.get("files_touched")
-    if not isinstance(touched, list):
-        touched = []
-    if path in touched:
-        touched = [p for p in touched if p != path]
-    touched.append(path)
-    live_activity["files_touched"] = touched[-_TOUCHED_FILES_LIMIT:]
+    live_activity["files_touched"] = _dedup_append_capped(
+        touched if isinstance(touched, list) else [], [path], _TOUCHED_FILES_LIMIT
+    )
 
 
 def _append_recent_paths(
@@ -138,13 +143,9 @@ def _append_recent_paths(
     paths: list[str] | None,
 ) -> None:
     recent = live_activity.get(key)
-    if not isinstance(recent, list):
-        recent = []
-    for path in paths or []:
-        if path in recent:
-            recent = [existing for existing in recent if existing != path]
-        recent.append(path)
-    live_activity[key] = recent[-_RECENT_PATHS_LIMIT:]
+    live_activity[key] = _dedup_append_capped(
+        recent if isinstance(recent, list) else [], paths or [], _RECENT_PATHS_LIMIT
+    )
 
 
 def _mark_non_terminal_state(
@@ -160,6 +161,147 @@ def _mark_non_terminal_state(
     live_activity["termination_reason"] = None
     live_activity["stall_reason"] = None
     live_activity["last_model_activity_at"] = now_iso
+
+
+def _classify_quiet_or_stalled(
+    quiet_for_seconds: int | None,
+    stall_threshold: int,
+    stall_msg: str,
+) -> tuple[str, bool, str | None]:
+    if quiet_for_seconds is not None and quiet_for_seconds >= stall_threshold:
+        return "stalled", True, stall_msg
+    if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
+        return "quiet", False, None
+    return "active", False, None
+
+
+def _classify_active_health(
+    response: dict[str, Any],
+    phase: str,
+    quiet_for_seconds: int | None,
+) -> tuple[str, bool, str | None]:
+    """Return (health, stalled, stall_reason) for an active session."""
+    if phase in _ACTIVE_PHASES:
+        return _classify_quiet_or_stalled(
+            quiet_for_seconds, _STALL_AFTER_SECONDS,
+            f"No model activity for {quiet_for_seconds}s while phase={phase}",
+        )
+    if phase == "unknown":
+        return _classify_quiet_or_stalled(
+            quiet_for_seconds, _NO_ACTIVITY_STALL_AFTER_SECONDS,
+            f"No structured activity for {quiet_for_seconds}s",
+        )
+    return "active", False, None
+
+
+def _fix_terminal_response(
+    response: dict[str, Any],
+    status_val: str,
+    fallback_summary: str,
+    should_fix_summary: bool,
+) -> None:
+    response["status"] = status_val
+    if str(response.get("phase") or "") in _ACTIVE_PHASES:
+        response["phase"] = status_val
+    if should_fix_summary:
+        summary = response.get("summary")
+        if not isinstance(summary, str) or summary.startswith(_ACTIVE_SUMMARY_PREFIXES):
+            response["summary"] = fallback_summary
+
+
+def _apply_terminal_overrides(
+    response: dict[str, Any],
+    session: Session,
+    phase: str,
+    status: str,
+) -> str:
+    """Apply completed/failed overrides, return health string."""
+    if session.status == "completed":
+        _fix_terminal_response(response, "completed", "Session completed", status != "completed")
+        return "completed"
+    if session.status == "failed":
+        _fix_terminal_response(response, "failed", "Session failed", status not in {"failed", "error"})
+        return "failed"
+    return "idle"
+
+
+def _compute_anti_reap_signals(
+    response: dict[str, Any],
+    has_owner_lane: bool,
+    has_specialist_lane: bool,
+    detached_rebuild_stale: bool,
+    phase: str,
+    quiet_for: int | None,
+) -> list[str]:
+    signals: list[str] = []
+    if has_owner_lane:
+        signals.append("owner_lane")
+    if has_specialist_lane and not detached_rebuild_stale:
+        signals.append("specialist_lane")
+    if int(response.get("outstanding_tool_calls") or 0) > 0:
+        signals.append("outstanding_tool_calls")
+    if phase in _NON_REAPABLE_PHASES:
+        signals.append(f"phase_{phase}")
+    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
+        signals.append("recent_write_activity")
+    return signals
+
+
+def _should_reap(
+    dead_signals: list[str],
+    anti_reap_signals: list[str],
+    quiet_for: int | None,
+    detached_rebuild_stale: bool,
+) -> bool:
+    if not dead_signals or anti_reap_signals:
+        return False
+    if detached_rebuild_stale and "detached_control_plane_rebuild" in dead_signals:
+        return True
+    return (
+        quiet_for is not None
+        and quiet_for >= _REAPABLE_AFTER_SECONDS
+        and any(s in _STRONG_DEAD_SIGNALS for s in dead_signals)
+    )
+
+
+def _compute_dead_signals_and_state(
+    session: Session,
+    response: dict[str, Any],
+    quiet_for: int | None,
+    phase: str,
+    last_heartbeat_age: int | None,
+    is_restart_cmd: bool,
+    detached_rebuild_stale: bool,
+    anti_reap_signals: list[str],
+) -> tuple[list[str], str]:
+    dead_signals: list[str] = []
+    state = str(response.get("health") or response.get("status") or "idle")
+
+    if session.status != "active":
+        return dead_signals, state
+
+    last_event_type = str(response.get("last_event_type") or "")
+    if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+        dead_signals.append("no_model_activity_30m")
+    if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+        dead_signals.append("no_structured_activity")
+    if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+        dead_signals.append("heartbeat_only")
+    if response.get("termination_reason"):
+        dead_signals.append("termination_signal")
+    if is_restart_cmd:
+        dead_signals.append("detached_control_plane_rebuild")
+    if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
+        dead_signals.append("heartbeat_missing")
+    elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
+        dead_signals.append("heartbeat_absent_6h")
+
+    if dead_signals:
+        state = "dead_candidate"
+    if _should_reap(dead_signals, anti_reap_signals, quiet_for, detached_rebuild_stale):
+        state = "reapable"
+
+    return dead_signals, state
 
 
 def _apply_lifecycle_state(
@@ -186,55 +328,13 @@ def _apply_lifecycle_state(
         and is_restart_cmd
     )
 
-    anti_reap_signals: list[str] = []
-    if has_owner_lane:
-        anti_reap_signals.append("owner_lane")
-    if has_specialist_lane and not detached_rebuild_stale:
-        anti_reap_signals.append("specialist_lane")
-    if int(response.get("outstanding_tool_calls") or 0) > 0:
-        anti_reap_signals.append("outstanding_tool_calls")
-    if phase in _NON_REAPABLE_PHASES:
-        anti_reap_signals.append(f"phase_{phase}")
-    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
-        anti_reap_signals.append("recent_write_activity")
-
-    dead_signals: list[str] = []
-    state = str(response.get("health") or response.get("status") or "idle")
-
-    if session.status == "active":
-        last_event_type = str(response.get("last_event_type") or "")
-        if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-            dead_signals.append("no_model_activity_30m")
-        if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
-            dead_signals.append("no_structured_activity")
-        if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_only")
-        if response.get("termination_reason"):
-            dead_signals.append("termination_signal")
-        if is_restart_cmd:
-            dead_signals.append("detached_control_plane_rebuild")
-        if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_missing")
-        elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
-            dead_signals.append("heartbeat_absent_6h")
-        if dead_signals:
-            state = "dead_candidate"
-        if (
-            detached_rebuild_stale
-            and state == "dead_candidate"
-            and not anti_reap_signals
-            and "detached_control_plane_rebuild" in dead_signals
-        ):
-            state = "reapable"
-        if (
-            quiet_for is not None
-            and quiet_for >= _REAPABLE_AFTER_SECONDS
-            and state == "dead_candidate"
-            and not anti_reap_signals
-            and any(s in _STRONG_DEAD_SIGNALS for s in dead_signals)
-        ):
-            state = "reapable"
-
+    anti_reap_signals = _compute_anti_reap_signals(
+        response, has_owner_lane, has_specialist_lane, detached_rebuild_stale, phase, quiet_for,
+    )
+    dead_signals, state = _compute_dead_signals_and_state(
+        session, response, quiet_for, phase, last_heartbeat_age,
+        is_restart_cmd, detached_rebuild_stale, anti_reap_signals,
+    )
     reason_codes = [*dead_signals, *anti_reap_signals] or [f"health_{state}"]
     response.update({
         "lifecycle_state": state,
@@ -466,55 +566,21 @@ def apply_live_activity_heartbeat(
     session.provider_metadata = metadata
 
 
-def _classify_active_health(
-    response: dict[str, Any],
-    phase: str,
-    quiet_for_seconds: int | None,
-) -> tuple[str, bool, str | None]:
-    """Return (health, stalled, stall_reason) for an active session."""
-    if phase in _ACTIVE_PHASES:
-        if quiet_for_seconds is not None and quiet_for_seconds >= _STALL_AFTER_SECONDS:
-            return "stalled", True, f"No model activity for {quiet_for_seconds}s while phase={phase}"
-        if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
-            return "quiet", False, None
-        return "active", False, None
-
-    if phase == "unknown":
-        if quiet_for_seconds is not None and quiet_for_seconds >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
-            return "stalled", True, f"No structured activity for {quiet_for_seconds}s"
-        if quiet_for_seconds is not None and quiet_for_seconds >= _QUIET_AFTER_SECONDS:
-            return "quiet", False, None
-        return "active", False, None
-
-    return "active", False, None
-
-
-def _apply_terminal_overrides(
-    response: dict[str, Any],
-    session: Session,
-    phase: str,
-    status: str,
-) -> str:
-    """Apply completed/failed overrides, return health string."""
-    if session.status == "completed":
-        response["status"] = "completed"
-        if phase in _ACTIVE_PHASES:
-            response["phase"] = "completed"
-        summary = response.get("summary")
-        summary_looks_active = not isinstance(summary, str) or summary.startswith(_ACTIVE_SUMMARY_PREFIXES)
-        if status != "completed" and summary_looks_active:
-            response["summary"] = "Session completed"
-        return "completed"
-    if session.status == "failed":
-        response["status"] = "failed"
-        if phase in _ACTIVE_PHASES:
-            response["phase"] = "failed"
-        summary = response.get("summary")
-        summary_looks_active = not isinstance(summary, str) or summary.startswith(_ACTIVE_SUMMARY_PREFIXES)
-        if status not in {"failed", "error"} and summary_looks_active:
-            response["summary"] = "Session failed"
-        return "failed"
-    return "idle"
+def _build_fallback_live_activity(session: Session) -> dict[str, Any]:
+    last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
+    last_updated_iso = last_updated.isoformat() if last_updated is not None else None
+    return {
+        "phase": "unknown",
+        "status": "active",
+        "summary": "No structured activity recorded",
+        "last_event_type": None,
+        "last_event_at": last_updated_iso,
+        "last_model_activity_at": last_updated_iso,
+        "outstanding_tool_calls": 0,
+        "tool_calls_count": 0,
+        "files_touched": [],
+        "last_heartbeat_at": None,
+    }
 
 
 def build_live_activity_response(
@@ -528,20 +594,7 @@ def build_live_activity_response(
     if not raw:
         if session.status != "active":
             return None
-        last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
-        last_updated_iso = last_updated.isoformat() if last_updated is not None else None
-        raw = {
-            "phase": "unknown",
-            "status": "active",
-            "summary": "No structured activity recorded",
-            "last_event_type": None,
-            "last_event_at": last_updated_iso,
-            "last_model_activity_at": last_updated_iso,
-            "outstanding_tool_calls": 0,
-            "tool_calls_count": 0,
-            "files_touched": [],
-            "last_heartbeat_at": None,
-        }
+        raw = _build_fallback_live_activity(session)
 
     response = dict(raw)
     phase = str(response.get("phase") or "created")
