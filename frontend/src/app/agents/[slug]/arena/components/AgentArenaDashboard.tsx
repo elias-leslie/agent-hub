@@ -19,15 +19,13 @@ import { metricsToAnalytics } from "@/app/agents/[slug]/analytics/utils";
 import type { AgentBenchmarkRunDetail } from "@/app/agents/[slug]/analytics/types";
 import { deriveArenaStatus, formatRelativeTime } from "@/app/arena/utils";
 
-import { ArenaHeader, type ArenaView } from "./ArenaHeader";
+import { ArenaHeader, type ArenaView, type ArenaWindow } from "./ArenaHeader";
 import { sortCases, sortModels, sortRegressions, sortRuns, sortSuites } from "./arenaSort";
 import { OverviewPanels } from "./OverviewPanels";
 import { RecentRunsCard } from "./RecentRunsCard";
 import { RegressionWatchlist } from "./RegressionWatchlist";
 import { RuntimePanels } from "./RuntimePanels";
 import { SuitePanels } from "./SuitePanels";
-
-type ArenaWindow = 7 | 30 | 90;
 
 interface AgentArenaDashboardProps {
   slug: string;
