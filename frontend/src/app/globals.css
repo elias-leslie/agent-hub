@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../../node_modules/@summitflow/notes-ui/src";
 @import "../components/output/prism-theme.css";
 
 /* Command Center Typography - IBM Plex family loaded via next/font */
