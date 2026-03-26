@@ -296,29 +296,18 @@ class CodexOAuthAdapter(ProviderAdapter):
 
         @with_retry
         async def _do_complete() -> CompletionResult:
-            return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
+            resolved_model = self._resolve_model(model)
+            input_items, instructions = _convert_messages_to_input(messages)
+            return await self._complete_from_input(
+                input_items=input_items,
+                instructions=instructions,
+                resolved_model=resolved_model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs,
+            )
 
         return await _do_complete()
-
-    async def _complete_impl(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Internal non-streaming completion (collects full streamed response)."""
-        resolved_model = self._resolve_model(model)
-        input_items, instructions = _convert_messages_to_input(messages)
-        return await self._complete_from_input(
-            input_items=input_items,
-            instructions=instructions,
-            resolved_model=resolved_model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **kwargs,
-        )
 
     async def _complete_from_input(
         self,
