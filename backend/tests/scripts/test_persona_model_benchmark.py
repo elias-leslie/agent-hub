@@ -184,7 +184,7 @@ def test_score_attempt_backfills_identity_for_infra_failures() -> None:
 
 def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     from scripts.persona_benchmark_eval import PersonaBenchmarkRun
-    from scripts.run_persona_model_benchmark import build_persistence_payload
+    from scripts.persona_benchmark_persistence import build_persistence_payload
 
     attempt = PersonaBenchmarkAttempt(
         model_id="codex/gpt-5.4",
@@ -737,7 +737,7 @@ def test_generate_markdown_report_includes_ranking_table() -> None:
 
 
 async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
-    from scripts.run_persona_model_benchmark import _run_one_attempt
+    from scripts.persona_benchmark_runner import _run_one_attempt
 
     captured_kwargs: dict[str, object] = {}
 
@@ -763,7 +763,7 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
             )
 
     with patch(
-        "scripts.run_persona_model_benchmark._fetch_used_tool_names",
+        "scripts.persona_benchmark_runner._fetch_used_tool_names",
         new=AsyncMock(return_value=[]),
     ):
         attempt = await _run_one_attempt(
@@ -794,7 +794,8 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_persist_run_promotes_memory_variant_on_candidate_win() -> None:
     from scripts.persona_benchmark_eval import PersonaBenchmarkRun
-    from scripts.run_persona_model_benchmark import _build_parser, _persist_run
+    from scripts.persona_benchmark_persistence import _persist_run
+    from scripts.run_persona_model_benchmark import _build_parser, derive_suite_id
 
     attempt = PersonaBenchmarkAttempt(
         model_id="codex/gpt-5.4",
@@ -829,23 +830,23 @@ async def test_persist_run_promotes_memory_variant_on_candidate_win() -> None:
 
     with (
         patch(
-            "scripts.run_persona_model_benchmark.capture_benchmark_config_snapshot",
+            "scripts.persona_benchmark_persistence.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.run_persona_model_benchmark.persist_benchmark_payload",
+            "scripts.persona_benchmark_persistence.persist_benchmark_payload",
             new=AsyncMock(return_value="run-1"),
         ),
         patch(
-            "scripts.run_persona_model_benchmark.get_benchmark_experiment_summary_by_key",
+            "scripts.persona_benchmark_persistence.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(return_value={"decision": "promote", "name": "exp", "decision_reason": "candidate_outperforms_baseline", "baseline": {"run_count": 3, "avg_score": 80.0, "avg_pass_rate": 50.0}, "candidate": {"run_count": 3, "avg_score": 95.0, "avg_pass_rate": 80.0}, "score_delta": {"mean_delta": 15.0, "ci_low": 5.0, "ci_high": 20.0}, "pass_rate_delta": {"mean_delta": 30.0, "ci_low": 10.0, "ci_high": 40.0}}),
         ),
         patch(
-            "scripts.run_persona_model_benchmark.set_active_memory_variant",
+            "scripts.persona_benchmark_persistence.set_active_memory_variant",
             new=AsyncMock(),
         ) as mock_promote,
     ):
-        await _persist_run(run, args, ["ready_task_dispatch"])
+        await _persist_run(run, args, derive_suite_id(["ready_task_dispatch"]))
 
     mock_promote.assert_awaited_once_with("ENHANCED")
 
