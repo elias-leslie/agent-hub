@@ -298,6 +298,7 @@ class TestDispatchAgentFireAndForget:
             parent_session_id="parent-session-123",
             current_branch="task-12345678/main",
             working_dir="/tmp/worktrees/task-12345678",
+            task_id="task-12345678",
         )
 
     @pytest.mark.asyncio
@@ -350,6 +351,7 @@ class TestDispatchAgentFireAndForget:
             parent_session_id=None,
             current_branch="task-87654321/main",
             working_dir="/tmp/worktrees/task-87654321",
+            task_id="task-87654321",
         )
 
 

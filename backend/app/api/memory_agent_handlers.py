@@ -3,7 +3,9 @@
 import time
 
 from app.services.memory.context_builder_tiers import get_rendered_content
+from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.service import MemoryScope
+from app.services.memory.tool_capability_context import format_tool_capability_context
 
 from .memory_agent_context_builder import (
     build_progressive_context_with_variant,
@@ -77,7 +79,7 @@ async def build_progressive_context_response(
         consumer_profile=consumer_profile,
     )
 
-    formatted = await format_context_with_continuity(
+    memory_formatted = await format_context_with_continuity(
         context=context,
         scope=scope,
         scope_id=scope_id,
@@ -85,6 +87,29 @@ async def build_progressive_context_response(
         session_id=session_id,
         consumer_profile=consumer_profile,
     )
+
+    # Assemble full formatted output — same blocks as inject_progressive_context()
+    effective_project_id = project_id or scope_id
+    blocks: list[str] = []
+
+    project_index_block = format_project_index_context(
+        effective_project_id, consumer_profile=consumer_profile, task_type=task_type,
+    )
+    if project_index_block:
+        blocks.append(project_index_block)
+        context.debug_info["project_index_included"] = True
+
+    tool_capability_block = format_tool_capability_context(
+        consumer_profile=consumer_profile, task_type=task_type, project_id=effective_project_id,
+    )
+    if tool_capability_block:
+        blocks.append(tool_capability_block)
+        context.debug_info["tool_capabilities_included"] = True
+
+    if memory_formatted:
+        blocks.append(memory_formatted)
+
+    formatted = "\n".join(blocks) if blocks else ""
 
     await track_and_record_metrics(
         context=context,

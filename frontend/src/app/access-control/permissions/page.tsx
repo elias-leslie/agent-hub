@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback } from "react";
+import { FormEvent, useCallback, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { FolderLock, Zap } from "lucide-react";
+import { FolderLock, Plus, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  createProjectPermission,
   fetchProjectPermissions,
   updateProjectPermission,
+  type ProjectPermissionCreate,
   type ProjectPermission,
   type ProjectPermissionUpdate,
 } from "@/lib/api";
@@ -94,10 +96,87 @@ function PermissionsTable({
   );
 }
 
+function AddProjectPermissionForm({
+  onCreate,
+  isPending,
+}: {
+  onCreate: (payload: ProjectPermissionCreate) => void;
+  isPending: boolean;
+}) {
+  const [projectId, setProjectId] = useState("");
+  const [tier, setTier] = useState<Tier>("read");
+  const [autoExec, setAutoExec] = useState(false);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalized = projectId.trim();
+    if (!normalized) return;
+    onCreate({
+      project_id: normalized,
+      permission_tier: tier,
+      auto_exec_enabled: autoExec,
+    });
+    setProjectId("");
+    setTier("read");
+    setAutoExec(false);
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mb-4 rounded-lg border border-slate-800/80 bg-slate-900/40 p-4"
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs text-slate-400">
+          Project ID
+          <input
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+            placeholder="test2"
+            className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none ring-0 placeholder:text-slate-500"
+          />
+        </label>
+        <label className="flex w-full flex-col gap-1.5 text-xs text-slate-400 lg:w-40">
+          Tier
+          <select
+            value={tier}
+            onChange={(event) => setTier(event.target.value as Tier)}
+            className="h-10 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100 outline-none ring-0"
+          >
+            {TIERS.map((value) => (
+              <option key={value} value={value}>
+                {TIER_CONFIG[value].label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex h-10 items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 text-sm text-slate-200">
+          <input
+            type="checkbox"
+            checked={autoExec}
+            onChange={(event) => setAutoExec(event.target.checked)}
+            className="h-4 w-4 rounded border-slate-600 bg-slate-950"
+          />
+          Auto Exec
+        </label>
+        <button
+          type="submit"
+          disabled={isPending || projectId.trim().length === 0}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-slate-100 px-4 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          Add Project
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ProjectPermissionsPage() {
   const queryClient = useQueryClient();
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const { data: permissions, isLoading, error } = useQuery({
     queryKey: ["project-permissions"],
@@ -137,11 +216,30 @@ export default function ProjectPermissionsPage() {
     },
   });
 
+  const createMutation = useMutation({
+    mutationFn: createProjectPermission,
+    onSuccess: () => {
+      setCreateError(null);
+      queryClient.invalidateQueries({ queryKey: ["project-permissions"] });
+    },
+    onError: () => {
+      setCreateError("Failed to create project permission");
+    },
+  });
+
   const handleUpdate = useCallback(
     (projectId: string, update: ProjectPermissionUpdate) => {
       mutation.mutate({ projectId, update });
     },
     [mutation],
+  );
+
+  const handleCreate = useCallback(
+    (payload: ProjectPermissionCreate) => {
+      setCreateError(null);
+      createMutation.mutate(payload);
+    },
+    [createMutation],
   );
 
   const tierCounts = permissions?.reduce(
@@ -184,6 +282,15 @@ export default function ProjectPermissionsPage() {
             <p className="text-sm text-red-400">
               Failed to load project permissions
             </p>
+          </div>
+        )}
+        <AddProjectPermissionForm
+          onCreate={handleCreate}
+          isPending={createMutation.isPending}
+        />
+        {createError && (
+          <div className="mb-4 rounded-lg border border-red-800/50 bg-red-900/20 p-3">
+            <p className="text-sm text-red-400">{createError}</p>
           </div>
         )}
 

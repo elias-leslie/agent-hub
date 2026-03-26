@@ -13,10 +13,12 @@ from app.services.session_ingestion.models import (
     NormalizedEvent,
     SessionHeartbeatRequest,
     SessionUpsertRequest,
+    TranscriptIngestRequest,
 )
 from app.services.session_ingestion.service import (
     append_normalized_events,
     heartbeat_session,
+    ingest_transcript_events,
     upsert_session,
 )
 
@@ -128,6 +130,69 @@ async def test_append_normalized_events_single_implicit_event_uses_fast_path() -
     assert mock_store.await_args.kwargs["session"] is session
     mock_get_max_turn.assert_not_awaited()
     mock_load_existing_pairs.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_append_normalized_events_reconciles_transcript_backed_session_models() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-transcript-append",
+        project_id="agent-hub",
+        provider="claude",
+        model="opus-4-6",
+        status="active",
+        session_type="claude_code",
+        provider_metadata={"transcript_path": "/tmp/session-transcript-append.jsonl"},
+        models_used=["opus-4-6"],
+        providers_used=["claude"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute = AsyncMock(
+        return_value=MagicMock(
+            all=lambda: [
+                ("claude-sonnet-4-6", None),
+                ("claude-sonnet-4-6", None),
+            ]
+        )
+    )
+
+    append_result = MagicMock(
+        session_id="session-transcript-append",
+        events_appended=1,
+        events_skipped=0,
+        last_turn=1,
+        last_sequence=1,
+        event_ids=["evt-transcript-append"],
+    )
+
+    with patch(
+        "app.services.session_ingestion.service._store_single_implicit_event",
+        new_callable=AsyncMock,
+        return_value=append_result,
+    ) as mock_store:
+        result = await append_normalized_events(
+            db=db,
+            session_id="session-transcript-append",
+            request=AppendNormalizedEventsRequest(
+                events=[
+                    NormalizedEvent(
+                        event_type="assistant_message",
+                        role="assistant",
+                        content="direct",
+                        model_used="claude-sonnet-4-6",
+                    )
+                ]
+            ),
+            session=session,
+        )
+
+    assert result is append_result
+    assert session.model == "claude-sonnet-4-6"
+    assert session.models_used == ["claude-sonnet-4-6"]
+    mock_store.assert_awaited_once()
+    assert db.commit.await_count == 1
 
 
 @pytest.mark.unit
@@ -278,6 +343,139 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
     assert session.updated_at is not None
     assert db.commit.await_count == 1
     db.refresh.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ingest_transcript_events_reconciles_direct_session_models_from_event_evidence() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-direct",
+        project_id="agent-hub",
+        provider="claude",
+        model="claude-sonnet-4-6",
+        status="active",
+        session_type="claude_code",
+        provider_metadata={},
+        models_used=["claude-opus-4-6", "claude-sonnet-4-6"],
+        providers_used=["claude"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: session),
+            MagicMock(
+                all=lambda: [
+                    ("claude-sonnet-4-6", None),
+                    (None, None),
+                    ("claude-sonnet-4-6", None),
+                ]
+            ),
+        ]
+    )
+
+    adapter = MagicMock()
+    adapter.read_new_events = AsyncMock(return_value=([], "4"))
+    adapter.detect_boundaries = AsyncMock(return_value=[])
+    append_result = MagicMock(
+        events_appended=0,
+        events_skipped=0,
+        last_turn=1,
+        last_sequence=1,
+        event_ids=[],
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._adapter_for_provider",
+            return_value=adapter,
+        ),
+        patch(
+            "app.services.session_ingestion.service.append_normalized_events",
+            new_callable=AsyncMock,
+            return_value=append_result,
+        ),
+    ):
+        result = await ingest_transcript_events(
+            db=db,
+            session_id="session-direct",
+            request=TranscriptIngestRequest(
+                provider="claude",
+                transcript_path="/tmp/session-direct.jsonl",
+            ),
+        )
+
+    assert result.next_checkpoint == "4"
+    assert session.model == "claude-sonnet-4-6"
+    assert session.models_used == ["claude-sonnet-4-6"]
+    assert db.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_ingest_transcript_events_preserves_delegated_model_history_from_event_evidence() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-delegated",
+        project_id="agent-hub",
+        provider="claude",
+        model="unknown",
+        status="active",
+        session_type="claude_code",
+        provider_metadata={},
+        models_used=["claude-haiku-4-5"],
+        providers_used=["claude"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: session),
+            MagicMock(
+                all=lambda: [
+                    ("claude-sonnet-4-6", None),
+                    ("claude-opus-4-6", "agent-1"),
+                    ("claude-sonnet-4-6", None),
+                ]
+            ),
+        ]
+    )
+
+    adapter = MagicMock()
+    adapter.read_new_events = AsyncMock(return_value=([], "8"))
+    adapter.detect_boundaries = AsyncMock(return_value=[])
+    append_result = MagicMock(
+        events_appended=0,
+        events_skipped=0,
+        last_turn=2,
+        last_sequence=7,
+        event_ids=[],
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._adapter_for_provider",
+            return_value=adapter,
+        ),
+        patch(
+            "app.services.session_ingestion.service.append_normalized_events",
+            new_callable=AsyncMock,
+            return_value=append_result,
+        ),
+    ):
+        await ingest_transcript_events(
+            db=db,
+            session_id="session-delegated",
+            request=TranscriptIngestRequest(
+                provider="claude",
+                transcript_path="/tmp/session-delegated.jsonl",
+            ),
+        )
+
+    assert session.model == "claude-sonnet-4-6"
+    assert session.models_used == ["claude-sonnet-4-6", "claude-opus-4-6"]
+    assert db.commit.await_count == 1
 
 
 @pytest.mark.unit
