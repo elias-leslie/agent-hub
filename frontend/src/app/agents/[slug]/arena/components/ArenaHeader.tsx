@@ -3,7 +3,7 @@ import { ArrowLeft, FlaskConical, RefreshCw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-type ArenaWindow = 7 | 30 | 90;
+export type ArenaWindow = 7 | 30 | 90;
 export type ArenaView = "overview" | "suites" | "runtime" | "experiments";
 
 interface ArenaHeaderProps {

@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
       // beforeFiles: WebSocket-capable paths must go directly to the backend
       // (route handlers can't proxy WebSocket upgrades).
       beforeFiles: [
+        // Notes API → SummitFlow backend (centralized notes service)
+        {
+          source: '/api/notes/:path*',
+          destination: `${SUMMITFLOW_API_URL}/api/notes/:path*`,
+        },
+        {
+          source: '/api/notes',
+          destination: `${SUMMITFLOW_API_URL}/api/notes`,
+        },
         // WebSocket: session events
         {
           source: '/api/events',
@@ -89,7 +98,7 @@ const nextConfig: NextConfig = {
   },
 
   // Transpile workspace packages
-  transpilePackages: ['@agent-hub/passport-client', '@agent-hub/chat-ui'],
+  transpilePackages: ['@agent-hub/passport-client', '@agent-hub/chat-ui', '@summitflow/notes-ui'],
 
   // Disable x-powered-by header
   poweredByHeader: false,

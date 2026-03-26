@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
-from app.services.memory.citation_parser import normalize_terminal_summary_tag
+from app.services.memory.citation_parser import normalize_terminal_summary_tag, parse_summary_tags
 
 from .closeout_policy import (
     append_closeout_turn,
@@ -31,6 +31,29 @@ def _resolve_reported_turn(turn: int, tracker: ProgressTracker) -> int:
     if logged_turns:
         return max(logged_turns)
     return turn or 1
+
+
+def _dedupe_exact_repeated_closeout(content: str) -> str:
+    """Collapse exact repeated summary-tagged closeout blocks.
+
+    Some providers occasionally echo the full final closeout twice. When the
+    entire normalized response is an exact repetition and contains a terminal
+    summary tag, keep the single canonical block.
+    """
+    normalized = normalize_terminal_summary_tag(content)
+    stripped = normalized.strip()
+    if not stripped:
+        return normalized
+    if not parse_summary_tags(stripped).tags:
+        return normalized
+
+    for repeat_count in (2, 3):
+        if len(stripped) % repeat_count != 0:
+            continue
+        block = stripped[: len(stripped) // repeat_count]
+        if block and block * repeat_count == stripped:
+            return block
+    return normalized
 
 
 async def finalize_response(
@@ -118,7 +141,7 @@ async def finalize_response(
                 or "Using deterministic tool summary after closeout recovery failed",
             )
 
-    final_content = normalize_terminal_summary_tag(final_content)
+    final_content = _dedupe_exact_repeated_closeout(final_content)
     thinking_content = "\n".join(thinking_parts) if thinking_parts else None
     thinking_tokens = len(thinking_content) // 4 if thinking_content else None
     estimated_tokens = len(final_content) // 4
