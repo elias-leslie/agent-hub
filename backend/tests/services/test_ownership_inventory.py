@@ -148,7 +148,7 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
 
 
 @pytest.mark.asyncio
-async def test_query_project_ownership_skips_unscoped_persona_heartbeat_on_main() -> None:
+async def test_query_project_ownership_skips_unscoped_persona_heartbeat_even_with_task_lane_metadata() -> None:
     now = datetime.now(UTC)
     session = SimpleNamespace(
         id="sess-persona-heartbeat",
@@ -158,7 +158,7 @@ async def test_query_project_ownership_skips_unscoped_persona_heartbeat_on_main(
         agent_slug="persona",
         request_source="heartbeat",
         external_id="task-269134f1",
-        current_branch=None,
+        current_branch="task-269134f1/main",
         status="active",
         workstream_status=None,
         workstream_note=None,
@@ -166,7 +166,7 @@ async def test_query_project_ownership_skips_unscoped_persona_heartbeat_on_main(
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence=None,
-        provider_metadata={"cwd": "/repo"},
+        provider_metadata={"cwd": "/repo/.worktrees/task-269134f1"},
     )
 
     db = AsyncMock()
@@ -185,6 +185,46 @@ async def test_query_project_ownership_skips_unscoped_persona_heartbeat_on_main(
         owners = await query_project_ownership(db, "agent-hub")
 
     assert owners == []
+
+
+@pytest.mark.asyncio
+async def test_query_project_ownership_upgrades_unknown_scope_confidence_from_declared_paths() -> None:
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        id="sess-upgrade-confidence",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=2),
+        updated_at=now - timedelta(minutes=1),
+        agent_slug="refactor",
+        external_id="task-1a2b3c4d",
+        current_branch="task-1a2b3c4d/main",
+        status="active",
+        workstream_status=None,
+        workstream_note=None,
+        declared_scope_paths=["backend/app/services/ownership_inventory.py"],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence="unknown",
+        provider_metadata={"cwd": "/repo/.worktrees/task-1a2b3c4d"},
+    )
+
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.ownership_inventory._fetch_candidate_sessions",
+            new=AsyncMock(return_value=[session]),
+        ),
+        patch(
+            "app.services.ownership_inventory._fetch_scope_events",
+            new=AsyncMock(return_value={}),
+        ),
+        patch("app.services.ownership_inventory._is_worktree", return_value=True),
+    ):
+        owners = await query_project_ownership(db, "agent-hub")
+
+    assert len(owners) == 1
+    assert owners[0].scope_confidence == "declared"
 
 
 @pytest.mark.asyncio
