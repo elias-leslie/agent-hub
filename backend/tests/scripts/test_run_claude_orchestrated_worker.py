@@ -222,12 +222,14 @@ def test_build_prompt_from_task_context_generates_task_contract():
         },
         target_paths=["backend/cli/lib/autosnapshot.py"],
         related_tests=["backend/tests/cli/test_autosnapshot.py"],
+        feedback_text="Second pass must reduce file size and remove banner comments.",
     )
 
     assert "Use exactly one Agent subagent named `task-analyst`" in prompt
     assert "`backend/cli/lib/autosnapshot.py`" in prompt
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
+    assert "Second pass must reduce file size and remove banner comments." in prompt
 
 
 def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):
