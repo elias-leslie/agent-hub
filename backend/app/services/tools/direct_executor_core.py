@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import inspect
 import logging
-import re
-import shlex
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -33,6 +31,12 @@ from app.services.tools._executor_file_io import (
     write_file as _write_file,
 )
 from app.services.tools._executor_registry import build_tool_registry
+from app.services.tools._executor_restart_guards import (
+    _in_band_agent_hub_restart_block_reason,
+    _rewrite_in_band_agent_hub_restart,
+    _self_hosting_restart_block_reason,
+)
+from app.services.tools._executor_roots import KNOWN_ROOTS as KNOWN_ROOTS
 from app.services.tools._executor_web import (
     fetch_web_page as _fetch_web_page,
 )
@@ -49,221 +53,9 @@ from app.services.tools.registry import get_command_redirect
 
 logger = logging.getLogger(__name__)
 
-# Dynamic project roots — derived from project_permissions table.
-# Used for path boundary enforcement and cross-project permission checks.
-# Projects NOT in the map (e.g. persona-sandbox with no root_path) have no path restriction.
-
-
-def _get_known_roots() -> dict[str, str]:
-    """Get project_id → root_path mapping from cached project data."""
-    from app.constants.projects import get_known_roots
-
-    return get_known_roots()
-
-
-# Backward-compatible module-level name for imports (e.g. cross_project_hook).
-# Callers that do `from ... import KNOWN_ROOTS` then `KNOWN_ROOTS.get(pid)`
-# need a proxy that delegates to the cached function.
-
-
-class _RootsProxy(dict):
-    """Dict-like proxy that delegates to get_known_roots()."""
-
-    def get(self, key: str, default: str | None = None) -> str | None:
-        return _get_known_roots().get(key, default)
-
-    def __getitem__(self, key: str) -> str:
-        return _get_known_roots()[key]
-
-    def __contains__(self, key: object) -> bool:
-        return key in _get_known_roots()
-
-    def __iter__(self):
-        return iter(_get_known_roots())
-
-    def items(self):
-        return _get_known_roots().items()
-
-    def values(self):
-        return _get_known_roots().values()
-
-    def keys(self):
-        return _get_known_roots().keys()
-
-    def __repr__(self) -> str:
-        return repr(_get_known_roots())
-
-
-KNOWN_ROOTS: dict[str, str] = _RootsProxy()
-
-_AGENT_HUB_DEFAULT_RESTART_WORKERS = frozenset({
-    "agent-hub-hatchet-ops-worker.service",
-})
-_AGENT_HUB_ALL_RESTART_WORKERS = frozenset({
-    *_AGENT_HUB_DEFAULT_RESTART_WORKERS,
-    "agent-hub-hatchet-agent-worker.service",
-})
-_DIRECT_SYSTEMCTL_SERVICE_RE = re.compile(
-    r"(^|[;&|]\s*)(?:sudo\s+)?systemctl\s+(?:--user\s+)?"
-    r"(?:restart|stop|start|kill|try-restart|reload-or-restart)\s+(?P<unit>\S+)",
-)
-_SHELL_SEPARATOR_TOKENS = frozenset({"&&", "||", ";", "|", "&"})
-_RESTART_SCRIPT_BASENAMES = frozenset({"rebuild.sh", "restart.sh"})
-
-
-def _normalize_shell_command(command: str) -> str:
-    return re.sub(r"\s+", " ", command.strip().lower())
-
-
-def _split_shell_segments(command: str) -> list[list[str]]:
-    """Split a shell command into tokenized segments around common separators."""
-    try:
-        tokens = shlex.split(command, posix=True)
-    except ValueError:
-        tokens = command.split()
-
-    segments: list[list[str]] = []
-    current: list[str] = []
-    for token in tokens:
-        if token in _SHELL_SEPARATOR_TOKENS:
-            if current:
-                segments.append(current)
-                current = []
-            continue
-        current.append(token)
-    if current:
-        segments.append(current)
-    return segments
-
-
-def _in_band_agent_hub_restart_block_reason(command: str) -> str | None:
-    """Block plain Agent Hub rebuild/restart inside the Agent Hub control plane."""
-    for segment in _split_shell_segments(command):
-        if not segment:
-            continue
-
-        script_index = 0
-        if Path(segment[0]).name.lower() == "bash":
-            if len(segment) < 2:
-                continue
-            script_index = 1
-
-        script_name = Path(segment[script_index]).name.lower()
-        if script_name not in _RESTART_SCRIPT_BASENAMES:
-            continue
-
-        args = segment[script_index + 1:]
-        if any(arg in {"--help", "-h", "--status"} for arg in args):
-            continue
-
-        positional = [arg.lower() for arg in args if not arg.startswith("-")]
-        if not positional or positional[0] != "agent-hub":
-            continue
-
-        if "--detach" in args:
-            continue
-
-        return (
-            "Do not restart the Agent Hub control plane from inside an active Agent Hub session. "
-            "Use `rebuild.sh --detach agent-hub` (or `restart.sh --detach agent-hub`) to queue "
-            "the canonical rebuild out-of-band, then verify from a fresh session after restart."
-        )
-
-    return None
-
-
-def _rewrite_in_band_agent_hub_restart(command: str) -> tuple[str, str] | None:
-    """Canonicalize simple Agent Hub self-restarts to detached rebuilds."""
-    segments = _split_shell_segments(command)
-    if len(segments) != 1:
-        return None
-
-    segment = segments[0]
-    if not segment:
-        return None
-
-    script_index = 0
-    if Path(segment[0]).name.lower() == "bash":
-        if len(segment) < 2:
-            return None
-        script_index = 1
-
-    script_name = Path(segment[script_index]).name.lower()
-    if script_name not in _RESTART_SCRIPT_BASENAMES:
-        return None
-
-    args = segment[script_index + 1:]
-    if any(arg in {"--help", "-h", "--status", "--detach"} for arg in args):
-        return None
-
-    positional = [arg.lower() for arg in args if not arg.startswith("-")]
-    if positional != ["agent-hub"]:
-        return None
-
-    rewritten = list(segment)
-    rewritten.insert(script_index + 1, "--detach")
-    rewritten_command = shlex.join(rewritten)
-    return (
-        rewritten_command,
-        f"Command auto-detached for runtime safety. Running `{rewritten_command}` instead.",
-    )
-
-
-def _self_hosting_restart_block_reason(command: str, env: dict[str, str]) -> str | None:
-    """Return a block reason when a command would restart its hosting worker."""
-    host_service = env.get("AGENT_HUB_HOST_SERVICE", "").strip().lower()
-    if not host_service:
-        return None
-
-    normalized = _normalize_shell_command(command)
-    systemctl_match = _DIRECT_SYSTEMCTL_SERVICE_RE.search(normalized)
-    if systemctl_match and systemctl_match.group("unit").lower() == host_service:
-        return (
-            f"Do not restart the hosting worker service ({host_service}) from inside the active "
-            "session. Run that restart from outside the worker after the current work is drained."
-        )
-
-    is_agent_hub_rebuild = (
-        "agent-hub" in normalized
-        and ("rebuild.sh" in normalized or "restart.sh" in normalized)
-    )
-    if not is_agent_hub_rebuild:
-        return None
-
-    restarted_workers = (
-        _AGENT_HUB_ALL_RESTART_WORKERS
-        if "--include-all-workers" in normalized
-        else _AGENT_HUB_DEFAULT_RESTART_WORKERS
-    )
-    if host_service not in restarted_workers:
-        return None
-
-    if "--include-all-workers" in normalized:
-        return (
-            f"`rebuild.sh agent-hub --include-all-workers` would restart the hosting worker service "
-            f"({host_service}). Use `rebuild.sh agent-hub` for safe backend/frontend + ops rebuilds, "
-            "and restart the agent worker separately from outside active execution."
-        )
-
-    return (
-        f"`rebuild.sh agent-hub` would restart the hosting worker service ({host_service}). "
-        "Run it from outside the active worker so the current execution is not terminated mid-task."
-    )
-
-
-def _is_blocked_command(command: str) -> bool:
-    """Check if command is blocked for safety."""
-    return is_blocked_command(command)
-
-
-def _get_command_redirect(command: str) -> str | None:
-    """Check if command should be redirected to a standardized wrapper.
-
-    Delegates to the centralized tool registry (tool-registry.json).
-    Returns redirect message if command should use dt/st/restart scripts,
-    None if the command is allowed to proceed.
-    """
-    return get_command_redirect(command)
+# Re-exported for backward compatibility with direct_executor.py and tests.
+_is_blocked_command = is_blocked_command
+_get_command_redirect = get_command_redirect
 
 
 class DirectToolExecutor:
@@ -339,17 +131,27 @@ class DirectToolExecutor:
         if name == "dispatch_agent":
             return await self.dispatch_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "task", "project_id", "max_turns")})
         if name == "search_web":
-            return await self.search_web(**{k: v for k, v in args.items() if k in ("query", "max_results", "search_type", "timelimit")})
+            return await _search_web(
+                query=args["query"],
+                max_results=args.get("max_results", 5),
+                search_type=args.get("search_type", "text"),
+                timelimit=args.get("timelimit"),
+            )
         if name == "research_web":
-            return await self.research_web(
-                **{
-                    k: v for k, v in args.items()
-                    if k in ("query", "max_results", "result_index", "search_type", "timelimit", "max_chars", "focus_query")
-                }
+            return await _research_web(
+                query=args["query"],
+                max_results=args.get("max_results", 5),
+                result_index=args.get("result_index", 1),
+                search_type=args.get("search_type", "text"),
+                timelimit=args.get("timelimit"),
+                max_chars=args.get("max_chars", 12000),
+                focus_query=args.get("focus_query"),
             )
         if name == "fetch_web_page":
-            return await self.fetch_web_page(
-                **{k: v for k, v in args.items() if k in ("url", "max_chars", "focus_query")}
+            return await _fetch_web_page(
+                url=args["url"],
+                max_chars=args.get("max_chars", 12000),
+                focus_query=args.get("focus_query"),
             )
         if name == "tool_search":
             return await self.tool_search(**{k: v for k, v in args.items() if k in ("query", "limit")})
@@ -367,7 +169,7 @@ class DirectToolExecutor:
 
     async def bash(self, command: str) -> str:
         """Execute a bash command with environment inheritance."""
-        if _is_blocked_command(command):
+        if is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
 
         auto_detached = _rewrite_in_band_agent_hub_restart(command)
@@ -392,7 +194,7 @@ class DirectToolExecutor:
         if self_hosting_block_reason:
             return f"Error: Command blocked for runtime safety: {self_hosting_block_reason}"
 
-        redirect = _get_command_redirect(command)
+        redirect = get_command_redirect(command)
         if redirect:
             return f"Error: Command redirected. {redirect}"
 
@@ -433,7 +235,6 @@ class DirectToolExecutor:
     ) -> str:
         """Dispatch an agent with full tool access to perform a task."""
         from app.services.tools._executor_consultation import dispatch_agent as _dispatch
-        # Use provided project_id (from tool args) or fall back to executor's project
         effective_project_id = project_id or self._project_id
         return await _dispatch(
             effective_project_id,
@@ -441,55 +242,6 @@ class DirectToolExecutor:
             task,
             max_turns,
             parent_session_id=self._session_id,
-        )
-
-    async def search_web(
-        self,
-        query: str,
-        max_results: int = 5,
-        search_type: str = "text",
-        timelimit: str | None = None,
-    ) -> str:
-        """Search the public web."""
-        return await _search_web(
-            query=query,
-            max_results=max_results,
-            search_type=search_type,
-            timelimit=timelimit,
-        )
-
-    async def research_web(
-        self,
-        query: str,
-        max_results: int = 5,
-        result_index: int = 1,
-        search_type: str = "text",
-        timelimit: str | None = None,
-        max_chars: int = 12000,
-        focus_query: str | None = None,
-    ) -> str:
-        """Search the web and fetch a selected result in one step."""
-        return await _research_web(
-            query=query,
-            max_results=max_results,
-            result_index=result_index,
-            search_type=search_type,
-            timelimit=timelimit,
-            max_chars=max_chars,
-            focus_query=focus_query,
-        )
-
-    async def fetch_web_page(
-        self,
-        url: str,
-        max_chars: int = 12000,
-        focus_query: str | None = None,
-    ) -> str:
-        """Fetch a webpage and extract readable content."""
-        return await _fetch_web_page(
-            url=url,
-            max_chars=max_chars,
-            focus_query=focus_query,
         )
 
     async def tool_search(self, query: str, limit: int = 8) -> str:
