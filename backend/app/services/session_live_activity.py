@@ -38,25 +38,40 @@ _DETACHED_AGENT_HUB_RESTART_TOKENS = (
     "rebuild.sh --detach agent-hub",
     "restart.sh --detach agent-hub",
 )
+_STRONG_DEAD_SIGNALS = {
+    "no_structured_activity", "heartbeat_only", "heartbeat_missing",
+    "heartbeat_absent_6h", "termination_signal", "detached_control_plane_rebuild",
+}
+_NON_ACTIONABLE_LIFECYCLE_STATES = {
+    "dead_candidate",
+    "reapable",
+    "completed",
+    "failed",
+    "error",
+    "idle",
+}
+_ACTIVE_SUMMARY_PREFIXES = (
+    "Waiting for model",
+    "Tool failed:",
+    "Running ",
+    "Reading ",
+    "Writing ",
+    "Injecting memory",
+    "Model planning",
+)
 
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _metadata_dict(session: Session) -> dict[str, Any]:
+def _get_live_activity_ctx(session: Session) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (metadata_copy, live_activity_copy) from session.provider_metadata."""
     raw_metadata = getattr(session, "provider_metadata", None)
-    metadata = raw_metadata if isinstance(raw_metadata, dict) else None
-    if metadata is None:
-        metadata = {}
-    return dict(metadata)
-
-
-def _live_activity(metadata: dict[str, Any]) -> dict[str, Any]:
-    live_activity = metadata.get("live_activity")
-    if isinstance(live_activity, dict):
-        return dict(live_activity)
-    return {}
+    metadata: dict[str, Any] = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
+    raw = metadata.get("live_activity")
+    live: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    return metadata, live
 
 
 def _activity_age_seconds(value: Any) -> int | None:
@@ -71,16 +86,6 @@ def _activity_age_seconds(value: Any) -> int | None:
     return max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
 
 
-def _path_from_tool_input(tool_input: dict[str, Any] | None) -> str | None:
-    if not isinstance(tool_input, dict):
-        return None
-    for key in ("file_path", "path", "target_file"):
-        value = tool_input.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
-
-
 def _command_from_tool_input(tool_input: dict[str, Any] | None) -> str | None:
     if not isinstance(tool_input, dict):
         return None
@@ -88,47 +93,31 @@ def _command_from_tool_input(tool_input: dict[str, Any] | None) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _is_detached_agent_hub_restart_command(command: Any) -> bool:
-    if not isinstance(command, str):
-        return False
-    normalized = " ".join(command.lower().split())
-    return any(token in normalized for token in _DETACHED_AGENT_HUB_RESTART_TOKENS)
-
-
-def _detached_agent_hub_restart_stale(
-    response: dict[str, Any],
-    quiet_for: int | None,
-    *,
-    has_owner_lane: bool,
-) -> bool:
-    return (
-        not has_owner_lane
-        and quiet_for is not None
-        and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS
-        and int(response.get("outstanding_tool_calls") or 0) == 0
-        and _is_detached_agent_hub_restart_command(response.get("last_command"))
-    )
-
-
-def _tool_phase(tool_name: str | None, tool_input: dict[str, Any] | None) -> tuple[str, str]:
+def _tool_phase(
+    tool_name: str | None,
+    tool_input: dict[str, Any] | None,
+) -> tuple[str, str, str | None]:
+    """Return (phase, summary, path) for a tool_use event."""
     normalized = (tool_name or "").lower()
     command = _command_from_tool_input(tool_input)
+    path: str | None = None
+    if isinstance(tool_input, dict):
+        for key in ("file_path", "path", "target_file"):
+            value = tool_input.get(key)
+            if isinstance(value, str) and value:
+                path = value
+                break
 
     if "read" in normalized:
-        path = _path_from_tool_input(tool_input)
-        return "reading_file", f"Reading {path or 'file'}"
-
+        return "reading_file", f"Reading {path or 'file'}", path
     if "write" in normalized or "edit" in normalized:
-        path = _path_from_tool_input(tool_input)
-        return "writing_file", f"Writing {path or 'file'}"
-
+        return "writing_file", f"Writing {path or 'file'}", path
     if command:
         validation_tokens = ("dt ", "pytest", "ruff", "tsc", "biome", "sqlfluff", "squawk")
         if any(token in command for token in validation_tokens):
-            return "running_validation", f"Running validation: {command[:100]}"
-        return "running_tool", f"Running command: {command[:100]}"
-
-    return "running_tool", f"Running tool: {tool_name or 'unknown'}"
+            return "running_validation", f"Running validation: {command[:100]}", path
+        return "running_tool", f"Running command: {command[:100]}", path
+    return "running_tool", f"Running tool: {tool_name or 'unknown'}", path
 
 
 def _append_touched_file(live_activity: dict[str, Any], path: str | None) -> None:
@@ -173,111 +162,6 @@ def _mark_non_terminal_state(
     live_activity["last_model_activity_at"] = now_iso
 
 
-def _summary_looks_active(summary: Any) -> bool:
-    if not isinstance(summary, str):
-        return True
-    return summary.startswith(
-        (
-            "Waiting for model",
-            "Tool failed:",
-            "Running ",
-            "Reading ",
-            "Writing ",
-            "Injecting memory",
-            "Model planning",
-        )
-    )
-
-
-def _synthetic_live_activity(session: Session) -> dict[str, Any] | None:
-    metadata = _metadata_dict(session)
-    raw = _live_activity(metadata)
-    if raw:
-        return raw
-    if session.status != "active":
-        return None
-    last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
-    last_updated_iso = last_updated.isoformat() if last_updated is not None else None
-    return {
-        "phase": "unknown",
-        "status": "active",
-        "summary": "No structured activity recorded",
-        "last_event_type": None,
-        "last_event_at": last_updated_iso,
-        "last_model_activity_at": last_updated_iso,
-        "outstanding_tool_calls": 0,
-        "tool_calls_count": 0,
-        "files_touched": [],
-        "last_heartbeat_at": None,
-    }
-
-
-def _collect_anti_reap_signals(
-    response: dict[str, Any],
-    phase: str,
-    quiet_for: int | None,
-    *,
-    has_owner_lane: bool,
-    has_specialist_lane: bool,
-) -> list[str]:
-    signals: list[str] = []
-    detached_rebuild_stale = _detached_agent_hub_restart_stale(
-        response,
-        quiet_for,
-        has_owner_lane=has_owner_lane,
-    )
-    if has_owner_lane:
-        signals.append("owner_lane")
-    if has_specialist_lane and not detached_rebuild_stale:
-        signals.append("specialist_lane")
-    if int(response.get("outstanding_tool_calls") or 0) > 0:
-        signals.append("outstanding_tool_calls")
-    if phase in _NON_REAPABLE_PHASES:
-        signals.append(f"phase_{phase}")
-    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
-        signals.append("recent_write_activity")
-    return signals
-
-
-def _collect_dead_signals(
-    response: dict[str, Any],
-    phase: str,
-    quiet_for: int | None,
-    last_heartbeat_age: int | None,
-) -> list[str]:
-    signals: list[str] = []
-    last_event_type = str(response.get("last_event_type") or "")
-    if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-        signals.append("no_model_activity_30m")
-    if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
-        signals.append("no_structured_activity")
-    if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
-        signals.append("heartbeat_only")
-    if response.get("termination_reason"):
-        signals.append("termination_signal")
-    if _is_detached_agent_hub_restart_command(response.get("last_command")):
-        signals.append("detached_control_plane_rebuild")
-    if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
-        signals.append("heartbeat_missing")
-    elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
-        signals.append("heartbeat_absent_6h")
-    return signals
-
-
-_STRONG_DEAD_SIGNALS = {
-    "no_structured_activity", "heartbeat_only", "heartbeat_missing",
-    "heartbeat_absent_6h", "termination_signal", "detached_control_plane_rebuild",
-}
-_NON_ACTIONABLE_LIFECYCLE_STATES = {
-    "dead_candidate",
-    "reapable",
-    "completed",
-    "failed",
-    "error",
-    "idle",
-}
-
-
 def _apply_lifecycle_state(
     session: Session,
     response: dict[str, Any],
@@ -290,20 +174,49 @@ def _apply_lifecycle_state(
     phase = str(response.get("phase") or "unknown")
     last_heartbeat_age = _activity_age_seconds(response.get("last_heartbeat_at"))
 
-    anti_reap_signals = _collect_anti_reap_signals(
-        response, phase, quiet_for,
-        has_owner_lane=has_owner_lane, has_specialist_lane=has_specialist_lane,
+    cmd = response.get("last_command")
+    is_restart_cmd = isinstance(cmd, str) and any(
+        token in " ".join(cmd.lower().split()) for token in _DETACHED_AGENT_HUB_RESTART_TOKENS
     )
-    detached_rebuild_stale = _detached_agent_hub_restart_stale(
-        response,
-        quiet_for,
-        has_owner_lane=has_owner_lane,
+    detached_rebuild_stale = (
+        not has_owner_lane
+        and quiet_for is not None
+        and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS
+        and int(response.get("outstanding_tool_calls") or 0) == 0
+        and is_restart_cmd
     )
+
+    anti_reap_signals: list[str] = []
+    if has_owner_lane:
+        anti_reap_signals.append("owner_lane")
+    if has_specialist_lane and not detached_rebuild_stale:
+        anti_reap_signals.append("specialist_lane")
+    if int(response.get("outstanding_tool_calls") or 0) > 0:
+        anti_reap_signals.append("outstanding_tool_calls")
+    if phase in _NON_REAPABLE_PHASES:
+        anti_reap_signals.append(f"phase_{phase}")
+    if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
+        anti_reap_signals.append("recent_write_activity")
+
     dead_signals: list[str] = []
     state = str(response.get("health") or response.get("status") or "idle")
 
     if session.status == "active":
-        dead_signals = _collect_dead_signals(response, phase, quiet_for, last_heartbeat_age)
+        last_event_type = str(response.get("last_event_type") or "")
+        if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+            dead_signals.append("no_model_activity_30m")
+        if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
+            dead_signals.append("no_structured_activity")
+        if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_only")
+        if response.get("termination_reason"):
+            dead_signals.append("termination_signal")
+        if is_restart_cmd:
+            dead_signals.append("detached_control_plane_rebuild")
+        if last_heartbeat_age is None and quiet_for is not None and quiet_for >= _REAPABLE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_missing")
+        elif last_heartbeat_age is not None and last_heartbeat_age >= _REAPABLE_AFTER_SECONDS:
+            dead_signals.append("heartbeat_absent_6h")
         if dead_signals:
             state = "dead_candidate"
         if (
@@ -341,7 +254,7 @@ def _handle_tool_use_event(
     tool_input: dict[str, Any] | None,
     now_iso: str,
 ) -> None:
-    phase, summary = _tool_phase(tool_name, tool_input)
+    phase, summary, path = _tool_phase(tool_name, tool_input)
     _mark_non_terminal_state(live_activity, phase=phase, summary=summary, now_iso=now_iso)
     live_activity["current_tool_name"] = tool_name
     live_activity["last_tool_name"] = tool_name
@@ -350,7 +263,6 @@ def _handle_tool_use_event(
         int(live_activity.get("outstanding_tool_calls") or 0) + 1, 1,
     )
     live_activity["tool_calls_count"] = int(live_activity.get("tool_calls_count") or 0) + 1
-    path = _path_from_tool_input(tool_input)
     command = _command_from_tool_input(tool_input)
     if phase == "reading_file":
         live_activity["last_read_path"] = path
@@ -392,33 +304,6 @@ def _handle_tool_result_event(
             live_activity["last_command_exit_code"] = exit_code
 
 
-def _handle_assistant_message_event(
-    live_activity: dict[str, Any],
-    content: str | None,
-    now_iso: str,
-) -> None:
-    summary = "Finalizing response"
-    if isinstance(content, str) and content.strip():
-        summary = f"Assistant responded: {content.strip()[:100]}"
-    _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
-    live_activity["current_tool_name"] = None
-    live_activity["outstanding_tool_calls"] = 0
-
-
-def _handle_error_event(
-    live_activity: dict[str, Any],
-    content: str | None,
-    now_iso: str,
-) -> None:
-    live_activity["phase"] = "error"
-    live_activity["status"] = "error"
-    live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
-    live_activity["termination_reason"] = content
-    live_activity["current_tool_name"] = None
-    live_activity["outstanding_tool_calls"] = 0
-    live_activity["last_model_activity_at"] = now_iso
-
-
 def update_live_activity_for_event(
     session: Session,
     *,
@@ -430,8 +315,7 @@ def update_live_activity_for_event(
     model_used: str | None = None,
 ) -> None:
     """Update provider_metadata.live_activity from a stored session event."""
-    metadata = _metadata_dict(session)
-    live_activity = _live_activity(metadata)
+    metadata, live_activity = _get_live_activity_ctx(session)
     now_iso = _now_iso()
 
     live_activity["last_event_type"] = event_type
@@ -448,9 +332,22 @@ def update_live_activity_for_event(
     elif event_type == "tool_result":
         _handle_tool_result_event(live_activity, tool_name, tool_output, now_iso)
     elif event_type == "assistant_message":
-        _handle_assistant_message_event(live_activity, content, now_iso)
+        summary = (
+            f"Assistant responded: {content.strip()[:100]}"
+            if isinstance(content, str) and content.strip()
+            else "Finalizing response"
+        )
+        _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
+        live_activity["current_tool_name"] = None
+        live_activity["outstanding_tool_calls"] = 0
     elif event_type == "error":
-        _handle_error_event(live_activity, content, now_iso)
+        live_activity["phase"] = "error"
+        live_activity["status"] = "error"
+        live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
+        live_activity["termination_reason"] = content
+        live_activity["current_tool_name"] = None
+        live_activity["outstanding_tool_calls"] = 0
+        live_activity["last_model_activity_at"] = now_iso
 
     metadata["live_activity"] = live_activity
     session.provider_metadata = metadata
@@ -458,8 +355,7 @@ def update_live_activity_for_event(
 
 def mark_session_execution_start(session: Session, summary: str = "Waiting for model response") -> None:
     """Mark a session as actively executing before the provider responds."""
-    metadata = _metadata_dict(session)
-    live_activity = _live_activity(metadata)
+    metadata, live_activity = _get_live_activity_ctx(session)
     now_iso = _now_iso()
     live_activity.update(
         {
@@ -488,8 +384,7 @@ def mark_session_terminal_state(
     termination_reason: str | None,
 ) -> None:
     """Persist terminal execution state on the session metadata."""
-    metadata = _metadata_dict(session)
-    live_activity = _live_activity(metadata)
+    metadata, live_activity = _get_live_activity_ctx(session)
     now_iso = _now_iso()
     live_activity.update(
         {
@@ -540,8 +435,7 @@ def apply_live_activity_heartbeat(
     active_write_paths: list[str] | None = None,
 ) -> None:
     """Update live activity directly from an external session heartbeat."""
-    metadata = _metadata_dict(session)
-    live_activity = _live_activity(metadata)
+    metadata, live_activity = _get_live_activity_ctx(session)
 
     live_activity["last_heartbeat_at"] = heartbeat_at
     live_activity["last_event_at"] = heartbeat_at
@@ -606,14 +500,18 @@ def _apply_terminal_overrides(
         response["status"] = "completed"
         if phase in _ACTIVE_PHASES:
             response["phase"] = "completed"
-        if status != "completed" and _summary_looks_active(response.get("summary")):
+        summary = response.get("summary")
+        summary_looks_active = not isinstance(summary, str) or summary.startswith(_ACTIVE_SUMMARY_PREFIXES)
+        if status != "completed" and summary_looks_active:
             response["summary"] = "Session completed"
         return "completed"
     if session.status == "failed":
         response["status"] = "failed"
         if phase in _ACTIVE_PHASES:
             response["phase"] = "failed"
-        if status not in {"failed", "error"} and _summary_looks_active(response.get("summary")):
+        summary = response.get("summary")
+        summary_looks_active = not isinstance(summary, str) or summary.startswith(_ACTIVE_SUMMARY_PREFIXES)
+        if status not in {"failed", "error"} and summary_looks_active:
             response["summary"] = "Session failed"
         return "failed"
     return "idle"
@@ -626,9 +524,24 @@ def build_live_activity_response(
     has_specialist_lane: bool = False,
 ) -> dict[str, Any] | None:
     """Build API-ready live activity payload with dynamic quiet/stall classification."""
-    raw = _synthetic_live_activity(session)
+    _, raw = _get_live_activity_ctx(session)
     if not raw:
-        return None
+        if session.status != "active":
+            return None
+        last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
+        last_updated_iso = last_updated.isoformat() if last_updated is not None else None
+        raw = {
+            "phase": "unknown",
+            "status": "active",
+            "summary": "No structured activity recorded",
+            "last_event_type": None,
+            "last_event_at": last_updated_iso,
+            "last_model_activity_at": last_updated_iso,
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 0,
+            "files_touched": [],
+            "last_heartbeat_at": None,
+        }
 
     response = dict(raw)
     phase = str(response.get("phase") or "created")
