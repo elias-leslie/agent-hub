@@ -55,7 +55,7 @@ Required loop:
    - Delete stale/misleading code before adding new code.
    - `dt --check` must pass after every change.
    - `rebuild.sh agent-hub` after code changes.
-   - `commit.sh --push --msg "..."` after each verified improvement.
+   - `commit.sh --push --msg "..."` after each verified code improvement; use `commit.sh --current --push` when the repo is already committed and only needs publish.
 
 5. Verify the fix works end-to-end.
    - Don't just check that tests pass. Check that the live system reflects the change.
