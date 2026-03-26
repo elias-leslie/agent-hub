@@ -6,6 +6,25 @@ Use these with `backend/scripts/run_claude_orchestrated_worker.py`.
 
 Use `--spec-file` for real work. The spec keeps the task contract structured while the wrapper still generates the stable plain-text Claude prompt underneath.
 
+Task-driven SummitFlow refactor:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestrated_worker.py \
+  --project-id summitflow \
+  --task-id task-715ee872 \
+  --task-root /srv/workspaces/projects/summitflow \
+  --claim-if-needed \
+  --timeout-seconds 900
+```
+
+This path:
+
+- runs `st context <task-id>`
+- claims the task automatically if you pass `--claim-if-needed`
+- switches to the claimed worktree
+- builds a write-capable Claude contract from the task description, done-when gates, context target paths, and discovered related tests
+- injects a single read-only analysis subagent before the main edit pass
+
 Direct spec:
 
 ```bash
