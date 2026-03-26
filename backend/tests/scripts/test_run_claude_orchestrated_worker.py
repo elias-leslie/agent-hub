@@ -21,6 +21,7 @@ def test_build_claude_command_uses_stdin_input_without_prompt_arg(tmp_path):
     command = module._build_claude_command(
         schema_path=None,
         agents_path=None,
+        agents_payload=None,
         model="sonnet",
         allowed_tools="Read,Agent",
         permission_mode="bypassPermissions",
@@ -48,6 +49,7 @@ def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
     command = module._build_claude_command(
         schema_path=schema_path,
         agents_path=agents_path,
+        agents_payload=None,
         model="sonnet",
         allowed_tools="Read,Agent,StructuredOutput",
         permission_mode="bypassPermissions",
@@ -57,6 +59,80 @@ def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
     assert str(schema_path) in command
     assert "--agents" in command
     assert '{"reader":{"description":"Read only","prompt":"Inspect files"}}' in command
+
+
+def test_build_prompt_from_spec_generates_direct_readonly_contract():
+    module = _load_module()
+
+    prompt = module._build_prompt_from_spec(
+        {
+            "objective": "State what the file does.",
+            "paths": ["backend/app/services/session_ingestion/adapters/claude_code.py"],
+            "response_contract": "Reply with exactly one sentence that states what the file does.",
+            "constraints": ["Do not inspect any other files."],
+        }
+    )
+
+    assert "Read only `backend/app/services/session_ingestion/adapters/claude_code.py`." in prompt
+    assert "Objective: State what the file does." in prompt
+    assert "Reply with exactly one sentence that states what the file does." in prompt
+    assert "- Do not inspect any other files." in prompt
+
+
+def test_build_prompt_from_spec_generates_delegated_contract():
+    module = _load_module()
+
+    prompt = module._build_prompt_from_spec(
+        {
+            "objective": "State what the file does.",
+            "paths": ["backend/app/services/session_ingestion/adapters/claude_code.py"],
+            "response_contract": "Reply with exactly one sentence that states what the file does.",
+            "constraints": ["Do not add extra commentary."],
+            "agent": {"name": "opus-reasoner"},
+        }
+    )
+
+    assert "Use exactly one Agent subagent named `opus-reasoner`." in prompt
+    assert (
+        "Have the subagent read only `backend/app/services/session_ingestion/adapters/claude_code.py`."
+        in prompt
+    )
+    assert "Reply with exactly one sentence that states what the file does." in prompt
+    assert "- Do not add extra commentary." in prompt
+
+
+def test_build_agents_payload_from_spec_uses_defaults_and_supported_fields():
+    module = _load_module()
+
+    payload = module._build_agents_payload_from_spec(
+        {
+            "agent": {
+                "name": "reader",
+                "tools": ["Read"],
+                "model": "sonnet",
+            }
+        }
+    )
+
+    assert payload == {
+        "reader": {
+            "description": "Scoped analysis worker",
+            "prompt": "Read only the requested files and report back briefly.",
+            "tools": ["Read"],
+            "model": "sonnet",
+        }
+    }
+
+
+def test_allowed_tools_from_spec_defaults_to_agent_or_read():
+    module = _load_module()
+
+    assert module._allowed_tools_from_spec({"paths": ["x.py"]}) == "Read"
+    assert module._allowed_tools_from_spec({"agent": {"name": "reader"}}) == "Agent"
+    assert (
+        module._allowed_tools_from_spec({"allowed_tools": ["Read", "StructuredOutput"]})
+        == "Read,StructuredOutput"
+    )
 
 
 def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):

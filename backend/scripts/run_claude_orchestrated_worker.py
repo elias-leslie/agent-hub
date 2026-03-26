@@ -33,7 +33,11 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run a direct Claude CLI worker and ingest the resulting transcript.",
     )
-    parser.add_argument("--prompt-file", required=True, help="Markdown/text prompt file for Claude")
+    parser.add_argument("--prompt-file", help="Markdown/text prompt file for Claude")
+    parser.add_argument(
+        "--spec-file",
+        help="Optional JSON worker spec that generates a stable readonly prompt and agents payload",
+    )
     parser.add_argument("--schema-file", help="Optional JSON schema file for StructuredOutput")
     parser.add_argument("--agents-file", help="Optional Claude agents JSON file")
     parser.add_argument("--project-id", default="agent-hub", help="Agent Hub project id")
@@ -60,11 +64,21 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip Agent Hub transcript ingestion and only emit raw artifacts",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.prompt_file and not args.spec_file:
+        parser.error("one of --prompt-file or --spec-file is required")
+    return args
 
 
 def _read_text(path_str: str) -> str:
     return Path(path_str).read_text().strip()
+
+
+def _read_json_object(path_str: str) -> dict[str, Any]:
+    parsed = json.loads(Path(path_str).read_text())
+    if not isinstance(parsed, dict):
+        raise ValueError(f"expected JSON object in {path_str}")
+    return parsed
 
 
 def _read_agents_payload(path: Path) -> str:
@@ -73,6 +87,104 @@ def _read_agents_payload(path: Path) -> str:
         return json.dumps(json.loads(raw), separators=(",", ":"))
     except json.JSONDecodeError:
         return raw
+
+
+def _coerce_string_list(value: Any) -> list[str]:
+    if isinstance(value, str) and value:
+        return [value]
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str) and item]
+
+
+def _build_prompt_from_spec(spec: dict[str, Any]) -> str:
+    objective = spec.get("objective")
+    response_contract = spec.get("response_contract")
+    constraints = _coerce_string_list(spec.get("constraints"))
+    paths = _coerce_string_list(spec.get("paths"))
+    agent = spec.get("agent") if isinstance(spec.get("agent"), dict) else None
+
+    lines: list[str] = []
+    if agent:
+        agent_name = agent.get("name") if isinstance(agent.get("name"), str) else "worker"
+        lines.append(f"Use exactly one Agent subagent named `{agent_name}`.")
+        if len(paths) == 1:
+            lines.append(f"Have the subagent read only `{paths[0]}`.")
+        elif paths:
+            lines.append("Have the subagent read only these paths:")
+            lines.extend(f"- `{path}`" for path in paths)
+    else:
+        if len(paths) == 1:
+            lines.append(f"Read only `{paths[0]}`.")
+        elif paths:
+            lines.append("Read only these paths:")
+            lines.extend(f"- `{path}`" for path in paths)
+
+    if isinstance(objective, str) and objective:
+        lines.append("")
+        lines.append(f"Objective: {objective}")
+
+    if isinstance(response_contract, str) and response_contract:
+        lines.append("")
+        lines.append(response_contract)
+
+    if constraints:
+        lines.append("")
+        lines.append("Constraints:")
+        lines.extend(f"- {constraint}" for constraint in constraints)
+
+    return "\n".join(lines).strip()
+
+
+def _build_agents_payload_from_spec(spec: dict[str, Any]) -> dict[str, Any] | None:
+    agent = spec.get("agent")
+    if not isinstance(agent, dict):
+        return None
+
+    name = agent.get("name") if isinstance(agent.get("name"), str) and agent.get("name") else "worker"
+    payload: dict[str, Any] = {
+        "description": (
+            agent.get("description")
+            if isinstance(agent.get("description"), str) and agent.get("description")
+            else "Scoped analysis worker"
+        ),
+        "prompt": (
+            agent.get("prompt")
+            if isinstance(agent.get("prompt"), str) and agent.get("prompt")
+            else "Read only the requested files and report back briefly."
+        ),
+    }
+
+    for key in (
+        "tools",
+        "disallowedTools",
+        "model",
+        "permissionMode",
+        "mcpServers",
+        "hooks",
+        "maxTurns",
+        "skills",
+        "initialPrompt",
+        "memory",
+        "effort",
+        "background",
+        "isolation",
+    ):
+        value = agent.get(key)
+        if value is not None:
+            payload[key] = value
+
+    return {name: payload}
+
+
+def _allowed_tools_from_spec(spec: dict[str, Any]) -> str:
+    allowed_tools = spec.get("allowed_tools")
+    if isinstance(allowed_tools, str) and allowed_tools:
+        return allowed_tools
+    allowed_tool_list = _coerce_string_list(allowed_tools)
+    if allowed_tool_list:
+        return ",".join(allowed_tool_list)
+    return "Agent" if isinstance(spec.get("agent"), dict) else "Read"
 
 
 def _emit_status(name: str, value: str | int | float | bool) -> None:
@@ -272,6 +384,7 @@ def _build_claude_command(
     *,
     schema_path: Path | None,
     agents_path: Path | None,
+    agents_payload: dict[str, Any] | None,
     model: str,
     allowed_tools: str,
     permission_mode: str,
@@ -293,7 +406,9 @@ def _build_claude_command(
     ]
     if schema_path is not None:
         command.extend(["--json-schema", str(schema_path)])
-    if agents_path is not None:
+    if agents_payload is not None:
+        command.extend(["--agents", json.dumps(agents_payload, separators=(",", ":"))])
+    elif agents_path is not None:
         command.extend(["--agents", _read_agents_payload(agents_path)])
     return command
 
@@ -376,6 +491,7 @@ def _run_claude(
     prompt: str,
     schema_path: Path | None,
     agents_path: Path | None,
+    agents_payload: dict[str, Any] | None,
     workdir: Path,
     model: str,
     allowed_tools: str,
@@ -389,6 +505,7 @@ def _run_claude(
     command = _build_claude_command(
         schema_path=schema_path,
         agents_path=agents_path,
+        agents_payload=agents_payload,
         model=model,
         allowed_tools=allowed_tools,
         permission_mode=permission_mode,
@@ -648,18 +765,22 @@ async def _ingest_transcript(
 
 def main() -> int:
     args = _parse_args()
-    prompt = _read_text(args.prompt_file)
+    spec = _read_json_object(args.spec_file) if args.spec_file else None
+    prompt = _build_prompt_from_spec(spec) if spec is not None else _read_text(args.prompt_file)
     schema_path = Path(args.schema_file).resolve() if args.schema_file else None
     agents_path = Path(args.agents_file).resolve() if args.agents_file else None
+    agents_payload = _build_agents_payload_from_spec(spec) if spec is not None else None
     workdir = Path(args.workdir).resolve()
+    allowed_tools = _allowed_tools_from_spec(spec) if spec is not None else args.allowed_tools
 
     run_summary = _run_claude(
         prompt=prompt,
         schema_path=schema_path,
         agents_path=agents_path,
+        agents_payload=agents_payload,
         workdir=workdir,
         model=args.model,
-        allowed_tools=args.allowed_tools,
+        allowed_tools=allowed_tools,
         permission_mode=args.permission_mode,
         timeout_seconds=args.timeout_seconds,
     )

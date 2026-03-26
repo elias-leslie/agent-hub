@@ -2,6 +2,30 @@
 
 Use these with `backend/scripts/run_claude_orchestrated_worker.py`.
 
+## Preferred automation path
+
+Use `--spec-file` for real work. The spec keeps the task contract structured while the wrapper still generates the stable plain-text Claude prompt underneath.
+
+Direct spec:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestrated_worker.py \
+  --project-id agent-hub \
+  --workdir /srv/workspaces/projects/agent-hub \
+  --spec-file backend/scripts/claude_orchestrated_worker_examples/exact_file_direct_spec.json \
+  --timeout-seconds 90
+```
+
+Delegated spec:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestrated_worker.py \
+  --project-id agent-hub \
+  --workdir /srv/workspaces/projects/agent-hub \
+  --spec-file backend/scripts/claude_orchestrated_worker_examples/exact_file_subagent_spec.json \
+  --timeout-seconds 120
+```
+
 ## Known-good smoke runs
 
 Direct worker:
@@ -80,6 +104,7 @@ Additional traces:
 The richer structured file-reading prompts in `readonly_*` are useful for experiments, but they are not yet reliable as a default harness. The stable proof-of-concept path today is:
 
 - plain-text prompt contract
+- generated from a small JSON worker spec when automating
 - exact file or path scope
 - optional custom agent spec JSON
 - transcript-based observability
