@@ -27,6 +27,33 @@ PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestra
   --timeout-seconds 90
 ```
 
+## Stable real-work pattern
+
+Use a plain-text prompt with an exact file or path scope. Keep the contract narrow and let transcript observability carry the proof.
+
+Direct exact-file read:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestrated_worker.py \
+  --project-id agent-hub \
+  --workdir /srv/workspaces/projects/agent-hub \
+  --prompt-file backend/scripts/claude_orchestrated_worker_examples/exact_file_direct_prompt.md \
+  --allowed-tools Read \
+  --timeout-seconds 90
+```
+
+Delegated exact-file read:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/run_claude_orchestrated_worker.py \
+  --project-id agent-hub \
+  --workdir /srv/workspaces/projects/agent-hub \
+  --prompt-file backend/scripts/claude_orchestrated_worker_examples/exact_file_subagent_prompt.md \
+  --agents-file backend/scripts/claude_orchestrated_worker_examples/readonly_subagent_agents.json \
+  --allowed-tools Agent \
+  --timeout-seconds 120
+```
+
 ## Observability
 
 The wrapper emits these early on stderr:
@@ -39,7 +66,7 @@ The wrapper emits these early on stderr:
 
 Artifacts:
 
-- `run.json`: wrapper summary and final status
+- `run.json`: wrapper summary, transcript progress, and final status
 - `stdout.jsonl`: raw Claude `stream-json` output
 - `stderr.log`: Claude stderr
 
@@ -52,6 +79,7 @@ Additional traces:
 
 The richer structured file-reading prompts in `readonly_*` are useful for experiments, but they are not yet reliable as a default harness. The stable proof-of-concept path today is:
 
-- simple prompt contract
+- plain-text prompt contract
+- exact file or path scope
 - optional custom agent spec JSON
 - transcript-based observability

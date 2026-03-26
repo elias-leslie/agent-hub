@@ -455,6 +455,66 @@ async def _resolve_experiment_decision(
     loop_state.honed = not should_rollback and loop_state.previous_failing_attempts == 0 and review_clean
 
 
+async def _run_main_cohort_experiment(
+    *,
+    benchmark_run: PersonaBenchmarkRun,
+    models: list[str],
+    case_ids: list[str],
+    runs_per_case: int,
+    project_id: str,
+    working_root: Path,
+    timeout_seconds: float | None,
+    base_url: str,
+    client_id: str,
+    use_memory: bool,
+    benchmark_task_type: str,
+    seed: int,
+    iteration: int,
+    agent_slug: str,
+    suite_name: str,
+    cohort_repetitions: int,
+    baseline_config: dict[str, Any],
+    record: PersonaHoningIteration,
+    persist_results: bool,
+) -> tuple[list[PersonaBenchmarkRun], list[PersonaBenchmarkRun], str, dict[str, Any]]:
+    """Run baseline+candidate cohort benchmarks, persist runs if enabled, evaluate; mutates record."""
+    cohort_kw: dict[str, Any] = dict(
+        models=models, case_ids=case_ids, runs_per_case=runs_per_case,
+        project_id=project_id, working_root=working_root, timeout_seconds=timeout_seconds,
+        base_url=base_url, client_id=client_id, use_memory=use_memory,
+        benchmark_task_type=benchmark_task_type, count=cohort_repetitions,
+    )
+    baseline_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 100, first_run=benchmark_run)
+    candidate_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 1000)
+    experiment_key = f"persona-honing-{suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
+    record.experiment_key = experiment_key
+    candidate_config = await _get_config_snapshot(agent_slug, benchmark_task_type)
+    if persist_results:
+        shared: dict[str, Any] = dict(
+            experiment_key=experiment_key,
+            experiment_name=f"Persona honing iteration {iteration}",
+            hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
+            suite_id=suite_name, project_id=project_id, agent_slug=agent_slug,
+            use_memory=use_memory, min_runs_per_cohort=cohort_repetitions,
+        )
+        record.baseline_run_ids = await _persist_cohort_runs(
+            runs=baseline_runs, cohort="baseline", run_kind=RUN_KIND_HONING_BASELINE,
+            seed_start=seed + iteration * 100, config_snapshot=baseline_config, **shared,
+        )
+        record.candidate_run_ids = await _persist_cohort_runs(
+            runs=candidate_runs, cohort="candidate", run_kind=RUN_KIND_HONING_CANDIDATE,
+            seed_start=seed + iteration * 1000, config_snapshot=candidate_config, **shared,
+        )
+    experiment_summary = await _evaluate_experiment(
+        experiment_key=experiment_key, iteration=iteration, suite_name=suite_name,
+        baseline_runs=baseline_runs, candidate_runs=candidate_runs,
+        baseline_config=baseline_config, candidate_config=candidate_config,
+        cohort_repetitions=cohort_repetitions, persist_results=persist_results,
+    )
+    record.experiment_summary = experiment_summary
+    return baseline_runs, candidate_runs, experiment_key, experiment_summary
+
+
 async def _run_experiment_and_decide(
     *,
     iteration: int,
@@ -498,43 +558,17 @@ async def _run_experiment_and_decide(
     record.improvement_tools = tools
     record.improvement_parsed = parsed
 
-    cohort_kw: dict[str, Any] = dict(
-        models=models, case_ids=case_ids, runs_per_case=runs_per_case,
-        project_id=project_id, working_root=working_root, timeout_seconds=timeout_seconds,
-        base_url=base_url, client_id=client_id, use_memory=use_memory,
-        benchmark_task_type=benchmark_task_type, count=cohort_repetitions,
+    baseline_runs, candidate_runs, experiment_key, experiment_summary = (
+        await _run_main_cohort_experiment(
+            benchmark_run=benchmark_run, models=models, case_ids=case_ids,
+            runs_per_case=runs_per_case, project_id=project_id, working_root=working_root,
+            timeout_seconds=timeout_seconds, base_url=base_url, client_id=client_id,
+            use_memory=use_memory, benchmark_task_type=benchmark_task_type, seed=seed,
+            iteration=iteration, agent_slug=agent_slug, suite_name=suite_name,
+            cohort_repetitions=cohort_repetitions, baseline_config=baseline_config,
+            record=record, persist_results=persist_results,
+        )
     )
-    baseline_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 100, first_run=benchmark_run)
-    candidate_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=seed + iteration * 1000)
-
-    experiment_key = f"persona-honing-{suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
-    record.experiment_key = experiment_key
-    candidate_config = await _get_config_snapshot(agent_slug, benchmark_task_type)
-
-    if persist_results:
-        shared: dict[str, Any] = dict(
-            experiment_key=experiment_key,
-            experiment_name=f"Persona honing iteration {iteration}",
-            hypothesis=f"Candidate self-edit for iteration {iteration} should improve {suite_name}.",
-            suite_id=suite_name, project_id=project_id, agent_slug=agent_slug,
-            use_memory=use_memory, min_runs_per_cohort=cohort_repetitions,
-        )
-        record.baseline_run_ids = await _persist_cohort_runs(
-            runs=baseline_runs, cohort="baseline", run_kind=RUN_KIND_HONING_BASELINE,
-            seed_start=seed + iteration * 100, config_snapshot=baseline_config, **shared,
-        )
-        record.candidate_run_ids = await _persist_cohort_runs(
-            runs=candidate_runs, cohort="candidate", run_kind=RUN_KIND_HONING_CANDIDATE,
-            seed_start=seed + iteration * 1000, config_snapshot=candidate_config, **shared,
-        )
-
-    experiment_summary = await _evaluate_experiment(
-        experiment_key=experiment_key, iteration=iteration, suite_name=suite_name,
-        baseline_runs=baseline_runs, candidate_runs=candidate_runs,
-        baseline_config=baseline_config, candidate_config=candidate_config,
-        cohort_repetitions=cohort_repetitions, persist_results=persist_results,
-    )
-    record.experiment_summary = experiment_summary
 
     review_baseline_runs: list[CompletionReviewBenchmarkRun] = []
     review_candidate_runs: list[CompletionReviewBenchmarkRun] = []
@@ -677,6 +711,45 @@ def _is_stalled(
     )
 
 
+async def _run_initial_benchmarks(
+    *,
+    models: list[str],
+    case_ids: list[str],
+    runs_per_case: int,
+    reviewer_models: list[str] | None,
+    reviewer_case_ids: list[str] | None,
+    reviewer_runs_per_case: int,
+    project_id: str,
+    working_root: Path,
+    seed: int,
+    iteration: int,
+    timeout_seconds: float | None,
+    base_url: str,
+    client_id: str,
+    use_memory: bool,
+    benchmark_task_type: str,
+    disable_completion_review: bool,
+    agent_slug: str,
+) -> tuple[PersonaBenchmarkRun, CompletionReviewBenchmarkRun | None, dict[str, Any] | None]:
+    """Run main benchmark and optional review benchmark; return runs and review config snapshot."""
+    benchmark_run = await run_benchmark(
+        models=models, case_ids=case_ids, runs_per_case=runs_per_case, project_id=project_id,
+        working_root=working_root, seed=seed + iteration - 1, timeout_seconds=timeout_seconds,
+        keep_workdirs=False, base_url=base_url, client_id=client_id, use_memory=use_memory,
+        memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}", task_type=benchmark_task_type,
+    )
+    review_run: CompletionReviewBenchmarkRun | None = None
+    review_baseline_config: dict[str, Any] | None = None
+    if not disable_completion_review and reviewer_models and reviewer_case_ids:
+        review_run = await run_completion_review_benchmark(
+            models=reviewer_models, case_ids=reviewer_case_ids, runs_per_case=reviewer_runs_per_case,
+            project_id=project_id, seed=seed + iteration + 4999, timeout_seconds=timeout_seconds,
+            base_url=base_url, client_id=client_id, use_memory=use_memory,
+        )
+        review_baseline_config = await _get_config_snapshot(agent_slug, "review")
+    return benchmark_run, review_run, review_baseline_config
+
+
 async def _run_iteration(
     *,
     iteration: int,
@@ -705,21 +778,15 @@ async def _run_iteration(
 ) -> bool:
     """Execute one benchmark + improvement cycle. Returns True if the loop should stop."""
     baseline_state = await _capture_persona_mutable_state(agent_slug)
-    benchmark_run = await run_benchmark(
-        models=models, case_ids=case_ids, runs_per_case=runs_per_case, project_id=project_id,
-        working_root=working_root, seed=seed + iteration - 1, timeout_seconds=timeout_seconds,
-        keep_workdirs=False, base_url=base_url, client_id=client_id, use_memory=use_memory,
-        memory_group_id=f"benchmark:honing:{uuid.uuid4().hex[:8]}", task_type=benchmark_task_type,
+    benchmark_run, review_run, review_baseline_config = await _run_initial_benchmarks(
+        models=models, case_ids=case_ids, runs_per_case=runs_per_case,
+        reviewer_models=reviewer_models, reviewer_case_ids=reviewer_case_ids,
+        reviewer_runs_per_case=reviewer_runs_per_case, project_id=project_id,
+        working_root=working_root, seed=seed, iteration=iteration,
+        timeout_seconds=timeout_seconds, base_url=base_url, client_id=client_id,
+        use_memory=use_memory, benchmark_task_type=benchmark_task_type,
+        disable_completion_review=disable_completion_review, agent_slug=agent_slug,
     )
-    review_run: CompletionReviewBenchmarkRun | None = None
-    review_baseline_config: dict[str, Any] | None = None
-    if not disable_completion_review and reviewer_models and reviewer_case_ids:
-        review_run = await run_completion_review_benchmark(
-            models=reviewer_models, case_ids=reviewer_case_ids, runs_per_case=reviewer_runs_per_case,
-            project_id=project_id, seed=seed + iteration + 4999, timeout_seconds=timeout_seconds,
-            base_url=base_url, client_id=client_id, use_memory=use_memory,
-        )
-        review_baseline_config = await _get_config_snapshot(agent_slug, "review")
 
     report_path = _write_iteration_report(output_dir, benchmark_run, iteration)
     baseline_config = await _get_config_snapshot(agent_slug, benchmark_task_type)
