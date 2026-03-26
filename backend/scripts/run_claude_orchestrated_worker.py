@@ -45,6 +45,10 @@ def _parse_args() -> argparse.Namespace:
         help="Optional SummitFlow task id to convert into a Claude worker contract",
     )
     parser.add_argument(
+        "--feedback-text",
+        help="Optional evaluator feedback to inject into a task-driven Claude contract",
+    )
+    parser.add_argument(
         "--task-root",
         help="Repo root where `st context` / `st claim` should run for --task-id",
     )
@@ -244,6 +248,7 @@ def _build_prompt_from_task_context(
     *,
     target_paths: list[str],
     related_tests: list[str],
+    feedback_text: str | None = None,
 ) -> str:
     task_id = task_context.get("task_id", "unknown-task")
     title = task_context.get("title", "Untitled task")
@@ -265,6 +270,15 @@ def _build_prompt_from_task_context(
     if done_when:
         lines.extend(["", "Done when:"])
         lines.extend(f"- {item}" for item in done_when if isinstance(item, str) and item)
+
+    if isinstance(feedback_text, str) and feedback_text.strip():
+        lines.extend(
+            [
+                "",
+                "Evaluator feedback from the previous pass:",
+                f"- {feedback_text.strip()}",
+            ]
+        )
 
     lines.extend(
         [
@@ -334,6 +348,7 @@ def _load_task_contract(
     task_id: str,
     task_root: Path,
     claim_if_needed: bool,
+    feedback_text: str | None = None,
 ) -> tuple[str, dict[str, Any], Path, dict[str, Any], str]:
     raw_context = _run_text_command(command=["st", "context", task_id], cwd=task_root)
     task_context = _parse_task_context(raw_context)
@@ -357,11 +372,13 @@ def _load_task_contract(
         task_context,
         target_paths=target_paths,
         related_tests=related_tests,
+        feedback_text=feedback_text,
     )
     metadata = {
         "task_context": task_context,
         "target_paths": target_paths,
         "related_tests": related_tests,
+        "feedback_text": feedback_text,
     }
     return prompt, _task_agents_payload(), workdir, metadata, _task_allowed_tools()
 
@@ -1042,6 +1059,7 @@ def main() -> int:
             task_id=args.task_id,
             task_root=Path(args.task_root).resolve(),
             claim_if_needed=args.claim_if_needed,
+            feedback_text=args.feedback_text,
         )
     else:
         prompt = _build_prompt_from_spec(spec) if spec is not None else _read_text(args.prompt_file)
