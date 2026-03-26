@@ -182,6 +182,59 @@ def test_score_attempt_backfills_identity_for_infra_failures() -> None:
     assert attempt.failure_kind == "infra"
 
 
+def test_score_attempt_classifies_empty_content_as_infra() -> None:
+    case = get_case_by_id("ready_task_dispatch")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.4",
+        run_number=1,
+        latency_ms=60000,
+        content="",
+        session_id=None,
+        provider=None,
+        effective_model=None,
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+    )
+
+    assert attempt.infra_failure is True
+    assert attempt.failure_kind == "infra"
+    assert attempt.failure_detail == "empty_model_response"
+    assert attempt.passed is False
+
+
+def test_score_attempt_classifies_whitespace_only_content_as_infra() -> None:
+    case = get_case_by_id("ready_task_dispatch")
+
+    attempt = score_attempt(
+        case=case,
+        model_id="codex/gpt-5.3-codex-spark",
+        run_number=2,
+        latency_ms=60000,
+        content="\n\n  \n",
+        session_id=None,
+        provider=None,
+        effective_model=None,
+        fallback_used=False,
+        turns=1,
+        tool_calls_count=0,
+        used_tool_names=[],
+        input_tokens=0,
+        output_tokens=0,
+        total_tokens=0,
+    )
+
+    assert attempt.infra_failure is True
+    assert attempt.failure_kind == "infra"
+    assert attempt.failure_detail == "empty_model_response"
+
+
 def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     from scripts.persona_benchmark_eval import PersonaBenchmarkRun
     from scripts.persona_benchmark_persistence import build_persistence_payload
