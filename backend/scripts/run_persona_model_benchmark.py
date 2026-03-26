@@ -84,6 +84,13 @@ _SUITE_ID_PREFIX = "benchmark-suite-"
 _RUN_KIND = "benchmark"
 _STATUS_COMPLETED = "completed"
 _DEFAULT_WORKING_ROOT = str(ROOT / "backend" / ".tmp" / "persona-model-benchmark")
+_DEFAULT_TASK_TYPE = "wake"
+_ENV_CLIENT_ID = "AGENT_HUB_CLIENT_ID"
+_EVENT_TYPE_TOOL_USE = "tool_use"
+_DECISION_PROMOTE = "promote"
+_COHORT_CANDIDATE = "candidate"
+_METADATA_REPORT_KEY = "report_generated"
+_CONFIG_TASK_TYPE_KEY = "benchmark_task_type"
 
 _BENCHMARK_RESPONSE_SCHEMA = {
     "type": "object",
@@ -216,7 +223,7 @@ async def _fetch_used_tool_names(session_id: str | None) -> list[str]:
         select(SessionEvent.tool_name)
         .where(
             SessionEvent.session_id == session_id,
-            SessionEvent.event_type == "tool_use",
+            SessionEvent.event_type == _EVENT_TYPE_TOOL_USE,
             SessionEvent.tool_name.is_not(None),
         )
         .order_by(SessionEvent.turn, SessionEvent.sequence)
@@ -237,7 +244,7 @@ async def _resolve_client_id(explicit_client_id: str | None, project_id: str) ->
     """Resolve an active client id for local benchmark API calls."""
     if explicit_client_id:
         return explicit_client_id
-    if env_id := os.environ.get("AGENT_HUB_CLIENT_ID"):
+    if env_id := os.environ.get(_ENV_CLIENT_ID):
         return env_id
     query = text(
         """
@@ -291,6 +298,41 @@ def _score_kwargs_failure(case, model_id, run_number, latency_ms, failure_detail
     )
 
 
+def _build_complete_kwargs(
+    case,
+    *,
+    benchmark_id: str,
+    project_id: str,
+    model_id: str,
+    run_number: int,
+    workdir: Path,
+    use_memory: bool,
+    memory_group_id: str,
+    memory_variant_override: str | None,
+    timeout_seconds: float | None,
+    task_type: str,
+    persona_name: str,
+) -> dict:
+    return dict(
+        messages=[{"role": "user", "content": f"@{model_id}\n{case.build_prompt(persona_name)}"}],
+        project_id=project_id,
+        agent_slug=_AGENT_SLUG,
+        external_id=f"{_BENCHMARK_ID_PREFIX}:{benchmark_id}:{case.case_id}:run-{run_number}",
+        enable_caching=False,
+        skip_cache=True,
+        use_memory=use_memory,
+        memory_group_id=memory_group_id,
+        memory_variant_override=memory_variant_override,
+        max_turns=case.max_turns,
+        working_dir=str(workdir) if case.fixture_files else None,
+        execute_tools=case.execute_tools,
+        timeout_seconds=timeout_seconds,
+        task_type=task_type,
+        disable_agent_fallbacks=True,
+        response_format={"type": "json_object", "schema": _BENCHMARK_RESPONSE_SCHEMA},
+    )
+
+
 async def _run_one_attempt(
     *,
     client: AsyncAgentHubClient,
@@ -312,35 +354,21 @@ async def _run_one_attempt(
     workdir = working_root / benchmark_id / model_id.replace("/", "__") / case.case_id / f"run-{run_number}"
     if case.fixture_files:
         prepare_case_workspace(case, workdir)
-
-    message_content = f"@{model_id}\n{case.build_prompt(persona_name)}"
+    complete_kwargs = _build_complete_kwargs(
+        case, benchmark_id=benchmark_id, project_id=project_id, model_id=model_id,
+        run_number=run_number, workdir=workdir, use_memory=use_memory,
+        memory_group_id=memory_group_id, memory_variant_override=memory_variant_override,
+        timeout_seconds=timeout_seconds, task_type=task_type, persona_name=persona_name,
+    )
     started = time.perf_counter()
     try:
-        response = await client.complete(
-            messages=[{"role": "user", "content": message_content}],
-            project_id=project_id,
-            agent_slug=_AGENT_SLUG,
-            external_id=f"{_BENCHMARK_ID_PREFIX}:{benchmark_id}:{case.case_id}:run-{run_number}",
-            enable_caching=False,
-            skip_cache=True,
-            use_memory=use_memory,
-            memory_group_id=memory_group_id,
-            memory_variant_override=memory_variant_override,
-            max_turns=case.max_turns,
-            working_dir=str(workdir) if case.fixture_files else None,
-            execute_tools=case.execute_tools,
-            timeout_seconds=timeout_seconds,
-            task_type=task_type,
-            disable_agent_fallbacks=True,
-            response_format={"type": "json_object", "schema": _BENCHMARK_RESPONSE_SCHEMA},
-        )
+        response = await client.complete(**complete_kwargs)
         latency_ms = int((time.perf_counter() - started) * 1000)
         used_tool_names = await _fetch_used_tool_names(response.session_id)
         attempt = score_attempt(**_score_kwargs_success(case, model_id, run_number, latency_ms, response, used_tool_names))
     except Exception as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
         attempt = score_attempt(**_score_kwargs_failure(case, model_id, run_number, latency_ms, str(exc)))
-
     if case.fixture_files and not keep_workdirs:
         shutil.rmtree(workdir, ignore_errors=True)
     return attempt
@@ -397,7 +425,7 @@ async def run_benchmark(
     use_memory: bool,
     memory_group_id: str | None,
     memory_variant_override: str | None = None,
-    task_type: str = "wake",
+    task_type: str = _DEFAULT_TASK_TYPE,
 ) -> PersonaBenchmarkRun:
     benchmark_id = f"{_BENCHMARK_ID_PREFIX}-{uuid.uuid4().hex[:8]}"
     started_at = datetime.now(UTC).isoformat()
@@ -479,7 +507,7 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("BASELINE", "ENHANCED", "MINIMAL", "AGGRESSIVE"),
         help="Override the memory injection variant for controlled benchmark experiments",
     )
-    parser.add_argument("--task-type", default="wake", choices=("wake", "heartbeat"), help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context")
+    parser.add_argument("--task-type", default=_DEFAULT_TASK_TYPE, choices=("wake", "heartbeat"), help="Agent task type to benchmark; use heartbeat to include live heartbeat instructions in context")
     parser.add_argument("--experiment-key", help="Stable experiment id for repeated baseline/candidate comparisons")
     parser.add_argument("--experiment-name", help="Display name for the benchmark experiment")
     parser.add_argument("--experiment-cohort", choices=("baseline", "candidate"), help="Cohort label for this persisted run")
@@ -495,7 +523,7 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _build_experiment_payload(args: argparse.Namespace, case_ids: list[str]) -> dict[str, object] | None:
+def _build_experiment_payload(args: argparse.Namespace, suite_id: str) -> dict[str, object] | None:
     if not args.experiment_key:
         return None
     if not args.experiment_cohort:
@@ -505,7 +533,7 @@ def _build_experiment_payload(args: argparse.Namespace, case_ids: list[str]) -> 
         "name": args.experiment_name or args.experiment_key,
         "cohort": args.experiment_cohort,
         "hypothesis": args.experiment_hypothesis,
-        "suite_id": args.suite_id or derive_suite_id(case_ids),
+        "suite_id": suite_id,
         "project_id": args.project_id,
         "min_runs_per_cohort": args.min_runs_per_cohort,
     }
@@ -541,10 +569,10 @@ async def _maybe_promote_memory_variant(
     """Promote a winning candidate variant into the global memory settings row."""
     if (
         not args.promote_on_win
-        or args.experiment_cohort != "candidate"
+        or args.experiment_cohort != _COHORT_CANDIDATE
         or not args.memory_variant_override
         or not summary
-        or summary.get("decision") != "promote"
+        or summary.get("decision") != _DECISION_PROMOTE
     ):
         return
     await set_active_memory_variant(args.memory_variant_override)
@@ -562,7 +590,7 @@ async def _persist_run(
         memory_variant_override=args.memory_variant_override,
     )
     if config_snapshot is not None:
-        config_snapshot = {**config_snapshot, "benchmark_task_type": args.task_type}
+        config_snapshot = {**config_snapshot, _CONFIG_TASK_TYPE_KEY: args.task_type}
     suite_id = args.suite_id or derive_suite_id(case_ids)
     payload = build_persistence_payload(
         run,
@@ -572,8 +600,8 @@ async def _persist_run(
         use_memory=args.use_memory,
         seed=args.seed,
         config_snapshot=config_snapshot,
-        metadata={"report_generated": True},
-        experiment=_build_experiment_payload(args, case_ids),
+        metadata={_METADATA_REPORT_KEY: True},
+        experiment=_build_experiment_payload(args, suite_id),
     )
     persisted_run_id = await persist_benchmark_payload(payload)
     logger.info("Persisted benchmark run as %s", persisted_run_id)
