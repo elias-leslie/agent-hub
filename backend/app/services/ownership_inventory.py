@@ -211,7 +211,7 @@ def _derive_scope_confidence(
     observed_write_paths: list[str],
     observed_read_paths: list[str],
 ) -> str:
-    if stored_confidence in {"declared", "observed_write", "observed_read", "unknown"}:
+    if stored_confidence in {"declared", "observed_write", "observed_read"}:
         return stored_confidence
     if declared_scope_paths:
         return "declared"
@@ -224,19 +224,20 @@ def _derive_scope_confidence(
 
 def _should_skip_owner_session(
     session: Session,
-    worktree_path: str | None,
-    scope_paths: list[str],
+    declared_scope_paths: list[str],
+    observed_write_paths: list[str],
+    observed_read_paths: list[str],
 ) -> bool:
     """Return True when a session is control-plane observer work, not a live owner lane."""
     if session.agent_slug != PERSONA_SLUG:
         return False
     if session.request_source != "heartbeat":
         return False
-    if isinstance(session.current_branch, str) and session.current_branch:
-        return False
-    if _is_worktree(worktree_path):
-        return False
-    return not scope_paths
+    return not (
+        declared_scope_paths
+        or observed_write_paths
+        or observed_read_paths
+    )
 
 
 async def query_project_ownership(
@@ -283,7 +284,12 @@ async def query_project_ownership(
             observed_write_paths,
             observed_read_paths,
         )
-        if _should_skip_owner_session(session, worktree_path, scope_paths):
+        if _should_skip_owner_session(
+            session,
+            declared_scope_paths,
+            observed_write_paths,
+            observed_read_paths,
+        ):
             continue
         age = _age_minutes(session.created_at, session.updated_at)
         is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
