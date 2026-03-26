@@ -101,26 +101,47 @@ def _live_activity_summary(session: Session) -> tuple[str | None, str | None]:
     )
 
 
-def _extend_strs(parts: list[str], *values: Any) -> None:
-    parts.extend(v for v in values if isinstance(v, str) and v)
-
-
 def _entry_match_text(entry: PersonaStreamEntry) -> str:
-    parts: list[str] = []
-    _extend_strs(
-        parts,
-        entry.content, entry.display_summary, entry.summary_oneliner, entry.live_summary,
-        entry.agent_slug, entry.project_id, entry.external_id, entry.current_branch, entry.model,
-    )
-    for preview in entry.event_previews:
-        _extend_strs(
-            parts,
-            preview.tool_name, preview.content_preview, preview.tool_input_preview,
-            preview.tool_output_preview, preview.model_used, preview.event_type,
-        )
-    for marker in entry.issue_markers:
-        _extend_strs(parts, marker.title, marker.summary, marker.tool_name, marker.primary_tag, marker.primary_root_cause)
-    return " ".join(parts).lower()
+    return " ".join(
+        value
+        for value in [
+            entry.content,
+            entry.display_summary,
+            entry.summary_oneliner,
+            entry.live_summary,
+            entry.agent_slug,
+            entry.project_id,
+            entry.external_id,
+            entry.current_branch,
+            entry.model,
+            *[
+                preview_value
+                for preview in entry.event_previews
+                for preview_value in [
+                    preview.tool_name,
+                    preview.content_preview,
+                    preview.tool_input_preview,
+                    preview.tool_output_preview,
+                    preview.model_used,
+                    preview.event_type,
+                ]
+                if isinstance(preview_value, str)
+            ],
+            *[
+                marker_value
+                for marker in entry.issue_markers
+                for marker_value in [
+                    marker.title,
+                    marker.summary,
+                    marker.tool_name,
+                    marker.primary_tag,
+                    marker.primary_root_cause,
+                ]
+                if isinstance(marker_value, str)
+            ],
+        ]
+        if isinstance(value, str) and value
+    ).lower()
 
 
 def _parse_search(search: str | None) -> ParsedSearch:
@@ -146,38 +167,59 @@ def _matches_terms(text: str, terms: list[str]) -> bool:
     return all(term in text for term in terms)
 
 
-def _check_field_terms(terms: list[str], *values: str | None) -> bool:
-    """Return True when all terms appear in the joined lowercased values (or terms is empty)."""
-    if not terms:
-        return True
-    text = " ".join(v.lower() for v in values if isinstance(v, str) and v)
-    return _matches_terms(text, terms)
-
-
 def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch) -> bool:
     if not parsed_search.has_terms():
         return False
-    text = _entry_match_text(entry)
-    return (
-        _check_field_terms(parsed_search.general_terms, text)
-        and _check_field_terms(
-            parsed_search.task_terms,
-            entry.external_id, entry.display_summary, entry.summary_oneliner, entry.live_summary, entry.content,
+    entry_text = _entry_match_text(entry)
+    if parsed_search.general_terms and not _matches_terms(entry_text, parsed_search.general_terms):
+        return False
+
+    if parsed_search.task_terms:
+        task_text = " ".join(
+            value.lower()
+            for value in [
+                entry.external_id,
+                entry.display_summary,
+                entry.summary_oneliner,
+                entry.live_summary,
+                entry.content,
+            ]
+            if isinstance(value, str) and value
         )
-        and _check_field_terms(parsed_search.file_terms, text)
-        and _check_field_terms(
-            parsed_search.agent_terms,
-            entry.agent_slug, entry.display_summary, entry.summary_oneliner, entry.live_summary,
+        if not _matches_terms(task_text, parsed_search.task_terms):
+            return False
+
+    if parsed_search.file_terms and not _matches_terms(entry_text, parsed_search.file_terms):
+        return False
+
+    if parsed_search.agent_terms:
+        agent_text = " ".join(
+            value.lower()
+            for value in [entry.agent_slug, entry.display_summary, entry.summary_oneliner, entry.live_summary]
+            if isinstance(value, str) and value
         )
-        and _check_field_terms(
-            parsed_search.status_terms,
-            entry.status, entry.live_status, entry.display_summary, entry.summary_oneliner, entry.live_summary,
+        if not _matches_terms(agent_text, parsed_search.agent_terms):
+            return False
+
+    if parsed_search.status_terms:
+        status_text = " ".join(
+            value.lower()
+            for value in [entry.status, entry.live_status, entry.display_summary, entry.summary_oneliner, entry.live_summary]
+            if isinstance(value, str) and value
         )
-        and _check_field_terms(
-            parsed_search.project_terms,
-            entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner,
+        if not _matches_terms(status_text, parsed_search.status_terms):
+            return False
+
+    if parsed_search.project_terms:
+        project_text = " ".join(
+            value.lower()
+            for value in [entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner]
+            if isinstance(value, str) and value
         )
-    )
+        if not _matches_terms(project_text, parsed_search.project_terms):
+            return False
+
+    return True
 
 
 def _entry_match_snippet(entry: PersonaStreamEntry) -> str:
@@ -572,20 +614,6 @@ async def _fetch_sessions(
     return persona_sessions, child_sessions
 
 
-def _display_summary_candidates(
-    sessions: list[Session],
-) -> list[SessionDisplaySummaryCandidate]:
-    return [
-        SessionDisplaySummaryCandidate(
-            session_id=s.id,
-            summary_oneliner=s.summary_oneliner,
-            live_summary=_live_activity_summary(s)[0],
-        )
-        for s in sessions
-        if s.session_type != "chat"
-    ]
-
-
 @router.get("/stream", response_model=PersonaStreamResponse)
 async def get_persona_stream(
     db: AsyncSession = Depends(get_db),
@@ -600,18 +628,27 @@ async def get_persona_stream(
     search_term = search.strip() if search else None
     parsed_search = _parse_search(search_term)
     hours = 0 if search_term else HOURS_MAP.get(time_range, 24)
+
     persona_sessions, child_sessions = await _fetch_sessions(db, hours, parsed_search)
-    all_sessions = [*persona_sessions, *child_sessions]
-    all_session_ids = [s.id for s in all_sessions]
+    all_session_ids = [s.id for s in persona_sessions] + [s.id for s in child_sessions]
 
     message_counts = await _fetch_event_counts(db, all_session_ids, _CHAT_MESSAGE_TYPES)
     tool_counts = await _fetch_event_counts(db, all_session_ids, ("tool_use",))
     event_previews = await _fetch_event_previews(db, all_session_ids)
     persona_chat_ids = [s.id for s in persona_sessions if s.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
-    session_pulses = build_session_pulses(all_sessions, event_previews)
+    session_pulses = build_session_pulses([*persona_sessions, *child_sessions], event_previews)
     display_summaries = await fetch_session_display_summaries(
-        db, _display_summary_candidates(all_sessions)
+        db,
+        [
+            SessionDisplaySummaryCandidate(
+                session_id=session.id,
+                summary_oneliner=session.summary_oneliner,
+                live_summary=_live_activity_summary(session)[0],
+            )
+            for session in [*persona_sessions, *child_sessions]
+            if session.session_type != "chat"
+        ],
     )
 
     entries = _build_stream_entries(
@@ -619,7 +656,7 @@ async def get_persona_stream(
         message_counts, tool_counts, event_previews, session_pulses, display_summaries,
     )
     matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
-    pulse = build_pulse_summary(entries, all_sessions, session_pulses)
+    pulse = build_pulse_summary(entries, [*persona_sessions, *child_sessions], session_pulses)
 
     sliced_entries = _slice_entries(
         entries,
