@@ -55,8 +55,16 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--claim-if-needed",
+        dest="claim_if_needed",
         action="store_true",
+        default=None,
         help="Claim the task automatically when --task-id is used and no worktree exists yet",
+    )
+    parser.add_argument(
+        "--no-claim-if-needed",
+        dest="claim_if_needed",
+        action="store_false",
+        help="Do not auto-claim when --task-id is used and the task has no worktree yet",
     )
     parser.add_argument("--project-id", default="agent-hub", help="Agent Hub project id")
     parser.add_argument("--workdir", default=str(ROOT), help="Working directory for the Claude run")
@@ -90,6 +98,10 @@ def _parse_args() -> argparse.Namespace:
         parser.error("exactly one of --prompt-file, --spec-file, or --task-id is required")
     if args.task_id and not args.task_root:
         parser.error("--task-root is required when --task-id is used")
+    if args.task_id:
+        args.claim_if_needed = True if args.claim_if_needed is None else args.claim_if_needed
+    elif args.claim_if_needed is None:
+        args.claim_if_needed = False
     return args
 
 
@@ -370,7 +382,7 @@ def _load_task_contract(
 
     if not isinstance(worktree_path, str) or not worktree_path:
         raise ValueError(
-            f"task {task_id} has no worktree path; claim it first or pass --claim-if-needed"
+            f"task {task_id} has no worktree path and auto-claim is disabled"
         )
 
     workdir = Path(worktree_path).resolve()
