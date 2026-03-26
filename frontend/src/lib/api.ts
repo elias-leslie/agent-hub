@@ -108,10 +108,12 @@ export {
 // Re-export all project-permissions-related exports
 export type {
   ProjectPermission,
+  ProjectPermissionCreate,
   ProjectPermissionUpdate,
   ExecutionPermission,
 } from "./api/project-permissions";
 export {
+  createProjectPermission,
   fetchProjectPermissions,
   updateProjectPermission,
   fetchExecutionPermission,

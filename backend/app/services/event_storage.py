@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.narration_extraction import extract_narration_from_event
 from app.services.session_live_activity import update_live_activity_for_event
+from app.services.session_scope import apply_scope_state, resolve_scope_base_path
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,69 @@ def get_sequencer() -> EventSequencer:
     if _sequencer is None:
         _sequencer = EventSequencer()
     return _sequencer
+
+
+def _append_unique_string(values: list[str] | None, item: str | None) -> list[str]:
+    existing = [value for value in (values or []) if isinstance(value, str) and value]
+    if item and item not in existing:
+        existing.append(item)
+    return existing
+
+
+def _tool_scope_paths(
+    tool_name: str | None,
+    tool_input: dict[str, Any] | None,
+) -> tuple[list[str], list[str]]:
+    if not isinstance(tool_input, dict):
+        return [], []
+    raw_paths: list[str] = []
+    for key in ("file_path", "path", "target_file"):
+        value = tool_input.get(key)
+        if isinstance(value, str) and value:
+            raw_paths.append(value)
+    for key in ("file_paths", "paths"):
+        value = tool_input.get(key)
+        if isinstance(value, list):
+            raw_paths.extend(path for path in value if isinstance(path, str) and path)
+    if not raw_paths:
+        return [], []
+    normalized_tool = (tool_name or "").lower()
+    if "read" in normalized_tool:
+        return raw_paths, []
+    if "write" in normalized_tool or "edit" in normalized_tool:
+        return [], raw_paths
+    return [], []
+
+
+def _reconcile_session_from_event(
+    session: Session,
+    *,
+    event_type: str,
+    tool_name: str | None,
+    tool_input: dict[str, Any] | None,
+    model_used: str | None,
+    agent_id: str | None,
+) -> None:
+    if model_used:
+        session.models_used = _append_unique_string(getattr(session, "models_used", None), model_used)
+        if not agent_id:
+            session.model = model_used
+
+    if str(event_type) != SessionEventType.TOOL_USE:
+        return
+
+    observed_reads, observed_writes = _tool_scope_paths(tool_name, tool_input)
+    if not observed_reads and not observed_writes:
+        return
+
+    provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    base_path = resolve_scope_base_path(provider_metadata, None)
+    apply_scope_state(
+        session,
+        base_path=base_path,
+        observed_read_paths=observed_reads,
+        observed_write_paths=observed_writes,
+    )
 
 
 async def store_event(
@@ -120,6 +184,14 @@ async def store_event(
     if parent_session is None:
         parent_session = await db.get(Session, session_id)
     if parent_session is not None:
+        _reconcile_session_from_event(
+            parent_session,
+            event_type=str(event_type),
+            tool_name=tool_name,
+            tool_input=tool_input,
+            model_used=model_used,
+            agent_id=agent_id,
+        )
         update_live_activity_for_event(
             parent_session,
             event_type=str(event_type),

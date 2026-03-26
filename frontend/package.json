@@ -18,6 +18,7 @@
   "dependencies": {
     "@agent-hub/chat-ui": "workspace:*",
     "@agent-hub/passport-client": "workspace:*",
+    "@summitflow/notes-ui": "file:../../summitflow/packages/notes-ui",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-virtual": "^3.13.18",
     "clsx": "^2.1.1",
@@ -27,6 +28,7 @@
     "prismjs": "^1.30.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "motion": "^12.0.0",
     "recharts": "^3.6.0",
     "tailwind-merge": "^3.4.0"
   },

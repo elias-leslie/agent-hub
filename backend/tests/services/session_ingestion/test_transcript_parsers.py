@@ -53,6 +53,41 @@ class TestParseTranscriptEvents:
         assert events[2].tool_name == "exec_command"
         assert events[3].content == "M backend/app.py"
 
+    def test_parses_claude_progress_subagent_events_with_models_and_tool_results(self) -> None:
+        lines = [
+            '{"type":"user","message":{"role":"user","content":"Inspect adapters"}}',
+            '{"type":"assistant","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"tool_use","name":"Agent","input":{"description":"delegate"}}]}}',
+            '{"type":"progress","slug":"sparkling-dancing-peach","data":{"type":"agent_progress","agentId":"agent-1","message":{"type":"user","message":{"role":"user","content":[{"type":"text","text":"Read the file"},{"type":"tool_result","tool_use_id":"toolu_1","content":"read ok"}]}}}}',
+            '{"type":"progress","slug":"sparkling-dancing-peach","data":{"type":"agent_progress","agentId":"agent-1","message":{"type":"assistant","message":{"model":"claude-opus-4-6","role":"assistant","content":[{"type":"thinking","thinking":"Checking file"},{"type":"tool_use","name":"Read","input":{"file_path":"/tmp/x.py"}},{"type":"text","text":"Done"}]}}}}',
+            '{"type":"assistant","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"text","text":"Finished"}]}}',
+        ]
+
+        events = parse_transcript_events(lines)
+
+        assert [(event.event_type, event.turn, event.sequence) for event in events] == [
+            ("user_message", 1, 1),
+            ("tool_use", 1, 2),
+            ("tool_result", 1, 3),
+            ("thinking", 1, 4),
+            ("tool_use", 1, 5),
+            ("assistant_message", 1, 6),
+            ("assistant_message", 1, 7),
+        ]
+        assert events[1].tool_name == "Agent"
+        assert events[1].model_used == "claude-sonnet-4-6"
+        assert events[2].content == "read ok"
+        assert events[2].agent_id == "agent-1"
+        assert events[2].agent_name == "sparkling-dancing-peach"
+        assert events[3].content == "Checking file"
+        assert events[3].model_used == "claude-opus-4-6"
+        assert events[4].tool_name == "Read"
+        assert events[4].tool_input == {"file_path": "/tmp/x.py"}
+        assert events[4].agent_id == "agent-1"
+        assert events[5].content == "Done"
+        assert events[5].model_used == "claude-opus-4-6"
+        assert events[6].content == "Finished"
+        assert events[6].model_used == "claude-sonnet-4-6"
+
 
 @pytest.mark.unit
 def test_read_jsonl_lines_respects_line_offset_checkpoint(tmp_path: Path) -> None:

@@ -74,6 +74,9 @@ class _ParseState:
 
 def _append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
     entry_type = obj.get("type")
+    if entry_type == "progress":
+        _append_claude_progress_events(obj, state)
+        return
     if entry_type == "user" and not obj.get("isMeta"):
         _append_claude_user_events(obj, state)
         return
@@ -85,21 +88,99 @@ def _append_normalized_events(obj: JsonObject, state: _ParseState) -> None:
 
 
 def _append_claude_user_events(obj: JsonObject, state: _ParseState) -> None:
-    content = _get_message_content(obj)
-    texts = _extract_text_blocks(content)
-    if not texts:
+    message = obj.get("message")
+    if not isinstance(message, dict):
         return
-    state.begin_user_turn()
-    for text in texts:
-        cleaned = _strip_command_tags(text)
-        if cleaned:
-            state.append("user_message", role="user", content=cleaned)
+    _append_claude_user_message(message, state)
 
 
 def _append_claude_assistant_events(obj: JsonObject, state: _ParseState) -> None:
-    content = _get_message_content(obj)
+    message = obj.get("message")
+    if not isinstance(message, dict):
+        return
+    _append_claude_assistant_message(message, state)
+
+
+def _append_claude_progress_events(obj: JsonObject, state: _ParseState) -> None:
+    data = obj.get("data")
+    if not isinstance(data, dict) or data.get("type") != "agent_progress":
+        return
+    nested = data.get("message")
+    if not isinstance(nested, dict):
+        return
+    nested_type = nested.get("type")
+    message = nested.get("message")
+    if not isinstance(message, dict):
+        return
+    agent_id = data.get("agentId") if isinstance(data.get("agentId"), str) else None
+    agent_name = obj.get("slug") if isinstance(obj.get("slug"), str) else None
+    if nested_type == "assistant":
+        _append_claude_assistant_message(
+            message,
+            state,
+            agent_id=agent_id,
+            agent_name=agent_name,
+        )
+    elif nested_type == "user":
+        _append_claude_user_message(
+            message,
+            state,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            allow_prompt_text=False,
+        )
+
+
+def _append_claude_user_message(
+    message: JsonObject,
+    state: _ParseState,
+    *,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
+    allow_prompt_text: bool = True,
+) -> None:
+    content = message.get("content")
+    texts = _extract_text_blocks(content) if allow_prompt_text else []
+    if texts:
+        state.begin_user_turn()
+        for text in texts:
+            cleaned = _strip_command_tags(text)
+            if cleaned:
+                state.append(
+                    "user_message",
+                    role="user",
+                    content=cleaned,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                )
+    for tool_result in _extract_tool_result_blocks(content):
+        state.append(
+            "tool_result",
+            content=tool_result["content"],
+            tool_output=tool_result["tool_output"],
+            agent_id=agent_id,
+            agent_name=agent_name,
+        )
+
+
+def _append_claude_assistant_message(
+    message: JsonObject,
+    state: _ParseState,
+    *,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
+) -> None:
+    content = message.get("content")
+    model_used = message.get("model") if isinstance(message.get("model"), str) else None
     if isinstance(content, str) and content.strip():
-        state.append("assistant_message", role="assistant", content=content.strip())
+        state.append(
+            "assistant_message",
+            role="assistant",
+            content=content.strip(),
+            model_used=model_used,
+            agent_id=agent_id,
+            agent_name=agent_name,
+        )
         return
     if not isinstance(content, list):
         return
@@ -110,7 +191,24 @@ def _append_claude_assistant_events(obj: JsonObject, state: _ParseState) -> None
         if block_type == "text":
             text = block.get("text")
             if isinstance(text, str) and text.strip():
-                state.append("assistant_message", role="assistant", content=text.strip())
+                state.append(
+                    "assistant_message",
+                    role="assistant",
+                    content=text.strip(),
+                    model_used=model_used,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                )
+        elif block_type == "thinking":
+            thinking = block.get("thinking")
+            if isinstance(thinking, str) and thinking.strip():
+                state.append(
+                    "thinking",
+                    content=thinking.strip(),
+                    model_used=model_used,
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                )
         elif block_type == "tool_use":
             tool_name = block.get("name")
             tool_input = block.get("input")
@@ -118,6 +216,9 @@ def _append_claude_assistant_events(obj: JsonObject, state: _ParseState) -> None
                 "tool_use",
                 tool_name=tool_name if isinstance(tool_name, str) else "unknown",
                 tool_input=tool_input if isinstance(tool_input, dict) else {},
+                model_used=model_used,
+                agent_id=agent_id,
+                agent_name=agent_name,
             )
 
 
@@ -192,6 +293,38 @@ def _extract_text_blocks(content: object) -> list[str]:
         if isinstance(text, str) and text.strip():
             texts.append(text)
     return texts
+
+
+def _extract_tool_result_blocks(content: object) -> list[dict[str, Any]]:
+    if not isinstance(content, list):
+        return []
+    results: list[dict[str, Any]] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "tool_result":
+            continue
+        rendered = _render_tool_result_content(block.get("content"))
+        tool_output: dict[str, Any] = {}
+        tool_use_id = block.get("tool_use_id")
+        if isinstance(tool_use_id, str) and tool_use_id:
+            tool_output["tool_use_id"] = tool_use_id
+        is_error = block.get("is_error")
+        if isinstance(is_error, bool):
+            tool_output["is_error"] = is_error
+        if rendered is not None:
+            tool_output["content"] = rendered
+        results.append({"content": rendered, "tool_output": tool_output})
+    return results
+
+
+def _render_tool_result_content(content: object) -> str | None:
+    if isinstance(content, str):
+        stripped = content.strip()
+        return stripped if stripped else None
+    text_blocks = _extract_text_blocks(content)
+    if not text_blocks:
+        return None
+    rendered = "\n".join(text_blocks).strip()
+    return rendered or None
 
 
 def _parse_function_arguments(arguments: object) -> dict[str, Any]:
