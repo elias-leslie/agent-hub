@@ -9,17 +9,20 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session
+from app.models import Session, SessionEvent
 from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.agent_routing import resolve_agent
 from app.services.event_storage import get_max_sequence, get_max_turn
 from app.services.memory.session_analysis import analyze_session
 from app.services.session_live_activity import apply_live_activity_heartbeat
 from app.services.session_operations import _validate_project_id, get_or_create_session
-from app.services.session_scope import normalize_scope_paths
+from app.services.session_scope import (
+    apply_scope_state,
+    normalize_scope_paths,
+    resolve_scope_base_path,
+)
 
 from ._events import _adapter_for_provider, _store_events_general, _store_single_implicit_event
-from ._scope import _apply_scope_state, _scope_base_path
 from .adapters.base import ProviderSessionRef
 from .models import (
     AppendNormalizedEventsRequest,
@@ -55,6 +58,68 @@ def _append_unique(values: list[str] | None, item: str | None) -> list[str]:
     if item and item not in result:
         result.append(item)
     return result
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    """Preserve first-seen order while removing duplicate strings."""
+    deduped: list[str] = []
+    for value in values:
+        if value and value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+async def _reconcile_transcript_session_models(
+    db: AsyncSession,
+    session_id: str,
+) -> None:
+    """Rebuild transcript-backed model fields from persisted event evidence."""
+    session = (
+        await db.execute(select(Session).where(Session.id == session_id).limit(1))
+    ).scalar_one_or_none()
+    if session is None:
+        return
+
+    event_rows = (
+        await db.execute(
+            select(
+                SessionEvent.model_used,
+                SessionEvent.agent_id,
+            )
+            .where(SessionEvent.session_id == session_id)
+            .order_by(SessionEvent.turn, SessionEvent.sequence)
+        )
+    ).all()
+    if not event_rows:
+        return
+
+    all_models: list[str] = []
+    top_level_models: list[str] = []
+    for model_used, agent_id in event_rows:
+        if not isinstance(model_used, str) or not model_used:
+            continue
+        all_models.append(model_used)
+        if not isinstance(agent_id, str) or not agent_id:
+            top_level_models.append(model_used)
+
+    normalized_models = _dedupe_strings(all_models)
+    normalized_top_level = _dedupe_strings(top_level_models)
+    if not normalized_models:
+        return
+
+    updated = False
+    if session.models_used != normalized_models:
+        session.models_used = normalized_models
+        updated = True
+
+    normalized_model = normalized_top_level[-1] if normalized_top_level else None
+    if normalized_model and session.model != normalized_model:
+        session.model = normalized_model
+        updated = True
+
+    if updated:
+        session.updated_at = datetime.now(UTC)
+        await db.commit()
 
 
 def _validate_external_id(external_id: str | None) -> None:
@@ -93,7 +158,7 @@ def _build_new_session(
         created_at=now,
         updated_at=now,
     )
-    _apply_scope_state(
+    apply_scope_state(
         session,
         base_path=base_path,
         declared_scope_paths=request.declared_scope_paths,
@@ -130,7 +195,7 @@ def _update_existing_session(
     session.provider_metadata = _merge_metadata(session.provider_metadata, merged_metadata)
     session.models_used = _append_unique(session.models_used, model)
     session.providers_used = _append_unique(session.providers_used, provider)
-    _apply_scope_state(
+    apply_scope_state(
         session,
         base_path=base_path,
         declared_scope_paths=request.declared_scope_paths,
@@ -159,7 +224,7 @@ async def upsert_session(
         request.provider_metadata,
         {"cwd": request.cwd} if request.cwd else None,
     )
-    base_path = _scope_base_path(merged_metadata, request.cwd)
+    base_path = resolve_scope_base_path(merged_metadata, request.cwd)
 
     existing, is_existing = await get_or_create_session(db, request.session_id)
     if not is_existing or existing is None:
@@ -189,8 +254,8 @@ def _apply_heartbeat_update(session: Session, request: SessionHeartbeatRequest) 
     if request.status is not None:
         session.status = request.status
 
-    base_path = _scope_base_path(metadata, request.cwd)
-    _apply_scope_state(
+    base_path = resolve_scope_base_path(metadata, request.cwd)
+    apply_scope_state(
         session,
         base_path=base_path,
         declared_scope_paths=request.declared_scope_paths,
@@ -299,6 +364,7 @@ async def ingest_transcript_events(
         session_id=session_id,
         request=AppendNormalizedEventsRequest(events=events),
     )
+    await _reconcile_transcript_session_models(db, session_id)
     return TranscriptIngestResult(
         session_id=session_id,
         provider=request.provider,

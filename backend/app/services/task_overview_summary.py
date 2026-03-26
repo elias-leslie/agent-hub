@@ -66,18 +66,14 @@ def _payload_projects(
     projects = task_overview_payload.get("projects")
     if not isinstance(projects, list):
         return []
-    filtered: list[dict[str, object]] = []
+    items: list[dict[str, object]] = []
     for item in projects:
-        if isinstance(item, dict):
-            filtered.append(item)
-    if project_id is None:
-        return filtered
-    matching: list[dict[str, object]] = []
-    for item in filtered:
-        item_project_id = item.get("project_id")
-        if isinstance(item_project_id, str) and item_project_id == project_id:
-            matching.append(item)
-    return matching
+        if not isinstance(item, dict):
+            continue
+        if project_id is not None and item.get("project_id") != project_id:
+            continue
+        items.append(item)
+    return items
 
 
 def _project_overview_from_payload(project: dict[str, object]) -> ProjectOverview | None:
@@ -85,20 +81,11 @@ def _project_overview_from_payload(project: dict[str, object]) -> ProjectOvervie
     project_id = project.get("project_id")
     if not isinstance(project_id, str) or not project_id:
         return None
-
     ready = _coerce_int(project.get("ready_count"))
-    blocked = _coerce_int(project.get("blocked_count"))
-    active = _coerce_int(project.get("active_count"))
-    stale = _coerce_int(project.get("stale_count"))
-
     parts = [f"{ready} ready"]
-    if blocked:
-        parts.append(f"{blocked} blocked")
-    if active:
-        parts.append(f"{active} active")
-    if stale:
-        parts.append(f"{stale} stale")
-
+    for field, label in (("blocked_count", "blocked"), ("active_count", "active"), ("stale_count", "stale")):
+        if count := _coerce_int(project.get(field)):
+            parts.append(f"{count} {label}")
     return ProjectOverview(project_id=project_id, label=", ".join(parts))
 
 
@@ -153,6 +140,73 @@ def _extract_payload_task_candidates(
     return candidates
 
 
+def _extract_task_candidates(
+    task_overview: str,
+    *,
+    allowed_prefixes: set[str],
+    per_project_limit: int = 2,
+    required_suffix: str | None = None,
+) -> list[ReadyTaskCandidate]:
+    """Extract task candidates matching prefixes/suffixes from ready-all output."""
+    candidates: list[ReadyTaskCandidate] = []
+    current_project: str | None = None
+    project_counts: dict[str, int] = {}
+
+    for raw_line in task_overview.splitlines():
+        line = raw_line.rstrip()
+        if not line:
+            continue
+        project_match = _PROJECT_RE.match(line)
+        if project_match:
+            current_project = project_match.group("project")
+            continue
+        task_match = _TASK_RE.match(line)
+        if not task_match or not current_project:
+            continue
+        prefix = task_match.group("prefix")
+        suffix = (task_match.group("suffix") or "").strip()
+        if prefix not in allowed_prefixes:
+            continue
+        if required_suffix is not None and suffix != required_suffix:
+            continue
+        shown = project_counts.get(current_project, 0)
+        if shown >= per_project_limit:
+            continue
+        candidates.append(
+            ReadyTaskCandidate(
+                project_id=current_project,
+                task_id=task_match.group("task_id"),
+                priority=int(task_match.group("priority")),
+                task_type=task_match.group("task_type"),
+                mode=task_match.group("mode"),
+                title=task_match.group("title").strip(),
+            )
+        )
+        project_counts[current_project] = shown + 1
+
+    return candidates
+
+
+def _format_actionable_summary(header: str, candidates: list[ReadyTaskCandidate]) -> str:
+    """Format a labelled actionable section from a list of candidates."""
+    if not candidates:
+        return ""
+    lines = [f"{header}[{len(candidates)}]"]
+    for c in candidates:
+        lines.append(
+            f"- {c.project_id} | {c.task_id} | "
+            f"P{c.priority} {c.task_type} [{c.mode}] | {c.title}"
+        )
+    return "\n".join(lines)
+
+
+def _append_section(lines: list[str], section: str) -> None:
+    """Append a blank separator and section content when section is non-empty."""
+    if section:
+        lines.append("")
+        lines.append(section)
+
+
 def parse_task_overview_stats_from_payload(task_overview_payload: dict[str, object]) -> TaskOverviewStats:
     """Parse ready-all headline counts from structured API payloads."""
     summary = task_overview_payload.get("summary")
@@ -173,12 +227,11 @@ def extract_project_overviews_from_payload(
     project_id: str | None = None,
 ) -> list[ProjectOverview]:
     """Extract compact per-project overview rows from ready-all API payloads."""
-    overviews: list[ProjectOverview] = []
-    for project in _payload_projects(task_overview_payload, project_id=project_id):
-        overview = _project_overview_from_payload(project)
-        if overview is not None:
-            overviews.append(overview)
-    return overviews
+    return [
+        o
+        for p in _payload_projects(task_overview_payload, project_id=project_id)
+        if (o := _project_overview_from_payload(p)) is not None
+    ]
 
 
 def build_actionable_ready_summary_from_payload(
@@ -194,15 +247,7 @@ def build_actionable_ready_summary_from_payload(
         per_project_limit=per_project_limit,
         project_id=project_id,
     )
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-READY[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-READY", candidates)
 
 
 def build_actionable_blocked_summary_from_payload(
@@ -218,15 +263,7 @@ def build_actionable_blocked_summary_from_payload(
         per_project_limit=per_project_limit,
         project_id=project_id,
     )
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-BLOCKED[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-BLOCKED", candidates)
 
 
 def extract_stale_task_candidates_from_payload(
@@ -256,15 +293,7 @@ def build_actionable_stale_summary_from_payload(
         per_project_limit=per_project_limit,
         project_id=project_id,
     )
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-STALE[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-STALE", candidates)
 
 
 def collect_visible_task_ids_from_payload(
@@ -313,32 +342,15 @@ def build_compact_task_overview_from_payload(
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
 
-    ready_actionable = build_actionable_ready_summary_from_payload(
-        task_overview_payload,
-        per_project_limit=per_project_limit,
-        project_id=project_id,
-    )
-    if ready_actionable:
-        lines.append("")
-        lines.append(ready_actionable)
-
-    blocked_actionable = build_actionable_blocked_summary_from_payload(
-        task_overview_payload,
-        per_project_limit=per_project_limit,
-        project_id=project_id,
-    )
-    if blocked_actionable:
-        lines.append("")
-        lines.append(blocked_actionable)
-
-    stale_actionable = build_actionable_stale_summary_from_payload(
-        task_overview_payload,
-        per_project_limit=per_project_limit,
-        project_id=project_id,
-    )
-    if stale_actionable:
-        lines.append("")
-        lines.append(stale_actionable)
+    _append_section(lines, build_actionable_ready_summary_from_payload(
+        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+    ))
+    _append_section(lines, build_actionable_blocked_summary_from_payload(
+        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+    ))
+    _append_section(lines, build_actionable_stale_summary_from_payload(
+        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+    ))
 
     return "\n".join(lines)
 
@@ -368,87 +380,11 @@ def extract_ready_task_candidates(
     Only plain ready rows and ready bug rows (`*`) are included. Active, blocked, and
     stale rows are excluded.
     """
-    candidates: list[ReadyTaskCandidate] = []
-    current_project: str | None = None
-    project_counts: dict[str, int] = {}
-
-    for raw_line in task_overview.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        project_match = _PROJECT_RE.match(line)
-        if project_match:
-            current_project = project_match.group("project")
-            continue
-        task_match = _TASK_RE.match(line)
-        if not task_match or not current_project:
-            continue
-        prefix = task_match.group("prefix")
-        if prefix not in {" ", "*"}:
-            continue
-        shown = project_counts.get(current_project, 0)
-        if shown >= per_project_limit:
-            continue
-        candidates.append(
-            ReadyTaskCandidate(
-                project_id=current_project,
-                task_id=task_match.group("task_id"),
-                priority=int(task_match.group("priority")),
-                task_type=task_match.group("task_type"),
-                mode=task_match.group("mode"),
-                title=task_match.group("title").strip(),
-            )
-        )
-        project_counts[current_project] = shown + 1
-
-    return candidates
-
-
-def _extract_task_candidates(
-    task_overview: str,
-    *,
-    allowed_prefixes: set[str],
-    per_project_limit: int = 2,
-    required_suffix: str | None = None,
-) -> list[ReadyTaskCandidate]:
-    """Extract task candidates matching prefixes/suffixes from ready-all output."""
-    candidates: list[ReadyTaskCandidate] = []
-    current_project: str | None = None
-    project_counts: dict[str, int] = {}
-
-    for raw_line in task_overview.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        project_match = _PROJECT_RE.match(line)
-        if project_match:
-            current_project = project_match.group("project")
-            continue
-        task_match = _TASK_RE.match(line)
-        if not task_match or not current_project:
-            continue
-        prefix = task_match.group("prefix")
-        suffix = (task_match.group("suffix") or "").strip()
-        if prefix not in allowed_prefixes:
-            continue
-        if required_suffix is not None and suffix != required_suffix:
-            continue
-        shown = project_counts.get(current_project, 0)
-        if shown >= per_project_limit:
-            continue
-        candidates.append(
-            ReadyTaskCandidate(
-                project_id=current_project,
-                task_id=task_match.group("task_id"),
-                priority=int(task_match.group("priority")),
-                task_type=task_match.group("task_type"),
-                mode=task_match.group("mode"),
-                title=task_match.group("title").strip(),
-            )
-        )
-        project_counts[current_project] = shown + 1
-
-    return candidates
+    return _extract_task_candidates(
+        task_overview,
+        allowed_prefixes={" ", "*"},
+        per_project_limit=per_project_limit,
+    )
 
 
 def build_actionable_ready_summary(
@@ -458,15 +394,7 @@ def build_actionable_ready_summary(
 ) -> str:
     """Build a short explicit executable-task section from ready-all output."""
     candidates = extract_ready_task_candidates(task_overview, per_project_limit=per_project_limit)
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-READY[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-READY", candidates)
 
 
 def build_actionable_blocked_summary(
@@ -480,15 +408,7 @@ def build_actionable_blocked_summary(
         allowed_prefixes={"!"},
         per_project_limit=per_project_limit,
     )
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-BLOCKED[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-BLOCKED", candidates)
 
 
 def build_actionable_stale_summary(
@@ -503,15 +423,7 @@ def build_actionable_stale_summary(
         per_project_limit=per_project_limit,
         required_suffix="stale-running",
     )
-    if not candidates:
-        return ""
-    lines = [f"ACTIONABLE-STALE[{len(candidates)}]"]
-    for candidate in candidates:
-        lines.append(
-            f"- {candidate.project_id} | {candidate.task_id} | "
-            f"P{candidate.priority} {candidate.task_type} [{candidate.mode}] | {candidate.title}"
-        )
-    return "\n".join(lines)
+    return _format_actionable_summary("ACTIONABLE-STALE", candidates)
 
 
 def extract_project_overviews(task_overview: str) -> list[ProjectOverview]:
@@ -554,20 +466,9 @@ def build_compact_task_overview(
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
 
-    ready_actionable = build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit)
-    if ready_actionable:
-        lines.append("")
-        lines.append(ready_actionable)
-
-    blocked_actionable = build_actionable_blocked_summary(task_overview, per_project_limit=per_project_limit)
-    if blocked_actionable:
-        lines.append("")
-        lines.append(blocked_actionable)
-
-    stale_actionable = build_actionable_stale_summary(task_overview, per_project_limit=per_project_limit)
-    if stale_actionable:
-        lines.append("")
-        lines.append(stale_actionable)
+    _append_section(lines, build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit))
+    _append_section(lines, build_actionable_blocked_summary(task_overview, per_project_limit=per_project_limit))
+    _append_section(lines, build_actionable_stale_summary(task_overview, per_project_limit=per_project_limit))
 
     return "\n".join(lines)
 

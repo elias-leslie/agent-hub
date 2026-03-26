@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -105,6 +106,8 @@ def _build_live_summary(
         "stdout_lines": state.get("stdout_lines", 0),
         "stderr_lines": state.get("stderr_lines", 0),
         "timed_out": state.get("timed_out", False),
+        "transcript_progress": state.get("transcript_progress"),
+        "last_progress_at": state.get("last_progress_at"),
     }
 
 
@@ -163,6 +166,100 @@ def _process_claude_stdout_line(
 
     if payload_type == "result":
         state["result"] = payload.get("result")
+
+
+def _extract_transcript_model(payload: dict[str, Any]) -> str | None:
+    entry_type = payload.get("type")
+    if entry_type == "assistant":
+        message = payload.get("message")
+        if isinstance(message, dict):
+            model = message.get("model")
+            if isinstance(model, str) and model:
+                return model
+    if entry_type == "progress":
+        data = payload.get("data")
+        if isinstance(data, dict):
+            nested = data.get("message")
+            if isinstance(nested, dict):
+                message = nested.get("message")
+                if isinstance(message, dict):
+                    model = message.get("model")
+                    if isinstance(model, str) and model:
+                        return model
+    return None
+
+
+def _read_transcript_progress(transcript_path: str | None) -> dict[str, Any] | None:
+    if not transcript_path:
+        return None
+    path = Path(transcript_path)
+    if not path.exists():
+        return None
+
+    try:
+        raw_lines = path.read_text().splitlines()
+        size_bytes = path.stat().st_size
+    except OSError:
+        return None
+
+    last_payload: dict[str, Any] | None = None
+    for line in reversed(raw_lines):
+        if not line.strip():
+            continue
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            last_payload = parsed
+            break
+
+    progress: dict[str, Any] = {
+        "line_count": len(raw_lines),
+        "size_bytes": size_bytes,
+    }
+    if not isinstance(last_payload, dict):
+        return progress
+
+    last_type = last_payload.get("type")
+    if isinstance(last_type, str) and last_type:
+        progress["last_type"] = last_type
+
+    last_model = _extract_transcript_model(last_payload)
+    if last_model:
+        progress["last_model"] = last_model
+
+    if last_type == "progress":
+        data = last_payload.get("data")
+        if isinstance(data, dict):
+            agent_id = data.get("agentId")
+            if isinstance(agent_id, str) and agent_id:
+                progress["last_agent_id"] = agent_id
+            nested = data.get("message")
+            if isinstance(nested, dict):
+                nested_type = nested.get("type")
+                if isinstance(nested_type, str) and nested_type:
+                    progress["last_nested_type"] = nested_type
+
+    return progress
+
+
+def _refresh_transcript_progress(
+    *,
+    state: dict[str, Any],
+    emit_updates: bool = False,
+) -> bool:
+    progress = _read_transcript_progress(state.get("transcript_path"))
+    if progress is None or progress == state.get("transcript_progress"):
+        return False
+    state["transcript_progress"] = progress
+    state["last_progress_at"] = datetime.now(UTC).isoformat()
+    if emit_updates:
+        _emit_status(
+            "TRANSCRIPT_PROGRESS",
+            json.dumps(progress, sort_keys=True, separators=(",", ":")),
+        )
+    return True
 
 
 def _process_claude_stderr_line(*, line: str, state: dict[str, Any]) -> None:
@@ -224,9 +321,14 @@ def _stream_claude_pipe(
                     old_session_id = state.get("session_id")
                     old_transcript_path = state.get("transcript_path")
                     _process_claude_stdout_line(line=line, workdir=workdir, state=state)
+                    progress_changed = _refresh_transcript_progress(
+                        state=state,
+                        emit_updates=True,
+                    )
                     if (
                         state.get("session_id") != old_session_id
                         or state.get("transcript_path") != old_transcript_path
+                        or progress_changed
                     ):
                         _write_live_summary(
                             metadata_path=metadata_path,
@@ -238,6 +340,35 @@ def _stream_claude_pipe(
                         )
                 else:
                     _process_claude_stderr_line(line=line.rstrip("\n"), state=state)
+
+
+def _monitor_transcript_progress(
+    *,
+    stop_event: threading.Event,
+    state: dict[str, Any],
+    state_lock: threading.Lock,
+    command: list[str],
+    artifact_dir: Path,
+    stdout_path: Path,
+    stderr_path: Path,
+    metadata_path: Path,
+) -> None:
+    while not stop_event.wait(0.5):
+        with state_lock:
+            progress_changed = _refresh_transcript_progress(
+                state=state,
+                emit_updates=False,
+            )
+            if not progress_changed:
+                continue
+            _write_live_summary(
+                metadata_path=metadata_path,
+                command=command,
+                artifact_dir=artifact_dir,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                state=state,
+            )
 
 
 def _run_claude(
@@ -346,6 +477,22 @@ def _run_claude(
     )
     stdout_thread.start()
     stderr_thread.start()
+    transcript_monitor_stop = threading.Event()
+    transcript_monitor_thread = threading.Thread(
+        target=_monitor_transcript_progress,
+        kwargs={
+            "stop_event": transcript_monitor_stop,
+            "state": state,
+            "state_lock": state_lock,
+            "command": command,
+            "artifact_dir": artifact_dir,
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "metadata_path": metadata_path,
+        },
+        daemon=True,
+    )
+    transcript_monitor_thread.start()
     try:
         process.stdin.write(prompt)
         process.stdin.close()
@@ -359,6 +506,10 @@ def _run_claude(
 
     stdout_thread.join(timeout=5)
     stderr_thread.join(timeout=5)
+    transcript_monitor_stop.set()
+    transcript_monitor_thread.join(timeout=2)
+    with state_lock:
+        _refresh_transcript_progress(state=state, emit_updates=False)
 
     duration_seconds = round(time.time() - started_at, 3)
     state["duration_seconds"] = duration_seconds
