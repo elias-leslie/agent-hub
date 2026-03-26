@@ -220,19 +220,25 @@ async def dispatch_agent(
                 else SpecialistDispatchPlan(event_type="dispatch")
             )
 
+        wake_kwargs: dict[str, Any] = {
+            "agent_slug": agent_slug,
+            "model": resolved.model,
+            "provider": resolved.provider,
+            "temperature": resolved.agent.temperature,
+            "prompt": task,
+            "project_id": project_id,
+            "event_type": dispatch_plan.event_type,
+            "thinking_level": resolved.agent.thinking_level,
+            "max_turns": max_turns,
+            "parent_session_id": parent_session_id,
+            "current_branch": dispatch_plan.current_branch,
+            "working_dir": dispatch_plan.working_dir,
+        }
+        if dispatch_plan.event_type == "dispatch_task" and dispatch_request.task_id:
+            wake_kwargs["task_id"] = dispatch_request.task_id
+
         dispatch_wake(
-            agent_slug=agent_slug,
-            model=resolved.model,
-            provider=resolved.provider,
-            temperature=resolved.agent.temperature,
-            prompt=task,
-            project_id=project_id,
-            event_type=dispatch_plan.event_type,
-            thinking_level=resolved.agent.thinking_level,
-            max_turns=max_turns,
-            parent_session_id=parent_session_id,
-            current_branch=dispatch_plan.current_branch,
-            working_dir=dispatch_plan.working_dir,
+            **wake_kwargs,
         )
         return dispatch_result_text(agent_slug, bool(resolved.agent.is_coding_agent), task)
     except ValueError as e:
