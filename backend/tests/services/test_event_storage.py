@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -254,6 +255,88 @@ class TestMemoryInjectEvent:
         assert live_activity["last_validation_command"] == "dt pytest backend/tests/api/test_sessions.py -q"
         assert live_activity["last_command_exit_code"] == 0
         assert live_activity["tool_calls_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_store_event_updates_session_model_and_observed_scope_paths(self) -> None:
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None, None])
+        db.get = AsyncMock()
+        session = Session(
+            id="sess-scope",
+            project_id="agent-hub",
+            provider="claude",
+            model="unknown",
+            status="active",
+            session_type="claude_code",
+            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub"},
+            models_used=[],
+            providers_used=["claude"],
+        )
+        session.created_at = datetime.now(UTC)
+        session.updated_at = datetime.now(UTC)
+        get_sequencer()._sessions.clear()
+
+        await store_event(
+            db=db,
+            session_id="sess-scope",
+            event_type="tool_use",
+            tool_name="Read",
+            tool_input={"file_path": "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"},
+            model_used="claude-sonnet-4-6",
+            session=session,
+        )
+        await store_event(
+            db=db,
+            session_id="sess-scope",
+            event_type="tool_use",
+            tool_name="Edit",
+            tool_input={"file_path": "backend/app/services/event_storage.py"},
+            session=session,
+        )
+
+        assert session.model == "claude-sonnet-4-6"
+        assert session.models_used == ["claude-sonnet-4-6"]
+        assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
+        assert session.observed_write_paths == ["backend/app/services/event_storage.py"]
+        assert session.scope_confidence == "observed_write"
+        assert session.provider_metadata["live_activity"]["last_read_path"] == "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"
+        assert session.provider_metadata["live_activity"]["last_write_path"] == "backend/app/services/event_storage.py"
+
+    @pytest.mark.asyncio
+    async def test_store_event_tracks_subagent_model_without_overwriting_primary_model(self) -> None:
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        db.get = AsyncMock()
+        session = Session(
+            id="sess-subagent",
+            project_id="agent-hub",
+            provider="claude",
+            model="claude-sonnet-4-6",
+            status="active",
+            session_type="claude_code",
+            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub"},
+            models_used=["claude-sonnet-4-6"],
+            providers_used=["claude"],
+        )
+        session.created_at = datetime.now(UTC)
+        session.updated_at = datetime.now(UTC)
+        get_sequencer()._sessions.clear()
+
+        await store_event(
+            db=db,
+            session_id="sess-subagent",
+            event_type="tool_use",
+            tool_name="Read",
+            tool_input={"file_path": "/srv/workspaces/projects/agent-hub/backend/app/adapters/claude.py"},
+            model_used="claude-opus-4-6",
+            agent_id="agent-1",
+            agent_name="sparkling-dancing-peach",
+            session=session,
+        )
+
+        assert session.model == "claude-sonnet-4-6"
+        assert session.models_used == ["claude-sonnet-4-6", "claude-opus-4-6"]
+        assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
 
     @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
