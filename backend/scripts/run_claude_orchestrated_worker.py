@@ -40,6 +40,19 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--schema-file", help="Optional JSON schema file for StructuredOutput")
     parser.add_argument("--agents-file", help="Optional Claude agents JSON file")
+    parser.add_argument(
+        "--task-id",
+        help="Optional SummitFlow task id to convert into a Claude worker contract",
+    )
+    parser.add_argument(
+        "--task-root",
+        help="Repo root where `st context` / `st claim` should run for --task-id",
+    )
+    parser.add_argument(
+        "--claim-if-needed",
+        action="store_true",
+        help="Claim the task automatically when --task-id is used and no worktree exists yet",
+    )
     parser.add_argument("--project-id", default="agent-hub", help="Agent Hub project id")
     parser.add_argument("--workdir", default=str(ROOT), help="Working directory for the Claude run")
     parser.add_argument("--model", default="sonnet", help="Claude model alias")
@@ -65,8 +78,13 @@ def _parse_args() -> argparse.Namespace:
         help="Skip Agent Hub transcript ingestion and only emit raw artifacts",
     )
     args = parser.parse_args()
-    if not args.prompt_file and not args.spec_file:
-        parser.error("one of --prompt-file or --spec-file is required")
+    task_modes = sum(
+        1 for value in (args.prompt_file, args.spec_file, args.task_id) if value
+    )
+    if task_modes != 1:
+        parser.error("exactly one of --prompt-file, --spec-file, or --task-id is required")
+    if args.task_id and not args.task_root:
+        parser.error("--task-root is required when --task-id is used")
     return args
 
 
@@ -95,6 +113,249 @@ def _coerce_string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str) and item]
+
+
+def _run_text_command(*, command: list[str], cwd: Path) -> str:
+    completed = subprocess.run(
+        command,
+        cwd=str(cwd),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout
+
+
+def _parse_task_context(raw: str) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "done_when": [],
+        "context_entries": [],
+    }
+    for line in raw.splitlines():
+        if line.startswith("TASK:"):
+            task_parts = line.removeprefix("TASK:").split("|")
+            if task_parts:
+                context["task_id"] = task_parts[0]
+            if len(task_parts) > 1:
+                context["task_status"] = task_parts[1]
+            if len(task_parts) > 3:
+                context["task_type"] = task_parts[3]
+        elif line.startswith("TITLE:"):
+            context["title"] = line.removeprefix("TITLE:").strip()
+        elif line.startswith("DESCRIPTION:"):
+            context["description"] = line.removeprefix("DESCRIPTION:").strip()
+        elif line.startswith("DONE_WHEN"):
+            _, _, value = line.partition(":")
+            context["done_when"] = [
+                item.strip() for item in value.split(" | ") if item.strip()
+            ]
+        elif line.startswith("CONTEXT:"):
+            _, _, value = line.partition(":")
+            mode, _, path = value.partition(":")
+            context["context_entries"].append(
+                {
+                    "mode": mode.strip(),
+                    "path": path.strip(),
+                }
+            )
+        elif line.startswith("WORKTREE_PATH:"):
+            context["worktree_path"] = line.removeprefix("WORKTREE_PATH:").strip()
+        elif line.startswith("TASK_BRANCH:"):
+            context["task_branch"] = line.removeprefix("TASK_BRANCH:").strip()
+    return context
+
+
+def _find_target_paths(task_context: dict[str, Any]) -> list[str]:
+    targets: list[str] = []
+    for entry in task_context.get("context_entries", []):
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path")
+        if isinstance(path, str) and path:
+            targets.append(path)
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for path in targets:
+        if path in seen:
+            continue
+        seen.add(path)
+        deduped.append(path)
+    return deduped
+
+
+def _discover_related_tests(*, workdir: Path, target_paths: list[str], limit: int = 4) -> list[str]:
+    tests_root = workdir / "backend" / "tests"
+    if not tests_root.exists():
+        return []
+
+    exact_matches: list[str] = []
+    content_matches: list[str] = []
+    for target_path in target_paths:
+        stem = Path(target_path).stem
+        for path in sorted(tests_root.rglob(f"test_{stem}.py")):
+            rel = str(path.relative_to(workdir))
+            if rel not in exact_matches:
+                exact_matches.append(rel)
+
+        search_terms = {stem, target_path}
+        for path in sorted(tests_root.rglob("test_*.py")):
+            rel = str(path.relative_to(workdir))
+            if rel in exact_matches or rel in content_matches:
+                continue
+            try:
+                raw = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if any(term in raw for term in search_terms):
+                content_matches.append(rel)
+
+    return (exact_matches + content_matches)[:limit]
+
+
+def _task_allowed_tools() -> str:
+    return "Read,Agent,Edit,MultiEdit,Write,Bash,Glob,Grep,LS"
+
+
+def _task_agents_payload() -> dict[str, Any]:
+    return {
+        "task-analyst": {
+            "description": "Scoped read-only task analyst",
+            "prompt": (
+                "Read only the requested task files and tests. Identify the safest "
+                "extraction seams, behavior-sensitive logic, likely regressions, "
+                "and the tests that should be rerun. Do not edit files."
+            ),
+            "tools": ["Read", "Grep", "Glob", "LS"],
+            "model": "sonnet",
+        }
+    }
+
+
+def _build_prompt_from_task_context(
+    task_context: dict[str, Any],
+    *,
+    target_paths: list[str],
+    related_tests: list[str],
+) -> str:
+    task_id = task_context.get("task_id", "unknown-task")
+    title = task_context.get("title", "Untitled task")
+    description = task_context.get("description", "")
+    done_when = task_context.get("done_when", [])
+    task_type = task_context.get("task_type", "")
+
+    lines = [
+        "You are working in a SummitFlow task lane.",
+        "",
+        "Task:",
+        f"- ID: `{task_id}`",
+        f"- Title: `{title}`",
+    ]
+
+    if isinstance(description, str) and description:
+        lines.extend(["", "Objective:", f"- {description}"])
+
+    if done_when:
+        lines.extend(["", "Done when:"])
+        lines.extend(f"- {item}" for item in done_when if isinstance(item, str) and item)
+
+    lines.extend(
+        [
+            "",
+            "Required workflow:",
+            "1. Use exactly one Agent subagent named `task-analyst` for a read-only analysis pass before editing.",
+        ]
+    )
+    if target_paths or related_tests:
+        lines.append("2. Have that subagent read only these files:")
+        for path in target_paths:
+            lines.append(f"   - `{path}`")
+        for path in related_tests:
+            lines.append(f"   - `{path}`")
+    else:
+        lines.append(
+            "2. Have that subagent analyze the files most relevant to the task before editing."
+        )
+    lines.extend(
+        [
+            "3. Main agent implements the task after using the subagent findings.",
+            "4. Run the required verification before finishing.",
+            "",
+            "Hard constraints:",
+        ]
+    )
+
+    if target_paths:
+        if len(target_paths) == 1:
+            lines.append(
+                f"- Edit `{target_paths[0]}` only unless a narrow additional file change is genuinely required to keep the task correct."
+            )
+        else:
+            lines.append("- Limit edits to these task target files unless a narrow extra fix is genuinely required:")
+            lines.extend(f"  - `{path}`" for path in target_paths)
+    lines.extend(
+        [
+            "- Preserve existing behavior unless the task explicitly requires behavior change.",
+            "- No stubs, placeholders, TODOs, compatibility shims, or unrelated cleanup.",
+        ]
+    )
+    if task_type == "refactor":
+        lines.append("- Prefer helper extraction, reduced nesting, and removal of duplicate logic over cosmetic rearrangement.")
+
+    verification_commands: list[str] = []
+    if related_tests:
+        verification_commands.append(f"dt pytest {' '.join(related_tests)}")
+    verification_commands.append("dt --quick --changed-only")
+    lines.extend(["", "Verification commands:"])
+    lines.extend(f"- `{command}`" for command in verification_commands)
+
+    lines.extend(
+        [
+            "",
+            "Final response must include:",
+            "- files changed",
+            "- the main structural or behavioral work completed",
+            "- exact verification commands run",
+            "- whether all verifications passed",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _load_task_contract(
+    *,
+    task_id: str,
+    task_root: Path,
+    claim_if_needed: bool,
+) -> tuple[str, dict[str, Any], Path, dict[str, Any], str]:
+    raw_context = _run_text_command(command=["st", "context", task_id], cwd=task_root)
+    task_context = _parse_task_context(raw_context)
+    worktree_path = task_context.get("worktree_path")
+
+    if (not isinstance(worktree_path, str) or not worktree_path) and claim_if_needed:
+        _run_text_command(command=["st", "claim", task_id], cwd=task_root)
+        raw_context = _run_text_command(command=["st", "context", task_id], cwd=task_root)
+        task_context = _parse_task_context(raw_context)
+        worktree_path = task_context.get("worktree_path")
+
+    if not isinstance(worktree_path, str) or not worktree_path:
+        raise ValueError(
+            f"task {task_id} has no worktree path; claim it first or pass --claim-if-needed"
+        )
+
+    workdir = Path(worktree_path).resolve()
+    target_paths = _find_target_paths(task_context)
+    related_tests = _discover_related_tests(workdir=workdir, target_paths=target_paths)
+    prompt = _build_prompt_from_task_context(
+        task_context,
+        target_paths=target_paths,
+        related_tests=related_tests,
+    )
+    metadata = {
+        "task_context": task_context,
+        "target_paths": target_paths,
+        "related_tests": related_tests,
+    }
+    return prompt, _task_agents_payload(), workdir, metadata, _task_allowed_tools()
 
 
 def _build_prompt_from_spec(spec: dict[str, Any]) -> str:
@@ -766,12 +1027,25 @@ async def _ingest_transcript(
 def main() -> int:
     args = _parse_args()
     spec = _read_json_object(args.spec_file) if args.spec_file else None
-    prompt = _build_prompt_from_spec(spec) if spec is not None else _read_text(args.prompt_file)
+    task_metadata: dict[str, Any] | None = None
+    task_allowed_tools: str | None = None
+    if args.task_id:
+        prompt, agents_payload, workdir, task_metadata, task_allowed_tools = _load_task_contract(
+            task_id=args.task_id,
+            task_root=Path(args.task_root).resolve(),
+            claim_if_needed=args.claim_if_needed,
+        )
+    else:
+        prompt = _build_prompt_from_spec(spec) if spec is not None else _read_text(args.prompt_file)
+        agents_payload = _build_agents_payload_from_spec(spec) if spec is not None else None
+        workdir = Path(args.workdir).resolve()
     schema_path = Path(args.schema_file).resolve() if args.schema_file else None
     agents_path = Path(args.agents_file).resolve() if args.agents_file else None
-    agents_payload = _build_agents_payload_from_spec(spec) if spec is not None else None
-    workdir = Path(args.workdir).resolve()
-    allowed_tools = _allowed_tools_from_spec(spec) if spec is not None else args.allowed_tools
+    allowed_tools = (
+        task_allowed_tools
+        if task_allowed_tools is not None
+        else _allowed_tools_from_spec(spec) if spec is not None else args.allowed_tools
+    )
 
     run_summary = _run_claude(
         prompt=prompt,
@@ -788,6 +1062,8 @@ def main() -> int:
     output: dict[str, Any] = {
         "run": run_summary,
     }
+    if task_metadata is not None:
+        output["task"] = task_metadata
     session_id = run_summary.get("session_id")
     if not isinstance(session_id, str) or not session_id:
         output["error"] = "Claude run did not emit a session_id"

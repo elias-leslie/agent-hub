@@ -135,6 +135,78 @@ def test_allowed_tools_from_spec_defaults_to_agent_or_read():
     )
 
 
+def test_parse_task_context_extracts_core_fields():
+    module = _load_module()
+
+    parsed = module._parse_task_context(
+        "\n".join(
+            [
+                "TASK:task-123|running|P2|refactor|SIMPLE",
+                "TITLE:Refactor: backend/cli/lib/autosnapshot.py",
+                "DESCRIPTION:Simplify the file without regressions.",
+                "DONE_WHEN[2]:Tests pass | Nesting reduced",
+                "CONTEXT:modify:backend/cli/lib/autosnapshot.py",
+                "WORKTREE_PATH:/tmp/task-123",
+                "TASK_BRANCH:task-123/main",
+            ]
+        )
+    )
+
+    assert parsed == {
+        "done_when": ["Tests pass", "Nesting reduced"],
+        "context_entries": [{"mode": "modify", "path": "backend/cli/lib/autosnapshot.py"}],
+        "task_id": "task-123",
+        "task_status": "running",
+        "task_type": "refactor",
+        "title": "Refactor: backend/cli/lib/autosnapshot.py",
+        "description": "Simplify the file without regressions.",
+        "worktree_path": "/tmp/task-123",
+        "task_branch": "task-123/main",
+    }
+
+
+def test_discover_related_tests_prefers_exact_match_and_content_match(tmp_path):
+    module = _load_module()
+    workdir = tmp_path
+    tests_root = workdir / "backend" / "tests" / "cli"
+    tests_root.mkdir(parents=True)
+    (tests_root / "test_autosnapshot.py").write_text("def test_a():\n    pass\n")
+    (tests_root / "test_snapshots.py").write_text(
+        "from cli.lib.autosnapshot import ensure_baseline\n"
+    )
+
+    related = module._discover_related_tests(
+        workdir=workdir,
+        target_paths=["backend/cli/lib/autosnapshot.py"],
+    )
+
+    assert related == [
+        "backend/tests/cli/test_autosnapshot.py",
+        "backend/tests/cli/test_snapshots.py",
+    ]
+
+
+def test_build_prompt_from_task_context_generates_task_contract():
+    module = _load_module()
+
+    prompt = module._build_prompt_from_task_context(
+        {
+            "task_id": "task-123",
+            "title": "Refactor autosnapshot",
+            "description": "Simplify autosnapshot without regressions.",
+            "done_when": ["Tests pass", "Nesting reduced"],
+            "task_type": "refactor",
+        },
+        target_paths=["backend/cli/lib/autosnapshot.py"],
+        related_tests=["backend/tests/cli/test_autosnapshot.py"],
+    )
+
+    assert "Use exactly one Agent subagent named `task-analyst`" in prompt
+    assert "`backend/cli/lib/autosnapshot.py`" in prompt
+    assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
+    assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
+
+
 def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):
     module = _load_module()
     transcript = tmp_path / "session.jsonl"
