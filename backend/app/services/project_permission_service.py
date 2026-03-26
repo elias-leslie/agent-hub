@@ -218,6 +218,17 @@ async def _invalidate_cache(project_id: str) -> None:
         logger.debug("Permission cache invalidate error: %s", e)
 
 
+async def _flush_caches(
+    project_id: str, changed_client_ids: list[str], *, project: bool = False
+) -> None:
+    """Invalidate Redis and middleware caches after a permission write."""
+    await _invalidate_cache(project_id)
+    for client_id in changed_client_ids:
+        invalidate_client_cache(client_id)
+    if project:
+        invalidate_project_cache()
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
@@ -289,6 +300,12 @@ async def _sync_registered_project_access(
     return changed_client_ids
 
 
+def _validate_tier(tier: str) -> None:
+    """Raise ValueError if tier is not a recognised permission tier."""
+    if tier not in VALID_PERMISSION_TIERS:
+        raise ValueError(f"Invalid tier: {tier}")
+
+
 async def create_project_permission(
     db: AsyncSession,
     project_id: str,
@@ -310,8 +327,7 @@ async def create_project_permission(
     if existing is not None:
         raise ValueError(f"Project permission already exists for '{project_id}'")
 
-    if permission_tier not in VALID_PERMISSION_TIERS:
-        raise ValueError(f"Invalid tier: {permission_tier}")
+    _validate_tier(permission_tier)
 
     resolved_root_path = root_path
     if resolved_root_path is None:
@@ -335,10 +351,7 @@ async def create_project_permission(
     )
     await db.commit()
     await db.refresh(perm)
-    await _invalidate_cache(project_id)
-    for client_id in changed_client_ids:
-        invalidate_client_cache(client_id)
-    invalidate_project_cache()
+    await _flush_caches(project_id, changed_client_ids, project=True)
     return perm
 
 
@@ -355,11 +368,40 @@ async def delete_project_permission(
     )
     await db.delete(perm)
     await db.commit()
-    await _invalidate_cache(project_id)
-    for client_id in changed_client_ids:
-        invalidate_client_cache(client_id)
-    invalidate_project_cache()
+    await _flush_caches(project_id, changed_client_ids, project=True)
     return perm
+
+
+def _apply_optional_fields(
+    perm: ProjectPermission,
+    *,
+    permission_tier: str | None,
+    auto_exec_enabled: bool | None,
+    execution_start_hour: int | None,
+    execution_end_hour: int | None,
+    root_path: Any,
+    daily_cost_budget_usd: Any,
+    monthly_cost_budget_usd: Any,
+    budget_alert_threshold: float | None,
+) -> None:
+    """Mutate perm in-place for any non-sentinel kwargs; validate tier when provided."""
+    if permission_tier is not None:
+        _validate_tier(permission_tier)
+        perm.permission_tier = permission_tier
+    if auto_exec_enabled is not None:
+        perm.auto_exec_enabled = auto_exec_enabled
+    if execution_start_hour is not None:
+        perm.execution_start_hour = execution_start_hour
+    if execution_end_hour is not None:
+        perm.execution_end_hour = execution_end_hour
+    if root_path is not ...:
+        perm.root_path = root_path
+    if daily_cost_budget_usd is not ...:
+        perm.daily_cost_budget_usd = daily_cost_budget_usd
+    if monthly_cost_budget_usd is not ...:
+        perm.monthly_cost_budget_usd = monthly_cost_budget_usd
+    if budget_alert_threshold is not None:
+        perm.budget_alert_threshold = budget_alert_threshold
 
 
 async def update_project_permission(
@@ -383,36 +425,23 @@ async def update_project_permission(
     if perm is None:
         return None
 
-    if permission_tier is not None:
-        if permission_tier not in VALID_PERMISSION_TIERS:
-            raise ValueError(f"Invalid tier: {permission_tier}")
-        perm.permission_tier = permission_tier
-    if auto_exec_enabled is not None:
-        perm.auto_exec_enabled = auto_exec_enabled
-    if execution_start_hour is not None:
-        perm.execution_start_hour = execution_start_hour
-    if execution_end_hour is not None:
-        perm.execution_end_hour = execution_end_hour
-    if root_path is not ...:
-        perm.root_path = root_path
-    if daily_cost_budget_usd is not ...:
-        perm.daily_cost_budget_usd = daily_cost_budget_usd
-    if monthly_cost_budget_usd is not ...:
-        perm.monthly_cost_budget_usd = monthly_cost_budget_usd
-    if budget_alert_threshold is not None:
-        perm.budget_alert_threshold = budget_alert_threshold
-
+    _apply_optional_fields(
+        perm,
+        permission_tier=permission_tier,
+        auto_exec_enabled=auto_exec_enabled,
+        execution_start_hour=execution_start_hour,
+        execution_end_hour=execution_end_hour,
+        root_path=root_path,
+        daily_cost_budget_usd=daily_cost_budget_usd,
+        monthly_cost_budget_usd=monthly_cost_budget_usd,
+        budget_alert_threshold=budget_alert_threshold,
+    )
     changed_client_ids = await _sync_registered_project_access(
         db, project_id, enabled=perm.permission_tier != "off"
     )
     await db.commit()
     await db.refresh(perm)
-
-    # Invalidate cache after update
-    await _invalidate_cache(project_id)
-    for client_id in changed_client_ids:
-        invalidate_client_cache(client_id)
-
+    await _flush_caches(project_id, changed_client_ids)
     return perm
 
 
