@@ -378,7 +378,7 @@ def test_parse_improvement_content_tolerates_narration_and_citations() -> None:
 
 @pytest.mark.asyncio
 async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> None:
-    from scripts.persona_honing._experiment import _persist_iteration_record
+    from scripts.persona_honing._persistence import _persist_iteration_record
 
     benchmark_run = _benchmark_run("persona-benchmark-abc12345", [_failing_attempt("memory_routing_reconsideration")])
     record = SimpleNamespace(
@@ -399,7 +399,7 @@ async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> 
         return "run-iteration-1"
 
     with patch(
-        "scripts.persona_honing._experiment.persist_benchmark_payload",
+        "scripts.persona_honing._persistence.persist_benchmark_payload",
         new=AsyncMock(side_effect=_capture),
     ):
         await _persist_iteration_record(
@@ -437,11 +437,11 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.persona_honing._experiment._capture_persona_mutable_state",
+            "scripts.persona_honing._benchmarks._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.persona_honing._experiment.run_benchmark",
+            "scripts.persona_honing._benchmarks.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
@@ -449,11 +449,11 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.persona_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._persistence.persist_benchmark_payload",
             new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
@@ -501,11 +501,11 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.persona_honing._experiment._capture_persona_mutable_state",
+            "scripts.persona_honing._benchmarks._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.persona_honing._experiment.run_benchmark",
+            "scripts.persona_honing._benchmarks.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
@@ -513,11 +513,11 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.persona_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._persistence.persist_benchmark_payload",
             new=AsyncMock(side_effect=["run-1", "run-2", "run-3", "run-4", "run-5"]),
         ),
         patch(
@@ -582,15 +582,15 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             new=AsyncMock(return_value="client-1"),
         ),
         patch(
-            "scripts.persona_honing._experiment._capture_persona_mutable_state",
+            "scripts.persona_honing._benchmarks._capture_persona_mutable_state",
             new=AsyncMock(return_value=SimpleNamespace()),
         ),
         patch(
-            "scripts.persona_honing._experiment.run_benchmark",
+            "scripts.persona_honing._benchmarks.run_benchmark",
             new=AsyncMock(side_effect=[baseline_run, extra_baseline_run, candidate_run_1, candidate_run_2]),
         ),
         patch(
-            "scripts.persona_honing._experiment.run_completion_review_benchmark",
+            "scripts.persona_honing._benchmarks.run_completion_review_benchmark",
             new=AsyncMock(
                 side_effect=[
                     review_baseline_run,
@@ -605,11 +605,11 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
             new=AsyncMock(return_value=("sess-improve", '{"summary":"tuned"}', ["read_heartbeat_instructions"], {"summary": "tuned"})),
         ),
         patch(
-            "scripts.persona_honing._experiment.capture_benchmark_config_snapshot",
+            "scripts.persona_honing._benchmarks.capture_benchmark_config_snapshot",
             new=AsyncMock(return_value={"primary_model_id": "codex/gpt-5.4"}),
         ),
         patch(
-            "scripts.persona_honing._experiment.persist_benchmark_payload",
+            "scripts.persona_honing._persistence.persist_benchmark_payload",
             new=AsyncMock(return_value="run-id"),
         ),
         patch(
