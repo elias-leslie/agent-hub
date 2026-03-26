@@ -253,6 +253,34 @@ def test_discover_related_tests_prefers_exact_match_and_content_match(tmp_path):
     ]
 
 
+def test_find_target_paths_keeps_existing_paths_only(tmp_path):
+    module = _load_module()
+    workdir = tmp_path
+    target_file = workdir / "backend" / "cli" / "lib" / "autosnapshot.py"
+    target_file.parent.mkdir(parents=True)
+    target_file.write_text("def run():\n    return True\n")
+
+    related_dir = workdir / "backend" / "tests"
+    related_dir.mkdir(parents=True)
+
+    paths = module._find_target_paths(
+        {
+            "context_entries": [
+                {"mode": "modify", "path": "backend/cli/lib/autosnapshot.py"},
+                {"mode": "2nd", "path": "task_shape:pending"},
+                {"mode": "modify", "path": "../summitflow/backend/app.py"},
+                {"mode": "read", "path": "backend/tests"},
+            ]
+        },
+        workdir=workdir,
+    )
+
+    assert paths == [
+        "backend/cli/lib/autosnapshot.py",
+        "backend/tests",
+    ]
+
+
 def test_build_prompt_from_task_context_generates_task_contract():
     module = _load_module()
 
@@ -264,21 +292,29 @@ def test_build_prompt_from_task_context_generates_task_contract():
             "done_when": ["Tests pass", "Nesting reduced"],
             "task_type": "refactor",
         },
+        project_id="agent-hub",
+        workdir=Path("/tmp/task-123"),
         target_paths=["backend/cli/lib/autosnapshot.py"],
         related_tests=["backend/tests/cli/test_autosnapshot.py"],
         feedback_text="Second pass must reduce file size and remove banner comments.",
     )
 
+    assert "You are working in the `agent-hub` task lane." in prompt
     assert "Use exactly one Agent subagent named `task-analyst`" in prompt
     assert "`backend/cli/lib/autosnapshot.py`" in prompt
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
     assert "Second pass must reduce file size and remove banner comments." in prompt
+    assert "Stay inside this claimed worktree: `/tmp/task-123`." in prompt
+    assert "If the task appears mis-scoped, stop and report the mismatch" in prompt
 
 
 def test_load_task_contract_claims_pending_task_when_worktree_missing(tmp_path):
     module = _load_module()
     calls: list[tuple[str, ...]] = []
+    target_file = tmp_path / "backend" / "scripts" / "run_claude_orchestrated_worker.py"
+    target_file.parent.mkdir(parents=True)
+    target_file.write_text("def run():\n    return True\n")
     contexts = iter(
         [
             "\n".join(
@@ -314,6 +350,7 @@ def test_load_task_contract_claims_pending_task_when_worktree_missing(tmp_path):
     with patch.object(module, "_run_text_command", side_effect=_fake_run_text_command):
         prompt, agents_payload, workdir, task_metadata, allowed_tools = module._load_task_contract(
             task_id="task-123",
+            project_id="agent-hub",
             task_root=tmp_path,
             claim_if_needed=True,
         )
@@ -347,6 +384,7 @@ def test_load_task_contract_errors_when_auto_claim_disabled(tmp_path):
         try:
             module._load_task_contract(
                 task_id="task-123",
+                project_id="agent-hub",
                 task_root=tmp_path,
                 claim_if_needed=False,
             )
