@@ -54,8 +54,11 @@ from scripts.persona_honing._constants import (
     DEFAULT_TIMEOUT_SECONDS,
     REQUEST_SOURCE,
 )
-from scripts.persona_honing._experiment import _run_improvement_pass, _run_iteration  # noqa: F401
-from scripts.persona_honing._models import _LoopState
+from scripts.persona_honing._experiment import (  # noqa: F401
+    _run_improvement_pass,
+    _run_iteration,
+)
+from scripts.persona_honing._models import _IterationConfig, _LoopState
 from scripts.persona_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
 from scripts.run_persona_model_benchmark import _parse_csv, _resolve_client_id
 
@@ -106,51 +109,6 @@ def _flush_output_json(path: Path, loop_state: _LoopState) -> None:
     path.write_text(json.dumps(loop_state.to_result(), indent=2))
 
 
-def _build_iteration_kwargs(
-    *,
-    models: list[str],
-    case_ids: list[str],
-    runs_per_case: int,
-    reviewer_models: list[str] | None,
-    reviewer_case_ids: list[str] | None,
-    reviewer_runs_per_case: int,
-    project_id: str,
-    working_root: Path,
-    output_dir: Path,
-    seed: int,
-    timeout_seconds: float | None,
-    client_id: str,
-    use_memory: bool,
-    benchmark_task_type: str,
-    cohort_repetitions: int,
-    base_url: str,
-    agent_slug: str,
-    persist_results: bool,
-    disable_completion_review: bool,
-) -> dict[str, Any]:
-    return {
-        "models": models,
-        "case_ids": case_ids,
-        "runs_per_case": runs_per_case,
-        "reviewer_models": reviewer_models,
-        "reviewer_case_ids": reviewer_case_ids,
-        "reviewer_runs_per_case": reviewer_runs_per_case,
-        "project_id": project_id,
-        "working_root": working_root,
-        "output_dir": output_dir,
-        "seed": seed,
-        "timeout_seconds": timeout_seconds,
-        "client_id": client_id,
-        "use_memory": use_memory,
-        "benchmark_task_type": benchmark_task_type,
-        "cohort_repetitions": cohort_repetitions,
-        "base_url": base_url,
-        "agent_slug": agent_slug,
-        "persist_results": persist_results,
-        "disable_completion_review": disable_completion_review,
-    }
-
-
 def _build_client(base_url: str, resolved_client_id: str) -> AsyncAgentHubClient:
     return AsyncAgentHubClient(
         base_url=base_url,
@@ -168,7 +126,7 @@ async def _run_iterations(
     max_iterations: int,
     output_json_path: Path | None,
     suite_id: str | None,
-    iteration_kwargs: dict[str, Any],
+    iteration_kwargs: _IterationConfig,
 ) -> None:
     for iteration in range(1, max_iterations + 1):
         should_stop = await _run_iteration(
@@ -176,7 +134,7 @@ async def _run_iterations(
             loop_state=loop_state,
             client=client,
             suite_id=suite_id,
-            **iteration_kwargs,
+            cfg=iteration_kwargs,
         )
         if output_json_path:
             _flush_output_json(output_json_path, loop_state)
@@ -212,27 +170,16 @@ async def run_honing_loop(
     """Run benchmark/improve cycles until honed or the iteration cap is hit."""
     resolved_client_id = await _resolve_client_id(client_id, project_id)
     loop_state = _LoopState()
-    iteration_kwargs = _build_iteration_kwargs(
-        models=models,
-        case_ids=case_ids,
-        runs_per_case=runs_per_case,
-        reviewer_models=reviewer_models,
-        reviewer_case_ids=reviewer_case_ids,
-        reviewer_runs_per_case=reviewer_runs_per_case,
-        project_id=project_id,
-        working_root=working_root,
-        output_dir=output_dir,
-        seed=seed,
-        timeout_seconds=timeout_seconds,
-        client_id=resolved_client_id,
-        use_memory=use_memory,
-        benchmark_task_type=benchmark_task_type,
-        cohort_repetitions=cohort_repetitions,
-        base_url=base_url,
-        agent_slug=agent_slug,
-        persist_results=persist_results,
-        disable_completion_review=disable_completion_review,
-    )
+    iteration_kwargs: _IterationConfig = {
+        "models": models, "case_ids": case_ids, "runs_per_case": runs_per_case,
+        "reviewer_models": reviewer_models, "reviewer_case_ids": reviewer_case_ids,
+        "reviewer_runs_per_case": reviewer_runs_per_case,
+        "project_id": project_id, "working_root": working_root, "output_dir": output_dir,
+        "seed": seed, "timeout_seconds": timeout_seconds, "client_id": resolved_client_id,
+        "use_memory": use_memory, "benchmark_task_type": benchmark_task_type,
+        "cohort_repetitions": cohort_repetitions, "base_url": base_url, "agent_slug": agent_slug,
+        "persist_results": persist_results, "disable_completion_review": disable_completion_review,
+    }
     async with _build_client(base_url, resolved_client_id) as client:
         await _run_iterations(
             client=client,
