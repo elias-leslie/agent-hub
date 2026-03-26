@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "delegated": {
+      "type": "boolean"
+    },
+    "files_read": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "delegated",
+    "files_read",
+    "summary"
+  ],
+  "additionalProperties": false
+}
