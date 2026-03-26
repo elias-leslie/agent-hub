@@ -70,14 +70,7 @@ class ParsedSearch:
 
     def has_terms(self) -> bool:
         return any(
-            [
-                self.general_terms,
-                self.task_terms,
-                self.file_terms,
-                self.agent_terms,
-                self.status_terms,
-                self.project_terms,
-            ]
+            [self.general_terms, self.task_terms, self.file_terms, self.agent_terms, self.status_terms, self.project_terms]
         )
 
 
@@ -167,58 +160,35 @@ def _matches_terms(text: str, terms: list[str]) -> bool:
     return all(term in text for term in terms)
 
 
+def _str_join(*values: Any) -> str:
+    """Join non-empty string values as lowercase, ignoring None and non-strings."""
+    return " ".join(v.lower() for v in values if isinstance(v, str) and v)
+
+
 def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch) -> bool:
     if not parsed_search.has_terms():
         return False
     entry_text = _entry_match_text(entry)
     if parsed_search.general_terms and not _matches_terms(entry_text, parsed_search.general_terms):
         return False
-
     if parsed_search.task_terms:
-        task_text = " ".join(
-            value.lower()
-            for value in [
-                entry.external_id,
-                entry.display_summary,
-                entry.summary_oneliner,
-                entry.live_summary,
-                entry.content,
-            ]
-            if isinstance(value, str) and value
-        )
+        task_text = _str_join(entry.external_id, entry.display_summary, entry.summary_oneliner, entry.live_summary, entry.content)
         if not _matches_terms(task_text, parsed_search.task_terms):
             return False
-
     if parsed_search.file_terms and not _matches_terms(entry_text, parsed_search.file_terms):
         return False
-
     if parsed_search.agent_terms:
-        agent_text = " ".join(
-            value.lower()
-            for value in [entry.agent_slug, entry.display_summary, entry.summary_oneliner, entry.live_summary]
-            if isinstance(value, str) and value
-        )
+        agent_text = _str_join(entry.agent_slug, entry.display_summary, entry.summary_oneliner, entry.live_summary)
         if not _matches_terms(agent_text, parsed_search.agent_terms):
             return False
-
     if parsed_search.status_terms:
-        status_text = " ".join(
-            value.lower()
-            for value in [entry.status, entry.live_status, entry.display_summary, entry.summary_oneliner, entry.live_summary]
-            if isinstance(value, str) and value
-        )
+        status_text = _str_join(entry.status, entry.live_status, entry.display_summary, entry.summary_oneliner, entry.live_summary)
         if not _matches_terms(status_text, parsed_search.status_terms):
             return False
-
     if parsed_search.project_terms:
-        project_text = " ".join(
-            value.lower()
-            for value in [entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner]
-            if isinstance(value, str) and value
-        )
+        project_text = _str_join(entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner)
         if not _matches_terms(project_text, parsed_search.project_terms):
             return False
-
     return True
 
 
@@ -560,6 +530,13 @@ def _build_search_matches(
     return matches, total_matches
 
 
+def _center_window(entries: list[PersonaStreamEntry], idx: int, page_size: int) -> list[PersonaStreamEntry]:
+    start = max(idx - (page_size // 2), 0)
+    end = min(start + page_size, len(entries))
+    start = max(end - page_size, 0)
+    return entries[start:end]
+
+
 def _slice_entries(
     entries: list[PersonaStreamEntry],
     *,
@@ -571,23 +548,29 @@ def _slice_entries(
     if anchor_entry_id:
         anchor_indexes = [idx for idx, entry in enumerate(entries) if entry.id == anchor_entry_id]
         if anchor_indexes:
-            anchor_idx = anchor_indexes[0]
-            start = max(anchor_idx - (page_size // 2), 0)
-            end = min(start + page_size, len(entries))
-            start = max(end - page_size, 0)
-            return entries[start:end]
-
+            return _center_window(entries, anchor_indexes[0], page_size)
     if focus_session_id:
         focus_indexes = [idx for idx, entry in enumerate(entries) if entry.session_id == focus_session_id]
         if focus_indexes:
-            focus_idx = focus_indexes[0]
-            start = max(focus_idx - (page_size // 2), 0)
-            end = min(start + page_size, len(entries))
-            start = max(end - page_size, 0)
-            return entries[start:end]
-
+            return _center_window(entries, focus_indexes[0], page_size)
     offset = (page - 1) * page_size
     return entries[offset : offset + page_size]
+
+
+async def _fetch_display_summaries(
+    db: AsyncSession,
+    sessions: list[Session],
+) -> dict[str, str | None]:
+    candidates = [
+        SessionDisplaySummaryCandidate(
+            session_id=session.id,
+            summary_oneliner=session.summary_oneliner,
+            live_summary=_live_activity_summary(session)[0],
+        )
+        for session in sessions
+        if session.session_type != "chat"
+    ]
+    return await fetch_session_display_summaries(db, candidates)
 
 
 async def _fetch_sessions(
@@ -637,26 +620,16 @@ async def get_persona_stream(
     event_previews = await _fetch_event_previews(db, all_session_ids)
     persona_chat_ids = [s.id for s in persona_sessions if s.session_type == "chat"]
     message_events = await _fetch_persona_chat_events(db, persona_chat_ids)
-    session_pulses = build_session_pulses([*persona_sessions, *child_sessions], event_previews)
-    display_summaries = await fetch_session_display_summaries(
-        db,
-        [
-            SessionDisplaySummaryCandidate(
-                session_id=session.id,
-                summary_oneliner=session.summary_oneliner,
-                live_summary=_live_activity_summary(session)[0],
-            )
-            for session in [*persona_sessions, *child_sessions]
-            if session.session_type != "chat"
-        ],
-    )
+    all_sessions = [*persona_sessions, *child_sessions]
+    session_pulses = build_session_pulses(all_sessions, event_previews)
+    display_summaries = await _fetch_display_summaries(db, all_sessions)
 
     entries = _build_stream_entries(
         persona_sessions, child_sessions, message_events,
         message_counts, tool_counts, event_previews, session_pulses, display_summaries,
     )
     matches, match_count = _build_search_matches(entries, parsed_search=parsed_search)
-    pulse = build_pulse_summary(entries, [*persona_sessions, *child_sessions], session_pulses)
+    pulse = build_pulse_summary(entries, all_sessions, session_pulses)
 
     sliced_entries = _slice_entries(
         entries,
