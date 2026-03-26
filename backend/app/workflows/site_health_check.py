@@ -82,7 +82,7 @@ def _agent_browser_cdp_args() -> list[str]:
         return ["--cdp", cdp_url]
     host = settings.sf_browser_host.strip()
     if host:
-        return ["--cdp", f"{host}:{_BROWSER_CDP_PORT}"]
+        return ["--cdp", f"http://{host}:{_BROWSER_CDP_PORT}"]
     return []
 
 
