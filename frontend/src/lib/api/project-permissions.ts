@@ -76,6 +76,13 @@ export async function createProjectPermission(
   return res.json();
 }
 
+export async function deleteProjectPermission(projectId: string): Promise<void> {
+  const res = await fetchApi(buildApiUrl(`/api/projects/${projectId}/permissions`), {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Failed to delete permission for ${projectId}`);
+}
+
 export async function fetchExecutionPermission(
   projectId: string
 ): Promise<ExecutionPermission> {

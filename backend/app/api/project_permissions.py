@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from app.services.project_permission_service import (
     ExecutionPermissionResult,
     check_execution_permission,
     create_project_permission,
+    delete_project_permission,
     get_project_permission,
     list_project_permissions,
     update_project_permission,
@@ -221,6 +222,18 @@ async def update_permission(
         await invalidate_budget_cache(project_id)
 
     return _to_response(perm)
+
+
+@router.delete("/{project_id}/permissions", status_code=204)
+async def delete_permission(
+    project_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    """Delete the permission row for a project."""
+    deleted = await delete_project_permission(db, project_id)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    return Response(status_code=204)
 
 
 @router.get(

@@ -197,6 +197,37 @@ class TestGetPermission:
 
 
 # ---------------------------------------------------------------------------
+# DELETE /api/projects/{project_id}/permissions
+# ---------------------------------------------------------------------------
+
+
+class TestDeletePermission:
+    @pytest.mark.asyncio
+    async def test_deletes_permission(self, client):
+        ac, _ = client
+        deleted = _make_perm("proj", "yolo")
+        with patch(
+            "app.api.project_permissions.delete_project_permission",
+            new_callable=AsyncMock,
+            return_value=deleted,
+        ):
+            resp = await ac.delete("/api/projects/proj/permissions")
+            assert resp.status_code == 204
+            assert resp.text == ""
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_missing_project(self, client):
+        ac, _ = client
+        with patch(
+            "app.api.project_permissions.delete_project_permission",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = await ac.delete("/api/projects/missing/permissions")
+            assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # PATCH /api/projects/{project_id}/permissions
 # ---------------------------------------------------------------------------
 
