@@ -134,6 +134,69 @@ async def test_append_normalized_events_single_implicit_event_uses_fast_path() -
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_append_normalized_events_reconciles_transcript_backed_session_models() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-transcript-append",
+        project_id="agent-hub",
+        provider="claude",
+        model="opus-4-6",
+        status="active",
+        session_type="claude_code",
+        provider_metadata={"transcript_path": "/tmp/session-transcript-append.jsonl"},
+        models_used=["opus-4-6"],
+        providers_used=["claude"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute = AsyncMock(
+        return_value=MagicMock(
+            all=lambda: [
+                ("claude-sonnet-4-6", None),
+                ("claude-sonnet-4-6", None),
+            ]
+        )
+    )
+
+    append_result = MagicMock(
+        session_id="session-transcript-append",
+        events_appended=1,
+        events_skipped=0,
+        last_turn=1,
+        last_sequence=1,
+        event_ids=["evt-transcript-append"],
+    )
+
+    with patch(
+        "app.services.session_ingestion.service._store_single_implicit_event",
+        new_callable=AsyncMock,
+        return_value=append_result,
+    ) as mock_store:
+        result = await append_normalized_events(
+            db=db,
+            session_id="session-transcript-append",
+            request=AppendNormalizedEventsRequest(
+                events=[
+                    NormalizedEvent(
+                        event_type="assistant_message",
+                        role="assistant",
+                        content="direct",
+                        model_used="claude-sonnet-4-6",
+                    )
+                ]
+            ),
+            session=session,
+        )
+
+    assert result is append_result
+    assert session.model == "claude-sonnet-4-6"
+    assert session.models_used == ["claude-sonnet-4-6"]
+    mock_store.assert_awaited_once()
+    assert db.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_upsert_session_create_sets_timestamps_without_refresh() -> None:
     db = AsyncMock()
 
