@@ -122,17 +122,17 @@ async def _navigate_to_page(url: str, page_path: str) -> None:
     """Clear previous page state and navigate to a new page."""
     page_url = url.rstrip("/") + page_path
     with contextlib.suppress(Exception):
-        await _run_cmd("agent-browser", "errors", "--clear")
+        await _run_browser_cmd("errors", "--clear")
     with contextlib.suppress(Exception):
-        await _run_cmd("agent-browser", "console", "--clear")
-    await _run_cmd("agent-browser", "open", page_url)
-    await _run_cmd("agent-browser", "wait", "--load", "networkidle", timeout=30)
+        await _run_browser_cmd("console", "--clear")
+    await _run_browser_cmd("open", page_url)
+    await _run_browser_cmd("wait", "--load", "networkidle", timeout=30)
 
 
 async def _take_screenshot() -> str:
     """Take a browser screenshot and return its base64-encoded content."""
     with contextlib.suppress(Exception):
-        raw = await _run_cmd("agent-browser", "screenshot", "--json")
+        raw = await _run_browser_cmd("screenshot", "--json")
         data = json.loads(raw)
         path = (data.get("data") or {}).get("path", "") if isinstance(data, dict) else ""
         if path:
@@ -144,9 +144,9 @@ async def _collect_console_data() -> tuple[str, str]:
     """Collect console errors and output from the browser."""
     errors = console = ""
     with contextlib.suppress(Exception):
-        errors = await _run_cmd("agent-browser", "errors", "--json")
+        errors = await _run_browser_cmd("errors", "--json")
     with contextlib.suppress(Exception):
-        console = await _run_cmd("agent-browser", "console", "--json")
+        console = await _run_browser_cmd("console", "--json")
     return errors or "No errors captured", console or "No console output captured"
 
 
@@ -175,11 +175,11 @@ async def run_browser_captures(
 ) -> list[dict[str, str]]:
     """Open a browser session and capture screenshots for each page path."""
     try:
-        await _run_cmd("agent-browser", "open", url + page_paths[0])
-        await _run_cmd("agent-browser", "wait", "--load", "networkidle", timeout=60)
+        await _run_browser_cmd("open", url + page_paths[0])
+        await _run_browser_cmd("wait", "--load", "networkidle", timeout=60)
     except Exception as e:
         with contextlib.suppress(Exception):
-            await _run_cmd("agent-browser", "close")
+            await _run_browser_cmd("close")
         raise RuntimeError(f"Failed to load {url}: {e}") from e
 
     captures: list[dict[str, str]] = []
@@ -190,7 +190,7 @@ async def run_browser_captures(
                 captures.append(capture)
     finally:
         with contextlib.suppress(Exception):
-            await _run_cmd("agent-browser", "close")
+            await _run_browser_cmd("close")
 
     return captures
 
