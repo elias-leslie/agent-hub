@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_claude_orchestrated_worker.py"
 
@@ -230,6 +233,214 @@ def test_build_prompt_from_task_context_generates_task_contract():
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
     assert "Second pass must reduce file size and remove banner comments." in prompt
+
+
+def test_ensure_session_metadata_sets_external_id_on_create(tmp_path):
+    module = _load_module()
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
+    upsert_session = AsyncMock()
+
+    class FakeSession:
+        id = object()
+
+    class SessionUpsertRequest:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with patch.dict(
+        sys.modules,
+        {
+            "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+            "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+            "app.models": types.SimpleNamespace(Session=FakeSession),
+            "app.services.session_ingestion.models": types.SimpleNamespace(
+                SessionUpsertRequest=SessionUpsertRequest
+            ),
+            "app.services.session_ingestion.service": types.SimpleNamespace(
+                upsert_session=upsert_session
+            ),
+        },
+    ):
+        asyncio.run(
+            module._ensure_session_metadata(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                external_id="task-123",
+            )
+        )
+
+    request = upsert_session.await_args.args[1]
+    assert request.external_id == "task-123"
+
+
+def test_ensure_session_metadata_backfills_external_id_on_existing_session(tmp_path):
+    module = _load_module()
+    existing = SimpleNamespace(provider_metadata={}, external_id=None)
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: existing)
+
+    class FakeSession:
+        id = object()
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with patch.dict(
+        sys.modules,
+        {
+            "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+            "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+            "app.models": types.SimpleNamespace(Session=FakeSession),
+            "app.services.session_ingestion.models": types.SimpleNamespace(
+                SessionUpsertRequest=object
+            ),
+            "app.services.session_ingestion.service": types.SimpleNamespace(
+                upsert_session=AsyncMock()
+            ),
+        },
+    ):
+        asyncio.run(
+            module._ensure_session_metadata(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                external_id="task-123",
+            )
+        )
+
+    assert existing.external_id == "task-123"
+    assert existing.provider_metadata["transcript_path"] == str(tmp_path / "session.jsonl")
+    assert existing.provider_metadata["repo_root"] == str(tmp_path.resolve())
+    db.commit.assert_awaited_once()
+
+
+def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(tmp_path):
+    module = _load_module()
+
+    with patch.object(module, "_ensure_session_metadata", new_callable=AsyncMock) as ensure:
+        state = {"session_id": "session-1"}
+
+        assert (
+            module._sync_session_metadata_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is True
+        )
+        ensure.assert_awaited_once()
+        first_call = ensure.await_args
+        assert first_call.kwargs["transcript_path"] is None
+        assert first_call.kwargs["external_id"] == "task-123"
+
+        assert (
+            module._sync_session_metadata_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is False
+        )
+        assert ensure.await_count == 1
+
+        state["transcript_path"] = str(tmp_path / "session.jsonl")
+        assert (
+            module._sync_session_metadata_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is True
+        )
+        assert ensure.await_count == 2
+        second_call = ensure.await_args
+        assert second_call.kwargs["transcript_path"] == tmp_path / "session.jsonl"
+
+
+def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_path):
+    module = _load_module()
+
+    with patch.object(module, "_ingest_transcript", new_callable=AsyncMock) as ingest:
+        ingest.side_effect = [
+            {"next_checkpoint": "4", "events_appended": 3, "events_skipped": 0, "last_turn": 1, "last_sequence": 3},
+            {"next_checkpoint": "7", "events_appended": 2, "events_skipped": 0, "last_turn": 1, "last_sequence": 5},
+        ]
+        state = {
+            "session_id": "session-1",
+            "transcript_path": str(tmp_path / "session.jsonl"),
+            "transcript_progress": {"line_count": 10},
+        }
+
+        assert (
+            module._sync_transcript_events_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is True
+        )
+        assert state["live_ingest_checkpoint"] == "4"
+        first_call = ingest.await_args
+        assert first_call.kwargs["checkpoint"] is None
+
+        assert (
+            module._sync_transcript_events_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is False
+        )
+        assert ingest.await_count == 1
+
+        state["transcript_progress"] = {"line_count": 12}
+        assert (
+            module._sync_transcript_events_if_needed(
+                state=state,
+                workdir=tmp_path,
+                project_id="agent-hub",
+                external_id="task-123",
+            )
+            is True
+        )
+        assert ingest.await_count == 2
+        second_call = ingest.await_args
+        assert second_call.kwargs["checkpoint"] == "4"
+        assert state["live_ingest_checkpoint"] == "7"
 
 
 def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):
