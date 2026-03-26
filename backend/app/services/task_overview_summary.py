@@ -52,43 +52,6 @@ def _coerce_int(value: object, default: int = 0) -> int:
     return value if isinstance(value, int) else default
 
 
-def _task_mode(task: dict[str, object]) -> str:
-    """Return the compact execution-mode marker for a task payload."""
-    return "A" if task.get("execution_mode") == "autonomous" else "M"
-
-
-def _payload_projects(
-    task_overview_payload: dict[str, object],
-    *,
-    project_id: str | None = None,
-) -> list[dict[str, object]]:
-    """Return typed project payload entries, optionally filtered to one project."""
-    projects = task_overview_payload.get("projects")
-    if not isinstance(projects, list):
-        return []
-    items: list[dict[str, object]] = []
-    for item in projects:
-        if not isinstance(item, dict):
-            continue
-        if project_id is not None and item.get("project_id") != project_id:
-            continue
-        items.append(item)
-    return items
-
-
-def _project_overview_from_payload(project: dict[str, object]) -> ProjectOverview | None:
-    """Map one API project payload into a compact overview row."""
-    project_id = project.get("project_id")
-    if not isinstance(project_id, str) or not project_id:
-        return None
-    ready = _coerce_int(project.get("ready_count"))
-    parts = [f"{ready} ready"]
-    for field, label in (("blocked_count", "blocked"), ("active_count", "active"), ("stale_count", "stale")):
-        if count := _coerce_int(project.get(field)):
-            parts.append(f"{count} {label}")
-    return ProjectOverview(project_id=project_id, label=", ".join(parts))
-
-
 def _candidate_from_payload_task(
     project_id: str,
     task: dict[str, object],
@@ -105,7 +68,7 @@ def _candidate_from_payload_task(
         task_id=task_id,
         priority=_coerce_int(task.get("priority"), default=3),
         task_type=task_type if isinstance(task_type, str) and task_type else "task",
-        mode=_task_mode(task),
+        mode="A" if task.get("execution_mode") == "autonomous" else "M",
         title=title.strip() if isinstance(title, str) else "",
     )
 
@@ -118,8 +81,15 @@ def _extract_payload_task_candidates(
     project_id: str | None = None,
 ) -> list[ReadyTaskCandidate]:
     """Extract heartbeat task candidates directly from ready-all API payloads."""
+    raw_projects = task_overview_payload.get("projects")
+    if not isinstance(raw_projects, list):
+        return []
     candidates: list[ReadyTaskCandidate] = []
-    for project in _payload_projects(task_overview_payload, project_id=project_id):
+    for project in raw_projects:
+        if not isinstance(project, dict):
+            continue
+        if project_id is not None and project.get("project_id") != project_id:
+            continue
         pid = project.get("project_id")
         if not isinstance(pid, str) or not pid:
             continue
@@ -200,13 +170,6 @@ def _format_actionable_summary(header: str, candidates: list[ReadyTaskCandidate]
     return "\n".join(lines)
 
 
-def _append_section(lines: list[str], section: str) -> None:
-    """Append a blank separator and section content when section is non-empty."""
-    if section:
-        lines.append("")
-        lines.append(section)
-
-
 def parse_task_overview_stats_from_payload(task_overview_payload: dict[str, object]) -> TaskOverviewStats:
     """Parse ready-all headline counts from structured API payloads."""
     summary = task_overview_payload.get("summary")
@@ -227,11 +190,31 @@ def extract_project_overviews_from_payload(
     project_id: str | None = None,
 ) -> list[ProjectOverview]:
     """Extract compact per-project overview rows from ready-all API payloads."""
-    return [
-        o
-        for p in _payload_projects(task_overview_payload, project_id=project_id)
-        if (o := _project_overview_from_payload(p)) is not None
-    ]
+    raw_projects = task_overview_payload.get("projects")
+    if not isinstance(raw_projects, list):
+        return []
+    overviews: list[ProjectOverview] = []
+    for project in raw_projects:
+        if not isinstance(project, dict):
+            continue
+        if project_id is not None and project.get("project_id") != project_id:
+            continue
+        pid = project.get("project_id")
+        if not isinstance(pid, str) or not pid:
+            continue
+        ready = _coerce_int(project.get("ready_count"))
+        blocked = _coerce_int(project.get("blocked_count"))
+        active = _coerce_int(project.get("active_count"))
+        stale = _coerce_int(project.get("stale_count"))
+        parts = [f"{ready} ready"]
+        if blocked:
+            parts.append(f"{blocked} blocked")
+        if active:
+            parts.append(f"{active} active")
+        if stale:
+            parts.append(f"{stale} stale")
+        overviews.append(ProjectOverview(project_id=pid, label=", ".join(parts)))
+    return overviews
 
 
 def build_actionable_ready_summary_from_payload(
@@ -342,15 +325,19 @@ def build_compact_task_overview_from_payload(
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
 
-    _append_section(lines, build_actionable_ready_summary_from_payload(
-        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
-    ))
-    _append_section(lines, build_actionable_blocked_summary_from_payload(
-        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
-    ))
-    _append_section(lines, build_actionable_stale_summary_from_payload(
-        task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
-    ))
+    for section in [
+        build_actionable_ready_summary_from_payload(
+            task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+        ),
+        build_actionable_blocked_summary_from_payload(
+            task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+        ),
+        build_actionable_stale_summary_from_payload(
+            task_overview_payload, per_project_limit=per_project_limit, project_id=project_id,
+        ),
+    ]:
+        if section:
+            lines.extend(["", section])
 
     return "\n".join(lines)
 
@@ -466,9 +453,13 @@ def build_compact_task_overview(
         for overview in project_overviews:
             lines.append(f"- {overview.project_id} | {overview.label}")
 
-    _append_section(lines, build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit))
-    _append_section(lines, build_actionable_blocked_summary(task_overview, per_project_limit=per_project_limit))
-    _append_section(lines, build_actionable_stale_summary(task_overview, per_project_limit=per_project_limit))
+    for section in [
+        build_actionable_ready_summary(task_overview, per_project_limit=per_project_limit),
+        build_actionable_blocked_summary(task_overview, per_project_limit=per_project_limit),
+        build_actionable_stale_summary(task_overview, per_project_limit=per_project_limit),
+    ]:
+        if section:
+            lines.extend(["", section])
 
     return "\n".join(lines)
 
