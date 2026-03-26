@@ -86,7 +86,6 @@ def _normalize_summary(summary: str | None) -> str:
 
 def _extract_task_status(context_output: str) -> str | None:
     """Extract task status from `st context --compact` output."""
-    import re
     if not isinstance(context_output, str):
         return None
     first_line = context_output.splitlines()[0] if context_output else ""
@@ -252,13 +251,10 @@ async def _mark_stale_active_sessions(
                 workstream_updated_at=getattr(session, "workstream_updated_at", None),
                 now=now,
             )
-            mark_session_completed(
-                session,
-                summary=f"{note_prefix} after {idle_minutes}m inactivity ({branch})",
-                termination_reason=f"cleanup_closed:{workstream_status}",
-            )
+            note = f"{note_prefix} after {idle_minutes}m inactivity ({branch})"
+            mark_session_completed(session, summary=note, termination_reason=f"cleanup_closed:{workstream_status}")
             session.workstream_status = workstream_status
-            session.workstream_note = f"{note_prefix} after {idle_minutes}m inactivity ({branch})"
+            session.workstream_note = note
             session.workstream_updated_at = now
             db.add(session)
         await db.commit()
@@ -346,6 +342,124 @@ async def _retire_stale_active_sessions(
     return sessions, active_sessions, task_status
 
 
+# ---------------------------------------------------------------------------
+# Reconcile helpers
+# ---------------------------------------------------------------------------
+
+
+def _needs_admin_close(result: str) -> bool:
+    """Return True when the done-command output requires an admin-close retry."""
+    lowered = result.lower()
+    return (
+        (_MISSING_CHECKPOINT_PHRASE.lower() in lowered and "was it claimed?" in lowered)
+        or "claimed worktree has uncommitted changes." in lowered
+        or (
+            _STATUS_UPDATE_FAILED_PHRASE in lowered
+            and _ADMIN_RECOVERY_PHRASE in lowered
+            and "--admin" in lowered
+        )
+    )
+
+
+async def _finalize_merge_if_terminal_residue(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+    result: str,
+) -> str:
+    """Run finalize-merge when the result contains a terminal merge-residue error."""
+    from ._executor_io_tasks import _handle_finalize_merge
+
+    lowered = result.lower()
+    if (
+        "cannot merge - task" not in lowered
+        and "failed to merge " not in lowered
+        and _NO_CHECKPOINT_MERGE_PHRASE not in lowered
+    ):
+        return result
+    task_status = await _get_task_status(bash_fn, task_id, project_id)
+    if _task_is_terminal(task_status):
+        return await _handle_finalize_merge(bash_fn, task_id, project_id)
+    return result
+
+
+async def _retire_noop_lane(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+    sessions: list[Session],
+    result: str,
+) -> str:
+    """Retire a lane whose diff gate found no code changes vs the base branch."""
+    note = (
+        "Retired during reconcile after diff gate reported no code changes; "
+        "task remains open for a real implementation or explicit closure."
+    )
+    await _mark_lane_residue(sessions, workstream_status="retired", note=note)
+    cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
+    return (
+        f"Reconcile retired no-op lane for {task_id}: diff gate reported no files changed "
+        "vs base branch, so the completed session lane was closed as residue and the task "
+        "was left open.\n"
+        f"Original result: {result.strip()}\n"
+        f"Lane cleanup: {cleanup_result}"
+    )
+
+
+def _no_completed_sessions_message(
+    task_id: str,
+    sessions: list[Session],
+    task_status: str | None,
+) -> str:
+    """Build the reconcile-skip message when no completed sessions are available."""
+    statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
+    task_detail = f" (task={task_status})" if task_status else ""
+    next_step = (
+        ' Treat this as queue/worktree state, not closure residue. '
+        'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.'
+        if task_status == "blocked"
+        else ""
+    )
+    return (
+        f"Reconcile skipped for {task_id}: no completed sessions to justify closure "
+        f"(statuses={statuses or 'unknown'}){task_detail}.{next_step}"
+    )
+
+
+async def _dispatch_done(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+    message: str,
+    sessions: list[Session],
+) -> str:
+    """Run `st done` and handle result, including admin-close and noop-lane paths."""
+    cmd = _st_cmd(f"done {shlex.quote(task_id)} --message {shlex.quote(message)}", project_id)
+    result = await bash_fn(cmd)
+    if "Task not ready to complete:" in result:
+        return (
+            f"Reconcile stopped for {task_id}: SummitFlow reported the task is not ready to "
+            "complete. Do not admin-close it from session evidence. "
+            "Inspect task context/verification and keep the lane open.\n"
+            f"Original result: {result.strip()}"
+        )
+    if _NO_CODE_CHANGES_PHRASE in result.lower():
+        return await _retire_noop_lane(bash_fn, task_id, project_id, sessions, result)
+    if _needs_admin_close(result):
+        admin_cmd = _st_cmd(
+            f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
+            project_id,
+        )
+        admin_result = await bash_fn(admin_cmd)
+        return await _finalize_merge_if_terminal_residue(bash_fn, task_id, project_id, admin_result)
+    return await _finalize_merge_if_terminal_residue(bash_fn, task_id, project_id, result)
+
+
+# ---------------------------------------------------------------------------
+# Lane lifecycle: retire and reconcile
+# ---------------------------------------------------------------------------
+
+
 async def _retire_task_lane(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
@@ -393,57 +507,13 @@ async def _reconcile_task_lane(
     project_id: str | None,
 ) -> str:
     """Reconcile a task lane using Agent Hub session evidence."""
-    from ._executor_io_tasks import _handle_finalize_merge
-
-    async def _finalize_if_terminal_merge_residue(result: str) -> str:
-        lowered = result.lower()
-        if (
-            "cannot merge - task" not in lowered
-            and "failed to merge " not in lowered
-            and _NO_CHECKPOINT_MERGE_PHRASE not in lowered
-        ):
-            return result
-        task_status = await _get_task_status(bash_fn, task_id, project_id)
-        if _task_is_terminal(task_status):
-            return await _handle_finalize_merge(bash_fn, task_id, project_id)
-        return result
-
-    def _needs_admin_close(result: str) -> bool:
-        lowered = result.lower()
-        return (
-            (_MISSING_CHECKPOINT_PHRASE.lower() in lowered and "was it claimed?" in lowered)
-            or "claimed worktree has uncommitted changes." in lowered
-            or (_STATUS_UPDATE_FAILED_PHRASE in lowered and _ADMIN_RECOVERY_PHRASE in lowered and "--admin" in lowered)
-        )
-
-    async def _retire_noop_lane(result: str) -> str:
-        note = (
-            "Retired during reconcile after diff gate reported no code changes; "
-            "task remains open for a real implementation or explicit closure."
-        )
-        await _mark_lane_residue(
-            sessions,
-            workstream_status="retired",
-            note=note,
-        )
-        cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
-        return (
-            f"Reconcile retired no-op lane for {task_id}: diff gate reported no files changed "
-            "vs base branch, so the completed session lane was closed as residue and the task "
-            "was left open.\n"
-            f"Original result: {result.strip()}\n"
-            f"Lane cleanup: {cleanup_result}"
-        )
-
     sessions = await _load_task_lane_sessions(task_id)
     if not sessions:
         task_status = await _get_task_status(bash_fn, task_id, project_id)
-        recovered = await _recover_orphan_running_task(bash_fn, task_id, project_id, task_status)
-        if recovered:
-            return recovered
-        return (
+        orphan = await _recover_orphan_running_task(bash_fn, task_id, project_id, task_status)
+        return orphan or (
             f"Reconcile skipped for {task_id}: no linked Agent Hub sessions found. "
-            "Use manage_tasks(action=\"get_context\") or query_sessions() first."
+            'Use manage_tasks(action="get_context") or query_sessions() first.'
         )
 
     sessions, active_sessions, task_status = await _retire_stale_active_sessions(
@@ -466,18 +536,7 @@ async def _reconcile_task_lane(
     if not completed_sessions:
         if task_status is None:
             task_status = await _get_task_status(bash_fn, task_id, project_id)
-        statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
-        task_detail = f" (task={task_status})" if task_status else ""
-        next_step = (
-            ' Treat this as queue/worktree state, not closure residue. '
-            'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.'
-            if task_status == "blocked"
-            else ""
-        )
-        return (
-            f"Reconcile skipped for {task_id}: no completed sessions to justify closure "
-            f"(statuses={statuses or 'unknown'}){task_detail}.{next_step}"
-        )
+        return _no_completed_sessions_message(task_id, sessions, task_status)
 
     if await _has_recent_execution_activity(bash_fn, task_id, project_id):
         return (
@@ -490,23 +549,4 @@ async def _reconcile_task_lane(
     await _persist_workstream_resolution(sessions, authoritative_session)
     summary = _normalize_summary(getattr(authoritative_session, "summary_oneliner", None))
     message = f"Reconciled from Agent Hub session evidence: {summary}"
-
-    cmd = _st_cmd(f"done {shlex.quote(task_id)} --message {shlex.quote(message)}", project_id)
-    result = await bash_fn(cmd)
-    if "Task not ready to complete:" in result:
-        return (
-            f"Reconcile stopped for {task_id}: SummitFlow reported the task is not ready to "
-            "complete. Do not admin-close it from session evidence. "
-            'Inspect task context/verification and keep the lane open.\n'
-            f"Original result: {result.strip()}"
-        )
-    if _NO_CODE_CHANGES_PHRASE in result.lower():
-        return await _retire_noop_lane(result)
-    if _needs_admin_close(result):
-        admin_cmd = _st_cmd(
-            f"done {shlex.quote(task_id)} --admin --message {shlex.quote(message)}",
-            project_id,
-        )
-        admin_result = await bash_fn(admin_cmd)
-        return await _finalize_if_terminal_merge_residue(admin_result)
-    return await _finalize_if_terminal_merge_residue(result)
+    return await _dispatch_done(bash_fn, task_id, project_id, message, sessions)
