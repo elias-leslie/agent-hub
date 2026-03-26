@@ -197,14 +197,29 @@ def _parse_task_context(raw: str) -> dict[str, Any]:
     return context
 
 
-def _find_target_paths(task_context: dict[str, Any]) -> list[str]:
+def _normalize_target_path(*, workdir: Path, raw_path: str) -> str | None:
+    candidate = Path(raw_path)
+    resolved = candidate.resolve() if candidate.is_absolute() else (workdir / candidate).resolve()
+    try:
+        relative = resolved.relative_to(workdir.resolve())
+    except ValueError:
+        return None
+    if not resolved.exists():
+        return None
+    return str(relative)
+
+
+def _find_target_paths(task_context: dict[str, Any], *, workdir: Path) -> list[str]:
     targets: list[str] = []
     for entry in task_context.get("context_entries", []):
         if not isinstance(entry, dict):
             continue
         path = entry.get("path")
-        if isinstance(path, str) and path:
-            targets.append(path)
+        if not isinstance(path, str) or not path:
+            continue
+        normalized = _normalize_target_path(workdir=workdir, raw_path=path)
+        if normalized:
+            targets.append(normalized)
     deduped: list[str] = []
     seen: set[str] = set()
     for path in targets:
@@ -266,6 +281,8 @@ def _task_agents_payload() -> dict[str, Any]:
 def _build_prompt_from_task_context(
     task_context: dict[str, Any],
     *,
+    project_id: str,
+    workdir: Path,
     target_paths: list[str],
     related_tests: list[str],
     feedback_text: str | None = None,
@@ -277,7 +294,7 @@ def _build_prompt_from_task_context(
     task_type = task_context.get("task_type", "")
 
     lines = [
-        "You are working in a SummitFlow task lane.",
+        f"You are working in the `{project_id}` task lane.",
         "",
         "Task:",
         f"- ID: `{task_id}`",
@@ -338,6 +355,8 @@ def _build_prompt_from_task_context(
         [
             "- Preserve existing behavior unless the task explicitly requires behavior change.",
             "- No stubs, placeholders, TODOs, compatibility shims, or unrelated cleanup.",
+            f"- Stay inside this claimed worktree: `{workdir}`.",
+            "- Do not read, edit, commit, or run commands in sibling repos or any path outside this worktree. If the task appears mis-scoped, stop and report the mismatch instead of switching repos.",
         ]
     )
     if task_type == "refactor":
@@ -366,6 +385,7 @@ def _build_prompt_from_task_context(
 def _load_task_contract(
     *,
     task_id: str,
+    project_id: str,
     task_root: Path,
     claim_if_needed: bool,
     feedback_text: str | None = None,
@@ -386,10 +406,12 @@ def _load_task_contract(
         )
 
     workdir = Path(worktree_path).resolve()
-    target_paths = _find_target_paths(task_context)
+    target_paths = _find_target_paths(task_context, workdir=workdir)
     related_tests = _discover_related_tests(workdir=workdir, target_paths=target_paths)
     prompt = _build_prompt_from_task_context(
         task_context,
+        project_id=project_id,
+        workdir=workdir,
         target_paths=target_paths,
         related_tests=related_tests,
         feedback_text=feedback_text,
@@ -1306,6 +1328,7 @@ def main() -> int:
     if args.task_id:
         prompt, agents_payload, workdir, task_metadata, task_allowed_tools = _load_task_contract(
             task_id=args.task_id,
+            project_id=args.project_id,
             task_root=Path(args.task_root).resolve(),
             claim_if_needed=args.claim_if_needed,
             feedback_text=args.feedback_text,
