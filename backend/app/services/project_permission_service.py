@@ -17,6 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.constants.projects import invalidate_project_cache
+from app.core.project_roots import resolve_project_root
 from app.models.project_permission import VALID_PERMISSION_TIERS, ProjectPermission
 
 logger = logging.getLogger(__name__)
@@ -233,6 +235,54 @@ async def list_project_permissions(db: AsyncSession) -> list[ProjectPermission]:
         select(ProjectPermission).order_by(ProjectPermission.project_id)
     )
     return list(result.scalars().all())
+
+
+async def create_project_permission(
+    db: AsyncSession,
+    project_id: str,
+    *,
+    permission_tier: str = "read",
+    auto_exec_enabled: bool = False,
+    execution_start_hour: int = 0,
+    execution_end_hour: int = 24,
+    root_path: str | None = None,
+    daily_cost_budget_usd: float | None = None,
+    monthly_cost_budget_usd: float | None = None,
+    budget_alert_threshold: float = 0.8,
+) -> ProjectPermission:
+    """Create a new project permission row.
+
+    Raises ValueError when project_id already exists or the tier is invalid.
+    """
+    existing = await get_project_permission(db, project_id)
+    if existing is not None:
+        raise ValueError(f"Project permission already exists for '{project_id}'")
+
+    if permission_tier not in VALID_PERMISSION_TIERS:
+        raise ValueError(f"Invalid tier: {permission_tier}")
+
+    resolved_root_path = root_path
+    if resolved_root_path is None:
+        resolved_root = resolve_project_root(project_id)
+        resolved_root_path = str(resolved_root) if resolved_root else None
+
+    perm = ProjectPermission(
+        project_id=project_id,
+        permission_tier=permission_tier,
+        auto_exec_enabled=auto_exec_enabled,
+        execution_start_hour=execution_start_hour,
+        execution_end_hour=execution_end_hour,
+        root_path=resolved_root_path,
+        daily_cost_budget_usd=daily_cost_budget_usd,
+        monthly_cost_budget_usd=monthly_cost_budget_usd,
+        budget_alert_threshold=budget_alert_threshold,
+    )
+    db.add(perm)
+    await db.commit()
+    await db.refresh(perm)
+    await _invalidate_cache(project_id)
+    invalidate_project_cache()
+    return perm
 
 
 async def update_project_permission(

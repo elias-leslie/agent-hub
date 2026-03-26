@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,6 +16,7 @@ from app.services.project_permission_service import (
     TIER_TOOLS,
     check_execution_permission,
     check_tool_allowed,
+    create_project_permission,
     get_project_permission,
     get_tools_for_tier,
     list_project_permissions,
@@ -194,6 +196,67 @@ class TestUpdateProjectPermission:
             await update_project_permission(
                 mock_db, "proj", permission_tier="invalid"
             )
+
+
+class TestCreateProjectPermission:
+    @pytest.mark.asyncio
+    async def test_creates_permission_and_resolves_default_root(self):
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        created = {}
+
+        def capture_add(perm):
+            created["perm"] = perm
+
+        mock_db.add = MagicMock(side_effect=capture_add)
+
+        with (
+            patch(
+                "app.services.project_permission_service.resolve_project_root",
+                return_value=Path("/srv/workspaces/projects/test2"),
+            ),
+            patch(
+                "app.services.project_permission_service._invalidate_cache",
+                new_callable=AsyncMock,
+            ),
+            patch("app.services.project_permission_service.invalidate_project_cache"),
+        ):
+            result = await create_project_permission(
+                mock_db,
+                "test2",
+                permission_tier="yolo",
+                auto_exec_enabled=True,
+            )
+
+        assert result is created["perm"]
+        assert created["perm"].project_id == "test2"
+        assert created["perm"].permission_tier == "yolo"
+        assert created["perm"].auto_exec_enabled is True
+        assert created["perm"].root_path == "/srv/workspaces/projects/test2"
+        mock_db.commit.assert_awaited_once()
+        mock_db.refresh.assert_awaited_once_with(created["perm"])
+
+    @pytest.mark.asyncio
+    async def test_rejects_duplicate_project(self):
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = _make_permission("proj", "read")
+        mock_db.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="already exists"):
+            await create_project_permission(mock_db, "proj")
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_tier(self):
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="Invalid tier"):
+            await create_project_permission(mock_db, "proj", permission_tier="bad")
 
 
 # ---------------------------------------------------------------------------
