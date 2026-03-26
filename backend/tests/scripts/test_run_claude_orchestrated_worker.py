@@ -65,6 +65,47 @@ def test_run_text_command_strips_pythonpath_for_nested_st_calls(tmp_path):
     assert env["KEEP_ME"] == "1"
 
 
+def test_parse_args_defaults_task_mode_to_claim_if_needed(monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_claude_orchestrated_worker.py",
+            "--task-id",
+            "task-123",
+            "--task-root",
+            "/tmp/project",
+        ],
+    )
+
+    args = module._parse_args()
+
+    assert args.task_id == "task-123"
+    assert args.claim_if_needed is True
+
+
+def test_parse_args_honors_no_claim_if_needed(monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_claude_orchestrated_worker.py",
+            "--task-id",
+            "task-123",
+            "--task-root",
+            "/tmp/project",
+            "--no-claim-if-needed",
+        ],
+    )
+
+    args = module._parse_args()
+
+    assert args.task_id == "task-123"
+    assert args.claim_if_needed is False
+
+
 def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
     module = _load_module()
     schema_path = tmp_path / "schema.json"
@@ -233,6 +274,86 @@ def test_build_prompt_from_task_context_generates_task_contract():
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
     assert "Second pass must reduce file size and remove banner comments." in prompt
+
+
+def test_load_task_contract_claims_pending_task_when_worktree_missing(tmp_path):
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+    contexts = iter(
+        [
+            "\n".join(
+                [
+                    "TASK:task-123|pending|P2|refactor|SIMPLE",
+                    "TITLE:Refactor worker",
+                    "DESCRIPTION:Simplify the worker wrapper.",
+                    "DONE_WHEN[1]:Tests pass",
+                    "CONTEXT:modify:backend/scripts/run_claude_orchestrated_worker.py",
+                ]
+            ),
+            "\n".join(
+                [
+                    "TASK:task-123|running|P2|refactor|SIMPLE",
+                    "TITLE:Refactor worker",
+                    "DESCRIPTION:Simplify the worker wrapper.",
+                    "DONE_WHEN[1]:Tests pass",
+                    "CONTEXT:modify:backend/scripts/run_claude_orchestrated_worker.py",
+                    f"WORKTREE_PATH:{tmp_path}",
+                ]
+            ),
+        ]
+    )
+
+    def _fake_run_text_command(*, command, cwd):
+        calls.append(tuple(command))
+        if command[:2] == ["st", "context"]:
+            return next(contexts)
+        if command[:2] == ["st", "claim"]:
+            return "PASS claimed"
+        raise AssertionError(f"unexpected command: {command}")
+
+    with patch.object(module, "_run_text_command", side_effect=_fake_run_text_command):
+        prompt, agents_payload, workdir, task_metadata, allowed_tools = module._load_task_contract(
+            task_id="task-123",
+            task_root=tmp_path,
+            claim_if_needed=True,
+        )
+
+    assert calls == [
+        ("st", "context", "task-123"),
+        ("st", "claim", "task-123"),
+        ("st", "context", "task-123"),
+    ]
+    assert workdir == tmp_path.resolve()
+    assert task_metadata["target_paths"] == ["backend/scripts/run_claude_orchestrated_worker.py"]
+    assert allowed_tools == "Read,Agent,Edit,MultiEdit,Write,Bash,Glob,Grep,LS"
+    assert "Tests pass" in prompt
+    assert "task-analyst" in agents_payload
+
+
+def test_load_task_contract_errors_when_auto_claim_disabled(tmp_path):
+    module = _load_module()
+
+    with patch.object(
+        module,
+        "_run_text_command",
+        return_value="\n".join(
+            [
+                "TASK:task-123|pending|P2|refactor|SIMPLE",
+                "TITLE:Refactor worker",
+                "DESCRIPTION:Simplify the worker wrapper.",
+            ]
+        ),
+    ):
+        try:
+            module._load_task_contract(
+                task_id="task-123",
+                task_root=tmp_path,
+                claim_if_needed=False,
+            )
+        except ValueError as exc:
+            assert str(exc) == "task task-123 has no worktree path and auto-claim is disabled"
+        else:
+            raise AssertionError("expected ValueError")
 
 
 def test_ensure_session_metadata_sets_external_id_on_create(tmp_path):
