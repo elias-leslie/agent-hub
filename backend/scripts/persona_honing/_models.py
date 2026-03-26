@@ -1,8 +1,31 @@
-"""Dataclasses for the persona honing loop."""
+"""Dataclasses and config types for the persona honing loop."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from pathlib import Path
+from typing import Any, TypedDict
+
+
+class _IterationConfig(TypedDict):
+    models: list[str]
+    case_ids: list[str]
+    runs_per_case: int
+    reviewer_models: list[str] | None
+    reviewer_case_ids: list[str] | None
+    reviewer_runs_per_case: int
+    project_id: str
+    working_root: Path
+    output_dir: Path
+    seed: int
+    timeout_seconds: float | None
+    client_id: str
+    use_memory: bool
+    benchmark_task_type: str
+    cohort_repetitions: int
+    base_url: str
+    agent_slug: str
+    persist_results: bool
+    disable_completion_review: bool
 
 
 @dataclass
