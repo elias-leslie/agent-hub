@@ -85,12 +85,21 @@ def _derive_scope_confidence(
 
 def _should_skip_owner_session(
     session: Session,
+    *,
+    task_id: str | None,
+    is_worktree: bool,
     declared_scope_paths: list[str],
     observed_write_paths: list[str],
     observed_read_paths: list[str],
 ) -> bool:
     if session.agent_slug != PERSONA_SLUG:
-        return False
+        return (
+            not task_id
+            and not is_worktree
+            and bool(session.current_branch)
+            and not (declared_scope_paths or observed_write_paths or observed_read_paths)
+            and not is_session_actionably_active(session, has_owner_lane=True)
+        )
     if session.request_source != "heartbeat":
         return False
     return not (declared_scope_paths or observed_write_paths or observed_read_paths)
@@ -239,12 +248,20 @@ async def query_project_ownership(db: AsyncSession, project_id: str) -> list[Own
         metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
         lane_paths = metadata_paths(metadata)
         worktree_path = _worktree_path_from_metadata(metadata)
+        is_worktree = _is_worktree(worktree_path)
         events = scope_events.get(session.id, [])
         declared, observed_write, observed_read, scope = _build_scope_paths(session, events, worktree_path)
         task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
-        if not (task_id or session.current_branch or _is_worktree(worktree_path)):
+        if not (task_id or session.current_branch or is_worktree):
             continue
-        if _should_skip_owner_session(session, declared, observed_write, observed_read):
+        if _should_skip_owner_session(
+            session,
+            task_id=task_id,
+            is_worktree=is_worktree,
+            declared_scope_paths=declared,
+            observed_write_paths=observed_write,
+            observed_read_paths=observed_read,
+        ):
             continue
         age = _age_minutes(session.created_at, session.updated_at)
         is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
@@ -255,7 +272,7 @@ async def query_project_ownership(db: AsyncSession, project_id: str) -> list[Own
                 agent_slug=session.agent_slug,
                 branch=session.current_branch,
                 worktree_path=worktree_path,
-                is_worktree=_is_worktree(worktree_path),
+                is_worktree=is_worktree,
                 session_status=session.status,
                 workstream_status=session.workstream_status,
                 workstream_note=session.workstream_note,

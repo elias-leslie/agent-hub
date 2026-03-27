@@ -246,3 +246,27 @@ def test_build_live_activity_response_reaps_lane_free_stale_finalizing_session()
     assert response["lifecycle_state"] == "reapable"
     assert response["reapable"] is True
     assert "phase_finalizing" not in response["anti_reap_signals"]
+
+
+def test_build_live_activity_response_reaps_lane_free_stale_planning_session() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "planning",
+            "status": "active",
+            "summary": "Model planning",
+            "last_event_type": "thinking",
+            "last_event_at": (datetime.now(UTC) - timedelta(hours=7)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(hours=7)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 3,
+        }
+    }
+
+    response = build_live_activity_response(session, has_owner_lane=False, has_specialist_lane=False)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "reapable"
+    assert response["reapable"] is True
+    assert "phase_planning" not in response["anti_reap_signals"]
