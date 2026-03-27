@@ -58,14 +58,12 @@ def _extract_query_text(content: Any) -> str | None:
         text = " ".join(parts)
     if not text:
         return None
-
     task_marker = "\nTask:\n"
     task_index = text.rfind(task_marker)
     if task_index >= 0:
         text = text[task_index + len(task_marker):]
     elif text.startswith("Task:\n"):
         text = text[len("Task:\n"):]
-
     text = text.strip()
     return text[:500] if text else None
 
@@ -86,12 +84,7 @@ async def _get_continuity_markdown(
     memory_config: dict[str, Any] | None = None,
     session_id: str | None = None,
 ) -> str:
-    """Build continuity context markdown if applicable.
-
-    Uses settings from MemorySettings (global) or memory_config (per-agent)
-    to control continuity injection. Includes cross-project and live session
-    awareness unless disabled.
-    """
+    """Build continuity context markdown if applicable."""
     if scope != MemoryScope.PROJECT or not scope_id:
         logger.debug("Continuity skipped: scope=%s scope_id=%s (requires PROJECT scope)", scope, scope_id)
         return ""
@@ -103,15 +96,10 @@ async def _get_continuity_markdown(
         if not continuity_enabled:
             logger.debug("Continuity skipped: continuity_enabled=False for project=%s", scope_id)
             return ""
-
         from .continuity_injector import build_continuity_context
-
         ctx = await build_continuity_context(
-            project_id=scope_id,
-            current_branch=current_branch,
-            max_sessions=max_sessions,
-            include_cross_project=include_cross_project,
-            include_live_sessions=include_live_sessions,
+            project_id=scope_id, current_branch=current_branch, max_sessions=max_sessions,
+            include_cross_project=include_cross_project, include_live_sessions=include_live_sessions,
             exclude_session_id=session_id,
         )
         if ctx.markdown:
@@ -125,16 +113,6 @@ async def _get_continuity_markdown(
     except Exception as e:
         logger.warning("Failed to build continuity context for project=%s: %s", scope_id, e)
     return ""
-
-
-def _inject_memory_block(messages: list[dict[str, Any]], memory_block: str) -> list[dict[str, Any]]:
-    """Inject memory block into system message or prepend new system message."""
-    modified = list(messages)
-    if modified and modified[0].get("role") == "system":
-        modified[0] = {"role": "system", "content": f"{modified[0].get('content', '')}\n\n{memory_block}"}
-    else:
-        modified.insert(0, {"role": "system", "content": memory_block})
-    return modified
 
 
 async def _build_context_and_format(
@@ -153,37 +131,12 @@ async def _build_context_and_format(
     mc_mandates, mc_guardrails, mc_references = resolve_memory_config_includes(memory_config)
     context = await build_progressive_context(
         query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
-        include_mandates=mc_mandates,
-        include_guardrails=mc_guardrails,
-        include_references=mc_references,
-        memory_config=memory_config,
-        consumer_profile=consumer_profile,
-        consumer_agent_slug=consumer_agent_slug,
-        consumer_tags=consumer_tags,
-        variant=variant,
+        include_mandates=mc_mandates, include_guardrails=mc_guardrails, include_references=mc_references,
+        memory_config=memory_config, consumer_profile=consumer_profile,
+        consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags, variant=variant,
     )
-    formatted = format_progressive_context(
-        context,
-        include_citations=True,
-        consumer_profile=consumer_profile,
-    )
+    formatted = format_progressive_context(context, include_citations=True, consumer_profile=consumer_profile)
     return context, formatted
-
-
-def _annotate_reference_observability(
-    context: ProgressiveContext,
-) -> None:
-    """Attach selected-reference observability to context.debug_info."""
-    selected_uuids = context.get_reference_uuids()
-    index_uuids = context.get_reference_index_uuids()
-    context.debug_info.update(
-        {
-            "reference_selected_count": len(selected_uuids),
-            "reference_selected_uuids": selected_uuids,
-            "reference_index_count": len(index_uuids),
-            "reference_index_uuids": index_uuids,
-        }
-    )
 
 
 def _record_injection_metrics(
@@ -231,6 +184,109 @@ async def _apply_continuity_to_context(
     return f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
 
 
+def _build_optional_blocks(
+    context: ProgressiveContext,
+    memory_config: dict[str, Any] | None,
+    effective_project_id: str | None,
+    consumer_profile: str | None,
+    task_type: str | None,
+) -> tuple[str, str]:
+    """Build project index and tool capability blocks, annotating debug_info for each."""
+    project_index_block = ""
+    if resolve_project_index_enabled(memory_config):
+        project_index_block = format_project_index_context(
+            effective_project_id, consumer_profile=consumer_profile, task_type=task_type,
+        )
+        if project_index_block:
+            context.debug_info["project_index_included"] = True
+            context.debug_info["project_index_chars"] = len(project_index_block)
+    tool_capability_block = ""
+    if resolve_tool_capabilities_enabled(memory_config):
+        tool_capability_block = format_tool_capability_context(
+            consumer_profile=consumer_profile, task_type=task_type, project_id=effective_project_id,
+        )
+        if tool_capability_block:
+            context.debug_info["tool_capabilities_included"] = True
+            context.debug_info["tool_capabilities_chars"] = len(tool_capability_block)
+    return project_index_block, tool_capability_block
+
+
+def _inject_memory_block(messages: list[dict[str, Any]], memory_block: str) -> list[dict[str, Any]]:
+    """Inject memory block into system message or prepend new system message."""
+    modified = list(messages)
+    if modified and modified[0].get("role") == "system":
+        modified[0] = {"role": "system", "content": f"{modified[0].get('content', '')}\n\n{memory_block}"}
+    else:
+        modified.insert(0, {"role": "system", "content": memory_block})
+    return modified
+
+
+def _annotate_reference_observability(context: ProgressiveContext) -> None:
+    """Attach selected-reference observability to context.debug_info."""
+    selected_uuids = context.get_reference_uuids()
+    index_uuids = context.get_reference_index_uuids()
+    context.debug_info.update({
+        "reference_selected_count": len(selected_uuids),
+        "reference_selected_uuids": selected_uuids,
+        "reference_index_count": len(index_uuids),
+        "reference_index_uuids": index_uuids,
+    })
+
+
+def _log_injection(context: ProgressiveContext, resolved_variant: Any, latency_ms: int, scope: MemoryScope, scope_id: str | None) -> None:
+    """Log injection summary."""
+    continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
+    logger.info(
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d "
+        "refs_selected=%d refs_index=%d continuity_tokens=%d scope=%s",
+        resolved_variant.value, latency_ms, context.total_tokens, len(context.mandates),
+        len(context.guardrails),
+        context.debug_info.get("reference_selected_count", len(context.reference)),
+        context.debug_info.get("reference_index_count", len(context.reference_index)),
+        continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
+    )
+
+
+async def _finalize_injection(
+    messages: list[dict[str, Any]],
+    context: ProgressiveContext,
+    formatted: str | None,
+    project_index_block: str,
+    tool_capability_block: str,
+    resolved_variant: Any,
+    scope: MemoryScope,
+    scope_id: str | None,
+    session_id: str | None,
+    memory_config: dict[str, Any] | None,
+    current_branch: str | None,
+    include_continuity: bool,
+    start_time: float,
+    query: str,
+    external_id: str | None,
+    project_id: str | None,
+    collect_metrics: bool,
+) -> tuple[list[dict[str, Any]], ProgressiveContext]:
+    """Guard, assemble blocks, inject into messages, log, and record metrics."""
+    if not formatted and not project_index_block and not tool_capability_block:
+        return messages, context
+    _annotate_reference_observability(context)
+    blocks: list[str] = [b for b in [project_index_block, tool_capability_block] if b]
+    if formatted:
+        blocks.append(await _apply_continuity_to_context(
+            context, formatted, scope, scope_id, session_id, memory_config, current_branch, include_continuity,
+        ))
+    modified = _inject_memory_block(messages, "\n".join(blocks))
+    latency_ms = int((time.monotonic() - start_time) * 1000)
+    context.debug_info.update({"variant": resolved_variant.value, "injection_latency_ms": latency_ms})
+    _log_injection(context, resolved_variant, latency_ms, scope, scope_id)
+    if collect_metrics:
+        _record_injection_metrics(
+            context=context, latency_ms=latency_ms, query=query, variant=resolved_variant.value,
+            session_id=session_id, external_id=external_id, project_id=project_id,
+        )
+    return modified, context
+
+
 async def inject_progressive_context(
     messages: list[dict[str, Any]],
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -254,88 +310,25 @@ async def inject_progressive_context(
     start_time = time.monotonic()
     if not messages or not (query or (query := extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
-
     settings = await get_memory_settings()
     resolved_variant = assign_variant(
-        external_id=external_id,
-        project_id=project_id or scope_id,
-        variant_override=variant,
-        active_variant=settings.active_variant,
+        external_id=external_id, project_id=project_id or scope_id,
+        variant_override=variant, active_variant=settings.active_variant,
     )
-
     context, formatted = await _build_context_and_format(
-        query=query, scope=scope, scope_id=scope_id,
-        task_type=task_type, phase=phase, memory_config=memory_config,
-        consumer_profile=consumer_profile,
-        consumer_agent_slug=consumer_agent_slug,
-        consumer_tags=consumer_tags,
+        query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
+        memory_config=memory_config, consumer_profile=consumer_profile,
+        consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
         variant=resolved_variant.value,
     )
-    project_index_block = ""
-    if resolve_project_index_enabled(memory_config):
-        project_index_block = format_project_index_context(
-            project_id or scope_id,
-            consumer_profile=consumer_profile,
-            task_type=task_type,
-        )
-        if project_index_block:
-            context.debug_info["project_index_included"] = True
-            context.debug_info["project_index_chars"] = len(project_index_block)
-    tool_capability_block = ""
-    if resolve_tool_capabilities_enabled(memory_config):
-        tool_capability_block = format_tool_capability_context(
-            consumer_profile=consumer_profile,
-            task_type=task_type,
-            project_id=project_id or scope_id,
-        )
-        if tool_capability_block:
-            context.debug_info["tool_capabilities_included"] = True
-            context.debug_info["tool_capabilities_chars"] = len(tool_capability_block)
-    if not formatted and not project_index_block and not tool_capability_block:
-        return messages, context
-    _annotate_reference_observability(context)
-
-    blocks: list[str] = []
-    if project_index_block:
-        blocks.append(project_index_block)
-    if tool_capability_block:
-        blocks.append(tool_capability_block)
-    if formatted:
-        blocks.append(
-            await _apply_continuity_to_context(
-                context,
-                formatted,
-                scope,
-                scope_id,
-                session_id,
-                memory_config,
-                current_branch,
-                include_continuity,
-            )
-        )
-    modified_messages = _inject_memory_block(messages, "\n".join(blocks))
-
-    latency_ms = int((time.monotonic() - start_time) * 1000)
-    context.debug_info.update({"variant": resolved_variant.value, "injection_latency_ms": latency_ms})
-    continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
-    logger.info(
-        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d refs_selected=%d refs_index=%d continuity_tokens=%d scope=%s",
-        resolved_variant.value, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
-        context.debug_info.get("reference_selected_count", len(context.reference)),
-        context.debug_info.get("reference_index_count", len(context.reference_index)),
-        continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
+    project_index_block, tool_capability_block = _build_optional_blocks(
+        context, memory_config, project_id or scope_id, consumer_profile, task_type,
     )
-    if collect_metrics:
-        _record_injection_metrics(
-            context=context,
-            latency_ms=latency_ms,
-            query=query,
-            variant=resolved_variant.value,
-            session_id=session_id,
-            external_id=external_id,
-            project_id=project_id,
-        )
-    return modified_messages, context
+    return await _finalize_injection(
+        messages, context, formatted, project_index_block, tool_capability_block,
+        resolved_variant, scope, scope_id, session_id, memory_config, current_branch,
+        include_continuity, start_time, query, external_id, project_id, collect_metrics,
+    )
 
 
 def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str | None]:
