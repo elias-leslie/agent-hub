@@ -68,7 +68,7 @@ def get_sequencer() -> EventSequencer:
 
 
 def _append_unique_string(values: list[str] | None, item: str | None) -> list[str]:
-    existing = [value for value in (values or []) if isinstance(value, str) and value]
+    existing = [v for v in (values or []) if isinstance(v, str) and v]
     if item and item not in existing:
         existing.append(item)
     return existing
@@ -88,7 +88,7 @@ def _tool_scope_paths(
     for key in ("file_paths", "paths"):
         value = tool_input.get(key)
         if isinstance(value, list):
-            raw_paths.extend(path for path in value if isinstance(path, str) and path)
+            raw_paths.extend(p for p in value if isinstance(p, str) and p)
     if not raw_paths:
         return [], []
     normalized_tool = (tool_name or "").lower()
@@ -112,14 +112,11 @@ def _reconcile_session_from_event(
         session.models_used = _append_unique_string(getattr(session, "models_used", None), model_used)
         if not agent_id:
             session.model = model_used
-
     if str(event_type) != SessionEventType.TOOL_USE:
         return
-
     observed_reads, observed_writes = _tool_scope_paths(tool_name, tool_input)
     if not observed_reads and not observed_writes:
         return
-
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     base_path = resolve_scope_base_path(provider_metadata, None)
     apply_scope_state(
@@ -128,6 +125,52 @@ def _reconcile_session_from_event(
         observed_read_paths=observed_reads,
         observed_write_paths=observed_writes,
     )
+
+
+async def _resolve_turn_sequence(db: AsyncSession, session_id: str) -> tuple[int, int]:
+    """Sync sequencer from DB if needed, return (turn, sequence)."""
+    sequencer = get_sequencer()
+    if session_id not in sequencer._sessions:
+        current_turn = await get_max_turn(db, session_id)
+        current_sequence = (
+            await get_max_sequence(db, session_id, current_turn) if current_turn else 0
+        )
+        if current_turn:
+            sequencer.set_turn(session_id, current_turn, current_sequence)
+    return sequencer.get_turn_sequence(session_id)
+
+
+def _touch_session(
+    parent_session: Session,
+    *,
+    event_type: str,
+    tool_name: str | None,
+    tool_input: dict[str, Any] | None,
+    tool_output: dict[str, Any] | None,
+    content: str | None,
+    model_used: str | None,
+    agent_id: str | None,
+) -> None:
+    _reconcile_session_from_event(
+        parent_session,
+        event_type=event_type,
+        tool_name=tool_name,
+        tool_input=tool_input,
+        model_used=model_used,
+        agent_id=agent_id,
+    )
+    update_live_activity_for_event(
+        parent_session,
+        event_type=event_type,
+        tool_name=tool_name,
+        tool_input=tool_input,
+        tool_output=tool_output,
+        content=content,
+        model_used=model_used,
+    )
+    touched_at = datetime.now(UTC)
+    parent_session.updated_at = touched_at
+    parent_session.last_activity_at = touched_at
 
 
 async def store_event(
@@ -152,47 +195,20 @@ async def store_event(
 
     If turn/sequence not provided, auto-generates from sequencer.
     """
-    sequencer = get_sequencer()
     if turn is None or sequence is None:
-        if session_id not in sequencer._sessions:
-            current_turn = await get_max_turn(db, session_id)
-            current_sequence = (
-                await get_max_sequence(db, session_id, current_turn) if current_turn else 0
-            )
-            if current_turn:
-                sequencer.set_turn(session_id, current_turn, current_sequence)
-        turn, sequence = sequencer.get_turn_sequence(session_id)
+        turn, sequence = await _resolve_turn_sequence(db, session_id)
 
     event = SessionEvent(
-        session_id=session_id,
-        turn=turn,
-        sequence=sequence,
-        event_type=event_type,
-        role=role,
-        content=content,
-        tool_name=tool_name,
-        tool_input=tool_input,
-        tool_output=tool_output,
-        tokens=tokens,
-        duration_ms=duration_ms,
-        model_used=model_used,
-        agent_id=agent_id,
-        agent_name=agent_name,
+        session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,
+        role=role, content=content, tool_name=tool_name, tool_input=tool_input,
+        tool_output=tool_output, tokens=tokens, duration_ms=duration_ms,
+        model_used=model_used, agent_id=agent_id, agent_name=agent_name,
     )
     db.add(event)
-    parent_session = session
-    if parent_session is None:
-        parent_session = await db.get(Session, session_id)
+
+    parent_session = session or await db.get(Session, session_id)
     if parent_session is not None:
-        _reconcile_session_from_event(
-            parent_session,
-            event_type=str(event_type),
-            tool_name=tool_name,
-            tool_input=tool_input,
-            model_used=model_used,
-            agent_id=agent_id,
-        )
-        update_live_activity_for_event(
+        _touch_session(
             parent_session,
             event_type=str(event_type),
             tool_name=tool_name,
@@ -200,20 +216,14 @@ async def store_event(
             tool_output=tool_output,
             content=content,
             model_used=model_used,
+            agent_id=agent_id,
         )
-        touched_at = datetime.now(UTC)
-        parent_session.updated_at = touched_at
-        parent_session.last_activity_at = touched_at
 
-    # Extract narration tags from assistant messages
     if event_type == SessionEventType.ASSISTANT_MESSAGE and content:
         try:
             await extract_narration_from_event(
-                db,
-                session_id=session_id,
-                event_type=event_type,
-                content=content,
-                session=parent_session,
+                db, session_id=session_id, event_type=event_type,
+                content=content, session=parent_session,
             )
         except Exception:
             logger.debug("Failed to extract narration tags", exc_info=True)
@@ -238,19 +248,11 @@ async def store_message_event(
         "assistant": SessionEventType.ASSISTANT_MESSAGE,
         "system": SessionEventType.SYSTEM_MESSAGE,
     }
-    event_type = event_type_map.get(role, SessionEventType.USER_MESSAGE)
-
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=event_type,
-        role=role,
-        content=content,
-        tokens=tokens,
-        duration_ms=duration_ms,
-        model_used=model_used,
-        agent_id=agent_id,
-        agent_name=agent_name,
+        db=db, session_id=session_id,
+        event_type=event_type_map.get(role, SessionEventType.USER_MESSAGE),
+        role=role, content=content, tokens=tokens, duration_ms=duration_ms,
+        model_used=model_used, agent_id=agent_id, agent_name=agent_name,
     )
 
 
@@ -265,14 +267,9 @@ async def store_thinking_event(
 ) -> SessionEvent:
     """Store a thinking/reasoning event."""
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.THINKING,
-        content=thinking_content,
-        tokens=tokens,
-        model_used=model_used,
-        agent_id=agent_id,
-        agent_name=agent_name,
+        db=db, session_id=session_id, event_type=SessionEventType.THINKING,
+        content=thinking_content, tokens=tokens,
+        model_used=model_used, agent_id=agent_id, agent_name=agent_name,
     )
 
 
@@ -288,15 +285,9 @@ async def store_tool_use_event(
 ) -> SessionEvent:
     """Store a tool use event."""
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.TOOL_USE,
-        tool_name=tool_name,
-        tool_input=tool_input,
-        duration_ms=duration_ms,
-        model_used=model_used,
-        agent_id=agent_id,
-        agent_name=agent_name,
+        db=db, session_id=session_id, event_type=SessionEventType.TOOL_USE,
+        tool_name=tool_name, tool_input=tool_input, duration_ms=duration_ms,
+        model_used=model_used, agent_id=agent_id, agent_name=agent_name,
     )
 
 
@@ -309,8 +300,7 @@ def _extract_tool_result_content(output_data: dict[str, Any]) -> str | None:
     for key in ("result", "content", "output", "message"):
         val = output_data.get(key)
         if val and isinstance(val, str):
-            return val[:2000]  # cap at column-reasonable length
-    # If the dict has a single key with a string value, use that
+            return val[:2000]
     if len(output_data) == 1:
         val = next(iter(output_data.values()))
         if isinstance(val, str):
@@ -330,19 +320,11 @@ async def store_tool_result_event(
 ) -> SessionEvent:
     """Store a tool result event."""
     output_data = tool_output if isinstance(tool_output, dict) else {"result": tool_output}
-    # Extract text content for the content column so Activity UI can display it
-    content_text = _extract_tool_result_content(output_data)
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.TOOL_RESULT,
-        tool_name=tool_name,
-        content=content_text,
-        tool_output=output_data,
-        duration_ms=duration_ms,
-        model_used=model_used,
-        agent_id=agent_id,
-        agent_name=agent_name,
+        db=db, session_id=session_id, event_type=SessionEventType.TOOL_RESULT,
+        tool_name=tool_name, content=_extract_tool_result_content(output_data),
+        tool_output=output_data, duration_ms=duration_ms,
+        model_used=model_used, agent_id=agent_id, agent_name=agent_name,
     )
 
 
@@ -357,13 +339,9 @@ async def store_error_event(
 ) -> SessionEvent:
     """Store an error event."""
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.ERROR,
+        db=db, session_id=session_id, event_type=SessionEventType.ERROR,
         content=f"{error_type}: {error_message}",
-        agent_id=agent_id,
-        agent_name=agent_name,
-        model_used=model_used,
+        agent_id=agent_id, agent_name=agent_name, model_used=model_used,
     )
 
 
@@ -379,28 +357,21 @@ async def store_memory_inject_event(
     agent_name: str | None = None,
 ) -> SessionEvent:
     """Store a memory injection event."""
-    selected_reference_uuids = reference_selected_uuids or []
-    indexed_reference_uuids = reference_index_uuids or []
-    debug_payload = memory_debug or {}
+    selected = reference_selected_uuids or []
+    indexed = reference_index_uuids or []
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.MEMORY_INJECT,
-        content=(
-            f"Injected {memory_count} memory facts "
-            f"(refs selected={len(selected_reference_uuids)} index={len(indexed_reference_uuids)})"
-        ),
+        db=db, session_id=session_id, event_type=SessionEventType.MEMORY_INJECT,
+        content=f"Injected {memory_count} memory facts (refs selected={len(selected)} index={len(indexed)})",
         tool_input={
             "uuids": memory_uuids,
             "count": memory_count,
-            "reference_selected_count": len(selected_reference_uuids),
-            "reference_index_count": len(indexed_reference_uuids),
-            "reference_selected_uuids": selected_reference_uuids,
-            "reference_index_uuids": indexed_reference_uuids,
-            "memory_debug": debug_payload,
+            "reference_selected_count": len(selected),
+            "reference_index_count": len(indexed),
+            "reference_selected_uuids": selected,
+            "reference_index_uuids": indexed,
+            "memory_debug": memory_debug or {},
         },
-        agent_id=agent_id,
-        agent_name=agent_name,
+        agent_id=agent_id, agent_name=agent_name,
     )
 
 
@@ -414,14 +385,10 @@ async def store_memory_cite_event(
 ) -> SessionEvent:
     """Store a memory citation event."""
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.MEMORY_CITE,
+        db=db, session_id=session_id, event_type=SessionEventType.MEMORY_CITE,
         content=f"Cited {len(cited_uuids)} memory rules",
         tool_input={"uuids": cited_uuids},
-        agent_id=agent_id,
-        agent_name=agent_name,
-        model_used=model_used,
+        agent_id=agent_id, agent_name=agent_name, model_used=model_used,
     )
 
 
@@ -439,22 +406,14 @@ async def store_subagent_result_event(
 ) -> SessionEvent:
     """Store a subagent result event (announce-back to parent session)."""
     return await store_event(
-        db=db,
-        session_id=session_id,
-        event_type=SessionEventType.SUBAGENT_RESULT,
+        db=db, session_id=session_id, event_type=SessionEventType.SUBAGENT_RESULT,
         content=content,
         tool_output={
-            "subagent_id": subagent_id,
-            "subagent_name": subagent_name,
-            "status": status,
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
+            "subagent_id": subagent_id, "subagent_name": subagent_name,
+            "status": status, "input_tokens": input_tokens, "output_tokens": output_tokens,
         },
-        tokens=input_tokens + output_tokens,
-        duration_ms=duration_ms,
-        model_used=model_used,
-        agent_id=subagent_id,
-        agent_name=subagent_name,
+        tokens=input_tokens + output_tokens, duration_ms=duration_ms,
+        model_used=model_used, agent_id=subagent_id, agent_name=subagent_name,
     )
 
 
@@ -466,8 +425,7 @@ async def get_max_turn(db: AsyncSession, session_id: str) -> int:
         .order_by(SessionEvent.turn.desc())
         .limit(1)
     )
-    row = result.scalar_one_or_none()
-    return row or 0
+    return result.scalar_one_or_none() or 0
 
 
 async def get_max_sequence(db: AsyncSession, session_id: str, turn: int) -> int:
@@ -478,5 +436,4 @@ async def get_max_sequence(db: AsyncSession, session_id: str, turn: int) -> int:
         .order_by(SessionEvent.sequence.desc())
         .limit(1)
     )
-    row = result.scalar_one_or_none()
-    return row or 0
+    return result.scalar_one_or_none() or 0
