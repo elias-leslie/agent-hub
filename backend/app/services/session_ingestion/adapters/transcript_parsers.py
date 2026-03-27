@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -29,12 +30,37 @@ def read_jsonl_lines(transcript_path: str, checkpoint: str | None = None) -> tup
 def parse_transcript_events(lines: list[str]) -> list[NormalizedEvent]:
     """Parse supported transcript JSONL entries into normalized events."""
     state = _ParseState()
+    _parse_transcript_lines(lines, state)
+    return state.events
+
+
+def read_incremental_transcript_events(
+    transcript_path: str,
+    checkpoint: str | None = None,
+) -> tuple[list[NormalizedEvent], str | None]:
+    """Read and parse transcript deltas while preserving parser state across checkpoints."""
+    path = Path(transcript_path)
+    if not path.exists() or path.suffix != ".jsonl":
+        return [], checkpoint
+
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return [], checkpoint
+
+    parser_checkpoint = _load_parse_checkpoint(checkpoint, line_count=len(lines))
+    state = _ParseState.from_checkpoint(parser_checkpoint)
+    _parse_transcript_lines(lines[parser_checkpoint.line_offset :], state)
+    return state.events, _dump_parse_checkpoint(line_count=len(lines), state=state)
+
+
+def _parse_transcript_lines(lines: list[str], state: _ParseState) -> None:
+    """Parse transcript lines into the provided mutable state."""
     for raw_line in lines:
         obj = _parse_jsonl_line(raw_line)
         if obj is None:
             continue
         _append_normalized_events(obj, state)
-    return state.events
 
 
 def _parse_jsonl_line(raw_line: str) -> JsonObject | None:
@@ -45,14 +71,32 @@ def _parse_jsonl_line(raw_line: str) -> JsonObject | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+@dataclass(slots=True)
+class _TranscriptParseCheckpoint:
+    """Opaque checkpoint for incremental transcript parsing."""
+
+    line_offset: int = 0
+    turn: int = 1
+    sequence: int = 0
+    saw_content: bool = False
+
+
 class _ParseState:
     """Mutable transcript parsing state."""
 
-    def __init__(self) -> None:
-        self.turn = 1
-        self.sequence = 0
+    def __init__(self, *, turn: int = 1, sequence: int = 0, saw_content: bool = False) -> None:
+        self.turn = turn
+        self.sequence = sequence
         self.events: list[NormalizedEvent] = []
-        self._saw_content = False
+        self._saw_content = saw_content
+
+    @classmethod
+    def from_checkpoint(cls, checkpoint: _TranscriptParseCheckpoint) -> _ParseState:
+        return cls(
+            turn=checkpoint.turn,
+            sequence=checkpoint.sequence,
+            saw_content=checkpoint.saw_content,
+        )
 
     def begin_user_turn(self) -> None:
         if self._saw_content:
@@ -70,6 +114,54 @@ class _ParseState:
                 **kwargs,
             )
         )
+
+
+def _load_parse_checkpoint(
+    checkpoint: str | None,
+    *,
+    line_count: int,
+) -> _TranscriptParseCheckpoint:
+    """Load an opaque parser checkpoint, reparsing from start for legacy or invalid values."""
+    if not checkpoint or checkpoint.isdigit():
+        return _TranscriptParseCheckpoint()
+    try:
+        parsed = json.loads(checkpoint)
+    except json.JSONDecodeError:
+        return _TranscriptParseCheckpoint()
+    if not isinstance(parsed, dict):
+        return _TranscriptParseCheckpoint()
+    line_offset = parsed.get("line_offset")
+    turn = parsed.get("turn")
+    sequence = parsed.get("sequence")
+    saw_content = parsed.get("saw_content")
+    if not isinstance(line_offset, int) or line_offset < 0 or line_offset > line_count:
+        return _TranscriptParseCheckpoint()
+    if not isinstance(turn, int) or turn < 1:
+        return _TranscriptParseCheckpoint()
+    if not isinstance(sequence, int) or sequence < 0:
+        return _TranscriptParseCheckpoint()
+    if not isinstance(saw_content, bool):
+        return _TranscriptParseCheckpoint()
+    return _TranscriptParseCheckpoint(
+        line_offset=line_offset,
+        turn=turn,
+        sequence=sequence,
+        saw_content=saw_content,
+    )
+
+
+def _dump_parse_checkpoint(*, line_count: int, state: _ParseState) -> str:
+    """Serialize the parser state into the opaque checkpoint string."""
+    return json.dumps(
+        {
+            "line_offset": line_count,
+            "turn": state.turn,
+            "sequence": state.sequence,
+            "saw_content": state._saw_content,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def _append_normalized_events(obj: JsonObject, state: _ParseState) -> None:

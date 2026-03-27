@@ -644,11 +644,25 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
 
 def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_path):
     module = _load_module()
+    first_checkpoint = '{"line_offset":4,"saw_content":true,"sequence":3,"turn":1}'
+    second_checkpoint = '{"line_offset":7,"saw_content":true,"sequence":5,"turn":1}'
 
     with patch.object(module, "_ingest_transcript", new_callable=AsyncMock) as ingest:
         ingest.side_effect = [
-            {"next_checkpoint": "4", "events_appended": 3, "events_skipped": 0, "last_turn": 1, "last_sequence": 3},
-            {"next_checkpoint": "7", "events_appended": 2, "events_skipped": 0, "last_turn": 1, "last_sequence": 5},
+            {
+                "next_checkpoint": first_checkpoint,
+                "events_appended": 3,
+                "events_skipped": 0,
+                "last_turn": 1,
+                "last_sequence": 3,
+            },
+            {
+                "next_checkpoint": second_checkpoint,
+                "events_appended": 2,
+                "events_skipped": 0,
+                "last_turn": 1,
+                "last_sequence": 5,
+            },
         ]
         state = {
             "session_id": "session-1",
@@ -665,7 +679,7 @@ def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_p
             )
             is True
         )
-        assert state["live_ingest_checkpoint"] == "4"
+        assert state["live_ingest_checkpoint"] == first_checkpoint
         first_call = ingest.await_args
         assert first_call.kwargs["checkpoint"] is None
 
@@ -692,8 +706,8 @@ def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_p
         )
         assert ingest.await_count == 2
         second_call = ingest.await_args
-        assert second_call.kwargs["checkpoint"] == "4"
-        assert state["live_ingest_checkpoint"] == "7"
+        assert second_call.kwargs["checkpoint"] == first_checkpoint
+        assert state["live_ingest_checkpoint"] == second_checkpoint
 
 
 def test_read_transcript_progress_extracts_last_entry_metadata(tmp_path):

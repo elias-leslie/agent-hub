@@ -16,11 +16,31 @@ from app.hatchet_app import hatchet
 
 logger = logging.getLogger(__name__)
 
+_TRANSCRIPT_SYNC_REAP_AFTER_SECONDS = 60 * 60
+
 
 class ReaperResult(BaseModel):
     status: str
     reaped_completion: int = 0
     reaped_stale: int = 0
+
+
+def _should_reap_dead_transcript_sync_session(session) -> bool:
+    """Return whether a lane-free transcript-sync observer should be auto-closed early."""
+    from app.services.session_live_activity import build_live_activity_response
+
+    request_source = str(getattr(session, "request_source", "") or "")
+    if not request_source.endswith("transcript-sync"):
+        return False
+    activity = build_live_activity_response(session)
+    if not activity:
+        return False
+    if activity.get("has_owner_lane") or activity.get("has_specialist_lane"):
+        return False
+    if activity.get("lifecycle_state") not in {"dead_candidate", "reapable"}:
+        return False
+    quiet_for = activity.get("quiet_for_seconds")
+    return isinstance(quiet_for, int) and quiet_for >= _TRANSCRIPT_SYNC_REAP_AFTER_SECONDS
 
 
 async def reap_stale_sessions(db, now) -> tuple[int, int]:
@@ -53,15 +73,36 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
         )
     reaped_completion = len(completion_sessions)
 
+    excluded_ids = {session.id for session in completion_sessions}
+
+    cutoff_1h = now - timedelta(seconds=_TRANSCRIPT_SYNC_REAP_AFTER_SECONDS)
+    transcript_sync_query = select(Session).where(
+        Session.status == "active",
+        last_activity < cutoff_1h,
+    )
+    if excluded_ids:
+        transcript_sync_query = transcript_sync_query.where(Session.id.notin_(excluded_ids))
+    transcript_sync_candidates = (await db.execute(transcript_sync_query)).scalars().all()
+    transcript_sync_sessions = [
+        session
+        for session in transcript_sync_candidates
+        if _should_reap_dead_transcript_sync_session(session)
+    ]
+    for session in transcript_sync_sessions:
+        mark_session_completed(
+            session,
+            summary="Auto-completed by session reaper after 1h dead transcript-sync inactivity",
+            termination_reason="session_reaper_dead_transcript_sync",
+        )
+    excluded_ids.update(session.id for session in transcript_sync_sessions)
+
     cutoff_24h = now - timedelta(hours=24)
     stale_query = select(Session).where(
         Session.status == "active",
         last_activity < cutoff_24h,
     )
-    if completion_sessions:
-        stale_query = stale_query.where(
-            Session.id.notin_([session.id for session in completion_sessions])
-        )
+    if excluded_ids:
+        stale_query = stale_query.where(Session.id.notin_(excluded_ids))
     stale_sessions = (await db.execute(stale_query)).scalars().all()
     for session in stale_sessions:
         mark_session_completed(
@@ -69,7 +110,7 @@ async def reap_stale_sessions(db, now) -> tuple[int, int]:
             summary="Auto-completed by session reaper after 24h inactivity",
             termination_reason="session_reaper_global_timeout",
         )
-    reaped_stale = len(stale_sessions)
+    reaped_stale = len(transcript_sync_sessions) + len(stale_sessions)
 
     await db.commit()
     return reaped_completion, reaped_stale

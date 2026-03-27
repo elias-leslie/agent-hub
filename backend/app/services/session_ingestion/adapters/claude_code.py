@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from app.services.session_ingestion.models import NormalizedEvent, SessionUpsertRequest
 
 from .base import ProviderBoundary, ProviderSessionRef
-from .transcript_parsers import parse_transcript_events, read_jsonl_lines
+from .transcript_parsers import read_incremental_transcript_events
 
 
 class ClaudeCodeTranscriptAdapter:
@@ -35,8 +35,7 @@ class ClaudeCodeTranscriptAdapter:
     ) -> tuple[list[NormalizedEvent], str | None]:
         if not session_ref.source_id:
             return [], checkpoint
-        lines, next_checkpoint = read_jsonl_lines(session_ref.source_id, checkpoint)
-        return parse_transcript_events(lines), next_checkpoint
+        return read_incremental_transcript_events(session_ref.source_id, checkpoint)
 
     async def detect_boundaries(
         self,
