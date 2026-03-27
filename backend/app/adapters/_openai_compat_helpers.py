@@ -8,9 +8,14 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import CompletionResult, Message, ProviderError, StreamEvent, ToolCallResult
+
+if TYPE_CHECKING:
+    from openai import AsyncOpenAI, AsyncStream
+    from openai.types.chat import ChatCompletion, ChatCompletionChunk
+    from openai.types.chat.chat_completion_chunk import ChoiceDeltaToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,18 @@ def parse_tool_call(tc: Any) -> ToolCallResult:
     )
 
 
+def _apply_optional_params(params: dict[str, Any], kwargs: dict[str, Any]) -> None:
+    """Mutate params with optional keys from kwargs when present."""
+    if kwargs.get("tools"):
+        params["tools"] = [_to_openai_tool(t) for t in kwargs["tools"]]
+    if kwargs.get("tool_choice"):
+        params["tool_choice"] = kwargs["tool_choice"]
+    if kwargs.get("response_format"):
+        params["response_format"] = kwargs["response_format"]
+    if kwargs.get("reasoning_effort"):
+        params["reasoning_effort"] = kwargs["reasoning_effort"]
+
+
 def build_completion_params(
     model_id: str,
     openai_messages: list[dict[str, Any]],
@@ -119,14 +136,7 @@ def build_completion_params(
     }
     if max_tokens:
         params["max_tokens"] = max_tokens
-    if kwargs.get("tools"):
-        params["tools"] = [_to_openai_tool(t) for t in kwargs["tools"]]
-    if kwargs.get("tool_choice"):
-        params["tool_choice"] = kwargs["tool_choice"]
-    if kwargs.get("response_format"):
-        params["response_format"] = kwargs["response_format"]
-    if kwargs.get("reasoning_effort"):
-        params["reasoning_effort"] = kwargs["reasoning_effort"]
+    _apply_optional_params(params, kwargs)
     return params
 
 
@@ -138,27 +148,12 @@ def build_stream_params(
     kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the params dict for a streaming chat completion request."""
-    params: dict[str, Any] = {
-        "model": model_id,
-        "messages": openai_messages,
-        "temperature": temperature,
-        "stream": True,
-    }
-    if max_tokens:
-        params["max_tokens"] = max_tokens
-    if kwargs:
-        if kwargs.get("tools"):
-            params["tools"] = [_to_openai_tool(t) for t in kwargs["tools"]]
-        if kwargs.get("tool_choice"):
-            params["tool_choice"] = kwargs["tool_choice"]
-        if kwargs.get("response_format"):
-            params["response_format"] = kwargs["response_format"]
-        if kwargs.get("reasoning_effort"):
-            params["reasoning_effort"] = kwargs["reasoning_effort"]
+    params = build_completion_params(model_id, openai_messages, temperature, max_tokens, kwargs or {})
+    params["stream"] = True
     return params
 
 
-def parse_completion_response(response: Any, provider_name: str) -> CompletionResult:
+def parse_completion_response(response: ChatCompletion, provider_name: str) -> CompletionResult:
     """Convert an OpenAI chat completion response to CompletionResult."""
     choice = response.choices[0]
     # Some providers return non-string content (e.g. Cloudflare may return int).
@@ -168,9 +163,7 @@ def parse_completion_response(response: Any, provider_name: str) -> CompletionRe
     if raw_content is None and reasoning:
         raw_content = reasoning
     content = str(raw_content) if raw_content is not None else ""
-    tool_calls = None
-    if choice.message.tool_calls:
-        tool_calls = [parse_tool_call(tc) for tc in choice.message.tool_calls]
+    tool_calls = [parse_tool_call(tc) for tc in choice.message.tool_calls] if choice.message.tool_calls else None
     return CompletionResult(
         content=content,
         model=response.model,
@@ -179,11 +172,11 @@ def parse_completion_response(response: Any, provider_name: str) -> CompletionRe
         output_tokens=response.usage.completion_tokens if response.usage else 0,
         finish_reason=choice.finish_reason,
         raw_response=response,
-        tool_calls=tool_calls if tool_calls else None,
+        tool_calls=tool_calls,
     )
 
 
-def _chunk_to_event(chunk: Any) -> StreamEvent | None:
+def _chunk_to_event(chunk: ChatCompletionChunk) -> StreamEvent | None:
     """Convert a stream chunk to a StreamEvent, or None to skip."""
     if not chunk.choices:
         return None
@@ -193,30 +186,36 @@ def _chunk_to_event(chunk: Any) -> StreamEvent | None:
     return None
 
 
-async def iterate_stream(stream: Any) -> AsyncIterator[StreamEvent]:
+def _accumulate_tool_delta(
+    accumulators: dict[int, dict[str, str]],
+    tc_delta: ChoiceDeltaToolCall,
+) -> None:
+    """Merge a streaming tool-call delta into the accumulators dict."""
+    idx = tc_delta.index
+    if idx not in accumulators:
+        accumulators[idx] = {"id": "", "name": "", "arguments": ""}
+    acc = accumulators[idx]
+    if tc_delta.id:
+        acc["id"] = tc_delta.id
+    if tc_delta.function:
+        if tc_delta.function.name:
+            acc["name"] = tc_delta.function.name
+        if tc_delta.function.arguments:
+            acc["arguments"] += tc_delta.function.arguments
+
+
+async def iterate_stream(stream: AsyncStream[ChatCompletionChunk]) -> AsyncIterator[StreamEvent]:
     """Yield StreamEvents from an OpenAI stream, ending with a done event."""
-    tool_call_accumulators: dict[int, dict[str, Any]] = {}
+    tool_call_accumulators: dict[int, dict[str, str]] = {}
 
     async for chunk in stream:
         event = _chunk_to_event(chunk)
         if event is not None:
             yield event
-
         if chunk.choices:
             delta = chunk.choices[0].delta
-            if delta.tool_calls:
-                for tc_delta in delta.tool_calls:
-                    idx = tc_delta.index
-                    if idx not in tool_call_accumulators:
-                        tool_call_accumulators[idx] = {"id": "", "name": "", "arguments": ""}
-                    acc = tool_call_accumulators[idx]
-                    if tc_delta.id:
-                        acc["id"] = tc_delta.id
-                    if tc_delta.function:
-                        if tc_delta.function.name:
-                            acc["name"] = tc_delta.function.name
-                        if tc_delta.function.arguments:
-                            acc["arguments"] += tc_delta.function.arguments
+            for tc_delta in delta.tool_calls or []:
+                _accumulate_tool_delta(tool_call_accumulators, tc_delta)
 
     for acc in tool_call_accumulators.values():
         try:
@@ -255,7 +254,6 @@ def build_client_kwargs(
     extra_kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble kwargs for constructing an AsyncOpenAI client."""
-
     client_kwargs: dict[str, Any] = {"api_key": resolved_key, "base_url": base_url}
     if headers:
         client_kwargs["default_headers"] = headers
@@ -278,11 +276,24 @@ def handle_provider_error(error: Exception, provider_name: str) -> None:
     raise ProviderError(msg, provider_name, retriable=True)
 
 
+async def _single_request(
+    client: AsyncOpenAI, params: dict[str, Any], provider_name: str
+) -> CompletionResult:
+    """Execute one completion request and map errors to ProviderError."""
+    try:
+        response = await client.chat.completions.create(**params)
+        return parse_completion_response(response, provider_name)
+    except Exception as e:
+        logger.error("%s completion error: %s", provider_name, e)
+        handle_provider_error(e, provider_name)
+        raise  # Unreachable
+
+
 async def complete_once(
-    client: Any,
+    client: AsyncOpenAI,
     provider_name: str,
     params: dict[str, Any],
-    refresh_credentials: Any,
+    refresh_credentials: Callable[..., Awaitable[str | None]],
 ) -> CompletionResult:
     """Execute a single completion request with auth-retry on 401 errors.
 
@@ -302,10 +313,4 @@ async def complete_once(
             logger.error("%s completion error: %s", provider_name, e)
             handle_provider_error(e, provider_name)
             raise  # Unreachable
-        try:
-            response = await client.chat.completions.create(**params)
-            return parse_completion_response(response, provider_name)
-        except Exception as retry_error:
-            logger.error("%s completion error: %s", provider_name, retry_error)
-            handle_provider_error(retry_error, provider_name)
-            raise  # Unreachable
+    return await _single_request(client, params, provider_name)
