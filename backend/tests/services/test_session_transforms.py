@@ -47,3 +47,16 @@ def test_build_session_response_derives_scope_confidence_from_paths() -> None:
     response = build_session_response(session)
 
     assert response.scope_confidence == "observed_read"
+
+
+def test_build_session_list_items_exposes_batch_task_ids() -> None:
+    session = _session(
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "batch_task_ids": ["task-a", "task-b"],
+        }
+    )
+
+    item = build_session_list_items([session], {}, {})[0]
+
+    assert item.batch_task_ids == ["task-a", "task-b"]
