@@ -12,10 +12,9 @@ from collections.abc import Awaitable, Callable
 from app.services.task_overview_summary import build_actionable_ready_summary
 
 from ._executor_io_lanes import (
-    _NO_CODE_CHANGES_PHRASE,
+    _handle_lane_action,
+    _handle_simple_task_action,
     _load_task_lane_sessions,
-    _reconcile_task_lane,
-    _retire_task_lane,
     _st_cmd,
 )
 from ._executor_io_tasks import (
@@ -54,21 +53,12 @@ async def send_push(
             payload["severity"] = severity
         if tag:
             payload["tag"] = tag
-
         async with async_session() as db:
             sent = await _send_push(db, payload=payload)
-
         return f"Push notification sent to {sent} device(s): {title}"
     except Exception as e:
         logger.exception("send_push failed")
         return f"Error sending push notification: {e}"
-
-
-def _require_task_id(action: str, task_id: str | None) -> str | None:
-    """Return an error string if task_id is missing, else None."""
-    if not task_id:
-        return f"Error: task_id required for {action}"
-    return None
 
 
 async def manage_tasks(
@@ -78,8 +68,6 @@ async def manage_tasks(
     labels: str | None = None, project_id: str | None = None,
     done_when: list[str] | None = None, complexity: str | None = None,
     subtasks: list[dict[str, object]] | None = None,
-    # Deprecated params — accepted but ignored for backwards compatibility
-    objective: str | None = None, spirit_anti: str | None = None,
 ) -> str:
     """Quick task operations via st CLI."""
     if action == "overview":
@@ -87,19 +75,18 @@ async def manage_tasks(
         actionable = build_actionable_ready_summary(overview)
         return f"{overview}\n\n{actionable}" if actionable else overview
     if action == "get_context":
-        err = _require_task_id(action, task_id)
-        return err if err else await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id))
+        return (f"Error: task_id required for {action}" if not task_id
+                else await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id)))
     if action == "create":
         if not title:
             return "Error: title required for create"
         return await _handle_create(
             bash_fn, title, description, priority, task_type,
-            labels, project_id, done_when, complexity,
-            subtasks=subtasks,
+            labels, project_id, done_when, complexity, subtasks=subtasks,
         )
     if action == "dispatch":
-        err = _require_task_id(action, task_id)
-        return err if err else await _handle_dispatch(bash_fn, task_id, project_id)
+        return (f"Error: task_id required for {action}" if not task_id
+                else await _handle_dispatch(bash_fn, task_id, project_id))
     if action == "cleanup_status":
         return await _handle_cleanup_status(bash_fn, project_id)
     if action == "cleanup_worktrees":
@@ -115,27 +102,9 @@ async def manage_tasks(
     if action == "resolve_conflict":
         return await _handle_resolve_conflict(bash_fn, task_id, project_id)
     if action in {"reconcile", "retire_lane"}:
-        err = _require_task_id(action, task_id)
-        if err:
-            return err
-        handler = _reconcile_task_lane if action == "reconcile" else _retire_task_lane
-        return await handler(bash_fn, task_id, project_id)
+        return await _handle_lane_action(bash_fn, action, task_id, project_id)
     if action in _SIMPLE_TASK_ACTIONS:
-        err = _require_task_id(action, task_id)
-        if err:
-            return err
-        result = await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))
-        if action == "done" and _NO_CODE_CHANGES_PHRASE in result.lower():
-            sessions = await _load_task_lane_sessions(task_id)
-            if sessions:
-                has_retired_lane = any(
-                    getattr(session, "workstream_status", None) == "retired"
-                    for session in sessions
-                )
-                fallback_handler = _retire_task_lane if has_retired_lane else _reconcile_task_lane
-                fallback = await fallback_handler(bash_fn, task_id, project_id)
-                return f"{result.rstrip()}\nFallback: {fallback}"
-        return result
+        return await _handle_simple_task_action(bash_fn, action, task_id, project_id)
     return (
         f"Error: Unknown action '{action}'. "
         "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/salvage_orphan/cleanup_all_safe/"
