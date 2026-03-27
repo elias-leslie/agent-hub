@@ -173,6 +173,25 @@ def _touch_session(
     parent_session.last_activity_at = touched_at
 
 
+async def _maybe_extract_narration(
+    db: AsyncSession,
+    session_id: str,
+    event_type: str,
+    content: str | None,
+    session: Session | None,
+) -> None:
+    """Extract narration tags from assistant messages, silently ignoring failures."""
+    if event_type != SessionEventType.ASSISTANT_MESSAGE or not content:
+        return
+    try:
+        await extract_narration_from_event(
+            db, session_id=session_id, event_type=event_type,
+            content=content, session=session,
+        )
+    except Exception:
+        logger.debug("Failed to extract narration tags", exc_info=True)
+
+
 async def store_event(
     db: AsyncSession,
     session_id: str,
@@ -219,15 +238,7 @@ async def store_event(
             agent_id=agent_id,
         )
 
-    if event_type == SessionEventType.ASSISTANT_MESSAGE and content:
-        try:
-            await extract_narration_from_event(
-                db, session_id=session_id, event_type=event_type,
-                content=content, session=parent_session,
-            )
-        except Exception:
-            logger.debug("Failed to extract narration tags", exc_info=True)
-
+    await _maybe_extract_narration(db, session_id, event_type, content, parent_session)
     return event
 
 
