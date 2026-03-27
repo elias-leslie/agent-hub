@@ -14,6 +14,7 @@ from app.services.persona_policy import (
     command_hits_persona_git_publish_policy,
     get_persona_git_publish_block_reason,
 )
+from app.services.tools.command_guard import get_command_guard_block_reason
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +67,20 @@ async def run_bash(
     env: dict[str, str],
     *,
     agent_slug: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Execute a bash command and return combined stdout+stderr output."""
     persona_block_reason = get_persona_block_reason(command, agent_slug)
     if persona_block_reason:
         return f"Error: Command blocked for workflow policy: {persona_block_reason}"
+
+    guard_block_reason = get_command_guard_block_reason(
+        command,
+        working_dir,
+        session_id=session_id,
+    )
+    if guard_block_reason:
+        return guard_block_reason
 
     try:
         process = await asyncio.create_subprocess_shell(

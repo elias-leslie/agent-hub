@@ -23,6 +23,8 @@ import os
 import re
 from pathlib import Path
 
+from app.services.tools.command_guard import build_command_guard_env_overlay
+
 logger = logging.getLogger(__name__)
 
 
@@ -120,12 +122,14 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
                 working_dir,
                 main_repo,
             )
+        env.update(build_command_guard_env_overlay())
         return env
 
     venv_bin = str(venv_path / "bin")
     env["VIRTUAL_ENV"] = str(venv_path)
     env["PATH"] = f"{venv_bin}:{env.get('PATH', '')}"
     env.pop("PYTHONHOME", None)
+    env.update(build_command_guard_env_overlay())
 
     logger.debug(
         "Resolved project venv: %s (working_dir=%s, worktree=%s)",
@@ -151,7 +155,7 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
     venv_path = find_venv(working_dir, main_repo)
 
     if not venv_path:
-        return {}
+        return build_command_guard_env_overlay()
 
     venv_bin = str(venv_path / "bin")
     overlay: dict[str, str] = {
@@ -159,6 +163,7 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
         "PATH": f"{venv_bin}:{os.environ.get('PATH', '')}",
         "PYTHONHOME": "",  # Empty string overrides os.environ's value in SDK merge
     }
+    overlay.update(build_command_guard_env_overlay())
 
     logger.info(
         "Venv env overlay: %s (working_dir=%s, worktree=%s)",

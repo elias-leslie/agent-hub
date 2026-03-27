@@ -80,7 +80,7 @@ class ClaudeToolSessionMixin:
         del project_id
         from app.adapters.claude_tool_events import adapt_claude_stream
 
-        raw_stream = self.complete_with_tools(  # type: ignore[attr-defined]
+        raw_stream = self.complete_with_tools(
             messages=messages,
             model=model,
             tools=tools,
@@ -140,6 +140,7 @@ class ClaudeToolSessionMixin:
             provider_name=self.provider_name,  # type: ignore[attr-defined]
             max_turns=max_turns,
             project_id=project_id,
+            session_id=session_id,
             agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
