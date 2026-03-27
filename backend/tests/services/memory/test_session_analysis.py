@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -592,8 +593,7 @@ class TestFindSessionsForTask:
 
     @pytest.mark.asyncio
     async def test_find_sessions_fallback_by_project_and_time(self) -> None:
-        """Falls back to project_id + started_at lookup when external_id returns empty."""
-        # First query (external_id) returns empty, second (project+time) returns sessions
+        """Falls back to session lane matching when external_id returns empty."""
         empty_result = MagicMock()
         empty_scalars = MagicMock()
         empty_scalars.all.return_value = []
@@ -601,7 +601,22 @@ class TestFindSessionsForTask:
 
         fallback_result = MagicMock()
         fallback_scalars = MagicMock()
-        fallback_scalars.all.return_value = ["session-3", "session-4"]
+        fallback_scalars.all.return_value = [
+            SimpleNamespace(
+                id="session-3",
+                external_id=None,
+                current_branch=None,
+                session_type="claude_code",
+                provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-abc"},
+            ),
+            SimpleNamespace(
+                id="session-4",
+                external_id=None,
+                current_branch=None,
+                session_type="agent",
+                provider_metadata={"cwd": "/srv/workspaces/lanes/agent-hub/task-abc-follow-up"},
+            ),
+        ]
         fallback_result.scalars.return_value = fallback_scalars
 
         mock_session = AsyncMock()

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 STALE_WORKSTREAM_IDLE_MINUTES = 10
+_TASK_ID_PATH_RE = re.compile(r"(?:^|[\\/])(task-[A-Za-z0-9]+)(?=[^A-Za-z0-9]|$)")
 
 
 @dataclass(frozen=True)
@@ -50,14 +52,30 @@ _WORKSTREAM_STATUS_RANK = {
 }
 
 
-def infer_task_id(external_id: str | None, branch: str | None) -> str | None:
+def _task_id_from_path(path: str | None) -> str | None:
+    if not path:
+        return None
+    match = _TASK_ID_PATH_RE.search(path)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def infer_task_id(external_id: str | None, branch: str | None, *paths: str | None) -> str | None:
     """Resolve task id from explicit external id or task branch naming."""
     if external_id and external_id.startswith("task-"):
         return external_id
     if not branch:
-        return None
-    prefix = branch.split("/", 1)[0]
-    return prefix if prefix.startswith("task-") else None
+        prefix = None
+    else:
+        prefix = branch.split("/", 1)[0]
+        if prefix.startswith("task-"):
+            return prefix
+    for path in paths:
+        task_id = _task_id_from_path(path)
+        if task_id:
+            return task_id
+    return None
 
 
 def lane_fingerprint(
@@ -189,6 +207,7 @@ def collapse_active_workstream_rows(
             task_id=infer_task_id(
                 row.get("external_id") if isinstance(row.get("external_id"), str) else None,
                 row.get("current_branch") if isinstance(row.get("current_branch"), str) else None,
+                row.get("working_dir") if isinstance(row.get("working_dir"), str) else None,
             ),
             branch=row.get("current_branch") if isinstance(row.get("current_branch"), str) else None,
             worktree_path=row.get("working_dir") if isinstance(row.get("working_dir"), str) else None,

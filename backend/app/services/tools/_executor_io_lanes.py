@@ -10,12 +10,14 @@ import logging
 import re
 import shlex
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from app.services._session_metadata_helpers import metadata_paths
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     idle_minutes_from_timestamps,
+    infer_task_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ _STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
 _ADMIN_RECOVERY_PHRASE = "recovery: st done"
 _CLEANUP_NO_MATCHING_LANE_PHRASE = "No matching lane, orphaned snapshots, or stale checkpoints found to clean up."
 _EXEC_LOG_RECENT_MINUTES = 5
+_TASK_SESSION_LOOKBACK_HOURS = 48
 _CONFIRM_TOKEN_RE = re.compile(r"--confirm (?P<token>[0-9a-f]{8})\b")
 _EXEC_LOG_ACTIVE_MARKERS = (
     "Verification failed",
@@ -42,6 +45,11 @@ _EXEC_LOG_ACTIVE_MARKERS = (
     "Worktree ready:",
 )
 _EXEC_LOG_LINE_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\|")
+
+
+def _session_matches_task_lane(session: Session, task_id: str) -> bool:
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    return infer_task_id(session.external_id, session.current_branch, *metadata_paths(metadata)) == task_id
 
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
@@ -65,7 +73,24 @@ async def _load_task_lane_sessions(task_id: str) -> list[Session]:
             .order_by(Session.created_at.desc())
             .limit(20)
         )
-        return list((await db.execute(query)).scalars().all())
+        sessions = list((await db.execute(query)).scalars().all())
+        if sessions:
+            return sessions
+
+        fallback_query = (
+            select(Session)
+            .where(
+                Session.created_at >= datetime.now(UTC) - timedelta(hours=_TASK_SESSION_LOOKBACK_HOURS),
+                or_(
+                    Session.agent_slug.isnot(None),
+                    Session.session_type.in_(("agent", "claude_code")),
+                ),
+            )
+            .order_by(Session.created_at.desc())
+            .limit(200)
+        )
+        candidates = list((await db.execute(fallback_query)).scalars().all())
+        return [session for session in candidates if _session_matches_task_lane(session, task_id)][:20]
 
 
 def _choose_authoritative_session(completed_sessions: list[Session]) -> Session:

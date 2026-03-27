@@ -7,12 +7,14 @@ Not intended for direct external use.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
 from app.db import _get_session_factory
 from app.models import MemoryInjectionMetric, Session, SessionEvent
+from app.services._session_metadata_helpers import metadata_paths
+from app.services.ownership_lanes import infer_task_id
 
 from .citation_parser import (
     extract_feedback_tags,
@@ -23,6 +25,12 @@ from .memory_utils import build_group_id
 from .service import MemoryScope
 
 logger = logging.getLogger(__name__)
+_TASK_SESSION_LOOKBACK_DAYS = 7
+
+
+def _session_matches_task(session: Session, task_id: str) -> bool:
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    return infer_task_id(session.external_id, session.current_branch, *metadata_paths(metadata)) == task_id
 
 
 async def extract_citations_from_events(session_id: str) -> list[str]:
@@ -219,14 +227,42 @@ async def find_sessions_by_task(
         if session_ids:
             return session_ids
 
-        # Fallback: lookup by project_id + time range
+        # Fallback: inspect task-linked sessions directly within the task's project/time window.
         if project_id and started_at:
             try:
                 start_dt = datetime.fromisoformat(started_at)
             except ValueError:
                 logger.warning("Invalid started_at format: %s", started_at)
                 return session_ids
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=UTC)
 
+            session_query = (
+                select(Session)
+                .where(Session.project_id == project_id)
+                .where(Session.created_at >= start_dt)
+                .where(Session.created_at >= datetime.now(UTC) - timedelta(days=_TASK_SESSION_LOOKBACK_DAYS))
+                .where(Session.session_type.in_(("agent", "claude_code")))
+                .order_by(Session.created_at.desc())
+                .limit(200)
+            )
+            result = await db.execute(session_query)
+            sessions = result.scalars().all()
+            session_ids = list(dict.fromkeys(
+                session.id for session in sessions if _session_matches_task(session, task_id)
+            ))
+
+            if session_ids:
+                logger.info(
+                    "Task %s: found %d sessions via session lane fallback (project=%s, since=%s)",
+                    task_id,
+                    len(session_ids),
+                    project_id,
+                    started_at,
+                )
+                return session_ids
+
+            # Final fallback: lookup by memory injection metrics within the task time window.
             fallback_query = (
                 select(MemoryInjectionMetric.session_id)
                 .where(MemoryInjectionMetric.project_id == project_id)

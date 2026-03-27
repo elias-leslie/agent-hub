@@ -9,6 +9,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent
+from app.services._session_metadata_helpers import metadata_paths
 from app.services.ownership_lanes import (
     OwnershipOwner,
     collapse_ownership_owners,
@@ -127,9 +128,13 @@ async def _fetch_candidate_sessions(db: AsyncSession, project_id: str) -> list[S
             and_(
                 Session.project_id == project_id,
                 Session.created_at >= cutoff,
-                Session.agent_slug.isnot(None),
                 Session.status == "active",
-                or_(Session.external_id.isnot(None), Session.current_branch.isnot(None)),
+                or_(
+                    Session.agent_slug.isnot(None),
+                    Session.session_type.in_(("agent", "claude_code")),
+                    Session.external_id.isnot(None),
+                    Session.current_branch.isnot(None),
+                ),
                 or_(event_count, Session.created_at >= ghost_cutoff),
             )
         )
@@ -202,11 +207,8 @@ async def _fetch_active_specialists(db: AsyncSession, project_id: str) -> list[A
 
 
 def _worktree_path_from_metadata(metadata: dict) -> str | None:
-    for key in ("worktree_path", "cwd"):
-        value = metadata.get(key)
-        if isinstance(value, str) and value:
-            return value
-    return None
+    paths = metadata_paths(metadata)
+    return paths[0] if paths else None
 
 
 def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_path: str | None) -> tuple[
@@ -235,16 +237,20 @@ async def query_project_ownership(db: AsyncSession, project_id: str) -> list[Own
     owners: list[OwnershipOwner] = []
     for session in sessions:
         metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+        lane_paths = metadata_paths(metadata)
         worktree_path = _worktree_path_from_metadata(metadata)
         events = scope_events.get(session.id, [])
         declared, observed_write, observed_read, scope = _build_scope_paths(session, events, worktree_path)
+        task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
+        if not (task_id or session.current_branch or _is_worktree(worktree_path)):
+            continue
         if _should_skip_owner_session(session, declared, observed_write, observed_read):
             continue
         age = _age_minutes(session.created_at, session.updated_at)
         is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
         owners.append(
             OwnershipOwner(
-                task_id=infer_task_id(session.external_id, session.current_branch),
+                task_id=task_id,
                 session_id=session.id,
                 agent_slug=session.agent_slug,
                 branch=session.current_branch,
