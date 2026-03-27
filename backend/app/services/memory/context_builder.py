@@ -296,6 +296,118 @@ def _should_select_query_references(
     return task_kind != "heartbeat"
 
 
+def _split_reference_index(
+    context: ProgressiveContext,
+    settings: Any,
+    memory_config: dict[str, Any] | None,
+) -> None:
+    """Partition fetched references into capability (index) vs regular buckets."""
+    if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
+        context.reference_index = [
+            item for item in context.reference if item.context_kind == MemoryContextKind.CAPABILITY
+        ]
+        context.reference = [
+            item for item in context.reference if item.context_kind != MemoryContextKind.CAPABILITY
+        ]
+
+
+def _deduplicate_query_selected(
+    payloads: list[Any],
+    existing_uuids: set[str],
+) -> list[MemorySearchResult]:
+    """Validate payloads and drop any UUIDs already present in context."""
+    results: list[MemorySearchResult] = []
+    for payload in payloads:
+        result = MemorySearchResult.model_validate(payload)
+        if result.uuid in existing_uuids:
+            continue
+        existing_uuids.add(result.uuid)
+        results.append(result)
+    return results
+
+
+async def _merge_query_selected_references(
+    context: ProgressiveContext,
+    query: str,
+    scopes_to_query: list[tuple[MemoryScope, str | None]],
+    variant_config: Any,
+    consumer_profile: str | None,
+) -> None:
+    """Fetch query-relevant references and merge them into the context."""
+    payloads = await get_query_relevant_references_as_search_results(query, scopes_to_query)
+    if not payloads:
+        return
+    existing = {item.uuid for item in [*context.reference_index, *context.reference]}
+    selected = _deduplicate_query_selected(payloads, existing)
+    if selected:
+        selected_uuids = {r.uuid for r in selected}
+        context.reference_index = [
+            item for item in context.reference_index if item.uuid not in selected_uuids
+        ]
+    context.reference.extend(
+        _limit_references_for_variant(selected, variant_config.max_query_selected_references, consumer_profile)
+    )
+
+
+def _apply_all_filters(
+    context: ProgressiveContext,
+    memory_config: dict[str, Any] | None,
+    consumer_profile: str | None,
+    consumer_agent_slug: str | None,
+    consumer_tags: list[str] | None,
+) -> None:
+    """Apply applicability, tag, and UUID exclusion filters to all context blocks."""
+    resolved_tags = list(consumer_tags or [])
+    if not resolved_tags:
+        resolved_tags, _ = resolve_memory_tags(memory_config)
+    _apply_applicability_filters(
+        context,
+        consumer_profile=consumer_profile,
+        consumer_agent_slug=consumer_agent_slug,
+        consumer_tags=resolved_tags,
+    )
+    if memory_config:
+        _apply_tag_filters(context, memory_config)
+        _apply_uuid_exclusions(context, set(resolve_excluded_memory_uuids(memory_config)))
+
+
+def _build_scopes_to_query(
+    scope: MemoryScope,
+    scope_id: str | None,
+    include_global: bool,
+) -> list[tuple[MemoryScope, str | None]]:
+    """Return the ordered list of scopes to query, appending GLOBAL when appropriate."""
+    scopes: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
+    if include_global and scope == MemoryScope.PROJECT and scope_id:
+        scopes.append((MemoryScope.GLOBAL, None))
+    return scopes
+
+
+def _apply_priority_and_limits(
+    context: ProgressiveContext,
+    query: str,
+    variant: str | None,
+    variant_config: Any,
+    consumer_profile: str | None,
+) -> None:
+    """Prioritize, score, and cap all context blocks according to variant config."""
+    context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
+    context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
+    context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
+    context.reference_index = _limit_references_for_variant(
+        context.reference_index, variant_config.max_reference_items, consumer_profile
+    )
+    context.reference = _prioritize_items_for_profile(context.reference, consumer_profile)
+    context.reference = _apply_reference_variant_scoring(context.reference, query, variant, consumer_profile)
+    context.reference = _limit_references_for_variant(
+        context.reference, variant_config.max_reference_items, consumer_profile
+    )
+    plan_context_render_tiers(
+        context.mandates, context.guardrails, context.reference_index, context.reference,
+        query, consumer_profile=consumer_profile,
+    )
+
+
 async def build_progressive_context(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -312,111 +424,32 @@ async def build_progressive_context(
     consumer_tags: list[str] | None = None,
     variant: str | None = None,
 ) -> ProgressiveContext:
-    """Build tier-aware context for mandates, guardrails, and direct references.
-
-    Deterministic injection: ALL mandates and guardrails for the scope are
-    injected. No scoring, no thresholds - just tiered prompt rendering.
-    References still include auto-inject and task/phase-triggered items. Query-
-    selected references are enabled by default except for heartbeat, whose
-    dynamic prompt is too noisy to use as a retrieval query.
+    """Build tier-aware context: all mandates/guardrails injected deterministically;
+    references include auto-inject, task/phase triggers, and query-selected items
+    (disabled only for heartbeat tasks).
     """
     context = ProgressiveContext()
     variant_config = get_variant_config(variant)
     settings = await get_memory_settings()
     apply_memory_config_overrides(settings, memory_config)
-
     if not settings.enabled:
         logger.info("Memory injection disabled - returning empty context")
-        context.budget_usage = BudgetUsage()
-        context.total_tokens = 0
+        context.budget_usage, context.total_tokens = BudgetUsage(), 0
         return context
-
-    scopes_to_query: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
-    if include_global and scope == MemoryScope.PROJECT and scope_id:
-        scopes_to_query.append((MemoryScope.GLOBAL, None))
-
+    scopes_to_query = _build_scopes_to_query(scope, scope_id, include_global)
     context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
         scopes_to_query, include_mandates, include_guardrails, include_references, task_type, phase
     )
-    if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
-        context.reference_index = [
-            item for item in context.reference if item.context_kind == MemoryContextKind.CAPABILITY
-        ]
-        context.reference = [
-            item for item in context.reference if item.context_kind != MemoryContextKind.CAPABILITY
-        ]
+    _split_reference_index(context, settings, memory_config)
     if not include_references:
         context.reference = []
         context.reference_index = []
-    if include_references and _should_select_query_references(task_type, memory_config):
-        selected_reference_payloads = await get_query_relevant_references_as_search_results(
-            query,
-            scopes_to_query,
+    elif _should_select_query_references(task_type, memory_config):
+        await _merge_query_selected_references(
+            context, query, scopes_to_query, variant_config, consumer_profile
         )
-        if selected_reference_payloads:
-            existing = {item.uuid for item in [*context.reference_index, *context.reference]}
-            selected_results: list[MemorySearchResult] = []
-            for payload in selected_reference_payloads:
-                result = MemorySearchResult.model_validate(payload)
-                if result.uuid in existing:
-                    continue
-                existing.add(result.uuid)
-                selected_results.append(result)
-            if selected_results:
-                context.reference_index = [
-                    item for item in context.reference_index
-                    if item.uuid not in {result.uuid for result in selected_results}
-                ]
-            context.reference.extend(
-                _limit_references_for_variant(
-                    selected_results,
-                    variant_config.max_query_selected_references,
-                    consumer_profile,
-                )
-            )
-    resolved_consumer_tags = list(consumer_tags or [])
-    if not resolved_consumer_tags:
-        resolved_consumer_tags, _ = resolve_memory_tags(memory_config)
-    _apply_applicability_filters(
-        context,
-        consumer_profile=consumer_profile,
-        consumer_agent_slug=consumer_agent_slug,
-        consumer_tags=resolved_consumer_tags,
-    )
-    if memory_config:
-        _apply_tag_filters(context, memory_config)
-        _apply_uuid_exclusions(context, set(resolve_excluded_memory_uuids(memory_config)))
-
-    context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
-    context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
-    context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
-    context.reference_index = _limit_references_for_variant(
-        context.reference_index,
-        variant_config.max_reference_items,
-        consumer_profile,
-    )
-    context.reference = _prioritize_items_for_profile(context.reference, consumer_profile)
-    context.reference = _apply_reference_variant_scoring(
-        context.reference,
-        query,
-        variant,
-        consumer_profile,
-    )
-    context.reference = _limit_references_for_variant(
-        context.reference,
-        variant_config.max_reference_items,
-        consumer_profile,
-    )
-
-    plan_context_render_tiers(
-        context.mandates,
-        context.guardrails,
-        context.reference_index,
-        context.reference,
-        query,
-        consumer_profile=consumer_profile,
-    )
-
+    _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
+    _apply_priority_and_limits(context, query, variant, variant_config, consumer_profile)
     budget = _build_usage_snapshot(context)
     _finalize_context(context, budget, query, task_type, phase, consumer_profile, variant)
     return context
