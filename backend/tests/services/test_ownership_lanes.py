@@ -8,6 +8,7 @@ from app.services.ownership_lanes import (
     OwnershipOwner,
     collapse_active_workstream_rows,
     collapse_ownership_owners,
+    infer_task_id,
 )
 
 
@@ -96,6 +97,10 @@ class TestCollapseOwnershipOwners:
         }
 
 
+def test_infer_task_id_recovers_from_lane_path_suffix() -> None:
+    assert infer_task_id(None, None, "/tmp/worktrees/task-a961e3b9-follow-up") == "task-a961e3b9"
+
+
 class TestCollapseActiveWorkstreamRows:
     def test_collapses_duplicate_active_rows_for_same_lane(self) -> None:
         rows = [
@@ -158,3 +163,23 @@ class TestCollapseActiveWorkstreamRows:
         collapsed = collapse_active_workstream_rows(rows)
 
         assert len(collapsed) == 2
+
+    def test_uses_working_dir_to_infer_task_id_for_path_only_lane(self) -> None:
+        rows = [
+            {
+                "session_id": "sess-path",
+                "agent_slug": None,
+                "project_id": "agent-hub",
+                "external_id": None,
+                "current_branch": None,
+                "working_dir": "/tmp/worktrees/task-a961e3b9-follow-up",
+                "status": "active",
+                "updated_at": datetime(2026, 3, 7, 20, 28, tzinfo=UTC),
+                "age_minutes": 2,
+            }
+        ]
+
+        collapsed = collapse_active_workstream_rows(rows)
+
+        assert len(collapsed) == 1
+        assert collapsed[0]["external_id"] == "task-a961e3b9"

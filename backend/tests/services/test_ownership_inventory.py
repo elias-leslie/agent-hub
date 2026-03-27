@@ -104,6 +104,66 @@ async def test_query_project_ownership_marks_external_id_only_task_lanes_as_unsc
 
 
 @pytest.mark.asyncio
+async def test_query_project_ownership_includes_repo_root_only_claude_lane() -> None:
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        id="sess-claude-lane",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=12),
+        updated_at=now - timedelta(minutes=11),
+        agent_slug=None,
+        external_id=None,
+        current_branch=None,
+        status="active",
+        workstream_status=None,
+        workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
+        provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-b5008fb6"},
+    )
+
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.ownership_inventory._fetch_candidate_sessions",
+            new=AsyncMock(return_value=[session]),
+        ),
+        patch(
+            "app.services.ownership_inventory._fetch_scope_events",
+            new=AsyncMock(return_value={}),
+        ),
+        patch("app.services.ownership_inventory._is_worktree", return_value=True),
+    ):
+        owners = await query_project_ownership(db, "agent-hub")
+
+    assert len(owners) == 1
+    assert owners[0].task_id == "task-b5008fb6"
+    assert owners[0].worktree_path == "/srv/workspaces/lanes/agent-hub/task-b5008fb6"
+    assert owners[0].is_worktree is True
+
+
+@pytest.mark.asyncio
+async def test_fetch_candidate_sessions_broadens_candidates_with_session_type_fallback() -> None:
+    from app.services.ownership_inventory import _fetch_candidate_sessions
+
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_db.execute.return_value = mock_result
+
+    await _fetch_candidate_sessions(mock_db, "agent-hub")
+
+    compiled = str(mock_db.execute.await_args.args[0])
+    assert "sessions.session_type IN" in compiled
+    assert "sessions.agent_slug IS NOT NULL" in compiled
+    assert "sessions.external_id IS NOT NULL" in compiled
+    assert "sessions.current_branch IS NOT NULL" in compiled
+
+
+@pytest.mark.asyncio
 async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30_minutes() -> None:
     session = SimpleNamespace(
         id="sess-stale",

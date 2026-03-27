@@ -21,6 +21,19 @@ def session_metadata(session: Session) -> dict[str, Any]:
     return metadata or {}
 
 
+def metadata_paths(metadata: dict[str, Any] | None) -> list[str]:
+    if not isinstance(metadata, dict):
+        return []
+    paths: list[str] = []
+    seen: set[str] = set()
+    for key in ("worktree_path", "cwd", "repo_root"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value and value not in seen:
+            paths.append(value)
+            seen.add(value)
+    return paths
+
+
 def metadata_value(session: Session, key: str) -> str | None:
     value = session_metadata(session).get(key)
     return value if isinstance(value, str) and value else None
