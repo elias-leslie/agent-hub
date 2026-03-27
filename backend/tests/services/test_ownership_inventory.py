@@ -146,6 +146,111 @@ async def test_query_project_ownership_includes_repo_root_only_claude_lane() -> 
 
 
 @pytest.mark.asyncio
+async def test_query_project_ownership_skips_stale_unscoped_repo_root_session() -> None:
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        id="sess-root-stale",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=50),
+        updated_at=now - timedelta(minutes=45),
+        agent_slug=None,
+        external_id=None,
+        current_branch="main",
+        status="active",
+        workstream_status=None,
+        workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Transcript sync heartbeat",
+                "last_event_type": "heartbeat",
+                "last_event_at": (now - timedelta(minutes=45)).isoformat(),
+                "last_model_activity_at": (now - timedelta(hours=2)).isoformat(),
+                "last_heartbeat_at": now.isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            },
+        },
+    )
+
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.ownership_inventory._fetch_candidate_sessions",
+            new=AsyncMock(return_value=[session]),
+        ),
+        patch(
+            "app.services.ownership_inventory._fetch_scope_events",
+            new=AsyncMock(return_value={}),
+        ),
+        patch("app.services.ownership_inventory._is_worktree", return_value=False),
+    ):
+        owners = await query_project_ownership(db, "agent-hub")
+
+    assert owners == []
+
+
+@pytest.mark.asyncio
+async def test_query_project_ownership_keeps_active_unscoped_repo_root_session() -> None:
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        id="sess-root-live",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=8),
+        updated_at=now - timedelta(minutes=2),
+        agent_slug=None,
+        external_id=None,
+        current_branch="main",
+        status="active",
+        workstream_status=None,
+        workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Waiting for model after Read",
+                "last_event_type": "tool_result",
+                "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 2,
+            },
+        },
+    )
+
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.ownership_inventory._fetch_candidate_sessions",
+            new=AsyncMock(return_value=[session]),
+        ),
+        patch(
+            "app.services.ownership_inventory._fetch_scope_events",
+            new=AsyncMock(return_value={}),
+        ),
+        patch("app.services.ownership_inventory._is_worktree", return_value=False),
+    ):
+        owners = await query_project_ownership(db, "agent-hub")
+
+    assert len(owners) == 1
+    assert owners[0].session_id == "sess-root-live"
+    assert owners[0].branch == "main"
+
+
+@pytest.mark.asyncio
 async def test_fetch_candidate_sessions_broadens_candidates_with_session_type_fallback() -> None:
     from app.services.ownership_inventory import _fetch_candidate_sessions
 

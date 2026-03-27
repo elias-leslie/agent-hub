@@ -121,7 +121,7 @@ def _compute_anti_reap_signals(
         signals.append("specialist_lane")
     if int(response.get("outstanding_tool_calls") or 0) > 0:
         signals.append("outstanding_tool_calls")
-    if phase in _NON_REAPABLE_PHASES:
+    if phase in _NON_REAPABLE_PHASES and (quiet_for is None or quiet_for < _REAPABLE_AFTER_SECONDS):
         signals.append(f"phase_{phase}")
     if response.get("last_write_path") and quiet_for is not None and quiet_for < _REAPABLE_AFTER_SECONDS:
         signals.append("recent_write_activity")
