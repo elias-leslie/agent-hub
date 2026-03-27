@@ -79,6 +79,12 @@ def _session_list_item(
     model_info = session_model_info(session)
     wd = working_dir(session)
     session_tokens = token_stats.get(session.id, {})
+    provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    batch_task_ids = [
+        str(task_id).strip()
+        for task_id in provider_metadata.get("batch_task_ids", [])
+        if isinstance(task_id, str) and str(task_id).strip()
+    ]
     return SessionListItem(
         id=session.id,
         project_id=session.project_id,
@@ -111,6 +117,7 @@ def _session_list_item(
         is_worktree=is_worktree(wd),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
+        batch_task_ids=batch_task_ids,
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
         observed_write_paths=scope_list(session.observed_write_paths),
@@ -158,6 +165,12 @@ def build_session_response(
     specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
     model_info = session_model_info(session)
+    provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    batch_task_ids = [
+        str(task_id).strip()
+        for task_id in provider_metadata.get("batch_task_ids", [])
+        if isinstance(task_id, str) and str(task_id).strip()
+    ]
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
@@ -190,6 +203,7 @@ def build_session_response(
         is_worktree=is_worktree(working_dir(session)),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
+        batch_task_ids=batch_task_ids,
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
         observed_write_paths=scope_list(session.observed_write_paths),

@@ -91,6 +91,12 @@ def _parse_args() -> argparse.Namespace:
         help="Subprocess timeout in seconds",
     )
     parser.add_argument(
+        "--batch-task-id",
+        action="append",
+        default=[],
+        help="Task id linked to a prompt-file orchestrator batch (repeatable)",
+    )
+    parser.add_argument(
         "--skip-ingest",
         action="store_true",
         help="Skip Agent Hub transcript ingestion and only emit raw artifacts",
@@ -761,6 +767,7 @@ def _stream_claude_pipe(
     metadata_path: Path,
     project_id: str,
     external_id: str | None,
+    batch_task_ids: list[str] | None,
 ) -> None:
     with sink_path.open("w") as sink:
         for line in iter(stream.readline, ""):
@@ -780,6 +787,7 @@ def _stream_claude_pipe(
                         workdir=workdir,
                         project_id=project_id,
                         external_id=external_id,
+                        batch_task_ids=batch_task_ids,
                     )
                     ingest_changed = _sync_transcript_events_if_needed(
                         state=state,
@@ -848,6 +856,7 @@ def _run_claude(
     timeout_seconds: int,
     project_id: str,
     external_id: str | None,
+    batch_task_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     artifact_dir = Path(tempfile.mkdtemp(prefix="claude-orchestrated-worker-"))
     stdout_path = artifact_dir / "stdout.jsonl"
@@ -926,6 +935,7 @@ def _run_claude(
             "metadata_path": metadata_path,
             "project_id": project_id,
             "external_id": external_id,
+            "batch_task_ids": batch_task_ids,
         },
         daemon=True,
     )
@@ -945,6 +955,7 @@ def _run_claude(
             "metadata_path": metadata_path,
             "project_id": project_id,
             "external_id": external_id,
+            "batch_task_ids": batch_task_ids,
         },
         daemon=True,
     )
@@ -968,6 +979,7 @@ def _run_claude(
                     workdir=workdir,
                     project_id=project_id,
                     external_id=external_id,
+                    batch_task_ids=batch_task_ids,
                 )
                 ingest_changed = _sync_transcript_events_if_needed(
                     state=state,
@@ -1001,6 +1013,7 @@ def _run_claude(
             workdir=workdir,
             project_id=project_id,
             external_id=external_id,
+            batch_task_ids=batch_task_ids,
         )
         ingest_changed = _sync_transcript_events_if_needed(
             state=state,
@@ -1038,6 +1051,7 @@ def _run_claude(
                 transcript_path=transcript_path,
                 workdir=workdir,
                 external_id=external_id,
+                batch_task_ids=batch_task_ids,
                 timed_out=bool(state.get("timed_out")),
                 exit_code=process.returncode,
                 timeout_seconds=timeout_seconds,
@@ -1091,6 +1105,7 @@ async def _ensure_session_metadata(
     transcript_path: Path | None,
     workdir: Path,
     external_id: str | None = None,
+    batch_task_ids: list[str] | None = None,
 ) -> None:
     from sqlalchemy import select
 
@@ -1107,6 +1122,8 @@ async def _ensure_session_metadata(
             provider_metadata = {
                 "repo_root": str(workdir.resolve()),
             }
+            if batch_task_ids:
+                provider_metadata["batch_task_ids"] = sorted({task_id for task_id in batch_task_ids if task_id})
             if transcript_path is not None:
                 provider_metadata["transcript_path"] = str(transcript_path)
             await upsert_session(
@@ -1125,6 +1142,8 @@ async def _ensure_session_metadata(
 
         metadata = dict(existing.provider_metadata or {})
         metadata.setdefault("repo_root", str(workdir.resolve()))
+        if batch_task_ids:
+            metadata["batch_task_ids"] = sorted({task_id for task_id in batch_task_ids if task_id})
         if transcript_path is not None:
             metadata["transcript_path"] = str(transcript_path)
         existing.provider_metadata = metadata
@@ -1139,6 +1158,7 @@ def _sync_session_metadata_if_needed(
     workdir: Path,
     project_id: str,
     external_id: str | None,
+    batch_task_ids: list[str] | None = None,
 ) -> bool:
     session_id = state.get("session_id")
     if not isinstance(session_id, str) or not session_id:
@@ -1159,6 +1179,7 @@ def _sync_session_metadata_if_needed(
             transcript_path=transcript_path,
             workdir=workdir,
             external_id=external_id,
+            batch_task_ids=batch_task_ids,
         )
     )
     state["metadata_sync_marker"] = marker
@@ -1216,6 +1237,7 @@ async def _ingest_transcript(
     transcript_path: Path,
     workdir: Path,
     external_id: str | None = None,
+    batch_task_ids: list[str] | None = None,
     checkpoint: str | None = None,
 ) -> dict[str, Any]:
     from sqlalchemy import select
@@ -1231,6 +1253,7 @@ async def _ingest_transcript(
         transcript_path=transcript_path,
         workdir=workdir,
         external_id=external_id,
+        batch_task_ids=batch_task_ids,
     )
     async with async_session() as db:
         ingest_result = await ingest_transcript_events(
@@ -1271,6 +1294,7 @@ async def _finalize_session_status(
     transcript_path: Path | None,
     workdir: Path,
     external_id: str | None,
+    batch_task_ids: list[str] | None = None,
     timed_out: bool,
     exit_code: int | None,
     timeout_seconds: int,
@@ -1290,6 +1314,7 @@ async def _finalize_session_status(
         transcript_path=transcript_path,
         workdir=workdir,
         external_id=external_id,
+        batch_task_ids=batch_task_ids,
     )
     async with async_session() as db:
         session = (
@@ -1363,6 +1388,7 @@ def main() -> int:
         timeout_seconds=args.timeout_seconds,
         project_id=args.project_id,
         external_id=args.task_id,
+        batch_task_ids=args.batch_task_id,
     )
 
     output: dict[str, Any] = {
@@ -1387,6 +1413,7 @@ def main() -> int:
                 transcript_path=transcript_path,
                 workdir=workdir,
                 external_id=args.task_id,
+                batch_task_ids=args.batch_task_id,
             )
         )
 

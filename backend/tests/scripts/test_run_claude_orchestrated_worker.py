@@ -543,6 +543,61 @@ def test_ensure_session_metadata_sets_external_id_on_create(tmp_path):
     assert request.external_id == "task-123"
 
 
+def test_ensure_session_metadata_sets_batch_task_ids_on_create(tmp_path):
+    module = _load_module()
+    db = AsyncMock()
+    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: None)
+    upsert_session = AsyncMock()
+
+    class FakeSession:
+        id = object()
+
+    class SessionUpsertRequest:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    class _Select:
+        def where(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+    class _AsyncSessionCtx:
+        async def __aenter__(self):
+            return db
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    with patch.dict(
+        sys.modules,
+        {
+            "sqlalchemy": types.SimpleNamespace(select=lambda *_args, **_kwargs: _Select()),
+            "app.db": types.SimpleNamespace(async_session=lambda: _AsyncSessionCtx()),
+            "app.models": types.SimpleNamespace(Session=FakeSession),
+            "app.services.session_ingestion.models": types.SimpleNamespace(
+                SessionUpsertRequest=SessionUpsertRequest
+            ),
+            "app.services.session_ingestion.service": types.SimpleNamespace(
+                upsert_session=upsert_session
+            ),
+        },
+    ):
+        asyncio.run(
+            module._ensure_session_metadata(
+                session_id="session-1",
+                project_id="agent-hub",
+                transcript_path=tmp_path / "session.jsonl",
+                workdir=tmp_path,
+                batch_task_ids=["task-a", "task-b", "task-a"],
+            )
+        )
+
+    request = upsert_session.await_args.args[1]
+    assert request.provider_metadata["batch_task_ids"] == ["task-a", "task-b"]
+
+
 def test_ensure_session_metadata_backfills_external_id_on_existing_session(tmp_path):
     module = _load_module()
     existing = SimpleNamespace(provider_metadata={}, external_id=None)
@@ -608,6 +663,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
                 workdir=tmp_path,
                 project_id="agent-hub",
                 external_id="task-123",
+                batch_task_ids=["task-a", "task-b"],
             )
             is True
         )
@@ -615,6 +671,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
         first_call = ensure.await_args
         assert first_call.kwargs["transcript_path"] is None
         assert first_call.kwargs["external_id"] == "task-123"
+        assert first_call.kwargs["batch_task_ids"] == ["task-a", "task-b"]
 
         assert (
             module._sync_session_metadata_if_needed(
@@ -622,6 +679,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
                 workdir=tmp_path,
                 project_id="agent-hub",
                 external_id="task-123",
+                batch_task_ids=["task-a", "task-b"],
             )
             is False
         )
@@ -634,6 +692,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
                 workdir=tmp_path,
                 project_id="agent-hub",
                 external_id="task-123",
+                batch_task_ids=["task-a", "task-b"],
             )
             is True
         )
