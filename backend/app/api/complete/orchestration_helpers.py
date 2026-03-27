@@ -96,6 +96,52 @@ async def process_result(
     )
 
 
+def _record_fallback_on_request(http_request: Request | None, result: Any) -> None:
+    """Attach fallback metadata to http_request.state for middleware logging."""
+    if http_request is None:
+        return
+    if isinstance(result, tuple):
+        _cr, model_used, fallback_used, _uuids, _sid, _fallback_reason = result
+        if fallback_used:
+            http_request.state.used_fallback = True
+            http_request.state.fallback_model = model_used
+    elif hasattr(result, "model_used") and hasattr(result, "fallback_used"):
+        if result.fallback_used:
+            http_request.state.used_fallback = True
+            http_request.state.fallback_model = result.model_used
+
+
+async def _rollback_db(db: AsyncSession | None) -> None:
+    """Attempt a DB rollback, suppressing any error."""
+    if db is not None:
+        with suppress(Exception):
+            await db.rollback()
+
+
+async def _run_completion(
+    request: CompletionRequest, resolved_model: str, provider: str,
+    resolved_agent: ResolvedAgent | None, messages_dict: list[Any], all_messages: list[Any],
+    is_agentic: bool, db: AsyncSession | None, session_id: str,
+    client_id: str | None, source: str | None, skip_cache: bool,
+    ctx_info: ContextUsageInfo | None, memory_facts: int, loaded_uuids_in: list[str],
+    agent_used: str | None, is_new_session: bool, session: DBSession | None,
+    http_request: Request | None,
+) -> tuple[Any, int, str | None]:
+    """Execute completion and return (result, duration_ms, effective_thinking_level)."""
+    t0 = time.monotonic()
+    result = await execute_completion(
+        request=request, resolved_model=resolved_model, provider=provider,
+        resolved_agent=resolved_agent, messages_dict=messages_dict,
+        all_messages=all_messages, is_agentic=is_agentic, db=db,
+        session_id=session_id, client_id=client_id,
+        request_source=source, skip_cache=skip_cache,
+    )
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    _record_fallback_on_request(http_request, result)
+    effective_thinking_level = get_thinking_level(request, all_messages, resolved_agent)
+    return result, duration_ms, effective_thinking_level
+
+
 async def execute_and_respond(
     request: CompletionRequest, resolved_model: str, provider: str,
     resolved_agent: ResolvedAgent | None, messages_dict: list[Any], all_messages: list[Any],
@@ -107,27 +153,12 @@ async def execute_and_respond(
 ) -> CompletionResponse | JSONResponse:
     """Execute completion and build response."""
     try:
-        t0 = time.monotonic()
-        result = await execute_completion(
-            request=request, resolved_model=resolved_model, provider=provider,
-            resolved_agent=resolved_agent, messages_dict=messages_dict,
-            all_messages=all_messages, is_agentic=is_agentic, db=db,
-            session_id=session_id, client_id=client_id,
-            request_source=source, skip_cache=skip_cache,
+        result, duration_ms, effective_thinking_level = await _run_completion(
+            request, resolved_model, provider, resolved_agent, messages_dict, all_messages,
+            is_agentic, db, session_id, client_id, source, skip_cache,
+            ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, session,
+            http_request,
         )
-        duration_ms = int((time.monotonic() - t0) * 1000)
-        # Record fallback info on http_request.state for middleware logging
-        if http_request is not None:
-            if isinstance(result, tuple):
-                _cr, model_used, fallback_used, _uuids, _sid, _fallback_reason = result
-                if fallback_used:
-                    http_request.state.used_fallback = True
-                    http_request.state.fallback_model = model_used
-            elif hasattr(result, "model_used") and hasattr(result, "fallback_used"):
-                if result.fallback_used:
-                    http_request.state.used_fallback = True
-                    http_request.state.fallback_model = result.model_used
-        effective_thinking_level = get_thinking_level(request, all_messages, resolved_agent)
         if is_agentic and hasattr(result, "turns"):
             return build_agentic_response(result, ctx_info, effective_thinking_level, agent_used, False, request.trace_id)
         return await process_result(
@@ -136,22 +167,16 @@ async def execute_and_respond(
             effective_thinking_level=effective_thinking_level,
         )
     except asyncio.CancelledError as e:
-        if db is not None:
-            with suppress(Exception):
-                await db.rollback()
+        await _rollback_db(db)
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise
     except TimeoutError as e:
-        if db is not None:
-            with suppress(Exception):
-                await db.rollback()
+        await _rollback_db(db)
         if http_request is not None:
             http_request.state.timed_out = True
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise  # handle_completion_error is NoReturn but ty needs explicit raise
     except Exception as e:
-        if db is not None:
-            with suppress(Exception):
-                await db.rollback()
+        await _rollback_db(db)
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise  # handle_completion_error is NoReturn but ty needs explicit raise
