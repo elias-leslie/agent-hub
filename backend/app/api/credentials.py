@@ -6,7 +6,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -33,6 +33,8 @@ router = APIRouter()
 # Valid credential types
 VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token", "account_id"}
 
+CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
+
 
 def _is_visible_credential_provider(provider: str) -> bool:
     """Return whether a credential provider should be exposed via the public API."""
@@ -50,6 +52,26 @@ def mask_value(value: str) -> str:
     if len(value) <= 8:
         return "*" * len(value)
     return value[:4] + "*" * (len(value) - 8) + value[-4:]
+
+
+def _build_credential_response(cred: Any, masked: str) -> CredentialResponse:
+    """Build a CredentialResponse from a DB credential object and masked value."""
+    return CredentialResponse(
+        id=cred.id,
+        provider=cred.provider,
+        credential_type=cred.credential_type,
+        value_masked=masked,
+        created_at=cred.created_at,
+        updated_at=cred.updated_at,
+    )
+
+
+def _decrypt_masked(value_encrypted: str) -> str:
+    """Decrypt an encrypted credential value and return its masked form."""
+    try:
+        return mask_value(decrypt_value(value_encrypted))
+    except EncryptionError:
+        return "***ERROR***"
 
 
 # Request/Response schemas
@@ -78,11 +100,15 @@ class CredentialResponse(BaseModel):
     updated_at: datetime
 
 
-class CredentialListResponse(BaseModel):
-    """Response body for listing credentials."""
+class ClaudeOAuthStatus(BaseModel):
+    """Read-only status of Claude Code OAuth token."""
 
-    credentials: list[CredentialResponse]
-    total: int
+    status: str = Field(..., description="valid, expired, or missing")
+    expires_at: datetime | None = Field(default=None, description="Token expiry time")
+    expires_in_seconds: int | None = Field(default=None, description="Seconds until expiry")
+    scopes: list[str] = Field(default_factory=list)
+    subscription_type: str | None = Field(default=None)
+    token_prefix: str | None = Field(default=None, description="First 12 chars of access token")
 
 
 class SetPrimaryCredentialResponse(BaseModel):
@@ -123,69 +149,28 @@ async def create_credential(
             credential_type=request.credential_type,
             value=request.value,
         )
-        # Update cache
         get_credential_manager().set(request.provider, request.credential_type, request.value)
     except EncryptionError as e:
         raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
 
-    return CredentialResponse(
-        id=credential.id,
-        provider=credential.provider,
-        credential_type=credential.credential_type,
-        value_masked=mask_value(request.value),
-        created_at=credential.created_at,
-        updated_at=credential.updated_at,
-    )
+    return _build_credential_response(credential, mask_value(request.value))
 
 
-@router.get("/credentials", response_model=CredentialListResponse)
+@router.get("/credentials", response_model=dict[str, Any])
 async def list_credentials(
     db: Annotated[AsyncSession, Depends(get_db)],
     provider: Annotated[str | None, Query(description="Filter by provider")] = None,
-) -> CredentialListResponse:
+) -> dict[str, Any]:
     """List all credentials with masked values."""
     credentials = await list_credentials_async(db, provider=provider)
     credentials = [cred for cred in credentials if _is_visible_credential_provider(cred.provider)]
 
-    responses = []
-    for cred in credentials:
-        try:
-            decrypted = decrypt_value(cred.value_encrypted)
-            masked = mask_value(decrypted)
-        except EncryptionError:
-            masked = "***ERROR***"
+    responses = [
+        _build_credential_response(cred, _decrypt_masked(cred.value_encrypted))
+        for cred in credentials
+    ]
 
-        responses.append(
-            CredentialResponse(
-                id=cred.id,
-                provider=cred.provider,
-                credential_type=cred.credential_type,
-                value_masked=masked,
-                created_at=cred.created_at,
-                updated_at=cred.updated_at,
-            )
-        )
-
-    return CredentialListResponse(
-        credentials=responses,
-        total=len(responses),
-    )
-
-
-# --- Claude OAuth status (read-only from ~/.claude/.credentials.json) ---
-
-CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
-
-
-class ClaudeOAuthStatus(BaseModel):
-    """Read-only status of Claude Code OAuth token."""
-
-    status: str = Field(..., description="valid, expired, or missing")
-    expires_at: datetime | None = Field(default=None, description="Token expiry time")
-    expires_in_seconds: int | None = Field(default=None, description="Seconds until expiry")
-    scopes: list[str] = Field(default_factory=list)
-    subscription_type: str | None = Field(default=None)
-    token_prefix: str | None = Field(default=None, description="First 12 chars of access token")
+    return {"credentials": [r.model_dump() for r in responses], "total": len(responses)}
 
 
 @router.get("/credentials/claude-oauth-status", response_model=ClaudeOAuthStatus)
@@ -208,10 +193,9 @@ async def get_claude_oauth_status() -> ClaudeOAuthStatus:
         return ClaudeOAuthStatus(status="missing")
 
     expires_at_ms = oauth.get("expiresAt", 0)
-    expires_at = datetime.fromtimestamp(expires_at_ms / 1000) if expires_at_ms else None
     now_ms = int(datetime.now().timestamp() * 1000)
+    expires_at = datetime.fromtimestamp(expires_at_ms / 1000) if expires_at_ms else None
     expires_in = int((expires_at_ms - now_ms) / 1000) if expires_at_ms else None
-
     access_token = oauth.get("accessToken", "")
     token_prefix = access_token[:12] + "..." if len(access_token) > 12 else None
 
@@ -235,21 +219,7 @@ async def get_credential(
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
     _require_visible_provider(credential.provider)
-
-    try:
-        decrypted = decrypt_value(credential.value_encrypted)
-        masked = mask_value(decrypted)
-    except EncryptionError:
-        masked = "***ERROR***"
-
-    return CredentialResponse(
-        id=credential.id,
-        provider=credential.provider,
-        credential_type=credential.credential_type,
-        value_masked=masked,
-        created_at=credential.created_at,
-        updated_at=credential.updated_at,
-    )
+    return _build_credential_response(credential, _decrypt_masked(credential.value_encrypted))
 
 
 @router.put("/credentials/{credential_id}", response_model=CredentialResponse)
@@ -259,14 +229,13 @@ async def update_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CredentialResponse:
     """Update a credential's value."""
-    old_credential = await get_credential_by_id_async(db, credential_id)
-    if not old_credential:
+    existing_cred = await get_credential_by_id_async(db, credential_id)
+    if not existing_cred:
         raise HTTPException(status_code=404, detail="Credential not found")
-    _require_visible_provider(old_credential.provider)
+    _require_visible_provider(existing_cred.provider)
 
-    old_value: str | None
     try:
-        old_value = decrypt_value(old_credential.value_encrypted)
+        old_value: str | None = decrypt_value(existing_cred.value_encrypted)
     except Exception:
         logger.debug("Failed to decrypt old credential value for diff", exc_info=True)
         old_value = None
@@ -279,20 +248,13 @@ async def update_credential(
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
 
-    cm = get_credential_manager()
+    cred_mgr = get_credential_manager()
     if old_value is not None:
-        cm.replace_value(credential.provider, credential.credential_type, old_value, request.value)
+        cred_mgr.replace_value(credential.provider, credential.credential_type, old_value, request.value)
     else:
-        cm.set(credential.provider, credential.credential_type, request.value)
+        cred_mgr.set(credential.provider, credential.credential_type, request.value)
 
-    return CredentialResponse(
-        id=credential.id,
-        provider=credential.provider,
-        credential_type=credential.credential_type,
-        value_masked=mask_value(request.value),
-        created_at=credential.created_at,
-        updated_at=credential.updated_at,
-    )
+    return _build_credential_response(credential, mask_value(request.value))
 
 
 @router.delete("/credentials/{credential_id}", status_code=204)
@@ -301,25 +263,61 @@ async def delete_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a credential."""
-    # Get credential first to know provider/type for cache removal
     credential = await get_credential_by_id_async(db, credential_id)
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
     _require_visible_provider(credential.provider)
 
-    # Decrypt to get the actual value for targeted multi-cache removal
     try:
-        value = decrypt_value(credential.value_encrypted)
+        value: str | None = decrypt_value(credential.value_encrypted)
     except EncryptionError:
         value = None
 
     deleted = await delete_credential_async(db, credential_id)
     if deleted:
-        cm = get_credential_manager()
+        cred_mgr = get_credential_manager()
         if value:
-            cm.remove_value(credential.provider, credential.credential_type, value)
+            cred_mgr.remove_value(credential.provider, credential.credential_type, value)
         else:
-            cm.remove(credential.provider, credential.credential_type)
+            cred_mgr.remove(credential.provider, credential.credential_type)
+
+
+async def _swap_credentials_and_refresh_cache(
+    db: AsyncSession,
+    primary: Any,
+    target: Any,
+) -> int:
+    """Swap primary and target api_key values, refresh cache, return new primary ID."""
+    try:
+        primary_value = decrypt_value(primary.value_encrypted)
+        target_value = decrypt_value(target.value_encrypted)
+    except EncryptionError as e:
+        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
+
+    try:
+        await update_credential_async(db, primary.id, target_value)
+        await update_credential_async(db, target.id, primary_value)
+    except EncryptionError as e:
+        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
+
+    refreshed = await list_credentials_async(db, provider=target.provider)
+    ordered_keys: list[str] = []
+    for cred in refreshed:
+        if cred.credential_type != "api_key":
+            continue
+        try:
+            ordered_keys.append(decrypt_value(cred.value_encrypted))
+        except EncryptionError:
+            continue
+
+    get_credential_manager().set_api_keys(target.provider, ordered_keys)
+
+    new_primary_id = primary.id
+    for cred in refreshed:
+        if cred.credential_type == "api_key":
+            new_primary_id = cred.id
+            break
+    return new_primary_id
 
 
 @router.post("/credentials/{credential_id}/set-primary", response_model=SetPrimaryCredentialResponse)
@@ -350,38 +348,7 @@ async def set_primary_credential(
             success=True, provider=target.provider, primary_credential_id=target.id
         )
 
-    try:
-        primary_value = decrypt_value(primary.value_encrypted)
-        target_value = decrypt_value(target.value_encrypted)
-    except EncryptionError as e:
-        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
-
-    try:
-        await update_credential_async(db, primary.id, target_value)
-        await update_credential_async(db, target.id, primary_value)
-    except EncryptionError as e:
-        raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
-
-    refreshed = await list_credentials_async(db, provider=target.provider)
-    ordered_keys: list[str] = []
-    for cred in refreshed:
-        if cred.credential_type != "api_key":
-            continue
-        try:
-            ordered_keys.append(decrypt_value(cred.value_encrypted))
-        except EncryptionError:
-            continue
-
-    cm = get_credential_manager()
-    cm.set_api_keys(target.provider, ordered_keys)
-
-    new_primary_id = primary.id
-    if refreshed:
-        for cred in refreshed:
-            if cred.credential_type == "api_key":
-                new_primary_id = cred.id
-                break
-
+    new_primary_id = await _swap_credentials_and_refresh_cache(db, primary, target)
     return SetPrimaryCredentialResponse(
         success=True,
         provider=target.provider,
