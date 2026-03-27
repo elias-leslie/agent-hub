@@ -111,6 +111,18 @@ def compute_next_run(
     return None
 
 
+async def _check_project_permission() -> str | None:
+    """Return a skip reason if the scheduler project permission is off, else None."""
+    from app.db import async_session
+    from app.services.project_permission_service import get_project_permission
+
+    async with async_session() as perm_db:
+        perm = await get_project_permission(perm_db, SCHEDULER_PROJECT)
+        if perm and perm.permission_tier == PERMISSION_TIER_OFF:
+            return "Skipped: project permission tier is off"
+    return None
+
+
 async def _execute_agent_turn(job: Any) -> str:
     """Execute a scheduled job as an agent turn via complete_internal."""
     from app.api.complete.core import complete_internal
@@ -119,27 +131,22 @@ async def _execute_agent_turn(job: Any) -> str:
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates
     from app.services.agent_service import get_agent_service
-    from app.services.project_permission_service import get_project_permission
+    from app.services.persona_service import get_persona
 
-    async with async_session() as perm_db:
-        perm = await get_project_permission(perm_db, SCHEDULER_PROJECT)
-        if perm and perm.permission_tier == PERMISSION_TIER_OFF:
-            return "Skipped: project permission tier is off"
+    skip = await _check_project_permission()
+    if skip:
+        return skip
 
     async with async_session() as db:
-        agent_service = get_agent_service()
-        agent = await agent_service.get_by_slug(db, "persona")
+        agent = await get_agent_service().get_by_slug(db, "persona")
         if not agent:
             return "Error: persona agent not found"
-
-        from app.services.persona_service import get_persona
 
         provider = get_provider_for_model(agent.primary_model_id)
         mandate = await inject_agent_mandates(
             agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT, task_type="scheduled_job"
         )
-        persona = await get_persona(db)
-        max_turns = get_persona_limit(persona, "max_turns")
+        max_turns = get_persona_limit(await get_persona(db), "max_turns")
 
         messages: list[dict[str, Any]] = []
         if mandate.system_content:
