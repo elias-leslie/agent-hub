@@ -153,6 +153,159 @@ def build_messages(
     return messages
 
 
+async def _call_adapter(
+    adapter: ProviderAdapter,
+    messages: list[Message],
+    model: str,
+    config: SubagentConfig,
+):
+    """Invoke adapter.complete with optional timeout."""
+    coro = adapter.complete(
+        messages=messages,
+        model=model,
+        temperature=config.temperature,
+        thinking_level=config.thinking_level,
+        tools=config.tools,
+    )
+    if config.timeout_seconds is None:
+        return await coro
+    return await asyncio.wait_for(coro, timeout=config.timeout_seconds)
+
+
+def _record_success(span, result, config) -> str | None:
+    """Record completion attributes on span and return updated trace_id or None."""
+    span.set_attribute("subagent.status", "completed")
+    span.set_attribute("subagent.input_tokens", result.input_tokens)
+    span.set_attribute("subagent.output_tokens", result.output_tokens)
+    span.set_attribute("subagent.total_tokens", result.input_tokens + result.output_tokens)
+    if result.thinking_tokens:
+        span.set_attribute("subagent.thinking_tokens", result.thinking_tokens)
+    span.set_status(Status(StatusCode.OK))
+
+    span_ctx = span.get_span_context()
+    if span_ctx.is_valid:
+        return format(span_ctx.trace_id, "032x")
+    return None
+
+
+async def _maybe_log_cost(config: SubagentConfig, result) -> None:
+    """Fire-and-forget cost logging when project tracking is enabled."""
+    if not (config.project_id and result.input_tokens + result.output_tokens > 0):
+        return
+    try:
+        await _log_subagent_cost(
+            project_id=config.project_id,
+            provider=result.provider,
+            model=result.model,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+        )
+    except Exception:
+        logger.warning("Subagent cost logging failed", exc_info=True)
+
+
+def _make_result(
+    subagent_id: str,
+    config: SubagentConfig,
+    model: str,
+    started_at: datetime,
+    *,
+    status: str,
+    content: str = "",
+    provider: str | None = None,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    thinking_content: str | None = None,
+    thinking_tokens: int | None = None,
+    error: str | None = None,
+    parent_id: str | None = None,
+    trace_id: str | None = None,
+) -> SubagentResult:
+    return SubagentResult(
+        subagent_id=subagent_id,
+        name=config.name,
+        content=content,
+        status=status,
+        provider=provider or config.provider,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        thinking_content=thinking_content,
+        thinking_tokens=thinking_tokens,
+        error=error,
+        started_at=started_at,
+        completed_at=datetime.now(UTC),
+        parent_id=parent_id,
+        trace_id=trace_id,
+    )
+
+
+async def _handle_success(span, subagent_id, config, model, started_at,
+                         result, effective_trace_id, parent_id) -> SubagentResult:
+    """Record span attributes, log cost, and return a completed SubagentResult."""
+    updated_trace_id = _record_success(span, result, config)
+    if updated_trace_id:
+        effective_trace_id = updated_trace_id
+    await _maybe_log_cost(config, result)
+    return _make_result(
+        subagent_id, config, result.model, started_at,
+        status="completed",
+        content=result.content,
+        provider=result.provider,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        thinking_content=result.thinking_content,
+        thinking_tokens=result.thinking_tokens,
+        parent_id=parent_id,
+        trace_id=effective_trace_id,
+    )
+
+
+async def _execute_in_span(
+    span, subagent_id, task, config, adapter, model,
+    context, parent_id, effective_trace_id, started_at,
+) -> SubagentResult:
+    """Run the adapter call inside an already-active span and return a result."""
+    messages = build_messages(task, config, context)
+    span.set_attribute("subagent.message_count", len(messages))
+
+    try:
+        result = await _call_adapter(adapter, messages, model, config)
+        return await _handle_success(
+            span, subagent_id, config, model, started_at,
+            result, effective_trace_id, parent_id,
+        )
+
+    except TimeoutError:
+        logger.warning(
+            f"Subagent {config.name} ({subagent_id}) timed out "
+            f"after {config.timeout_seconds}s"
+        )
+        span.set_attribute("subagent.status", "timeout")
+        span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
+        span.record_exception(TimeoutError(f"Timeout after {config.timeout_seconds}s"))
+        return _make_result(
+            subagent_id, config, model, started_at,
+            status="timeout",
+            error=f"Execution timed out after {config.timeout_seconds} seconds",
+            parent_id=parent_id,
+            trace_id=effective_trace_id,
+        )
+
+    except Exception as e:
+        logger.error(f"Subagent {config.name} ({subagent_id}) error: {e}")
+        span.set_attribute("subagent.status", "error")
+        span.set_status(Status(StatusCode.ERROR, str(e)))
+        span.record_exception(e)
+        return _make_result(
+            subagent_id, config, model, started_at,
+            status="error",
+            error=str(e),
+            parent_id=parent_id,
+            trace_id=effective_trace_id,
+        )
+
+
 async def execute_subagent(
     task: str,
     config: SubagentConfig,
@@ -162,24 +315,10 @@ async def execute_subagent(
     parent_id: str | None = None,
     trace_id: str | None = None,
 ) -> SubagentResult:
-    """Execute a subagent with telemetry and error handling.
-
-    Args:
-        task: The task description.
-        config: Subagent configuration.
-        adapter: Provider adapter to use.
-        model: Model name to use.
-        context: Optional context messages.
-        parent_id: Parent subagent ID.
-        trace_id: OpenTelemetry trace ID.
-
-    Returns:
-        SubagentResult with execution outcome.
-    """
+    """Execute a subagent with telemetry and error handling."""
     subagent_id = str(uuid.uuid4())[:8]
     started_at = datetime.now(UTC)
 
-    # Get tracer and create span
     tracer = get_tracer("agent-hub.orchestration.subagent")
     effective_trace_id = trace_id or get_current_trace_id()
 
@@ -206,118 +345,7 @@ async def execute_subagent(
             f"provider={config.provider} parent={parent_id} trace={effective_trace_id}"
         )
 
-        # Build messages with isolated context
-        messages = build_messages(task, config, context)
-        span.set_attribute("subagent.message_count", len(messages))
-
-        try:
-            if config.timeout_seconds is None:
-                result = await adapter.complete(
-                    messages=messages,
-                    model=model,
-                    temperature=config.temperature,
-                    thinking_level=config.thinking_level,
-                    tools=config.tools,
-                )
-            else:
-                result = await asyncio.wait_for(
-                    adapter.complete(
-                        messages=messages,
-                        model=model,
-                        temperature=config.temperature,
-                        thinking_level=config.thinking_level,
-                        tools=config.tools,
-                    ),
-                    timeout=config.timeout_seconds,
-                )
-
-            # Record success in span
-            span.set_attribute("subagent.status", "completed")
-            span.set_attribute("subagent.input_tokens", result.input_tokens)
-            span.set_attribute("subagent.output_tokens", result.output_tokens)
-            span.set_attribute("subagent.total_tokens", result.input_tokens + result.output_tokens)
-            if result.thinking_tokens:
-                span.set_attribute("subagent.thinking_tokens", result.thinking_tokens)
-            span.set_status(Status(StatusCode.OK))
-
-            # Update effective_trace_id from current span context
-            span_ctx = span.get_span_context()
-            if span_ctx.is_valid:
-                effective_trace_id = format(span_ctx.trace_id, "032x")
-
-            # Log cost if project tracking is enabled (fire-and-forget)
-            if config.project_id and result.input_tokens + result.output_tokens > 0:
-                try:
-                    await _log_subagent_cost(
-                        project_id=config.project_id,
-                        provider=result.provider,
-                        model=result.model,
-                        input_tokens=result.input_tokens,
-                        output_tokens=result.output_tokens,
-                    )
-                except Exception:
-                    logger.warning("Subagent cost logging failed", exc_info=True)
-
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content=result.content,
-                status="completed",
-                provider=result.provider,
-                model=result.model,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                thinking_content=result.thinking_content,
-                thinking_tokens=result.thinking_tokens,
-                started_at=started_at,
-                completed_at=datetime.now(UTC),
-                parent_id=parent_id,
-                trace_id=effective_trace_id,
-            )
-
-        except TimeoutError:
-            logger.warning(
-                f"Subagent {config.name} ({subagent_id}) timed out "
-                f"after {config.timeout_seconds}s"
-            )
-            span.set_attribute("subagent.status", "timeout")
-            span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
-            span.record_exception(TimeoutError(f"Timeout after {config.timeout_seconds}s"))
-
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content="",
-                status="timeout",
-                provider=config.provider,
-                model=model,
-                input_tokens=0,
-                output_tokens=0,
-                error=f"Execution timed out after {config.timeout_seconds} seconds",
-                started_at=started_at,
-                completed_at=datetime.now(UTC),
-                parent_id=parent_id,
-                trace_id=effective_trace_id,
-            )
-
-        except Exception as e:
-            logger.error(f"Subagent {config.name} ({subagent_id}) error: {e}")
-            span.set_attribute("subagent.status", "error")
-            span.set_status(Status(StatusCode.ERROR, str(e)))
-            span.record_exception(e)
-
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content="",
-                status="error",
-                provider=config.provider,
-                model=model,
-                input_tokens=0,
-                output_tokens=0,
-                error=str(e),
-                started_at=started_at,
-                completed_at=datetime.now(UTC),
-                parent_id=parent_id,
-                trace_id=effective_trace_id,
-            )
+        return await _execute_in_span(
+            span, subagent_id, task, config, adapter, model,
+            context, parent_id, effective_trace_id, started_at,
+        )
