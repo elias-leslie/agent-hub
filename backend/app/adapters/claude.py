@@ -5,11 +5,11 @@ import shutil
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
+from app.adapters._claude_tool_session import ClaudeToolSessionMixin
 from app.adapters.base import (
     CompletionResult,
     Message,
     ProviderAdapter,
-    ProviderRuntimeSession,
     StreamEvent,
 )
 from app.adapters.claude_direct import (
@@ -24,16 +24,12 @@ from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 logger = logging.getLogger(__name__)
 
 
-class ClaudeAdapter(ProviderAdapter):
+class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
     """Adapter for Claude models with dual authentication modes.
 
-    1. **Direct API** — Uses an OAuth token stored in the credential manager
-       with the ``anthropic`` SDK's ``auth_token`` parameter.
-    2. **CLI** — Falls back to the Claude Agent SDK which shells out to the
-       ``claude`` CLI binary (zero API cost via Max subscription).
-
-    Either mode (or both) can be available. Direct API is preferred when an
-    OAuth token exists.
+    Supports Direct API (OAuth token via ``anthropic`` SDK) and CLI
+    (Claude Agent SDK shelling out to the ``claude`` binary).  Direct API
+    is preferred when an OAuth token exists; CLI is used otherwise.
     """
 
     # Model name mapping: full ID -> SDK short name (for CLI mode)
@@ -65,13 +61,7 @@ class ClaudeAdapter(ProviderAdapter):
     }
 
     def __init__(self, **kwargs: Any) -> None:
-        """Initialize Claude adapter.
-
-        Accepts if ANY of CLI, OAuth token, or API key is available.
-
-        Args:
-            **kwargs: Ignored (for backward compatibility).
-        """
+        """Initialize Claude adapter (accepts any of CLI, OAuth token, or API key)."""
         self._cli_path = shutil.which("claude")
 
         from app.services.credential_manager import get_credential_manager
@@ -101,12 +91,7 @@ class ClaudeAdapter(ProviderAdapter):
 
     @property
     def _use_direct_api(self) -> bool:
-        """Whether to use direct Anthropic API (vs CLI).
-
-        Prefer CLI when available — it uses the Claude Agent SDK which handles
-        auth via the Max subscription. Direct API is used as a fallback
-        when CLI is not installed but OAuth token or API key exists.
-        """
+        """True when CLI is absent but OAuth token or API key is present."""
         if self._cli_path:
             return False
         from app.services.credential_manager import get_credential_manager
@@ -159,23 +144,7 @@ class ClaudeAdapter(ProviderAdapter):
                 cache_retention=cache_retention,
                 **kwargs,
             )
-        return await self._complete_cli(
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            cache_retention=cache_retention,
-            **kwargs,
-        )
 
-    async def _complete_cli(
-        self,
-        messages: list[Message],
-        model: str,
-        cache_retention: str = "none",
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Complete using the Claude CLI via Agent SDK."""
         from app.adapters.errors import with_retry
 
         @with_retry
@@ -226,122 +195,3 @@ class ClaudeAdapter(ProviderAdapter):
             **kwargs,
         ):
             yield event
-
-    async def complete_with_tools(
-        self,
-        messages: list[Message],
-        model: str,
-        tools: list[dict[str, Any]],
-        permission_config: dict[str, Any] | None = None,
-        working_dir: str | None = None,
-        resume_session_id: str | None = None,
-        max_turns: int | None = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[tuple[Any, str | None]]:
-        """Generate with native tool calling. Yields (SDK message, session_id).
-
-        Tool calling requires the CLI — direct API doesn't support agentic tool use
-        with Max subscription OAuth tokens.
-        """
-        from app.adapters.claude_tools_helpers import complete_with_tools as _complete_with_tools
-        from app.adapters.claude_utils import build_permission_checker
-
-        checker, yolo_mode = build_permission_checker(permission_config)
-        assert self._cli_path is not None
-        async for message in _complete_with_tools(
-            messages=messages,
-            model=model,
-            tools=tools,
-            yolo_mode=yolo_mode,
-            permission_checker=checker,
-            working_dir=working_dir,
-            resume_session_id=resume_session_id,
-            cli_path=self._cli_path,
-            model_map=self.MODEL_MAP,
-            provider_name=self.provider_name,
-            max_turns=max_turns,
-            **kwargs,
-        ):
-            yield message
-
-    def complete_with_tool_events(
-        self,
-        messages: list[Message],
-        model: str,
-        tools: list[dict[str, Any]],
-        working_dir: str | None,
-        permission_config: dict[str, Any] | None,
-        max_turns: int,
-        project_id: str | None,
-        session_id: str,
-        agent_slug: str | None,
-        tool_catalog: list[dict[str, Any]] | None,
-    ) -> AsyncIterator[tuple[Any, str]]:
-        """Return canonical ToolEvents for the shared tool execution pipeline."""
-        del session_id  # Claude SDK emits its own session id stream.
-        del project_id
-        from app.adapters.claude_tool_events import adapt_claude_stream
-
-        raw_stream = self.complete_with_tools(
-            messages=messages,
-            model=model,
-            tools=tools,
-            permission_config=permission_config,
-            working_dir=working_dir,
-            max_turns=max_turns,
-            agent_slug=agent_slug,
-            tool_catalog=tool_catalog,
-        )
-        return adapt_claude_stream(raw_stream)
-
-    async def start_tool_session(
-        self,
-        messages: list[Message],
-        model: str,
-        tools: list[dict[str, Any]],
-        working_dir: str | None,
-        permission_config: dict[str, Any] | None,
-        max_turns: int,
-        project_id: str | None,
-        session_id: str,
-        agent_slug: str | None,
-        tool_catalog: list[dict[str, Any]] | None,
-    ) -> ProviderRuntimeSession:
-        """Start an owned Claude runtime session for one tool turn."""
-        if self._use_direct_api:
-            return await super().start_tool_session(
-                messages=messages,
-                model=model,
-                tools=tools,
-                working_dir=working_dir,
-                permission_config=permission_config,
-                max_turns=max_turns,
-                project_id=project_id,
-                session_id=session_id,
-                agent_slug=agent_slug,
-                tool_catalog=tool_catalog,
-            )
-
-        from app.adapters.claude_tools_helpers import (
-            build_tool_runtime_session as _build_tool_runtime_session,
-        )
-        from app.adapters.claude_utils import build_permission_checker
-
-        checker, yolo_mode = build_permission_checker(permission_config)
-        assert self._cli_path is not None
-        return await _build_tool_runtime_session(
-            messages=messages,
-            model=model,
-            tools=tools,
-            yolo_mode=yolo_mode,
-            permission_checker=checker,
-            working_dir=working_dir,
-            resume_session_id=None,
-            cli_path=self._cli_path,
-            model_map=self.MODEL_MAP,
-            provider_name=self.provider_name,
-            max_turns=max_turns,
-            project_id=project_id,
-            agent_slug=agent_slug,
-            tool_catalog=tool_catalog,
-        )
