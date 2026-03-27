@@ -175,6 +175,50 @@ def _has_scored_attempts(attempts: list[dict[str, Any]]) -> bool:
     return aggregate_attempts(attempts).scored_attempts > 0
 
 
+def _create_regression_cluster(
+    run: AgentBenchmarkRun,
+    regression_key: str,
+    case_id: str,
+    failure_detail: str,
+    bucket: dict[str, Any],
+    completed_at: datetime,
+) -> AgentRegressionCluster:
+    return AgentRegressionCluster(
+        agent_slug=run.agent_slug,
+        suite_id=run.suite_id,
+        regression_key=regression_key,
+        case_id=case_id,
+        failure_detail=failure_detail,
+        status="open",
+        first_seen_run_id=run.id,
+        last_seen_run_id=run.id,
+        occurrence_count=bucket["occurrence_count"],
+        latest_avg_score=bucket["score_total"] / bucket["occurrence_count"],
+        affected_models=sorted(bucket["models"]),
+        opened_at=completed_at,
+        last_seen_at=completed_at,
+    )
+
+
+def _update_existing_cluster(
+    cluster: AgentRegressionCluster,
+    run: AgentBenchmarkRun,
+    bucket: dict[str, Any],
+    completed_at: datetime,
+) -> None:
+    cluster.status = "open"
+    cluster.resolved_at = None
+    cluster.last_seen_run_id = run.id
+    cluster.last_seen_at = completed_at
+    cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
+    cluster.latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
+    cluster.affected_models = sorted(bucket["models"])
+    if not cluster.first_seen_run_id:
+        cluster.first_seen_run_id = run.id
+    if not cluster.opened_at:
+        cluster.opened_at = completed_at
+
+
 async def _update_regression_clusters(
     db: AsyncSession,
     run: AgentBenchmarkRun,
@@ -195,44 +239,19 @@ async def _update_regression_clusters(
 
     for (case_id, failure_detail), bucket in grouped_failures.items():
         regression_key = f"{case_id}::{failure_detail}"
-        cluster = open_cluster_map.get(regression_key)
-        if cluster is None:
-            cluster = await db.scalar(
-                select(AgentRegressionCluster).where(
-                    AgentRegressionCluster.agent_slug == run.agent_slug,
-                    AgentRegressionCluster.suite_id == run.suite_id,
-                    AgentRegressionCluster.regression_key == regression_key,
-                )
+        cluster = open_cluster_map.get(regression_key) or await db.scalar(
+            select(AgentRegressionCluster).where(
+                AgentRegressionCluster.agent_slug == run.agent_slug,
+                AgentRegressionCluster.suite_id == run.suite_id,
+                AgentRegressionCluster.regression_key == regression_key,
             )
-        latest_avg_score = bucket["score_total"] / bucket["occurrence_count"]
+        )
         if cluster is None:
-            db.add(AgentRegressionCluster(
-                agent_slug=run.agent_slug,
-                suite_id=run.suite_id,
-                regression_key=regression_key,
-                case_id=case_id,
-                failure_detail=failure_detail,
-                status="open",
-                first_seen_run_id=run.id,
-                last_seen_run_id=run.id,
-                occurrence_count=bucket["occurrence_count"],
-                latest_avg_score=latest_avg_score,
-                affected_models=sorted(bucket["models"]),
-                opened_at=completed_at,
-                last_seen_at=completed_at,
+            db.add(_create_regression_cluster(
+                run, regression_key, case_id, failure_detail, bucket, completed_at
             ))
         else:
-            cluster.status = "open"
-            cluster.resolved_at = None
-            cluster.last_seen_run_id = run.id
-            cluster.last_seen_at = completed_at
-            cluster.occurrence_count = int(cluster.occurrence_count or 0) + bucket["occurrence_count"]
-            cluster.latest_avg_score = latest_avg_score
-            cluster.affected_models = sorted(bucket["models"])
-            if not cluster.first_seen_run_id:
-                cluster.first_seen_run_id = run.id
-            if not cluster.opened_at:
-                cluster.opened_at = completed_at
+            _update_existing_cluster(cluster, run, bucket, completed_at)
 
     for cluster in open_clusters:
         if cluster.regression_key not in current_keys:
