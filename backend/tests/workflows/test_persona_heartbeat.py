@@ -55,7 +55,7 @@ class TestHeartbeatRuntimeInfo:
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=resolved,
             ),
@@ -83,7 +83,7 @@ class TestHeartbeatRuntimeInfo:
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=resolved,
             ),
@@ -111,7 +111,7 @@ class TestHeartbeatRuntimeInfo:
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=(model_id, provider, 0.7, "medium", "You are Persona", None),
             ),
@@ -134,17 +134,17 @@ class TestPersonaHeartbeatTask:
     async def test_should_run_skips_when_persona_is_paused(self):
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="paused",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_redis_elapsed",
+                "app.workflows._heartbeat_steps.check_redis_elapsed",
                 new_callable=AsyncMock,
             ) as mock_elapsed,
         ):
@@ -159,22 +159,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     model=CODEX_GPT_5_1_MINI,
@@ -204,22 +204,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     model="claude/unknown-no-tools",
@@ -236,7 +236,7 @@ class TestPersonaHeartbeatTask:
                 new_callable=AsyncMock,
             ) as mock_skip,
             patch(
-                "app.workflows.persona_heartbeat._execute_heartbeat",
+                "app.workflows.persona_heartbeat._do_completion",
                 new_callable=AsyncMock,
             ) as mock_execute,
         ):
@@ -254,17 +254,17 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="paused",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
             ) as mock_permission,
             patch(
@@ -289,22 +289,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     heartbeat_supported=True,
@@ -339,7 +339,7 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
-                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                "app.workflows._heartbeat_steps.record_heartbeat_success",
                 new_callable=AsyncMock,
             ) as mock_success,
         ):
@@ -355,22 +355,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_permission,
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     heartbeat_supported=True,
@@ -405,7 +405,7 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
-                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                "app.workflows._heartbeat_steps.record_heartbeat_success",
                 new_callable=AsyncMock,
             ),
         ):
@@ -424,22 +424,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     heartbeat_supported=True,
@@ -474,7 +474,7 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
-                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                "app.workflows._heartbeat_steps.record_heartbeat_success",
                 new_callable=AsyncMock,
             ),
         ):
@@ -495,22 +495,22 @@ class TestPersonaHeartbeatTask:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_interval",
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_persona_execution_state",
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
             ),
             patch(
-                "app.workflows.persona_heartbeat.check_project_permission",
+                "app.workflows._heartbeat_steps.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
             patch(
-                "app.workflows.persona_heartbeat.get_heartbeat_runtime_info",
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
                 new_callable=AsyncMock,
                 return_value=SimpleNamespace(
                     heartbeat_supported=True,
@@ -545,7 +545,7 @@ class TestPersonaHeartbeatTask:
                 ),
             ),
             patch(
-                "app.workflows.persona_heartbeat.record_heartbeat_success",
+                "app.workflows._heartbeat_steps.record_heartbeat_success",
                 new_callable=AsyncMock,
             ),
         ):
@@ -581,18 +581,18 @@ class TestHeartbeatCompletionRouting:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_model_review_status",
+                "app.workflows._heartbeat_steps.get_model_review_status",
                 new_callable=AsyncMock,
                 return_value=(False, "not due"),
             ),
             patch(
-                "app.workflows.persona_heartbeat.build_heartbeat_prompt",
+                "app.workflows._heartbeat_steps.build_heartbeat_prompt",
                 new_callable=AsyncMock,
                 return_value="Check the system",
             ),
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=(model_id, provider, 0.7, "medium", "You are Persona", None),
             ),
@@ -606,7 +606,7 @@ class TestHeartbeatCompletionRouting:
                 return_value=500,
             ),
             patch(
-                "app.workflows.persona_heartbeat.resolve_project_root",
+                "app.workflows._heartbeat_steps.resolve_project_root",
                 return_value=Path("/tmp/agent-hub"),
             ),
             patch(
@@ -645,18 +645,18 @@ class TestHeartbeatCompletionRouting:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_model_review_status",
+                "app.workflows._heartbeat_steps.get_model_review_status",
                 new_callable=AsyncMock,
                 return_value=(True, "due now"),
             ),
             patch(
-                "app.workflows.persona_heartbeat.build_heartbeat_prompt",
+                "app.workflows._heartbeat_steps.build_heartbeat_prompt",
                 new_callable=AsyncMock,
                 return_value="Compare providers",
             ),
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=(model_id, provider, 0.25, "high", "You are Persona", {"mode": "auto"}),
             ),
@@ -709,18 +709,18 @@ class TestHeartbeatCompletionRouting:
 
         with (
             patch(
-                "app.workflows.persona_heartbeat.get_model_review_status",
+                "app.workflows._heartbeat_steps.get_model_review_status",
                 new_callable=AsyncMock,
                 return_value=(False, "not due"),
             ),
             patch(
-                "app.workflows.persona_heartbeat.build_heartbeat_prompt",
+                "app.workflows._heartbeat_steps.build_heartbeat_prompt",
                 new_callable=AsyncMock,
                 return_value="Focus on agent-hub",
             ) as mock_prompt,
             patch("app.db.async_session", _mock_async_session(mock_db)),
             patch(
-                "app.workflows.persona_heartbeat._resolve_persona",
+                "app.workflows._heartbeat_steps._resolve_persona",
                 new_callable=AsyncMock,
                 return_value=("claude-sonnet-4-6", "claude", 0.2, "medium", "You are Persona", {"mode": "auto"}),
             ) as mock_resolve_persona,
@@ -734,7 +734,7 @@ class TestHeartbeatCompletionRouting:
                 return_value=500,
             ),
             patch(
-                "app.workflows.persona_heartbeat.resolve_project_root",
+                "app.workflows._heartbeat_steps.resolve_project_root",
                 return_value=Path("/tmp/agent-hub"),
             ),
             patch(
