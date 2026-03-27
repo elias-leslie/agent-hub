@@ -574,6 +574,72 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_ingest_transcript_events_upgrades_unknown_scope_confidence_from_stored_paths() -> None:
+    db = AsyncMock()
+    session = Session(
+        id="session-scope-upgrade",
+        project_id="agent-hub",
+        provider="codex",
+        model="codex/gpt-5.4",
+        status="active",
+        session_type="agent",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "transcript_path": "/tmp/session-scope-upgrade.jsonl",
+        },
+        observed_write_paths=["backend/app/services/session_scope.py"],
+        scope_confidence="unknown",
+        models_used=["codex/gpt-5.4"],
+        providers_used=["codex"],
+    )
+    session.created_at = datetime.now(UTC)
+    session.updated_at = datetime.now(UTC)
+    db.execute = AsyncMock(
+        side_effect=[
+            MagicMock(scalar_one_or_none=lambda: session),
+            MagicMock(all=lambda: [("codex/gpt-5.4", None)]),
+            MagicMock(scalar_one_or_none=lambda: session),
+        ]
+    )
+
+    adapter = MagicMock()
+    adapter.read_new_events = AsyncMock(return_value=([], "13"))
+    adapter.detect_boundaries = AsyncMock(return_value=[])
+    append_result = MagicMock(
+        events_appended=0,
+        events_skipped=0,
+        last_turn=3,
+        last_sequence=10,
+        event_ids=[],
+    )
+
+    with (
+        patch(
+            "app.services.session_ingestion.service._adapter_for_provider",
+            return_value=adapter,
+        ),
+        patch(
+            "app.services.session_ingestion.service.append_normalized_events",
+            new_callable=AsyncMock,
+            return_value=append_result,
+        ),
+    ):
+        result = await ingest_transcript_events(
+            db=db,
+            session_id="session-scope-upgrade",
+            request=TranscriptIngestRequest(
+                provider="codex",
+                transcript_path="/tmp/session-scope-upgrade.jsonl",
+            ),
+        )
+
+    assert result.next_checkpoint == "13"
+    assert session.scope_confidence == "observed_write"
+    assert db.commit.await_count == 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_heartbeat_session_backfills_request_identity_and_source_metadata() -> None:
     db = AsyncMock()
     session = Session(
