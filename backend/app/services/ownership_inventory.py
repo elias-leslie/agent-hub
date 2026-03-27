@@ -237,61 +237,72 @@ def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_pa
     return declared, observed_write, observed_read, scope
 
 
+def _build_owner(
+    session: Session,
+    events: list[SessionEvent],
+    worktree_path: str | None,
+    lane_paths: list[str],
+) -> OwnershipOwner | None:
+    """Build an OwnershipOwner for a session, or return None if it should be skipped."""
+    is_worktree = _is_worktree(worktree_path)
+    declared, observed_write, observed_read, scope = _build_scope_paths(session, events, worktree_path)
+    task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
+    if not (task_id or session.current_branch or is_worktree):
+        return None
+    if _should_skip_owner_session(
+        session,
+        task_id=task_id,
+        is_worktree=is_worktree,
+        declared_scope_paths=declared,
+        observed_write_paths=observed_write,
+        observed_read_paths=observed_read,
+    ):
+        return None
+    age = _age_minutes(session.created_at, session.updated_at)
+    is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
+    return OwnershipOwner(
+        task_id=task_id,
+        session_id=session.id,
+        agent_slug=session.agent_slug,
+        branch=session.current_branch,
+        worktree_path=worktree_path,
+        is_worktree=is_worktree,
+        session_status=session.status,
+        workstream_status=session.workstream_status,
+        workstream_note=session.workstream_note,
+        ownership_kind=_derive_ownership_kind(session.workstream_status, scope, is_stale),
+        scope_paths=scope,
+        declared_scope_paths=declared,
+        observed_read_paths=observed_read,
+        observed_write_paths=observed_write,
+        scope_confidence=_derive_scope_confidence(
+            getattr(session, "scope_confidence", None),
+            declared,
+            observed_write,
+            observed_read,
+        ),
+        updated_at=_parse_timestamp(session.updated_at),
+        created_at=_parse_timestamp(session.created_at) or datetime.now(UTC),
+        age_minutes=age,
+        is_stale=is_stale,
+    )
+
+
 async def query_project_ownership(db: AsyncSession, project_id: str) -> list[OwnershipOwner]:
     """Return normalized live ownership rows for a project."""
     sessions = await _fetch_candidate_sessions(db, project_id)
     scope_events = await _fetch_scope_events(db, [s.id for s in sessions])
-
     owners: list[OwnershipOwner] = []
     for session in sessions:
         metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
-        lane_paths = metadata_paths(metadata)
-        worktree_path = _worktree_path_from_metadata(metadata)
-        is_worktree = _is_worktree(worktree_path)
-        events = scope_events.get(session.id, [])
-        declared, observed_write, observed_read, scope = _build_scope_paths(session, events, worktree_path)
-        task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
-        if not (task_id or session.current_branch or is_worktree):
-            continue
-        if _should_skip_owner_session(
+        owner = _build_owner(
             session,
-            task_id=task_id,
-            is_worktree=is_worktree,
-            declared_scope_paths=declared,
-            observed_write_paths=observed_write,
-            observed_read_paths=observed_read,
-        ):
-            continue
-        age = _age_minutes(session.created_at, session.updated_at)
-        is_stale = session.status == "active" and age >= _STALE_ACTIVE_MINUTES
-        owners.append(
-            OwnershipOwner(
-                task_id=task_id,
-                session_id=session.id,
-                agent_slug=session.agent_slug,
-                branch=session.current_branch,
-                worktree_path=worktree_path,
-                is_worktree=is_worktree,
-                session_status=session.status,
-                workstream_status=session.workstream_status,
-                workstream_note=session.workstream_note,
-                ownership_kind=_derive_ownership_kind(session.workstream_status, scope, is_stale),
-                scope_paths=scope,
-                declared_scope_paths=declared,
-                observed_read_paths=observed_read,
-                observed_write_paths=observed_write,
-                scope_confidence=_derive_scope_confidence(
-                    getattr(session, "scope_confidence", None),
-                    declared,
-                    observed_write,
-                    observed_read,
-                ),
-                updated_at=_parse_timestamp(session.updated_at),
-                created_at=_parse_timestamp(session.created_at) or datetime.now(UTC),
-                age_minutes=age,
-                is_stale=is_stale,
-            )
+            scope_events.get(session.id, []),
+            _worktree_path_from_metadata(metadata),
+            metadata_paths(metadata),
         )
+        if owner is not None:
+            owners.append(owner)
     return collapse_ownership_owners(owners)
 
 
