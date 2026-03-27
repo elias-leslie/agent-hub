@@ -302,6 +302,12 @@ def score_attempt(
             attempt.failure_kind = "model"
         return attempt
 
+    if not content.strip():
+        attempt.failure_detail = "empty_model_response"
+        attempt.infra_failure = True
+        attempt.failure_kind = "infra"
+        return attempt
+
     parsed, parse_error = parse_benchmark_json(content)
     if parse_error:
         attempt.failure_detail = parse_error
