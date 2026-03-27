@@ -105,22 +105,30 @@ async def _process_tool_use_block(
     tool_input = getattr(block, "input", {})
     tool_use_id = getattr(block, "id", "")
 
-    # Track tool_use_id → original tool metadata so tool_result events can resolve the name/input
     if tool_use_id and tool_use_id_to_name is not None:
-        tool_use_id_to_name[tool_use_id] = {
-            "name": tool_name,
-            "input": tool_input,
-        }
+        tool_use_id_to_name[tool_use_id] = {"name": tool_name, "input": tool_input}
 
-    await update_session_health(
-        db,
-        session_id,
-        executing_tool_health_detail(tool_name),
-        commit=True,
-    )
+    await update_session_health(db, session_id, executing_tool_health_detail(tool_name), commit=True)
     await store_tool_use(db, session_id, tool_name, tool_input, model_used=model_used, agent_id=agent_id)
     await tracker.report_tool_use(turn, tool_name, tool_input)
     return 1
+
+
+async def _handle_text_block(
+    block: Any,
+    session_id: str,
+    db: AsyncSession,
+    content_parts: list[str],
+) -> bool:
+    """Process a text block: append content, extract narration, return True if valid progress tag found."""
+    _process_text_block(block, content_parts)
+    text = getattr(block, "text", "")
+    if not text:
+        return False
+    tags = parse_narration_tags(text)
+    if "[[P:" in text:
+        await _extract_narration_from_text(text, db, session_id)
+    return bool(tags)
 
 
 async def _process_assistant_event(
@@ -148,18 +156,9 @@ async def _process_assistant_event(
         block_type = getattr(block, "type", None)
         if block_type == "text":
             saw_text_block = True
-            _process_text_block(block, content_parts)
-            text = getattr(block, "text", "")
-            if text:
-                tags = parse_narration_tags(text)
-                if tags:
-                    saw_valid_progress_tag = True
-            if text and "[[P:" in text:
-                await _extract_narration_from_text(text, db, session_id)
+            saw_valid_progress_tag |= await _handle_text_block(block, session_id, db, content_parts)
         elif block_type == "thinking":
-            await _process_thinking_block(
-                block, thinking_parts, db, session_id, model_used, agent_id,
-            )
+            await _process_thinking_block(block, thinking_parts, db, session_id, model_used, agent_id)
         elif block_type == "tool_use":
             tool_calls_increment += await _process_tool_use_block(
                 block, turn, session_id, db, tracker, model_used, agent_id,
@@ -167,10 +166,7 @@ async def _process_assistant_event(
             )
     if saw_text_block and requires_progress_tags:
         await update_session_health(
-            db,
-            session_id,
-            progress_tag_health_detail(saw_valid_progress_tag),
-            commit=True,
+            db, session_id, progress_tag_health_detail(saw_valid_progress_tag), commit=True,
         )
     return tool_calls_increment
 
@@ -193,7 +189,6 @@ async def _process_tool_result_event(
     is_error = getattr(event, "is_error", False)
     duration_ms = getattr(event, "duration_ms", None)
 
-    # Resolve actual tool name from the tool_use_id mapping
     tool_metadata = (tool_use_id_to_name or {}).get(tool_use_id, {})
     tool_name = str(tool_metadata.get("name") or tool_use_id)
     if tool_result_summaries is not None:
@@ -224,51 +219,43 @@ def _process_error_event(event: Any) -> str:
     return error_message
 
 
-async def process_tool_event(
-    event: Any,
-    event_turn: int,
+def _summarize_tool_result(tool_name: str, content: str, is_error: bool) -> str | None:
+    """Build a compact one-line summary from a tool result."""
+    first_line = next((line.strip() for line in str(content).splitlines() if line.strip()), "")
+    if not first_line:
+        first_line = "<no output>"
+    prefix = f"{tool_name or 'tool'}"
+    if is_error:
+        prefix = f"{prefix} error"
+    return f"{prefix}: {first_line[:160]}"
+
+
+def _compute_assistant_turns(
+    tool_calls_increment: int,
     model_turn: int,
     awaiting_tool_results: bool,
-    session_id: str,
-    db: AsyncSession,
-    content_parts: list[str],
-    thinking_parts: list[str],
-    tracker: ProgressTracker,
-    model_used: str | None = None,
-    agent_id: str | None = None,
+) -> tuple[int, bool]:
+    """Update model_turn and awaiting_tool_results after an assistant event."""
+    if tool_calls_increment > 0 and not awaiting_tool_results:
+        model_turn += 1
+    if tool_calls_increment > 0:
+        awaiting_tool_results = True
+    return model_turn, awaiting_tool_results
+
+
+async def process_tool_event(
+    event: Any, event_turn: int, model_turn: int, awaiting_tool_results: bool,
+    session_id: str, db: AsyncSession, content_parts: list[str], thinking_parts: list[str],
+    tracker: ProgressTracker, model_used: str | None = None, agent_id: str | None = None,
     requires_progress_tags: bool = False,
     tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
     tool_result_summaries: list[str] | None = None,
 ) -> tuple[int, int, str | None, int, bool]:
-    """Process a single unified ToolEvent.
+    """Process a single unified ToolEvent (assistant/tool_result/result/error).
 
-    Handles all event types: assistant, tool_result, result, error.
-    Works identically for Claude, Gemini, CloudCode, and OpenAI-compat events
-    once they've been adapted to ToolEvent format.
-
-    Args:
-        event: ToolEvent from any provider's event adapter
-        turn: Current turn number
-        session_id: Session ID for storage
-        db: Database session
-        content_parts: List to append text content to
-        thinking_parts: List to append thinking content to
-        tracker: Progress tracker instance
-        model_used: Model identifier for event attribution
-        agent_id: Agent slug for event attribution
-        tool_use_id_to_name: Mutable mapping of tool_use_id to original tool metadata,
-            populated by tool_use events and consumed by tool_result events.
-            Caller should pass a shared dict across calls.
-
-    Returns:
-        Tuple of (
-            updated_event_turn,
-            tool_calls_increment,
-            error_message,
-            updated_model_turn,
-            updated_awaiting_tool_results,
-        )
-        error_message is set if event indicates an error
+    Returns (updated_event_turn, tool_calls_increment, error_message,
+             updated_model_turn, updated_awaiting_tool_results).
+    tool_use_id_to_name maps tool_use_id -> {name, input}; caller shares across calls.
     """
     event_type = getattr(event, "type", None)
     tool_calls_increment = 0
@@ -281,10 +268,9 @@ async def process_tool_event(
             tracker, model_used, agent_id, requires_progress_tags,
             tool_use_id_to_name=tool_use_id_to_name,
         )
-        if tool_calls_increment > 0 and not awaiting_tool_results:
-            model_turn += 1
-        if tool_calls_increment > 0:
-            awaiting_tool_results = True
+        model_turn, awaiting_tool_results = _compute_assistant_turns(
+            tool_calls_increment, model_turn, awaiting_tool_results,
+        )
     elif event_type == "tool_result":
         event_turn = await _process_tool_result_event(
             event, event_turn, session_id, db, model_used, agent_id,
@@ -301,14 +287,3 @@ async def process_tool_event(
         error_message = _process_error_event(event)
 
     return event_turn, tool_calls_increment, error_message, model_turn, awaiting_tool_results
-
-
-def _summarize_tool_result(tool_name: str, content: str, is_error: bool) -> str | None:
-    """Build a compact one-line summary from a tool result."""
-    first_line = next((line.strip() for line in str(content).splitlines() if line.strip()), "")
-    if not first_line:
-        first_line = "<no output>"
-    prefix = f"{tool_name or 'tool'}"
-    if is_error:
-        prefix = f"{prefix} error"
-    return f"{prefix}: {first_line[:160]}"
