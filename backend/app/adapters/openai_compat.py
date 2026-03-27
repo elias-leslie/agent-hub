@@ -5,7 +5,6 @@ Shared by OpenRouter, OpenAI, xAI, and Zhipu adapters.
 
 from __future__ import annotations
 
-import json
 import logging
 from abc import abstractmethod
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -17,12 +16,13 @@ from app.adapters._openai_compat_helpers import (
     build_client_kwargs,
     build_completion_params,
     build_stream_params,
+    complete_once,
     convert_messages,
-    handle_provider_error,
     iterate_stream,
-    parse_completion_response,
+    load_credentials_from_db,
     resolve_api_key,
 )
+from app.adapters._openai_tool_loop import run_tool_loop
 from app.adapters.base import (
     CompletionResult,
     Message,
@@ -31,66 +31,6 @@ from app.adapters.base import (
 )
 
 logger = logging.getLogger(__name__)
-_EMPTY_FINAL_RESPONSE_MSG = (
-    "You have finished tool work but have not produced a final user-facing response. "
-    "Write the final response now. "
-    "If no changes were needed, say so plainly. "
-    "If changes were made, summarize the exact changes and evidence. "
-    "Do not call more tools unless a missing fact blocks the response."
-)
-
-
-def _is_auth_error(error: Exception) -> bool:
-    """Return True when the provider error looks like authentication."""
-    message = str(error).lower()
-    return "401" in message or "authentication" in message or "unauthorized" in message
-
-
-async def _load_credentials_from_db(provider_name: str) -> str | None:
-    """Reload credentials from the database and return the provider key."""
-    try:
-        from app.db import async_session
-        from app.services.credential_manager import get_credential_manager
-
-        cm = get_credential_manager()
-        async with async_session() as db:
-            await cm.load(db)
-        return cm.get_api_key(provider_name)
-    except Exception:
-        logger.debug("DB credential reload failed for %s", provider_name, exc_info=True)
-        return None
-
-
-def _build_assistant_tool_message(result: CompletionResult) -> dict[str, Any]:
-    """Build the assistant message dict with tool_calls for conversation history."""
-    return {
-        "role": "assistant",
-        "content": result.content or None,
-        "tool_calls": [
-            {
-                "id": tc.id,
-                "type": "function",
-                "function": {"name": tc.name, "arguments": json.dumps(tc.input)},
-            }
-            for tc in result.tool_calls  # type: ignore[union-attr]
-        ],
-    }
-
-
-async def _execute_tool_calls(
-    result: CompletionResult,
-    openai_messages: list[dict[str, Any]],
-    tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
-) -> AsyncIterator[StreamEvent]:
-    """Execute all tool calls from a result, appending messages and yielding events."""
-    openai_messages.append(_build_assistant_tool_message(result))
-    if result.content:
-        yield StreamEvent(type="content", content=result.content)
-    for tc in result.tool_calls:  # type: ignore[union-attr]
-        yield StreamEvent(type="tool_use", tool_id=tc.id, tool_name=tc.name, tool_input=tc.input)
-        tool_result_str = await tool_handler(tc.name, tc.input)
-        yield StreamEvent(type="tool_result", tool_id=tc.id, content=tool_result_str)
-        openai_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_str})
 
 
 class OpenAICompatibleAdapter(ProviderAdapter):
@@ -134,23 +74,15 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     def _get_client_kwargs(self) -> dict[str, Any]:
         return {}
 
-    def _set_client_api_key(self, api_key: str) -> None:
-        """Update the underlying client with a new API key."""
-        self._client.api_key = api_key
-        self._last_resolved_key = api_key
-
     async def _refresh_credentials(self, *, allow_db_reload: bool = False) -> str | None:
-        """Re-check CredentialManager for a fresher API key.
-
-        Called before each API call so long-running agentic sessions pick up
-        rotated keys without adapter recreation.
-        """
+        """Re-check CredentialManager; updates client key if rotated."""
         try:
             fresh = resolve_api_key(self.provider_name, None)
             if not fresh and allow_db_reload:
-                fresh = await _load_credentials_from_db(self.provider_name)
+                fresh = await load_credentials_from_db(self.provider_name)
             if fresh and fresh != self._last_resolved_key:
-                self._set_client_api_key(fresh)
+                self._client.api_key = fresh
+                self._last_resolved_key = fresh
                 logger.debug("%s: credential refreshed from cache", self.provider_name)
             return fresh
         except Exception:
@@ -171,52 +103,13 @@ class OpenAICompatibleAdapter(ProviderAdapter):
 
         @with_retry
         async def _do_complete() -> CompletionResult:
-            return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
+            await self._refresh_credentials()
+            params = build_completion_params(
+                self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs,
+            )
+            return await complete_once(self._client, self.provider_name, params, self._refresh_credentials)
 
         return await _do_complete()
-
-    async def _complete_impl(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Internal implementation of completion."""
-        await self._refresh_credentials()
-        params = build_completion_params(
-            self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs,
-        )
-        try:
-            response = await self._client.chat.completions.create(**params)
-            return parse_completion_response(response, self.provider_name)
-        except Exception as e:
-            result, e = await self._retry_on_auth_error(e, params)
-            if result is not None:
-                return result
-            logger.error(f"{self.provider_name} completion error: {e}")
-            handle_provider_error(e, self.provider_name)
-            raise  # Unreachable
-
-    async def _retry_on_auth_error(
-        self, error: Exception, params: dict[str, Any]
-    ) -> tuple[CompletionResult | None, Exception]:
-        """If error is auth-related, refresh credentials and retry once.
-
-        Returns ``(result, error)`` where result is set on success, or
-        ``(None, error_to_report)`` when retry is skipped or fails.
-        """
-        if not _is_auth_error(error):
-            return None, error
-        fresh = await self._refresh_credentials(allow_db_reload=True)
-        if not fresh:
-            return None, error
-        try:
-            response = await self._client.chat.completions.create(**params)
-            return parse_completion_response(response, self.provider_name), error
-        except Exception as retry_error:
-            return None, retry_error
 
     async def health_check(self) -> bool:
         """Check if the provider API is reachable."""
@@ -245,7 +138,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             async for event in iterate_stream(raw_stream):
                 yield event
         except Exception as e:
-            logger.error(f"{self.provider_name} stream error: {e}")
+            logger.error("%s stream error: %s", self.provider_name, e)
             yield StreamEvent(type="error", error=str(e))
 
     async def complete_with_tools(
@@ -258,48 +151,15 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Run an agentic tool-calling loop over the OpenAI-compatible API."""
-        kwargs = kwargs.copy()
-        openai_messages: list[dict[str, Any]] = convert_messages(messages)
-        temperature: float = kwargs.pop("temperature", 1.0)
-        max_tokens: int | None = kwargs.pop("max_tokens", None)
-        extra_kwargs = {**kwargs, "tools": tools}
-        empty_closeout_used = False
-
-        for _turn in range(max_turns):
-            await self._refresh_credentials()
-            params = build_completion_params(
-                self._resolve_model(model), openai_messages, temperature, max_tokens, extra_kwargs,
-            )
-            try:
-                response = await self._client.chat.completions.create(**params)
-                result = parse_completion_response(response, self.provider_name)
-            except Exception as e:
-                logger.error(f"{self.provider_name} complete_with_tools error: {e}")
-                yield StreamEvent(type="error", error=str(e))
-                return
-
-            if result.tool_calls:
-                async for event in _execute_tool_calls(result, openai_messages, tool_handler):
-                    yield event
-                continue
-
-            # No tool calls — handle empty response or finish
-            no_content = not (result.content or "").strip()
-            if no_content and not empty_closeout_used and _turn + 1 < max_turns:
-                openai_messages.append({"role": "user", "content": _EMPTY_FINAL_RESPONSE_MSG})
-                empty_closeout_used = True
-                continue
-            if result.content:
-                yield StreamEvent(type="content", content=result.content)
-            yield StreamEvent(
-                type="done",
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                finish_reason=result.finish_reason,
-            )
-            return
-
-        yield StreamEvent(type="done", finish_reason="max_turns")
+        kw = kwargs.copy()
+        temperature: float = kw.pop("temperature", 1.0)
+        max_tokens: int | None = kw.pop("max_tokens", None)
+        async for event in run_tool_loop(
+            self._client, self.provider_name, self._resolve_model(model),
+            messages, tools, tool_handler, self._refresh_credentials,
+            max_turns=max_turns, temperature=temperature, max_tokens=max_tokens, **kw,
+        ):
+            yield event
 
     def complete_with_tool_events(
         self,
@@ -330,4 +190,3 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             agent_slug=agent_slug,
             tool_catalog=tool_catalog,
         )
-
