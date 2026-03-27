@@ -53,6 +53,126 @@ class ReinforcementResult(BaseModel):
     new_confidence: float | None = None
 
 
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _extract_confidence(source_desc: str) -> float:
+    """Extract confidence value from source description."""
+    match = re.search(r"confidence:(\d+(?:\.\d+)?)", source_desc)
+    if match:
+        return float(match.group(1))
+    return 70.0  # Default to provisional threshold
+
+
+def _update_confidence_in_desc(source_desc: str, old_conf: float, new_conf: float) -> str:
+    """Replace the confidence tag in source_desc with the new value."""
+    return source_desc.replace(
+        f"confidence:{old_conf:.0f}", f"confidence:{new_conf:.0f}"
+    )
+
+
+async def _fetch_candidates(
+    repo,
+    content: str,
+    query_embedding: list[float] | None,
+    group_id: str | None,
+) -> list[dict]:
+    """Return candidate records via semantic or text search."""
+    if query_embedding:
+        return await repo.semantic_search(query_embedding, group_id=group_id, limit=5)
+
+    matches = await repo.text_search(content, group_id=group_id, limit=5)
+    return [
+        {
+            "uuid": str(m.id),
+            "source_description": m.source_description or "",
+            "relevance_score": 1.0,
+        }
+        for m in matches
+    ]
+
+
+async def _apply_reinforcement(
+    repo,
+    candidate: dict,
+    confidence: float,
+) -> ReinforcementResult:
+    """Promote or reinforce a matching provisional candidate. Returns updated result."""
+    result = ReinforcementResult(found_match=True)
+    matched_uuid = str(candidate.get("uuid", ""))
+    result.matched_uuid = matched_uuid
+
+    source_desc = str(candidate.get("source_description", "") or "")
+    existing_conf = _extract_confidence(source_desc)
+    new_conf = min(100, (existing_conf + confidence) / 2 + 10)
+    result.new_confidence = new_conf
+
+    updated_desc = _update_confidence_in_desc(source_desc, existing_conf, new_conf)
+
+    if new_conf >= CANONICAL_THRESHOLD:
+        updated_desc = updated_desc.replace("status:provisional", "status:canonical")
+        result.promoted = True
+        logger.info(
+            "Promoted learning %s from provisional to canonical "
+            "(old_conf=%.0f, new_conf=%.0f)",
+            matched_uuid[:8],
+            existing_conf,
+            new_conf,
+        )
+    else:
+        logger.info(
+            "Reinforced provisional learning %s (old_conf=%.0f, new_conf=%.0f)",
+            matched_uuid[:8],
+            existing_conf,
+            new_conf,
+        )
+
+    await repo.update(matched_uuid, source_description=updated_desc)
+    return result
+
+
+def _is_provisional_match(candidate: dict, score_threshold: float) -> bool:
+    """Return True when candidate is provisional and meets the similarity threshold."""
+    score = float(candidate.get("relevance_score", 0.0))
+    if score < score_threshold:
+        return False
+    source_desc = str(candidate.get("source_description", "") or "")
+    return "status:provisional" in source_desc
+
+
+def _build_source_desc_for_promotion(source_desc: str, reason: str | None) -> tuple[str, str]:
+    """
+    Return (updated_source_desc, previous_status) for a manual promotion.
+
+    Does not handle the already-canonical case.
+    """
+    if "status:provisional" in source_desc:
+        updated = source_desc.replace("status:provisional", "status:canonical")
+        previous_status = "provisional"
+    else:
+        updated = f"{source_desc} status:canonical"
+        previous_status = "unknown"
+
+    if reason:
+        updated = f"{updated} promoted:{reason}"
+
+    return updated, previous_status
+
+
+def _candidate_qualifies_for_context(source_desc: str, include_provisional: bool) -> bool:
+    """Return True if a candidate should be included in context results."""
+    if "status:canonical" in source_desc:
+        return True
+    return include_provisional and "status:provisional" in source_desc
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 async def check_and_promote_duplicate(
     content: str,
     confidence: float,
@@ -74,79 +194,12 @@ async def check_and_promote_duplicate(
         ReinforcementResult indicating if promotion occurred
     """
     repo = get_memory_repository()
-    result = ReinforcementResult()
 
     try:
-        if not query_embedding:
-            # Without an embedding we cannot do semantic search; fall back to text search
-            matches = await repo.text_search(content, group_id=group_id, limit=5)
-            candidates = [
-                {
-                    "uuid": str(m.id),
-                    "source_description": m.source_description or "",
-                    "relevance_score": 1.0,  # exact text match gets high score
-                }
-                for m in matches
-            ]
-        else:
-            candidates = await repo.semantic_search(
-                query_embedding,
-                group_id=group_id,
-                limit=5,
-            )
-
-        if not candidates:
-            return result
-
+        candidates = await _fetch_candidates(repo, content, query_embedding, group_id)
         for candidate in candidates:
-            score = float(candidate.get("relevance_score", 0.0))
-            if score < SIMILARITY_THRESHOLD:
-                continue
-
-            source_desc = str(candidate.get("source_description", "") or "")
-            if "status:provisional" not in source_desc:
-                continue
-
-            # Found a matching provisional learning — promote it
-            result.found_match = True
-            matched_uuid = str(candidate.get("uuid", ""))
-            result.matched_uuid = matched_uuid
-
-            # Calculate new confidence (average of existing + new, capped at 100)
-            existing_conf = _extract_confidence(source_desc)
-            new_conf = min(100, (existing_conf + confidence) / 2 + 10)
-            result.new_confidence = new_conf
-
-            if new_conf >= CANONICAL_THRESHOLD:
-                new_source_desc = source_desc.replace(
-                    "status:provisional", "status:canonical"
-                ).replace(f"confidence:{existing_conf:.0f}", f"confidence:{new_conf:.0f}")
-
-                await repo.update(matched_uuid, source_description=new_source_desc)
-                result.promoted = True
-
-                logger.info(
-                    "Promoted learning %s from provisional to canonical "
-                    "(old_conf=%.0f, new_conf=%.0f)",
-                    matched_uuid[:8],
-                    existing_conf,
-                    new_conf,
-                )
-            else:
-                new_source_desc = source_desc.replace(
-                    f"confidence:{existing_conf:.0f}", f"confidence:{new_conf:.0f}"
-                )
-                await repo.update(matched_uuid, source_description=new_source_desc)
-
-                logger.info(
-                    "Reinforced provisional learning %s (old_conf=%.0f, new_conf=%.0f)",
-                    matched_uuid[:8],
-                    existing_conf,
-                    new_conf,
-                )
-
-            return result  # Only process first match
-
+            if _is_provisional_match(candidate, SIMILARITY_THRESHOLD):
+                return await _apply_reinforcement(repo, candidate, confidence)
     except Exception as e:
         from .exceptions import PromotionError
 
@@ -154,7 +207,7 @@ async def check_and_promote_duplicate(
         if isinstance(e, PromotionError):
             raise
 
-    return result
+    return ReinforcementResult()
 
 
 async def promote_learning(request: PromoteRequest) -> PromotionResult:
@@ -170,16 +223,15 @@ async def promote_learning(request: PromoteRequest) -> PromotionResult:
     repo = get_memory_repository()
 
     try:
-        mem = await repo.get_as_dict(request.episode_uuid)
-        if not mem:
+        memory_record = await repo.get_as_dict(request.episode_uuid)
+        if not memory_record:
             return PromotionResult(
                 success=False,
                 message=f"Memory not found: {request.episode_uuid}",
             )
 
-        source_desc = mem.get("source_description", "") or ""
+        source_desc = memory_record.get("source_description", "") or ""
 
-        # Check current status
         if "status:canonical" in source_desc:
             return PromotionResult(
                 success=True,
@@ -190,19 +242,10 @@ async def promote_learning(request: PromoteRequest) -> PromotionResult:
                 new_status="canonical",
             )
 
-        # Update to canonical
-        if "status:provisional" in source_desc:
-            new_source_desc = source_desc.replace("status:provisional", "status:canonical")
-            previous_status = "provisional"
-        else:
-            new_source_desc = f"{source_desc} status:canonical"
-            previous_status = "unknown"
-
-        # Add promotion reason if provided
-        if request.reason:
-            new_source_desc = f"{new_source_desc} promoted:{request.reason}"
-
-        await repo.update(request.episode_uuid, source_description=new_source_desc)
+        updated_desc, previous_status = _build_source_desc_for_promotion(
+            source_desc, request.reason
+        )
+        await repo.update(request.episode_uuid, source_description=updated_desc)
 
         logger.info(
             "Manually promoted learning %s to canonical (reason: %s)",
@@ -257,32 +300,22 @@ async def get_canonical_context(
     try:
         if query_embedding:
             candidates = await repo.semantic_search(
-                query_embedding,
-                group_id=group_id,
-                limit=max_facts * 2,
+                query_embedding, group_id=group_id, limit=max_facts * 2
             )
         else:
             matches = await repo.text_search(query, group_id=group_id, limit=max_facts * 2)
             candidates = [
-                {
-                    "content": m.content,
-                    "source_description": m.source_description or "",
-                }
+                {"content": m.content, "source_description": m.source_description or ""}
                 for m in matches
             ]
 
         for candidate in candidates:
             if len(facts) >= max_facts:
                 break
-
             source_desc = candidate.get("source_description", "") or ""
-            is_canonical = "status:canonical" in source_desc
-            is_provisional = "status:provisional" in source_desc
-
-            if is_canonical or (include_provisional and is_provisional):
-                content = candidate.get("content", "")
-                if content:
-                    facts.append(content)
+            content = candidate.get("content", "")
+            if content and _candidate_qualifies_for_context(source_desc, include_provisional):
+                facts.append(content)
 
     except Exception as e:
         from .exceptions import PromotionError
@@ -292,11 +325,3 @@ async def get_canonical_context(
             raise
 
     return facts
-
-
-def _extract_confidence(source_desc: str) -> float:
-    """Extract confidence value from source description."""
-    match = re.search(r"confidence:(\d+(?:\.\d+)?)", source_desc)
-    if match:
-        return float(match.group(1))
-    return 70.0  # Default to provisional threshold
