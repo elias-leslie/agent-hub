@@ -7,80 +7,29 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
-
-from app.services.memory.context_builder_settings import normalize_memory_config
 
 logger = logging.getLogger(__name__)
 
-
-def _resolve_catalog_model_id(model_id: str | None) -> str | None:
-    """Resolve aliases to canonical catalog IDs for model-management actions."""
-    if not model_id:
-        return None
-
-    from app.constants.catalog import MODEL_CATALOG_BY_ID, resolve_model
-
-    resolved = resolve_model(model_id)
-    if resolved in MODEL_CATALOG_BY_ID:
-        return resolved
-    return model_id
-
-
-def _normalize_tag_values(values: list[str] | None) -> list[str]:
-    normalized: list[str] = []
-    for value in values or []:
-        cleaned = value.strip()
-        if cleaned and cleaned not in normalized:
-            normalized.append(cleaned)
-    return normalized
-
-
-def _merge_tag_values(
-    current: object,
-    *,
-    add_values: list[str] | None = None,
-    remove_values: list[str] | None = None,
-    clear: bool = False,
-) -> list[str]:
-    merged = [] if clear else _normalize_tag_values(current if isinstance(current, list) else None)
-    for value in _normalize_tag_values(add_values):
-        if value not in merged:
-            merged.append(value)
-    remove_set = set(_normalize_tag_values(remove_values))
-    if remove_set:
-        merged = [value for value in merged if value not in remove_set]
-    return merged
-
-
-def _copy_memory_config(memory_config: object) -> dict[str, object]:
-    normalized = normalize_memory_config(memory_config if isinstance(memory_config, dict) else None)
-    return dict(normalized) if normalized else {}
-
-
-def _format_agent_details(agent: Any) -> str:
-    memory_config = getattr(agent, "memory_config", None)
-    fallback_models = getattr(agent, "fallback_models", None) or []
-    fallbacks = ", ".join(fallback_models) if fallback_models else "none"
-    description = getattr(agent, "description", None)
-    description_block = f"\n  Description: {description}" if description else ""
-    memory_config_json = json.dumps(memory_config or {}, sort_keys=True)
-    return (
-        f"- **{agent.name}** (`{agent.slug}`){description_block}\n"
-        f"  Primary: {agent.primary_model_id} | Fallbacks: {fallbacks}\n"
-        f"  Escalation: {agent.escalation_model_id or 'none'} | "
-        f"Temp: {agent.temperature} | Thinking: {agent.thinking_level or 'N/A'}\n"
-        f"  Role: {'coding' if agent.is_coding_agent else 'general'} | "
-        f"Active: {agent.is_active} | Version: {agent.version}\n"
-        f"  Memory: {memory_config_json}"
-    )
+# Re-export helpers that tests import transitively via this module.
+from app.services.tools._executor_model_mgmt_helpers import (  # noqa: E402, F401
+    _apply_tag_patches,
+    _build_changes_summary,
+    _compute_model_line,
+    _copy_memory_config,
+    _do_update_agent_memory,
+    _do_update_agent_model,
+    _format_agent_details,
+    _format_enrichment_lines,
+    _merge_tag_values,
+    _normalize_tag_values,
+    _resolve_catalog_model_id,
+)
 
 
 async def list_models() -> str:
     """List all catalog models with merged benchmark scores."""
     try:
         from app.constants import MODEL_CATALOG
-        from app.constants.catalog import SCORE_WEIGHTS
         from app.db import async_session
         from app.services.model_enrichment_service import get_all_enrichments
 
@@ -91,48 +40,7 @@ async def list_models() -> str:
         except Exception:
             logger.debug("Failed to load model enrichments", exc_info=True)
 
-        lines = []
-        for m in MODEL_CATALOG:
-            cap_flags = []
-            if m.capabilities.has_vision:
-                cap_flags.append("vision")
-            if m.capabilities.has_thinking:
-                cap_flags.append("thinking")
-            if m.capabilities.can_generate_images:
-                cap_flags.append("image-gen")
-            if m.capabilities.supports_pdf:
-                cap_flags.append("pdf")
-            if m.capabilities.supports_audio:
-                cap_flags.append("audio")
-
-            enr = enrichments.get(m.id)
-            coding = enr.ext_coding if enr and enr.ext_coding is not None else m.scores.coding
-            reasoning = enr.ext_reasoning if enr and enr.ext_reasoning is not None else m.scores.reasoning
-            tool_use = enr.ext_tool_use if enr and enr.ext_tool_use is not None else m.scores.tool_use
-            planning = enr.ext_planning if enr and enr.ext_planning is not None else m.scores.planning
-            instruction = enr.ext_instruction if enr and enr.ext_instruction is not None else m.scores.instruction
-            design = m.scores.design
-            composite = round(
-                coding * SCORE_WEIGHTS["coding"]
-                + reasoning * SCORE_WEIGHTS["reasoning"]
-                + planning * SCORE_WEIGHTS["planning"]
-                + tool_use * SCORE_WEIGHTS["tool_use"]
-                + instruction * SCORE_WEIGHTS["instruction"]
-                + design * SCORE_WEIGHTS["design"],
-                1,
-            )
-
-            lines.append(
-                f"- **{m.name}** (`{m.id}`)\n"
-                f"  Provider: {m.provider} | Speed: {m.speed_tier} | "
-                f"Context: {m.context_window:,} | Family: {m.family or 'N/A'}\n"
-                f"  Scores: coding={coding} reasoning={reasoning} "
-                f"planning={planning} tool_use={tool_use} "
-                f"instruction={instruction} design={design} "
-                f"composite={composite}\n"
-                f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
-                f"  Capabilities: {', '.join(cap_flags) or 'none'}"
-            )
+        lines = [_compute_model_line(m, enrichments) for m in MODEL_CATALOG]
         return "\n\n".join(lines)
     except Exception as e:
         logger.exception("list_models failed")
@@ -179,18 +87,8 @@ async def get_model_details(model_id: str | None) -> str:
             f"PDF: {entry.capabilities.supports_pdf} | Audio: {entry.capabilities.supports_audio}",
             f"  Max Output: {entry.capabilities.max_output_tokens:,} tokens",
         ]
-
         if enr:
-            lines.extend([
-                "",
-                "## External Enrichment",
-                f"  Ext Coding: {enr.ext_coding or 'N/A'} | Ext Reasoning: {enr.ext_reasoning or 'N/A'}",
-                f"  Ext Speed: {enr.ext_speed_tier or 'N/A'}",
-                f"  Ext Pricing: ${enr.ext_input_per_m or 'N/A'}/M in, "
-                f"${enr.ext_output_per_m or 'N/A'}/M out",
-                f"  Source: {enr.source} | Synced: {enr.synced_at.isoformat() if enr.synced_at else 'never'}",
-            ])
-
+            lines.extend(_format_enrichment_lines(enr))
         return "\n".join(lines)
     except Exception as e:
         logger.exception("get_model_details failed")
@@ -209,57 +107,35 @@ async def update_agent_model(
     """Update an agent's model configuration."""
     if not agent_slug:
         return "Error: agent_slug required for update_agent_model"
-    if not any([
-        primary_model_id, fallback_models, escalation_model_id,
-        temperature is not None, thinking_level,
-    ]):
+    if not any([primary_model_id, fallback_models, escalation_model_id,
+                temperature is not None, thinking_level]):
         return "Error: at least one setting to update required"
-
     try:
-        from app.db import async_session
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
-        resolved_primary_model_id = _resolve_catalog_model_id(primary_model_id)
-        resolved_fallback_models = (
-            [_resolve_catalog_model_id(model_id) or model_id for model_id in fallback_models]
-            if fallback_models
-            else None
+        resolved_primary = _resolve_catalog_model_id(primary_model_id)
+        resolved_fallbacks = (
+            [_resolve_catalog_model_id(mid) or mid for mid in fallback_models]
+            if fallback_models else None
         )
-        resolved_escalation_model_id = _resolve_catalog_model_id(escalation_model_id)
+        resolved_escalation = _resolve_catalog_model_id(escalation_model_id)
 
-        async with async_session() as db:
-            agent = await agent_service.get_by_slug(db, agent_slug)
-            if not agent:
-                return f"Error: Agent '{agent_slug}' not found"
+        updated = await _do_update_agent_model(
+            agent_service, agent_slug,
+            resolved_primary, resolved_fallbacks, resolved_escalation,
+            temperature, thinking_level, change_reason,
+        )
 
-            updated = await agent_service.update(
-                db,
-                agent.id,
-                primary_model_id=resolved_primary_model_id,
-                fallback_models=resolved_fallback_models,
-                escalation_model_id=resolved_escalation_model_id,
-                temperature=temperature,
-                thinking_level=thinking_level,
-                changed_by="persona",
-                change_reason=change_reason or "Model config update by persona",
-            )
-
+        if updated is None:
+            return f"Error: Agent '{agent_slug}' not found"
         if not updated:
             return f"Error: Failed to update agent '{agent_slug}'"
 
-        changes = []
-        if resolved_primary_model_id:
-            changes.append(f"primary_model={resolved_primary_model_id}")
-        if resolved_fallback_models:
-            changes.append(f"fallback_models={resolved_fallback_models}")
-        if resolved_escalation_model_id:
-            changes.append(f"escalation_model={resolved_escalation_model_id}")
-        if temperature is not None:
-            changes.append(f"temperature={temperature}")
-        if thinking_level:
-            changes.append(f"thinking_level={thinking_level}")
-
+        changes = _build_changes_summary(
+            resolved_primary, resolved_fallbacks, resolved_escalation,
+            temperature, thinking_level,
+        )
         return (
             f"Agent '{agent_slug}' updated (version {updated.version}). "
             f"Changes: {', '.join(changes)}. Reason: {change_reason or 'N/A'}"
@@ -308,68 +184,26 @@ async def update_agent_memory(
 
     patch = _copy_memory_config(memory_config_patch)
     if not any([
-        patch,
-        add_audience_tags,
-        remove_audience_tags,
-        clear_audience_tags,
-        add_exclude_tags,
-        remove_exclude_tags,
-        clear_exclude_tags,
+        patch, add_audience_tags, remove_audience_tags, clear_audience_tags,
+        add_exclude_tags, remove_exclude_tags, clear_exclude_tags,
     ]):
         return "Error: at least one memory update is required"
 
     try:
-        from app.db import async_session
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
+        updated, updated_config = await _do_update_agent_memory(
+            agent_service, agent_slug, patch,
+            add_audience_tags, remove_audience_tags, clear_audience_tags,
+            add_exclude_tags, remove_exclude_tags, clear_exclude_tags,
+            change_reason,
+        )
 
-        async with async_session() as db:
-            agent = await agent_service.get_by_slug(db, agent_slug)
-            if not agent:
-                return f"Error: Agent '{agent_slug}' not found"
-
-            current_config = _copy_memory_config(getattr(agent, "memory_config", None))
-            updated_config = dict(current_config)
-            updated_config.update(patch)
-
-            if (
-                "audience_tags" in patch
-                or add_audience_tags
-                or remove_audience_tags
-                or clear_audience_tags
-            ):
-                updated_config["audience_tags"] = _merge_tag_values(
-                    updated_config.get("audience_tags"),
-                    add_values=add_audience_tags,
-                    remove_values=remove_audience_tags,
-                    clear=clear_audience_tags,
-                )
-
-            if (
-                "exclude_tags" in patch
-                or add_exclude_tags
-                or remove_exclude_tags
-                or clear_exclude_tags
-            ):
-                updated_config["exclude_tags"] = _merge_tag_values(
-                    updated_config.get("exclude_tags"),
-                    add_values=add_exclude_tags,
-                    remove_values=remove_exclude_tags,
-                    clear=clear_exclude_tags,
-                )
-
-            if updated_config == current_config:
-                return f"No memory config changes required for agent '{agent_slug}'."
-
-            updated = await agent_service.update(
-                db,
-                agent.id,
-                memory_config=updated_config,
-                changed_by="persona",
-                change_reason=change_reason or "Memory config update by persona",
-            )
-
+        if updated is None:
+            return f"Error: Agent '{agent_slug}' not found"
+        if updated == "noop":
+            return f"No memory config changes required for agent '{agent_slug}'."
         if not updated:
             return f"Error: Failed to update agent '{agent_slug}'"
 
@@ -434,10 +268,7 @@ async def list_agents(fmt: str = "detailed", coding_only: bool | None = None) ->
             ]
             return "\n".join(lines)
 
-        lines = []
-        for a in agents:
-            lines.append(_format_agent_details(a))
-        return "\n\n".join(lines)
+        return "\n\n".join(_format_agent_details(a) for a in agents)
     except Exception as e:
         logger.exception("list_agents failed")
         return f"Error listing agents: {e}"
