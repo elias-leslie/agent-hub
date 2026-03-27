@@ -112,6 +112,38 @@ def build_message_list(
     return all_messages, messages_dict
 
 
+def _count_memory_facts(progressive_context: Any) -> int:
+    """Sum facts across all memory block types."""
+    return (
+        _memory_block_len(progressive_context, "mandates")
+        + _memory_block_len(progressive_context, "guardrails")
+        + _memory_block_len(progressive_context, "reference_index")
+        + _memory_block_len(progressive_context, "reference")
+    )
+
+
+async def _record_memory_injection(
+    db: AsyncSession | None,
+    session_id: str,
+    loaded_memory_uuids: list[str],
+    memory_facts_injected: int,
+    progressive_context: Any,
+    agent_slug: str | None,
+) -> None:
+    """Track loaded batch and optionally persist injection event."""
+    await track_loaded_batch(loaded_memory_uuids)
+    if not db:
+        return
+    memory_debug = dict(getattr(progressive_context, "debug_info", {}))
+    await store_memory_inject_event(
+        db, session_id, loaded_memory_uuids, memory_facts_injected,
+        reference_selected_uuids=list(memory_debug.get("reference_selected_uuids", [])),
+        reference_index_uuids=list(memory_debug.get("reference_index_uuids", [])),
+        memory_debug=memory_debug,
+        agent_id=agent_slug,
+    )
+
+
 async def inject_memory(
     request: CompletionRequest,
     messages_dict: list[dict[str, Any]],
@@ -121,65 +153,42 @@ async def inject_memory(
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Inject memory context into messages.
 
-    Args:
-        request: Completion request
-        messages_dict: Messages as dicts
-        session_id: Session ID
-        resolved_agent: Resolved agent
-        db: Database session
-
     Returns:
         Tuple of (messages_dict, memory_facts_injected, loaded_memory_uuids)
     """
+    agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
+
+    if not (request.use_memory and memory_injection_enabled(agent_memory_config)):
+        return messages_dict, 0, []
+
     memory_facts_injected = 0
     loaded_memory_uuids: list[str] = []
-
-    agent_memory_config = (
-        resolved_agent.agent.memory_config if resolved_agent else None
-    )
-
-    if request.use_memory and memory_injection_enabled(agent_memory_config):
-        scope, scope_id = parse_memory_group_id(request.memory_group_id)
-        try:
-            messages_dict, progressive_context = await inject_progressive_context(
-                messages=messages_dict,
-                scope=scope,
-                scope_id=scope_id,
-                variant=request.memory_variant_override,
-                task_type=request.task_type,
-                phase=request.phase,
-                session_id=session_id,
-                project_id=request.project_id,
-                external_id=request.external_id,
-                memory_config=agent_memory_config,
-                current_branch=request.current_branch,
-                consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
+    scope, scope_id = parse_memory_group_id(request.memory_group_id)
+    try:
+        messages_dict, progressive_context = await inject_progressive_context(
+            messages=messages_dict,
+            scope=scope,
+            scope_id=scope_id,
+            variant=request.memory_variant_override,
+            task_type=request.task_type,
+            phase=request.phase,
+            session_id=session_id,
+            project_id=request.project_id,
+            external_id=request.external_id,
+            memory_config=agent_memory_config,
+            current_branch=request.current_branch,
+            consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
+        )
+        memory_facts_injected = _count_memory_facts(progressive_context)
+        loaded_memory_uuids = progressive_context.get_loaded_uuids()
+        if memory_facts_injected > 0:
+            agent_slug = resolved_agent.agent.slug if resolved_agent else None
+            await _record_memory_injection(
+                db, session_id, loaded_memory_uuids, memory_facts_injected,
+                progressive_context, agent_slug,
             )
-            memory_facts_injected = (
-                _memory_block_len(progressive_context, "mandates")
-                + _memory_block_len(progressive_context, "guardrails")
-                + _memory_block_len(progressive_context, "reference_index")
-                + _memory_block_len(progressive_context, "reference")
-            )
-            loaded_memory_uuids = progressive_context.get_loaded_uuids()
-            if memory_facts_injected > 0:
-                await track_loaded_batch(loaded_memory_uuids)
-                if db:
-                    agent_slug = resolved_agent.agent.slug if resolved_agent else None
-                    memory_debug = dict(getattr(progressive_context, "debug_info", {}))
-                    await store_memory_inject_event(
-                        db, session_id, loaded_memory_uuids, memory_facts_injected,
-                        reference_selected_uuids=list(
-                            memory_debug.get("reference_selected_uuids", [])
-                        ),
-                        reference_index_uuids=list(
-                            memory_debug.get("reference_index_uuids", [])
-                        ),
-                        memory_debug=memory_debug,
-                        agent_id=agent_slug,
-                    )
-        except Exception as e:
-            logger.warning(f"Memory injection failed: {e}")
+    except Exception as e:
+        logger.warning(f"Memory injection failed: {e}")
 
     return messages_dict, memory_facts_injected, loaded_memory_uuids
 
