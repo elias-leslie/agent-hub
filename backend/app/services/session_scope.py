@@ -22,6 +22,22 @@ _PATCH_MOVE_RE = re.compile(r"^\*\*\* Move to: (.+)$")
 _ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
 
 
+def _safe_resolve(path: Path) -> Path | None:
+    """Resolve a path for scope normalization, ignoring invalid filesystem tokens."""
+    try:
+        return path.resolve(strict=False)
+    except OSError:
+        return None
+
+
+def _safe_exists(path: Path) -> bool:
+    """Return whether a path exists without surfacing invalid-path OS errors."""
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
 def normalize_scope_path(raw_path: Any, base_path: str | None) -> str | None:
     """Normalize a raw path into repo/worktree-relative POSIX form."""
     if not isinstance(raw_path, str):
@@ -34,12 +50,18 @@ def normalize_scope_path(raw_path: Any, base_path: str | None) -> str | None:
     if path.startswith("/"):
         base_candidates: list[Path] = []
         if base_path:
-            cwd = Path(base_path).resolve()
+            cwd = _safe_resolve(Path(base_path))
+            if cwd is None:
+                return None
             base_candidates.append(cwd)
             main_repo = detect_main_repo(cwd)
             if main_repo and main_repo != cwd:
-                base_candidates.append(main_repo.resolve())
-        absolute = Path(path).resolve()
+                resolved_main_repo = _safe_resolve(main_repo)
+                if resolved_main_repo is not None:
+                    base_candidates.append(resolved_main_repo)
+        absolute = _safe_resolve(Path(path))
+        if absolute is None:
+            return None
         for base in base_candidates:
             try:
                 rel = absolute.relative_to(base)
@@ -117,20 +139,27 @@ def _normalize_tool_scope_path(
     if not candidate or candidate.startswith("-"):
         return None
     if candidate.startswith("/"):
-        resolved = Path(candidate).resolve(strict=False)
-        if allow_missing or resolved.exists():
+        resolved = _safe_resolve(Path(candidate))
+        if resolved is None:
+            return None
+        if allow_missing or _safe_exists(resolved):
             return normalize_scope_path(str(resolved), base_path)
         return None
     if "\\" in candidate or "//" in candidate:
         return None
     if base_path:
-        resolved = (Path(base_path) / candidate).resolve(strict=False)
-        if allow_missing or resolved.exists():
+        resolved = _safe_resolve(Path(base_path) / candidate)
+        if resolved is None:
+            return None
+        if allow_missing or _safe_exists(resolved):
             return normalize_scope_path(str(resolved), base_path)
         return None
     relative = Path(candidate)
-    if allow_missing or relative.exists():
-        return normalize_scope_path(str(relative.resolve(strict=False)), None)
+    if allow_missing or _safe_exists(relative):
+        resolved = _safe_resolve(relative)
+        if resolved is None:
+            return None
+        return normalize_scope_path(str(resolved), None)
     return None
 
 

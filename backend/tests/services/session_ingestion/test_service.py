@@ -514,6 +514,19 @@ async def test_ingest_transcript_events_reconciles_scope_from_persisted_tool_evi
                     (
                         "exec_command",
                         {
+                            "cmd": (
+                                'st feedback report infra '
+                                '"Detached rebuilds stayed active while agent-hub-frontend stop timed out '
+                                'and was SIGKILLed before restart. Health recovered, but systemctl status '
+                                'looked hung until the transient unit disappeared, which made runtime '
+                                'verification noisier than it needed to be."'
+                            ),
+                            "workdir": "/srv/workspaces/projects/agent-hub",
+                        },
+                    ),
+                    (
+                        "exec_command",
+                        {
                             "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
                             "workdir": "/srv/workspaces/projects/agent-hub",
                         },
