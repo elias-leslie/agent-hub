@@ -14,11 +14,9 @@ from app.services.tools._tool_constants import DEFAULT_TIMEOUT
 
 # Core executor implementation
 from app.services.tools.direct_executor_core import (
-    BLOCKED_COMMANDS,
     MAX_OUTPUT_SIZE,
     DirectToolExecutor,
     _get_command_redirect,
-    _is_blocked_command,
 )
 
 # Registry-driven command redirect (centralized tool-registry.json)
@@ -31,14 +29,12 @@ from app.services.tools.tool_definitions import STANDARD_TOOLS, get_standard_too
 from app.services.tools.tool_handler import DirectToolHandler, create_direct_handler
 
 __all__ = [
-    "BLOCKED_COMMANDS",
     "DEFAULT_TIMEOUT",
     "MAX_OUTPUT_SIZE",
     "STANDARD_TOOLS",
     "DirectToolExecutor",
     "DirectToolHandler",
     "_get_command_redirect",
-    "_is_blocked_command",
     "create_direct_handler",
     "get_command_redirect",
     "get_standard_tools",

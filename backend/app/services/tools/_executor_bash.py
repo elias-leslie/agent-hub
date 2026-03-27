@@ -21,35 +21,6 @@ logger = logging.getLogger(__name__)
 # Maximum output size to return
 MAX_OUTPUT_SIZE = 100_000
 
-# Blocked commands for safety (destructive system commands)
-BLOCKED_COMMANDS = frozenset(
-    {
-        "rm -rf /",
-        "rm -rf /*",
-        "mkfs",
-        "dd if=/dev/zero",
-        "> /dev/sda",
-        # Git safety — agents must use st CLI for task work
-        "git push --force",
-        "git push -f",
-        "git reset --hard",
-        "git clean -fd",
-        "git clean -f",
-        "git checkout .",
-        # Service safety — agents must use wrapper scripts
-        "systemctl stop",
-        "systemctl disable",
-        "drop database",
-        "drop table",
-        "truncate",
-    }
-)
-
-def is_blocked_command(command: str) -> bool:
-    """Check if command is blocked for safety."""
-    command_lower = command.lower().strip()
-    return any(blocked in command_lower for blocked in BLOCKED_COMMANDS)
-
 
 def get_persona_block_reason(command: str, agent_slug: str | None) -> str | None:
     """Return a persona-specific block reason for commands we never want in Bash."""

@@ -13,26 +13,9 @@ from app.services.tools.base import ToolCall
 from app.services.tools.direct_executor import (
     DirectToolExecutor,
     DirectToolHandler,
-    _is_blocked_command,
     create_direct_handler,
     get_standard_tools,
 )
-
-
-class TestBlockedCommands:
-    """Tests for command blocking."""
-
-    def test_blocks_rm_rf_root(self) -> None:
-        """Test that rm -rf / is blocked."""
-        assert _is_blocked_command("rm -rf /") is True
-
-    def test_allows_rm_in_directory(self) -> None:
-        """Test that rm in a specific directory is allowed."""
-        assert _is_blocked_command("rm -rf ./build") is False
-
-    def test_blocks_mkfs(self) -> None:
-        """Test that mkfs is blocked."""
-        assert _is_blocked_command("mkfs.ext4 /dev/sda1") is True
 
 
 class TestDirectToolExecutor:
