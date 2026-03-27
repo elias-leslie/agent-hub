@@ -40,6 +40,23 @@ logger = logging.getLogger(__name__)
 __all__ = ["AgentDTO", "AgentService", "get_agent_service"]
 
 
+async def _resolve_system_prompt(db: AsyncSession, agent: Any) -> str:
+    prompt = await get_prompt_by_slug(db, build_agent_system_prompt_slug(agent.slug))
+    if prompt and prompt.enabled and prompt.content.strip():
+        return prompt.content.strip()
+    return agent.system_prompt
+
+
+async def _apply_display_name_overrides(db: AsyncSession, dto: AgentDTO) -> AgentDTO:
+    """Resolve shared display names from their live authority rows."""
+    if dto.slug != PERSONA_SLUG:
+        return dto
+    display_name = await get_persona_display_name(db, fallback=dto.name)
+    if display_name == dto.name:
+        return dto
+    return replace(dto, name=display_name)
+
+
 class AgentService:
     """Service for agent CRUD operations with Redis caching."""
 
@@ -48,36 +65,19 @@ class AgentService:
         url = redis_url or settings.agent_hub_redis_url
         self._cache = AgentCache(url)
 
-    async def _resolve_system_prompt(self, db: AsyncSession, agent: Any) -> str:
-        prompt = await get_prompt_by_slug(db, build_agent_system_prompt_slug(agent.slug))
-        if prompt and prompt.enabled and prompt.content.strip():
-            return prompt.content.strip()
-        return agent.system_prompt
-
-    async def _apply_display_name_overrides(self, db: AsyncSession, dto: AgentDTO) -> AgentDTO:
-        """Resolve shared display names from their live authority rows."""
-        if dto.slug != PERSONA_SLUG:
-            return dto
-
-        display_name = await get_persona_display_name(db, fallback=dto.name)
-        if display_name == dto.name:
-            return dto
-        return replace(dto, name=display_name)
-
     async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
         """Get agent by slug with caching."""
         cached = await self._cache.get(slug)
         if cached:
-            return await self._apply_display_name_overrides(db, cached)
+            return await _apply_display_name_overrides(db, cached)
 
         agent = await get_agent_by_slug(db, slug, active_only=True)
-
         if agent:
             dto = AgentDTO.from_model(
                 agent,
-                system_prompt_override=await self._resolve_system_prompt(db, agent),
+                system_prompt_override=await _resolve_system_prompt(db, agent),
             )
-            dto = await self._apply_display_name_overrides(db, dto)
+            dto = await _apply_display_name_overrides(db, dto)
             await self._cache.set(dto)
             return dto
 
@@ -90,9 +90,9 @@ class AgentService:
             return None
         dto = AgentDTO.from_model(
             agent,
-            system_prompt_override=await self._resolve_system_prompt(db, agent),
+            system_prompt_override=await _resolve_system_prompt(db, agent),
         )
-        return await self._apply_display_name_overrides(db, dto)
+        return await _apply_display_name_overrides(db, dto)
 
     async def list_agents(
         self,
@@ -110,11 +110,11 @@ class AgentService:
         dtos = [
             AgentDTO.from_model(
                 agent,
-                system_prompt_override=await self._resolve_system_prompt(db, agent),
+                system_prompt_override=await _resolve_system_prompt(db, agent),
             )
             for agent in agents
         ]
-        return [await self._apply_display_name_overrides(db, dto) for dto in dtos]
+        return [await _apply_display_name_overrides(db, dto) for dto in dtos]
 
     async def create(
         self,
@@ -177,20 +177,10 @@ class AgentService:
         await db.commit()
         await db.refresh(agent)
         dto = AgentDTO.from_model(agent, system_prompt_override=system_prompt)
-        await self._finalize_create(db, agent.id, dto, changed_by)
+        await create_version_record(db, agent.id, 1, dto.to_dict(), changed_by, "Initial creation")
+        await self._cache.set(dto)
         logger.info(f"Created agent: {slug}")
         return dto
-
-    async def _finalize_create(
-        self,
-        db: AsyncSession,
-        agent_id: int,
-        dto: AgentDTO,
-        changed_by: str | None,
-    ) -> None:
-        """Persist initial version record and prime cache after create."""
-        await create_version_record(db, agent_id, 1, dto.to_dict(), changed_by, "Initial creation")
-        await self._cache.set(dto)
 
     async def update(
         self,
@@ -224,11 +214,8 @@ class AgentService:
         if not agent:
             return None
 
-        normalized_memory_config = (
-            normalize_memory_config(memory_config) if memory_config is not None else None
-        )
-
-        old_slug = agent.slug
+        memory_cfg = normalize_memory_config(memory_config) if memory_config is not None else None
+        prev_slug = agent.slug
         apply_agent_updates(
             agent,
             name=name,
@@ -244,7 +231,7 @@ class AgentService:
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
-            memory_config=normalized_memory_config,
+            memory_config=memory_cfg,
             max_concurrency=max_concurrency,
             max_subagent_concurrency=max_subagent_concurrency,
             daily_token_budget=daily_token_budget,
@@ -264,27 +251,15 @@ class AgentService:
         await db.refresh(agent)
         dto = AgentDTO.from_model(
             agent,
-            system_prompt_override=await self._resolve_system_prompt(db, agent),
+            system_prompt_override=await _resolve_system_prompt(db, agent),
         )
-        await self._finalize_update(db, agent, dto, old_slug, changed_by, change_reason)
-        logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
-        return dto
-
-    async def _finalize_update(
-        self,
-        db: AsyncSession,
-        agent: Any,
-        dto: AgentDTO,
-        old_slug: str,
-        changed_by: str | None,
-        change_reason: str | None,
-    ) -> None:
-        """Persist version record and refresh cache after update."""
         await create_version_record(
             db, agent.id, agent.version, dto.to_dict(), changed_by, change_reason or "Updated"
         )
-        await self._cache.invalidate(old_slug)
+        await self._cache.invalidate(prev_slug)
         await self._cache.set(dto)
+        logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
+        return dto
 
     async def delete(
         self,
@@ -299,7 +274,6 @@ class AgentService:
             return False
 
         slug = agent.slug
-
         if hard_delete:
             await db.delete(agent)
         else:
@@ -307,7 +281,6 @@ class AgentService:
 
         await db.commit()
         await self._cache.invalidate(slug)
-
         logger.info(f"{'Deleted' if hard_delete else 'Deactivated'} agent: {slug}")
         return True
 
