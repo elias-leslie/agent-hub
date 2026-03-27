@@ -71,6 +71,139 @@ def _init_execution_state(
     )
 
 
+def _check_result_event(event: Any, state: _ExecutionState) -> None:
+    """Update terminal_finish_reason when a result event is received."""
+    state.terminal_finish_reason = getattr(event, "finish_reason", None) or "end_turn"
+
+
+def _check_tool_result_event(
+    event: Any,
+    state: _ExecutionState,
+    tool_use_metadata: dict[str, dict[str, Any]],
+    project_id: str | None,
+) -> bool:
+    """Handle a tool_result event; return True if the loop should break."""
+    tool_name, tool_input = _extract_tool_metadata(
+        tool_use_metadata,
+        getattr(event, "tool_use_id", None),
+    )
+    detached_closeout = detached_agent_hub_rebuild_closeout(
+        project_id=project_id,
+        tool_name=tool_name,
+        tool_input=tool_input,
+        tool_content=str(getattr(event, "content", "") or ""),
+        agent_slug=state.agent_slug,
+        external_id=state.external_id,
+    )
+    if detached_closeout is not None:
+        state.content_parts = [detached_closeout]
+        state.terminal_finish_reason = "end_turn"
+        return True
+    return False
+
+
+async def _process_event(
+    event: Any,
+    state: _ExecutionState,
+    tool_use_metadata: dict[str, dict[str, Any]],
+    session_id: str,
+    db: AsyncSession,
+    tracker: ProgressTracker,
+    model: str,
+    project_id: str | None,
+    terminal_error_message: str | None,
+) -> tuple[str | None, bool]:
+    """Process a single event; return (updated terminal_error_message, should_break)."""
+    (
+        state.event_turn,
+        tools_delta,
+        error_message,
+        state.turn,
+        state.awaiting_tool_results,
+    ) = await process_tool_event(
+        event, state.event_turn, state.turn, state.awaiting_tool_results, session_id, db,
+        state.content_parts, state.thinking_parts, tracker, model_used=model,
+        agent_id=state.agent_slug, requires_progress_tags=state.requires_progress_tags,
+        tool_use_id_to_name=tool_use_metadata,
+        tool_result_summaries=state.tool_result_summaries,
+    )
+    state.tool_calls_count += tools_delta
+
+    event_type = getattr(event, "type", None)
+    if event_type == "result":
+        _check_result_event(event, state)
+    elif event_type == "tool_result" and _check_tool_result_event(event, state, tool_use_metadata, project_id):
+        return terminal_error_message, True
+
+    if error_message and terminal_error_message is None:
+        # Record the terminal error, but keep draining the provider stream so
+        # SDK-backed generators can unwind cleanly on their own task boundary.
+        terminal_error_message = error_message
+        await update_session_health(
+            db, session_id, health_detail_for_error(error_message), commit=True,
+        )
+    elif event_type == "tool_result":
+        await update_session_health(db, session_id, "calling_model", commit=True)
+
+    return terminal_error_message, False
+
+
+async def _drain_event_stream(
+    event_stream: Any,
+    state: _ExecutionState,
+    tool_use_metadata: dict[str, dict[str, Any]],
+    session_id: str,
+    db: AsyncSession,
+    tracker: ProgressTracker,
+    model: str,
+    project_id: str | None,
+) -> tuple[str | None, bool]:
+    """Drain the event stream; return (terminal_error_message, exhausted)."""
+    terminal_error_message: str | None = None
+    exhausted = False
+    async for event, _session_id in event_stream:
+        terminal_error_message, should_break = await _process_event(
+            event, state, tool_use_metadata, session_id, db, tracker, model,
+            project_id, terminal_error_message,
+        )
+        if should_break:
+            break
+    else:
+        exhausted = True
+    return terminal_error_message, exhausted
+
+
+async def _execute_event_stream(
+    runtime_session: Any,
+    state: _ExecutionState,
+    session_id: str,
+    db: AsyncSession,
+    tracker: ProgressTracker,
+    model: str,
+    project_id: str | None,
+) -> tuple[str | None, bool]:
+    """Run the event stream with cancellation handling; return (error_msg, exhausted)."""
+    event_stream = runtime_session.events()
+    tool_use_metadata: dict[str, dict[str, Any]] = {}
+    terminal_error_message: str | None = None
+    exhausted = False
+    try:
+        terminal_error_message, exhausted = await _drain_event_stream(
+            event_stream, state, tool_use_metadata, session_id, db, tracker, model, project_id,
+        )
+    except asyncio.CancelledError:
+        with suppress(Exception):
+            await runtime_session.interrupt()
+        raise
+    finally:
+        # Only force-close provider streams when the loop exits early. Redundant
+        # close after natural exhaustion can re-enter provider cleanup on a
+        # foreign task and inject cancellation into the caller.
+        if not exhausted:
+            await runtime_session.close()
+    return terminal_error_message, exhausted
+
+
 async def _run_tool_loop(
     adapter: Any,
     state: _ExecutionState,
@@ -96,7 +229,6 @@ async def _run_tool_loop(
     Returns an error result on failure, else None (results in state).
     """
     await update_session_health(db, session_id, "calling_model", commit=True)
-
     runtime_session = await adapter.start_tool_session(
         messages=state.messages_for_adapter,
         model=model,
@@ -109,81 +241,12 @@ async def _run_tool_loop(
         session_id=session_id,
         agent_slug=state.agent_slug,
     )
-    event_stream = runtime_session.events()
-
-    # Mapping of tool_use_id → original tool metadata, shared across all events in the loop
-    tool_use_metadata: dict[str, dict[str, Any]] = {}
-
-    terminal_error_message: str | None = None
-    exhausted = False
-
-    try:
-        async for event, _session_id in event_stream:
-            (
-                state.event_turn,
-                tools_delta,
-                error_message,
-                state.turn,
-                state.awaiting_tool_results,
-            ) = await process_tool_event(
-                event, state.event_turn, state.turn, state.awaiting_tool_results, session_id, db, state.content_parts,
-                state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
-                requires_progress_tags=state.requires_progress_tags,
-                tool_use_id_to_name=tool_use_metadata,
-                tool_result_summaries=state.tool_result_summaries,
-            )
-            state.tool_calls_count += tools_delta
-            if getattr(event, "type", None) == "result":
-                state.terminal_finish_reason = getattr(event, "finish_reason", None) or "end_turn"
-            elif getattr(event, "type", None) == "tool_result":
-                tool_name, tool_input = _extract_tool_metadata(
-                    tool_use_metadata,
-                    getattr(event, "tool_use_id", None),
-                )
-                detached_closeout = detached_agent_hub_rebuild_closeout(
-                    project_id=project_id,
-                    tool_name=tool_name,
-                    tool_input=tool_input,
-                    tool_content=str(getattr(event, "content", "") or ""),
-                    agent_slug=state.agent_slug,
-                    external_id=state.external_id,
-                )
-                if detached_closeout is not None:
-                    state.content_parts = [
-                        detached_closeout
-                    ]
-                    state.terminal_finish_reason = "end_turn"
-                    break
-
-            if error_message and terminal_error_message is None:
-                # Record the terminal error, but keep draining the provider stream so
-                # SDK-backed generators can unwind cleanly on their own task boundary.
-                terminal_error_message = error_message
-                await update_session_health(
-                    db,
-                    session_id,
-                    health_detail_for_error(error_message),
-                    commit=True,
-                )
-            elif getattr(event, "type", None) == "tool_result":
-                await update_session_health(db, session_id, "calling_model", commit=True)
-        else:
-            exhausted = True
-    except asyncio.CancelledError:
-        with suppress(Exception):
-            await runtime_session.interrupt()
-        raise
-    finally:
-        # Only force-close provider streams when the loop exits early. Redundant
-        # close after natural exhaustion can re-enter provider cleanup on a
-        # foreign task and inject cancellation into the caller.
-        if not exhausted:
-            await runtime_session.close()
-
+    terminal_error_message, _ = await _execute_event_stream(
+        runtime_session, state, session_id, db, tracker, model, project_id,
+    )
     if terminal_error_message:
         return build_error_result(
             Exception(terminal_error_message), model, provider, session_id, loaded_memory_uuids,
             turns=state.turn, tool_calls_count=state.tool_calls_count,
         )
-
     return None
