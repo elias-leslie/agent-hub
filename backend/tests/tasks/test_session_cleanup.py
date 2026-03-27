@@ -179,7 +179,7 @@ async def test_cleanup_stale_sessions_does_not_reap_owner_lane_sessions() -> Non
         mp.setattr(
             mod,
             "query_project_ownership",
-            AsyncMock(return_value=[SimpleNamespace(session_id="sess-1")]),
+            AsyncMock(return_value=[SimpleNamespace(session_id="sess-1", branch="task-123/main")]),
         )
         mp.setattr(mod, "query_project_active_specialists", AsyncMock(return_value=[]))
         build_live_activity = MagicMock(return_value={"reapable": False})
@@ -191,6 +191,88 @@ async def test_cleanup_stale_sessions_does_not_reap_owner_lane_sessions() -> Non
     assert session_one.status == "active"
     assert build_live_activity.call_args.kwargs["has_owner_lane"] is True
     assert build_live_activity.call_args.kwargs["has_specialist_lane"] is False
+
+
+@pytest.mark.asyncio
+async def test_cleanup_stale_sessions_reaps_ghost_owner_lane_sessions(tmp_path) -> None:
+    mock_db = AsyncMock()
+    active_sessions = MagicMock()
+    session_one = MagicMock(status="active", provider_metadata={})
+    session_one.id = "sess-1"
+    session_one.project_id = "agent-hub"
+    active_sessions.scalars.return_value.all.return_value = [session_one]
+    mock_db.execute.return_value = active_sessions
+
+    ghost_path = tmp_path / "ghost-lane"
+
+    from app.tasks import session_cleanup as mod
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(mod, "cleanup_superseded_persona_heartbeat_sessions", AsyncMock(return_value=0))
+        mp.setattr(
+            mod,
+            "query_project_ownership",
+            AsyncMock(
+                return_value=[
+                    SimpleNamespace(
+                        session_id="sess-1",
+                        branch=None,
+                        worktree_path=str(ghost_path),
+                        is_worktree=False,
+                    )
+                ]
+            ),
+        )
+        mp.setattr(mod, "query_project_active_specialists", AsyncMock(return_value=[]))
+        build_live_activity = MagicMock(
+            return_value={"reapable": True, "reapable_reason": "heartbeat_only+no_lane"}
+        )
+        mp.setattr(mod, "build_live_activity_response", build_live_activity)
+
+        cleaned = await cleanup_stale_sessions(mock_db)
+
+    assert cleaned == 1
+    assert session_one.status == "completed"
+    assert build_live_activity.call_args.kwargs["has_owner_lane"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_stale_session_stats_ignores_ghost_owner_lane_blockers(tmp_path) -> None:
+    mock_db = AsyncMock()
+    active_sessions = MagicMock()
+    session_one = MagicMock(status="active", provider_metadata={}, session_type="agent")
+    session_one.id = "sess-1"
+    session_one.project_id = "agent-hub"
+    active_sessions.scalars.return_value.all.return_value = [session_one]
+    mock_db.execute.return_value = active_sessions
+
+    ghost_path = tmp_path / "ghost-lane"
+
+    from app.tasks import session_cleanup as mod
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(
+            mod,
+            "query_project_ownership",
+            AsyncMock(
+                return_value=[
+                    SimpleNamespace(
+                        session_id="sess-1",
+                        branch=None,
+                        worktree_path=str(ghost_path),
+                        is_worktree=False,
+                    )
+                ]
+            ),
+        )
+        mp.setattr(mod, "query_project_active_specialists", AsyncMock(return_value=[]))
+        build_live_activity = MagicMock(return_value={"reapable": True})
+        mp.setattr(mod, "build_live_activity_response", build_live_activity)
+
+        stats = await get_stale_session_stats(mock_db)
+
+    assert stats == {"agent": 1}
+    assert build_live_activity.call_args.kwargs["has_owner_lane"] is False
 
 
 @pytest.mark.asyncio

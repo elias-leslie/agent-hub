@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 
 from sqlalchemy import func, select
@@ -17,6 +18,30 @@ from app.services.session_live_activity import build_live_activity_response, mar
 logger = logging.getLogger(__name__)
 
 _HEARTBEAT_PREFIX = "Run your regular heartbeat check."
+
+
+def _owner_lane_blocks_reap(owner: object) -> bool:
+    """Return whether an ownership row represents real lane backing that should block reaping."""
+    branch = getattr(owner, "branch", None)
+    if isinstance(branch, str) and branch.strip():
+        return True
+
+    if bool(getattr(owner, "is_worktree", False)):
+        return True
+
+    worktree_path = getattr(owner, "worktree_path", None)
+    return isinstance(worktree_path, str) and bool(worktree_path) and Path(worktree_path).exists()
+
+
+def _blocking_owner_session_ids(owners: list[object]) -> set[str]:
+    """Return owner session ids whose lane backing is still present."""
+    blocking: set[str] = set()
+    for owner in owners:
+        session_id = getattr(owner, "session_id", None)
+        if not session_id or not _owner_lane_blocks_reap(owner):
+            continue
+        blocking.add(str(session_id))
+    return blocking
 
 
 async def _query_active_persona_heartbeat_sessions(
@@ -114,11 +139,7 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
     owner_session_ids: set[str] = set()
     specialist_session_ids: set[str] = set()
     for project_id in project_ids:
-        owner_session_ids.update(
-            str(owner.session_id)
-            for owner in await query_project_ownership(db, project_id)
-            if getattr(owner, "session_id", None)
-        )
+        owner_session_ids.update(_blocking_owner_session_ids(await query_project_ownership(db, project_id)))
         specialist_session_ids.update(
             str(spec.session_id)
             for spec in await query_project_active_specialists(db, project_id)
@@ -158,11 +179,7 @@ async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
     owner_session_ids: set[str] = set()
     specialist_session_ids: set[str] = set()
     for project_id in sorted({session.project_id for session in sessions if session.project_id}):
-        owner_session_ids.update(
-            str(owner.session_id)
-            for owner in await query_project_ownership(db, project_id)
-            if getattr(owner, "session_id", None)
-        )
+        owner_session_ids.update(_blocking_owner_session_ids(await query_project_ownership(db, project_id)))
         specialist_session_ids.update(
             str(spec.session_id)
             for spec in await query_project_active_specialists(db, project_id)
