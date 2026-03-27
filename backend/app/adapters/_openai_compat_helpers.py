@@ -7,12 +7,66 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from app.adapters.base import CompletionResult, Message, ProviderError, StreamEvent, ToolCallResult
 
 logger = logging.getLogger(__name__)
+
+
+def is_auth_error(error: Exception) -> bool:
+    """Return True when the provider error looks like authentication."""
+    message = str(error).lower()
+    return "401" in message or "authentication" in message or "unauthorized" in message
+
+
+async def load_credentials_from_db(provider_name: str) -> str | None:
+    """Reload credentials from the database and return the provider key."""
+    try:
+        from app.db import async_session
+        from app.services.credential_manager import get_credential_manager
+
+        cm = get_credential_manager()
+        async with async_session() as db:
+            await cm.load(db)
+        return cm.get_api_key(provider_name)
+    except Exception:
+        logger.debug("DB credential reload failed for %s", provider_name, exc_info=True)
+        return None
+
+
+def build_assistant_tool_message(result: CompletionResult) -> dict[str, Any]:
+    """Build the assistant message dict with tool_calls for conversation history."""
+    tool_calls = result.tool_calls or []
+    return {
+        "role": "assistant",
+        "content": result.content or None,
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.name, "arguments": json.dumps(tc.input)},
+            }
+            for tc in tool_calls
+        ],
+    }
+
+
+async def execute_tool_calls(
+    result: CompletionResult,
+    openai_messages: list[dict[str, Any]],
+    tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
+) -> AsyncIterator[StreamEvent]:
+    """Execute all tool calls from a result, appending messages and yielding events."""
+    openai_messages.append(build_assistant_tool_message(result))
+    if result.content:
+        yield StreamEvent(type="content", content=result.content)
+    for tc in result.tool_calls or []:
+        yield StreamEvent(type="tool_use", tool_id=tc.id, tool_name=tc.name, tool_input=tc.input)
+        tool_result_str = await tool_handler(tc.name, tc.input)
+        yield StreamEvent(type="tool_result", tool_id=tc.id, content=tool_result_str)
+        openai_messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result_str})
 
 
 def _to_openai_tool(tool: dict[str, Any]) -> dict[str, Any]:
@@ -222,3 +276,36 @@ def handle_provider_error(error: Exception, provider_name: str) -> None:
     if "429" in msg or "Rate limit" in msg:
         raise ProviderError(msg, provider_name, retriable=True, status_code=429)
     raise ProviderError(msg, provider_name, retriable=True)
+
+
+async def complete_once(
+    client: Any,
+    provider_name: str,
+    params: dict[str, Any],
+    refresh_credentials: Any,
+) -> CompletionResult:
+    """Execute a single completion request with auth-retry on 401 errors.
+
+    ``refresh_credentials`` is a callable that accepts ``allow_db_reload`` kwarg
+    and returns a fresh API key or None.
+    """
+    try:
+        response = await client.chat.completions.create(**params)
+        return parse_completion_response(response, provider_name)
+    except Exception as e:
+        if not is_auth_error(e):
+            logger.error("%s completion error: %s", provider_name, e)
+            handle_provider_error(e, provider_name)
+            raise  # Unreachable
+        fresh = await refresh_credentials(allow_db_reload=True)
+        if not fresh:
+            logger.error("%s completion error: %s", provider_name, e)
+            handle_provider_error(e, provider_name)
+            raise  # Unreachable
+        try:
+            response = await client.chat.completions.create(**params)
+            return parse_completion_response(response, provider_name)
+        except Exception as retry_error:
+            logger.error("%s completion error: %s", provider_name, retry_error)
+            handle_provider_error(retry_error, provider_name)
+            raise  # Unreachable
