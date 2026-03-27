@@ -19,6 +19,7 @@ from ._service_helpers import (
     _is_transcript_backed_session,
     _merge_metadata,
     _reconcile_transcript_session_models,
+    _reconcile_transcript_session_scope,
     _update_existing_session,
     _validate_external_id,
 )
@@ -161,6 +162,8 @@ async def ingest_transcript_events(
         request=AppendNormalizedEventsRequest(events=events),
     )
     await _reconcile_transcript_session_models(db, session_id)
+    if append_result.events_appended == 0:
+        await _reconcile_transcript_session_scope(db, session_id)
     return TranscriptIngestResult(
         session_id=session_id,
         provider=request.provider,

@@ -129,6 +129,16 @@ def _owner_rank(owner: OwnershipOwner) -> tuple[int, int, int, float]:
     )
 
 
+def prioritize_scope_paths(*groups: list[str] | None) -> list[str]:
+    """Merge scope paths while preserving write/declared priority over reads."""
+    ordered: list[str] = []
+    for group in groups:
+        for path in group or []:
+            if isinstance(path, str) and path and path not in ordered:
+                ordered.append(path)
+    return ordered
+
+
 def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwner]:
     """Collapse duplicate active sessions that represent the same exact lane."""
     grouped: dict[LaneFingerprint, list[OwnershipOwner]] = {}
@@ -148,10 +158,16 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
     collapsed: list[OwnershipOwner] = []
     for fingerprint, group in grouped.items():
         representative = max(group, key=_owner_rank)
-        merged_scope_paths = sorted({path for owner in group for path in owner.scope_paths})
+        legacy_scope_paths = sorted({path for owner in group for path in owner.scope_paths})
         merged_declared_paths = sorted({path for owner in group for path in owner.declared_scope_paths})
         merged_read_paths = sorted({path for owner in group for path in owner.observed_read_paths})
         merged_write_paths = sorted({path for owner in group for path in owner.observed_write_paths})
+        merged_scope_paths = prioritize_scope_paths(
+            merged_declared_paths,
+            merged_write_paths,
+            merged_read_paths,
+            legacy_scope_paths,
+        )
         lane_is_stale = all(owner.is_stale for owner in group)
         freshest_age = min(owner.age_minutes for owner in group)
         latest_updated = max(
@@ -247,4 +263,5 @@ __all__ = [
     "idle_minutes_from_timestamps",
     "infer_task_id",
     "lane_fingerprint",
+    "prioritize_scope_paths",
 ]

@@ -14,6 +14,8 @@ from app.models.field_lengths import EXTERNAL_ID_MAX_LENGTH
 from app.services.session_live_activity import apply_live_activity_heartbeat
 from app.services.session_scope import (
     apply_scope_state,
+    extract_tool_scope_paths,
+    merge_scope_paths,
     normalize_scope_paths,
     resolve_scope_base_path,
 )
@@ -266,5 +268,68 @@ async def _reconcile_transcript_session_models(
         updated = True
 
     if updated:
+        session.updated_at = datetime.now(UTC)
+        await db.commit()
+
+
+async def _reconcile_transcript_session_scope(
+    db: AsyncSession,
+    session_id: str,
+    session: Session | None = None,
+) -> None:
+    """Backfill transcript-backed scope from persisted tool events when the row is still unscoped."""
+    if session is None:
+        session = (
+            await db.execute(select(Session).where(Session.id == session_id).limit(1))
+        ).scalar_one_or_none()
+    if session is None:
+        return
+    if not _is_transcript_backed_session(session):
+        return
+    if session.declared_scope_paths or session.observed_read_paths or session.observed_write_paths:
+        return
+
+    metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
+    base_path = resolve_scope_base_path(metadata, None)
+    tool_rows = (
+        await db.execute(
+            select(SessionEvent.tool_name, SessionEvent.tool_input)
+            .where(
+                SessionEvent.session_id == session_id,
+                SessionEvent.event_type == "tool_use",
+            )
+            .order_by(SessionEvent.turn, SessionEvent.sequence)
+        )
+    ).all()
+    if not tool_rows:
+        return
+
+    observed_reads: list[str] = []
+    observed_writes: list[str] = []
+    for tool_name, tool_input in tool_rows:
+        tool_reads, tool_writes = extract_tool_scope_paths(
+            tool_name,
+            tool_input if isinstance(tool_input, dict) else None,
+            base_path=base_path,
+        )
+        observed_reads = merge_scope_paths(observed_reads, tool_reads)
+        observed_writes = merge_scope_paths(observed_writes, tool_writes)
+    if not observed_reads and not observed_writes:
+        return
+
+    previous_reads = list(session.observed_read_paths or [])
+    previous_writes = list(session.observed_write_paths or [])
+    previous_confidence = session.scope_confidence
+    apply_scope_state(
+        session,
+        base_path=base_path,
+        observed_read_paths=observed_reads,
+        observed_write_paths=observed_writes,
+    )
+    if (
+        session.observed_read_paths != previous_reads
+        or session.observed_write_paths != previous_writes
+        or session.scope_confidence != previous_confidence
+    ):
         session.updated_at = datetime.now(UTC)
         await db.commit()

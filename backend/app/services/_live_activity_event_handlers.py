@@ -29,8 +29,10 @@ def handle_tool_use_event(
     tool_name: str | None,
     tool_input: LiveActivity | None,
     now_iso: str,
+    *,
+    base_path: str | None = None,
 ) -> None:
-    phase, summary, path, command = tool_phase(tool_name, tool_input)
+    phase, summary, path, command = tool_phase(tool_name, tool_input, base_path=base_path)
     mark_non_terminal_state(live_activity, phase=phase, summary=summary, now_iso=now_iso)
     live_activity["current_tool_name"] = tool_name
     live_activity["last_tool_name"] = tool_name
