@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING
 from fastapi import HTTPException
 
 from app.services.memory import MemoryService
-from app.services.memory.embedder import get_embedder
-from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
@@ -37,6 +35,7 @@ async def handle_add_episode(
     """Add an episode to semantic memory."""
     from datetime import UTC, datetime
 
+    from app.services.memory.episode_creator import get_episode_creator
     from app.services.memory.ingestion_config import LEARNING
 
     from .memory_schemas import AddEpisodeResponse
@@ -51,9 +50,7 @@ async def handle_add_episode(
         source=request.source,
         context_kind=request.context_kind.value if request.context_kind is not None else None,
         applicability=(
-            request.applicability.model_dump()
-            if request.applicability is not None
-            else None
+            request.applicability.model_dump() if request.applicability is not None else None
         ),
         changed_by="api",
         change_reason=request.change_reason or "Episode added",
@@ -64,20 +61,25 @@ async def handle_add_episode(
         )
 
     new_uuid = result.uuid or ""
+    await _maybe_set_injection_tier(new_uuid, request)
+    await _maybe_copy_stats(new_uuid, request)
+    return AddEpisodeResponse(uuid=new_uuid)
 
-    # Set injection tier if specified
+
+async def _maybe_set_injection_tier(new_uuid: str, request: AddEpisodeRequest) -> None:
+    """Set injection tier on new episode if requested."""
     if request.injection_tier and new_uuid:
         from app.services.memory.episode_property_setters import set_episode_injection_tier
 
         await set_episode_injection_tier(new_uuid, request.injection_tier.value)
 
-    # Copy stats from source episode if requested
+
+async def _maybe_copy_stats(new_uuid: str, request: AddEpisodeRequest) -> None:
+    """Copy stats from source episode if requested."""
     if request.preserve_stats_from and new_uuid:
         from app.services.memory.episode_properties import copy_episode_stats
 
         await copy_episode_stats(request.preserve_stats_from, new_uuid)
-
-    return AddEpisodeResponse(uuid=new_uuid)
 
 
 async def handle_get_episode(
@@ -126,135 +128,33 @@ async def handle_update_episode_properties(
     request: UpdateEpisodePropertiesRequest,
 ) -> UpdateEpisodePropertiesResponse:
     """Update episode properties (pinned, auto_inject, display_order, triggers, summary)."""
-    from app.services.memory.episode_property_setters import (
-        set_episode_applicability,
-        set_episode_auto_inject,
-        set_episode_context_kind,
-        set_episode_display_order,
-        set_episode_pinned,
-        set_episode_summary,
-        set_episode_trigger_phases,
-        set_episode_trigger_task_types,
-    )
-
+    from ._memory_episodes_helpers import apply_episode_properties
     from .memory_schemas import UpdateEpisodePropertiesResponse
 
     try:
-        messages: list[str] = []
-        final_pinned = None
-        final_auto_inject = None
-        final_display_order = None
-        final_trigger_task_types = None
-        final_trigger_phases = None
-        final_context_kind = None
-        final_applicability = None
-        final_summary = None
-
-        if request.pinned is not None:
-            success = await set_episode_pinned(
-                full_uuid,
-                request.pinned,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_pinned = request.pinned
-            messages.append(f"pinned={request.pinned}")
-
-        if request.auto_inject is not None:
-            success = await set_episode_auto_inject(
-                full_uuid,
-                request.auto_inject,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_auto_inject = request.auto_inject
-            messages.append(f"auto_inject={request.auto_inject}")
-
-        if request.display_order is not None:
-            success = await set_episode_display_order(
-                full_uuid,
-                request.display_order,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_display_order = request.display_order
-            messages.append(f"display_order={request.display_order}")
-
-        if request.trigger_task_types is not None:
-            success = await set_episode_trigger_task_types(
-                full_uuid,
-                request.trigger_task_types,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_trigger_task_types = request.trigger_task_types
-            messages.append(f"trigger_task_types={request.trigger_task_types}")
-
-        if request.trigger_phases is not None:
-            success = await set_episode_trigger_phases(
-                full_uuid,
-                request.trigger_phases,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_trigger_phases = request.trigger_phases
-            messages.append(f"trigger_phases={request.trigger_phases}")
-
-        if request.context_kind is not None:
-            success = await set_episode_context_kind(
-                full_uuid,
-                request.context_kind.value,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_context_kind = request.context_kind
-            messages.append(f"context_kind={request.context_kind.value}")
-
-        if request.applicability is not None:
-            success = await set_episode_applicability(
-                full_uuid,
-                request.applicability.model_dump(),
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_applicability = request.applicability
-            messages.append("applicability")
-
-        if request.summary is not None:
-            success = await set_episode_summary(
-                full_uuid,
-                request.summary,
-                change_reason=request.change_reason,
-            )
-            if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-            final_summary = request.summary
-            messages.append(f"summary={request.summary}")
+        finals, messages = await apply_episode_properties(full_uuid, request)
 
         if not messages:
             raise HTTPException(status_code=400, detail="No properties to update")
 
         episode = await get_memory_repository().get_as_dict(full_uuid)
-        version = int(episode["version"]) if isinstance(episode, dict) and episode.get("version") is not None else None
+        version = (
+            int(episode["version"])
+            if isinstance(episode, dict) and episode.get("version") is not None
+            else None
+        )
 
         return UpdateEpisodePropertiesResponse(
             success=True,
             episode_id=full_uuid,
-            pinned=final_pinned,
-            auto_inject=final_auto_inject,
-            display_order=final_display_order,
-            trigger_task_types=final_trigger_task_types,
-            trigger_phases=final_trigger_phases,
-            context_kind=final_context_kind,
-            applicability=final_applicability,
-            summary=final_summary,
+            pinned=finals["final_pinned"],
+            auto_inject=finals["final_auto_inject"],
+            display_order=finals["final_display_order"],
+            trigger_task_types=finals["final_trigger_task_types"],
+            trigger_phases=finals["final_trigger_phases"],
+            context_kind=finals["final_context_kind"],
+            applicability=finals["final_applicability"],
+            summary=finals["final_summary"],
             message=f"Updated: {', '.join(messages)}",
             version=version,
         )
@@ -270,48 +170,16 @@ async def handle_update_episode(
     request: UpdateEpisodeRequest,
 ) -> UpdateEpisodeResponse:
     """Update episode content and/or tier without rotating UUID."""
-    from app.services.memory.episode_validation import EpisodeValidationError, EpisodeValidator
-
+    from ._memory_episodes_helpers import build_episode_updates
     from .memory_schemas import UpdateEpisodeResponse
 
     if request.content is None and request.injection_tier is None:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     repo = get_memory_repository()
-    updates: dict[str, object] = {}
-    messages: list[str] = []
-
-    if request.content is not None:
-        existing_episode: dict[str, object] | None = None
-        if request.injection_tier is None:
-            existing_episode = await repo.get_as_dict(full_uuid)
-            if existing_episode is None:
-                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
-        if request.injection_tier is not None:
-            effective_tier = request.injection_tier.value
-        else:
-            effective_tier = str((existing_episode or {}).get("injection_tier") or "reference")
-        try:
-            EpisodeValidator.validate_content(request.content, tier=effective_tier)
-        except EpisodeValidationError as e:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "validation_error",
-                    "message": e.message,
-                    "details": [{"message": pattern} for pattern in e.detected_patterns],
-                },
-            ) from e
-        embedder = get_embedder()
-        updates["content"] = request.content
-        updates["embedding"] = await embedder.embed(request.content)
-        messages.append("content")
-
-    if request.injection_tier is not None:
-        updates["injection_tier"] = request.injection_tier.value
-        messages.append(f"injection_tier={request.injection_tier.value}")
 
     try:
+        updates, messages = await build_episode_updates(full_uuid, request, repo)
         update_kwargs = dict(updates)
         update_kwargs["changed_by"] = "api"
         if request.change_reason is not None:
@@ -320,7 +188,11 @@ async def handle_update_episode(
         if not success:
             raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
         episode = await repo.get_as_dict(full_uuid)
-        version = int(episode["version"]) if isinstance(episode, dict) and episode.get("version") is not None else None
+        version = (
+            int(episode["version"])
+            if isinstance(episode, dict) and episode.get("version") is not None
+            else None
+        )
         return UpdateEpisodeResponse(
             success=True,
             episode_id=full_uuid,
@@ -350,7 +222,9 @@ def _revision_to_response(revision: object) -> MemoryRevisionResponse:
         content=revision.content,
         name=revision.name,
         summary=revision.summary,
-        injection_tier={1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(revision.tier, "reference"),
+        injection_tier={1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(
+            revision.tier, "reference"
+        ),
         scope=revision.scope,
         scope_id=revision.scope_id,
         tags=list(revision.tags or []),
