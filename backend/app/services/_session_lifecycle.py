@@ -29,7 +29,6 @@ _NON_REAPABLE_PHASES = {
     "reading_file",
     "writing_file",
     "running_validation",
-    "finalizing",
 }
 _DETACHED_AGENT_HUB_RESTART_TOKENS = (
     "rebuild.sh --detach agent-hub",
