@@ -28,6 +28,7 @@ from app.services._session_lifecycle import (
     _apply_terminal_overrides,
     _classify_active_health,
 )
+from app.services.session_scope import resolve_scope_base_path
 
 
 def update_live_activity_for_event(
@@ -56,7 +57,13 @@ def update_live_activity_for_event(
     elif event_type == "thinking":
         mark_non_terminal_state(live_activity, phase="planning", summary="Model planning", now_iso=now_iso)
     elif event_type == "tool_use":
-        handle_tool_use_event(live_activity, tool_name, tool_input, now_iso)
+        handle_tool_use_event(
+            live_activity,
+            tool_name,
+            tool_input,
+            now_iso,
+            base_path=resolve_scope_base_path(metadata, None),
+        )
     elif event_type == "tool_result":
         handle_tool_result_event(live_activity, tool_name, tool_output, now_iso)
     elif event_type == "assistant_message":

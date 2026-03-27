@@ -9,6 +9,7 @@ from app.services.ownership_lanes import (
     collapse_active_workstream_rows,
     collapse_ownership_owners,
     infer_task_id,
+    prioritize_scope_paths,
 )
 
 
@@ -99,6 +100,18 @@ class TestCollapseOwnershipOwners:
 
 def test_infer_task_id_recovers_from_lane_path_suffix() -> None:
     assert infer_task_id(None, None, "/tmp/worktrees/task-a961e3b9-follow-up") == "task-a961e3b9"
+
+
+def test_prioritize_scope_paths_prefers_declared_and_writes_before_reads() -> None:
+    assert prioritize_scope_paths(
+        ["backend/app/services/ownership_inventory.py"],
+        ["backend/app/services/session_scope.py"],
+        [".coverage", "backend/app/services/session_scope.py"],
+    ) == [
+        "backend/app/services/ownership_inventory.py",
+        "backend/app/services/session_scope.py",
+        ".coverage",
+    ]
 
 
 class TestCollapseActiveWorkstreamRows:

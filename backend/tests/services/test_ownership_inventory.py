@@ -248,6 +248,80 @@ async def test_query_project_ownership_keeps_active_unscoped_repo_root_session()
     assert len(owners) == 1
     assert owners[0].session_id == "sess-root-live"
     assert owners[0].branch == "main"
+    assert owners[0].scope_confidence == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_query_project_ownership_derives_scope_from_exec_command_and_apply_patch_events() -> None:
+    now = datetime.now(UTC)
+    session = SimpleNamespace(
+        id="sess-root-scoped",
+        project_id="agent-hub",
+        created_at=now - timedelta(minutes=8),
+        updated_at=now - timedelta(minutes=2),
+        agent_slug=None,
+        external_id=None,
+        current_branch="main",
+        status="active",
+        workstream_status=None,
+        workstream_note=None,
+        declared_scope_paths=[],
+        observed_read_paths=[],
+        observed_write_paths=[],
+        scope_confidence=None,
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "live_activity": {
+                "phase": "waiting_for_model",
+                "status": "active",
+                "summary": "Waiting for model after exec_command",
+                "last_event_type": "tool_result",
+                "last_event_at": (now - timedelta(minutes=2)).isoformat(),
+                "last_model_activity_at": (now - timedelta(minutes=2)).isoformat(),
+                "outstanding_tool_calls": 0,
+                "tool_calls_count": 4,
+            },
+        },
+    )
+    exec_event = SimpleNamespace(
+        tool_name="exec_command",
+        tool_input={
+            "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
+            "workdir": "/srv/workspaces/projects/agent-hub",
+        },
+    )
+    patch_event = SimpleNamespace(
+        tool_name="apply_patch",
+        tool_input={
+            "input": (
+                "*** Begin Patch\n"
+                "*** Update File: backend/app/services/ownership_inventory.py\n"
+                "@@\n"
+                "*** End Patch\n"
+            )
+        },
+    )
+
+    db = AsyncMock()
+
+    with (
+        patch(
+            "app.services.ownership_inventory._fetch_candidate_sessions",
+            new=AsyncMock(return_value=[session]),
+        ),
+        patch(
+            "app.services.ownership_inventory._fetch_scope_events",
+            new=AsyncMock(return_value={session.id: [exec_event, patch_event]}),
+        ),
+        patch("app.services.ownership_inventory._is_worktree", return_value=False),
+    ):
+        owners = await query_project_ownership(db, "agent-hub")
+
+    assert len(owners) == 1
+    assert owners[0].observed_read_paths == ["backend/app/services/session_scope.py"]
+    assert owners[0].observed_write_paths == ["backend/app/services/ownership_inventory.py"]
+    assert owners[0].ownership_kind == "scoped"
+    assert owners[0].scope_confidence == "observed_write"
 
 
 @pytest.mark.asyncio

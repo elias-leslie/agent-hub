@@ -303,6 +303,60 @@ class TestMemoryInjectEvent:
         assert session.provider_metadata["live_activity"]["last_write_path"] == "backend/app/services/event_storage.py"
 
     @pytest.mark.asyncio
+    async def test_store_event_infers_scope_from_exec_command_and_apply_patch(self) -> None:
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None, None])
+        db.get = AsyncMock()
+        session = Session(
+            id="sess-command-scope",
+            project_id="agent-hub",
+            provider="codex",
+            model="codex/gpt-5.4",
+            status="active",
+            session_type="agent",
+            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub"},
+            models_used=["codex/gpt-5.4"],
+            providers_used=["codex"],
+        )
+        session.created_at = datetime.now(UTC)
+        session.updated_at = datetime.now(UTC)
+        get_sequencer()._sessions.clear()
+
+        await store_event(
+            db=db,
+            session_id="sess-command-scope",
+            event_type="tool_use",
+            tool_name="exec_command",
+            tool_input={
+                "cmd": "sed -n '1,40p' backend/app/services/session_scope.py",
+                "workdir": "/srv/workspaces/projects/agent-hub",
+            },
+            session=session,
+        )
+        await store_event(
+            db=db,
+            session_id="sess-command-scope",
+            event_type="tool_use",
+            tool_name="apply_patch",
+            tool_input={
+                "input": (
+                    "*** Begin Patch\n"
+                    "*** Update File: backend/app/services/ownership_inventory.py\n"
+                    "@@\n"
+                    "*** End Patch\n"
+                )
+            },
+            session=session,
+        )
+
+        assert session.observed_read_paths == ["backend/app/services/session_scope.py"]
+        assert session.observed_write_paths == ["backend/app/services/ownership_inventory.py"]
+        assert session.scope_confidence == "observed_write"
+        assert session.provider_metadata["live_activity"]["last_command"] == "sed -n '1,40p' backend/app/services/session_scope.py"
+        assert session.provider_metadata["live_activity"]["last_read_path"] == "backend/app/services/session_scope.py"
+        assert session.provider_metadata["live_activity"]["last_write_path"] == "backend/app/services/ownership_inventory.py"
+
+    @pytest.mark.asyncio
     async def test_store_event_tracks_subagent_model_without_overwriting_primary_model(self) -> None:
         db = MagicMock()
         db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])

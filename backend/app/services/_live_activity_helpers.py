@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 from app.models import Session
+from app.services.session_scope import extract_tool_scope_paths
 
 _TOUCHED_FILES_LIMIT = 10
 _RECENT_PATHS_LIMIT = 20
@@ -181,24 +182,47 @@ def build_fallback_raw(session: Session) -> LiveActivity | None:
 def tool_phase(
     tool_name: str | None,
     tool_input: LiveActivity | None,
+    *,
+    base_path: str | None = None,
 ) -> tuple[str, str, str | None, str | None]:
     """Return (phase, summary, path, command) for a tool_use event."""
     normalized = (tool_name or "").lower()
     command: str | None = None
     path: str | None = None
+    observed_reads: list[str] = []
+    observed_writes: list[str] = []
     if isinstance(tool_input, dict):
-        cmd_val = tool_input.get("command")
+        cmd_val = tool_input.get("command") or tool_input.get("cmd")
         command = cmd_val if isinstance(cmd_val, str) and cmd_val else None
         for key in ("file_path", "path", "target_file"):
             val = tool_input.get(key)
             if isinstance(val, str) and val:
                 path = val
                 break
+        base_path = next(
+            (
+                value
+                for key in ("workdir", "cwd")
+                if isinstance((value := tool_input.get(key)), str) and value
+            ),
+            base_path,
+        )
+        observed_reads, observed_writes = extract_tool_scope_paths(
+            tool_name,
+            dict(tool_input),
+            base_path=base_path,
+        )
+        if not path:
+            path = (observed_writes or observed_reads or [None])[0]
 
     if "read" in normalized:
         return "reading_file", f"Reading {path or 'file'}", path, command
     if "write" in normalized or "edit" in normalized:
         return "writing_file", f"Writing {path or 'file'}", path, command
+    if observed_writes:
+        return "writing_file", f"Writing {path or 'file'}", path, command
+    if observed_reads:
+        return "reading_file", f"Reading {path or 'file'}", path, command
     if command:
         if any(token in command for token in _VALIDATION_COMMAND_TOKENS):
             return "running_validation", f"Running validation: {command[:100]}", path, command

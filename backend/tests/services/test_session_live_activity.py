@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 from app.services.session_live_activity import (
     apply_live_activity_heartbeat,
     build_live_activity_response,
+    update_live_activity_for_event,
 )
 
 
@@ -136,6 +137,27 @@ def test_apply_live_activity_heartbeat_advances_model_activity_for_running_tool(
     assert live["last_model_activity_at"] == "2026-03-10T14:00:00+00:00"
     assert live["current_tool_name"] == "Bash"
     assert live["outstanding_tool_calls"] == 1
+
+
+def test_update_live_activity_for_event_infers_exec_command_read_path() -> None:
+    session = MagicMock()
+    session.provider_metadata = {}
+
+    update_live_activity_for_event(
+        session,
+        event_type="tool_use",
+        tool_name="exec_command",
+        tool_input={
+            "cmd": "sed -n '1,20p' backend/app/services/session_scope.py",
+            "workdir": "/srv/workspaces/projects/agent-hub",
+        },
+    )
+
+    live = session.provider_metadata["live_activity"]
+    assert live["phase"] == "reading_file"
+    assert live["summary"] == "Reading backend/app/services/session_scope.py"
+    assert live["last_command"] == "sed -n '1,20p' backend/app/services/session_scope.py"
+    assert live["last_read_path"] == "backend/app/services/session_scope.py"
 
 
 def test_build_live_activity_response_normalizes_completed_sessions_with_stale_active_state() -> None:

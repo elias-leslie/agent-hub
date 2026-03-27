@@ -12,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Session, SessionEvent, SessionEventType
 from app.services.narration_extraction import extract_narration_from_event
 from app.services.session_live_activity import update_live_activity_for_event
-from app.services.session_scope import apply_scope_state, resolve_scope_base_path
+from app.services.session_scope import (
+    apply_scope_state,
+    extract_tool_scope_paths,
+    resolve_scope_base_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,31 +78,6 @@ def _append_unique_string(values: list[str] | None, item: str | None) -> list[st
     return existing
 
 
-def _tool_scope_paths(
-    tool_name: str | None,
-    tool_input: dict[str, Any] | None,
-) -> tuple[list[str], list[str]]:
-    if not isinstance(tool_input, dict):
-        return [], []
-    raw_paths: list[str] = []
-    for key in ("file_path", "path", "target_file"):
-        value = tool_input.get(key)
-        if isinstance(value, str) and value:
-            raw_paths.append(value)
-    for key in ("file_paths", "paths"):
-        value = tool_input.get(key)
-        if isinstance(value, list):
-            raw_paths.extend(p for p in value if isinstance(p, str) and p)
-    if not raw_paths:
-        return [], []
-    normalized_tool = (tool_name or "").lower()
-    if "read" in normalized_tool:
-        return raw_paths, []
-    if "write" in normalized_tool or "edit" in normalized_tool:
-        return [], raw_paths
-    return [], []
-
-
 def _reconcile_session_from_event(
     session: Session,
     *,
@@ -114,11 +93,15 @@ def _reconcile_session_from_event(
             session.model = model_used
     if str(event_type) != SessionEventType.TOOL_USE:
         return
-    observed_reads, observed_writes = _tool_scope_paths(tool_name, tool_input)
-    if not observed_reads and not observed_writes:
-        return
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     base_path = resolve_scope_base_path(provider_metadata, None)
+    observed_reads, observed_writes = extract_tool_scope_paths(
+        tool_name,
+        tool_input,
+        base_path=base_path,
+    )
+    if not observed_reads and not observed_writes:
+        return
     apply_scope_state(
         session,
         base_path=base_path,

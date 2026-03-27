@@ -14,18 +14,21 @@ from app.services.ownership_lanes import (
     OwnershipOwner,
     collapse_ownership_owners,
     infer_task_id,
+    prioritize_scope_paths,
 )
 from app.services.persona_identity import PERSONA_SLUG
 from app.services.session_live_activity import is_session_actionably_active
-from app.services.session_scope import merge_scope_paths, normalize_scope_paths
+from app.services.session_scope import (
+    extract_tool_scope_paths,
+    merge_scope_paths,
+    normalize_scope_paths,
+)
 from app.services.tools.project_env import is_worktree_path
 
 _LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 30
 _GHOST_SESSION_MINUTES = 15
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
-_WRITE_TOOL_NAMES = {"Write", "Edit", "write_file"}
-_READ_TOOL_NAMES = {"Read", "read_file"}
 
 _is_worktree = is_worktree_path
 
@@ -105,20 +108,18 @@ def _should_skip_owner_session(
     return not (declared_scope_paths or observed_write_paths or observed_read_paths)
 
 
-def _extract_scope_paths(events: list[SessionEvent], worktree_path: str | None, tool_names: set[str]) -> list[str]:
-    paths: list[str] = []
-    seen: set[str] = set()
+def _extract_scope_paths(events: list[SessionEvent], worktree_path: str | None) -> tuple[list[str], list[str]]:
+    observed_reads: list[str] = []
+    observed_writes: list[str] = []
     for event in events:
-        if event.tool_name not in tool_names:
-            continue
-        tool_input = event.tool_input if isinstance(event.tool_input, dict) else {}
-        raw = tool_input.get("file_path") or tool_input.get("path")
-        normalized = normalize_scope_paths([raw], worktree_path)
-        path = normalized[0] if normalized else None
-        if path and path not in seen:
-            seen.add(path)
-            paths.append(path)
-    return sorted(paths)
+        tool_reads, tool_writes = extract_tool_scope_paths(
+            event.tool_name,
+            event.tool_input if isinstance(event.tool_input, dict) else None,
+            base_path=worktree_path,
+        )
+        observed_reads = merge_scope_paths(observed_reads, tool_reads)
+        observed_writes = merge_scope_paths(observed_writes, tool_writes)
+    return observed_writes, observed_reads
 
 
 async def _fetch_candidate_sessions(db: AsyncSession, project_id: str) -> list[Session]:
@@ -163,7 +164,6 @@ async def _fetch_scope_events(db: AsyncSession, session_ids: list[str]) -> dict[
                 and_(
                     SessionEvent.session_id.in_(session_ids),
                     SessionEvent.event_type == "tool_use",
-                    SessionEvent.tool_name.in_(_WRITE_TOOL_NAMES | _READ_TOOL_NAMES),
                 )
             )
             .order_by(SessionEvent.created_at.desc())
@@ -223,8 +223,7 @@ def _worktree_path_from_metadata(metadata: dict) -> str | None:
 def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_path: str | None) -> tuple[
     list[str], list[str], list[str], list[str]
 ]:
-    write_event_paths = _extract_scope_paths(events, worktree_path, _WRITE_TOOL_NAMES)
-    read_event_paths = _extract_scope_paths(events, worktree_path, _READ_TOOL_NAMES)
+    write_event_paths, read_event_paths = _extract_scope_paths(events, worktree_path)
     declared = normalize_scope_paths(getattr(session, "declared_scope_paths", None), worktree_path)
     observed_write = merge_scope_paths(
         normalize_scope_paths(getattr(session, "observed_write_paths", None), worktree_path),
@@ -234,7 +233,7 @@ def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_pa
         normalize_scope_paths(getattr(session, "observed_read_paths", None), worktree_path),
         read_event_paths,
     )
-    scope = merge_scope_paths(declared, observed_write, observed_read)
+    scope = prioritize_scope_paths(declared, observed_write, observed_read)
     return declared, observed_write, observed_read, scope
 
 
