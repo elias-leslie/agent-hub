@@ -550,3 +550,44 @@ async def _reconcile_task_lane(
     summary = _normalize_summary(getattr(authoritative_session, "summary_oneliner", None))
     message = f"Reconciled from Agent Hub session evidence: {summary}"
     return await _dispatch_done(bash_fn, task_id, project_id, message, sessions)
+
+
+# ---------------------------------------------------------------------------
+# Thin action dispatchers shared by manage_tasks
+# ---------------------------------------------------------------------------
+
+
+async def _handle_lane_action(
+    bash_fn: Callable[..., Awaitable[str]],
+    action: str,
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Handle reconcile/retire_lane actions with task_id guard."""
+    if not task_id:
+        return f"Error: task_id required for {action}"
+    handler = _reconcile_task_lane if action == "reconcile" else _retire_task_lane
+    return await handler(bash_fn, task_id, project_id)
+
+
+async def _handle_simple_task_action(
+    bash_fn: Callable[..., Awaitable[str]],
+    action: str,
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Handle done/abandon/cancel with task_id guard and done no-code-changes fallback."""
+    if not task_id:
+        return f"Error: task_id required for {action}"
+    result = await bash_fn(_st_cmd(f"{action} {shlex.quote(task_id)}", project_id))
+    if action == "done" and _NO_CODE_CHANGES_PHRASE in result.lower():
+        sessions = await _load_task_lane_sessions(task_id)
+        if sessions:
+            has_retired_lane = any(
+                getattr(session, "workstream_status", None) == "retired"
+                for session in sessions
+            )
+            fallback_handler = _retire_task_lane if has_retired_lane else _reconcile_task_lane
+            fallback = await fallback_handler(bash_fn, task_id, project_id)
+            return f"{result.rstrip()}\nFallback: {fallback}"
+    return result
