@@ -887,6 +887,7 @@ def _run_claude(
     process = subprocess.Popen(
         command,
         cwd=str(workdir),
+        env=_subprocess_env(),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

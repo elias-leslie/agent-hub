@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import io
 import sys
 import types
 from pathlib import Path
@@ -63,6 +64,78 @@ def test_run_text_command_strips_pythonpath_for_nested_st_calls(tmp_path):
     assert isinstance(env, dict)
     assert "PYTHONPATH" not in env
     assert env["KEEP_ME"] == "1"
+
+
+def test_run_claude_strips_pythonpath_for_parent_claude_process(tmp_path):
+    module = _load_module()
+    captured: dict[str, object] = {}
+
+    class _FakeStdin:
+        def __init__(self) -> None:
+            self.writes: list[str] = []
+            self.closed = False
+
+        def write(self, value: str) -> None:
+            self.writes.append(value)
+
+        def close(self) -> None:
+            self.closed = True
+
+    class _FakeProcess:
+        def __init__(self, *args, **kwargs) -> None:
+            captured["env"] = kwargs["env"]
+            self.pid = 1234
+            self.stdin = _FakeStdin()
+            self.stdout = io.StringIO("")
+            self.stderr = io.StringIO("")
+            self.returncode = 0
+
+        def wait(self, timeout=None) -> int:
+            return 0
+
+        def kill(self) -> None:
+            return None
+
+    class _FakeThread:
+        def __init__(self, *args, **kwargs) -> None:
+            return None
+
+        def start(self) -> None:
+            return None
+
+        def join(self, timeout=None) -> None:
+            return None
+
+    with (
+        patch.dict(module.os.environ, {"PYTHONPATH": "backend", "KEEP_ME": "1"}, clear=True),
+        patch.object(module.subprocess, "Popen", side_effect=_FakeProcess),
+        patch.object(module.threading, "Thread", side_effect=_FakeThread),
+        patch.object(module, "_stream_claude_pipe"),
+        patch.object(module, "_write_live_summary"),
+        patch.object(module, "_emit_status"),
+        patch.object(module, "_refresh_transcript_progress", return_value=False),
+        patch.object(module, "_sync_session_metadata_if_needed", return_value=False),
+        patch.object(module, "_sync_transcript_events_if_needed", return_value=False),
+    ):
+        summary = module._run_claude(
+            prompt="hello",
+            schema_path=None,
+            agents_path=None,
+            agents_payload=None,
+            workdir=tmp_path,
+            model="sonnet",
+            allowed_tools="Read,Agent",
+            permission_mode="bypassPermissions",
+            timeout_seconds=5,
+            project_id="agent-hub",
+            external_id=None,
+        )
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert "PYTHONPATH" not in env
+    assert env["KEEP_ME"] == "1"
+    assert summary["exit_code"] == 0
 
 
 def test_parse_args_defaults_task_mode_to_claim_if_needed(monkeypatch):
