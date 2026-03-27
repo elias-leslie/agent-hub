@@ -10,6 +10,22 @@ from app.models import Session
 _TOUCHED_FILES_LIMIT = 10
 _RECENT_PATHS_LIMIT = 20
 _VALIDATION_COMMAND_TOKENS = ("dt ", "pytest", "ruff", "tsc", "biome", "sqlfluff", "squawk")
+_HEARTBEAT_ACTIVE_PHASES = {
+    "injecting_memory",
+    "planning",
+    "running_tool",
+    "reading_file",
+    "writing_file",
+    "running_validation",
+}
+_HEARTBEAT_PASSIVE_PHASES = {
+    "created",
+    "waiting_for_model",
+    "finalizing",
+    "completed",
+    "failed",
+    "error",
+}
 
 LiveActivity = dict[str, object]
 
@@ -83,22 +99,33 @@ def apply_heartbeat_fields(
     last_event_type: str | None,
 ) -> None:
     """Apply scalar heartbeat fields to live_activity dict."""
+    resolved_phase = phase or str(live_activity.get("phase") or "waiting_for_model")
     live_activity["last_heartbeat_at"] = heartbeat_at
     live_activity["last_event_at"] = heartbeat_at
-    live_activity["last_model_activity_at"] = heartbeat_at
     live_activity["termination_reason"] = None
     live_activity["status"] = status or str(live_activity.get("status") or "active")
-    live_activity["phase"] = phase or str(live_activity.get("phase") or "waiting_for_model")
+    live_activity["phase"] = resolved_phase
     if summary is not None:
         live_activity["summary"] = summary
     if current_tool_name is not None:
         live_activity["current_tool_name"] = current_tool_name
         live_activity["last_tool_name"] = current_tool_name
+    elif resolved_phase in _HEARTBEAT_PASSIVE_PHASES:
+        live_activity["current_tool_name"] = None
     if current_command is not None:
         live_activity["current_command"] = current_command
         live_activity["last_command"] = current_command
     if last_event_type is not None:
         live_activity["last_event_type"] = last_event_type
+    if (
+        current_tool_name
+        or resolved_phase in _HEARTBEAT_ACTIVE_PHASES
+        or (last_event_type and last_event_type != "heartbeat")
+        or not live_activity.get("last_model_activity_at")
+    ):
+        live_activity["last_model_activity_at"] = heartbeat_at
+    if resolved_phase in _HEARTBEAT_PASSIVE_PHASES and not current_tool_name:
+        live_activity["outstanding_tool_calls"] = 0
 
 
 def apply_heartbeat_path_updates(

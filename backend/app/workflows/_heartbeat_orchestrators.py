@@ -22,10 +22,7 @@ from app.services.git_status_summary import (
     build_actionable_git_summary_from_rows,
     build_compact_git_status,
 )
-from app.services.session_display_summary import (
-    SessionDisplaySummaryCandidate,
-    fetch_session_display_summary_results,
-)
+from app.services.session_display_summary import SessionDisplaySummaryCandidate
 from app.services.task_overview_summary import (
     build_compact_task_overview_from_payload,
     collect_visible_task_ids_from_payload,
@@ -181,6 +178,7 @@ async def _query_completed_sessions_with_summaries(
 
     from app.db import async_session
     from app.models import Session
+    from app.workflows._heartbeat_data import fetch_session_display_summary_results
 
     cutoff = now - timedelta(hours=_COMPLETED_SESSION_LOOKBACK_HOURS)
     async with async_session() as db:

@@ -533,6 +533,29 @@ class TestConsultAgent:
         assert "project_id" in result.content.lower()
 
     @pytest.mark.asyncio
+    async def test_consult_agent_includes_parent_session_id(self, tmp_path: Path) -> None:
+        """Consult child sessions should link back to the current session."""
+        executor = DirectToolExecutor(
+            str(tmp_path),
+            project_id="summitflow",
+            session_id="parent-session-456",
+        )
+        with patch(
+            "app.services.tools._executor_consultation.consult_agent",
+            new_callable=AsyncMock,
+            return_value="ok",
+        ) as mock_consult:
+            await executor.consult_agent("supervisor", "How do I fix this?", "Changed the sync path.")
+
+        mock_consult.assert_awaited_once_with(
+            "summitflow",
+            "supervisor",
+            "How do I fix this?",
+            "Changed the sync path.",
+            parent_session_id="parent-session-456",
+        )
+
+    @pytest.mark.asyncio
     async def test_dispatch_agent_includes_parent_session_id(self, tmp_path: Path) -> None:
         """Dispatched child sessions should link back to the current session."""
         executor = DirectToolExecutor(

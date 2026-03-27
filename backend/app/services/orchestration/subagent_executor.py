@@ -6,6 +6,7 @@ import asyncio
 import logging
 import uuid
 from datetime import UTC, datetime
+from textwrap import shorten
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
@@ -15,6 +16,60 @@ from app.services.telemetry import get_current_trace_id, get_tracer
 from .subagent_models import SubagentConfig, SubagentResult
 
 logger = logging.getLogger(__name__)
+
+
+def _truncate_text(content: str, remaining_chars: int) -> str:
+    """Return a bounded one-line excerpt for focused child context."""
+    if remaining_chars <= 0:
+        return ""
+    collapsed = " ".join(content.split())
+    if not collapsed:
+        return ""
+    width = max(remaining_chars, 32)
+    excerpt = shorten(collapsed, width=width, placeholder=" ...")
+    return excerpt[:remaining_chars].rstrip()
+
+
+def _shape_context_messages(
+    context: list[Message],
+    config: SubagentConfig,
+) -> list[Message]:
+    """Convert parent context into a single focused brief by default."""
+    if config.context_mode == "none":
+        return []
+    if config.context_mode == "full":
+        return list(context)
+
+    max_messages = max(config.max_context_messages, 0)
+    if max_messages == 0 or config.max_context_chars <= 0:
+        return []
+
+    candidate_messages = [message for message in context if message.role != "system"]
+    if not candidate_messages:
+        return []
+
+    selected = candidate_messages[-max_messages:]
+    omitted = len(candidate_messages) - len(selected)
+    remaining_chars = config.max_context_chars
+    lines = ["Selected parent context:"]
+
+    for message in selected:
+        prefix = f"- {message.role}: "
+        remaining_for_line = remaining_chars - len(prefix) - 1
+        excerpt = _truncate_text(message.content, remaining_for_line)
+        if not excerpt:
+            break
+        lines.append(f"{prefix}{excerpt}")
+        remaining_chars -= len(prefix) + len(excerpt) + 1
+        if remaining_chars <= 0:
+            break
+
+    if omitted > 0 and remaining_chars > 24:
+        lines.append(f"- ({omitted} older message(s) omitted)")
+
+    if len(lines) == 1:
+        return []
+    return [Message(role="user", content="\n".join(lines))]
 
 
 async def _log_subagent_cost(
@@ -90,7 +145,7 @@ def build_messages(
 
     # Add context messages if provided
     if context:
-        messages.extend(context)
+        messages.extend(_shape_context_messages(context, config))
 
     # Add the task as user message
     messages.append(Message(role="user", content=task))
@@ -140,10 +195,12 @@ async def execute_subagent(
             "subagent.task_length": len(task),
             "subagent.current_depth": config.current_depth,
             "subagent.max_spawn_depth": config.max_spawn_depth,
+            "subagent.context_mode": config.context_mode,
         },
     ) as span:
         if config.timeout_seconds is not None:
             span.set_attribute("subagent.timeout_seconds", config.timeout_seconds)
+        span.set_attribute("subagent.context_messages_supplied", len(context or []))
         logger.info(
             f"Spawning subagent {config.name} ({subagent_id}) "
             f"provider={config.provider} parent={parent_id} trace={effective_trace_id}"
@@ -151,6 +208,7 @@ async def execute_subagent(
 
         # Build messages with isolated context
         messages = build_messages(task, config, context)
+        span.set_attribute("subagent.message_count", len(messages))
 
         try:
             if config.timeout_seconds is None:

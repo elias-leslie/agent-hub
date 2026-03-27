@@ -81,6 +81,63 @@ def test_apply_live_activity_heartbeat_tracks_recent_paths() -> None:
     assert live["recent_write_paths"] == ["backend/app/services/ownership_inventory.py"]
 
 
+def test_apply_live_activity_heartbeat_keeps_waiting_heartbeat_from_advancing_model_activity() -> None:
+    session = MagicMock()
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "waiting_for_model",
+            "status": "active",
+            "summary": "Waiting for model after Bash",
+            "last_model_activity_at": "2026-03-10T13:55:00+00:00",
+            "current_tool_name": "Bash",
+            "outstanding_tool_calls": 1,
+        }
+    }
+
+    apply_live_activity_heartbeat(
+        session,
+        heartbeat_at="2026-03-10T14:00:00+00:00",
+        phase="waiting_for_model",
+        status="active",
+        summary="Transcript sync heartbeat",
+        last_event_type="heartbeat",
+    )
+
+    live = session.provider_metadata["live_activity"]
+    assert live["last_event_at"] == "2026-03-10T14:00:00+00:00"
+    assert live["last_model_activity_at"] == "2026-03-10T13:55:00+00:00"
+    assert live["current_tool_name"] is None
+    assert live["outstanding_tool_calls"] == 0
+
+
+def test_apply_live_activity_heartbeat_advances_model_activity_for_running_tool() -> None:
+    session = MagicMock()
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "running_tool",
+            "status": "active",
+            "summary": "Running Bash",
+            "last_model_activity_at": "2026-03-10T13:55:00+00:00",
+            "outstanding_tool_calls": 1,
+        }
+    }
+
+    apply_live_activity_heartbeat(
+        session,
+        heartbeat_at="2026-03-10T14:00:00+00:00",
+        phase="running_tool",
+        status="active",
+        summary="Still running Bash",
+        current_tool_name="Bash",
+        last_event_type="heartbeat",
+    )
+
+    live = session.provider_metadata["live_activity"]
+    assert live["last_model_activity_at"] == "2026-03-10T14:00:00+00:00"
+    assert live["current_tool_name"] == "Bash"
+    assert live["outstanding_tool_calls"] == 1
+
+
 def test_build_live_activity_response_normalizes_completed_sessions_with_stale_active_state() -> None:
     session = MagicMock()
     session.status = "completed"

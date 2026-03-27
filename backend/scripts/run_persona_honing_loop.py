@@ -40,6 +40,7 @@ from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_persona_benchmark_cases,
 )
+from scripts.persona_benchmark_runner import _resolve_client_id
 from scripts.persona_honing._constants import (
     CLI_COMMAND,
     CLIENT_NAME,
@@ -60,7 +61,7 @@ from scripts.persona_honing._experiment import (  # noqa: F401
 )
 from scripts.persona_honing._models import _IterationConfig, _LoopState
 from scripts.persona_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
-from scripts.run_persona_model_benchmark import _parse_csv, _resolve_client_id
+from scripts.run_persona_model_benchmark import _parse_csv
 
 LoopResult = dict[str, Any]
 

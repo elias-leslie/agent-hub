@@ -249,6 +249,130 @@ class TestDispatchAgentFireAndForget:
         mock_wake.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_dispatch_agent_blocks_when_parent_hits_subagent_limit(self):
+        mock_db = AsyncMock()
+        parent_session = MagicMock()
+        parent_session.agent_slug = "persona"
+        parent_session.id = "parent-session-123"
+        child_one = MagicMock()
+        child_one.id = "child-1"
+        child_one.project_id = "summitflow"
+        child_one.status = "active"
+        child_two = MagicMock()
+        child_two.id = "child-2"
+        child_two.project_id = "summitflow"
+        child_two.status = "active"
+
+        mock_db.execute = AsyncMock(
+            side_effect=[
+                _make_scalar_result(parent_session),
+                MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[child_one, child_two])))),
+            ]
+        )
+
+        parent_resolved = MagicMock()
+        parent_resolved.agent.max_subagent_concurrency = 2
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=parent_resolved,
+            ) as mock_resolve,
+            patch(
+                "app.services.ownership_inventory.query_project_ownership",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.services.ownership_inventory.query_project_active_specialists",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.services.session_live_activity.is_session_actionably_active",
+                side_effect=[True, True],
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            result = await dispatch_agent(
+                "summitflow",
+                "git-agent",
+                "Fix the bug",
+                parent_session_id="parent-session-123",
+            )
+
+        assert "Dispatch blocked for persona" in result
+        assert "max_subagent_concurrency=2" in result
+        assert mock_resolve.await_count == 1
+        mock_wake.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_agent_ignores_non_actionable_children_for_parent_limit(self):
+        mock_db = AsyncMock()
+        parent_session = MagicMock()
+        parent_session.agent_slug = "persona"
+        parent_session.id = "parent-session-123"
+        stale_child = MagicMock()
+        stale_child.id = "child-stale"
+        stale_child.project_id = "summitflow"
+        stale_child.status = "active"
+
+        mock_db.execute = AsyncMock(
+            side_effect=[
+                _make_scalar_result(parent_session),
+                MagicMock(scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[stale_child])))),
+            ]
+        )
+
+        parent_resolved = MagicMock()
+        parent_resolved.agent.max_subagent_concurrency = 1
+
+        child_resolved = MagicMock()
+        child_resolved.model = CLAUDE_SONNET
+        child_resolved.provider = "claude"
+        child_resolved.agent.temperature = 0.7
+        child_resolved.agent.thinking_level = "medium"
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                side_effect=[parent_resolved, child_resolved],
+            ),
+            patch(
+                "app.services.ownership_inventory.query_project_ownership",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.services.ownership_inventory.query_project_active_specialists",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+            patch(
+                "app.services.session_live_activity.is_session_actionably_active",
+                return_value=False,
+            ),
+            patch("app.workflows.persona_wake.dispatch_wake") as mock_wake,
+        ):
+            from app.services.tools._executor_consultation import dispatch_agent
+
+            result = await dispatch_agent(
+                "summitflow",
+                "git-agent",
+                "Fix the bug",
+                parent_session_id="parent-session-123",
+            )
+
+        assert "Dispatched git-agent" in result
+        mock_wake.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_dispatch_agent_for_task_mode_forwards_lane_metadata(self):
         mock_db = AsyncMock()
         mock_resolved = MagicMock()

@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 DEFAULT_MAX_SPAWN_DEPTH = 3
+DEFAULT_MAX_CONTEXT_MESSAGES = 6
+DEFAULT_MAX_CONTEXT_CHARS = 4000
 
 
 @dataclass
@@ -43,6 +45,15 @@ class SubagentConfig:
 
     project_id: str | None = None
     """Project ID for cost tracking. When set, token usage is logged to CostLog."""
+
+    context_mode: Literal["focused", "full", "none"] = "focused"
+    """How parent context is forwarded to the child."""
+
+    max_context_messages: int = DEFAULT_MAX_CONTEXT_MESSAGES
+    """Maximum parent-context messages to keep when context_mode='focused'."""
+
+    max_context_chars: int = DEFAULT_MAX_CONTEXT_CHARS
+    """Maximum combined context characters to forward when context_mode='focused'."""
 
 
 @dataclass

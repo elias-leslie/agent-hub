@@ -129,6 +129,79 @@ def _consultation_permission_config(tools: list[dict[str, Any]]) -> dict[str, An
     ).to_dict()
 
 
+async def parent_dispatch_limit_block(db: Any, parent_session_id: str | None) -> str | None:
+    """Return a blocking message when the parent session already hit its child-session cap."""
+    if not parent_session_id:
+        return None
+
+    from sqlalchemy import select
+
+    from app.models import Session as DBSession
+    from app.services.agent_routing_utils import resolve_agent
+    from app.services.ownership_inventory import (
+        query_project_active_specialists,
+        query_project_ownership,
+    )
+    from app.services.session_live_activity import is_session_actionably_active
+
+    parent = (
+        await db.execute(select(DBSession).where(DBSession.id == parent_session_id).limit(1))
+    ).scalar_one_or_none()
+    parent_agent_slug = getattr(parent, "agent_slug", None)
+    if not isinstance(parent_agent_slug, str) or not parent_agent_slug:
+        return None
+
+    resolved_parent = await resolve_agent(parent_agent_slug, db)
+    limit = getattr(resolved_parent.agent, "max_subagent_concurrency", None)
+    if not isinstance(limit, int) or limit < 1:
+        return None
+
+    child_sessions = (
+        await db.execute(
+            select(DBSession)
+            .where(
+                DBSession.status == "active",
+                DBSession.parent_session_id == parent_session_id,
+            )
+            .order_by(DBSession.created_at.desc())
+        )
+    ).scalars().all()
+    if not child_sessions:
+        return None
+
+    owner_session_ids: set[str] = set()
+    specialist_session_ids: set[str] = set()
+    for project_id in sorted({session.project_id for session in child_sessions if session.project_id}):
+        owner_session_ids.update(
+            str(session_id)
+            for owner in await query_project_ownership(db, project_id)
+            if (session_id := getattr(owner, "session_id", None))
+        )
+        specialist_session_ids.update(
+            str(session_id)
+            for specialist in await query_project_active_specialists(db, project_id)
+            if (session_id := getattr(specialist, "session_id", None))
+        )
+
+    active_children = [
+        session
+        for session in child_sessions
+        if is_session_actionably_active(
+            session,
+            has_owner_lane=session.id in owner_session_ids,
+            has_specialist_lane=session.id in specialist_session_ids,
+        )
+    ]
+    if len(active_children) < limit:
+        return None
+
+    return (
+        f"Dispatch blocked for {parent_agent_slug}: parent session already has "
+        f"{len(active_children)} active child session(s); "
+        f"max_subagent_concurrency={limit}."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Session list / format helpers
 # ---------------------------------------------------------------------------
