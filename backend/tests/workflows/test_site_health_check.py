@@ -24,10 +24,28 @@ from app.workflows.site_health_check import (
 
 
 class TestGetFrontendUrl:
-    def test_returns_localhost_url_when_not_in_docker(self) -> None:
-        with patch("app.workflows.site_health_check._IN_DOCKER", False):
+    def test_returns_configured_host_url_when_not_in_docker(self) -> None:
+        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
+            "app.workflows.site_health_check.settings.host", "192.168.8.244"
+        ), patch("app.workflows.site_health_check.settings.sf_browser_host", "192.168.8.234"):
             url = _get_frontend_url("summitflow")
-        assert url == "http://localhost:3001"
+        assert url == "http://192.168.8.244:3001"
+
+
+    def test_uses_sf_browser_host_when_host_is_loopback(self) -> None:
+        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
+            "app.workflows.site_health_check.settings.host", "127.0.0.1"
+        ), patch("app.workflows.site_health_check.settings.sf_browser_host", "192.168.8.245"):
+            url = _get_frontend_url("agent-hub")
+        assert url == "http://192.168.8.245:3003"
+
+
+    def test_falls_back_to_sf_browser_host_when_host_missing(self) -> None:
+        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
+            "app.workflows.site_health_check.settings.host", ""
+        ), patch("app.workflows.site_health_check.settings.sf_browser_host", "192.168.8.245"):
+            url = _get_frontend_url("agent-hub")
+        assert url == "http://192.168.8.245:3003"
 
     def test_returns_service_name_url_when_in_docker(self) -> None:
         with patch("app.workflows.site_health_check._IN_DOCKER", True):
@@ -37,10 +55,12 @@ class TestGetFrontendUrl:
     def test_all_known_projects_produce_urls(self) -> None:
         from app.workflows.site_health_check import FRONTEND_SERVICES
 
-        with patch("app.workflows.site_health_check._IN_DOCKER", False):
+        with patch("app.workflows.site_health_check._IN_DOCKER", False), patch(
+            "app.workflows.site_health_check.settings.host", "192.168.8.244"
+        ), patch("app.workflows.site_health_check.settings.sf_browser_host", "192.168.8.234"):
             for project_id in FRONTEND_SERVICES:
                 url = _get_frontend_url(project_id)
-                assert url.startswith("http://localhost:")
+                assert url.startswith("http://192.168.8.244:")
 
 
 # ---------------------------------------------------------------------------

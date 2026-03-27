@@ -42,9 +42,21 @@ CHECK_TIMEOUT_PER_PROJECT = 180  # seconds
 
 
 def _get_frontend_url(project_id: str) -> str:
-    """Return base URL for a project's frontend (Docker service name or localhost)."""
+    """Return base URL for a project's frontend.
+
+    When browser automation runs through the shared Chrome on the test VM, that remote
+    browser cannot reach the host's own loopback interface. In the native runtime we
+    therefore use the configured app host so the browser can reach the frontend over the
+    network; inside Docker we still use the frontend service name.
+    """
     service_name, port = FRONTEND_SERVICES[project_id]
-    host = service_name if _IN_DOCKER else "localhost"
+    configured_host = settings.host.strip()
+    browser_host = settings.sf_browser_host.strip()
+    host = (
+        service_name
+        if _IN_DOCKER
+        else (browser_host if configured_host in {"", "127.0.0.1", "localhost"} else configured_host)
+    )
     return f"http://{host}:{port}"
 
 
