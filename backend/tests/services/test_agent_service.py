@@ -219,9 +219,8 @@ class TestAgentService:
         mock_db.execute.return_value = mock_result
 
         with (
-            patch.object(
-                service,
-                "_resolve_system_prompt",
+            patch(
+                "app.services.agent_service._resolve_system_prompt",
                 new=AsyncMock(side_effect=["You are persona.", "Review code"]),
             ),
             patch(
