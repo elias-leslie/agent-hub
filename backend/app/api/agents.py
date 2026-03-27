@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
 async def _build_agent_response(
     db: AsyncSession,
     agent: AgentDTO,
@@ -46,6 +51,99 @@ async def _build_agent_response(
             agent.memory_config,
         ),
     )
+
+
+async def _require_agent(db: AsyncSession, slug: str) -> AgentDTO:
+    """Fetch agent by slug or raise 404."""
+    service = get_agent_service()
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+    return agent
+
+
+def _agent_create_kwargs(request: AgentCreateRequest, auth: AuthenticatedKey | None) -> dict[str, Any]:
+    """Map an AgentCreateRequest to keyword arguments for AgentService.create."""
+    return dict(
+        slug=request.slug,
+        name=request.name,
+        description=request.description,
+        system_prompt=request.system_prompt,
+        primary_model_id=request.primary_model_id,
+        fallback_models=request.fallback_models,
+        escalation_model_id=request.escalation_model_id,
+        strategies=request.strategies,
+        temperature=request.temperature,
+        thinking_level=request.thinking_level,
+        verbosity_level=request.verbosity_level,
+        is_active=request.is_active,
+        is_coding_agent=request.is_coding_agent,
+        tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
+        memory_config=request.memory_config,
+        max_concurrency=request.max_concurrency,
+        max_subagent_concurrency=request.max_subagent_concurrency,
+        daily_token_budget=request.daily_token_budget,
+        hourly_request_limit=request.hourly_request_limit,
+        timeout_seconds=request.timeout_seconds,
+        changed_by=str(auth.key_id) if auth else None,
+    )
+
+
+def _agent_update_kwargs(request: AgentUpdateRequest, auth: AuthenticatedKey | None) -> dict[str, Any]:
+    """Map an AgentUpdateRequest to keyword arguments for AgentService.update."""
+    return dict(
+        name=request.name,
+        description=request.description,
+        system_prompt=request.system_prompt,
+        primary_model_id=request.primary_model_id,
+        fallback_models=request.fallback_models,
+        escalation_model_id=request.escalation_model_id,
+        strategies=request.strategies,
+        temperature=request.temperature,
+        thinking_level=request.thinking_level,
+        verbosity_level=request.verbosity_level,
+        is_active=request.is_active,
+        is_coding_agent=request.is_coding_agent,
+        tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
+        memory_config=request.memory_config,
+        max_concurrency=request.max_concurrency,
+        max_subagent_concurrency=request.max_subagent_concurrency,
+        daily_token_budget=request.daily_token_budget,
+        hourly_request_limit=request.hourly_request_limit,
+        timeout_seconds=request.timeout_seconds,
+        changed_by=str(auth.key_id) if auth else None,
+        change_reason=request.change_reason,
+    )
+
+
+def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPreviewResponse:
+    """Construct AgentPreviewResponse from raw preview dict."""
+    return AgentPreviewResponse(
+        slug=agent.slug,
+        name=agent.name,
+        **{k: preview[k] for k in (
+            "combined_prompt",
+            "full_context",
+            "memory_query",
+            "memory_debug",
+            "loaded_memory_uuids",
+            "reference_uuids",
+            "mandate_count",
+            "guardrail_count",
+            "mandate_uuids",
+            "guardrail_uuids",
+            "task_type",
+            "phase",
+            "project_id",
+            "task_prompt",
+            "sections",
+        )},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 
 
 @router.get("", response_model=AgentListResponse)
@@ -92,12 +190,7 @@ async def get_agent(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentResponse:
     """Get a single agent by slug."""
-    service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
-
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
+    agent = await _require_agent(db, slug)
     return await _build_agent_response(db, agent)
 
 
@@ -110,38 +203,12 @@ async def create_agent(
     """Create a new agent."""
     service = get_agent_service()
 
-    # Check if slug already exists
     existing = await service.get_by_slug(db, request.slug)
     if existing:
         raise HTTPException(status_code=409, detail=f"Agent '{request.slug}' already exists")
 
     try:
-        agent = await service.create(
-            db,
-            slug=request.slug,
-            name=request.name,
-            description=request.description,
-            system_prompt=request.system_prompt,
-            primary_model_id=request.primary_model_id,
-            fallback_models=request.fallback_models,
-            escalation_model_id=request.escalation_model_id,
-            strategies=request.strategies,
-            temperature=request.temperature,
-            thinking_level=request.thinking_level,
-            verbosity_level=request.verbosity_level,
-            is_active=request.is_active,
-            is_coding_agent=request.is_coding_agent,
-            tool_permissions=request.tool_permissions.model_dump()
-            if request.tool_permissions
-            else None,
-            memory_config=request.memory_config,
-            max_concurrency=request.max_concurrency,
-            max_subagent_concurrency=request.max_subagent_concurrency,
-            daily_token_budget=request.daily_token_budget,
-            hourly_request_limit=request.hourly_request_limit,
-            timeout_seconds=request.timeout_seconds,
-            changed_by=str(auth.key_id) if auth else None,
-        )
+        agent = await service.create(db, **_agent_create_kwargs(request, auth))
         logger.info(f"Created agent: {request.slug}")
         return await _build_agent_response(db, agent)
     except HTTPException:
@@ -166,39 +233,10 @@ async def update_agent(
     else:
         logger.debug("No tool_permissions in request")
 
-    # Get agent to update
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+    agent = await _require_agent(db, slug)
 
     try:
-        updated = await service.update(
-            db,
-            agent.id,
-            name=request.name,
-            description=request.description,
-            system_prompt=request.system_prompt,
-            primary_model_id=request.primary_model_id,
-            fallback_models=request.fallback_models,
-            escalation_model_id=request.escalation_model_id,
-            strategies=request.strategies,
-            temperature=request.temperature,
-            thinking_level=request.thinking_level,
-            verbosity_level=request.verbosity_level,
-            is_active=request.is_active,
-            is_coding_agent=request.is_coding_agent,
-            tool_permissions=request.tool_permissions.model_dump()
-            if request.tool_permissions
-            else None,
-            memory_config=request.memory_config,
-            max_concurrency=request.max_concurrency,
-            max_subagent_concurrency=request.max_subagent_concurrency,
-            daily_token_budget=request.daily_token_budget,
-            hourly_request_limit=request.hourly_request_limit,
-            timeout_seconds=request.timeout_seconds,
-            changed_by=str(auth.key_id) if auth else None,
-            change_reason=request.change_reason,
-        )
+        updated = await service.update(db, agent.id, **_agent_update_kwargs(request, auth))
         if not updated:
             raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
@@ -223,11 +261,7 @@ async def delete_agent(
     Use hard_delete=true to permanently delete.
     """
     service = get_agent_service()
-
-    # Get agent to delete
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+    agent = await _require_agent(db, slug)
 
     deleted = await service.delete(db, agent.id, hard_delete=hard_delete)
     if not deleted:
@@ -252,11 +286,7 @@ async def preview_agent(
     Returns the agent's system prompt combined with global instructions,
     mandates, and guardrails that would be injected at runtime.
     """
-    service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
+    agent = await _require_agent(db, slug)
     preview = await build_agent_preview(
         db,
         agent,
@@ -265,26 +295,7 @@ async def preview_agent(
         phase=phase,
         prompt_input=prompt_input,
     )
-
-    return AgentPreviewResponse(
-        slug=agent.slug,
-        name=agent.name,
-        combined_prompt=preview["combined_prompt"],
-        full_context=preview["full_context"],
-        memory_query=preview["memory_query"],
-        memory_debug=preview["memory_debug"],
-        loaded_memory_uuids=preview["loaded_memory_uuids"],
-        reference_uuids=preview["reference_uuids"],
-        mandate_count=preview["mandate_count"],
-        guardrail_count=preview["guardrail_count"],
-        mandate_uuids=preview["mandate_uuids"],
-        guardrail_uuids=preview["guardrail_uuids"],
-        task_type=preview["task_type"],
-        phase=preview["phase"],
-        project_id=preview["project_id"],
-        task_prompt=preview["task_prompt"],
-        sections=preview["sections"],
-    )
+    return _build_preview_response(agent, preview)
 
 
 @router.get("/metrics/all", response_model=AgentMetricsListResponse)
@@ -316,12 +327,7 @@ async def get_agent_metrics(
 
     Queries request_logs table using agent_slug column for real metrics.
     """
-    service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
-
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
+    agent = await _require_agent(db, slug)
     return await compute_agent_metrics(db, agent.slug)
 
 
@@ -335,11 +341,7 @@ async def get_agent_benchmarks(
     suite_id: str | None = None,
 ) -> AgentBenchmarkDashboard:
     """Get persisted benchmark history and regression dashboard for one agent."""
-    service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
+    agent = await _require_agent(db, slug)
     return await get_agent_benchmark_dashboard(db, agent.slug, days=days, limit=limit, suite_id=suite_id)
 
 
@@ -351,11 +353,7 @@ async def get_agent_benchmark_run_detail(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentBenchmarkRunDetail:
     """Get one benchmark run with individual attempt results for drill-down."""
-    service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
+    agent = await _require_agent(db, slug)
     result = await get_agent_benchmark_run(db, agent.slug, run_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Benchmark run '{run_id}' not found")
@@ -371,10 +369,5 @@ async def get_agent_versions(
 ) -> list[dict[str, Any]]:
     """Get version history for an agent."""
     service = get_agent_service()
-
-    agent = await service.get_by_slug(db, slug)
-    if not agent:
-        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
-
-    versions = await service.get_version_history(db, agent.id, limit=limit)
-    return versions
+    agent = await _require_agent(db, slug)
+    return await service.get_version_history(db, agent.id, limit=limit)
