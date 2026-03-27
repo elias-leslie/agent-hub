@@ -105,6 +105,7 @@ def build_sdk_options(
     model: str,
     model_map: dict[str, str],
     working_dir: str | None = None,
+    session_id: str | None = None,
     yolo_mode: bool = True,
     can_use_tool: Any | None = None,
     mcp_servers: dict[str, Any] | None = None,
@@ -137,6 +138,8 @@ def build_sdk_options(
         "enable_file_checkpointing": True,
         "max_buffer_size": 10 * 1024 * 1024,  # 10 MB
     }
+    if session_id:
+        sdk_opts["env"]["AGENT_HUB_SESSION_ID"] = session_id
 
     use_streaming_prompt = _apply_permission_opts(
         sdk_opts, yolo_mode, can_use_tool, working_dir=working_dir, agent_slug=agent_slug

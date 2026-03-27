@@ -277,13 +277,23 @@ class TestBuildVenvEnvOverlay:
     """Tests for build_venv_env_overlay() — SDK merge-compatible delta."""
 
     def test_returns_only_venv_keys(self, tmp_path: Path) -> None:
-        """Overlay contains only VIRTUAL_ENV, PATH, PYTHONHOME — not full env."""
+        """Overlay contains venv keys plus shared command-guard env when available."""
         venv = tmp_path / ".venv" / "bin"
         venv.mkdir(parents=True)
         (venv / "python").write_text("#!/usr/bin/env python3\n")
 
         overlay = build_venv_env_overlay(str(tmp_path))
-        assert set(overlay.keys()) == {"VIRTUAL_ENV", "PATH", "PYTHONHOME"}
+        assert {"VIRTUAL_ENV", "PATH", "PYTHONHOME"} <= set(overlay.keys())
+        assert set(overlay.keys()) <= {
+            "VIRTUAL_ENV",
+            "PATH",
+            "PYTHONHOME",
+            "SUMMITFLOW_SCRIPTS_DIR",
+            "SF_COMMAND_GUARD_BIN",
+            "SF_COMMAND_GUARD_WORDS",
+            "BASH_ENV",
+            "SF_COMMAND_GUARD_PREV_BASH_ENV",
+        }
 
     def test_virtual_env_set(self, tmp_path: Path) -> None:
         """VIRTUAL_ENV points to the resolved venv."""
@@ -327,9 +337,11 @@ class TestBuildVenvEnvOverlay:
         assert merged["VIRTUAL_ENV"] == str(tmp_path / ".venv")
 
     def test_no_venv_returns_empty_dict(self, tmp_path: Path) -> None:
-        """No venv found → returns empty dict (no overrides)."""
+        """No venv found → returns command-guard env only, never venv keys."""
         overlay = build_venv_env_overlay(str(tmp_path))
-        assert overlay == {}
+        assert "VIRTUAL_ENV" not in overlay
+        assert "PYTHONHOME" not in overlay
+        assert "PATH" not in overlay
 
     def test_worktree_resolves_main_repo(self, tmp_path: Path) -> None:
         """Worktree resolves main repo's venv in overlay."""
@@ -367,3 +379,20 @@ class TestBuildVenvEnvOverlay:
         assert process_env["CLAUDE_CODE_ENTRYPOINT"] == "sdk-py"
         # Original PATH entries still present
         assert os.environ.get("PATH", "") in process_env["PATH"]
+
+    def test_build_project_env_merges_shared_command_guard(self, tmp_path: Path) -> None:
+        """Project env should carry shared guard vars even without a venv."""
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                "app.services.tools.project_env.build_command_guard_env_overlay",
+                lambda: {
+                    "BASH_ENV": "/tmp/bash-command-guard.sh",
+                    "SF_COMMAND_GUARD_BIN": "/tmp/command-guard",
+                    "SF_COMMAND_GUARD_WORDS": "git env",
+                },
+            )
+            env = build_project_env(str(tmp_path))
+
+        assert env["BASH_ENV"] == "/tmp/bash-command-guard.sh"
+        assert env["SF_COMMAND_GUARD_BIN"] == "/tmp/command-guard"
+        assert env["SF_COMMAND_GUARD_WORDS"] == "git env"

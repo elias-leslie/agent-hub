@@ -56,8 +56,6 @@ logger = logging.getLogger(__name__)
 # Re-exported for backward compatibility with direct_executor.py and tests.
 _is_blocked_command = is_blocked_command
 _get_command_redirect = get_command_redirect
-
-
 class DirectToolExecutor:
     """Executes tools directly with environment inheritance.
 
@@ -103,6 +101,8 @@ class DirectToolExecutor:
         self._project_id = project_id
         self._session_id = session_id
         self._agent_slug = agent_slug
+        if session_id:
+            self._env["AGENT_HUB_SESSION_ID"] = session_id
         self._tool_catalog = {
             str(tool["name"]): dict(tool) for tool in (tool_catalog or [])
         }
@@ -169,9 +169,6 @@ class DirectToolExecutor:
 
     async def bash(self, command: str) -> str:
         """Execute a bash command with environment inheritance."""
-        if is_blocked_command(command):
-            return f"Error: Command blocked for safety: {command}"
-
         auto_detached = _rewrite_in_band_agent_hub_restart(command)
         if auto_detached:
             rewritten_command, message = auto_detached
@@ -180,6 +177,7 @@ class DirectToolExecutor:
                 self.working_dir,
                 self._env,
                 agent_slug=self._agent_slug,
+                session_id=self._session_id,
             )
             result = result.strip()
             if result:
@@ -194,10 +192,6 @@ class DirectToolExecutor:
         if self_hosting_block_reason:
             return f"Error: Command blocked for runtime safety: {self_hosting_block_reason}"
 
-        redirect = get_command_redirect(command)
-        if redirect:
-            return f"Error: Command redirected. {redirect}"
-
         if self._allowed_root and not self._is_path_allowed(self.working_dir):
             return "Error: Working directory outside allowed project root"
 
@@ -206,6 +200,7 @@ class DirectToolExecutor:
             self.working_dir,
             self._env,
             agent_slug=self._agent_slug,
+            session_id=self._session_id,
         )
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:

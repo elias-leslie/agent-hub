@@ -59,9 +59,9 @@ class TestClaudeToolsEnvInjection:
             captured_opts.update(kwargs)
             return MagicMock()
 
-        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+        async def mock_query(**kwargs: Any):
             return
-            yield  # type: ignore[misc]
+            yield None
 
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
@@ -113,12 +113,13 @@ class TestClaudeToolsEnvInjection:
 
     @pytest.mark.asyncio
     async def test_env_empty_when_no_venv(self, tmp_path: Path) -> None:
-        """No venv found keeps env minimal when working_dir stays on string prompts."""
+        """No venv found keeps env minimal apart from shared command-guard vars."""
         captured_opts: dict[str, Any] = {}
         await self._run_complete_with_tools(str(tmp_path), captured_opts)
 
         assert "env" in captured_opts
-        assert captured_opts["env"] == {}
+        assert "VIRTUAL_ENV" not in captured_opts["env"]
+        assert "PYTHONHOME" not in captured_opts["env"]
 
     @pytest.mark.asyncio
     async def test_pythonhome_overridden(self, tmp_path: Path) -> None:
@@ -162,6 +163,8 @@ class TestClaudeOAuthEnvInjection:
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
+        assert "BASH_ENV" in captured_opts["env"]
+        assert "SF_COMMAND_GUARD_BIN" in captured_opts["env"]
 
     def test_env_in_sdk_options_worktree(self, tmp_path: Path) -> None:
         """build_sdk_options resolves main repo venv for worktree."""
@@ -183,6 +186,12 @@ class TestClaudeOAuthEnvInjection:
         captured_opts = self._build_and_capture(tmp_path, max_turns=10)
 
         assert captured_opts["max_turns"] == 10
+
+    def test_session_id_injected_into_sdk_env(self, tmp_path: Path) -> None:
+        """Agent Hub session id should reach the Claude subprocess env."""
+        captured_opts = self._build_and_capture(tmp_path, session_id="sess-123")
+
+        assert captured_opts["env"]["AGENT_HUB_SESSION_ID"] == "sess-123"
 
     def test_json_mode_preserves_higher_max_turns(self, tmp_path: Path) -> None:
         """json_mode requires at least 2 turns but preserves a higher caller budget."""
@@ -403,9 +412,9 @@ class TestClaudeToolsMaxTurns:
             captured_opts.update(kwargs)
             return MagicMock()
 
-        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+        async def mock_query(**kwargs: Any):
             return
-            yield  # type: ignore[misc]
+            yield None
 
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
@@ -444,9 +453,9 @@ class TestClaudeToolsMaxTurns:
             captured_opts.update(kwargs)
             return MagicMock()
 
-        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+        async def mock_query(**kwargs: Any):
             return
-            yield  # type: ignore[misc]
+            yield None
 
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),

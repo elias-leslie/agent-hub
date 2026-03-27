@@ -190,6 +190,7 @@ async def _build_tool_message_session(
     """Build the owned Claude SDK message session for one tool turn."""
     project_id = kwargs.get("project_id")
     agent_slug = kwargs.get("agent_slug")
+    session_id = kwargs.get("session_id")
     tool_catalog = kwargs.get("tool_catalog")
 
     can_use_tool_cb, mcp_servers, allowed_tools = _build_tool_infra(
@@ -201,6 +202,7 @@ async def _build_tool_message_session(
         model=model,
         model_map=model_map,
         working_dir=working_dir,
+        session_id=session_id if isinstance(session_id, str) else None,
         yolo_mode=yolo_mode,
         can_use_tool=can_use_tool_cb,
         mcp_servers=mcp_servers,

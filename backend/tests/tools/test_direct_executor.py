@@ -60,8 +60,12 @@ class TestDirectToolExecutor:
     @pytest.mark.asyncio
     async def test_bash_blocked_command(self, executor: DirectToolExecutor) -> None:
         """Test that dangerous commands are blocked."""
-        result = await executor.bash("rm -rf /")
-        assert "blocked" in result.lower()
+        with patch(
+            "app.services.tools._executor_bash.get_command_guard_block_reason",
+            return_value="BLOCKED:test",
+        ):
+            result = await executor.bash("rm -rf /")
+        assert result == "BLOCKED:test"
 
     @pytest.mark.asyncio
     async def test_bash_blocks_in_band_agent_hub_rebuild_from_agent_worker(
@@ -82,7 +86,9 @@ class TestDirectToolExecutor:
         assert "auto-detached for runtime safety" in result.lower()
         assert "rebuild.sh --detach agent-hub" in result
         mock_run.assert_awaited_once()
+        assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "rebuild.sh --detach agent-hub"
+        assert mock_run.await_args.kwargs == {"agent_slug": None, "session_id": None}
 
     @pytest.mark.asyncio
     async def test_bash_rewrites_in_band_agent_hub_rebuild_from_direct_executor(
@@ -101,6 +107,7 @@ class TestDirectToolExecutor:
         assert "auto-detached for runtime safety" in result.lower()
         assert "rebuild.sh --detach agent-hub" in result
         mock_run.assert_awaited_once()
+        assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "rebuild.sh --detach agent-hub"
 
     @pytest.mark.asyncio
@@ -120,7 +127,9 @@ class TestDirectToolExecutor:
         assert "auto-detached for runtime safety" in result.lower()
         assert "restart.sh --detach agent-hub" in result
         mock_run.assert_awaited_once()
+        assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "restart.sh --detach agent-hub"
+        assert mock_run.await_args.kwargs == {"agent_slug": "persona", "session_id": None}
 
     @pytest.mark.asyncio
     async def test_bash_still_blocks_chained_agent_hub_rebuild_from_direct_executor(
@@ -155,6 +164,8 @@ class TestDirectToolExecutor:
 
         assert result == "queued"
         mock_run.assert_awaited_once()
+        assert mock_run.await_args is not None
+        assert mock_run.await_args.kwargs == {"agent_slug": "coder", "session_id": None}
 
     @pytest.mark.asyncio
     async def test_bash_blocks_rebuild_that_restarts_hosting_agent_worker(
@@ -212,8 +223,9 @@ class TestDirectToolExecutor:
             result = await executor.bash("echo ok")
 
         assert result == "ok"
+        assert mock_run.await_args is not None
         assert mock_run.await_args.args == ("echo ok", tmp_path.resolve(), executor._env)
-        assert mock_run.await_args.kwargs == {"agent_slug": None}
+        assert mock_run.await_args.kwargs == {"agent_slug": None, "session_id": None}
 
     @pytest.mark.asyncio
     async def test_read_file_success(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
