@@ -58,64 +58,100 @@ def _events_for_block(block: object, is_assistant: bool) -> list[StreamEvent]:
     return []
 
 
+def _events_for_message(message: object) -> list[StreamEvent]:
+    """Convert a non-result SDK message into zero or more StreamEvents."""
+    from claude_agent_sdk.types import AssistantMessage
+
+    content_blocks = getattr(message, "content", None)
+    if not isinstance(content_blocks, list):
+        return []
+    is_assistant = isinstance(message, AssistantMessage)
+    events: list[StreamEvent] = []
+    for block in content_blocks:
+        events.extend(_events_for_block(block, is_assistant))
+    return events
+
+
+def _make_result_event(message: object) -> StreamEvent:
+    """Build a done StreamEvent from a ResultMessage."""
+    usage = getattr(message, "usage", None) or {}
+    return StreamEvent(
+        type="done",
+        input_tokens=usage.get("input_tokens", 0),
+        output_tokens=usage.get("output_tokens", 0),
+        finish_reason="end_turn",
+    )
+
+
+def _create_abort_watch_task(
+    abort_event: asyncio.Event,
+    session: object,
+) -> "asyncio.Task[None]":
+    """Create a background task that interrupts the session when abort fires."""
+    async def _watch_abort() -> None:
+        await abort_event.wait()
+        await session.interrupt()  # type: ignore[attr-defined]
+
+    return asyncio.create_task(_watch_abort())
+
+
+async def _cancel_abort_watch(task: "asyncio.Task[None] | None") -> None:
+    """Cancel and await the abort-watch task if it exists."""
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+async def _iterate_sdk_messages(
+    message_iter: object,
+    abort_event: asyncio.Event | None,
+    session: object,
+) -> AsyncIterator[StreamEvent]:
+    """Yield StreamEvents by iterating raw SDK messages."""
+    from claude_agent_sdk.types import ResultMessage
+
+    done_emitted = False
+    while True:
+        if abort_event is not None and abort_event.is_set():
+            await session.interrupt()  # type: ignore[attr-defined]
+            raise asyncio.CancelledError("Abort signal received")
+        try:
+            message = await anext(cast(AsyncIterator[object], message_iter))
+        except StopAsyncIteration:
+            return
+        if isinstance(message, ResultMessage):
+            yield _make_result_event(message)
+            done_emitted = True
+            return
+        if done_emitted:
+            continue
+        for event in _events_for_message(message):
+            yield event
+
+
 async def _yield_sdk_events(
     prompt: object,
     options: object,
     abort_event: asyncio.Event | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Yield StreamEvents from SDK query; prompt may be str or async iterable."""
-    from claude_agent_sdk.types import AssistantMessage, ResultMessage
-
     session = _ClaudeSDKQuerySession(prompt=prompt, options=options)
-    done_emitted = False
     await session.start()
     message_iter = session.message_iter
     if message_iter is None:
         raise RuntimeError("Claude SDK query session did not initialize an iterator")
 
-    abort_watch_task: asyncio.Task[None] | None = None
-    if abort_event is not None:
-        async def _watch_abort() -> None:
-            await abort_event.wait()
-            await session.interrupt()
-
-        abort_watch_task = asyncio.create_task(_watch_abort())
-
+    abort_watch_task = (
+        _create_abort_watch_task(abort_event, session)
+        if abort_event is not None
+        else None
+    )
     try:
-        while True:
-            if abort_event is not None and abort_event.is_set():
-                await session.interrupt()
-                raise asyncio.CancelledError("Abort signal received")
-            try:
-                message = await anext(cast(AsyncIterator[object], message_iter))
-            except StopAsyncIteration:
-                return
-            if isinstance(message, ResultMessage):
-                usage = message.usage or {}
-                yield StreamEvent(
-                    type="done",
-                    input_tokens=usage.get("input_tokens", 0),
-                    output_tokens=usage.get("output_tokens", 0),
-                    finish_reason="end_turn",
-                )
-                done_emitted = True
-                return
-            if done_emitted:
-                continue
-            # Include all message types: ToolResultBlock arrives in non-assistant messages.
-            content_blocks = getattr(message, "content", None)
-            if not isinstance(content_blocks, list):
-                continue
-
-            is_assistant = isinstance(message, AssistantMessage)
-            for block in content_blocks:
-                for event in _events_for_block(block, is_assistant):
-                    yield event
+        async for event in _iterate_sdk_messages(message_iter, abort_event, session):
+            yield event
     finally:
-        if abort_watch_task is not None:
-            abort_watch_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await abort_watch_task
+        await _cancel_abort_watch(abort_watch_task)
         await session.close()
 
 
@@ -158,6 +194,16 @@ async def _gated_sdk_events(
             yield event
 
 
+def _make_cancelled_done(total_content: str) -> StreamEvent:
+    """Build a done event with cancelled finish reason."""
+    return StreamEvent(
+        type="done",
+        input_tokens=0,
+        output_tokens=len(total_content) // 4,
+        finish_reason="cancelled",
+    )
+
+
 async def stream_oauth(
     messages: list[Message],
     model: str,
@@ -178,14 +224,11 @@ async def stream_oauth(
         await _wrap_prompt_as_stream(conversation_prompt) if use_streaming_prompt
         else conversation_prompt
     )
+    safe_abort = abort_event if isinstance(abort_event, asyncio.Event) else None
     total_content = ""
     got_done = False
     try:
-        async for event in _gated_sdk_events(
-            prompt,
-            options,
-            abort_event=abort_event if isinstance(abort_event, asyncio.Event) else None,
-        ):
+        async for event in _gated_sdk_events(prompt, options, abort_event=safe_abort):
             if event.type == "content":
                 total_content += event.content or ""
             if event.type == "done":
@@ -196,12 +239,7 @@ async def stream_oauth(
     except asyncio.CancelledError:
         logger.warning("Claude SDK stream cancelled (cancel scope); emitting cancelled done")
         if not got_done:
-            yield StreamEvent(
-                type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
-                finish_reason="cancelled",
-            )
+            yield _make_cancelled_done(total_content)
     except TimeoutError:
         logger.error("Claude OAuth stream timeout")
         yield StreamEvent(type="error", error="Claude OAuth stream timeout")
