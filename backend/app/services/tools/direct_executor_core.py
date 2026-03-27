@@ -12,13 +12,9 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from app.services.tools._executor_bash import (
-    BLOCKED_COMMANDS as BLOCKED_COMMANDS,
-)
-from app.services.tools._executor_bash import (
     MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
 )
 from app.services.tools._executor_bash import (
-    is_blocked_command,
     run_bash,
 )
 from app.services.tools._executor_file_io import (
@@ -53,8 +49,6 @@ from app.services.tools.registry import get_command_redirect
 
 logger = logging.getLogger(__name__)
 
-# Re-exported for backward compatibility with direct_executor.py and tests.
-_is_blocked_command = is_blocked_command
 _get_command_redirect = get_command_redirect
 class DirectToolExecutor:
     """Executes tools directly with environment inheritance.
