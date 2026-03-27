@@ -42,75 +42,32 @@ async def log_agent_performance(*args: Any, **kwargs: Any) -> str:
     return await _log_agent_performance(*args, **kwargs)
 
 
-async def postprocess_heartbeat(
+def _followup_from_completion_review(
+    completion_review: CompletionReviewOutcome | None,
+) -> tuple[str | None, str | None]:
+    """Return (followup_reason, followup_note) derived from a completion review outcome."""
+    if not (completion_review and completion_review.used):
+        return None, None
+    if completion_review.decision == "continue":
+        return "completion_review_continue", completion_review.reason
+    if completion_review.decision == "escalate":
+        return "completion_review_escalate", completion_review.reason
+    return None, None
+
+
+def _build_heartbeat_result(
+    *,
+    status: str,
     result: CompletionInternalResult,
     interval_minutes: int,
-    target_project_id: str | None = None,
-):
-    """Post-process heartbeat: summaries, format validation, metrics.
-
-    Returns a HeartbeatResult instance.
-    """
+    format_ok: bool,
+    summary_stored: bool,
+    mcp_retried: int,
+    followup_dispatched: bool,
+    followup_reason: str | None,
+    completion_review: CompletionReviewOutcome | None,
+) -> Any:
     from app.workflows.persona_heartbeat import HeartbeatResult
-
-    content = result.content or ""
-    session_id = result.session_id
-
-    # 1. Summary extraction
-    summary_stored = await _ensure_session_summary(session_id, content)
-
-    # 2. Format validation
-    status, format_ok, summary_tag_ok, progress_tag_ok = _validate_heartbeat_format(content)
-
-    # 3. Record observability metrics
-    from app.workflows._heartbeat_redis import record_heartbeat_metrics
-
-    await record_heartbeat_metrics(
-        session_id=session_id,
-        format_compliant=format_ok,
-        summary_stored=summary_stored,
-        turns=result.turns,
-        tool_calls=result.tool_calls_count,
-        had_error=result.error is not None,
-    )
-
-    # 4. Retry MCP tools that failed with "Stream closed"
-    mcp_retried = await _retry_failed_mcp_tools(session_id)
-    cleanup_status = await _get_cleanup_status_summary(target_project_id=target_project_id)
-    workstream_inventory = await _get_workstream_inventory(target_project_id=target_project_id)
-    completion_review = await _maybe_review_completion(
-        content=content,
-        session_id=session_id,
-        target_project_id=target_project_id,
-        cleanup_status=cleanup_status,
-        workstream_inventory=workstream_inventory,
-    )
-    followup_reason = _detect_followup_reason(content, cleanup_status, workstream_inventory)
-    followup_note = None
-    if followup_reason is None and completion_review and completion_review.used:
-        if completion_review.decision == "continue":
-            followup_reason = "completion_review_continue"
-            followup_note = completion_review.reason
-        elif completion_review.decision == "escalate":
-            followup_reason = "completion_review_escalate"
-            followup_note = completion_review.reason
-    followup_dispatched = False
-    if followup_reason:
-        followup_dispatched = await _dispatch_followup_wake(
-            followup_reason,
-            target_project_id,
-            note=followup_note,
-            parent_session_id=session_id,
-        )
-    await _log_heartbeat_performance_observation(
-        result=result,
-        format_ok=format_ok,
-        summary_tag_ok=summary_tag_ok,
-        progress_tag_ok=progress_tag_ok,
-        followup_reason=followup_reason,
-        completion_review=completion_review,
-        target_project_id=target_project_id,
-    )
 
     return HeartbeatResult(
         status=status,
@@ -129,6 +86,96 @@ async def postprocess_heartbeat(
         completion_review_session_id=completion_review.session_id if completion_review else None,
         completion_review_agent_slug=completion_review.reviewer_agent_slug if completion_review else None,
         completion_review_model_id=completion_review.reviewer_model_id if completion_review else None,
+    )
+
+
+async def _record_metrics_and_retry(
+    result: CompletionInternalResult,
+    session_id: str,
+    format_ok: bool,
+    summary_stored: bool,
+) -> int:
+    """Record Redis metrics and retry any failed MCP tools. Returns mcp_retried count."""
+    from app.workflows._heartbeat_redis import record_heartbeat_metrics
+
+    await record_heartbeat_metrics(
+        session_id=session_id,
+        format_compliant=format_ok,
+        summary_stored=summary_stored,
+        turns=result.turns,
+        tool_calls=result.tool_calls_count,
+        had_error=result.error is not None,
+    )
+    return await _retry_failed_mcp_tools(session_id)
+
+
+async def _resolve_followup(
+    content: str,
+    session_id: str,
+    target_project_id: str | None,
+) -> tuple[str | None, str | None, CompletionReviewOutcome | None]:
+    """Gather context and return (followup_reason, followup_note, completion_review)."""
+    cleanup_status = await _get_cleanup_status_summary(target_project_id=target_project_id)
+    workstream_inventory = await _get_workstream_inventory(target_project_id=target_project_id)
+    completion_review = await _maybe_review_completion(
+        content=content,
+        session_id=session_id,
+        target_project_id=target_project_id,
+        cleanup_status=cleanup_status,
+        workstream_inventory=workstream_inventory,
+    )
+    followup_reason = _detect_followup_reason(content, cleanup_status, workstream_inventory)
+    followup_note = None
+    if followup_reason is None:
+        followup_reason, followup_note = _followup_from_completion_review(completion_review)
+    return followup_reason, followup_note, completion_review
+
+
+async def postprocess_heartbeat(
+    result: CompletionInternalResult,
+    interval_minutes: int,
+    target_project_id: str | None = None,
+):
+    """Post-process heartbeat: summaries, format validation, metrics.
+
+    Returns a HeartbeatResult instance.
+    """
+    content = result.content or ""
+    session_id = result.session_id
+
+    summary_stored = await _ensure_session_summary(session_id, content)
+    status, format_ok, summary_tag_ok, progress_tag_ok = _validate_heartbeat_format(content)
+    mcp_retried = await _record_metrics_and_retry(result, session_id, format_ok, summary_stored)
+    followup_reason, followup_note, completion_review = await _resolve_followup(
+        content, session_id, target_project_id
+    )
+    followup_dispatched = False
+    if followup_reason:
+        followup_dispatched = await _dispatch_followup_wake(
+            followup_reason,
+            target_project_id,
+            note=followup_note,
+            parent_session_id=session_id,
+        )
+    await _log_heartbeat_performance_observation(
+        result=result,
+        format_ok=format_ok,
+        summary_tag_ok=summary_tag_ok,
+        progress_tag_ok=progress_tag_ok,
+        followup_reason=followup_reason,
+        completion_review=completion_review,
+        target_project_id=target_project_id,
+    )
+    return _build_heartbeat_result(
+        status=status,
+        result=result,
+        interval_minutes=interval_minutes,
+        format_ok=format_ok,
+        summary_stored=summary_stored,
+        mcp_retried=mcp_retried,
+        followup_dispatched=followup_dispatched,
+        followup_reason=followup_reason,
+        completion_review=completion_review,
     )
 
 
