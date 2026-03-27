@@ -29,6 +29,7 @@ from app.services._session_metadata_helpers import (
     worktree_path,
 )
 from app.services.session_live_activity import build_live_activity_response
+from app.services.session_scope import resolve_scope_confidence
 
 # Re-export private helpers with underscore names for backward compatibility
 _resolve_model_display_name = resolve_model_display_name
@@ -56,6 +57,16 @@ def convert_messages_to_response(
         turn_events = sorted(turns[turn_num], key=lambda event: event.sequence)
         result.extend(turn_messages(turn_events, names))
     return result
+
+
+def _resolved_scope_confidence(session: Session) -> str | None:
+    return resolve_scope_confidence(
+        None,
+        scope_list(session.declared_scope_paths),
+        scope_list(session.observed_write_paths),
+        scope_list(session.observed_read_paths),
+        optional_str(session.scope_confidence),
+    )
 
 
 def _session_list_item(
@@ -103,7 +114,7 @@ def _session_list_item(
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
         observed_write_paths=scope_list(session.observed_write_paths),
-        scope_confidence=optional_str(session.scope_confidence),
+        scope_confidence=_resolved_scope_confidence(session),
         live_activity=build_live_activity_response(
             session,
             has_owner_lane=session.id in (owner_session_ids or set()),
@@ -182,7 +193,7 @@ def build_session_response(
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
         observed_write_paths=scope_list(session.observed_write_paths),
-        scope_confidence=optional_str(session.scope_confidence),
+        scope_confidence=_resolved_scope_confidence(session),
         created_at=session.created_at,
         updated_at=session.updated_at,
         live_activity=build_live_activity_response(

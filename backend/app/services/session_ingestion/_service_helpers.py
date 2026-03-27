@@ -286,48 +286,50 @@ async def _reconcile_transcript_session_scope(
         return
     if not _is_transcript_backed_session(session):
         return
-    if session.declared_scope_paths or session.observed_read_paths or session.observed_write_paths:
+    if session.scope_confidence in {"declared", "observed_write", "observed_read"}:
         return
 
     metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     base_path = resolve_scope_base_path(metadata, None)
-    tool_rows = (
-        await db.execute(
-            select(SessionEvent.tool_name, SessionEvent.tool_input)
-            .where(
-                SessionEvent.session_id == session_id,
-                SessionEvent.event_type == "tool_use",
+    declared_paths = normalize_scope_paths(getattr(session, "declared_scope_paths", None), base_path)
+    observed_reads = normalize_scope_paths(getattr(session, "observed_read_paths", None), base_path)
+    observed_writes = normalize_scope_paths(getattr(session, "observed_write_paths", None), base_path)
+    if not (declared_paths or observed_reads or observed_writes):
+        tool_rows = (
+            await db.execute(
+                select(SessionEvent.tool_name, SessionEvent.tool_input)
+                .where(
+                    SessionEvent.session_id == session_id,
+                    SessionEvent.event_type == "tool_use",
+                )
+                .order_by(SessionEvent.turn, SessionEvent.sequence)
             )
-            .order_by(SessionEvent.turn, SessionEvent.sequence)
-        )
-    ).all()
-    if not tool_rows:
+        ).all()
+        for tool_name, tool_input in tool_rows:
+            tool_reads, tool_writes = extract_tool_scope_paths(
+                tool_name,
+                tool_input if isinstance(tool_input, dict) else None,
+                base_path=base_path,
+            )
+            observed_reads = merge_scope_paths(observed_reads, tool_reads)
+            observed_writes = merge_scope_paths(observed_writes, tool_writes)
+    if not (declared_paths or observed_reads or observed_writes):
         return
 
-    observed_reads: list[str] = []
-    observed_writes: list[str] = []
-    for tool_name, tool_input in tool_rows:
-        tool_reads, tool_writes = extract_tool_scope_paths(
-            tool_name,
-            tool_input if isinstance(tool_input, dict) else None,
-            base_path=base_path,
-        )
-        observed_reads = merge_scope_paths(observed_reads, tool_reads)
-        observed_writes = merge_scope_paths(observed_writes, tool_writes)
-    if not observed_reads and not observed_writes:
-        return
-
+    previous_declared = list(session.declared_scope_paths or [])
     previous_reads = list(session.observed_read_paths or [])
     previous_writes = list(session.observed_write_paths or [])
     previous_confidence = session.scope_confidence
     apply_scope_state(
         session,
         base_path=base_path,
+        declared_scope_paths=declared_paths,
         observed_read_paths=observed_reads,
         observed_write_paths=observed_writes,
     )
     if (
-        session.observed_read_paths != previous_reads
+        session.declared_scope_paths != previous_declared
+        or session.observed_read_paths != previous_reads
         or session.observed_write_paths != previous_writes
         or session.scope_confidence != previous_confidence
     ):
