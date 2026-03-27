@@ -39,6 +39,15 @@ def _activity_age_seconds(value: Any) -> int | None:
     return max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
 
 
+def _extract_tool_input_path(tool_input: dict[str, Any]) -> str | None:
+    """Return the first file path found in tool_input, or None."""
+    for key in ("file_path", "path", "target_file"):
+        val = tool_input.get(key)
+        if isinstance(val, str) and val:
+            return val
+    return None
+
+
 def _tool_phase(
     tool_name: str | None,
     tool_input: dict[str, Any] | None,
@@ -50,11 +59,7 @@ def _tool_phase(
     if isinstance(tool_input, dict):
         cmd_val = tool_input.get("command")
         command = cmd_val if isinstance(cmd_val, str) and cmd_val else None
-        for key in ("file_path", "path", "target_file"):
-            val = tool_input.get(key)
-            if isinstance(val, str) and val:
-                path = val
-                break
+        path = _extract_tool_input_path(tool_input)
 
     if "read" in normalized:
         return "reading_file", f"Reading {path or 'file'}", path, command
@@ -165,6 +170,44 @@ def _handle_tool_result_event(
             live_activity["last_command_exit_code"] = exit_code
 
 
+def _handle_assistant_message_event(
+    live_activity: dict[str, Any],
+    content: str | None,
+    now_iso: str,
+) -> None:
+    summary = (
+        f"Assistant responded: {content.strip()[:100]}"
+        if isinstance(content, str) and content.strip()
+        else "Finalizing response"
+    )
+    _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
+    live_activity["current_tool_name"] = None
+    live_activity["outstanding_tool_calls"] = 0
+
+
+def _handle_error_event(
+    live_activity: dict[str, Any],
+    content: str | None,
+    now_iso: str,
+) -> None:
+    live_activity["phase"] = "error"
+    live_activity["status"] = "error"
+    live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
+    live_activity["termination_reason"] = content
+    live_activity["current_tool_name"] = None
+    live_activity["outstanding_tool_calls"] = 0
+    live_activity["last_model_activity_at"] = now_iso
+
+
+def _persist_live_activity(
+    session: Session,
+    metadata: dict[str, Any],
+    live_activity: dict[str, Any],
+) -> None:
+    metadata["live_activity"] = live_activity
+    session.provider_metadata = metadata
+
+
 def update_live_activity_for_event(
     session: Session,
     *,
@@ -185,7 +228,9 @@ def update_live_activity_for_event(
         live_activity["model_used"] = model_used
 
     if event_type == "memory_inject":
-        _mark_non_terminal_state(live_activity, phase="injecting_memory", summary="Injecting memory context", now_iso=now_iso)
+        _mark_non_terminal_state(
+            live_activity, phase="injecting_memory", summary="Injecting memory context", now_iso=now_iso
+        )
     elif event_type == "thinking":
         _mark_non_terminal_state(live_activity, phase="planning", summary="Model planning", now_iso=now_iso)
     elif event_type == "tool_use":
@@ -193,25 +238,11 @@ def update_live_activity_for_event(
     elif event_type == "tool_result":
         _handle_tool_result_event(live_activity, tool_name, tool_output, now_iso)
     elif event_type == "assistant_message":
-        summary = (
-            f"Assistant responded: {content.strip()[:100]}"
-            if isinstance(content, str) and content.strip()
-            else "Finalizing response"
-        )
-        _mark_non_terminal_state(live_activity, phase="finalizing", summary=summary, now_iso=now_iso)
-        live_activity["current_tool_name"] = None
-        live_activity["outstanding_tool_calls"] = 0
+        _handle_assistant_message_event(live_activity, content, now_iso)
     elif event_type == "error":
-        live_activity["phase"] = "error"
-        live_activity["status"] = "error"
-        live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
-        live_activity["termination_reason"] = content
-        live_activity["current_tool_name"] = None
-        live_activity["outstanding_tool_calls"] = 0
-        live_activity["last_model_activity_at"] = now_iso
+        _handle_error_event(live_activity, content, now_iso)
 
-    metadata["live_activity"] = live_activity
-    session.provider_metadata = metadata
+    _persist_live_activity(session, metadata, live_activity)
 
 
 def mark_session_execution_start(session: Session, summary: str = "Waiting for model response") -> None:
@@ -232,8 +263,7 @@ def mark_session_execution_start(session: Session, summary: str = "Waiting for m
             "tool_calls_count": int(live_activity.get("tool_calls_count") or 0),
         }
     )
-    metadata["live_activity"] = live_activity
-    session.provider_metadata = metadata
+    _persist_live_activity(session, metadata, live_activity)
 
 
 def mark_session_terminal_state(
@@ -260,8 +290,7 @@ def mark_session_terminal_state(
             "last_model_activity_at": now_iso,
         }
     )
-    metadata["live_activity"] = live_activity
-    session.provider_metadata = metadata
+    _persist_live_activity(session, metadata, live_activity)
 
 
 def mark_session_completed(
@@ -323,8 +352,43 @@ def apply_live_activity_heartbeat(
         for path in active_write_paths:
             _append_touched_file(live_activity, path)
 
-    metadata["live_activity"] = live_activity
-    session.provider_metadata = metadata
+    _persist_live_activity(session, metadata, live_activity)
+
+
+def _build_fallback_raw(session: Session) -> dict[str, Any] | None:
+    """Return a fallback raw live_activity dict for active sessions with no recorded data."""
+    if session.status != "active":
+        return None
+    last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
+    last_updated_iso = last_updated.isoformat() if last_updated is not None else None
+    return {
+        "phase": "unknown",
+        "status": "active",
+        "summary": "No structured activity recorded",
+        "last_event_type": None,
+        "last_event_at": last_updated_iso,
+        "last_model_activity_at": last_updated_iso,
+        "outstanding_tool_calls": 0,
+        "tool_calls_count": 0,
+        "files_touched": [],
+        "last_heartbeat_at": None,
+    }
+
+
+def _resolve_health(
+    session: Session,
+    response: dict[str, Any],
+    phase: str,
+    status: str,
+    quiet_for_seconds: int | None,
+) -> tuple[str, bool, str | None]:
+    """Return (health, stalled, stall_reason) based on session state."""
+    if session.status == "active":
+        return _classify_active_health(response, phase, quiet_for_seconds)
+    if status == "error":
+        return "error", False, None
+    health = _apply_terminal_overrides(response, session, phase, status)
+    return health, False, None
 
 
 def build_live_activity_response(
@@ -336,22 +400,9 @@ def build_live_activity_response(
     """Build API-ready live activity payload with dynamic quiet/stall classification."""
     _, raw = _get_live_activity_ctx(session)
     if not raw:
-        if session.status != "active":
+        raw = _build_fallback_raw(session)
+        if raw is None:
             return None
-        last_updated = session.updated_at or getattr(session, "last_activity_at", None) or session.created_at
-        last_updated_iso = last_updated.isoformat() if last_updated is not None else None
-        raw = {
-            "phase": "unknown",
-            "status": "active",
-            "summary": "No structured activity recorded",
-            "last_event_type": None,
-            "last_event_at": last_updated_iso,
-            "last_model_activity_at": last_updated_iso,
-            "outstanding_tool_calls": 0,
-            "tool_calls_count": 0,
-            "files_touched": [],
-            "last_heartbeat_at": None,
-        }
 
     response = dict(raw)
     phase = str(response.get("phase") or "created")
@@ -363,14 +414,7 @@ def build_live_activity_response(
     )
     response["quiet_for_seconds"] = quiet_for_seconds
 
-    if session.status == "active":
-        health, stalled, stall_reason = _classify_active_health(response, phase, quiet_for_seconds)
-    elif status == "error":
-        health, stalled, stall_reason = "error", False, None
-    else:
-        health = _apply_terminal_overrides(response, session, phase, status)
-        stalled, stall_reason = False, None
-
+    health, stalled, stall_reason = _resolve_health(session, response, phase, status, quiet_for_seconds)
     response["health"] = health
     response["stalled"] = stalled
     response["stall_reason"] = stall_reason or response.get("stall_reason")
