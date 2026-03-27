@@ -39,15 +39,6 @@ def _activity_age_seconds(value: Any) -> int | None:
     return max(int((datetime.now(UTC) - last_dt).total_seconds()), 0)
 
 
-def _extract_tool_input_path(tool_input: dict[str, Any]) -> str | None:
-    """Return the first file path found in tool_input, or None."""
-    for key in ("file_path", "path", "target_file"):
-        val = tool_input.get(key)
-        if isinstance(val, str) and val:
-            return val
-    return None
-
-
 def _tool_phase(
     tool_name: str | None,
     tool_input: dict[str, Any] | None,
@@ -59,7 +50,11 @@ def _tool_phase(
     if isinstance(tool_input, dict):
         cmd_val = tool_input.get("command")
         command = cmd_val if isinstance(cmd_val, str) and cmd_val else None
-        path = _extract_tool_input_path(tool_input)
+        for key in ("file_path", "path", "target_file"):
+            val = tool_input.get(key)
+            if isinstance(val, str) and val:
+                path = val
+                break
 
     if "read" in normalized:
         return "reading_file", f"Reading {path or 'file'}", path, command
@@ -375,22 +370,6 @@ def _build_fallback_raw(session: Session) -> dict[str, Any] | None:
     }
 
 
-def _resolve_health(
-    session: Session,
-    response: dict[str, Any],
-    phase: str,
-    status: str,
-    quiet_for_seconds: int | None,
-) -> tuple[str, bool, str | None]:
-    """Return (health, stalled, stall_reason) based on session state."""
-    if session.status == "active":
-        return _classify_active_health(response, phase, quiet_for_seconds)
-    if status == "error":
-        return "error", False, None
-    health = _apply_terminal_overrides(response, session, phase, status)
-    return health, False, None
-
-
 def build_live_activity_response(
     session: Session,
     *,
@@ -414,7 +393,12 @@ def build_live_activity_response(
     )
     response["quiet_for_seconds"] = quiet_for_seconds
 
-    health, stalled, stall_reason = _resolve_health(session, response, phase, status, quiet_for_seconds)
+    if session.status == "active":
+        health, stalled, stall_reason = _classify_active_health(response, phase, quiet_for_seconds)
+    elif status == "error":
+        health, stalled, stall_reason = "error", False, None
+    else:
+        health, stalled, stall_reason = _apply_terminal_overrides(response, session, phase, status), False, None
     response["health"] = health
     response["stalled"] = stalled
     response["stall_reason"] = stall_reason or response.get("stall_reason")
