@@ -7,6 +7,7 @@ from typing import Any
 from app.services.agent_benchmark_service import persist_benchmark_payload
 from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
 from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+from scripts.persona_benchmark_persistence import build_persistence_payload
 from scripts.persona_honing._constants import (
     RUN_KIND_HONING_BASELINE,
     RUN_KIND_HONING_CANDIDATE,
@@ -16,7 +17,6 @@ from scripts.persona_honing._models import PersonaHoningIteration, _IterationCon
 from scripts.run_completion_review_model_benchmark import (
     build_persistence_payload as build_review_persistence_payload,
 )
-from scripts.run_persona_model_benchmark import build_persistence_payload
 
 
 async def _persist_runs(

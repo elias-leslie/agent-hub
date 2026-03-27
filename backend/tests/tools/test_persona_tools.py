@@ -861,6 +861,7 @@ class TestSteerConsultation:
                 "supervisor",
                 "What should I verify next?",
                 "Changed the web research path.",
+                parent_session_id="parent-session-123",
             )
 
         assert "sess-456" in result
@@ -868,6 +869,7 @@ class TestSteerConsultation:
         tool_names = {tool["name"] for tool in kwargs["tools"]}
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
+        assert kwargs["parent_session_id"] == "parent-session-123"
         assert tool_names == {
             "fetch_web_page",
             "precision_code_search",

@@ -51,11 +51,8 @@ from scripts.completion_review_benchmark_eval import (
     score_completion_review_attempt,
     summarize_completion_review_attempts,
 )
-from scripts.run_persona_model_benchmark import (
-    _fetch_used_tool_names,
-    _parse_csv,
-    _resolve_client_id,
-)
+from scripts.persona_benchmark_runner import _fetch_used_tool_names, _resolve_client_id
+from scripts.run_persona_model_benchmark import _parse_csv
 
 logging.basicConfig(
     level=logging.INFO,

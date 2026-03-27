@@ -227,7 +227,13 @@ class DirectToolExecutor:
     async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:
         """Consult another agent for advice without executing tools."""
         from app.services.tools._executor_consultation import consult_agent as _consult
-        return await _consult(self._project_id, agent_slug, question, context)
+        return await _consult(
+            self._project_id,
+            agent_slug,
+            question,
+            context,
+            parent_session_id=self._session_id,
+        )
 
     async def dispatch_agent(
         self, agent_slug: str, task: str,

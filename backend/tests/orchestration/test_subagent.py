@@ -180,7 +180,7 @@ class TestSubagentManager:
     async def test_spawn_with_context(self):
         """Test spawn with context messages."""
         manager = SubagentManager()
-        config = SubagentConfig(name="test")
+        config = SubagentConfig(name="test", context_mode="full")
 
         mock_result = CompletionResult(
             content="Context aware response",
@@ -211,6 +211,48 @@ class TestSubagentManager:
             call_args = mock_complete.call_args
             messages = call_args.kwargs.get("messages")
             assert len(messages) >= 3  # context + task
+
+    @pytest.mark.asyncio
+    async def test_spawn_with_context_defaults_to_focused_brief(self):
+        """Default context handling should narrow parent context into one brief."""
+        manager = SubagentManager()
+        config = SubagentConfig(name="test", max_context_messages=2, max_context_chars=120)
+
+        mock_result = CompletionResult(
+            content="Focused response",
+            provider="claude",
+            model=CLAUDE_SONNET,
+            input_tokens=120,
+            output_tokens=40,
+        )
+
+        with patch.object(
+            manager._get_adapter("claude"),
+            "complete",
+            new=AsyncMock(return_value=mock_result),
+        ) as mock_complete:
+            context = [
+                Message(role="system", content="Parent system rules."),
+                Message(role="user", content="First parent request."),
+                Message(role="assistant", content="Intermediate parent reply."),
+                Message(role="user", content="Most recent parent request."),
+            ]
+
+            await manager.spawn(
+                task="Continue the conversation.",
+                config=config,
+                context=context,
+            )
+
+            messages = mock_complete.call_args.kwargs["messages"]
+            assert len(messages) == 2
+            assert messages[0].role == "user"
+            assert "Selected parent context:" in messages[0].content
+            assert "Parent system rules." not in messages[0].content
+            assert "First parent request." not in messages[0].content
+            assert "Intermediate parent reply." in messages[0].content
+            assert "Most recent parent request." in messages[0].content
+            assert messages[1].content == "Continue the conversation."
 
     @pytest.mark.asyncio
     async def test_spawn_with_system_prompt(self):

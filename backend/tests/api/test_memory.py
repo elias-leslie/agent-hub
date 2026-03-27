@@ -124,7 +124,7 @@ class TestUpdateEpisodeEndpoint:
         mock_repo.update = AsyncMock(return_value=True)
 
         with (
-            patch("app.api.memory_episodes_handlers.get_embedder", return_value=mock_embedder),
+            patch("app.services.memory.embedder.get_embedder", return_value=mock_embedder),
             patch("app.api.memory_episodes_handlers.get_memory_repository", return_value=mock_repo),
         ):
             response = await client.patch(

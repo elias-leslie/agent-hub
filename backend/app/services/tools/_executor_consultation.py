@@ -20,6 +20,7 @@ from ._executor_consultation_helpers import (
     cancel_consultation,
     inspect_session,
     list_consultations,
+    parent_dispatch_limit_block,
     query_sessions,
 )
 from ._executor_dispatch import (
@@ -59,6 +60,9 @@ async def dispatch_agent(
         from app.workflows.persona_wake import dispatch_wake
 
         async with async_session() as db:
+            block_reason = await parent_dispatch_limit_block(db, parent_session_id)
+            if block_reason:
+                return block_reason
             resolved = await resolve_agent(agent_slug, db)
             dispatch_request = parse_specialist_dispatch_request(task)
             dispatch_plan = (
@@ -100,6 +104,7 @@ async def consult_agent(
     agent_slug: str,
     question: str,
     context: str = "",
+    parent_session_id: str | None = None,
 ) -> str:
     """Consult another agent for advice with read-only research tools."""
     if not project_id:
@@ -125,6 +130,7 @@ async def consult_agent(
                 temperature=resolved.agent.temperature, project_id=project_id,
                 db=db, agent_slug=agent_slug, request_source="consultation",
                 use_memory=True, memory_group_id=f"project-{project_id}",
+                parent_session_id=parent_session_id,
                 max_turns=consultation_max_turns,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,

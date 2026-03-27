@@ -53,11 +53,8 @@ from scripts.agent_output_benchmark_eval import (
     score_output_contract_attempt,
     summarize_output_contract_attempts,
 )
-from scripts.run_persona_model_benchmark import (
-    _fetch_used_tool_names,
-    _parse_csv,
-    _resolve_client_id,
-)
+from scripts.persona_benchmark_runner import _fetch_used_tool_names, _resolve_client_id
+from scripts.run_persona_model_benchmark import _parse_csv
 
 logging.basicConfig(
     level=logging.INFO,
