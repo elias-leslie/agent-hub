@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from app.services.session_ingestion.adapters.transcript_parsers import (
     parse_transcript_events,
+    read_incremental_transcript_events,
     read_jsonl_lines,
 )
 
@@ -98,3 +100,92 @@ def test_read_jsonl_lines_respects_line_offset_checkpoint(tmp_path: Path) -> Non
 
     assert lines == ["two", "three"]
     assert checkpoint == "3"
+
+
+@pytest.mark.unit
+def test_read_incremental_transcript_events_preserves_turns_and_sequences(tmp_path: Path) -> None:
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                '{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review parser"}]}}',
+                '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Tracing now"}]}}',
+            ]
+        )
+        + "\n"
+    )
+
+    first_events, first_checkpoint = read_incremental_transcript_events(str(transcript))
+
+    transcript.write_text(
+        "\n".join(
+            [
+                '{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review parser"}]}}',
+                '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Tracing now"}]}}',
+                '{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\\"cmd\\":\\"git status\\"}"}}',
+                '{"type":"response_item","payload":{"type":"function_call_output","output":"M backend/app.py"}}',
+                '{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Patch it"}]}}',
+                '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done"}]}}',
+            ]
+        )
+        + "\n"
+    )
+
+    second_events, second_checkpoint = read_incremental_transcript_events(
+        str(transcript),
+        checkpoint=first_checkpoint,
+    )
+
+    assert [(event.event_type, event.turn, event.sequence) for event in first_events] == [
+        ("user_message", 1, 1),
+        ("assistant_message", 1, 2),
+    ]
+    assert [(event.event_type, event.turn, event.sequence) for event in second_events] == [
+        ("tool_use", 1, 3),
+        ("tool_result", 1, 4),
+        ("user_message", 2, 1),
+        ("assistant_message", 2, 2),
+    ]
+    assert json.loads(first_checkpoint or "{}") == {
+        "line_offset": 2,
+        "saw_content": True,
+        "sequence": 2,
+        "turn": 1,
+    }
+    assert json.loads(second_checkpoint or "{}") == {
+        "line_offset": 6,
+        "saw_content": True,
+        "sequence": 2,
+        "turn": 2,
+    }
+
+
+@pytest.mark.unit
+def test_read_incremental_transcript_events_replays_legacy_checkpoint_from_start(tmp_path: Path) -> None:
+    transcript = tmp_path / "session.jsonl"
+    transcript.write_text(
+        "\n".join(
+            [
+                '{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Review parser"}]}}',
+                '{"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Tracing now"}]}}',
+                '{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\\"cmd\\":\\"git status\\"}"}}',
+                '{"type":"response_item","payload":{"type":"function_call_output","output":"M backend/app.py"}}',
+            ]
+        )
+        + "\n"
+    )
+
+    events, checkpoint = read_incremental_transcript_events(str(transcript), checkpoint="2")
+
+    assert [(event.event_type, event.turn, event.sequence) for event in events] == [
+        ("user_message", 1, 1),
+        ("assistant_message", 1, 2),
+        ("tool_use", 1, 3),
+        ("tool_result", 1, 4),
+    ]
+    assert json.loads(checkpoint or "{}") == {
+        "line_offset": 4,
+        "saw_content": True,
+        "sequence": 4,
+        "turn": 1,
+    }
