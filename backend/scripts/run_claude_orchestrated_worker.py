@@ -74,6 +74,17 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--workdir", default=str(ROOT), help="Working directory for the Claude run")
     parser.add_argument("--model", default="sonnet", help="Claude model alias")
+    parser.add_argument("--effort", help="Claude effort override (low, medium, high, max)")
+    parser.add_argument(
+        "--append-system-prompt",
+        help="Optional system prompt appended to Claude's built-in system prompt",
+    )
+    parser.add_argument(
+        "--skill",
+        action="append",
+        default=[],
+        help="Claude skill to invoke at session start (repeatable)",
+    )
     parser.add_argument(
         "--allowed-tools",
         default="Read,Agent,StructuredOutput",
@@ -125,6 +136,14 @@ def _run_async(awaitable):
 
 def _read_text(path_str: str) -> str:
     return Path(path_str).read_text().strip()
+
+
+def _apply_skills_to_prompt(prompt: str, skills: list[str] | None) -> str:
+    normalized = [skill.strip().lstrip("/") for skill in skills or [] if isinstance(skill, str) and skill.strip()]
+    if not normalized:
+        return prompt
+    skill_block = "\n".join(f"/{skill}" for skill in normalized)
+    return f"{skill_block}\n\n{prompt}".strip()
 
 
 def _read_json_object(path_str: str) -> dict[str, Any]:
@@ -725,6 +744,8 @@ def _build_claude_command(
     agents_path: Path | None,
     agents_payload: dict[str, Any] | None,
     model: str,
+    effort: str | None,
+    append_system_prompt: str | None,
     allowed_tools: str,
     permission_mode: str,
 ) -> list[str]:
@@ -743,6 +764,10 @@ def _build_claude_command(
         "--allowedTools",
         allowed_tools,
     ]
+    if effort:
+        command.extend(["--effort", effort])
+    if append_system_prompt:
+        command.extend(["--append-system-prompt", append_system_prompt])
     if schema_path is not None:
         command.extend(["--json-schema", str(schema_path)])
     if agents_payload is not None:
@@ -851,6 +876,8 @@ def _run_claude(
     agents_payload: dict[str, Any] | None,
     workdir: Path,
     model: str,
+    effort: str | None,
+    append_system_prompt: str | None,
     allowed_tools: str,
     permission_mode: str,
     timeout_seconds: int,
@@ -867,6 +894,8 @@ def _run_claude(
         agents_path=agents_path,
         agents_payload=agents_payload,
         model=model,
+        effort=effort,
+        append_system_prompt=append_system_prompt,
         allowed_tools=allowed_tools,
         permission_mode=permission_mode,
     )
@@ -1368,6 +1397,7 @@ def main() -> int:
         prompt = _build_prompt_from_spec(spec) if spec is not None else _read_text(args.prompt_file)
         agents_payload = _build_agents_payload_from_spec(spec) if spec is not None else None
         workdir = Path(args.workdir).resolve()
+    prompt = _apply_skills_to_prompt(prompt, args.skill)
     schema_path = Path(args.schema_file).resolve() if args.schema_file else None
     agents_path = Path(args.agents_file).resolve() if args.agents_file else None
     allowed_tools = (
@@ -1383,6 +1413,8 @@ def main() -> int:
         agents_payload=agents_payload,
         workdir=workdir,
         model=args.model,
+        effort=args.effort,
+        append_system_prompt=args.append_system_prompt,
         allowed_tools=allowed_tools,
         permission_mode=args.permission_mode,
         timeout_seconds=args.timeout_seconds,

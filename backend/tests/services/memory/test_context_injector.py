@@ -863,3 +863,48 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
 
     assert "<tool-capabilities>" in injected_messages[0]["content"]
     assert context.debug_info["tool_capabilities_included"] is True
+
+
+@pytest.mark.asyncio
+async def test_inject_progressive_context_fails_closed_after_repeated_errors() -> None:
+    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.settings import MemorySettingsDTO
+    from app.services.memory.variants import MemoryVariant
+
+    settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+    with (
+        patch(
+            "app.services.memory.context_injector.get_memory_settings",
+            new=AsyncMock(return_value=settings),
+        ),
+        patch(
+            "app.services.memory.context_injector.assign_variant",
+            return_value=MemoryVariant.BASELINE,
+        ),
+        patch(
+            "app.services.memory.context_injector._build_context_and_format",
+            new=AsyncMock(side_effect=RuntimeError("neo4j restart in progress")),
+        ) as mock_build,
+        patch(
+            "app.services.memory.context_injector.report_memory_failure",
+            new=AsyncMock(),
+        ) as mock_report,
+        patch("app.services.memory.context_resilience.asyncio.sleep", new=AsyncMock()),
+    ):
+        injected_messages, context = await inject_progressive_context(
+            messages=[{"role": "user", "content": "Need help"}],
+            project_id="agent-hub",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+            consumer_profile="claude_session_start",
+        )
+
+    assert mock_build.await_count == 3
+    assert mock_report.await_count == 1
+    assert injected_messages[0]["role"] == "system"
+    assert "CRITICAL" in injected_messages[0]["content"]
+    assert "Stop substantive work immediately" in injected_messages[0]["content"]
+    assert "st memory status" in injected_messages[0]["content"]
+    assert context.debug_info["memory_system_failed"] is True
+    assert context.debug_info["failure_mode"] == "stop"

@@ -163,3 +163,71 @@ class TestArenaOverviewEndpoint:
             assert data["scheduled_jobs"][0]["name"] == "Daily Jenny Improvement Review"
             assert data["agents"][0]["slug"] == "persona"
             mock_get_overview.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_get_arena_overview_accepts_vantage_project_id(self, api_client) -> None:
+        with (
+            patch("app.api.arena.get_agent_service") as mock_get_service,
+            patch(
+                "app.api.arena.get_arena_overview",
+                new=AsyncMock(
+                    return_value={
+                        "generated_at": "2026-03-27T16:00:00Z",
+                        "project_id": "vantage",
+                        "primary_agent_slug": "persona",
+                        "days": 30,
+                        "system": {
+                            "total_agents": 0,
+                            "agents_with_history": 0,
+                            "total_runs": 0,
+                            "avg_score": 0.0,
+                            "avg_pass_rate": 0.0,
+                            "total_regressions": 0,
+                            "regressions_by_category": {},
+                        },
+                        "scheduled_jobs": [],
+                        "agent_signal_volume": [],
+                        "repeated_issues": [],
+                        "recent_benchmark_experiments": [],
+                        "open_regression_clusters": [],
+                        "memory_utilization": {
+                            "injection_sessions": 0,
+                            "citation_sessions": 0,
+                            "lookup_after_injection_sessions": 0,
+                            "citation_session_rate": 0.0,
+                            "assistant_citation_rate": 0.0,
+                            "selected_reference_citation_rate": 0.0,
+                            "memory_search_calls": 0,
+                            "memory_get_calls": 0,
+                            "memory_debug_coverage_rate": 0.0,
+                        },
+                        "memory_governance": {
+                            "active_count": 0,
+                            "by_context_kind": {},
+                            "targeted_count": 0,
+                            "explicit_exclusion_count": 0,
+                            "untargeted_reference_count": 0,
+                            "policy_with_targeting_count": 0,
+                            "missing_reference_summary_count": 0,
+                            "missing_capability_summary_count": 0,
+                            "oversized_policy_count": 0,
+                            "alias_trigger_task_type_count": 0,
+                            "invalid_trigger_task_type_count": 0,
+                            "invalid_trigger_task_type_samples": [],
+                            "issue_count": 0,
+                        },
+                        "low_yield_references": [],
+                        "agents": [],
+                    }
+                ),
+            ) as mock_get_overview,
+        ):
+            mock_svc = MagicMock()
+            mock_svc.list_agents = AsyncMock(return_value=[])
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.get("/api/arena/overview?project_id=vantage")
+
+        assert response.status_code == 200
+        assert response.json()["project_id"] == "vantage"
+        assert mock_get_overview.await_args.kwargs["project_id"] == "vantage"

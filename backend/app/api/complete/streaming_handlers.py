@@ -63,6 +63,7 @@ async def _setup_streaming_session(
             agent_slug=request.agent_slug,
             current_branch=request.current_branch,
             working_dir=request.working_dir,
+            trace_id=request.trace_id,
         )
         session_id = stream_session.id
         mark_session_execution_start(stream_session)

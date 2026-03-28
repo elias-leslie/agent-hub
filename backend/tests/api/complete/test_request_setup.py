@@ -34,6 +34,7 @@ def _request() -> SimpleNamespace:
         phase=None,
         project_id="agent-hub",
         external_id=None,
+        trace_id=None,
         current_branch=None,
         working_dir=None,
         session_id=None,
@@ -263,3 +264,31 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
     assert mock_get_or_create.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-123"
     assert mock_get_or_create.await_args.kwargs["current_branch"] == "task-123/main"
     mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-4-6", "summitflow")
+
+
+@pytest.mark.asyncio
+async def test_setup_session_forwards_trace_id_to_session_creation() -> None:
+    request = _request()
+    request.project_id = "vantage"
+    request.trace_id = "vantage:issue:iss-123:run:run-456"
+
+    session = SimpleNamespace(id="sess-1")
+    with patch(
+        "app.api.complete.request_setup.get_or_create_session",
+        new_callable=AsyncMock,
+        return_value=(session, [], False),
+    ) as mock_get_or_create:
+        session_id, returned_session, context_messages, is_new_session = await setup_session(
+            request=request,
+            provider="claude",
+            resolved_model="claude-sonnet-4-6",
+            db=AsyncMock(),
+            client_id="client-1",
+            request_source="vantage",
+        )
+
+    assert session_id == "sess-1"
+    assert returned_session is session
+    assert context_messages == []
+    assert is_new_session is False
+    assert mock_get_or_create.await_args.kwargs["trace_id"] == "vantage:issue:iss-123:run:run-456"

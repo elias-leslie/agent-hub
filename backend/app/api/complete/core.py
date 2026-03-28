@@ -153,7 +153,7 @@ async def complete_internal(
     working_dir: str | None = None,
     permission_config: dict[str, Any] | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
-    trace_id: str | None = None,  # accepted for API compat, not forwarded
+    trace_id: str | None = None,
     task_type: str | None = None, phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
@@ -166,6 +166,7 @@ async def complete_internal(
         db, session_id, project_id, provider, model,
         external_id, client_id, request_source, agent_slug, current_branch, working_dir,
         parent_session_id, messages,
+        trace_id=trace_id,
         requested_provider=requested_provider or provider, requested_model=requested_model or model,
     )
     ctx = _build_ctx(

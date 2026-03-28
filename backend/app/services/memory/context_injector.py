@@ -27,6 +27,11 @@ from .context_injector_formatter import (
     get_context_token_stats,
     get_relevance_debug_info,
 )
+from .context_resilience import (
+    build_memory_failure_notice,
+    run_with_memory_retries,
+)
+from .failure_reporting import MemoryFailureReport, report_memory_failure
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .project_index_context import format_project_index_context
 from .service import MemoryScope
@@ -247,6 +252,32 @@ def _log_injection(context: ProgressiveContext, resolved_variant: Any, latency_m
     )
 
 
+def _build_failed_context(
+    failure_notice: str,
+    *,
+    operation: str,
+    attempts: int,
+    latency_ms: int,
+    error_type: str,
+    error_message: str,
+) -> ProgressiveContext:
+    """Create a synthetic context object for fail-closed delivery."""
+    context = ProgressiveContext()
+    context.debug_info.update(
+        {
+            "memory_system_failed": True,
+            "failure_mode": "stop",
+            "failure_notice": failure_notice,
+            "failure_operation": operation,
+            "failure_attempts": attempts,
+            "failure_latency_ms": latency_ms,
+            "failure_error_type": error_type,
+            "failure_error_message": error_message,
+        }
+    )
+    return context
+
+
 async def _finalize_injection(
     messages: list[dict[str, Any]],
     context: ProgressiveContext,
@@ -307,28 +338,69 @@ async def inject_progressive_context(
     consumer_tags: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """Inject mandates and guardrails context into messages. Main entry point for memory injection."""
-    start_time = time.monotonic()
     if not messages or not (query or (query := extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
-    settings = await get_memory_settings()
-    resolved_variant = assign_variant(
-        external_id=external_id, project_id=project_id or scope_id,
-        variant_override=variant, active_variant=settings.active_variant,
+
+    async def _operation() -> tuple[list[dict[str, Any]], ProgressiveContext]:
+        start_time = time.monotonic()
+        settings = await get_memory_settings()
+        resolved_variant = assign_variant(
+            external_id=external_id, project_id=project_id or scope_id,
+            variant_override=variant, active_variant=settings.active_variant,
+        )
+        context, formatted = await _build_context_and_format(
+            query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
+            memory_config=memory_config, consumer_profile=consumer_profile,
+            consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
+            variant=resolved_variant.value,
+        )
+        project_index_block, tool_capability_block = _build_optional_blocks(
+            context, memory_config, project_id or scope_id, consumer_profile, task_type,
+        )
+        return await _finalize_injection(
+            messages, context, formatted, project_index_block, tool_capability_block,
+            resolved_variant, scope, scope_id, session_id, memory_config, current_branch,
+            include_continuity, start_time, query, external_id, project_id, collect_metrics,
+        )
+
+    injected, failure, attempts, latency_ms = await run_with_memory_retries(
+        _operation,
+        operation_name="inject-progressive-context",
     )
-    context, formatted = await _build_context_and_format(
-        query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
-        memory_config=memory_config, consumer_profile=consumer_profile,
-        consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
-        variant=resolved_variant.value,
-    )
-    project_index_block, tool_capability_block = _build_optional_blocks(
-        context, memory_config, project_id or scope_id, consumer_profile, task_type,
-    )
-    return await _finalize_injection(
-        messages, context, formatted, project_index_block, tool_capability_block,
-        resolved_variant, scope, scope_id, session_id, memory_config, current_branch,
-        include_continuity, start_time, query, external_id, project_id, collect_metrics,
-    )
+    if failure:
+        failure_notice = build_memory_failure_notice(
+            failure,
+            consumer_profile=consumer_profile,
+            project_id=project_id or scope_id,
+        )
+        await report_memory_failure(
+            MemoryFailureReport(
+                failure=failure,
+                consumer_profile=consumer_profile,
+                project_id=project_id or scope_id,
+                session_id=session_id,
+                external_id=external_id,
+                current_branch=current_branch,
+                source="context_injector",
+            )
+        )
+        logger.error(
+            "Injecting fail-closed memory notice after repeated failures: scope=%s scope_id=%s attempts=%d",
+            scope,
+            scope_id,
+            attempts,
+        )
+        return _inject_memory_block(messages, failure_notice), _build_failed_context(
+            failure_notice,
+            operation=failure.operation,
+            attempts=attempts,
+            latency_ms=latency_ms,
+            error_type=failure.error_type,
+            error_message=failure.error_message,
+        )
+
+    assert injected is not None
+    return injected
 
 
 def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str | None]:

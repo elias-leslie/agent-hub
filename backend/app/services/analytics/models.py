@@ -42,6 +42,38 @@ class CostFilters(BaseModel):
     end_date: datetime | None = None
 
 
+class CostLogExportFilters(BaseModel):
+    """Filters for raw cost-log export."""
+
+    project_id: str | None = None
+    after_id: int | None = None
+    limit: int = 100
+    external_id: str | None = None
+    session_id: str | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+
+
+class CostLogExportRow(BaseModel):
+    """Raw cost-log row with joined session metadata for finance sync."""
+
+    id: int = Field(..., description="Immutable cost-log row ID")
+    session_id: str = Field(..., description="Owning session ID")
+    project_id: str = Field(..., description="Execution project ID")
+    agent_slug: str | None = Field(default=None, description="Agent slug if set on the session")
+    external_id: str | None = Field(default=None, description="Caller-defined external identifier")
+    trace_id: str | None = Field(default=None, description="Execution correlation ID if present")
+    client_id: str | None = Field(default=None, description="Calling client ID")
+    request_source: str | None = Field(default=None, description="Caller attribution header value")
+    session_type: str = Field(..., description="Session category")
+    provider: str = Field(..., description="Provider recorded on the session")
+    model: str = Field(..., description="Model recorded on the cost log")
+    input_tokens: int = Field(..., description="Input tokens for this row")
+    output_tokens: int = Field(..., description="Output tokens for this row")
+    cost_usd: float = Field(..., description="Estimated USD cost for this row")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+
 class TruncationFilters(BaseModel):
     """Filters for truncation aggregation queries."""
 

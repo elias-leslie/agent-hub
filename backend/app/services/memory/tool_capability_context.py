@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 from subprocess import run
@@ -17,6 +18,7 @@ _RUNTIME_TOOL_TASK_TYPES = {
     "performance", "config", "devops", "database", "exploration",
     "heartbeat", "wake", "review",
 }
+_GENERIC_DESCRIPTION_HEADINGS = {"available projects:"}
 
 
 @dataclass(frozen=True)
@@ -111,14 +113,43 @@ def _should_include_tool(
 
 @lru_cache(maxsize=32)
 def _read_help_output(command: tuple[str, ...]) -> str:
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env.pop("PYTHONHOME", None)
     try:
-        result = run(command, capture_output=True, text=True, timeout=3, check=False)
+        result = run(command, capture_output=True, text=True, timeout=3, check=False, env=env)
     except Exception:
         return ""
     output = (result.stdout or "").strip()
     if output:
         return output
-    return (result.stderr or "").strip()
+    stderr = (result.stderr or "").strip()
+    if stderr and _looks_like_help_text(stderr) and not _looks_like_error_text(stderr):
+        return stderr
+    return ""
+
+
+def _looks_like_help_text(text: str) -> bool:
+    lowered_lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
+    return any(
+        line.startswith("usage:")
+        or line == "commands:"
+        or line == "options:"
+        or line == "positional arguments:"
+        or line.startswith("subcommands")
+        for line in lowered_lines
+    )
+
+
+def _looks_like_error_text(text: str) -> bool:
+    lowered_lines = [line.strip().lower() for line in text.splitlines() if line.strip()]
+    return any(
+        line.startswith("traceback (most recent call last):")
+        or "modulenotfounderror:" in line
+        or "exception:" in line
+        or "error:" in line
+        for line in lowered_lines
+    )
 
 
 def _description_from_help(help_text: str, fallback: str) -> str:
@@ -130,6 +161,8 @@ def _description_from_help(help_text: str, fallback: str) -> str:
         if lowered.startswith("usage:"):
             continue
         if lowered.endswith("commands:") or lowered.endswith("options:"):
+            continue
+        if lowered in _GENERIC_DESCRIPTION_HEADINGS:
             continue
         return line
     return fallback

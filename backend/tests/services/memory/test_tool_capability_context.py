@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -82,3 +83,61 @@ def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> N
     assert "tool: st" in rendered
     assert "tool: dt" in rendered
     assert "tool: rebuild.sh" in rendered
+
+
+def test_read_help_output_sanitizes_python_env_for_external_clis() -> None:
+    from app.services.memory.tool_capability_context import _read_help_output
+
+    _read_help_output.cache_clear()
+
+    with patch.dict(
+        "app.services.memory.tool_capability_context.os.environ",
+        {"PYTHONPATH": "/tmp/bad", "PYTHONHOME": "/tmp/also-bad"},
+        clear=True,
+    ), patch(
+        "app.services.memory.tool_capability_context.run",
+        return_value=SimpleNamespace(
+            stdout="Usage: st [OPTIONS] COMMAND [ARGS]...\n",
+            stderr="",
+            returncode=0,
+        ),
+    ) as mocked_run:
+        rendered = _read_help_output(("st", "--help"))
+
+    assert rendered.startswith("Usage: st")
+    env = mocked_run.call_args.kwargs["env"]
+    assert "PYTHONPATH" not in env
+    assert "PYTHONHOME" not in env
+
+
+def test_read_help_output_ignores_stderr_tracebacks() -> None:
+    from app.services.memory.tool_capability_context import _read_help_output
+
+    _read_help_output.cache_clear()
+
+    with patch(
+        "app.services.memory.tool_capability_context.run",
+        return_value=SimpleNamespace(
+            stdout="",
+            stderr=(
+                "Traceback (most recent call last):\n"
+                "  File \"/home/kasadis/bin/st\", line 4, in <module>\n"
+                "ModuleNotFoundError: No module named 'app.storage.connection'\n"
+            ),
+            returncode=1,
+        ),
+    ):
+        rendered = _read_help_output(("st", "--help"))
+
+    assert rendered == ""
+
+
+def test_description_from_help_falls_back_for_generic_headings() -> None:
+    from app.services.memory.tool_capability_context import _description_from_help
+
+    description = _description_from_help(
+        "Usage: rebuild.sh [--detach] [--include-all-workers] <project>\n\nAvailable projects:\n",
+        "Project rebuild helper",
+    )
+
+    assert description == "Project rebuild helper"

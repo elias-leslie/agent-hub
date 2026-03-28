@@ -4,7 +4,11 @@ from pathlib import Path
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+from app.api.memory_agent_handlers import build_progressive_context_response
 from app.config import AGENT_HUB_BACKEND_PORT
+from app.services.memory.context_resilience import MemoryFailureDetails
+from app.services.memory.failure_reporting import MemoryFailureReport, report_memory_failure
+from app.services.memory.service import MemoryScope
 
 # Initialize FastMCP server
 mcp = FastMCP("agent-hub")
@@ -15,26 +19,33 @@ DEFAULT_TIMEOUT = 30.0
 
 
 async def _query_progressive_context(query: str, project_id: str | None = None) -> str:
-    """Helper to query the agent-hub progressive context endpoint."""
-    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-        params = {"query": query}
-        if project_id:
-            # If we have a project ID, let's assume we want project scope which includes global
-            params["x_scope_id"] = project_id
-            params["x_memory_scope"] = "project"
-            params["include_global"] = "true"
-        else:
-            params["x_memory_scope"] = "global"
-
-        try:
-            response = await client.get(
-                f"{AGENT_HUB_API}/memory/progressive-context", params=params
+    """Helper to query the centralized progressive-context builder directly."""
+    scope = MemoryScope.PROJECT if project_id else MemoryScope.GLOBAL
+    response = await build_progressive_context_response(
+        query=query,
+        scope=scope,
+        scope_id=project_id,
+        debug=False,
+        include_global=True,
+        task_type=None,
+        project_id=project_id,
+    )
+    if response.status != "ok" and response.failure is not None:
+        await report_memory_failure(
+            MemoryFailureReport(
+                failure=MemoryFailureDetails(
+                    operation=response.failure.operation,
+                    attempts=response.failure.attempts,
+                    error_type=response.failure.error_type,
+                    error_message=response.failure.error_message,
+                    latency_ms=response.failure.latency_ms,
+                ),
+                consumer_profile="mcp_system_instruction",
+                project_id=project_id,
+                source="mcp_progressive_context",
             )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("formatted", "")
-        except Exception as e:
-            return f"Error fetching context: {type(e).__name__}: {e}"
+        )
+    return response.formatted
 
 
 @mcp.resource("memory://context")
