@@ -16,6 +16,7 @@ from app.api.memory_agent_context_builder import (
     format_context_with_continuity,
 )
 from app.api.memory_agent_handlers import build_progressive_context_response
+from app.api.memory_agent_schemas import ProgressiveContextBlock, ProgressiveContextResponse
 from app.services.memory.context_builder import ProgressiveContext
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
 
@@ -245,6 +246,67 @@ async def test_build_progressive_context_with_variant_uses_active_variant_settin
         active_variant="ENHANCED",
     )
     assert mock_build.await_args.kwargs["variant"] == "ENHANCED"
+
+
+@pytest.mark.asyncio
+async def test_build_progressive_context_response_retries_transient_failures() -> None:
+    ok_response = ProgressiveContextResponse(
+        mandates=ProgressiveContextBlock(items=[], count=0),
+        guardrails=ProgressiveContextBlock(items=[], count=0),
+        reference=ProgressiveContextBlock(items=[], count=0),
+        total_tokens=0,
+        formatted="formatted",
+        variant="BASELINE",
+    )
+
+    with (
+        patch(
+            f"{_HANDLER}._build_progressive_context_response_once",
+            new=AsyncMock(side_effect=[RuntimeError("temporary"), ok_response]),
+        ) as mock_once,
+        patch("app.services.memory.context_resilience.asyncio.sleep", new=AsyncMock()),
+    ):
+        response = await build_progressive_context_response(
+            query="test",
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            debug=False,
+            include_global=True,
+            task_type=None,
+        )
+
+    assert response.status == "ok"
+    assert response.formatted == "formatted"
+    assert response.attempts == 2
+    assert mock_once.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_build_progressive_context_response_fails_closed_after_retries() -> None:
+    with (
+        patch(
+            f"{_HANDLER}._build_progressive_context_response_once",
+            new=AsyncMock(side_effect=RuntimeError("database unavailable")),
+        ) as mock_once,
+        patch("app.services.memory.context_resilience.asyncio.sleep", new=AsyncMock()),
+    ):
+        response = await build_progressive_context_response(
+            query="test",
+            scope=MemoryScope.PROJECT,
+            scope_id="agent-hub",
+            debug=False,
+            include_global=True,
+            task_type=None,
+            project_id="agent-hub",
+            consumer_profile="codex_startup",
+        )
+
+    assert response.status == "failed"
+    assert response.failure is not None
+    assert response.failure.attempts == 3
+    assert "Stop substantive work immediately" in response.formatted
+    assert "st memory status" in response.formatted
+    assert mock_once.await_count == 3
 
 
 @pytest.mark.asyncio

@@ -79,6 +79,7 @@ async def setup_session(
             agent_slug=request.agent_slug,
             current_branch=request.current_branch,
             working_dir=request.working_dir,
+            trace_id=request.trace_id,
             requested_provider=provider,
             requested_model=resolved_model,
         )

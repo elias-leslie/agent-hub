@@ -1,7 +1,8 @@
 """
-Analytics API endpoints for cost aggregation.
+Analytics API endpoints for aggregated and raw export surfaces.
 
 GET /analytics/costs - Aggregate cost data with grouping options.
+GET /analytics/cost-logs - Raw cost-log export with cursor-based pagination.
 GET /analytics/truncations - Truncation metrics and analytics.
 """
 
@@ -10,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.analytics_helpers import (
@@ -22,13 +24,24 @@ from app.api.analytics_helpers import (
 from app.db import get_db
 from app.services.analytics_service import (
     CostFilters,
+    CostLogExportFilters,
+    CostLogExportRow,
     TruncationFilters,
     get_recent_truncation_events,
     get_truncation_rate,
+    list_cost_log_rows,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+
+class CostLogExportResponse(BaseModel):
+    """Response for raw cost-log export."""
+
+    rows: list[CostLogExportRow]
+    next_after_id: int | None = None
+    has_more: bool
 
 
 @router.get("/costs", response_model=CostAggregationResponse)
@@ -67,6 +80,31 @@ async def get_costs(
         total_tokens=sum(a.total_tokens for a in aggregations),
         total_requests=sum(a.request_count for a in aggregations),
     )
+
+
+@router.get("/cost-logs", response_model=CostLogExportResponse)
+async def get_cost_logs(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    project_id: Annotated[str | None, Query(description="Filter by project ID")] = None,
+    after_id: Annotated[int | None, Query(ge=0, description="Resume after this cost-log ID")] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Number of rows to return")] = 100,
+    external_id: Annotated[str | None, Query(description="Filter by external ID")] = None,
+    session_id: Annotated[str | None, Query(description="Filter by session ID")] = None,
+    created_after: Annotated[datetime | None, Query(description="Created-at lower bound (inclusive)")] = None,
+    created_before: Annotated[datetime | None, Query(description="Created-at upper bound (inclusive)")] = None,
+) -> CostLogExportResponse:
+    """Export raw cost-log rows in stable ascending ID order for ledger sync."""
+    filters = CostLogExportFilters(
+        project_id=project_id,
+        after_id=after_id,
+        limit=limit,
+        external_id=external_id,
+        session_id=session_id,
+        created_after=created_after,
+        created_before=created_before,
+    )
+    rows, next_after_id, has_more = await list_cost_log_rows(db, filters)
+    return CostLogExportResponse(rows=rows, next_after_id=next_after_id, has_more=has_more)
 
 
 @router.get("/truncations", response_model=TruncationMetricsResponse)

@@ -23,6 +23,7 @@ VALID_AGENT_TYPES = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu",
 _FALLBACK_PROJECT_IDS: frozenset[str] = frozenset({
     "summitflow",
     "agent-hub",
+    "vantage",
     "portfolio-ai",
     "terminal",
     "monkey-fight",

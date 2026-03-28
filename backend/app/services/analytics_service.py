@@ -22,10 +22,13 @@ from app.services.analytics.cost_queries import (
     aggregate_costs_by_session_type,
     aggregate_costs_by_time,
     aggregate_costs_total,
+    list_cost_log_rows,
 )
 from app.services.analytics.models import (
     CostAggregation,
     CostFilters,
+    CostLogExportFilters,
+    CostLogExportRow,
     TruncationAggregation,
     TruncationFilters,
 )
@@ -42,6 +45,8 @@ from app.services.analytics.truncation_queries import (
 __all__ = [
     "CostAggregation",
     "CostFilters",
+    "CostLogExportFilters",
+    "CostLogExportRow",
     "TruncationAggregation",
     "TruncationFilters",
     "aggregate_costs_by_agent",
@@ -56,4 +61,5 @@ __all__ = [
     "aggregate_truncations_total",
     "get_recent_truncation_events",
     "get_truncation_rate",
+    "list_cost_log_rows",
 ]

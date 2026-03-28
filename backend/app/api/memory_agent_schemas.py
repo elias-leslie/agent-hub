@@ -29,6 +29,16 @@ class ScoringBreakdown(BaseModel):
     content_preview: str = Field(..., description="First 60 chars of content")
 
 
+class ProgressiveContextFailure(BaseModel):
+    """Failure details for fail-closed progressive-context delivery."""
+
+    operation: str = Field(..., description="Failed operation name")
+    attempts: int = Field(..., description="Number of attempts performed")
+    error_type: str = Field(..., description="Exception type from the final failure")
+    error_message: str = Field(..., description="Final error message")
+    latency_ms: int = Field(..., description="End-to-end latency across all attempts")
+
+
 class ProgressiveContextResponse(BaseModel):
     """Response with 3-block progressive disclosure context."""
 
@@ -45,6 +55,12 @@ class ProgressiveContextResponse(BaseModel):
     budget_usage: BudgetUsageResponse | None = Field(
         None, description="Token budget usage tracking"
     )
+    status: str = Field("ok", description="Delivery status: ok or failed")
+    failure: ProgressiveContextFailure | None = Field(
+        None, description="Failure details when delivery fails closed"
+    )
+    attempts: int = Field(1, description="Number of attempts used for this response")
+    latency_ms: int = Field(0, description="End-to-end response latency in milliseconds")
 
 
 class CanonicalContextRequest(BaseModel):

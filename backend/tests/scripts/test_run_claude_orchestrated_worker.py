@@ -29,6 +29,8 @@ def test_build_claude_command_uses_stdin_input_without_prompt_arg(tmp_path):
         agents_path=None,
         agents_payload=None,
         model="sonnet",
+        effort=None,
+        append_system_prompt=None,
         allowed_tools="Read,Agent",
         permission_mode="bypassPermissions",
     )
@@ -43,6 +45,26 @@ def test_build_claude_command_uses_stdin_input_without_prompt_arg(tmp_path):
     ]
     assert "Read,Agent" in command
     assert "Reply with the single word hi." not in command
+
+
+def test_build_claude_command_passes_effort_and_system_prompt():
+    module = _load_module()
+
+    command = module._build_claude_command(
+        schema_path=None,
+        agents_path=None,
+        agents_payload=None,
+        model="claude-opus-4-6",
+        effort="max",
+        append_system_prompt="Use /frontend-design before editing.",
+        allowed_tools="Read,Agent",
+        permission_mode="bypassPermissions",
+    )
+
+    assert "--effort" in command
+    assert "max" in command
+    assert "--append-system-prompt" in command
+    assert "Use /frontend-design before editing." in command
 
 
 def test_run_text_command_strips_pythonpath_for_nested_st_calls(tmp_path):
@@ -124,6 +146,8 @@ def test_run_claude_strips_pythonpath_for_parent_claude_process(tmp_path):
             agents_payload=None,
             workdir=tmp_path,
             model="sonnet",
+            effort=None,
+            append_system_prompt=None,
             allowed_tools="Read,Agent",
             permission_mode="bypassPermissions",
             timeout_seconds=5,
@@ -212,6 +236,8 @@ def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
         agents_path=agents_path,
         agents_payload=None,
         model="sonnet",
+        effort=None,
+        append_system_prompt=None,
         allowed_tools="Read,Agent,StructuredOutput",
         permission_mode="bypassPermissions",
     )
@@ -220,6 +246,15 @@ def test_build_claude_command_includes_schema_and_minified_agents(tmp_path):
     assert str(schema_path) in command
     assert "--agents" in command
     assert '{"reader":{"description":"Read only","prompt":"Inspect files"}}' in command
+
+
+def test_apply_skills_to_prompt_prefixes_skill_commands():
+    module = _load_module()
+
+    prompt = module._apply_skills_to_prompt("Implement the product UI.", ["frontend-design", "/ux-polish"])
+
+    assert prompt.startswith("/frontend-design\n/ux-polish\n\n")
+    assert prompt.endswith("Implement the product UI.")
 
 
 def test_build_prompt_from_spec_generates_direct_readonly_contract():

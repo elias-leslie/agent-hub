@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog, Session
 
-from .models import CostAggregation, CostFilters
+from .models import CostAggregation, CostFilters, CostLogExportFilters, CostLogExportRow
 
 logger = logging.getLogger(__name__)
 
@@ -190,3 +190,83 @@ async def aggregate_costs_total(db: AsyncSession, filters: CostFilters) -> list[
     if row.total_tokens:
         return [_row_to_cost_aggregation(row, default_key="total")]
     return []
+
+
+def _extract_trace_id(provider_metadata: object) -> str | None:
+    """Read trace_id from session provider metadata when present."""
+    if not isinstance(provider_metadata, dict):
+        return None
+    value = provider_metadata.get("trace_id")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+async def list_cost_log_rows(
+    db: AsyncSession, filters: CostLogExportFilters
+) -> tuple[list[CostLogExportRow], int | None, bool]:
+    """List raw cost-log rows in stable ascending ID order."""
+    query = (
+        select(
+            CostLog.id.label("id"),
+            CostLog.session_id.label("session_id"),
+            Session.project_id.label("project_id"),
+            Session.agent_slug.label("agent_slug"),
+            Session.external_id.label("external_id"),
+            Session.provider_metadata.label("provider_metadata"),
+            Session.client_id.label("client_id"),
+            Session.request_source.label("request_source"),
+            Session.session_type.label("session_type"),
+            Session.provider.label("provider"),
+            CostLog.model.label("model"),
+            CostLog.input_tokens.label("input_tokens"),
+            CostLog.output_tokens.label("output_tokens"),
+            CostLog.cost_usd.label("cost_usd"),
+            CostLog.created_at.label("created_at"),
+        )
+        .join(Session, CostLog.session_id == Session.id)
+        .order_by(CostLog.id.asc())
+    )
+
+    if filters.project_id:
+        query = query.where(Session.project_id == filters.project_id)
+    if filters.after_id is not None:
+        query = query.where(CostLog.id > filters.after_id)
+    if filters.external_id:
+        query = query.where(Session.external_id == filters.external_id)
+    if filters.session_id:
+        query = query.where(CostLog.session_id == filters.session_id)
+    if filters.created_after:
+        query = query.where(CostLog.created_at >= filters.created_after)
+    if filters.created_before:
+        query = query.where(CostLog.created_at <= filters.created_before)
+
+    query = query.limit(filters.limit + 1)
+    result = await db.execute(query)
+    fetched = list(result.all())
+    has_more = len(fetched) > filters.limit
+    visible = fetched[: filters.limit]
+
+    rows = [
+        CostLogExportRow(
+            id=int(row.id),
+            session_id=str(row.session_id),
+            project_id=str(row.project_id),
+            agent_slug=str(row.agent_slug) if row.agent_slug else None,
+            external_id=str(row.external_id) if row.external_id else None,
+            trace_id=_extract_trace_id(row.provider_metadata),
+            client_id=str(row.client_id) if row.client_id else None,
+            request_source=str(row.request_source) if row.request_source else None,
+            session_type=str(row.session_type),
+            provider=str(row.provider),
+            model=str(row.model),
+            input_tokens=int(row.input_tokens or 0),
+            output_tokens=int(row.output_tokens or 0),
+            cost_usd=float(row.cost_usd or 0.0),
+            created_at=row.created_at,
+        )
+        for row in visible
+    ]
+
+    next_after_id = rows[-1].id if has_more and rows else None
+    return rows, next_after_id, has_more

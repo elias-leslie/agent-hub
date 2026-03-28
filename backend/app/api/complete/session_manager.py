@@ -33,6 +33,7 @@ async def _create_session(
     parent_session_id: str | None,
     requested_provider: str | None = None,
     requested_model: str | None = None,
+    trace_id: str | None = None,
 ) -> _SessionResult:
     session, _ = await upsert_session(
         db=db,
@@ -51,6 +52,7 @@ async def _create_session(
             parent_session_id=parent_session_id,
         ),
     )
+    _apply_trace_id_metadata(session, trace_id)
     return session, [], True
 
 
@@ -83,6 +85,7 @@ async def get_or_create_session(
     parent_session_id: str | None = None,
     requested_provider: str | None = None,
     requested_model: str | None = None,
+    trace_id: str | None = None,
 ) -> _SessionResult:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     await _validate_project(project_id)
@@ -106,7 +109,9 @@ async def get_or_create_session(
                     parent_session_id,
                     requested_provider=requested_provider,
                     requested_model=requested_model,
+                    trace_id=trace_id,
                 )
+            _apply_trace_id_metadata(existing[0], trace_id)
             return existing
 
     return await _create_session(
@@ -116,7 +121,17 @@ async def get_or_create_session(
         parent_session_id,
         requested_provider=requested_provider,
         requested_model=requested_model,
+        trace_id=trace_id,
     )
+
+
+def _apply_trace_id_metadata(session: DBSession, trace_id: str | None) -> None:
+    """Persist trace correlation into session metadata when supplied by the caller."""
+    if not trace_id:
+        return
+    metadata: dict[str, object] = session.provider_metadata or {}
+    metadata["trace_id"] = trace_id
+    session.provider_metadata = metadata
 
 
 async def update_provider_metadata(

@@ -8,6 +8,7 @@ from typing import ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.responses import JSONResponse
 from httpx import ASGITransport, AsyncClient
 
 from app.constants.models import GEMINI_FLASH
@@ -243,6 +244,38 @@ class TestIdentifyClientFlow:
             )
             # Should pass middleware (not 400/403) - may fail further in pipeline
             assert response.status_code not in [400, 403]
+
+    async def test_vantage_client_can_call_complete(self, async_client):
+        """Test that a Vantage-scoped client can call Agent Hub with project_id=vantage."""
+        mock_client = _make_mock_client(
+            client_id="876c5159-95c3-45fa-abbd-ac39d4d42bfc",
+            status="active",
+            display_name="vantage",
+            allowed_projects='["vantage"]',
+        )
+        mock_db = _mock_client_db(mock_client)
+
+        with (
+            patch("app.middleware.access_control_auth.async_session", return_value=mock_db),
+            patch(
+                "app.api.complete.endpoints.orchestrate_completion",
+                new=AsyncMock(return_value=JSONResponse({"ok": True})),
+            ),
+        ):
+            response = await async_client.post(
+                "/api/complete",
+                json={
+                    "messages": [{"role": "user", "content": "run a research task"}],
+                    "project_id": "vantage",
+                },
+                headers={
+                    "X-Client-Id": "876c5159-95c3-45fa-abbd-ac39d4d42bfc",
+                    "X-Request-Source": "vantage",
+                },
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
 
     async def test_identify_client_suspended_returns_403(self, async_client):
         """Test that a suspended client is rejected with 403."""

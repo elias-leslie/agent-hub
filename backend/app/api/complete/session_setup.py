@@ -43,6 +43,7 @@ async def _init_session(
     parent_session_id: str | None,
     requested_provider: str | None = None,
     requested_model: str | None = None,
+    trace_id: str | None = None,
 ) -> tuple[DBSession, list[Any], bool]:
     """Get or create a session and publish a start event when new."""
     session, ctx, is_new = await get_or_create_session(
@@ -61,6 +62,7 @@ async def _init_session(
         parent_session_id=parent_session_id,
         requested_provider=requested_provider,
         requested_model=requested_model,
+        trace_id=trace_id,
     )
     mark_session_execution_start(session)
     if is_new:
@@ -84,6 +86,7 @@ async def setup_completion_session(
     messages: list[dict[str, Any]],
     requested_provider: str | None = None,
     requested_model: str | None = None,
+    trace_id: str | None = None,
 ) -> tuple[DBSession, str, bool, list[dict[str, Any]]]:
     """Setup session and prepare messages for completion."""
     session, ctx, is_new = await _init_session(
@@ -101,5 +104,6 @@ async def setup_completion_session(
         parent_session_id,
         requested_provider,
         requested_model,
+        trace_id,
     )
     return session, session.id, is_new, _merge_messages(ctx, messages)
