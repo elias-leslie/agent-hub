@@ -12,6 +12,11 @@ def _write_executable(path: Path, content: str) -> None:
     path.chmod(0o755)
 
 
+def _write_index_yaml(path: Path, project_id: str) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".index.yaml").write_text(f"project: {project_id}\n")
+
+
 def _fake_env(tmp_path: Path, env_lines: list[str]) -> dict[str, str]:
     fake_home = tmp_path / "home"
     fake_home.mkdir()
@@ -99,7 +104,7 @@ def test_db_migrate_uses_dynamic_project_backend_alembic_dir(tmp_path: Path) -> 
     _write_executable(
         tmp_path / "bin" / "alembic",
         """#!/usr/bin/env bash
-printf 'PWD=%s DATABASE_URL=%s ARGS=%s\n' "$PWD" "$DATABASE_URL" "$*" >> "$FAKE_ALEMBIC_LOG"
+printf 'PWD=%s DATABASE_URL=%s DEMO_DB_URL=%s ARGS=%s\n' "$PWD" "$DATABASE_URL" "$DEMO_DB_URL" "$*" >> "$FAKE_ALEMBIC_LOG"
 case "$1" in
   current|heads)
     printf 'abc123 (head)\n'
@@ -124,5 +129,49 @@ esac
     log_output = log_file.read_text()
     assert f"PWD={backend_dir}" in log_output
     assert "DATABASE_URL=postgresql://demo_user@localhost:5432/demo" in log_output
+    assert "DEMO_DB_URL=postgresql://demo_user@localhost:5432/demo" in log_output
     assert "ARGS=current" in log_output
     assert "ARGS=heads" in log_output
+
+
+def test_db_migrate_prefers_local_index_context_root(tmp_path: Path) -> None:
+    env = _fake_env(
+        tmp_path,
+        ["DEMO_DB_URL=postgresql://demo_user@localhost:5432/demo"],
+    )
+    repo_dir = tmp_path / "lane-demo"
+    backend_dir = repo_dir / "backend"
+    (backend_dir / "alembic").mkdir(parents=True)
+    _write_index_yaml(repo_dir, "demo")
+
+    log_file = tmp_path / "local-alembic.log"
+    env["FAKE_ALEMBIC_LOG"] = str(log_file)
+    _write_executable(
+        tmp_path / "bin" / "alembic",
+        """#!/usr/bin/env bash
+printf 'PWD=%s DATABASE_URL=%s DEMO_DB_URL=%s ARGS=%s\n' "$PWD" "$DATABASE_URL" "$DEMO_DB_URL" "$*" >> "$FAKE_ALEMBIC_LOG"
+case "$1" in
+  current|heads)
+    printf 'abc123 (head)\n'
+    ;;
+  *)
+    printf 'ok\n'
+    ;;
+esac
+""",
+    )
+
+    result = subprocess.run(
+        [str(DB_SCRIPT), "migrate", "status"],
+        cwd=repo_dir,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    log_output = log_file.read_text()
+    assert f"PWD={backend_dir}" in log_output
+    assert "DATABASE_URL=postgresql://demo_user@localhost:5432/demo" in log_output
+    assert "DEMO_DB_URL=postgresql://demo_user@localhost:5432/demo" in log_output

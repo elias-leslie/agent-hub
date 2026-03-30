@@ -127,7 +127,9 @@ async def test_append_normalized_events_single_implicit_event_uses_fast_path() -
     assert result.last_sequence == 9
     assert result.event_ids == ["evt-fast"]
     mock_store.assert_awaited_once()
-    assert mock_store.await_args.kwargs["session"] is session
+    await_args = mock_store.await_args
+    assert await_args is not None
+    assert await_args.kwargs["session"] is session
     mock_get_max_turn.assert_not_awaited()
     mock_load_existing_pairs.assert_not_awaited()
 
@@ -199,6 +201,7 @@ async def test_append_normalized_events_reconciles_transcript_backed_session_mod
 @pytest.mark.asyncio
 async def test_upsert_session_create_sets_timestamps_without_refresh() -> None:
     db = AsyncMock()
+    db.add = MagicMock()
 
     with (
         patch(
@@ -338,8 +341,12 @@ async def test_heartbeat_session_updates_without_refresh() -> None:
 
     assert result.updated is True
     assert session.last_heartbeat_at is not None
-    assert session.provider_metadata["live_activity"]["phase"] == "running_tool"
-    assert session.provider_metadata["live_activity"]["last_read_path"] == "backend/app/api/sessions.py"
+    metadata = session.provider_metadata
+    assert isinstance(metadata, dict)
+    live_activity = metadata.get("live_activity")
+    assert isinstance(live_activity, dict)
+    assert live_activity["phase"] == "running_tool"
+    assert live_activity["last_read_path"] == "backend/app/api/sessions.py"
     assert session.updated_at is not None
     assert db.commit.await_count == 1
     db.refresh.assert_not_awaited()
@@ -685,8 +692,10 @@ async def test_heartbeat_session_backfills_request_identity_and_source_metadata(
 
     assert session.client_id == "client-123"
     assert session.request_source == "codex-transcript-sync"
-    assert session.provider_metadata["source_client"] == "summitflow/codex-session-sync"
-    assert session.provider_metadata["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
+    metadata = session.provider_metadata
+    assert isinstance(metadata, dict)
+    assert metadata["source_client"] == "summitflow/codex-session-sync"
+    assert metadata["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
 
 
 @pytest.mark.unit

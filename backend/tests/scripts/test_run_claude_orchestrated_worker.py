@@ -574,7 +574,9 @@ def test_ensure_session_metadata_sets_external_id_on_create(tmp_path):
             )
         )
 
-    request = upsert_session.await_args.args[1]
+    await_args = upsert_session.await_args
+    assert await_args is not None
+    request = await_args.args[1]
     assert request.external_id == "task-123"
 
 
@@ -629,7 +631,9 @@ def test_ensure_session_metadata_sets_batch_task_ids_on_create(tmp_path):
             )
         )
 
-    request = upsert_session.await_args.args[1]
+    await_args = upsert_session.await_args
+    assert await_args is not None
+    request = await_args.args[1]
     assert request.provider_metadata["batch_task_ids"] == ["task-a", "task-b"]
 
 
@@ -704,6 +708,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
         )
         ensure.assert_awaited_once()
         first_call = ensure.await_args
+        assert first_call is not None
         assert first_call.kwargs["transcript_path"] is None
         assert first_call.kwargs["external_id"] == "task-123"
         assert first_call.kwargs["batch_task_ids"] == ["task-a", "task-b"]
@@ -733,6 +738,7 @@ def test_sync_session_metadata_if_needed_tracks_session_and_transcript_markers(t
         )
         assert ensure.await_count == 2
         second_call = ensure.await_args
+        assert second_call is not None
         assert second_call.kwargs["transcript_path"] == tmp_path / "session.jsonl"
 
 
@@ -775,6 +781,7 @@ def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_p
         )
         assert state["live_ingest_checkpoint"] == first_checkpoint
         first_call = ingest.await_args
+        assert first_call is not None
         assert first_call.kwargs["checkpoint"] is None
 
         assert (
@@ -800,6 +807,7 @@ def test_sync_transcript_events_if_needed_tracks_line_count_and_checkpoint(tmp_p
         )
         assert ingest.await_count == 2
         second_call = ingest.await_args
+        assert second_call is not None
         assert second_call.kwargs["checkpoint"] == first_checkpoint
         assert state["live_ingest_checkpoint"] == second_checkpoint
 

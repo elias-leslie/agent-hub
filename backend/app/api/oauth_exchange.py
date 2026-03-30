@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.claude_auth import exchange_claude_code, parse_claude_auth_input
 from app.adapters.codex_auth import exchange_code as exchange_codex_code
+from app.adapters.codex_auth import serialize_stored_oauth_token
 from app.api.oauth_schemas import OAuthExchangeRequest
 from app.services.credential_upsert import upsert_credential
 
@@ -62,7 +63,7 @@ async def exchange_codex(
     """Exchange Codex OAuth code and store credentials. Returns email or None."""
     code, _state = parse_codex_input(body.code_input)
     creds = await exchange_codex_code(code, code_verifier)
-    await upsert_credential(db, "codex", "oauth_token", creds.access_token)
+    await upsert_credential(db, "codex", "oauth_token", serialize_stored_oauth_token(creds))
     if creds.refresh_token:
         await upsert_credential(db, "codex", "refresh_token", creds.refresh_token)
     return None

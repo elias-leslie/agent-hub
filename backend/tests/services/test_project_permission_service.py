@@ -21,6 +21,7 @@ from app.services.project_permission_service import (
     get_project_permission,
     get_tools_for_tier,
     list_project_permissions,
+    reconcile_registered_project_access,
     update_project_permission,
 )
 
@@ -170,6 +171,7 @@ class TestUpdateProjectPermission:
             result = await update_project_permission(
                 mock_db, "proj", permission_tier="yolo"
             )
+            assert result is not None
             assert result.permission_tier == "yolo"
             mock_db.commit.assert_awaited_once()
 
@@ -237,6 +239,7 @@ class TestUpdateProjectPermission:
                 mock_db, "test2", permission_tier="yolo"
             )
 
+        assert result is not None
         assert result.permission_tier == "yolo"
         assert summitflow_client.allowed_projects == '["summitflow", "test2"]'
         assert backend_client.allowed_projects == '["summitflow", "agent-hub", "test2"]'
@@ -280,6 +283,7 @@ class TestUpdateProjectPermission:
                 mock_db, "test2", permission_tier="off"
             )
 
+        assert result is not None
         assert result.permission_tier == "off"
         assert summitflow_client.allowed_projects == '["summitflow"]'
         assert backend_client.allowed_projects == '["summitflow", "agent-hub"]'
@@ -337,6 +341,98 @@ class TestCreateProjectPermission:
 
         with pytest.raises(ValueError, match="already exists"):
             await create_project_permission(mock_db, "proj")
+
+
+class TestReconcileRegisteredProjectAccess:
+    @pytest.mark.asyncio
+    async def test_repairs_missing_registered_project_access(self):
+        permissions = [
+            _make_permission("agent-hub", "read"),
+            _make_permission("summitflow", "yolo"),
+            _make_permission("test1", "yolo"),
+            _make_permission("vantage", "read"),
+            _make_permission("old-project", "off"),
+        ]
+        summitflow_client = MagicMock()
+        summitflow_client.id = "client-summitflow"
+        summitflow_client.display_name = "SummitFlow"
+        summitflow_client.allowed_projects = (
+            '["summitflow","st-cli","agent-hub","test1","old-project"]'
+        )
+        backend_client = MagicMock()
+        backend_client.id = "client-backend"
+        backend_client.display_name = "summitflow-backend"
+        backend_client.allowed_projects = '["summitflow","agent-hub","old-project"]'
+        other_client = MagicMock()
+        other_client.id = "client-other"
+        other_client.display_name = "Portfolio AI"
+        other_client.allowed_projects = '["portfolio-ai"]'
+
+        permission_result = MagicMock()
+        permission_scalars = MagicMock()
+        permission_scalars.all.return_value = permissions
+        permission_result.scalars.return_value = permission_scalars
+
+        client_result = MagicMock()
+        client_scalars = MagicMock()
+        client_scalars.all.return_value = [summitflow_client, backend_client, other_client]
+        client_result.scalars.return_value = client_scalars
+
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = [permission_result, client_result]
+
+        with patch("app.services.project_permission_service.invalidate_client_cache") as mock_invalidate:
+            changed = await reconcile_registered_project_access(mock_db)
+
+        assert changed == ["client-summitflow", "client-backend"]
+        assert summitflow_client.allowed_projects == (
+            '["summitflow", "st-cli", "agent-hub", "test1", "vantage"]'
+        )
+        assert backend_client.allowed_projects == '["summitflow", "agent-hub", "test1", "vantage"]'
+        assert other_client.allowed_projects == '["portfolio-ai"]'
+        mock_db.commit.assert_awaited_once()
+        mock_invalidate.assert_any_call("client-summitflow")
+        mock_invalidate.assert_any_call("client-backend")
+        assert mock_invalidate.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_noops_when_registered_access_is_aligned(self):
+        permissions = [
+            _make_permission("agent-hub", "read"),
+            _make_permission("summitflow", "yolo"),
+            _make_permission("test1", "yolo"),
+            _make_permission("vantage", "read"),
+        ]
+        summitflow_client = MagicMock()
+        summitflow_client.id = "client-summitflow"
+        summitflow_client.display_name = "SummitFlow"
+        summitflow_client.allowed_projects = (
+            '["summitflow","st-cli","agent-hub","test1","vantage"]'
+        )
+        backend_client = MagicMock()
+        backend_client.id = "client-backend"
+        backend_client.display_name = "summitflow-backend"
+        backend_client.allowed_projects = '["summitflow","agent-hub","test1","vantage"]'
+
+        permission_result = MagicMock()
+        permission_scalars = MagicMock()
+        permission_scalars.all.return_value = permissions
+        permission_result.scalars.return_value = permission_scalars
+
+        client_result = MagicMock()
+        client_scalars = MagicMock()
+        client_scalars.all.return_value = [summitflow_client, backend_client]
+        client_result.scalars.return_value = client_scalars
+
+        mock_db = AsyncMock()
+        mock_db.execute.side_effect = [permission_result, client_result]
+
+        with patch("app.services.project_permission_service.invalidate_client_cache") as mock_invalidate:
+            changed = await reconcile_registered_project_access(mock_db)
+
+        assert changed == []
+        mock_db.commit.assert_not_awaited()
+        mock_invalidate.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_tier(self):

@@ -23,6 +23,16 @@
 
 set -o pipefail
 
+reset_command_guard_shell_state() {
+    local guarded_word
+    for guarded_word in ${SF_COMMAND_GUARD_WORDS:-}; do
+        unset -f "$guarded_word" 2>/dev/null || true
+    done
+    unset BASH_ENV SF_COMMAND_GUARD_BIN SF_COMMAND_GUARD_WORDS SF_COMMAND_GUARD_PREV_BASH_ENV
+}
+
+reset_command_guard_shell_state
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -31,6 +41,8 @@ set -o pipefail
 PROJECT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 PROJECT_NAME=$(basename "$PROJECT_DIR")
 WORKSPACES_ROOT="${ST_WORKSPACES_ROOT:-/srv/workspaces}"
+CURRENT_CONTEXT_ROOT=""
+CURRENT_CONTEXT_PROJECT=""
 
 # Source credentials from ~/.env.local
 if [[ -f ~/.env.local ]]; then
@@ -47,8 +59,62 @@ declare -A DB_URLS=(
     ["hatchet"]="${HATCHET_DATABASE_URL:-postgresql://db_admin@localhost:5432/hatchet?sslmode=disable}"
 )
 
+read_project_id_from_index() {
+    local root="$1"
+    local index_path="$root/.index.yaml"
+
+    if [[ ! -f "$index_path" ]]; then
+        return 1
+    fi
+
+    awk '
+        /^project:[[:space:]]*/ {
+            sub(/^project:[[:space:]]*/, "", $0)
+            gsub(/["'"'"']/, "", $0)
+            if ($0 != "") {
+                print $0
+                exit
+            }
+        }
+    ' "$index_path"
+}
+
+detect_local_project_context() {
+    local candidate="${1:-$PWD}"
+
+    while [[ -n "$candidate" ]]; do
+        if [[ -f "$candidate/.index.yaml" ]]; then
+            local project_id
+            project_id="$(read_project_id_from_index "$candidate")"
+            if [[ -n "$project_id" ]]; then
+                CURRENT_CONTEXT_ROOT="$candidate"
+                CURRENT_CONTEXT_PROJECT="$project_id"
+                return 0
+            fi
+        fi
+
+        if [[ "$candidate" == "/" ]]; then
+            break
+        fi
+        candidate="$(dirname "$candidate")"
+    done
+
+    return 1
+}
+
+detect_local_project_context "$PWD" || detect_local_project_context "$PROJECT_DIR" || true
+if [[ -n "$CURRENT_CONTEXT_PROJECT" ]]; then
+    PROJECT_NAME="$CURRENT_CONTEXT_PROJECT"
+    PROJECT_DIR="$CURRENT_CONTEXT_ROOT"
+fi
+
 resolve_project_root() {
     local project="$1"
+
+    if [[ -n "$CURRENT_CONTEXT_ROOT" && -n "$CURRENT_CONTEXT_PROJECT" && "$CURRENT_CONTEXT_PROJECT" == "$project" ]]; then
+        printf '%s\n' "$CURRENT_CONTEXT_ROOT"
+        return 0
+    fi
 
     if command -v st >/dev/null 2>&1; then
         local root
@@ -138,7 +204,8 @@ Notes:
   - db query -t/--plain emits unformatted rows for shell composition
   - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE/CREATE)
   - db ddl allows safe DDL: CREATE INDEX, CREATE INDEX IF NOT EXISTS, ALTER TABLE ADD
-  - Auto-detects project from git root directory name
+  - Auto-detects project from repo-local .index.yaml when available
+  - When invoked inside a claimed worktree, migration commands prefer that worktree root for the matching project
   - Auxiliary projects use <PROJECT>_DB_URL (example: test2 -> TEST2_DB_URL)
   - Migration commands require alembic in <root>/backend/ or <root>/
 EOF
@@ -553,16 +620,18 @@ run_alembic() {
     local db_url
     get_db_url "$PROJECT_NAME" || return 1
     db_url="$DB_URL_RESULT"
+    local project_db_var
+    project_db_var="$(project_db_env_var "$PROJECT_NAME")"
 
     # Prefer project venv alembic so migrations run with project-local deps.
     if [[ -x "$alembic_dir/.venv/bin/alembic" ]]; then
-        (cd "$alembic_dir" && DATABASE_URL="$db_url" "$alembic_dir/.venv/bin/alembic" "$@") 2>&1
+        (cd "$alembic_dir" && env DATABASE_URL="$db_url" "$project_db_var=$db_url" "$alembic_dir/.venv/bin/alembic" "$@") 2>&1
         return $?
     fi
 
     # Host alembic on PATH
     if command -v alembic &>/dev/null; then
-        (cd "$alembic_dir" && DATABASE_URL="$db_url" alembic "$@") 2>&1
+        (cd "$alembic_dir" && env DATABASE_URL="$db_url" "$project_db_var=$db_url" alembic "$@") 2>&1
         return $?
     fi
 
@@ -596,6 +665,20 @@ run_alembic() {
 cmd_migrate() {
     local subcmd="${1:-status}"
     shift || true
+
+    if [[ "$subcmd" == "--help" || "$subcmd" == "-h" ]]; then
+        cat << 'EOF'
+Usage: db migrate <subcommand> [args]
+
+Subcommands:
+  status              Show current revision and pending migrations
+  upgrade [rev]       Apply pending migrations or upgrade to revision
+  downgrade <rev>     Downgrade to revision (use -1 for one step back)
+  history [n]         Show recent migration history
+  create "message"    Create a new migration revision
+EOF
+        return 0
+    fi
 
     case "$subcmd" in
         status)
@@ -718,6 +801,11 @@ cmd_migrate_history() {
 
 cmd_migrate_create() {
     local message="$1"
+
+    if [[ "$message" == "--help" || "$message" == "-h" ]]; then
+        echo 'Usage: db migrate create "description"'
+        return 0
+    fi
 
     if [[ -z "$message" ]]; then
         error "Message required. Usage: db migrate create \"description\""

@@ -13,6 +13,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
@@ -67,17 +68,25 @@ def _base64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data)
 
 
-def extract_account_id(access_token: str) -> str:
-    """Extract ``chatgpt_account_id`` from a JWT access token.
-
-    The token is *not* signature-verified -- we only need the claim.
-    """
+def _load_jwt_payload(access_token: str) -> dict[str, Any]:
+    """Decode the unsigned JWT payload for local claim inspection."""
     parts = access_token.split(".")
     if len(parts) != 3:
         raise ValueError("Invalid JWT: expected 3 dot-separated segments")
 
     payload_bytes = _base64url_decode(parts[1])
-    payload: dict = json.loads(payload_bytes)
+    payload = json.loads(payload_bytes)
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid JWT payload: expected object")
+    return payload
+
+
+def extract_account_id(access_token: str) -> str:
+    """Extract ``chatgpt_account_id`` from a JWT access token.
+
+    The token is *not* signature-verified -- we only need the claim.
+    """
+    payload = _load_jwt_payload(access_token)
 
     auth_claim = payload.get(JWT_CLAIM_PATH)
     if not isinstance(auth_claim, dict):
@@ -88,6 +97,51 @@ def extract_account_id(access_token: str) -> str:
         raise ValueError("JWT missing chatgpt_account_id in auth claim")
 
     return account_id
+
+
+def extract_expires_at(access_token: str) -> float | None:
+    """Extract the JWT ``exp`` claim, if present."""
+    payload = _load_jwt_payload(access_token)
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)):
+        return float(exp)
+    return None
+
+
+def parse_stored_oauth_token(raw_value: str | None) -> tuple[str | None, float | None]:
+    """Parse a stored Codex OAuth token value.
+
+    Supports both the legacy raw-JWT format and the structured JSON format used
+    for refreshed tokens.
+    """
+    if not raw_value:
+        return None, None
+
+    try:
+        data = json.loads(raw_value)
+    except (json.JSONDecodeError, TypeError):
+        return raw_value, extract_expires_at(raw_value)
+
+    if not isinstance(data, dict):
+        return raw_value, extract_expires_at(raw_value)
+
+    access_token = data.get("access_token")
+    if not isinstance(access_token, str) or not access_token:
+        return None, None
+
+    expires_at = data.get("expires_at")
+    if isinstance(expires_at, (int, float)):
+        return access_token, float(expires_at)
+
+    return access_token, extract_expires_at(access_token)
+
+
+def serialize_stored_oauth_token(credentials: CodexCredentials) -> str:
+    """Serialize Codex credentials for durable storage."""
+    payload: dict[str, Any] = {"access_token": credentials.access_token}
+    if credentials.expires_at is not None:
+        payload["expires_at"] = credentials.expires_at
+    return json.dumps(payload)
 
 
 # ---------------------------------------------------------------------------

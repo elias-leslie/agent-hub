@@ -20,8 +20,14 @@ class SharedCommandGuard:
     words: str
 
 
+def _guard_assets_exist(resolved: SharedCommandGuard | None) -> bool:
+    if resolved is None:
+        return False
+    return Path(resolved.guard_bin).exists() and Path(resolved.bash_env).exists()
+
+
 @lru_cache(maxsize=1)
-def resolve_shared_command_guard() -> SharedCommandGuard | None:
+def _resolve_shared_command_guard_cached() -> SharedCommandGuard | None:
     """Resolve the shared command guard binaries and intercept metadata."""
     scripts_dir = resolve_summitflow_scripts_dir()
     if scripts_dir is None:
@@ -53,6 +59,19 @@ def resolve_shared_command_guard() -> SharedCommandGuard | None:
         bash_env=str(bash_env),
         words=words,
     )
+
+
+def resolve_shared_command_guard() -> SharedCommandGuard | None:
+    """Resolve the shared command guard binaries and recover from stale cached paths."""
+    resolved = _resolve_shared_command_guard_cached()
+    if _guard_assets_exist(resolved):
+        return resolved
+
+    resolve_summitflow_scripts_dir.cache_clear()
+    _resolve_shared_command_guard_cached.cache_clear()
+
+    resolved = _resolve_shared_command_guard_cached()
+    return resolved if _guard_assets_exist(resolved) else None
 
 
 def build_command_guard_env_overlay() -> dict[str, str]:
