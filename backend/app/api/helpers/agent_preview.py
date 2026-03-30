@@ -61,7 +61,7 @@ async def _build_task_prompt_preview(
     if task_type == "heartbeat":
         from app.adapters.registry import get_provider_for_model
         from app.workflows._heartbeat_prompt import build_heartbeat_prompt
-        from app.workflows.persona_heartbeat import get_model_review_status
+        from app.workflows._heartbeat_redis import get_model_review_status
 
         model_review_due, model_review_label = await get_model_review_status()
         provider = get_provider_for_model(agent.primary_model_id)
