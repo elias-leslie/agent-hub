@@ -335,7 +335,13 @@ def _format_dashboard_sections(
     passed = sum(int(r.passed_attempt_count or 0) for r in runs)
     scores = [float(r.avg_score) for r in runs if r.avg_score is not None]
     seen: set[str] = set()
-    tracked = [m for r in runs for m in (r.models or []) if m not in seen and not seen.add(m)]  # type: ignore[func-returns-value]
+    tracked: list[str] = []
+    for run in runs:
+        for model in run.models or []:
+            if model in seen:
+                continue
+            seen.add(model)
+            tracked.append(model)
     overview = {
         "total_runs": len(runs),
         "avg_score": round(sum(scores) / len(scores), 1) if scores else 0.0,

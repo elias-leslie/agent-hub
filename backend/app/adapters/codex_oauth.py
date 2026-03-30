@@ -27,7 +27,9 @@ from app.adapters.base import (
 from app.adapters.codex_auth import (
     CodexCredentials,
     extract_account_id,
+    parse_stored_oauth_token,
     refresh_access_token,
+    serialize_stored_oauth_token,
 )
 from app.adapters.codex_sse import (
     CODEX_API_URL,
@@ -221,38 +223,70 @@ class CodexOAuthAdapter(ProviderAdapter):
 
             cm = get_credential_manager()
             if cm.is_initialized:
-                token = cm.get("codex", "oauth_token") or cm.get_api_key("codex")
+                token_value = cm.get("codex", "oauth_token") or cm.get_api_key("codex")
                 refresh = cm.get("codex", "refresh_token")
-                if token:
+                access_token, expires_at = parse_stored_oauth_token(token_value)
+                if access_token:
                     self._credentials = CodexCredentials(
-                        access_token=token,
+                        access_token=access_token,
                         refresh_token=refresh,
-                        account_id=extract_account_id(token),
+                        account_id=extract_account_id(access_token),
+                        expires_at=expires_at,
                     )
                     return self._credentials
         except Exception:
             logger.warning("Credential refresh failed", exc_info=True)
         raise AuthenticationError(provider="codex")
 
+    async def _persist_credentials(self, credentials: CodexCredentials) -> None:
+        """Persist refreshed Codex credentials to cache and DB."""
+        token_value = serialize_stored_oauth_token(credentials)
+
+        try:
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            cm.set("codex", "oauth_token", token_value)
+            if credentials.refresh_token:
+                cm.set("codex", "refresh_token", credentials.refresh_token)
+        except Exception:
+            logger.warning("Failed to update Codex credentials in cache", exc_info=True)
+
+        try:
+            from app.db import async_session
+            from app.services.credential_upsert import upsert_credential
+
+            async with async_session() as db:
+                await upsert_credential(db, "codex", "oauth_token", token_value)
+                if credentials.refresh_token:
+                    await upsert_credential(db, "codex", "refresh_token", credentials.refresh_token)
+        except Exception:
+            logger.warning("Failed to persist refreshed Codex token to DB", exc_info=True)
+
     async def _ensure_fresh_credentials(self) -> CodexCredentials:
         creds = self._get_credentials()
-        if not creds.is_expired or not creds.refresh_token:
+        if not creds.is_expired:
             return creds
+        if not creds.refresh_token:
+            raise AuthenticationError(provider="codex")
         async with self._refresh_lock:
             creds = self._get_credentials()
             if not creds.is_expired:
                 return creds
+            if not creds.refresh_token:
+                raise AuthenticationError(provider="codex")
             logger.info("Codex access token expired, refreshing...")
             try:
                 cached = await asyncio.to_thread(read_cached_token, creds.refresh_token)
                 new_creds = cached if cached is not None else await refresh_access_token(creds.refresh_token)
                 if cached is None:
                     await asyncio.to_thread(write_cached_token, new_creds)
+                await self._persist_credentials(new_creds)
                 self._credentials = new_creds
                 return new_creds
-            except Exception:
-                logger.warning("Codex token refresh failed, using existing token")
-                return creds
+            except Exception as exc:
+                logger.warning("Codex token refresh failed", exc_info=True)
+                raise AuthenticationError(provider="codex") from exc
 
     async def complete(
         self,

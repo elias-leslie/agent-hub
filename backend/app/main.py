@@ -18,6 +18,7 @@ from app.services.credential_manager import get_credential_manager
 from app.services.events import stop_all_stream_bridges
 from app.services.memory.scope_normalization import normalize_legacy_scope_rows
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
+from app.services.project_permission_service import reconcile_registered_project_access
 from app.services.telemetry import init_telemetry
 
 # Configure logging for application modules (must be after imports)
@@ -57,6 +58,20 @@ async def _startup() -> None:
             logger.info("Memory scope integrity check passed")
     except Exception as e:
         logger.warning("Failed memory scope normalization at startup: %s", e)
+
+    try:
+        async with async_session() as db:
+            changed_client_ids = await reconcile_registered_project_access(db)
+        if changed_client_ids:
+            logger.warning(
+                "Reconciled registered project access for %d SummitFlow-owned client(s): %s",
+                len(changed_client_ids),
+                ", ".join(changed_client_ids),
+            )
+        else:
+            logger.info("Registered project access already aligned")
+    except Exception as e:
+        logger.warning("Failed registered project access reconciliation at startup: %s", e)
 
     from app.services.health_prober import init_health_prober
     prober = init_health_prober()

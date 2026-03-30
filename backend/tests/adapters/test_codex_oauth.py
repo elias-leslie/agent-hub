@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
+import time
+from collections.abc import AsyncIterator
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import httpx
@@ -11,6 +16,35 @@ import pytest
 from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
 from app.adapters.codex_auth import CodexCredentials
 from app.adapters.codex_oauth import CodexOAuthAdapter
+
+
+def _build_codex_jwt(*, account_id: str = "acct", expires_at: float | None = None) -> str:
+    header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').rstrip(b"=").decode()
+    payload = {
+        "https://api.openai.com/auth": {"chatgpt_account_id": account_id},
+    }
+    if expires_at is not None:
+        payload["exp"] = int(expires_at)
+    payload_part = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
+    return f"{header}.{payload_part}.sig"
+
+
+class _FakeCredentialManager:
+    def __init__(self, oauth_token: str | None, refresh_token: str | None) -> None:
+        self.is_initialized = True
+        self.values = {
+            "codex:oauth_token": oauth_token,
+            "codex:refresh_token": refresh_token,
+        }
+
+    def get(self, provider: str, credential_type: str) -> str | None:
+        return self.values.get(f"{provider}:{credential_type}")
+
+    def get_api_key(self, provider: str) -> str | None:
+        return self.values.get(f"{provider}:api_key")
+
+    def set(self, provider: str, credential_type: str, value: str) -> None:
+        self.values[f"{provider}:{credential_type}"] = value
 
 
 @pytest.mark.asyncio
@@ -23,7 +57,7 @@ async def test_complete_with_tools_emits_tool_events_and_done() -> None:
             expires_at=9_999_999_999,
         )
     )
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         side_effect=[
             CompletionResult(
                 content="Checking repo",
@@ -45,6 +79,7 @@ async def test_complete_with_tools_emits_tool_events_and_done() -> None:
             ),
         ]
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock(return_value="readme contents")
 
@@ -78,7 +113,7 @@ async def test_complete_with_tools_max_turns_exhaustion() -> None:
         )
     )
     # Always returns tool_use so the loop never terminates naturally.
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         return_value=CompletionResult(
             content="",
             model="gpt-5.4",
@@ -89,6 +124,7 @@ async def test_complete_with_tools_max_turns_exhaustion() -> None:
             tool_calls=[ToolCallResult(id="call_x", name="noop", input={})],
         )
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock(return_value="ok")
 
@@ -118,7 +154,7 @@ async def test_complete_with_tools_empty_tool_calls_ends_immediately() -> None:
             expires_at=9_999_999_999,
         )
     )
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         return_value=CompletionResult(
             content="All done",
             model="gpt-5.4",
@@ -129,6 +165,7 @@ async def test_complete_with_tools_empty_tool_calls_ends_immediately() -> None:
             tool_calls=[],
         )
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock()
 
@@ -158,7 +195,7 @@ async def test_complete_with_tools_multiple_tool_calls_per_turn() -> None:
             expires_at=9_999_999_999,
         )
     )
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         side_effect=[
             CompletionResult(
                 content="",
@@ -183,6 +220,7 @@ async def test_complete_with_tools_multiple_tool_calls_per_turn() -> None:
             ),
         ]
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock(return_value="result")
 
@@ -220,7 +258,7 @@ async def test_complete_with_tools_retries_empty_final_response_once() -> None:
             expires_at=9_999_999_999,
         )
     )
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         side_effect=[
             CompletionResult(
                 content="",
@@ -251,6 +289,7 @@ async def test_complete_with_tools_retries_empty_final_response_once() -> None:
             ),
         ]
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock(return_value="ok")
 
@@ -266,7 +305,7 @@ async def test_complete_with_tools_retries_empty_final_response_once() -> None:
 
     assert any(e.type == "content" and e.content == "No further changes needed." for e in events)
     assert events[-1].type == "done"
-    assert adapter._complete_from_input.await_count == 3
+    assert complete_from_input.await_count == 3
 
 
 @pytest.mark.asyncio
@@ -279,7 +318,7 @@ async def test_complete_with_tools_disables_transport_timeout_for_tool_turns() -
             expires_at=9_999_999_999,
         )
     )
-    adapter._complete_from_input = AsyncMock(
+    complete_from_input = AsyncMock(
         return_value=CompletionResult(
             content="Done",
             model="gpt-5.4",
@@ -290,6 +329,7 @@ async def test_complete_with_tools_disables_transport_timeout_for_tool_turns() -
             tool_calls=[],
         )
     )
+    cast(Any, adapter)._complete_from_input = complete_from_input
 
     tool_handler = AsyncMock()
 
@@ -304,7 +344,8 @@ async def test_complete_with_tools_disables_transport_timeout_for_tool_turns() -
         events.append(event)
 
     assert events[-1].type == "done"
-    assert adapter._complete_from_input.await_args.kwargs["request_timeout"] is None
+    assert complete_from_input.await_args is not None
+    assert complete_from_input.await_args.kwargs["request_timeout"] is None
 
 
 @pytest.mark.asyncio
@@ -439,7 +480,7 @@ async def test_stream_preserves_events_and_closes_owned_session(
         async def close(self) -> None:
             lifecycle.append("close")
 
-    async def fake_iter_stream_events(response: object) -> asyncio.AsyncIterator[StreamEvent]:
+    async def fake_iter_stream_events(response: object) -> AsyncIterator[StreamEvent]:
         assert response is not None
         yield StreamEvent(type="content", content="hello")
         yield StreamEvent(type="done", input_tokens=3, output_tokens=2, finish_reason="stop")
@@ -493,7 +534,7 @@ async def test_stream_interrupts_owned_session_on_abort_event(
         async def close(self) -> None:
             lifecycle.append("close")
 
-    async def fake_iter_stream_events(response: object) -> asyncio.AsyncIterator[StreamEvent]:
+    async def fake_iter_stream_events(response: object) -> AsyncIterator[StreamEvent]:
         assert response is not None
         yield StreamEvent(type="content", content="hello")
         session = holder["session"]
@@ -520,3 +561,86 @@ async def test_stream_interrupts_owned_session_on_abort_event(
         ("done", "", "cancelled"),
     ]
     assert lifecycle == ["start", "interrupt", "close"]
+
+
+def test_init_derives_expiry_from_legacy_stored_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
+    expires_at = time.time() + 3600
+    cm = _FakeCredentialManager(_build_codex_jwt(expires_at=expires_at), "refresh-token")
+
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+
+    adapter = CodexOAuthAdapter()
+
+    assert adapter._credentials is not None
+    assert adapter._credentials.refresh_token == "refresh-token"
+    assert adapter._credentials.expires_at == pytest.approx(expires_at, abs=1)
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_credentials_persists_refreshed_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expired_at = time.time() - 300
+    refreshed_at = time.time() + 3600
+    adapter = CodexOAuthAdapter(
+        credentials=CodexCredentials(
+            access_token=_build_codex_jwt(expires_at=expired_at),
+            refresh_token="old-refresh",
+            account_id="acct",
+            expires_at=expired_at,
+        )
+    )
+    refreshed = CodexCredentials(
+        access_token=_build_codex_jwt(expires_at=refreshed_at),
+        refresh_token="new-refresh",
+        account_id="acct",
+        expires_at=refreshed_at,
+    )
+    assert adapter._credentials is not None
+    cm = _FakeCredentialManager(adapter._credentials.access_token, "old-refresh")
+    upsert_calls: list[tuple[str, str, str]] = []
+
+    class _FakeAsyncSession:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    async def _fake_upsert(_db: object, provider: str, credential_type: str, value: str) -> None:
+        upsert_calls.append((provider, credential_type, value))
+
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+    monkeypatch.setattr("app.adapters.codex_oauth.read_cached_token", lambda _refresh: None)
+    monkeypatch.setattr("app.adapters.codex_oauth.write_cached_token", lambda _creds: None)
+    monkeypatch.setattr("app.adapters.codex_oauth.refresh_access_token", AsyncMock(return_value=refreshed))
+    monkeypatch.setattr("app.db.async_session", lambda: _FakeAsyncSession())
+    monkeypatch.setattr("app.services.credential_upsert.upsert_credential", _fake_upsert)
+
+    result = await adapter._ensure_fresh_credentials()
+
+    assert result.access_token == refreshed.access_token
+    assert json.loads(cm.values["codex:oauth_token"]) == {
+        "access_token": refreshed.access_token,
+        "expires_at": refreshed.expires_at,
+    }
+    assert cm.values["codex:refresh_token"] == "new-refresh"
+    assert ("codex", "refresh_token", "new-refresh") in upsert_calls
+    oauth_writes = [value for provider, kind, value in upsert_calls if provider == "codex" and kind == "oauth_token"]
+    assert len(oauth_writes) == 1
+    assert json.loads(oauth_writes[0]) == {
+        "access_token": refreshed.access_token,
+        "expires_at": refreshed.expires_at,
+    }
+
+
+@pytest.mark.asyncio
+async def test_health_check_fails_for_expired_credential_without_refresh_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cm = _FakeCredentialManager(_build_codex_jwt(expires_at=time.time() - 300), None)
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+
+    adapter = CodexOAuthAdapter()
+
+    assert await adapter.health_check() is False

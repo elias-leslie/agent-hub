@@ -5,8 +5,8 @@ import json
 from typing import Any
 
 from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
-from scripts.persona_benchmark_eval import (
-    PersonaBenchmarkRun,
+from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+from scripts.persona_benchmark_scoring import (
     _load_first_json_object,
     _strip_leading_narration_tags,
     strip_markdown_fences,

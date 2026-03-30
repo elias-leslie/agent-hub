@@ -251,6 +251,29 @@ async def list_project_permissions(db: AsyncSession) -> list[ProjectPermission]:
     return list(result.scalars().all())
 
 
+def _merge_synced_allowed_projects(
+    current_projects: list[str],
+    managed_project_ids: list[str],
+    enabled_project_ids: list[str],
+) -> list[str]:
+    """Return the normalized allowed-project list for SummitFlow-owned clients."""
+    managed_project_set = set(managed_project_ids)
+    enabled_project_set = set(enabled_project_ids)
+
+    merged: list[str] = []
+    for project_id in current_projects:
+        if project_id in managed_project_set and project_id not in enabled_project_set:
+            continue
+        if project_id not in merged:
+            merged.append(project_id)
+
+    for project_id in enabled_project_ids:
+        if project_id not in merged:
+            merged.append(project_id)
+
+    return merged
+
+
 def _parse_allowed_projects_json(allowed_projects: str | None) -> list[str]:
     """Return a normalized allowed-project list from stored JSON."""
     if not allowed_projects:
@@ -297,6 +320,43 @@ async def _sync_registered_project_access(
                 [value for value in current_projects if value != project_id]
             )
             changed_client_ids.append(str(client.id))
+    return changed_client_ids
+
+
+async def reconcile_registered_project_access(db: AsyncSession) -> list[str]:
+    """Repair SummitFlow-owned client access against current project permissions."""
+    permission_result = await db.execute(
+        select(ProjectPermission).order_by(ProjectPermission.project_id)
+    )
+    permissions = list(permission_result.scalars().all())
+    managed_project_ids = [perm.project_id for perm in permissions]
+    enabled_project_ids = [
+        perm.project_id for perm in permissions if str(perm.permission_tier).strip().lower() != "off"
+    ]
+
+    client_result = await db.execute(select(Client))
+    clients = list(client_result.scalars().all())
+
+    changed_client_ids: list[str] = []
+    for client in clients:
+        if not _should_sync_registered_project_access(client):
+            continue
+        current_projects = _parse_allowed_projects_json(client.allowed_projects)
+        desired_projects = _merge_synced_allowed_projects(
+            current_projects,
+            managed_project_ids,
+            enabled_project_ids,
+        )
+        if desired_projects == current_projects:
+            continue
+        client.allowed_projects = json.dumps(desired_projects)
+        changed_client_ids.append(str(client.id))
+
+    if changed_client_ids:
+        await db.commit()
+        for client_id in changed_client_ids:
+            invalidate_client_cache(client_id)
+
     return changed_client_ids
 
 

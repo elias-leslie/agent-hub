@@ -339,7 +339,11 @@ async def research_web(
         return err
 
     effective_focus = _normalize_whitespace(focus_query or normalized_query)
-    page_raw = await fetch_web_page(url=selected_url, max_chars=max_chars, focus_query=effective_focus)  # type: ignore[arg-type]
+    page_raw = await fetch_web_page(
+        url=selected_url,
+        max_chars=max_chars,
+        focus_query=effective_focus,
+    )
     page_payload, err = _decode_step(page_raw, "fetch_web_page", "fetch step")
     if err:
         return err
