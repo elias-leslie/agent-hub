@@ -41,60 +41,57 @@ from app.workflows._heartbeat_state import (
 
 logger = logging.getLogger(__name__)
 
+# Time window constants
 _COMPLETED_SESSION_LOOKBACK_HOURS = 2
 _COMPLETED_SESSION_LIMIT = 10
 
+# Task overview section definitions: (header_prefix, bucket_key, output_label, always_count_one)
+# Projects always renders as count=1 for single-project filters.
+_TASK_SECTIONS: tuple[tuple[str, str, str, bool], ...] = (
+    ("PROJECTS[",          "projects", "PROJECTS",          True),
+    ("ACTIONABLE-READY[",  "ready",    "ACTIONABLE-READY",  False),
+    ("ACTIONABLE-BLOCKED[","blocked",  "ACTIONABLE-BLOCKED", False),
+    ("ACTIONABLE-STALE[",  "stale",    "ACTIONABLE-STALE",  False),
+)
 
-# ---------------------------------------------------------------------------
-# Task overview resolution helpers
-# ---------------------------------------------------------------------------
+# Session / lane classification constants
+_SESSION_STATUS_COMPLETED = "completed"
+_PERSONA_AGENT_SLUG = "persona"
+_LANE_RECONCILED = "reconciled"
+
+# Cleanup response payload keys
+_CLEANUP_KEY_COMPACT = "compact"
+_CLEANUP_KEY_PAYLOAD = "payload"
+
+# Display labels
+_SPECIALIST_SESSIONS_HEADER = "Active specialist sessions:"
+
+
+# --- Task overview resolution helpers ---
 
 
 def _filter_task_overview_for_project(task_overview: str, project_id: str) -> str:
     """Return the compact task overview narrowed to one project."""
     if not task_overview or not project_id:
         return task_overview
-    project_lines: list[str] = []
-    ready_lines: list[str] = []
-    blocked_lines: list[str] = []
-    stale_lines: list[str] = []
-    current_section: str | None = None
+    buckets: dict[str, list[str]] = {key: [] for _, key, _, _ in _TASK_SECTIONS}
+    current_key: str | None = None
     project_prefix = f"- {project_id} |"
     for raw_line in task_overview.splitlines():
         line = raw_line.rstrip()
         if not line:
             continue
-        if line.startswith("PROJECTS["):
-            current_section = "projects"
+        matched = next((key for pfx, key, _, _ in _TASK_SECTIONS if line.startswith(pfx)), None)
+        if matched is not None:
+            current_key = matched
             continue
-        if line.startswith("ACTIONABLE-READY["):
-            current_section = "ready"
-            continue
-        if line.startswith("ACTIONABLE-BLOCKED["):
-            current_section = "blocked"
-            continue
-        if line.startswith("ACTIONABLE-STALE["):
-            current_section = "stale"
-            continue
-        if not line.startswith(project_prefix):
-            continue
-        if current_section == "projects":
-            project_lines.append(line)
-        elif current_section == "ready":
-            ready_lines.append(line)
-        elif current_section == "blocked":
-            blocked_lines.append(line)
-        elif current_section == "stale":
-            stale_lines.append(line)
+        if current_key and line.startswith(project_prefix):
+            buckets[current_key].append(line)
     sections: list[str] = []
-    if project_lines:
-        sections.append("PROJECTS[1]\n" + "\n".join(project_lines))
-    if ready_lines:
-        sections.append(f"ACTIONABLE-READY[{len(ready_lines)}]\n" + "\n".join(ready_lines))
-    if blocked_lines:
-        sections.append(f"ACTIONABLE-BLOCKED[{len(blocked_lines)}]\n" + "\n".join(blocked_lines))
-    if stale_lines:
-        sections.append(f"ACTIONABLE-STALE[{len(stale_lines)}]\n" + "\n".join(stale_lines))
+    for _, key, label, is_single in _TASK_SECTIONS:
+        if buckets[key]:
+            count = 1 if is_single else len(buckets[key])
+            sections.append(f"{label}[{count}]\n" + "\n".join(buckets[key]))
     return "\n\n".join(sections)
 
 
@@ -165,9 +162,27 @@ async def _resolve_workstream_task_context(
     )
 
 
-# ---------------------------------------------------------------------------
-# Completed session helpers
-# ---------------------------------------------------------------------------
+async def _coerce_task_overview(
+    task_overview: str | None,
+    task_overview_payload: dict[str, object] | None,
+    heartbeat_state: SummitFlowHeartbeatState | None,
+    target_project_id: str | None,
+) -> str:
+    """Resolve task overview text from state, payload, or raw fetch."""
+    from app.workflows._heartbeat_data import _fetch_task_overview
+
+    if task_overview_payload is None and heartbeat_state is not None:
+        task_overview_payload = heartbeat_state.task_overview_payload
+    if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
+        task_overview = heartbeat_state.task_overview_raw
+    if task_overview is None and task_overview_payload is not None:
+        task_overview = build_compact_task_overview_from_payload(task_overview_payload)
+    if task_overview is None:
+        task_overview = await _fetch_task_overview(target_project_id)
+    return task_overview or ""
+
+
+# --- Completed session helpers ---
 
 
 async def _query_completed_sessions_with_summaries(
@@ -190,10 +205,10 @@ async def _query_completed_sessions_with_summaries(
                 Session.external_id, Session.summary_oneliner, Session.created_at,
             )
             .where(and_(
-                Session.status == "completed",
+                Session.status == _SESSION_STATUS_COMPLETED,
                 Session.created_at >= cutoff,
                 Session.summary_oneliner.isnot(None),
-                Session.agent_slug != "persona",
+                Session.agent_slug != _PERSONA_AGENT_SLUG,
                 Session.project_id == target_project_id if target_project_id else True,
             ))
             .order_by(Session.created_at.desc())
@@ -220,7 +235,7 @@ def _is_valid_summary_result(summary_result: object) -> bool:
     return bool(
         getattr(summary_result, "summary", None)
         and getattr(summary_result, "has_summary_tag", False)
-        and getattr(summary_result, "summary_outcome", None) == "completed"
+        and getattr(summary_result, "summary_outcome", None) == _SESSION_STATUS_COMPLETED
         and not getattr(summary_result, "has_unresolved_blocker", False)
     )
 
@@ -249,9 +264,7 @@ def _render_completed_session_rows(
     return rendered_rows
 
 
-# ---------------------------------------------------------------------------
-# State collectors
-# ---------------------------------------------------------------------------
+# --- State collectors ---
 
 
 async def _collect_summitflow_heartbeat_state(
@@ -300,9 +313,7 @@ async def _collect_agent_hub_heartbeat_state(
     )
 
 
-# ---------------------------------------------------------------------------
-# Heartbeat section builders
-# ---------------------------------------------------------------------------
+# --- Heartbeat section builders ---
 
 
 def _filter_reconciled_cleanup_items(
@@ -318,15 +329,13 @@ def _filter_reconciled_cleanup_items(
 
     if not items or not workstream_rows:
         return items
-
     reconciled_task_keys: set[tuple[str, str]] = set()
     for (project_id, _lane_key), lane_rows in _group_rows_by_lane(workstream_rows).items():
-        if _classify_workstream_lane(lane_rows) != "reconciled":
+        if _classify_workstream_lane(lane_rows) != _LANE_RECONCILED:
             continue
         task_id = _infer_lane_task_id(lane_rows)
         if task_id:
             reconciled_task_keys.add((project_id, task_id))
-
     if not reconciled_task_keys:
         return items
     return [
@@ -401,7 +410,7 @@ async def _get_active_specialist_inventory(
         for row in rows:
             key = (str(row["project_id"]), str(row["agent_slug"]))
             grouped.setdefault(key, []).append(row)
-        lines = ["Active specialist sessions:"]
+        lines = [_SPECIALIST_SESSIONS_HEADER]
         for (project_id, agent_slug), group_rows in sorted(grouped.items()):
             lines.append(_format_specialist_group_line(project_id, agent_slug, group_rows))
         body = "\n".join(lines)
@@ -423,17 +432,11 @@ async def _get_active_work_summary(
     from app.workflows._heartbeat_data import (
         _fetch_active_sessions_section,
         _fetch_recently_completed_sessions_section,
-        _fetch_task_overview,
     )
 
-    if task_overview_payload is None and heartbeat_state is not None:
-        task_overview_payload = heartbeat_state.task_overview_payload
-    if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
-        task_overview = heartbeat_state.task_overview_raw
-    if task_overview is None and task_overview_payload is not None:
-        task_overview = build_compact_task_overview_from_payload(task_overview_payload)
-    if task_overview is None:
-        task_overview = await _fetch_task_overview(target_project_id)
+    task_overview = await _coerce_task_overview(
+        task_overview, task_overview_payload, heartbeat_state, target_project_id
+    )
     visible_task_overview = (
         _filter_task_overview_for_project(task_overview, target_project_id)
         if target_project_id
@@ -479,9 +482,9 @@ async def _get_cleanup_status_summary(
         response = await _fetch_cleanup_status_response(target_project_id)
     if not response:
         return ""
-    output = response.get("compact")
+    output = response.get(_CLEANUP_KEY_COMPACT)
     compact = output.strip() if isinstance(output, str) else ""
-    payload = response.get("payload")
+    payload = response.get(_CLEANUP_KEY_PAYLOAD)
     items = (
         extract_cleanup_action_items_from_payload(payload)
         if isinstance(payload, dict)
