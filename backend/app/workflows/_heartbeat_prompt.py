@@ -160,6 +160,7 @@ async def _append_dynamic_sections(
         _get_cleanup_status_summary(
             target_project_id,
             cleanup_status_response=heartbeat_state.cleanup_status_response,
+            workstream_rows=agent_hub_state.workstream_rows,
         ),
         _get_active_specialist_inventory(
             target_project_id,
