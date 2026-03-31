@@ -16,6 +16,7 @@ _TOKEN_RE = re.compile(
 _ORPHAN_BRANCH_RE = re.compile(
     r"orphan_branches:(?P<branches>task-[a-z0-9]+/main(?:,task-[a-z0-9]+/main)*)"
 )
+_RECONCILED_WORKSTREAM_STATUSES = {"authoritative", "superseded"}
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,38 @@ def extract_cleanup_action_items_from_payload(cleanup_payload: dict[str, object]
     return items
 
 
+def filter_reconciled_cleanup_items(
+    items: list[CleanupActionItem],
+    workstream_rows: list[dict[str, object]] | None,
+) -> list[CleanupActionItem]:
+    """Drop cleanup items for lanes already reconciled as authoritative/superseded."""
+    if not items or not workstream_rows:
+        return items
+
+    reconciled_task_keys: set[tuple[str, str]] = set()
+    statuses_by_task: dict[tuple[str, str], set[str]] = {}
+    for row in workstream_rows:
+        project_id = row.get("project_id")
+        task_id = row.get("external_id")
+        if not isinstance(project_id, str) or not isinstance(task_id, str):
+            continue
+        status = row.get("workstream_status")
+        if not isinstance(status, str) or not status:
+            continue
+        statuses_by_task.setdefault((project_id, task_id), set()).add(status)
+
+    for task_key, statuses in statuses_by_task.items():
+        if _RECONCILED_WORKSTREAM_STATUSES.issubset(statuses):
+            reconciled_task_keys.add(task_key)
+
+    if not reconciled_task_keys:
+        return items
+    return [
+        item for item in items
+        if (item.project_id, item.task_id) not in reconciled_task_keys
+    ]
+
+
 def build_actionable_cleanup_summary(cleanup_status: str) -> str:
     """Build a short explicit actionable cleanup section from cleanup status output."""
     items = extract_cleanup_action_items(cleanup_status)
@@ -120,4 +153,5 @@ __all__ = [
     "build_actionable_cleanup_summary_from_payload",
     "extract_cleanup_action_items",
     "extract_cleanup_action_items_from_payload",
+    "filter_reconciled_cleanup_items",
 ]

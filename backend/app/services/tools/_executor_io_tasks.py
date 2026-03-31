@@ -9,7 +9,12 @@ import tempfile
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 
-from app.services.cleanup_summary import build_actionable_cleanup_summary
+from app.services.cleanup_summary import (
+    build_actionable_cleanup_summary,
+    build_actionable_cleanup_summary_from_items,
+    extract_cleanup_action_items,
+    filter_reconciled_cleanup_items,
+)
 from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     idle_minutes_from_timestamps,
@@ -237,7 +242,22 @@ async def _handle_cleanup_status(
         return 'Error: project_id required for cleanup_status'
     cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
     actionable = build_actionable_cleanup_summary(cleanup_status)
-    return f"{cleanup_status}\n\n{actionable}" if actionable else cleanup_status
+    if not actionable:
+        return cleanup_status
+
+    workstream_output = await bash_fn(_st_cmd("sessions ownership --project all --format json", project_id))
+    try:
+        workstream_rows = json.loads(workstream_output)
+    except json.JSONDecodeError:
+        return f"{cleanup_status}\n\n{actionable}"
+
+    filtered_actionable = build_actionable_cleanup_summary_from_items(
+        filter_reconciled_cleanup_items(
+            extract_cleanup_action_items(cleanup_status),
+            workstream_rows if isinstance(workstream_rows, list) else None,
+        )
+    )
+    return f"{cleanup_status}\n\n{filtered_actionable}" if filtered_actionable else cleanup_status
 
 
 async def _handle_cleanup_worktrees(
