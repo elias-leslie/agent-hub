@@ -23,7 +23,9 @@ from app.services.backup_summary import (
 from app.services.git_status_summary import RepoGitStatus
 from app.services.ownership_lanes import collapse_active_workstream_rows
 from app.services.session_display_summary import (
-    fetch_session_display_summary_results,  # noqa: F401 (patched in tests)
+    SessionDisplaySummaryCandidate,
+    clean_display_summary_text,
+    fetch_session_display_summary_results,
 )
 from app.services.task_overview_summary import (
     build_compact_task_overview,
@@ -81,6 +83,8 @@ logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _SUMMITFLOW_PROJECT_ID = "summitflow"
+_HEARTBEAT_DIGEST_LOOKBACK_HOURS = 6
+_HEARTBEAT_DIGEST_LIMIT = 4
 _IDLE_HISTORY_LOOKBACK_HOURS = 6
 _IDLE_HISTORY_LIMIT = 4
 _IDLE_SUMMARY_MARKERS = (
@@ -100,6 +104,10 @@ _IDLE_FAILURE_MARKERS = (
     "timed out",
     "did not exist",
     "no such file",
+)
+_HEARTBEAT_DIGEST_STATUSES = (
+    "completed",
+    "failed",
 )
 
 
@@ -335,6 +343,125 @@ async def _fetch_recently_completed_sessions_section(
         return ""
 
 
+def _extract_live_activity_summary(provider_metadata: dict[str, object] | None) -> str | None:
+    """Return the live activity summary from provider metadata when present."""
+    if not isinstance(provider_metadata, dict):
+        return None
+    live_activity = provider_metadata.get("live_activity")
+    if not isinstance(live_activity, dict):
+        return None
+    summary = live_activity.get("summary")
+    return summary if isinstance(summary, str) else None
+
+
+def _row_value(row: object, index: int, attr: str) -> object:
+    """Read one selected-column value from a SQLAlchemy row or plain tuple."""
+    if hasattr(row, attr):
+        return getattr(row, attr)
+    if isinstance(row, tuple):
+        return row[index]
+    try:
+        return row[index]  # type: ignore[index]
+    except Exception:
+        return None
+
+
+async def _get_recent_heartbeat_digest(target_project_id: str | None = None) -> str:
+    """Show a compact digest of recent heartbeat outcomes for bounded recall."""
+    from sqlalchemy import and_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    cutoff = datetime.now(UTC) - timedelta(hours=_HEARTBEAT_DIGEST_LOOKBACK_HOURS)
+    conditions = [
+        Session.agent_slug == "persona",
+        Session.request_source == "heartbeat",
+        Session.status.in_(_HEARTBEAT_DIGEST_STATUSES),
+        Session.created_at >= cutoff,
+    ]
+    if target_project_id:
+        conditions.append(Session.project_id == target_project_id)
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(
+                    Session.id,
+                    Session.project_id,
+                    Session.status,
+                    Session.created_at,
+                    Session.summary_oneliner,
+                    Session.provider_metadata,
+                )
+                .where(and_(*conditions))
+                .order_by(Session.created_at.desc())
+                .limit(_HEARTBEAT_DIGEST_LIMIT)
+            )
+            rows = list(result.all())
+            display_summaries = await fetch_session_display_summary_results(
+                db,
+                [
+                    SessionDisplaySummaryCandidate(
+                        session_id=str(_row_value(row, 0, "id") or ""),
+                        summary_oneliner=(
+                            _row_value(row, 4, "summary_oneliner")
+                            if isinstance(_row_value(row, 4, "summary_oneliner"), str)
+                            else None
+                        ),
+                        live_summary=_extract_live_activity_summary(
+                            _row_value(row, 5, "provider_metadata")
+                            if isinstance(_row_value(row, 5, "provider_metadata"), dict)
+                            else None
+                        ),
+                    )
+                    for row in rows
+                    if _row_value(row, 0, "id")
+                ],
+            )
+    except Exception:
+        logger.debug("Failed to fetch recent heartbeat digest", exc_info=True)
+        return ""
+
+    rendered_rows: list[str] = []
+    for row in rows:
+        session_id = str(_row_value(row, 0, "id") or "")
+        if not session_id:
+            continue
+        project_id = str(_row_value(row, 1, "project_id") or "unknown")
+        status = str(_row_value(row, 2, "status") or "unknown")
+        created_at = _row_value(row, 3, "created_at")
+        summary_oneliner = _row_value(row, 4, "summary_oneliner")
+        provider_metadata = _row_value(row, 5, "provider_metadata")
+        display_result = display_summaries.get(session_id)
+        display_summary = display_result if isinstance(display_result, str) else getattr(display_result, "summary", None)
+        summary = (
+            clean_display_summary_text(display_summary)
+            or clean_display_summary_text(summary_oneliner if isinstance(summary_oneliner, str) else None)
+            or clean_display_summary_text(
+                _extract_live_activity_summary(provider_metadata if isinstance(provider_metadata, dict) else None)
+            )
+        )
+        if not summary:
+            continue
+        timestamp = (
+            created_at.astimezone(UTC).strftime("%H:%M UTC")
+            if isinstance(created_at, datetime)
+            else "unknown"
+        )
+        rendered_rows.append(f"- {timestamp} | {status} | {project_id} | {summary}")
+
+    if not rendered_rows:
+        return ""
+
+    return (
+        "\n<recent_heartbeat_digest>\n"
+        f"Recent heartbeat recall: {len(rendered_rows)}\n"
+        + "\n".join(rendered_rows)
+        + "\n</recent_heartbeat_digest>"
+    )
+
+
 def _extract_idle_validation_command(provider_metadata: dict[str, object] | None) -> str | None:
     """Return the compact validation command for an idle heartbeat session."""
     if not isinstance(provider_metadata, dict):
@@ -458,6 +585,7 @@ __all__ = [
     "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
+    "_get_recent_heartbeat_digest",
     "_get_recent_idle_improvement_history",
     "_get_workstream_inventory",
     "_query_active_sessions_for_heartbeat",

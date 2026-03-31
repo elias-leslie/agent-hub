@@ -14,6 +14,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
 import { cn } from "@/lib/utils";
+import type { HeartbeatStatusResponse } from "@/lib/api/dashboard";
 import { useChatSession } from "../chat/hooks/useChatSession";
 import { usePersona } from "./hooks/usePersona";
 import { useHeartbeat } from "./hooks/useHeartbeat";
@@ -36,6 +37,21 @@ function formatRuntimeLabel(
   if (phase === "waiting_for_model") return "Waiting";
   if (phase === "finalizing") return "Finalizing";
   return "Working";
+}
+
+function formatHeartbeatFallbackSummary(status: HeartbeatStatusResponse | null | undefined): string | null {
+  if (!status?.running) {
+    return null;
+  }
+  const scope = status.running_project_id ? ` for ${status.running_project_id}` : "";
+  const trigger = status.running_trigger === "manual_api"
+    ? " via manual trigger"
+    : status.running_trigger === "cron"
+      ? " via scheduled trigger"
+      : status.running_trigger === "manual"
+        ? " via manual run"
+        : "";
+  return `Heartbeat running${scope}${trigger}`;
 }
 
 const STATUS_DOT: Record<RuntimeLabel, string> = {
@@ -73,6 +89,7 @@ function PersonaContent() {
   const isActive = runtimeLabel === "Working" || runtimeLabel === "Waiting" || runtimeLabel === "Finalizing";
 
   const liveSummary = runtime.primarySession?.live_activity?.summary
+    || formatHeartbeatFallbackSummary(heartbeatStatus)
     || (isHeartbeatRunning ? `${personaName} is actively working` : null)
     || (personaPaused ? `${personaName} is paused` : null)
     || (heartbeatStatus?.last_run

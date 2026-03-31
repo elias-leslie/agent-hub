@@ -113,6 +113,10 @@ export interface HeartbeatStatusResponse {
   interval_minutes: number;
   execution_state: string;
   running_session_id: string | null;
+  running_owner_host?: string | null;
+  running_owner_pid?: number | null;
+  running_trigger?: string | null;
+  running_project_id?: string | null;
   last_session_id?: string | null;
   last_turns?: number | null;
   last_tool_calls?: number | null;

@@ -453,11 +453,12 @@ class TestPersonaHeartbeatTask:
             patch(
                 "app.workflows.persona_heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
+                return_value="claim-provided",
             ) as mock_set_running,
             patch(
                 "app.workflows.persona_heartbeat.clear_heartbeat_running",
                 new_callable=AsyncMock,
-            ),
+            ) as mock_clear_running,
             patch(
                 "app.workflows.persona_heartbeat._do_completion",
                 new_callable=AsyncMock,
@@ -485,9 +486,18 @@ class TestPersonaHeartbeatTask:
 
         assert result["status"] == "success"
         mock_attempt.assert_awaited_once_with(session_id="hb-session-provided")
-        mock_set_running.assert_awaited_once_with(session_id="hb-session-provided")
+        mock_set_running.assert_awaited_once_with(
+            session_id="hb-session-provided",
+            trigger="manual",
+            project_id=HEARTBEAT_PROJECT,
+            only_if_missing=True,
+        )
         mock_do_completion.assert_awaited_once()
         assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-provided"
+        mock_clear_running.assert_awaited_once_with(
+            claim_token="claim-provided",
+            session_id="hb-session-provided",
+        )
 
     @pytest.mark.asyncio
     async def test_manual_heartbeat_skips_reclaim_when_api_already_reserved_run(self):
@@ -528,7 +538,7 @@ class TestPersonaHeartbeatTask:
             patch(
                 "app.workflows.persona_heartbeat.clear_heartbeat_running",
                 new_callable=AsyncMock,
-            ),
+            ) as mock_clear_running,
             patch(
                 "app.workflows.persona_heartbeat._do_completion",
                 new_callable=AsyncMock,
@@ -554,6 +564,7 @@ class TestPersonaHeartbeatTask:
                     manual=True,
                     heartbeat_session_id="hb-session-reserved",
                     running_claimed=True,
+                    running_claim_token="claim-preclaimed",
                 ),
                 ctx,
             )
@@ -562,6 +573,78 @@ class TestPersonaHeartbeatTask:
         mock_attempt.assert_not_awaited()
         mock_set_running.assert_not_awaited()
         assert mock_do_completion.await_args.kwargs["heartbeat_session_id"] == "hb-session-reserved"
+        mock_clear_running.assert_awaited_once_with(
+            claim_token="claim-preclaimed",
+            session_id="hb-session-reserved",
+        )
+
+    @pytest.mark.asyncio
+    async def test_manual_heartbeat_skips_when_lock_claim_fails(self):
+        ctx = SimpleNamespace(log=MagicMock())
+
+        with (
+            patch(
+                "app.workflows._heartbeat_steps.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.workflows._heartbeat_steps.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.workflows._heartbeat_steps.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.workflows._heartbeat_steps.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(
+                    heartbeat_supported=True,
+                    warnings=[],
+                ),
+            ),
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.workflows.persona_heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as mock_set_running,
+            patch(
+                "app.workflows.persona_heartbeat.record_heartbeat_skip",
+                new_callable=AsyncMock,
+            ) as mock_skip,
+            patch(
+                "app.workflows.persona_heartbeat.clear_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_clear_running,
+            patch(
+                "app.workflows.persona_heartbeat._do_completion",
+                new_callable=AsyncMock,
+            ) as mock_do_completion,
+        ):
+            result = await _run_persona_heartbeat(
+                HeartbeatInput(manual=True, heartbeat_session_id="hb-session-raced"),
+                ctx,
+            )
+
+        assert result["status"] == "skipped"
+        assert result["error"] == "already_running"
+        mock_attempt.assert_awaited_once_with(session_id="hb-session-raced")
+        mock_set_running.assert_awaited_once_with(
+            session_id="hb-session-raced",
+            trigger="manual",
+            project_id=HEARTBEAT_PROJECT,
+            only_if_missing=True,
+        )
+        mock_skip.assert_awaited_once_with("already_running", session_id="hb-session-raced")
+        mock_do_completion.assert_not_awaited()
+        mock_clear_running.assert_not_awaited()
 
 
 class TestHeartbeatCompletionRouting:
