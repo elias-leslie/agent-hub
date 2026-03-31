@@ -102,6 +102,7 @@ def _result_to_dict(result: Any, task_id: str) -> dict[str, Any]:
                 "turn": p.turn,
                 "status": p.status,
                 "message": p.message,
+                "topic": p.topic,
                 "tool_calls": p.tool_calls or [],
                 "tool_results": p.tool_results or [],
                 "thinking": p.thinking,
@@ -206,6 +207,7 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
                     "turn": progress.turn,
                     "status": progress.status,
                     "message": progress.message,
+                    "topic": progress.topic,
                 })
             )
 

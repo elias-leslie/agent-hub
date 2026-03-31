@@ -69,7 +69,7 @@ class DirectToolExecutor:
         "steer_consultation", "list_consultations", "cancel_consultation",
         "manage_tasks", "manage_backups", "manage_model_config", "manage_feedback",
         "log_agent_performance", "review_agent_performance", "review_improvement_signals",
-        "query_sessions", "inspect_session",
+        "query_sessions", "inspect_session", "search_persona_history",
     })
 
     def __init__(

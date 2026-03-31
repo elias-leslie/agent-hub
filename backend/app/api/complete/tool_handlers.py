@@ -132,7 +132,16 @@ async def _complete_with_tools(
     Handles any tool-capable provider through a unified pipeline.
     """
     state = _init_execution_state(session, messages)
-    tracker = ProgressTracker(progress_callback)
+    from app.services.activity_topics import default_progress_topic
+
+    tracker = ProgressTracker(
+        progress_callback,
+        default_topic=default_progress_topic(
+            external_id=state.external_id,
+            session_id=session_id,
+            agent_slug=state.agent_slug,
+        ),
+    )
     await store_user_messages(db, session_id, messages_for_db, agent_id=state.agent_slug)
 
     try:

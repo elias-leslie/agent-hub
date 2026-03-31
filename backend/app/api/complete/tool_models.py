@@ -13,6 +13,7 @@ class AgentProgress:
     turn: int
     status: str
     message: str
+    topic: str | None = None
     tool_calls: list[dict[str, Any]] | None = None
     tool_results: list[dict[str, Any]] | None = None
     thinking: str | None = None

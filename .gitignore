@@ -16,6 +16,7 @@ build/
 # Node
 node_modules
 node_modules/
+.pnpm-store/
 .next/
 frontend/.next/
 out/

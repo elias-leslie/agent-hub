@@ -125,10 +125,20 @@ async def store_tool_events(
 
 
 def create_progress(
-    turn: int, status: str, message: str, tool_calls: list[dict[str, Any]] | None = None
+    turn: int,
+    status: str,
+    message: str,
+    tool_calls: list[dict[str, Any]] | None = None,
+    topic: str | None = None,
 ) -> AgentProgress:
     """Create progress object."""
-    return AgentProgress(turn=turn, status=status, message=message, tool_calls=tool_calls)
+    return AgentProgress(
+        turn=turn,
+        status=status,
+        message=message,
+        topic=topic,
+        tool_calls=tool_calls,
+    )
 
 
 async def report_progress(

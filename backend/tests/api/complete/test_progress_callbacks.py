@@ -31,3 +31,25 @@ async def test_report_progress_swallows_callback_errors() -> None:
     await report_progress(progress, callback)
 
     callback.assert_awaited_once_with(progress)
+
+
+@pytest.mark.asyncio
+async def test_progress_tracker_derives_topic_from_tool_input() -> None:
+    tracker = ProgressTracker()
+
+    await tracker.report_tool_use(
+        turn=1,
+        tool_name="read_file",
+        tool_input={"path": "backend/app/workflows/_heartbeat_prompt.py"},
+    )
+
+    assert tracker.log[0].topic == "file:backend/app/workflows/_heartbeat_prompt.py"
+
+
+@pytest.mark.asyncio
+async def test_progress_tracker_uses_default_topic_for_completion() -> None:
+    tracker = ProgressTracker(default_topic="task:task-123")
+
+    await tracker.report_complete(turn=2, tool_calls_count=3)
+
+    assert tracker.log[0].topic == "task:task-123"

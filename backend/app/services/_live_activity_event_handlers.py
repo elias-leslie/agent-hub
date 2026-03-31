@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.services._live_activity_helpers import (
     LiveActivity,
+    activity_topic,
     append_touched_file,
     tool_phase,
 )
@@ -33,9 +34,13 @@ def handle_tool_use_event(
     base_path: str | None = None,
 ) -> None:
     phase, summary, path, command = tool_phase(tool_name, tool_input, base_path=base_path)
+    topic = activity_topic(tool_name, tool_input, base_path=base_path)
     mark_non_terminal_state(live_activity, phase=phase, summary=summary, now_iso=now_iso)
     live_activity["current_tool_name"] = tool_name
     live_activity["last_tool_name"] = tool_name
+    if topic:
+        live_activity["current_topic"] = topic
+        live_activity["last_topic"] = topic
     live_activity["last_tool_started_at"] = now_iso
     live_activity["outstanding_tool_calls"] = max(
         int(live_activity.get("outstanding_tool_calls") or 0) + 1, 1,
@@ -71,6 +76,8 @@ def handle_tool_result_event(
     live_activity["last_tool_name"] = tool_name or live_activity.get("last_tool_name")
     live_activity["last_tool_finished_at"] = now_iso
     live_activity["last_tool_error"] = is_error
+    if live_activity.get("last_topic") and not live_activity.get("current_topic"):
+        live_activity["current_topic"] = live_activity.get("last_topic")
     live_activity["outstanding_tool_calls"] = max(
         int(live_activity.get("outstanding_tool_calls") or 0) - 1, 0,
     )
@@ -108,5 +115,6 @@ def handle_error_event(
     live_activity["summary"] = f"Execution error: {(content or 'unknown error')[:120]}"
     live_activity["termination_reason"] = content
     live_activity["current_tool_name"] = None
+    live_activity["current_topic"] = None
     live_activity["outstanding_tool_calls"] = 0
     live_activity["last_model_activity_at"] = now_iso

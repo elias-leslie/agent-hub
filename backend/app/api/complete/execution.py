@@ -262,6 +262,7 @@ def build_agentic_response(
                 turn=p.turn,
                 status=p.status,
                 message=p.message,
+                topic=p.topic,
                 tool_calls=p.tool_calls or [],
                 tool_results=p.tool_results or [],
                 thinking=p.thinking,

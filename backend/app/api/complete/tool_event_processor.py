@@ -178,6 +178,7 @@ async def _process_tool_result_event(
     db: AsyncSession,
     model_used: str | None,
     agent_id: str | None,
+    tracker: ProgressTracker,
     tool_use_id_to_name: dict[str, dict[str, Any]] | None = None,
     tool_result_summaries: list[str] | None = None,
 ) -> int:
@@ -191,6 +192,7 @@ async def _process_tool_result_event(
 
     tool_metadata = (tool_use_id_to_name or {}).get(tool_use_id, {})
     tool_name = str(tool_metadata.get("name") or tool_use_id)
+    tool_input = tool_metadata.get("input") if isinstance(tool_metadata.get("input"), dict) else None
     if tool_result_summaries is not None:
         summary = _summarize_tool_result(tool_name, tool_content, is_error)
         if summary:
@@ -200,6 +202,12 @@ async def _process_tool_result_event(
         db, session_id, tool_name=tool_name, tool_use_id=tool_use_id,
         content=tool_content, is_error=is_error,
         duration_ms=duration_ms, agent_id=agent_id, model_used=model_used,
+    )
+    await tracker.report_tool_result(
+        max(turn, 1),
+        tool_name,
+        is_error=is_error,
+        tool_input=tool_input,
     )
     await update_session_health(db, session_id, "processing_response", commit=True)
     return turn + 1
@@ -273,7 +281,7 @@ async def process_tool_event(
         )
     elif event_type == "tool_result":
         event_turn = await _process_tool_result_event(
-            event, event_turn, session_id, db, model_used, agent_id,
+            event, event_turn, session_id, db, model_used, agent_id, tracker,
             tool_use_id_to_name=tool_use_id_to_name,
             tool_result_summaries=tool_result_summaries,
         )
