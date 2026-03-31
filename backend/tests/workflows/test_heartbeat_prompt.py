@@ -480,6 +480,55 @@ class TestRecentHeartbeatDigest:
         candidates = mock_fetch_summaries.await_args.args[1]
         assert [candidate.session_id for candidate in candidates] == ["hb-1", "hb-2"]
 
+    @pytest.mark.asyncio
+    async def test_recent_heartbeat_digest_respects_token_budget(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_rows(
+            [
+                ("hb-1", "agent-hub", "completed", now, "First scoped digest row.", {}),
+                (
+                    "hb-2",
+                    "agent-hub",
+                    "completed",
+                    now - timedelta(minutes=1),
+                    "Second scoped digest row.",
+                    {},
+                ),
+                (
+                    "hb-3",
+                    "agent-hub",
+                    "failed",
+                    now - timedelta(minutes=2),
+                    "Third scoped digest row.",
+                    {},
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "hb-1": "First scoped digest row.",
+                    "hb-2": "Second scoped digest row.",
+                    "hb-3": "Third scoped digest row.",
+                },
+            ),
+            patch(
+                "app.workflows._heartbeat_data.count_tokens",
+                side_effect=lambda text: text.count("\n- ") * 100,
+            ),
+            patch("app.workflows._heartbeat_data._HEARTBEAT_DIGEST_TOKEN_BUDGET", 250),
+        ):
+            result = await _get_recent_heartbeat_digest("agent-hub")
+
+        assert "Recent heartbeat recall: 2" in result
+        assert "First scoped digest row." in result
+        assert "Second scoped digest row." in result
+        assert "Third scoped digest row." not in result
+
 
 class TestRecentIdleImprovementHistory:
     @pytest.mark.asyncio
@@ -562,6 +611,64 @@ class TestRecentIdleImprovementHistory:
         assert "failed on an invalid test path" in result
         assert "Patched cleanup truth" not in result
         assert "sessions.agent_slug = :agent_slug_1" in executed_query
+
+    @pytest.mark.asyncio
+    async def test_recent_idle_history_respects_token_budget(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, _mock_db = _mock_async_session_with_scalars(
+            [
+                MagicMock(
+                    id="sess-idle-1",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    request_source="heartbeat",
+                    status="completed",
+                    created_at=now,
+                    summary_oneliner="Agent-hub stayed clean and idle after first bounded slice.",
+                    summary_files_touched=[],
+                    provider_metadata={
+                        "live_activity": {
+                            "last_validation_command": (
+                                "cd /srv/workspaces/projects/agent-hub && "
+                                "dt pytest backend/tests/api/test_memory.py -q"
+                            )
+                        }
+                    },
+                ),
+                MagicMock(
+                    id="sess-idle-2",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    request_source="heartbeat",
+                    status="completed",
+                    created_at=now - timedelta(minutes=1),
+                    summary_oneliner="Agent-hub stayed clean and idle after second bounded slice.",
+                    summary_files_touched=[],
+                    provider_metadata={
+                        "live_activity": {
+                            "last_validation_command": (
+                                "cd /srv/workspaces/projects/agent-hub && "
+                                "dt pytest backend/tests/api/test_feedback.py -q"
+                            )
+                        }
+                    },
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.count_tokens",
+                side_effect=lambda text: text.count("\n- ") * 100,
+            ),
+            patch("app.workflows._heartbeat_data._IDLE_HISTORY_TOKEN_BUDGET", 150),
+        ):
+            result = await _get_recent_idle_improvement_history("agent-hub")
+
+        assert "Recent idle slices: 1" in result
+        assert "test_memory.py" in result
+        assert "test_feedback.py" not in result
 
 
 class TestBuildHeartbeatPromptIncludesGitState:
