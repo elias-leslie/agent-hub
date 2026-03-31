@@ -114,6 +114,7 @@ def mark_session_terminal_state(
             "termination_reason": termination_reason,
             "stall_reason": None,
             "current_tool_name": None,
+            "current_topic": None,
             "outstanding_tool_calls": 0,
             "last_event_at": now_iso,
             "last_model_activity_at": now_iso,

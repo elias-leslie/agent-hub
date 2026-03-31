@@ -227,6 +227,7 @@ class AgentProgressInfo(BaseModel):
     turn: int
     status: str
     message: str
+    topic: str | None = None
     tool_calls: list[dict[str, Any]] = []
     tool_results: list[dict[str, Any]] = []
     thinking: str | None = None

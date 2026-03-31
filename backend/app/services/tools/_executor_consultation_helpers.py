@@ -249,6 +249,9 @@ def _format_activity_suffix(s: DBSession) -> str:
     quiet_for_seconds = activity.get("quiet_for_seconds")
     if quiet_for_seconds is not None:
         parts.append(f"quiet={quiet_for_seconds}s")
+    topic = activity.get("current_topic") or activity.get("last_topic")
+    if isinstance(topic, str) and topic:
+        parts.append(f"topic={topic}")
     if activity.get("current_tool_name"):
         parts.append(f"tool={activity['current_tool_name']}")
     elif activity.get("last_event_type"):
@@ -274,6 +277,8 @@ def _format_session_line(s: DBSession, now: datetime) -> str:
 # ---------------------------------------------------------------------------
 
 def _format_inspect_output(session: DBSession, events: list[DBSessionEvent]) -> str:
+    from app.services.session_live_activity import build_live_activity_response
+
     latest_assistant = next(
         (e for e in events if e.event_type == "assistant_message" and e.content), None,
     )
@@ -288,6 +293,11 @@ def _format_inspect_output(session: DBSession, events: list[DBSessionEvent]) -> 
         f"Project: {session.project_id}",
         f"Status: {session.status}",
     ]
+    activity = build_live_activity_response(session)
+    if activity:
+        topic = activity.get("current_topic") or activity.get("last_topic")
+        if isinstance(topic, str) and topic:
+            lines.append(f"Topic: {topic}")
     if session.summary_oneliner:
         lines.append(f"Summary: {session.summary_oneliner}")
     if recent_tools:

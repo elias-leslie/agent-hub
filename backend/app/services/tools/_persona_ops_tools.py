@@ -539,6 +539,45 @@ INSPECT_SESSION_TOOL = Tool(
     usage_examples=["Inspect a completed governance-auditor session before deciding the next action."],
 )
 
+SEARCH_PERSONA_HISTORY_TOOL = Tool(
+    name="search_persona_history",
+    description=(
+        "Search persona heartbeat history and child-session outcomes using the same bounded "
+        "search semantics as the persona workspace. Prefer this over rereading raw session "
+        "logs when you need targeted self-reflection evidence."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": (
+                    "Search query. Supports stream prefixes like task:, file:, agent:, "
+                    "status:, project:, and topic:."
+                ),
+            },
+            "hours_back": {
+                "type": "integer",
+                "description": "How many hours back to search (default: 168)",
+                "default": 168,
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum matches to return (default: 8)",
+                "default": 8,
+            },
+            "project_id": {
+                "type": "string",
+                "description": "Optional project filter appended as project:<id> when missing",
+            },
+        },
+        "required": ["query"],
+    },
+    category="observability",
+    search_keywords=["persona history", "self reflection", "heartbeat recall", "search sessions"],
+    usage_examples=["Search persona history for topic:task-123 before repeating the same blocker analysis."],
+)
+
 REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
     name="review_agent_performance",
     description=(

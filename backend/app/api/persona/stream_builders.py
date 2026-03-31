@@ -43,16 +43,18 @@ def _stringify_preview(value: Any, *, limit: int | None = 280) -> str | None:
     return f"{text[: limit - 1]}…"
 
 
-def _live_activity_summary(session: Session) -> tuple[str | None, str | None]:
+def _live_activity_summary(session: Session) -> tuple[str | None, str | None, str | None]:
     metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     live_activity = metadata.get("live_activity")
     if not isinstance(live_activity, dict):
-        return None, None
+        return None, None, None
     summary = live_activity.get("summary")
     status = live_activity.get("status")
+    topic = live_activity.get("current_topic") or live_activity.get("last_topic")
     return (
         summary if isinstance(summary, str) else None,
         status if isinstance(status, str) else None,
+        topic if isinstance(topic, str) else None,
     )
 
 
@@ -97,7 +99,7 @@ def _make_session_entry(
     display_summaries: dict[str, str | None] | None = None,
     session_type_override: str | None = None,
 ) -> PersonaStreamEntry:
-    live_summary, live_status = _live_activity_summary(session)
+    live_summary, live_status, live_topic = _live_activity_summary(session)
     pulse = session_pulses.get(session.id)
     display_summaries = display_summaries or {}
     return PersonaStreamEntry(
@@ -117,6 +119,7 @@ def _make_session_entry(
         model=session.model,
         live_summary=live_summary,
         live_status=live_status,
+        live_topic=live_topic,
         message_count=message_counts.get(session.id, 0),
         tool_count=tool_counts.get(session.id, 0),
         event_previews=event_previews.get(session.id, []),

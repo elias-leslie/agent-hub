@@ -95,6 +95,7 @@ async def test_query_sessions_includes_live_activity_health_phase_and_quiet() ->
             "live_activity": {
                 "phase": "waiting_for_model",
                 "status": "active",
+                "current_topic": "task:task-123",
                 "last_event_type": "thinking",
                 "last_model_activity_at": (datetime.now(UTC) - timedelta(seconds=95)).isoformat(),
             }
@@ -118,6 +119,7 @@ async def test_query_sessions_includes_live_activity_health_phase_and_quiet() ->
     assert "health=quiet" in result
     assert "phase=waiting_for_model" in result
     assert "quiet=" in result
+    assert "topic=task:task-123" in result
     assert "last=thinking" in result
 
 

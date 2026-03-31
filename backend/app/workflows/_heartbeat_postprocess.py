@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters._claude_constants import build_mcp_tool_name
 from app.workflows._completion_review import CompletionReviewOutcome, review_persona_completion
+from app.workflows._heartbeat_recall import warm_heartbeat_recall_sections
 from app.workflows._session_postprocess import (
     ensure_session_summary as _shared_ensure_session_summary,
 )
@@ -166,6 +167,7 @@ async def postprocess_heartbeat(
         completion_review=completion_review,
         target_project_id=target_project_id,
     )
+    await _warm_recall_cache(target_project_id)
     return _build_heartbeat_result(
         status=status,
         result=result,
@@ -177,6 +179,14 @@ async def postprocess_heartbeat(
         followup_reason=followup_reason,
         completion_review=completion_review,
     )
+
+
+async def _warm_recall_cache(target_project_id: str | None) -> None:
+    """Refresh the next-heartbeat recall cache without failing the current run."""
+    try:
+        await warm_heartbeat_recall_sections(target_project_id)
+    except Exception:
+        logger.debug("Failed to warm heartbeat recall cache", exc_info=True)
 
 
 async def _ensure_session_summary(session_id: str, content: str) -> bool:

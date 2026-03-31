@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 from app.models import Session
+from app.services.activity_topics import derive_activity_topic
 from app.services.session_scope import extract_tool_scope_paths
 
 _TOUCHED_FILES_LIMIT = 10
@@ -127,6 +128,8 @@ def apply_heartbeat_fields(
         live_activity["last_model_activity_at"] = heartbeat_at
     if resolved_phase in _HEARTBEAT_PASSIVE_PHASES and not current_tool_name:
         live_activity["outstanding_tool_calls"] = 0
+    if resolved_phase in {"completed", "failed", "error"}:
+        live_activity["current_topic"] = None
 
 
 def apply_heartbeat_path_updates(
@@ -228,3 +231,20 @@ def tool_phase(
             return "running_validation", f"Running validation: {command[:100]}", path, command
         return "running_tool", f"Running command: {command[:100]}", path, command
     return "running_tool", f"Running tool: {tool_name or 'unknown'}", path, command
+
+
+def activity_topic(
+    tool_name: str | None,
+    tool_input: LiveActivity | None,
+    *,
+    base_path: str | None = None,
+    fallback: str | None = None,
+) -> str | None:
+    """Return a stable topic label for one tool action."""
+    payload = dict(tool_input) if isinstance(tool_input, dict) else None
+    return derive_activity_topic(
+        tool_name,
+        payload,
+        fallback=fallback,
+        base_path=base_path,
+    )

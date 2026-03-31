@@ -160,6 +160,7 @@ class PersonaStreamEntry(BaseModel):
     model: str | None = None
     live_summary: str | None = None
     live_status: str | None = None
+    live_topic: str | None = None
     message_count: int = 0
     tool_count: int = 0
     event_previews: list[PersonaStreamEventPreview] = Field(default_factory=list)

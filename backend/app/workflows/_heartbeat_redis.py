@@ -18,9 +18,11 @@ REDIS_LAST_MODEL_REVIEW_KEY = "persona:heartbeat:last_model_review"
 REDIS_METRICS_KEY = "persona:heartbeat:metrics"
 REDIS_RUNNING_KEY = "persona:heartbeat:running"
 REDIS_STATE_KEY = "persona:heartbeat:state"
+REDIS_RECALL_CACHE_PREFIX = "persona:heartbeat:recall"
 REDIS_DAILY_COUNT_PREFIX = "persona:heartbeat:daily"
 _DAILY_COUNT_TTL = 14 * 86400  # 14 days
 _RUNNING_TTL = 7500  # 2h workflow timeout + 5m slack
+_RECALL_CACHE_TTL = 15 * 60
 _SPIKE_THRESHOLD = 50  # 3x normal rate at 60min interval
 
 
@@ -327,6 +329,19 @@ class HeartbeatState(TypedDict, total=False):
     last_session_id: str
 
 
+class HeartbeatRecallCache(TypedDict, total=False):
+    generated_at: str
+    project_id: str | None
+    recent_heartbeat_digest: str
+    recent_idle_history: str
+    improvement_signal_digest: str
+
+
+def _recall_cache_key(project_id: str | None) -> str:
+    normalized = project_id or "__all__"
+    return f"{REDIS_RECALL_CACHE_PREFIX}:{normalized}"
+
+
 async def get_heartbeat_metrics() -> HeartbeatMetrics | None:
     """Return the latest heartbeat metrics hash, or None if no data."""
     client = _get_redis_client()
@@ -347,6 +362,49 @@ async def get_heartbeat_state() -> HeartbeatState | None:
         await client.close()
 
 
+async def get_heartbeat_recall_cache(project_id: str | None = None) -> HeartbeatRecallCache | None:
+    """Return prefetched heartbeat recall sections for the given project scope."""
+    client = _get_redis_client()
+    try:
+        payload = await client.get(_recall_cache_key(project_id))
+        if not payload:
+            return None
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            logger.warning("Failed to decode heartbeat recall cache for project=%s", project_id)
+            return None
+        return data if isinstance(data, dict) else None
+    finally:
+        await client.close()
+
+
+async def set_heartbeat_recall_cache(
+    *,
+    project_id: str | None = None,
+    recent_heartbeat_digest: str = "",
+    recent_idle_history: str = "",
+    improvement_signal_digest: str = "",
+) -> None:
+    """Persist prefetched heartbeat recall sections for the next run."""
+    client = _get_redis_client()
+    try:
+        payload = json.dumps(
+            {
+                "generated_at": datetime.now(UTC).isoformat(),
+                "project_id": project_id,
+                "recent_heartbeat_digest": recent_heartbeat_digest,
+                "recent_idle_history": recent_idle_history,
+                "improvement_signal_digest": improvement_signal_digest,
+            }
+        )
+        await client.set(_recall_cache_key(project_id), payload, ex=_RECALL_CACHE_TTL)
+    except Exception:
+        logger.exception("Failed to persist heartbeat recall cache")
+    finally:
+        await client.close()
+
+
 __all__ = [
     "REDIS_LAST_MODEL_REVIEW_KEY",
     "REDIS_LAST_RUN_KEY",
@@ -354,6 +412,7 @@ __all__ = [
     "check_redis_elapsed",
     "clear_heartbeat_running",
     "get_heartbeat_metrics",
+    "get_heartbeat_recall_cache",
     "get_heartbeat_running_info",
     "get_heartbeat_state",
     "get_last_run_info",
@@ -363,5 +422,6 @@ __all__ = [
     "record_heartbeat_metrics",
     "record_heartbeat_skip",
     "record_heartbeat_success",
+    "set_heartbeat_recall_cache",
     "set_heartbeat_running",
 ]

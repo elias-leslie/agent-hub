@@ -214,6 +214,7 @@ def build_tool_registry(
         inspect_session,
         list_consultations,
         query_sessions,
+        search_persona_history,
         steer_consultation,
     )
     from app.services.tools._executor_feedback import manage_feedback
@@ -269,4 +270,5 @@ def build_tool_registry(
         "precision_code_search": _make_precision_code_search_bound(project_id),
         "query_sessions": query_sessions,
         "inspect_session": inspect_session,
+        "search_persona_history": search_persona_history,
     }

@@ -47,6 +47,7 @@ export interface PersonaStreamEntry {
   model: string | null;
   live_summary: string | null;
   live_status: string | null;
+  live_topic: string | null;
   message_count: number;
   tool_count: number;
   event_previews: PersonaStreamEventPreview[];

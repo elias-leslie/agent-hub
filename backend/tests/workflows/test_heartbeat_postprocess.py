@@ -413,6 +413,10 @@ class TestPostprocessHeartbeat:
                     reviewer_model_id="codex/gpt-5.4",
                 ),
             ),
+            patch(
+                "app.workflows._heartbeat_postprocess._warm_recall_cache",
+                new_callable=AsyncMock,
+            ) as mock_warm_recall,
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -427,6 +431,7 @@ class TestPostprocessHeartbeat:
         assert hb_result.completion_review_used is True
         assert hb_result.completion_review_decision == "complete"
         mock_metrics.assert_awaited_once()
+        mock_warm_recall.assert_awaited_once_with(None)
 
     @pytest.mark.asyncio
     async def test_error_result_propagates(self):
@@ -472,6 +477,10 @@ class TestPostprocessHeartbeat:
                     reviewer_model_id="codex/gpt-5.4",
                 ),
             ),
+            patch(
+                "app.workflows._heartbeat_postprocess._warm_recall_cache",
+                new_callable=AsyncMock,
+            ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -511,6 +520,10 @@ class TestPostprocessHeartbeat:
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_dispatch,
+            patch(
+                "app.workflows._heartbeat_postprocess._warm_recall_cache",
+                new_callable=AsyncMock,
+            ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -570,6 +583,10 @@ class TestPostprocessHeartbeat:
                 new_callable=AsyncMock,
                 return_value=True,
             ) as mock_dispatch,
+            patch(
+                "app.workflows._heartbeat_postprocess._warm_recall_cache",
+                new_callable=AsyncMock,
+            ),
         ):
             hb_result = await postprocess_heartbeat(result, 60)
 
@@ -636,6 +653,10 @@ class TestPostprocessHeartbeat:
                 "app.workflows._heartbeat_postprocess.log_agent_performance",
                 new_callable=AsyncMock,
             ) as mock_log,
+            patch(
+                "app.workflows._heartbeat_postprocess._warm_recall_cache",
+                new_callable=AsyncMock,
+            ),
         ):
             await postprocess_heartbeat(result, 60)
 

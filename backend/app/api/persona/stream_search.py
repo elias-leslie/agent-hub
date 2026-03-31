@@ -7,7 +7,7 @@ from typing import Any
 
 from .schemas import PersonaStreamEntry, PersonaStreamMatch
 
-_STRUCTURED_PREFIXES = {"task", "file", "agent", "status", "project"}
+_STRUCTURED_PREFIXES = {"task", "file", "agent", "status", "project", "topic"}
 
 
 @dataclass(slots=True)
@@ -18,10 +18,19 @@ class ParsedSearch:
     agent_terms: list[str] = field(default_factory=list)
     status_terms: list[str] = field(default_factory=list)
     project_terms: list[str] = field(default_factory=list)
+    topic_terms: list[str] = field(default_factory=list)
 
     def has_terms(self) -> bool:
         return any(
-            [self.general_terms, self.task_terms, self.file_terms, self.agent_terms, self.status_terms, self.project_terms]
+            [
+                self.general_terms,
+                self.task_terms,
+                self.file_terms,
+                self.agent_terms,
+                self.status_terms,
+                self.project_terms,
+                self.topic_terms,
+            ]
         )
 
 
@@ -60,6 +69,7 @@ def _entry_match_text(entry: PersonaStreamEntry) -> str:
             entry.display_summary,
             entry.summary_oneliner,
             entry.live_summary,
+            entry.live_topic,
             entry.agent_slug,
             entry.project_id,
             entry.external_id,
@@ -118,6 +128,10 @@ def _entry_matches_search(entry: PersonaStreamEntry, parsed_search: ParsedSearch
     if parsed_search.project_terms:
         project_text = _str_join(entry.project_id, entry.current_branch, entry.display_summary, entry.summary_oneliner)
         if not _matches_terms(project_text, parsed_search.project_terms):
+            return False
+    if parsed_search.topic_terms:
+        topic_text = _str_join(entry.live_topic, entry.display_summary, entry.summary_oneliner, entry.live_summary)
+        if not _matches_terms(topic_text, parsed_search.topic_terms):
             return False
     return True
 

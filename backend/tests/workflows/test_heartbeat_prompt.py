@@ -28,6 +28,7 @@ from app.workflows._heartbeat_data import (
     _query_active_sessions_for_heartbeat,
     _query_active_specialist_sessions,
 )
+from app.workflows._heartbeat_recall import HeartbeatRecallSections
 
 
 def _mock_async_session_with_rows(rows: list[object]):
@@ -342,8 +343,11 @@ class TestCollectAgentHubHeartbeatState:
 
 class TestAppendDynamicSections:
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_prompt._get_recent_heartbeat_digest", new_callable=AsyncMock, return_value="")
-    @patch("app.workflows._heartbeat_prompt._get_recent_idle_improvement_history", new_callable=AsyncMock, return_value="")
+    @patch(
+        "app.workflows._heartbeat_prompt.build_heartbeat_recall_sections",
+        new_callable=AsyncMock,
+        return_value=HeartbeatRecallSections(),
+    )
     @patch("app.workflows._heartbeat_prompt._get_feedback_summary_section", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_workstream_inventory", new_callable=AsyncMock, return_value="")
@@ -366,8 +370,7 @@ class TestAppendDynamicSections:
         mock_workstreams: AsyncMock,
         mock_git: AsyncMock,
         mock_feedback: AsyncMock,
-        mock_recent_digest: AsyncMock,
-        mock_recent_idle: AsyncMock,
+        mock_recall: AsyncMock,
     ) -> None:
         from app.workflows._heartbeat_data import AgentHubHeartbeatState, SummitFlowHeartbeatState
         from app.workflows._heartbeat_prompt import _append_dynamic_sections
@@ -419,8 +422,7 @@ class TestAppendDynamicSections:
         )
         mock_git.assert_awaited_once_with("agent-hub", git_status_rows=[])
         mock_feedback.assert_awaited_once_with()
-        mock_recent_digest.assert_awaited_once_with("agent-hub")
-        mock_recent_idle.assert_awaited_once_with("agent-hub")
+        mock_recall.assert_awaited_once_with("agent-hub")
 
 
 class TestRecentHeartbeatDigest:
@@ -692,6 +694,11 @@ class TestBuildHeartbeatPromptIncludesGitState:
         new_callable=AsyncMock,
         return_value="\n<git_state>\n[summitflow] test data\n</git_state>",
     )
+    @patch(
+        "app.workflows._heartbeat_prompt.build_heartbeat_recall_sections",
+        new_callable=AsyncMock,
+        return_value=HeartbeatRecallSections(),
+    )
     @patch("app.workflows._heartbeat_prompt._fetch_task_overview", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt.require_prompt_content",
@@ -734,6 +741,11 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
+    @patch(
+        "app.workflows._heartbeat_prompt.build_heartbeat_recall_sections",
+        new_callable=AsyncMock,
+        return_value=HeartbeatRecallSections(),
+    )
     @patch("app.workflows._heartbeat_prompt._fetch_task_overview", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt.require_prompt_content",

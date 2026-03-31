@@ -13,8 +13,8 @@ class AgentProgress(BaseModel):
         ..., description="Progress status: running, tool_use, thinking, complete, error"
     )
     message: str = Field(..., description="Human-readable progress message")
+    topic: str | None = Field(default=None, description="Stable task/lane topic for this progress update")
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     thinking: str | None = Field(default=None)
-
 

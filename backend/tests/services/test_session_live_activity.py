@@ -158,6 +158,8 @@ def test_update_live_activity_for_event_infers_exec_command_read_path() -> None:
     assert live["summary"] == "Reading backend/app/services/session_scope.py"
     assert live["last_command"] == "sed -n '1,20p' backend/app/services/session_scope.py"
     assert live["last_read_path"] == "backend/app/services/session_scope.py"
+    assert live["current_topic"] == "file:backend/app/services/session_scope.py"
+    assert live["last_topic"] == "file:backend/app/services/session_scope.py"
 
 
 def test_build_live_activity_response_normalizes_completed_sessions_with_stale_active_state() -> None:

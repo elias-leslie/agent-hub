@@ -30,6 +30,7 @@ _SEARCH_TERM_COLUMNS: list[tuple[str, list[Any]]] = [
     ("agent_terms", [Session.agent_slug, Session.summary_oneliner]),
     ("status_terms", [Session.status, Session.summary_oneliner]),
     ("project_terms", [Session.project_id, Session.current_branch, Session.summary_oneliner]),
+    ("topic_terms", [cast(Session.provider_metadata, String), Session.external_id, Session.summary_oneliner]),
 ]
 
 

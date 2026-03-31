@@ -49,7 +49,9 @@ export interface LiveActivity {
   last_event_at?: string | null;
   last_model_activity_at?: string | null;
   current_tool_name?: string | null;
+  current_topic?: string | null;
   last_tool_name?: string | null;
+  last_topic?: string | null;
   last_tool_started_at?: string | null;
   last_tool_finished_at?: string | null;
   last_tool_error?: boolean | null;

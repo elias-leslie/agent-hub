@@ -30,6 +30,7 @@ from ._executor_dispatch import (
     parse_specialist_dispatch_request,
     prepare_specialist_dispatch,
 )
+from ._executor_persona_history import search_persona_history
 
 __all__ = [
     "cancel_consultation",
@@ -38,6 +39,7 @@ __all__ = [
     "inspect_session",
     "list_consultations",
     "query_sessions",
+    "search_persona_history",
     "steer_consultation",
 ]
 

@@ -46,6 +46,7 @@ def _build_completion_response(stored: dict[str, Any]) -> CompletionResponse:
                 turn=p.get("turn", 0),
                 status=p.get("status", ""),
                 message=p.get("message", ""),
+                topic=p.get("topic"),
                 tool_calls=p.get("tool_calls", []),
                 tool_results=p.get("tool_results", []),
                 thinking=p.get("thinking"),

@@ -21,10 +21,12 @@ from app.workflows._heartbeat_data import (
     _get_git_status_summary,
     _get_persona_tool_summary,
     _get_protection_status_summary,
-    _get_recent_heartbeat_digest,
-    _get_recent_idle_improvement_history,
     _get_workstream_inventory,
     get_project_access_summary,
+)
+from app.workflows._heartbeat_recall import (
+    HeartbeatRecallSections,
+    build_heartbeat_recall_sections,
 )
 
 logger = logging.getLogger(__name__)
@@ -139,6 +141,9 @@ async def _append_dynamic_sections(
         _collect_summitflow_heartbeat_state(target_project_id),
         _collect_agent_hub_heartbeat_state(target_project_id),
     )
+    recall_sections_task: asyncio.Task[HeartbeatRecallSections] = asyncio.create_task(
+        build_heartbeat_recall_sections(target_project_id)
+    )
     task_overview_payload = heartbeat_state.task_overview_payload
     task_overview = None if task_overview_payload is not None else heartbeat_state.task_overview_raw
     (
@@ -150,8 +155,6 @@ async def _append_dynamic_sections(
         workstream_inventory,
         git_status,
         feedback_summary,
-        recent_heartbeat_digest,
-        recent_idle_history,
     ) = await asyncio.gather(
         _get_active_work_summary(
             task_overview=task_overview,
@@ -184,9 +187,8 @@ async def _append_dynamic_sections(
             git_status_rows=heartbeat_state.git_status_rows,
         ),
         _get_feedback_summary_section(),
-        _get_recent_heartbeat_digest(target_project_id),
-        _get_recent_idle_improvement_history(target_project_id),
     )
+    recall_sections = await recall_sections_task
     for section in (
         active_work,
         protection_status,
@@ -196,8 +198,9 @@ async def _append_dynamic_sections(
         workstream_inventory,
         git_status,
         feedback_summary,
-        recent_heartbeat_digest,
-        recent_idle_history,
+        recall_sections.improvement_signal_digest,
+        recall_sections.recent_heartbeat_digest,
+        recall_sections.recent_idle_history,
     ):
         if section:
             prompt += section
