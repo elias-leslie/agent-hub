@@ -332,9 +332,15 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool, bool, bool]:
 
 
 async def _get_cleanup_status_summary(target_project_id: str | None = None) -> str:
-    from app.workflows._heartbeat_data import _get_cleanup_status_summary as fetch_cleanup_status
+    from app.workflows._heartbeat_data import (
+        _get_cleanup_status_summary as fetch_cleanup_status,
+    )
+    from app.workflows._heartbeat_data import (
+        _query_recent_workstream_sessions,
+    )
 
-    return await fetch_cleanup_status(target_project_id)
+    workstream_rows = await _query_recent_workstream_sessions(target_project_id)
+    return await fetch_cleanup_status(target_project_id, workstream_rows=workstream_rows)
 
 
 async def _get_workstream_inventory(target_project_id: str | None = None) -> str:

@@ -396,6 +396,7 @@ class TestAppendDynamicSections:
         mock_cleanup.assert_awaited_once_with(
             "agent-hub",
             cleanup_status_response=summitflow_state.cleanup_status_response,
+            workstream_rows=agent_hub_state.workstream_rows,
         )
         mock_active_specialists.assert_awaited_once_with(
             "agent-hub",
@@ -610,6 +611,56 @@ class TestCleanupStatusSummary:
         assert "ACTIONABLE-CLEANUP[2]" in result
         assert "- summitflow | finalize | task-aa44180c" in result
         assert "- summitflow | orphan_branch | task-ee55ff66" in result
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
+    async def test_omits_reconciled_workstream_items_from_actionable_cleanup(
+        self,
+        mock_fetch_response: AsyncMock,
+    ) -> None:
+        mock_fetch_response.return_value = {
+            "compact": (
+                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
+                "summitflow worktrees:2 dirty:0 orphan:0 prunable:0 tasks:task-aa44180c,task-bb22cc33 "
+                "finalize:task-aa44180c review:task-bb22cc33"
+            ),
+            "payload": {
+                "repositories": [
+                    {
+                        "project_id": "summitflow",
+                        "needs_merge_tasks": ["task-aa44180c"],
+                        "conflict_tasks": [],
+                        "review_tasks": ["task-bb22cc33"],
+                        "salvage_task_ids": [],
+                        "review_orphan_task_ids": [],
+                        "orphan_branch_names": [],
+                    }
+                ]
+            },
+        }
+
+        result = await _get_cleanup_status_summary(
+            workstream_rows=[
+                {
+                    "project_id": "summitflow",
+                    "external_id": "task-aa44180c",
+                    "current_branch": "task-aa44180c/main",
+                    "status": "completed",
+                    "workstream_status": "authoritative",
+                },
+                {
+                    "project_id": "summitflow",
+                    "external_id": "task-aa44180c",
+                    "current_branch": "task-aa44180c/old",
+                    "status": "completed",
+                    "workstream_status": "superseded",
+                },
+            ]
+        )
+
+        assert "ACTIONABLE-CLEANUP[1]" in result
+        assert "- summitflow | review | task-bb22cc33" in result
+        assert "- summitflow | finalize | task-aa44180c" not in result
 
 
 class TestFetchCleanupStatus:

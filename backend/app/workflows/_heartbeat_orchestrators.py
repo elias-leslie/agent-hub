@@ -14,8 +14,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from app.services.cleanup_summary import (
-    build_actionable_cleanup_summary,
-    build_actionable_cleanup_summary_from_payload,
+    CleanupActionItem,
+    build_actionable_cleanup_summary_from_items,
+    extract_cleanup_action_items,
+    extract_cleanup_action_items_from_payload,
 )
 from app.services.git_status_summary import (
     RepoGitStatus,
@@ -303,6 +305,36 @@ async def _collect_agent_hub_heartbeat_state(
 # ---------------------------------------------------------------------------
 
 
+def _filter_reconciled_cleanup_items(
+    items: list[CleanupActionItem],
+    workstream_rows: list[dict[str, object]] | None,
+) -> list[CleanupActionItem]:
+    """Drop cleanup actions for tasks already classified as reconciled lanes."""
+    from app.workflows._heartbeat_workstream import (
+        _classify_workstream_lane,
+        _group_rows_by_lane,
+        _infer_lane_task_id,
+    )
+
+    if not items or not workstream_rows:
+        return items
+
+    reconciled_task_keys: set[tuple[str, str]] = set()
+    for (project_id, _lane_key), lane_rows in _group_rows_by_lane(workstream_rows).items():
+        if _classify_workstream_lane(lane_rows) != "reconciled":
+            continue
+        task_id = _infer_lane_task_id(lane_rows)
+        if task_id:
+            reconciled_task_keys.add((project_id, task_id))
+
+    if not reconciled_task_keys:
+        return items
+    return [
+        item for item in items
+        if (item.project_id, item.task_id) not in reconciled_task_keys
+    ]
+
+
 async def _get_workstream_inventory(
     provider: str | None = None,
     *,
@@ -437,6 +469,7 @@ async def _get_cleanup_status_summary(
     target_project_id: str | None = None,
     *,
     cleanup_status_response: dict[str, object] | None = None,
+    workstream_rows: list[dict[str, object]] | None = None,
 ) -> str:
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
     from app.workflows._heartbeat_data import _fetch_cleanup_status_response
@@ -449,10 +482,13 @@ async def _get_cleanup_status_summary(
     output = response.get("compact")
     compact = output.strip() if isinstance(output, str) else ""
     payload = response.get("payload")
-    actionable = (
-        build_actionable_cleanup_summary_from_payload(payload)
+    items = (
+        extract_cleanup_action_items_from_payload(payload)
         if isinstance(payload, dict)
-        else build_actionable_cleanup_summary(compact)
+        else extract_cleanup_action_items(compact)
+    )
+    actionable = build_actionable_cleanup_summary_from_items(
+        _filter_reconciled_cleanup_items(items, workstream_rows)
     )
     if not compact and not actionable:
         return ""
