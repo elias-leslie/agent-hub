@@ -31,6 +31,7 @@ from app.services.task_overview_summary import (
     build_compact_task_overview,
     build_compact_task_overview_from_payload,
 )
+from app.services.token_counter import count_tokens
 
 # Re-export orchestrators (these are patched via _heartbeat_prompt.* in tests)
 from app.workflows._heartbeat_orchestrators import (
@@ -85,8 +86,10 @@ _WORKSTREAM_LOOKBACK_HOURS = 24
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 _HEARTBEAT_DIGEST_LOOKBACK_HOURS = 6
 _HEARTBEAT_DIGEST_LIMIT = 4
+_HEARTBEAT_DIGEST_TOKEN_BUDGET = 420
 _IDLE_HISTORY_LOOKBACK_HOURS = 6
 _IDLE_HISTORY_LIMIT = 4
+_IDLE_HISTORY_TOKEN_BUDGET = 360
 _IDLE_SUMMARY_MARKERS = (
     "clean and idle",
     "clean-idle",
@@ -354,6 +357,40 @@ def _extract_live_activity_summary(provider_metadata: dict[str, object] | None) 
     return summary if isinstance(summary, str) else None
 
 
+def _render_budgeted_rows_section(
+    *,
+    tag: str,
+    heading: str,
+    rows: list[str],
+    token_budget: int,
+) -> str:
+    """Render a compact recall section within a prompt token budget."""
+    if not rows:
+        return ""
+    selected_rows: list[str] = []
+    for row in rows:
+        proposed_rows = [*selected_rows, row]
+        section = (
+            f"\n<{tag}>\n"
+            f"{heading}: {len(proposed_rows)}\n"
+            + "\n".join(proposed_rows)
+            + f"\n</{tag}>"
+        )
+        if selected_rows and count_tokens(section) > token_budget:
+            break
+        selected_rows = proposed_rows
+        if count_tokens(section) > token_budget:
+            break
+    if not selected_rows:
+        return ""
+    return (
+        f"\n<{tag}>\n"
+        f"{heading}: {len(selected_rows)}\n"
+        + "\n".join(selected_rows)
+        + f"\n</{tag}>"
+    )
+
+
 def _row_value(row: object, index: int, attr: str) -> object:
     """Read one selected-column value from a SQLAlchemy row or plain tuple."""
     if hasattr(row, attr):
@@ -454,11 +491,11 @@ async def _get_recent_heartbeat_digest(target_project_id: str | None = None) -> 
     if not rendered_rows:
         return ""
 
-    return (
-        "\n<recent_heartbeat_digest>\n"
-        f"Recent heartbeat recall: {len(rendered_rows)}\n"
-        + "\n".join(rendered_rows)
-        + "\n</recent_heartbeat_digest>"
+    return _render_budgeted_rows_section(
+        tag="recent_heartbeat_digest",
+        heading="Recent heartbeat recall",
+        rows=rendered_rows,
+        token_budget=_HEARTBEAT_DIGEST_TOKEN_BUDGET,
     )
 
 
@@ -553,11 +590,11 @@ async def _get_recent_idle_improvement_history(
     if not rendered_rows:
         return ""
 
-    return (
-        "\n<recent_idle_improvement_history>\n"
-        f"Recent idle slices: {len(rendered_rows)}\n"
-        + "\n".join(rendered_rows)
-        + "\n</recent_idle_improvement_history>"
+    return _render_budgeted_rows_section(
+        tag="recent_idle_improvement_history",
+        heading="Recent idle slices",
+        rows=rendered_rows,
+        token_budget=_IDLE_HISTORY_TOKEN_BUDGET,
     )
 
 
