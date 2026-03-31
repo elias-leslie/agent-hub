@@ -101,6 +101,7 @@ _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "dispatch_agent",
     "query_sessions",
     "inspect_session",
+    "search_persona_history",
 })
 
 _PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
@@ -114,6 +115,7 @@ _SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "cancel_consultation",
     "query_sessions",
     "inspect_session",
+    "search_persona_history",
 })
 
 _READ_SAFE_MANAGE_TASK_ACTIONS: frozenset[str] = frozenset({
