@@ -60,6 +60,11 @@ class PersonaHoningIteration:
     improvement_tools: list[str] | None = None
     improvement_content: str | None = None
     improvement_parsed: dict[str, Any] | None = None
+    field_snapshot: dict[str, Any] | None = None
+    final_decision: str | None = None
+    final_decision_reason: str | None = None
+    final_decision_source: str | None = None
+    decision_review: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -67,22 +72,17 @@ class PersonaHoningIteration:
 
 @dataclass
 class PersonaMutableState:
-    heartbeat_instructions: str
-    heartbeat_revision_id: str | None
     primary_model_id: str
     fallback_models: list[str]
     escalation_model_id: str | None
     temperature: float
     thinking_level: str | None
+    prompt_states: dict[str, dict[str, str | None]] = field(default_factory=dict)
     supervisor_primary_model_id: str | None = None
     supervisor_fallback_models: list[str] = field(default_factory=list)
     supervisor_escalation_model_id: str | None = None
     supervisor_temperature: float | None = None
     supervisor_thinking_level: str | None = None
-    completion_review_prompt: str | None = None
-    completion_review_prompt_revision_id: str | None = None
-    completion_review_rules: str | None = None
-    completion_review_rules_revision_id: str | None = None
 
 
 @dataclass

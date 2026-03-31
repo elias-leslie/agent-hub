@@ -80,6 +80,183 @@ class PersonaUpdate(BaseModel):
     limits: PersonaLimits | None = None
 
 
+class PersonaImprovementScheduleResponse(BaseModel):
+    """Current scheduled Jenny improvement-loop configuration."""
+
+    job_id: str | None = None
+    enabled: bool = False
+    schedule_type: str = "every"
+    schedule_value: str
+    schedule_timezone: str = "UTC"
+    cadence_minutes: int = 1440
+    cadence_label: str | None = None
+    last_run_at: str | None = None
+    next_run_at: str | None = None
+    run_count: int = 0
+
+
+class PersonaImprovementScheduleUpdate(BaseModel):
+    """Update the scheduled Jenny improvement loop."""
+
+    enabled: bool
+    cadence_minutes: int = Field(default=1440, ge=15, le=10080)
+
+
+class PersonaImprovementOverview(BaseModel):
+    """Top-level Jenny improvement KPIs."""
+
+    total_runs: int = 0
+    latest_completed_at: str | None = None
+    reliability: float | None = None
+    effectiveness: float | None = None
+    tokens_per_passed_attempt: float | None = None
+    prompt_tokens: float | None = None
+    open_regressions: int = 0
+
+
+class PersonaImprovementTrendPoint(BaseModel):
+    """One Jenny improvement trend point."""
+
+    run_id: str
+    completed_at: str | None = None
+    run_kind: str
+    suite_id: str
+    reliability: float | None = None
+    effectiveness: float | None = None
+    avg_total_tokens: float | None = None
+    tokens_per_passed_attempt: float | None = None
+    avg_tool_calls: float | None = None
+    avg_turns: float | None = None
+    prompt_tokens: int | None = None
+
+
+class PersonaImprovementFamilySummary(BaseModel):
+    """Per-family pass-rate summary for one Jenny improvement run."""
+
+    family: str
+    attempts: int = 0
+    pass_rate: float = 0.0
+    productive_attempts: int = 0
+
+
+class PersonaImprovementRecentRun(BaseModel):
+    """Compact Jenny improvement run summary for the dashboard."""
+
+    run_id: str
+    benchmark_id: str
+    suite_id: str
+    run_kind: str
+    started_at: str
+    completed_at: str | None = None
+    models: list[str] = Field(default_factory=list)
+    case_ids: list[str] = Field(default_factory=list)
+    attempt_count: int = 0
+    passed_attempt_count: int = 0
+    infra_failure_count: int = 0
+    reliability: float | None = None
+    effectiveness: float | None = None
+    avg_total_tokens: float | None = None
+    tokens_per_passed_attempt: float | None = None
+    avg_tool_calls: float | None = None
+    avg_turns: float | None = None
+    prompt_tokens: int | None = None
+    failure_count: int | None = None
+    top_failure_detail: str | None = None
+    family_breakdown: list[PersonaImprovementFamilySummary] = Field(default_factory=list)
+    experiment_decision: str | None = None
+    experiment_decision_reason: str | None = None
+    decision_source: str | None = None
+
+
+class PersonaImprovementOpenRegression(BaseModel):
+    """Open Jenny improvement regression cluster."""
+
+    case_id: str
+    failure_detail: str
+    occurrence_count: int = 0
+    last_seen_at: str | None = None
+    latest_avg_score: float | None = None
+
+
+class PersonaHeartbeatFieldOverview(BaseModel):
+    """Scored recent real-heartbeat summary for Jenny."""
+
+    total_heartbeats: int = 0
+    latest_completed_at: str | None = None
+    reliability: float | None = None
+    effectiveness: float | None = None
+    truth_quality: float | None = None
+    tokens_per_healthy_heartbeat: float | None = None
+    avg_tool_calls: float | None = None
+    avg_turns: float | None = None
+    risky_heartbeats: int = 0
+    critical_heartbeats: int = 0
+
+
+class PersonaHeartbeatFieldTrendPoint(BaseModel):
+    """One recent real-heartbeat trend point."""
+
+    session_id: str
+    completed_at: str | None = None
+    reliability: float | None = None
+    effectiveness: float | None = None
+    truth_quality: float | None = None
+    total_tokens: int = 0
+    tool_calls: int = 0
+    turns: int = 0
+    result_status: str
+
+
+class PersonaHeartbeatFieldRisk(BaseModel):
+    """Recent real-heartbeat risk surfaced into Jenny analytics."""
+
+    session_id: str
+    completed_at: str | None = None
+    reliability: float | None = None
+    issue_summary: str
+    summary_oneliner: str | None = None
+    critical: bool = False
+
+
+class PersonaHeartbeatFieldSession(BaseModel):
+    """Compact recent real-heartbeat summary."""
+
+    session_id: str
+    completed_at: str
+    created_at: str
+    status: str
+    result_status: str
+    summary_oneliner: str | None = None
+    reliability: float
+    effectiveness: float
+    truth_quality: float
+    total_tokens: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    tool_calls: int = 0
+    turns: int = 0
+    issue_codes: list[str] = Field(default_factory=list)
+    issue_summary: str
+    healthy: bool = False
+
+
+class PersonaImprovementDashboardResponse(BaseModel):
+    """Focused Jenny improvement dashboard response."""
+
+    generated_at: str
+    suite_id: str
+    days: int
+    schedule: PersonaImprovementScheduleResponse
+    overview: PersonaImprovementOverview
+    field_overview: PersonaHeartbeatFieldOverview
+    trend: list[PersonaImprovementTrendPoint] = Field(default_factory=list)
+    field_trend: list[PersonaHeartbeatFieldTrendPoint] = Field(default_factory=list)
+    recent_runs: list[PersonaImprovementRecentRun] = Field(default_factory=list)
+    recent_heartbeats: list[PersonaHeartbeatFieldSession] = Field(default_factory=list)
+    open_regressions: list[PersonaImprovementOpenRegression] = Field(default_factory=list)
+    field_risks: list[PersonaHeartbeatFieldRisk] = Field(default_factory=list)
+
+
 # ---------------------------------------------------------------------------
 # Personality sub-resource schemas
 # ---------------------------------------------------------------------------

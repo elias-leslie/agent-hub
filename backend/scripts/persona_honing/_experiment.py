@@ -8,11 +8,16 @@ from types import SimpleNamespace
 from typing import Any
 
 from agent_hub import AsyncAgentHubClient
+from sqlalchemy import select
 
 from app.db import async_session
 from app.services.agent_benchmark_service import (
     get_benchmark_experiment_summary_by_key,
     summarize_benchmark_experiment,
+)
+from app.services.persona_prompt_service import (
+    render_persona_improvement_decision_review_prompt,
+    render_persona_improvement_prompt,
 )
 from scripts.completion_review_benchmark_eval import (
     CompletionReviewBenchmarkRun,
@@ -31,7 +36,11 @@ from scripts.persona_honing._benchmarks import (
     _run_initial_benchmarks,
     _run_review_cohort_benchmarks,
 )
-from scripts.persona_honing._clusters import _diff_failure_clusters, _group_failures
+from scripts.persona_honing._clusters import (
+    _diff_failure_clusters,
+    _group_failures,
+    _render_cluster_block,
+)
 from scripts.persona_honing._constants import (
     DECISION_PROMOTE,
     RUN_KIND_HONING_BASELINE,
@@ -48,14 +57,25 @@ from scripts.persona_honing._persistence import (
     _persist_review_cohort_pair,
     _persist_runs,
 )
-from scripts.persona_honing._prompt import (
+from scripts.persona_honing._response import (
     _HONING_RESPONSE_SCHEMA,
-    _parse_improvement_content,
-    build_honing_prompt,
+    parse_decision_review_content,
+    parse_improvement_content,
 )
 from scripts.persona_honing._state import _restore_persona_mutable_state
 from scripts.run_completion_review_model_benchmark import derive_suite_id as derive_review_suite_id
 from scripts.run_persona_model_benchmark import derive_suite_id
+
+_REFERENCE_NOTES = [
+    (
+        "Auto-Claude inspiration: the learning loop should retrieve shared patterns/gotchas "
+        "before acting, and durable lessons belong in shared memory rather than ad hoc notes."
+    ),
+    (
+        "OpenClaw inspiration: keep fallback/model decisions observable and simple; prefer "
+        "clear, inspectable adaptation over extra defensive machinery."
+    ),
+]
 
 
 async def _load_recent_improvement_signals(project_id: str) -> str | None:
@@ -69,6 +89,296 @@ async def _load_recent_improvement_signals(project_id: str) -> str | None:
         include_team=True,
     )
     return review.strip() or None
+
+
+async def _load_field_snapshot() -> dict[str, Any]:
+    from app.services.persona_improvement import get_persona_heartbeat_field_snapshot
+
+    async with async_session() as db:
+        return await get_persona_heartbeat_field_snapshot(db)
+
+
+def _format_delta_block(label: str, delta: dict[str, Any] | None) -> str:
+    if not isinstance(delta, dict):
+        return f"- {label}: unavailable"
+    return (
+        f"- {label}: mean={delta.get('mean_delta')} "
+        f"ci=[{delta.get('ci_low')}, {delta.get('ci_high')}]"
+    )
+
+
+def _format_experiment_summary_block(summary: dict[str, Any] | None) -> str:
+    if not isinstance(summary, dict):
+        return "- not available"
+    baseline = dict(summary.get("baseline") or {})
+    candidate = dict(summary.get("candidate") or {})
+    lines = [
+        f"- decision={summary.get('decision')} reason={summary.get('decision_reason')}",
+        (
+            f"- baseline: runs={baseline.get('run_count')} "
+            f"score={baseline.get('avg_score')} pass_rate={baseline.get('avg_pass_rate')} "
+            f"tools={baseline.get('avg_tool_calls')}"
+        ),
+        (
+            f"- candidate: runs={candidate.get('run_count')} "
+            f"score={candidate.get('avg_score')} pass_rate={candidate.get('avg_pass_rate')} "
+            f"tools={candidate.get('avg_tool_calls')}"
+        ),
+        _format_delta_block("score_delta", summary.get("score_delta")),
+        _format_delta_block("pass_rate_delta", summary.get("pass_rate_delta")),
+        _format_delta_block("tool_call_delta", summary.get("tool_call_delta")),
+    ]
+    return "\n".join(lines)
+
+
+def _format_improvement_summary_block(record: PersonaHoningIteration) -> str:
+    parsed = dict(record.improvement_parsed or {})
+    changes = parsed.get("changes_applied")
+    next_focus = parsed.get("next_focus")
+    lines = [
+        f"- summary={parsed.get('summary') or '(none)'}",
+        f"- tools={', '.join(record.improvement_tools or []) or 'none'}",
+    ]
+    if isinstance(changes, list) and changes:
+        lines.append("- changes_applied=" + "; ".join(str(item) for item in changes))
+    if isinstance(next_focus, list) and next_focus:
+        lines.append("- next_focus=" + "; ".join(str(item) for item in next_focus))
+    return "\n".join(lines)
+
+
+def _needs_supervisor_review(
+    *,
+    raw_decision: str,
+    raw_reason: str,
+    review_summary: dict[str, Any] | None,
+    field_snapshot: dict[str, Any] | None,
+) -> bool:
+    if raw_decision == "hold":
+        return True
+    if raw_reason == "candidate_matches_quality_with_fewer_tool_calls":
+        return True
+    if review_summary is not None and str(review_summary.get("decision")) == "hold":
+        return True
+    field_gate = dict((field_snapshot or {}).get("review_gate") or {})
+    return bool(field_gate.get("needs_review"))
+
+
+async def _persist_final_experiment_decision(
+    *,
+    experiment_key: str,
+    decision: str,
+    reason: str,
+    source: str,
+    field_snapshot: dict[str, Any] | None,
+    decision_review: dict[str, Any] | None,
+) -> None:
+    from app.models import AgentBenchmarkExperiment
+
+    async with async_session() as db:
+        experiment = await db.scalar(
+            select(AgentBenchmarkExperiment).where(
+                AgentBenchmarkExperiment.experiment_key == experiment_key
+            )
+        )
+        if experiment is None:
+            return
+        evidence = dict(experiment.evidence or {})
+        evidence["final_decision_source"] = source
+        if field_snapshot:
+            evidence["field_gate"] = dict(field_snapshot.get("review_gate") or {})
+            evidence["field_overview"] = dict(field_snapshot.get("overview") or {})
+        if decision_review:
+            evidence["supervisor_review"] = decision_review
+        experiment.decision = decision
+        experiment.decision_reason = reason
+        experiment.status = "closed" if decision in {"promote", "rollback"} else "open"
+        experiment.evidence = evidence
+        await db.commit()
+
+
+async def _run_decision_review(
+    *,
+    client: AsyncAgentHubClient,
+    iteration: int,
+    experiment_key: str,
+    project_id: str,
+    timeout_seconds: float | None,
+    working_root: Path,
+    proposed_decision: str,
+    proposed_reason: str,
+    experiment_summary: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+    field_snapshot: dict[str, Any] | None,
+    record: PersonaHoningIteration,
+) -> dict[str, Any]:
+    from app.services.persona_improvement import build_persona_heartbeat_field_digest
+
+    prompt = await render_persona_improvement_decision_review_prompt(
+        proposed_decision=proposed_decision,
+        proposed_reason=proposed_reason,
+        experiment_summary_block=_format_experiment_summary_block(experiment_summary),
+        completion_review_block=_format_experiment_summary_block(review_summary),
+        field_signals_block=await build_persona_heartbeat_field_digest(),
+        improvement_summary_block=_format_improvement_summary_block(record),
+    )
+    try:
+        response = await client.complete(
+            messages=[{"role": "user", "content": prompt}],
+            project_id=project_id,
+            agent_slug="supervisor",
+            external_id=f"persona-honing-review:{experiment_key}:iteration-{iteration}",
+            enable_caching=False,
+            skip_cache=True,
+            use_memory=False,
+            max_turns=1,
+            working_dir=str(working_root),
+            execute_tools=False,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as exc:
+        return {
+            "used": False,
+            "session_id": None,
+            "decision": None,
+            "reason": f"review_unavailable:{type(exc).__name__}",
+        }
+    parsed = parse_decision_review_content(response.content)
+    if parsed is None:
+        return {
+            "used": False,
+            "session_id": response.session_id,
+            "decision": None,
+            "reason": "review_unparseable",
+            "raw_content": response.content,
+        }
+    return {
+        "used": True,
+        "session_id": response.session_id,
+        "decision": parsed["decision"],
+        "reason": parsed["reason"],
+        "raw_content": response.content,
+        "field_gate": dict((field_snapshot or {}).get("review_gate") or {}),
+    }
+
+
+async def _determine_final_experiment_decision(
+    *,
+    client: AsyncAgentHubClient,
+    iteration: int,
+    record: PersonaHoningIteration,
+    experiment_key: str,
+    experiment_summary: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+    field_snapshot: dict[str, Any] | None,
+    cfg: _IterationConfig,
+) -> tuple[str, str, str, dict[str, Any] | None]:
+    raw_decision = str(experiment_summary.get("decision") or "hold")
+    raw_reason = str(experiment_summary.get("decision_reason") or "no_clear_winner")
+    review_decision = str(review_summary.get("decision")) if review_summary is not None else None
+    if review_decision == "rollback":
+        review_reason = str(review_summary.get("decision_reason") or "completion_review_regression")
+        return "rollback", review_reason, "completion_review", None
+    if _needs_supervisor_review(
+        raw_decision=raw_decision,
+        raw_reason=raw_reason,
+        review_summary=review_summary,
+        field_snapshot=field_snapshot,
+    ):
+        decision_review = await _run_decision_review(
+            client=client,
+            iteration=iteration,
+            experiment_key=experiment_key,
+            project_id=cfg["project_id"],
+            timeout_seconds=cfg["timeout_seconds"],
+            working_root=cfg["working_root"],
+            proposed_decision=raw_decision,
+            proposed_reason=raw_reason,
+            experiment_summary=experiment_summary,
+            review_summary=review_summary,
+            field_snapshot=field_snapshot,
+            record=record,
+        )
+        if decision_review.get("used"):
+            return (
+                str(decision_review["decision"]),
+                str(decision_review["reason"]),
+                "supervisor_review",
+                decision_review,
+            )
+        return raw_decision, raw_reason, "benchmark", decision_review
+    return raw_decision, raw_reason, "benchmark", None
+
+
+async def _build_improvement_prompt(
+    *,
+    run: PersonaBenchmarkRun,
+    iteration: int,
+    previous_clusters: list[dict[str, Any]] | None,
+    review_run: CompletionReviewBenchmarkRun | None,
+    previous_review_clusters: list[dict[str, Any]] | None,
+    improvement_signals: str | None,
+    field_signals: str | None,
+    max_failures: int = 6,
+) -> str:
+    current_clusters = _group_failures(run.attempts)
+    persistent_clusters, new_clusters, resolved_clusters = _diff_failure_clusters(
+        previous_clusters,
+        current_clusters,
+    )
+    ranking_lines = [
+        f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
+        f"pass_rate={s.pass_rate:.3f} avg_tools={s.avg_tool_calls:.1f}"
+        for i, s in enumerate(run.summaries[:3], start=1)
+    ]
+    ranking_block = "\n".join(ranking_lines) if ranking_lines else "- none"
+    reference_block = "\n".join(f"- {note}" for note in _REFERENCE_NOTES)
+    failure_block = _render_cluster_block(current_clusters[:max_failures], "Top failure clusters")
+    persistent_block = _render_cluster_block(
+        persistent_clusters[:max_failures],
+        "Persistent unresolved clusters from the previous iteration",
+    )
+    new_block = _render_cluster_block(new_clusters[:max_failures], "New clusters this iteration")
+    resolved_block = _render_cluster_block(
+        resolved_clusters[:max_failures],
+        "Resolved clusters since the previous iteration",
+    )
+    review_ranking_block = "- not run"
+    review_failure_block = "Completion-review failure clusters:\n- not run"
+    review_persistent_block = "Persistent completion-review clusters from the previous iteration:\n- not run"
+    if review_run is not None:
+        review_ranking_lines = [
+            f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
+            f"pass_rate={s.pass_rate:.1f} avg_turns={s.avg_turns:.2f}"
+            for i, s in enumerate(review_run.summaries[:3], start=1)
+        ]
+        review_ranking_block = "\n".join(review_ranking_lines) if review_ranking_lines else "- none"
+        review_clusters = _group_failures(review_run.attempts)
+        review_persistent_clusters, _, _ = _diff_failure_clusters(
+            previous_review_clusters,
+            review_clusters,
+        )
+        review_failure_block = _render_cluster_block(
+            review_clusters[:max_failures],
+            "Completion-review failure clusters",
+        )
+        review_persistent_block = _render_cluster_block(
+            review_persistent_clusters[:max_failures],
+            "Persistent completion-review clusters from the previous iteration",
+        )
+    return await render_persona_improvement_prompt(
+        iteration=iteration,
+        ranking_block=ranking_block,
+        failure_block=failure_block,
+        persistent_block=persistent_block,
+        new_block=new_block,
+        resolved_block=resolved_block,
+        review_ranking_block=review_ranking_block,
+        review_failure_block=review_failure_block,
+        review_persistent_block=review_persistent_block,
+        improvement_signals_block=improvement_signals or "- none",
+        field_signals_block=field_signals or "- none",
+        reference_block=reference_block,
+    )
 
 
 def _merge_benchmark_runs(runs: list[Any], *, benchmark_id: str, summarize_fn: Any) -> Any:
@@ -140,13 +450,21 @@ async def _run_improvement_pass(
     working_root: Path,
 ) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
     """Prompt the persona to improve itself based on benchmark failures."""
+    from app.services.persona_improvement import build_persona_heartbeat_field_digest
+
     improvement_signals = await _load_recent_improvement_signals(project_id)
+    field_signals = await build_persona_heartbeat_field_digest()
+    prompt = await _build_improvement_prompt(
+        run=run,
+        iteration=iteration,
+        previous_clusters=previous_clusters,
+        review_run=review_run,
+        previous_review_clusters=previous_review_clusters,
+        improvement_signals=improvement_signals,
+        field_signals=field_signals,
+    )
     response = await client.complete(
-        messages=[{"role": "user", "content": build_honing_prompt(
-            run, iteration, previous_clusters,
-            review_run=review_run, previous_review_clusters=previous_review_clusters,
-            improvement_signals=improvement_signals,
-        )}],
+        messages=[{"role": "user", "content": prompt}],
         project_id=project_id,
         agent_slug="persona",
         external_id=f"persona-honing:{run.benchmark_id}:iteration-{iteration}",
@@ -155,7 +473,7 @@ async def _run_improvement_pass(
         response_format={"type": "json_object", "schema": _HONING_RESPONSE_SCHEMA},
     )
     used_tools = await _fetch_used_tool_names(response.session_id)
-    return response.session_id, response.content, used_tools, _parse_improvement_content(response.content)
+    return response.session_id, response.content, used_tools, parse_improvement_content(response.content)
 
 
 def _write_iteration_report(output_dir: Path, run: PersonaBenchmarkRun, iteration: int) -> str:
@@ -268,8 +586,9 @@ async def _run_review_cohort_experiment(
 
 async def _resolve_experiment_decision(
     *,
-    decision: str,
-    review_summary: dict[str, Any] | None,
+    final_decision: str,
+    final_decision_reason: str,
+    final_decision_source: str,
     baseline_state: PersonaMutableState,
     agent_slug: str,
     iteration: int,
@@ -282,8 +601,10 @@ async def _resolve_experiment_decision(
     loop_state: _LoopState,
 ) -> None:
     """Apply promote/rollback decision, merge winning runs, update loop state."""
-    review_decision = str(review_summary.get("decision")) if review_summary is not None else None
-    should_rollback = decision != DECISION_PROMOTE or review_decision == "rollback"
+    should_rollback = final_decision != DECISION_PROMOTE
+    record.final_decision = final_decision
+    record.final_decision_reason = final_decision_reason
+    record.final_decision_source = final_decision_source
     if should_rollback:
         await _restore_persona_mutable_state(
             agent_slug, baseline_state,
@@ -420,8 +741,31 @@ async def _run_experiment_and_decide(
                 experiment_key=experiment_key, iteration=iteration, cfg=cfg,
             )
         )
+    final_decision, final_reason, final_source, decision_review = (
+        await _determine_final_experiment_decision(
+            client=client,
+            iteration=iteration,
+            record=record,
+            experiment_key=experiment_key,
+            experiment_summary=record.experiment_summary,
+            review_summary=review_summary,
+            field_snapshot=record.field_snapshot,
+            cfg=cfg,
+        )
+    )
+    record.decision_review = decision_review
+    await _persist_final_experiment_decision(
+        experiment_key=experiment_key,
+        decision=final_decision,
+        reason=final_reason,
+        source=final_source,
+        field_snapshot=record.field_snapshot,
+        decision_review=decision_review,
+    )
     await _resolve_experiment_decision(
-        decision=record.experiment_summary["decision"], review_summary=review_summary,
+        final_decision=final_decision,
+        final_decision_reason=final_reason,
+        final_decision_source=final_source,
         baseline_state=baseline_state, agent_slug=cfg["agent_slug"], iteration=iteration,
         experiment_key=experiment_key,
         baseline_runs=baseline_runs, candidate_runs=candidate_runs,
@@ -506,6 +850,12 @@ async def _run_iteration(
     baseline_config = await _get_config_snapshot(cfg["agent_slug"], cfg["benchmark_task_type"])
     suite_name = suite_id or derive_suite_id(cfg["case_ids"])
     record = _build_iteration_record(iteration, benchmark_run, report_path, loop_state, review_run=review_run)
+    field_snapshot = await _load_field_snapshot()
+    record.field_snapshot = {
+        "overview": dict(field_snapshot.get("overview") or {}),
+        "review_gate": dict(field_snapshot.get("review_gate") or {}),
+        "risks": list(field_snapshot.get("risks") or [])[:3],
+    }
     persist_kw: dict[str, Any] = dict(
         record=record, benchmark_run=benchmark_run, config_snapshot=baseline_config,
         suite_name=suite_name, agent_slug=cfg["agent_slug"], use_memory=cfg["use_memory"],

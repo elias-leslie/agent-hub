@@ -19,8 +19,8 @@ from scripts.persona_benchmark_eval import (
     summarize_attempts,
 )
 from scripts.run_persona_honing_loop import (
+    _build_improvement_prompt,
     _run_improvement_pass,
-    build_honing_prompt,
     run_honing_loop,
 )
 
@@ -39,7 +39,68 @@ def _make_run(attempts: list[PersonaBenchmarkAttempt]) -> PersonaBenchmarkRun:
     )
 
 
-def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> None:
+@pytest.fixture(autouse=True)
+def _mock_persona_improvement_prompt():
+    async def _require_prompt_content(slug: str) -> str:
+        if slug == "persona-evolution-guidelines":
+            return (
+                "You are the persona reviewing your own benchmark results for honing iteration {iteration}.\n\n"
+                "Your job is to improve your own operating model only where the evidence justifies it.\n"
+                "Stay inside Jenny-improvement work: canonical prompts, memory, model/config, performance logging, and valid control-plane/runtime fixes.\n"
+                "Do not create or dispatch project tasks.\n\n"
+                "Benchmark ranking:\n"
+                "{ranking_block}\n\n"
+                "{failure_block}\n\n"
+                "{persistent_block}\n\n"
+                "{new_block}\n\n"
+                "{resolved_block}\n\n"
+                "Completion-review benchmark ranking:\n"
+                "{review_ranking_block}\n\n"
+                "{review_failure_block}\n\n"
+                "{review_persistent_block}\n\n"
+                "Recent improvement signals:\n"
+                "{improvement_signals_block}\n\n"
+                "Recent real-heartbeat field evidence:\n"
+                "{field_signals_block}\n\n"
+                "Reference heuristics to borrow when relevant:\n"
+                "{reference_block}\n\n"
+                "Required behavior:\n"
+                "- Diagnose the canonical layer first: prompt, memory, config, truth pipeline, evaluator, or runtime.\n"
+                "- Use `persona-evolution-guidelines` as the canonical Jenny improvement prompt and DB-backed prompts rather than Python prompt files.\n"
+                "- When reviewing your own performance history, use agent_slug=\"persona\" rather than a display name string.\n"
+                "- Use repeated issue clusters, benchmark decisions, and low-yield reference evidence to choose the smallest effective fix.\n"
+                "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
+                "- If memory routing looks implicated, inspect current agent memory config first and use manage_memory_tags for reference-tier retagging before editing heartbeat instructions.\n"
+                "- If a specialist keeps missing universal workflow rules like rebuild.sh or dt, inspect mandate/guardrail exposure before retagging references.\n"
+                "- Treat audience tags and reference inclusion as the memory-routing levers; do not paper over routing misses by inventing new mandates or guardrails.\n"
+                "- Treat completion-review regressions as first-class evidence; inspect completion-review-prompt, completion-review-rules, or supervisor model config when reviewer cases fail.\n"
+                "- If improvement signals show a recurring self-correction failure that this battery does not directly cover, call that out in next_focus as a benchmark coverage gap rather than overfitting the current prompt to an untested pattern.\n"
+                "- Return JSON only with fields summary, changes_applied, next_focus, durable_learning_saved."
+            )
+        if slug == "persona-improvement-review":
+            return (
+                "You are reviewing a proposed Jenny self-improvement decision.\n\n"
+                "Protected lab summary:\n"
+                "{experiment_summary_block}\n\n"
+                "Completion-review summary:\n"
+                "{completion_review_block}\n\n"
+                "Recent field evidence:\n"
+                "{field_signals_block}\n\n"
+                "Candidate change summary:\n"
+                "{improvement_summary_block}\n\n"
+                "Proposed automatic decision:\n"
+                "- decision={proposed_decision}\n"
+                "- reason={proposed_reason}\n\n"
+                "Return JSON only with fields decision and reason."
+            )
+        raise AssertionError(f"unexpected prompt slug: {slug}")
+
+    with patch("app.services.persona_prompt_service.require_prompt_content", new=_require_prompt_content):
+        yield
+
+
+@pytest.mark.asyncio
+async def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> None:
     run = _make_run(
         [
             PersonaBenchmarkAttempt(
@@ -75,7 +136,15 @@ def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> 
         ]
     )
 
-    prompt = build_honing_prompt(run, iteration=2)
+    prompt = await _build_improvement_prompt(
+        run=run,
+        iteration=2,
+        previous_clusters=None,
+        review_run=None,
+        previous_review_clusters=None,
+        improvement_signals=None,
+        field_signals=None,
+    )
 
     assert "feedback_triage_hotspot" in prompt
     assert "performance_review_honing" in prompt
@@ -87,7 +156,8 @@ def test_build_honing_prompt_includes_failure_clusters_and_reference_notes() -> 
     assert "rebuild.sh" in prompt
 
 
-def test_build_honing_prompt_handles_clean_run() -> None:
+@pytest.mark.asyncio
+async def test_build_honing_prompt_handles_clean_run() -> None:
     run = _make_run(
         [
             PersonaBenchmarkAttempt(
@@ -106,12 +176,21 @@ def test_build_honing_prompt_handles_clean_run() -> None:
         ]
     )
 
-    prompt = build_honing_prompt(run, iteration=1)
+    prompt = await _build_improvement_prompt(
+        run=run,
+        iteration=1,
+        previous_clusters=None,
+        review_run=None,
+        previous_review_clusters=None,
+        improvement_signals=None,
+        field_signals=None,
+    )
 
     assert "Top failure clusters:\n- none" in prompt
 
 
-def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
+@pytest.mark.asyncio
+async def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
     run = _make_run(
         [
             PersonaBenchmarkAttempt(
@@ -132,8 +211,8 @@ def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
         ]
     )
 
-    prompt = build_honing_prompt(
-        run,
+    prompt = await _build_improvement_prompt(
+        run=run,
         iteration=2,
         previous_clusters=[
             {
@@ -144,6 +223,10 @@ def test_build_honing_prompt_includes_persistent_cluster_section() -> None:
                 "avg_score": 57.5,
             }
         ],
+        review_run=None,
+        previous_review_clusters=None,
+        improvement_signals=None,
+        field_signals=None,
     )
 
     assert "Persistent unresolved clusters from the previous iteration" in prompt
@@ -171,6 +254,18 @@ class _FakeImprovementClient:
                 '{"summary":"tightened prompt","changes_applied":["edited heartbeat"],'
                 '"next_focus":["rerun benchmark"],"durable_learning_saved":false}'
             ),
+        )
+
+
+class _FakeDecisionReviewClient:
+    def __init__(self) -> None:
+        self.kwargs: dict[str, object] | None = None
+
+    async def complete(self, **kwargs):
+        self.kwargs = kwargs
+        return SimpleNamespace(
+            session_id="sess-review",
+            content='```json\n{"decision":"hold","reason":"review confirms hold"}\n```',
         )
 
 
@@ -285,6 +380,10 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
             "scripts.persona_honing._experiment._load_recent_improvement_signals",
             new=AsyncMock(return_value="## Repeated issues\n- persona [2x]: missed rebuild.sh"),
         ),
+        patch(
+            "app.services.persona_improvement.build_persona_heartbeat_field_digest",
+            new=AsyncMock(return_value="- 3 recent real heartbeats; avg reliability 90.0%; critical issues 0."),
+        ),
     ):
         session_id, content, tools, parsed = await _run_improvement_pass(
             client=client,
@@ -311,20 +410,23 @@ async def test_run_improvement_pass_disables_memory_in_controlled_honing_loop() 
     assert client.kwargs["use_memory"] is False
     assert client.kwargs["agent_slug"] == "persona"
     assert "Recent improvement signals" in client.kwargs["messages"][0]["content"]
+    assert "Recent real-heartbeat field evidence" in client.kwargs["messages"][0]["content"]
     assert "missed rebuild.sh" in client.kwargs["messages"][0]["content"]
 
 
-def test_build_honing_prompt_includes_completion_review_surface() -> None:
+@pytest.mark.asyncio
+async def test_build_honing_prompt_includes_completion_review_surface() -> None:
     run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
     review_run = _review_benchmark_run(
         "review-1",
         [_review_failing_attempt("review_recent_progress_patience")],
     )
 
-    prompt = build_honing_prompt(
-        run,
+    prompt = await _build_improvement_prompt(
+        run=run,
         iteration=2,
         review_run=review_run,
+        previous_clusters=None,
         previous_review_clusters=[
             {
                 "case_id": "review_recent_progress_patience",
@@ -334,6 +436,8 @@ def test_build_honing_prompt_includes_completion_review_surface() -> None:
                 "avg_score": 40.0,
             }
         ],
+        improvement_signals=None,
+        field_signals=None,
     )
 
     assert "Completion-review benchmark ranking" in prompt
@@ -342,28 +446,34 @@ def test_build_honing_prompt_includes_completion_review_surface() -> None:
     assert "completion-review-prompt" in prompt
 
 
-def test_build_honing_prompt_includes_recent_improvement_signals() -> None:
+@pytest.mark.asyncio
+async def test_build_honing_prompt_includes_recent_improvement_signals() -> None:
     run = _benchmark_run("bench-1", [_failing_attempt("session_patience_recent_progress")])
 
-    prompt = build_honing_prompt(
-        run,
+    prompt = await _build_improvement_prompt(
+        run=run,
         iteration=2,
+        previous_clusters=None,
+        review_run=None,
+        previous_review_clusters=None,
         improvement_signals=(
             "# Improvement Signals\n\n"
             "## Repeated issues\n"
             "- persona [2x]: Heartbeat self-reflection signals: missing HEARTBEAT_OK/HEARTBEAT_ACTION prefix\n"
         ),
+        field_signals="- 4 recent real heartbeats; avg reliability 89.0%; avg effectiveness 83.5%; critical issues 0.",
     )
 
     assert "Recent improvement signals" in prompt
+    assert "Recent real-heartbeat field evidence" in prompt
     assert "Heartbeat self-reflection signals" in prompt
     assert "benchmark coverage gap" in prompt
 
 
 def test_parse_improvement_content_tolerates_narration_and_citations() -> None:
-    from scripts.persona_honing._prompt import _parse_improvement_content
+    from scripts.persona_honing._response import parse_improvement_content
 
-    parsed = _parse_improvement_content(
+    parsed = parse_improvement_content(
         """[[P:started:reviewing improvement output]] Applied: [M:b901dcc9]
 {"summary":"tightened benchmark phrasing","changes_applied":["logged performance note"],"next_focus":["rerun benchmark"],"durable_learning_saved":false}"""
     )
@@ -374,6 +484,68 @@ def test_parse_improvement_content_tolerates_narration_and_citations() -> None:
         "next_focus": ["rerun benchmark"],
         "durable_learning_saved": False,
     }
+
+
+def test_parse_decision_review_content_tolerates_narration() -> None:
+    from scripts.persona_honing._response import parse_decision_review_content
+
+    parsed = parse_decision_review_content(
+        """[[P:started:reviewing decision]] {"decision":"hold","reason":"field evidence suggests evaluator gap"}"""
+    )
+
+    assert parsed == {
+        "decision": "hold",
+        "reason": "field evidence suggests evaluator gap",
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_decision_review_uses_freeform_completion_and_parses_json() -> None:
+    from scripts.persona_honing._experiment import _run_decision_review
+
+    client = _FakeDecisionReviewClient()
+    record = SimpleNamespace(
+        summary="candidate improved same_task_overlap JSON hygiene",
+        changes_applied=["tightened JSON-only precedence"],
+        next_focus=["address primary_action contract drift"],
+        improvement_parsed={
+            "summary": "candidate improved same_task_overlap JSON hygiene",
+            "changes_applied": ["tightened JSON-only precedence"],
+            "next_focus": ["address primary_action contract drift"],
+        },
+        improvement_tools=[],
+    )
+
+    with (
+        patch(
+            "scripts.persona_honing._experiment.render_persona_improvement_decision_review_prompt",
+            new=AsyncMock(return_value="review prompt"),
+        ),
+        patch(
+            "app.services.persona_improvement.build_persona_heartbeat_field_digest",
+            new=AsyncMock(return_value="- 4 recent real heartbeats; avg reliability 100.0%."),
+        ),
+    ):
+        result = await _run_decision_review(
+            client=client,
+            iteration=1,
+            experiment_key="exp-1234",
+            project_id="agent-hub",
+            timeout_seconds=60.0,
+            working_root=Path("/tmp/persona-honing-test"),
+            proposed_decision="hold",
+            proposed_reason="no_clear_winner",
+            experiment_summary={"decision": "hold", "decision_reason": "no_clear_winner"},
+            review_summary=None,
+            field_snapshot={"review_gate": {"needs_review": False, "summary": "field_ok"}},
+            record=record,
+        )
+
+    assert result["used"] is True
+    assert result["decision"] == "hold"
+    assert result["reason"] == "review confirms hold"
+    assert client.kwargs is not None
+    assert "response_format" not in client.kwargs
 
 
 @pytest.mark.asyncio
@@ -391,6 +563,14 @@ async def test_persist_iteration_record_uses_unique_iteration_benchmark_id() -> 
         review_experiment_key=None,
         review_experiment_summary=None,
         persisted_run_id=None,
+        improvement_session_id=None,
+        improvement_tools=None,
+        improvement_parsed=None,
+        final_decision=None,
+        final_decision_reason=None,
+        final_decision_source=None,
+        decision_review=None,
+        field_snapshot=None,
     )
     captured_payload: dict[str, object] = {}
 
@@ -461,6 +641,14 @@ async def test_run_honing_loop_rolls_back_non_promoted_candidate() -> None:
             new=AsyncMock(return_value={"decision": "rollback", "decision_reason": "candidate_underperforms_baseline"}),
         ),
         patch(
+            "scripts.persona_honing._experiment._load_field_snapshot",
+            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._persist_final_experiment_decision",
+            new=AsyncMock(),
+        ),
+        patch(
             "scripts.persona_honing._experiment._restore_persona_mutable_state",
             new=AsyncMock(),
         ) as mock_restore,
@@ -523,6 +711,14 @@ async def test_run_honing_loop_keeps_promoted_candidate_and_marks_honed() -> Non
         patch(
             "scripts.persona_honing._experiment.get_benchmark_experiment_summary_by_key",
             new=AsyncMock(return_value={"decision": "promote", "decision_reason": "candidate_outperforms_baseline"}),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._load_field_snapshot",
+            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._persist_final_experiment_decision",
+            new=AsyncMock(),
         ),
         patch(
             "scripts.persona_honing._experiment._restore_persona_mutable_state",
@@ -620,6 +816,14 @@ async def test_run_honing_loop_rolls_back_when_completion_review_surface_regress
                     {"decision": "rollback", "decision_reason": "completion_review_regression"},
                 ]
             ),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._load_field_snapshot",
+            new=AsyncMock(return_value={"overview": {}, "review_gate": {"needs_review": False}, "risks": []}),
+        ),
+        patch(
+            "scripts.persona_honing._experiment._persist_final_experiment_decision",
+            new=AsyncMock(),
         ),
         patch(
             "scripts.persona_honing._experiment._restore_persona_mutable_state",

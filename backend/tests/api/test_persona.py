@@ -218,6 +218,139 @@ class TestUpdatePersonaEndpoint:
         assert data["execution_state"] == "paused"
         assert data["version"] == 6
 
+
+class TestPersonaImprovementDashboardEndpoint:
+    """Tests for GET /api/persona/improvement."""
+
+    def test_returns_focused_improvement_dashboard(self, api_client, mock_db_session):
+        payload = {
+            "generated_at": "2026-03-31T18:00:00Z",
+            "suite_id": "persona-suite-jenny-improvement",
+            "days": 30,
+            "schedule": {
+                "job_id": "job-123",
+                "enabled": True,
+                "schedule_type": "every",
+                "schedule_value": "86400000",
+                "schedule_timezone": "UTC",
+                "cadence_minutes": 1440,
+                "cadence_label": "24h",
+                "last_run_at": "2026-03-31T00:00:00Z",
+                "next_run_at": "2026-04-01T00:00:00Z",
+                "run_count": 12,
+            },
+            "overview": {
+                "total_runs": 12,
+                "latest_completed_at": "2026-03-31T17:00:00Z",
+                "reliability": 91.2,
+                "effectiveness": 84.5,
+                "tokens_per_passed_attempt": 1880.4,
+                "prompt_tokens": 16780.0,
+                "open_regressions": 2,
+            },
+            "field_overview": {
+                "total_heartbeats": 4,
+                "latest_completed_at": "2026-03-31T17:15:00Z",
+                "reliability": 89.0,
+                "effectiveness": 83.5,
+                "truth_quality": 92.0,
+                "tokens_per_healthy_heartbeat": 2460.0,
+                "avg_tool_calls": 3.1,
+                "avg_turns": 2.3,
+                "risky_heartbeats": 1,
+                "critical_heartbeats": 0,
+            },
+            "trend": [
+                {
+                    "run_id": "run-1",
+                    "completed_at": "2026-03-31T17:00:00Z",
+                    "run_kind": "honing_baseline",
+                    "suite_id": "persona-suite-jenny-improvement",
+                    "reliability": 90.0,
+                    "effectiveness": 82.0,
+                    "avg_total_tokens": 1600.0,
+                    "tokens_per_passed_attempt": 1800.0,
+                    "avg_tool_calls": 3.2,
+                    "avg_turns": 2.1,
+                    "prompt_tokens": 16780,
+                }
+            ],
+            "field_trend": [
+                {
+                    "session_id": "sess-1",
+                    "completed_at": "2026-03-31T17:15:00Z",
+                    "reliability": 89.0,
+                    "effectiveness": 83.5,
+                    "truth_quality": 92.0,
+                    "total_tokens": 2410,
+                    "tool_calls": 3,
+                    "turns": 2,
+                    "result_status": "action",
+                }
+            ],
+            "recent_runs": [],
+            "recent_heartbeats": [],
+            "open_regressions": [],
+            "field_risks": [],
+        }
+
+        with patch(
+            "app.api.persona.get_persona_improvement_dashboard",
+            new=AsyncMock(return_value=payload),
+        ) as mock_dashboard:
+            response = api_client.get("/api/persona/improvement?days=30&limit=8")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["suite_id"] == "persona-suite-jenny-improvement"
+        assert data["schedule"]["enabled"] is True
+        assert data["overview"]["reliability"] == 91.2
+        mock_dashboard.assert_awaited_once()
+
+
+class TestPersonaImprovementScheduleEndpoint:
+    """Tests for PUT /api/persona/improvement/schedule."""
+
+    def test_updates_self_honing_schedule(self, api_client, mock_db_session):
+        payload = {
+            "job_id": "job-123",
+            "enabled": True,
+            "schedule_type": "every",
+            "schedule_value": "43200000",
+            "schedule_timezone": "UTC",
+            "cadence_minutes": 720,
+            "cadence_label": "12h",
+            "last_run_at": None,
+            "next_run_at": "2026-04-01T00:00:00Z",
+            "run_count": 3,
+        }
+
+        with patch(
+            "app.api.persona.update_persona_self_honing_schedule",
+            new=AsyncMock(return_value=payload),
+        ) as mock_update:
+            response = api_client.put(
+                "/api/persona/improvement/schedule",
+                json={"enabled": True, "cadence_minutes": 720},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["cadence_minutes"] == 720
+        mock_update.assert_awaited_once()
+
+    def test_returns_validation_error_from_schedule_service(self, api_client, mock_db_session):
+        with patch(
+            "app.api.persona.update_persona_self_honing_schedule",
+            new=AsyncMock(side_effect=ValueError("cadence_minutes must be between 15 and 10080")),
+        ) as mock_update:
+            response = api_client.put(
+                "/api/persona/improvement/schedule",
+                json={"enabled": True, "cadence_minutes": 720},
+            )
+
+        assert response.status_code == 422
+        mock_update.assert_awaited_once()
+
     def test_no_op_when_empty_update(self, api_client):
         persona = _make_persona(version=2)
 

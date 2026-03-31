@@ -43,6 +43,7 @@ const PERSONA_WORKFLOW_PROMPT_SLUGS = [
   "persona-onboarding-pending-approval",
   "persona-onboarding-review",
   "persona-evolution-guidelines",
+  "persona-improvement-review",
 ];
 
 const DEFAULT_ROLES = ["system", "autocode", "context", "guardrail"];

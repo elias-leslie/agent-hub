@@ -594,6 +594,72 @@ _SELF_CORRECTION_CASES: list[PersonaBenchmarkCase] = [
     ),
 ]
 
+_LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
+    _case(
+        case_id="manual_project_access_block",
+        family="live-acceptance",
+        name="Manual Project Access Block",
+        description="Do not dispatch into a manual or read-only project even when work looks ready.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS:\n"
+            "- project=terminal task=task-e4edac6c ready=yes permission_tier=manual mode=read_only\n"
+            "- project=summitflow task=none\n"
+            "- project=agent-hub task=none\n"
+            "ownership_truth=clean\n"
+            "cleanup_status=clean\n"
+            "question=What should Jenny do next?\n"
+        ),
+        action="block",
+        required_summary_terms=("manual", "access"),
+        summary_term_alternatives={
+            "manual": ("read-only", "read only"),
+            "access": ("permission", "not allowed", "not permitted"),
+        },
+    ),
+    _case(
+        case_id="ghost_owner_lane_reconcile",
+        family="live-acceptance",
+        name="Ghost Owner Lane Reconcile",
+        description="Reconcile stale owner-lane truth before treating the world as clean idle.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "ownership_truth=OWN terminal lane=lane-terminal-1 status=owner_lane branch=main\n"
+            "raw_active_sessions=0 for project terminal\n"
+            "lane_truth=worktree exists, dirty=no, session_missing=yes\n"
+            "cleanup_status=no_actionable_cleanup\n"
+            "question=Should Jenny treat this as clean idle?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("owner", "ghost"),
+        summary_term_alternatives={
+            "owner": ("ownership", "lane"),
+            "ghost": ("stale", "session missing", "residue"),
+        },
+    ),
+    _case(
+        case_id="publish_failure_non_fast_forward",
+        family="live-acceptance",
+        name="Publish Failure Non Fast Forward",
+        description="Classify a non-fast-forward push failure concretely and turn it into fix work.",
+        scenario=(
+            "TASK: task-publish-1\n"
+            "status=blocked\n"
+            "priority=P1\n"
+            "publish_attempt=git push origin feature/jenny-fix\n"
+            "push_result=failed\n"
+            "push_detail=! [rejected] feature/jenny-fix -> feature/jenny-fix (non-fast-forward)\n"
+            "question=What should Jenny do next?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("non-fast-forward",),
+        summary_term_alternatives={
+            "non-fast-forward": ("push rejected", "rebase", "pull first"),
+        },
+    ),
+]
+
 
 def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
     """Return the fixed benchmark battery used for persona model comparisons."""
@@ -604,6 +670,7 @@ def get_persona_benchmark_cases() -> list[PersonaBenchmarkCase]:
         *_TOOLING_CASES,
         *_DELEGATION_CASES,
         *_SELF_CORRECTION_CASES,
+        *_LIVE_HEARTBEAT_ACCEPTANCE_CASES,
     ]
 
 
@@ -630,11 +697,33 @@ def get_self_correction_case_ids() -> list[str]:
     return get_case_ids_by_family("self-correction")
 
 
+def get_live_heartbeat_acceptance_case_ids() -> list[str]:
+    """Return the live heartbeat acceptance battery for Jenny improvement runs."""
+    return [
+        "manual_project_access_block",
+        "ready_task_dispatch",
+        "same_task_overlap",
+        "cleanup_blocks_closeout",
+        "session_patience_recent_progress",
+        "stalled_session_reconcile",
+        "ghost_owner_lane_reconcile",
+        "publish_failure_non_fast_forward",
+        "feedback_triage_hotspot",
+    ]
+
+
+def get_jenny_improvement_case_ids() -> list[str]:
+    """Return the stable suite used for scheduled Jenny improvement runs."""
+    return get_live_heartbeat_acceptance_case_ids()
+
+
 def suggest_suite_id(case_ids: list[str]) -> str | None:
     """Return a stable family-based suite id when all selected cases share one family."""
     normalized = sorted(set(case_ids))
     if not normalized:
         return None
+    if normalized == sorted(get_jenny_improvement_case_ids()):
+        return "persona-suite-jenny-improvement"
     families = {get_case_by_id(case_id).family for case_id in normalized}
     if len(families) != 1:
         return None

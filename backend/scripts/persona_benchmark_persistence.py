@@ -12,6 +12,7 @@ from app.services.agent_benchmark_service import (
 )
 from app.services.benchmark_aggregation import aggregate_attempts, merge_efficiency_metadata
 from app.services.memory.settings import set_active_memory_variant
+from app.services.persona_improvement import build_persona_improvement_metadata
 from scripts.persona_benchmark_eval import PersonaBenchmarkRun
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,12 @@ def build_persistence_payload(
     """Normalize a benchmark run into the persisted DB payload shape."""
     attempts = [a.to_dict() for a in run.attempts]
     aggregate = aggregate_attempts(run.attempts)
+    merged_metadata = merge_efficiency_metadata(metadata, aggregate)
+    if agent_slug == "persona":
+        merged_metadata["persona_improvement"] = build_persona_improvement_metadata(
+            run.attempts,
+            config_snapshot=dict(config_snapshot or {}),
+        )
     return {
         "benchmark_id": run.benchmark_id,
         "agent_slug": agent_slug,
@@ -70,7 +77,7 @@ def build_persistence_payload(
         "passed_attempt_count": aggregate.passed_attempt_count,
         "infra_failure_count": aggregate.infra_failure_count,
         "config_snapshot": dict(config_snapshot or {}),
-        "metadata": merge_efficiency_metadata(metadata, aggregate),
+        "metadata": merged_metadata,
         "experiment": dict(experiment) if experiment else None,
         "started_at": run.started_at,
         "completed_at": run.completed_at,

@@ -119,8 +119,18 @@ async def _persist_iteration_record(
         "source_benchmark_id": benchmark_run.benchmark_id,
         "failure_clusters": failure_clusters,
         "persistent_failure_clusters": persistent_clusters,
-        "improvement": None,
+        "improvement": {
+            "session_id": record.improvement_session_id,
+            "tools": list(record.improvement_tools or []),
+            "parsed": dict(record.improvement_parsed or {}),
+            "final_decision": record.final_decision,
+            "final_decision_reason": record.final_decision_reason,
+            "final_decision_source": record.final_decision_source,
+            "decision_review": record.decision_review,
+        },
     }
+    if record.field_snapshot is not None:
+        metadata["field_surface"] = record.field_snapshot
     if record.review_benchmark_id or record.review_failure_clusters is not None:
         metadata["review_surface"] = {
             "benchmark_id": record.review_benchmark_id,
