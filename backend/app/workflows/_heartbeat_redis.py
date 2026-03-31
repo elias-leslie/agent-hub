@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import socket
 from datetime import UTC, datetime
 from typing import TypedDict
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -181,38 +184,86 @@ async def record_heartbeat_metrics(
         await client.close()
 
 
-async def set_heartbeat_running(*, session_id: str | None = None) -> None:
-    """Mark the heartbeat as currently running with a timestamp, session id, and TTL."""
+async def set_heartbeat_running(
+    *,
+    session_id: str | None = None,
+    claim_token: str | None = None,
+    owner_pid: int | None = None,
+    owner_host: str | None = None,
+    trigger: str | None = None,
+    project_id: str | None = None,
+    only_if_missing: bool = False,
+) -> str | None:
+    """Claim the heartbeat running lock and return the claim token on success."""
     client = _get_redis_client()
+    resolved_claim_token = claim_token or str(uuid4())
     try:
         payload = json.dumps(
             {
                 "started_at": datetime.now(UTC).isoformat(),
                 "session_id": session_id,
+                "claim_token": resolved_claim_token,
+                "owner_pid": owner_pid if owner_pid is not None else os.getpid(),
+                "owner_host": owner_host or socket.gethostname(),
+                "trigger": trigger,
+                "project_id": project_id,
             }
         )
-        await client.set(REDIS_RUNNING_KEY, payload, ex=_RUNNING_TTL)
+        claimed = await client.set(
+            REDIS_RUNNING_KEY,
+            payload,
+            ex=_RUNNING_TTL,
+            nx=only_if_missing,
+        )
+        if only_if_missing and not claimed:
+            return None
+        return resolved_claim_token
     except Exception:
         logger.exception("Failed to set heartbeat running lock")
+        return None
     finally:
         await client.close()
 
 
-async def clear_heartbeat_running() -> None:
+async def clear_heartbeat_running(
+    *,
+    claim_token: str | None = None,
+    session_id: str | None = None,
+) -> bool:
     """Clear the running lock when the heartbeat finishes."""
     client = _get_redis_client()
     try:
+        payload = await client.get(REDIS_RUNNING_KEY)
+        if not payload:
+            return False
+        try:
+            parsed = json.loads(payload)
+        except json.JSONDecodeError:
+            parsed = {"started_at": payload, "session_id": None}
+        current_claim_token = str(parsed.get("claim_token") or "") or None
+        current_session_id = str(parsed.get("session_id") or "") or None
+        if claim_token and current_claim_token != claim_token:
+            return False
+        if session_id and current_session_id != session_id:
+            return False
         await client.delete(REDIS_RUNNING_KEY)
+        return True
     except Exception:
         logger.exception("Failed to clear heartbeat running lock")
+        return False
     finally:
         await client.close()
 
 
-class HeartbeatRunningInfo(TypedDict):
+class HeartbeatRunningInfo(TypedDict, total=False):
     started_at: str
     elapsed_seconds: int
     session_id: str | None
+    claim_token: str | None
+    owner_pid: int | None
+    owner_host: str | None
+    trigger: str | None
+    project_id: str | None
 
 
 async def get_heartbeat_running_info() -> HeartbeatRunningInfo | None:
@@ -235,6 +286,15 @@ async def get_heartbeat_running_info() -> HeartbeatRunningInfo | None:
             "started_at": started_str,
             "elapsed_seconds": round(elapsed),
             "session_id": parsed.get("session_id"),
+            "claim_token": parsed.get("claim_token"),
+            "owner_pid": (
+                int(parsed["owner_pid"])
+                if parsed.get("owner_pid") not in (None, "")
+                else None
+            ),
+            "owner_host": parsed.get("owner_host"),
+            "trigger": parsed.get("trigger"),
+            "project_id": parsed.get("project_id"),
         }
     finally:
         await client.close()

@@ -70,6 +70,7 @@ class HeartbeatInput(BaseModel):
     target_project_id: str | None = None
     heartbeat_session_id: str | None = None
     running_claimed: bool = False
+    running_claim_token: str | None = None
 
 
 class HeartbeatResult(BaseModel):
@@ -100,6 +101,7 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
     """Periodic persona check-in via complete_internal."""
     manual = input.manual
     target_project_id = input.target_project_id
+    execution_project = target_project_id or HEARTBEAT_PROJECT
 
     may_proceed, interval_minutes, skip_reason = await _check_schedule_guards(manual)
     if not may_proceed:
@@ -115,9 +117,25 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes, error=runtime_skip).model_dump()
 
     heartbeat_session_id = input.heartbeat_session_id or create_heartbeat_session_id()
+    running_claim_token = input.running_claim_token
+    owns_running_lock = input.running_claimed
     if not input.running_claimed:
         await record_heartbeat_attempt(session_id=heartbeat_session_id)
-        await set_heartbeat_running(session_id=heartbeat_session_id)
+        running_claim_token = await set_heartbeat_running(
+            session_id=heartbeat_session_id,
+            trigger="manual" if manual else "cron",
+            project_id=execution_project,
+            only_if_missing=True,
+        )
+        if not running_claim_token:
+            await record_heartbeat_skip("already_running", session_id=heartbeat_session_id)
+            ctx.log("Heartbeat skipped (already_running)")
+            return HeartbeatResult(
+                status="skipped",
+                interval_minutes=interval_minutes,
+                error="already_running",
+            ).model_dump()
+        owns_running_lock = True
     try:
         result, model_review_due = await _do_completion(
             interval_minutes,
@@ -137,7 +155,11 @@ async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[st
             interval_minutes=interval_minutes,
         ).model_dump()
     finally:
-        await clear_heartbeat_running()
+        if owns_running_lock:
+            await clear_heartbeat_running(
+                claim_token=running_claim_token,
+                session_id=heartbeat_session_id,
+            )
 
 
 @hatchet.task(

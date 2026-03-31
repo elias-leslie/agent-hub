@@ -76,6 +76,10 @@ class TestHeartbeatStatus:
                     "started_at": "2026-03-03T10:00:00+00:00",
                     "elapsed_seconds": 45,
                     "session_id": "hb-session-1",
+                    "owner_host": "summitflow-prod",
+                    "owner_pid": 4242,
+                    "trigger": "manual_api",
+                    "project_id": "agent-hub",
                 },
             ),
             patch(
@@ -116,6 +120,10 @@ class TestHeartbeatStatus:
         assert data["running"] is True
         assert data["elapsed_seconds"] == 45
         assert data["running_session_id"] == "hb-session-1"
+        assert data["running_owner_host"] == "summitflow-prod"
+        assert data["running_owner_pid"] == 4242
+        assert data["running_trigger"] == "manual_api"
+        assert data["running_project_id"] == "agent-hub"
 
     def test_heartbeat_status_when_never_run_returns_null_last_run(self, api_client):
         with (
@@ -247,7 +255,10 @@ class TestHeartbeatStatus:
             result = await _get_effective_running_info()
 
         assert result is None
-        mock_clear.assert_awaited_once()
+        mock_clear.assert_awaited_once_with(
+            claim_token=None,
+            session_id="hb-session-1",
+        )
 
 
 class TestHeartbeatTrigger:
@@ -282,6 +293,7 @@ class TestHeartbeatTrigger:
             patch(
                 "app.api.heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
+                return_value="claim-api-123",
             ) as mock_set_running,
             patch(
                 "app.api.heartbeat.persona_heartbeat_task",
@@ -299,11 +311,17 @@ class TestHeartbeatTrigger:
         assert data["status"] == "dispatched"
         assert data["session_id"] == "hb-session-123"
         mock_attempt.assert_awaited_once_with(session_id="hb-session-123")
-        mock_set_running.assert_awaited_once_with(session_id="hb-session-123")
+        mock_set_running.assert_awaited_once_with(
+            session_id="hb-session-123",
+            trigger="manual_api",
+            project_id="persona-sandbox",
+            only_if_missing=True,
+        )
         mock_task.aio_run_no_wait.assert_awaited_once()
         heartbeat_input = mock_task.aio_run_no_wait.call_args.kwargs["input"]
         assert heartbeat_input.heartbeat_session_id == "hb-session-123"
         assert heartbeat_input.running_claimed is True
+        assert heartbeat_input.running_claim_token == "claim-api-123"
 
     def test_heartbeat_trigger_with_target_project_dispatches_scoped_run(self, api_client):
         with (
@@ -334,6 +352,7 @@ class TestHeartbeatTrigger:
             patch(
                 "app.api.heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
+                return_value="claim-api-agent-hub",
             ) as mock_set_running,
             patch(
                 "app.api.heartbeat.persona_heartbeat_task",
@@ -355,7 +374,12 @@ class TestHeartbeatTrigger:
         assert data["message"] == "Heartbeat triggered for agent-hub"
         assert data["session_id"] == "hb-session-agent-hub"
         mock_attempt.assert_awaited_once_with(session_id="hb-session-agent-hub")
-        mock_set_running.assert_awaited_once_with(session_id="hb-session-agent-hub")
+        mock_set_running.assert_awaited_once_with(
+            session_id="hb-session-agent-hub",
+            trigger="manual_api",
+            project_id="agent-hub",
+            only_if_missing=True,
+        )
         mock_permission.assert_awaited_once_with("agent-hub")
         mock_task.aio_run_no_wait.assert_awaited_once()
         heartbeat_input = mock_task.aio_run_no_wait.call_args.kwargs["input"]
@@ -363,6 +387,7 @@ class TestHeartbeatTrigger:
         assert heartbeat_input.target_project_id == "agent-hub"
         assert heartbeat_input.heartbeat_session_id == "hb-session-agent-hub"
         assert heartbeat_input.running_claimed is True
+        assert heartbeat_input.running_claim_token == "claim-api-agent-hub"
 
     def test_heartbeat_trigger_when_running_returns_409(self, api_client):
         with patch(
@@ -409,6 +434,7 @@ class TestHeartbeatTrigger:
             patch(
                 "app.api.heartbeat.set_heartbeat_running",
                 new_callable=AsyncMock,
+                return_value="claim-api-fail",
             ),
             patch(
                 "app.api.heartbeat.clear_heartbeat_running",
@@ -427,7 +453,74 @@ class TestHeartbeatTrigger:
 
         assert response.status_code == 503
         assert "Failed to dispatch heartbeat" in response.json()["message"]
-        mock_clear.assert_awaited_once()
+        mock_clear.assert_awaited_once_with(
+            claim_token="claim-api-fail",
+            session_id="hb-session-fail",
+        )
+
+    def test_heartbeat_trigger_returns_409_when_atomic_claim_fails(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat._get_effective_running_info",
+                new_callable=AsyncMock,
+                side_effect=[
+                    None,
+                    {
+                        "started_at": "2026-03-03T10:00:00+00:00",
+                        "elapsed_seconds": 3,
+                        "session_id": "hb-session-live",
+                        "owner_host": "summitflow-prod",
+                        "owner_pid": 5150,
+                        "trigger": "cron",
+                        "project_id": "persona-sandbox",
+                    },
+                ],
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.check_project_permission",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
+                "app.api.heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.api.heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as mock_set_running,
+            patch(
+                "app.api.heartbeat.persona_heartbeat_task",
+            ) as mock_task,
+            patch(
+                "app.api.heartbeat.create_heartbeat_session_id",
+                return_value="hb-session-raced",
+            ),
+        ):
+            response = api_client.post("/api/heartbeat/trigger")
+
+        assert response.status_code == 409
+        assert "already in progress" in response.json()["message"]
+        assert response.json()["running_session_id"] == "hb-session-live"
+        mock_attempt.assert_awaited_once_with(session_id="hb-session-raced")
+        mock_set_running.assert_awaited_once_with(
+            session_id="hb-session-raced",
+            trigger="manual_api",
+            project_id="persona-sandbox",
+            only_if_missing=True,
+        )
+        mock_task.aio_run_no_wait.assert_not_called()
 
     def test_heartbeat_trigger_when_not_onboarded_returns_400(self, api_client):
         with (

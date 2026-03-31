@@ -22,6 +22,7 @@ from app.workflows._heartbeat_data import (
     _get_cleanup_status_summary,
     _get_git_status_summary,
     _get_protection_status_summary,
+    _get_recent_heartbeat_digest,
     _get_recent_idle_improvement_history,
     _get_workstream_inventory,
     _query_active_sessions_for_heartbeat,
@@ -341,6 +342,7 @@ class TestCollectAgentHubHeartbeatState:
 
 class TestAppendDynamicSections:
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt._get_recent_heartbeat_digest", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_recent_idle_improvement_history", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_feedback_summary_section", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
@@ -364,6 +366,7 @@ class TestAppendDynamicSections:
         mock_workstreams: AsyncMock,
         mock_git: AsyncMock,
         mock_feedback: AsyncMock,
+        mock_recent_digest: AsyncMock,
         mock_recent_idle: AsyncMock,
     ) -> None:
         from app.workflows._heartbeat_data import AgentHubHeartbeatState, SummitFlowHeartbeatState
@@ -416,7 +419,66 @@ class TestAppendDynamicSections:
         )
         mock_git.assert_awaited_once_with("agent-hub", git_status_rows=[])
         mock_feedback.assert_awaited_once_with()
+        mock_recent_digest.assert_awaited_once_with("agent-hub")
         mock_recent_idle.assert_awaited_once_with("agent-hub")
+
+
+class TestRecentHeartbeatDigest:
+    def test_recent_heartbeat_digest_statuses_match_session_enum(self) -> None:
+        from app.models import Session
+        from app.workflows._heartbeat_data import _HEARTBEAT_DIGEST_STATUSES
+
+        assert set(_HEARTBEAT_DIGEST_STATUSES) <= set(Session.__table__.c.status.type.enums)
+
+    @pytest.mark.asyncio
+    async def test_formats_recent_heartbeat_digest_with_cleaned_display_summaries(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, mock_db = _mock_async_session_with_rows(
+            [
+                (
+                    "hb-1",
+                    "agent-hub",
+                    "completed",
+                    now,
+                    "[[P:done]] Patched cleanup truth and passed targeted tests.",
+                    {
+                        "live_activity": {
+                            "summary": "Patched cleanup truth and passed targeted tests.",
+                        }
+                    },
+                ),
+                (
+                    "hb-2",
+                    "agent-hub",
+                    "failed",
+                    now - timedelta(minutes=5),
+                    "Heartbeat failed after guessing an invalid dt pytest path.",
+                    {},
+                ),
+            ]
+        )
+
+        with (
+            patch("app.db.async_session", session_factory),
+            patch(
+                "app.workflows._heartbeat_data.fetch_session_display_summary_results",
+                new_callable=AsyncMock,
+                return_value={
+                    "hb-1": "Patched cleanup truth and passed targeted tests.",
+                    "hb-2": "Heartbeat failed after guessing an invalid dt pytest path.",
+                },
+            ) as mock_fetch_summaries,
+        ):
+            result = await _get_recent_heartbeat_digest("agent-hub")
+
+        executed_query = str(mock_db.execute.await_args.args[0])
+        assert "<recent_heartbeat_digest>" in result
+        assert "Recent heartbeat recall: 2" in result
+        assert "completed | agent-hub | Patched cleanup truth and passed targeted tests." in result
+        assert "failed | agent-hub | Heartbeat failed after guessing an invalid dt pytest path." in result
+        assert "sessions.request_source = :request_source_1" in executed_query
+        candidates = mock_fetch_summaries.await_args.args[1]
+        assert [candidate.session_id for candidate in candidates] == ["hb-1", "hb-2"]
 
 
 class TestRecentIdleImprovementHistory:

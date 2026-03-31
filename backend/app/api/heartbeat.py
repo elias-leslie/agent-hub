@@ -53,6 +53,10 @@ class HeartbeatStatusResponse(BaseModel):
     interval_minutes: int
     execution_state: str = "active"
     running_session_id: str | None = None
+    running_owner_host: str | None = None
+    running_owner_pid: int | None = None
+    running_trigger: str | None = None
+    running_project_id: str | None = None
     # Last completed heartbeat metrics (from Redis)
     last_session_id: str | None = None
     last_turns: int | None = None
@@ -120,7 +124,10 @@ async def _get_effective_running_info() -> HeartbeatRunningInfo | None:
         "Clearing stale heartbeat running lock (started_at=%s)",
         running_info["started_at"],
     )
-    await clear_heartbeat_running()
+    await clear_heartbeat_running(
+        claim_token=running_info.get("claim_token"),
+        session_id=running_info.get("session_id"),
+    )
     return None
 
 
@@ -146,6 +153,10 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
         interval_minutes=interval_minutes,
         execution_state=execution_state,
         running_session_id=running_info.get("session_id") if running_info else None,
+        running_owner_host=running_info.get("owner_host") if running_info else None,
+        running_owner_pid=running_info.get("owner_pid") if running_info else None,
+        running_trigger=running_info.get("trigger") if running_info else None,
+        running_project_id=running_info.get("project_id") if running_info else None,
         runtime=runtime,
     )
 
@@ -200,7 +211,26 @@ async def heartbeat_trigger(
     # Dispatch via Hatchet (fire-and-forget)
     heartbeat_session_id = create_heartbeat_session_id()
     await record_heartbeat_attempt(session_id=heartbeat_session_id)
-    await set_heartbeat_running(session_id=heartbeat_session_id)
+    claim_token = await set_heartbeat_running(
+        session_id=heartbeat_session_id,
+        trigger="manual_api",
+        project_id=permission_project,
+        only_if_missing=True,
+    )
+    if not claim_token:
+        running_info = await _get_effective_running_info()
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "http_error",
+                "message": (
+                    f"Heartbeat already in progress (started {running_info['elapsed_seconds']}s ago)"
+                    if running_info
+                    else "Heartbeat already in progress"
+                ),
+                "running_session_id": running_info.get("session_id") if running_info else None,
+            },
+        )
     try:
         await persona_heartbeat_task.aio_run_no_wait(
             input=HeartbeatInput(
@@ -208,10 +238,14 @@ async def heartbeat_trigger(
                 target_project_id=target_project_id,
                 heartbeat_session_id=heartbeat_session_id,
                 running_claimed=True,
+                running_claim_token=claim_token,
             )
         )
     except Exception as exc:
-        await clear_heartbeat_running()
+        await clear_heartbeat_running(
+            claim_token=claim_token,
+            session_id=heartbeat_session_id,
+        )
         logger.exception("Failed to dispatch manual heartbeat for target=%s", target_project_id or "persona-sandbox")
         raise HTTPException(status_code=503, detail=f"Failed to dispatch heartbeat: {exc}") from exc
     logger.info("Manual heartbeat triggered via API for target=%s", target_project_id or "persona-sandbox")
