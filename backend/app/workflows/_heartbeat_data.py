@@ -92,6 +92,15 @@ _IDLE_SUMMARY_MARKERS = (
     "no new scoped defect",
     "no new execution-ready target",
 )
+_IDLE_FAILURE_MARKERS = (
+    "failed",
+    "failure",
+    "invalid",
+    "blocked",
+    "timed out",
+    "did not exist",
+    "no such file",
+)
 
 
 async def _fetch_summitflow_json(endpoint: str, *, failure_log: str) -> dict[str, object] | None:
@@ -340,6 +349,14 @@ def _extract_idle_validation_command(provider_metadata: dict[str, object] | None
     return compact or None
 
 
+def _idle_validation_label(session: object) -> str:
+    """Return whether the idle-history command was verified or only attempted."""
+    summary = str(getattr(session, "summary_oneliner", "")).strip().lower()
+    if any(marker in summary for marker in _IDLE_FAILURE_MARKERS):
+        return "attempt"
+    return "verify"
+
+
 def _is_recent_idle_slice_session(session: object) -> bool:
     """Return True when the session represents a clean-idle improvement slice."""
     summary = getattr(session, "summary_oneliner", None)
@@ -394,6 +411,7 @@ async def _get_recent_idle_improvement_history(
         command = _extract_idle_validation_command(getattr(session, "provider_metadata", None))
         if not command:
             continue
+        command_label = _idle_validation_label(session)
         summary = str(getattr(session, "summary_oneliner", "")).strip()
         created_at = getattr(session, "created_at", None)
         timestamp = (
@@ -401,7 +419,7 @@ async def _get_recent_idle_improvement_history(
             if isinstance(created_at, datetime)
             else "unknown"
         )
-        rendered_rows.append(f"- {timestamp} | verify=`{command}` | {summary}")
+        rendered_rows.append(f"- {timestamp} | {command_label}=`{command}` | {summary}")
         if len(rendered_rows) >= _IDLE_HISTORY_LIMIT:
             break
 
