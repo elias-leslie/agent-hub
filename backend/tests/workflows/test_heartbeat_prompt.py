@@ -426,12 +426,33 @@ class TestRecentIdleImprovementHistory:
         session_factory, mock_db = _mock_async_session_with_scalars(
             [
                 MagicMock(
-                    id="sess-idle",
+                    id="sess-failed-idle",
                     agent_slug="persona",
                     project_id="agent-hub",
                     request_source="heartbeat",
                     status="completed",
                     created_at=now,
+                    summary_oneliner=(
+                        "Confirmed agent-hub is still clean and idle, but the bounded health "
+                        "check failed on an invalid test path."
+                    ),
+                    summary_files_touched=[],
+                    provider_metadata={
+                        "live_activity": {
+                            "last_validation_command": (
+                                "cd /srv/workspaces/projects/agent-hub && "
+                                "dt pytest backend/tests/api/test_agents_registry.py"
+                            )
+                        }
+                    },
+                ),
+                MagicMock(
+                    id="sess-idle",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    request_source="heartbeat",
+                    status="completed",
+                    created_at=now - timedelta(minutes=1),
                     summary_oneliner=(
                         "Agent-hub stayed clean and idle after feedback/session mining, "
                         "a passing ah.memory test slice, and a refreshed zero-ready overview."
@@ -472,9 +493,11 @@ class TestRecentIdleImprovementHistory:
 
         executed_query = str(mock_db.execute.await_args.args[0])
         assert "<recent_idle_improvement_history>" in result
-        assert "Recent idle slices: 1" in result
-        assert "dt pytest backend/tests/api/test_memory.py -q" in result
+        assert "Recent idle slices: 2" in result
+        assert "attempt=`dt pytest backend/tests/api/test_agents_registry.py`" in result
+        assert "verify=`dt pytest backend/tests/api/test_memory.py -q`" in result
         assert "ah.memory test slice" in result
+        assert "failed on an invalid test path" in result
         assert "Patched cleanup truth" not in result
         assert "sessions.agent_slug = :agent_slug_1" in executed_query
 
