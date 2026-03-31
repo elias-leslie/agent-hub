@@ -1266,10 +1266,13 @@ class TestManageTasks:
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
-            return_value=(
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=3 prunable=0\n"
-                "agent-hub worktrees:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
-            )
+            side_effect=[
+                (
+                    "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=3 prunable=0\n"
+                    "agent-hub worktrees:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
+                ),
+                "not-json",
+            ]
         )
         result = await manage_tasks(
             mock_bash,
@@ -1280,7 +1283,10 @@ class TestManageTasks:
         assert "CLEANUP[current]" in result
         assert "ACTIONABLE-CLEANUP[1]" in result
         assert "agent-hub | finalize | task-aa44180c" in result
-        mock_bash.assert_awaited_once_with("st -P agent-hub cleanup status")
+        assert mock_bash.await_args_list == [
+            call("st -P agent-hub cleanup status"),
+            call("st -P agent-hub sessions ownership --project all --format json"),
+        ]
 
     @pytest.mark.asyncio
     async def test_cleanup_worktrees_requires_project_id(self):
