@@ -62,6 +62,29 @@ def _mock_async_session(persona):
     return _session, mock_db
 
 
+def _allow_execution_permission_patch(
+    *,
+    permission_tier: str = "yolo",
+    auto_exec_enabled: bool = True,
+    in_time_window: bool = True,
+    reason: str = "allowed",
+):
+    from app.services.project_permission_service import ExecutionPermissionResult
+
+    return patch(
+        "app.services.tools._executor_io_tasks.check_execution_permission",
+        new=AsyncMock(
+            return_value=ExecutionPermissionResult(
+                allowed=auto_exec_enabled and in_time_window and permission_tier != "off",
+                permission_tier=permission_tier,
+                auto_exec_enabled=auto_exec_enabled,
+                in_time_window=in_time_window,
+                reason=reason,
+            )
+        ),
+    )
+
+
 @pytest.fixture(autouse=True)
 def _mock_prompt_backed_persona_documents():
     async def _get_personality(db):
@@ -1069,6 +1092,33 @@ class TestManageTasks:
         assert "Dispatched" in result
 
     @pytest.mark.asyncio
+    async def test_dispatch_blocks_when_project_access_is_manual(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+
+        with (
+            _allow_execution_permission_patch(
+                permission_tier="read",
+                auto_exec_enabled=False,
+                in_time_window=True,
+                reason="auto_exec_disabled",
+            ),
+        ):
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="task-42",
+                project_id="terminal",
+            )
+
+        assert "Dispatch blocked" in result
+        assert "terminal" in result
+        assert "read/manual" in result
+        assert "observe-only" in result
+        assert mock_bash.await_count == 0
+
+    @pytest.mark.asyncio
     async def test_dispatch_warns_on_running_tasks_and_cleanup_residue(self):
         from app.services.tools._executor_io import manage_tasks
 
@@ -1079,12 +1129,13 @@ class TestManageTasks:
             ]
         )
 
-        result = await manage_tasks(
-            mock_bash,
-            action="dispatch",
-            task_id="42",
-            project_id="agent-hub",
-        )
+        with _allow_execution_permission_patch():
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="42",
+                project_id="agent-hub",
+            )
 
         assert "Dispatch blocked" in result
         assert "cleanup residue" in result
@@ -1105,12 +1156,13 @@ class TestManageTasks:
             ]
         )
 
-        result = await manage_tasks(
-            mock_bash,
-            action="dispatch",
-            task_id="42",
-            project_id="agent-hub",
-        )
+        with _allow_execution_permission_patch():
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="42",
+                project_id="agent-hub",
+            )
 
         assert "task(s) already running" in result
         assert '"status":"queued"' in result
@@ -1129,12 +1181,13 @@ class TestManageTasks:
             ]
         )
 
-        result = await manage_tasks(
-            mock_bash,
-            action="dispatch",
-            task_id="42",
-            project_id="agent-hub",
-        )
+        with _allow_execution_permission_patch():
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="42",
+                project_id="agent-hub",
+            )
 
         assert "WARNING: merge-ready residue detected in cleanup status." in result
         assert '"status":"queued"' in result
@@ -1166,7 +1219,10 @@ class TestManageTasks:
         async def _session():
             yield mock_db
 
-        with patch("app.db.async_session", _session):
+        with (
+            patch("app.db.async_session", _session),
+            _allow_execution_permission_patch(),
+        ):
             result = await manage_tasks(
                 mock_bash,
                 action="dispatch",
@@ -1204,7 +1260,10 @@ class TestManageTasks:
         async def _session():
             yield mock_db
 
-        with patch("app.db.async_session", _session):
+        with (
+            patch("app.db.async_session", _session),
+            _allow_execution_permission_patch(),
+        ):
             result = await manage_tasks(
                 mock_bash,
                 action="dispatch",
@@ -1238,7 +1297,10 @@ class TestManageTasks:
         async def _session():
             yield mock_db
 
-        with patch("app.db.async_session", _session):
+        with (
+            patch("app.db.async_session", _session),
+            _allow_execution_permission_patch(),
+        ):
             result = await manage_tasks(
                 mock_bash,
                 action="dispatch",
