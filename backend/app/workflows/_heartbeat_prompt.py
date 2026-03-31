@@ -21,6 +21,7 @@ from app.workflows._heartbeat_data import (
     _get_git_status_summary,
     _get_persona_tool_summary,
     _get_protection_status_summary,
+    _get_recent_idle_improvement_history,
     _get_workstream_inventory,
     get_project_access_summary,
 )
@@ -148,6 +149,7 @@ async def _append_dynamic_sections(
         workstream_inventory,
         git_status,
         feedback_summary,
+        recent_idle_history,
     ) = await asyncio.gather(
         _get_active_work_summary(
             task_overview=task_overview,
@@ -180,6 +182,7 @@ async def _append_dynamic_sections(
             git_status_rows=heartbeat_state.git_status_rows,
         ),
         _get_feedback_summary_section(),
+        _get_recent_idle_improvement_history(target_project_id),
     )
     for section in (
         active_work,
@@ -190,6 +193,7 @@ async def _append_dynamic_sections(
         workstream_inventory,
         git_status,
         feedback_summary,
+        recent_idle_history,
     ):
         if section:
             prompt += section

@@ -22,6 +22,7 @@ from app.workflows._heartbeat_data import (
     _get_cleanup_status_summary,
     _get_git_status_summary,
     _get_protection_status_summary,
+    _get_recent_idle_improvement_history,
     _get_workstream_inventory,
     _query_active_sessions_for_heartbeat,
     _query_active_specialist_sessions,
@@ -340,6 +341,7 @@ class TestCollectAgentHubHeartbeatState:
 
 class TestAppendDynamicSections:
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt._get_recent_idle_improvement_history", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_feedback_summary_section", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_workstream_inventory", new_callable=AsyncMock, return_value="")
@@ -362,6 +364,7 @@ class TestAppendDynamicSections:
         mock_workstreams: AsyncMock,
         mock_git: AsyncMock,
         mock_feedback: AsyncMock,
+        mock_recent_idle: AsyncMock,
     ) -> None:
         from app.workflows._heartbeat_data import AgentHubHeartbeatState, SummitFlowHeartbeatState
         from app.workflows._heartbeat_prompt import _append_dynamic_sections
@@ -413,6 +416,67 @@ class TestAppendDynamicSections:
         )
         mock_git.assert_awaited_once_with("agent-hub", git_status_rows=[])
         mock_feedback.assert_awaited_once_with()
+        mock_recent_idle.assert_awaited_once_with("agent-hub")
+
+
+class TestRecentIdleImprovementHistory:
+    @pytest.mark.asyncio
+    async def test_formats_recent_idle_heartbeat_slices_with_validation_commands(self) -> None:
+        now = datetime.now(UTC)
+        session_factory, mock_db = _mock_async_session_with_scalars(
+            [
+                MagicMock(
+                    id="sess-idle",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    request_source="heartbeat",
+                    status="completed",
+                    created_at=now,
+                    summary_oneliner=(
+                        "Agent-hub stayed clean and idle after feedback/session mining, "
+                        "a passing ah.memory test slice, and a refreshed zero-ready overview."
+                    ),
+                    summary_files_touched=[],
+                    provider_metadata={
+                        "live_activity": {
+                            "last_validation_command": (
+                                "cd /srv/workspaces/projects/agent-hub && "
+                                "dt pytest backend/tests/api/test_memory.py -q"
+                            )
+                        }
+                    },
+                ),
+                MagicMock(
+                    id="sess-write",
+                    agent_slug="persona",
+                    project_id="agent-hub",
+                    request_source="heartbeat",
+                    status="completed",
+                    created_at=now - timedelta(minutes=5),
+                    summary_oneliner="Patched cleanup truth and passed targeted tests.",
+                    summary_files_touched=["backend/app/workflows/_heartbeat_prompt.py"],
+                    provider_metadata={
+                        "live_activity": {
+                            "last_validation_command": (
+                                "cd /srv/workspaces/projects/agent-hub && "
+                                "dt pytest backend/tests/workflows/test_heartbeat_prompt.py"
+                            )
+                        }
+                    },
+                ),
+            ]
+        )
+
+        with patch("app.db.async_session", session_factory):
+            result = await _get_recent_idle_improvement_history("agent-hub")
+
+        executed_query = str(mock_db.execute.await_args.args[0])
+        assert "<recent_idle_improvement_history>" in result
+        assert "Recent idle slices: 1" in result
+        assert "dt pytest backend/tests/api/test_memory.py -q" in result
+        assert "ah.memory test slice" in result
+        assert "Patched cleanup truth" not in result
+        assert "sessions.agent_slug = :agent_slug_1" in executed_query
 
 
 class TestBuildHeartbeatPromptIncludesGitState:

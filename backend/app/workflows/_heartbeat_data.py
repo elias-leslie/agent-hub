@@ -81,6 +81,17 @@ logger = logging.getLogger(__name__)
 
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _SUMMITFLOW_PROJECT_ID = "summitflow"
+_IDLE_HISTORY_LOOKBACK_HOURS = 6
+_IDLE_HISTORY_LIMIT = 4
+_IDLE_SUMMARY_MARKERS = (
+    "clean and idle",
+    "clean-idle",
+    "no ready or cleanup work",
+    "no actionable work",
+    "no new scoped target",
+    "no new scoped defect",
+    "no new execution-ready target",
+)
 
 
 async def _fetch_summitflow_json(endpoint: str, *, failure_log: str) -> dict[str, object] | None:
@@ -315,6 +326,96 @@ async def _fetch_recently_completed_sessions_section(
         return ""
 
 
+def _extract_idle_validation_command(provider_metadata: dict[str, object] | None) -> str | None:
+    """Return the compact validation command for an idle heartbeat session."""
+    if not isinstance(provider_metadata, dict):
+        return None
+    live_activity = provider_metadata.get("live_activity")
+    if not isinstance(live_activity, dict):
+        return None
+    raw_command = live_activity.get("last_validation_command") or live_activity.get("last_command")
+    if not isinstance(raw_command, str):
+        return None
+    compact = raw_command.split("&&")[-1].strip()
+    return compact or None
+
+
+def _is_recent_idle_slice_session(session: object) -> bool:
+    """Return True when the session represents a clean-idle improvement slice."""
+    summary = getattr(session, "summary_oneliner", None)
+    if not isinstance(summary, str):
+        return False
+    for attr in ("summary_files_touched", "observed_write_paths"):
+        value = getattr(session, attr, None)
+        if isinstance(value, (list, tuple, set, dict)) and len(value) > 0:
+            return False
+        if isinstance(value, str) and value.strip():
+            return False
+    summary_lower = summary.lower()
+    return any(marker in summary_lower for marker in _IDLE_SUMMARY_MARKERS)
+
+
+async def _get_recent_idle_improvement_history(
+    target_project_id: str | None = None,
+) -> str:
+    """Show recent clean-idle validation slices so heartbeat can avoid repeat theater."""
+    from sqlalchemy import and_, select
+
+    from app.db import async_session
+    from app.models import Session
+
+    cutoff = datetime.now(UTC) - timedelta(hours=_IDLE_HISTORY_LOOKBACK_HOURS)
+    conditions = [
+        Session.agent_slug == "persona",
+        Session.request_source == "heartbeat",
+        Session.status == "completed",
+        Session.created_at >= cutoff,
+    ]
+    if target_project_id:
+        conditions.append(Session.project_id == target_project_id)
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                select(Session)
+                .where(and_(*conditions))
+                .order_by(Session.created_at.desc())
+                .limit(_IDLE_HISTORY_LIMIT * 3)
+            )
+            sessions = result.scalars().all()
+    except Exception:
+        logger.debug("Failed to fetch recent idle improvement history", exc_info=True)
+        return ""
+
+    rendered_rows: list[str] = []
+    for session in sessions:
+        if not _is_recent_idle_slice_session(session):
+            continue
+        command = _extract_idle_validation_command(getattr(session, "provider_metadata", None))
+        if not command:
+            continue
+        summary = str(getattr(session, "summary_oneliner", "")).strip()
+        created_at = getattr(session, "created_at", None)
+        timestamp = (
+            created_at.astimezone(UTC).strftime("%H:%M UTC")
+            if isinstance(created_at, datetime)
+            else "unknown"
+        )
+        rendered_rows.append(f"- {timestamp} | verify=`{command}` | {summary}")
+        if len(rendered_rows) >= _IDLE_HISTORY_LIMIT:
+            break
+
+    if not rendered_rows:
+        return ""
+
+    return (
+        "\n<recent_idle_improvement_history>\n"
+        f"Recent idle slices: {len(rendered_rows)}\n"
+        + "\n".join(rendered_rows)
+        + "\n</recent_idle_improvement_history>"
+    )
+
+
 __all__ = [
     "AgentHubHeartbeatState",
     "SummitFlowHeartbeatState",
@@ -339,6 +440,7 @@ __all__ = [
     "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_protection_status_summary",
+    "_get_recent_idle_improvement_history",
     "_get_workstream_inventory",
     "_query_active_sessions_for_heartbeat",
     "_query_active_specialist_sessions",
