@@ -1,7 +1,7 @@
 "use client";
 
-import { AgentAnalyticsDashboard } from "@/app/agents/[slug]/analytics/components/AgentAnalyticsDashboard";
+import { PersonaImprovementDashboard } from "@/app/persona/analytics/components/PersonaImprovementDashboard";
 
 export default function PersonaAnalyticsPage() {
-  return <AgentAnalyticsDashboard slug="persona" backHref="/persona" />;
+  return <PersonaImprovementDashboard />;
 }

@@ -84,6 +84,10 @@ export {
 // Re-export all agents-related exports (list & metrics)
 export { fetchAgents, fetchAgentBenchmarkDashboard, fetchAgentBenchmarkRunDetail, fetchAgentMetrics } from "./api/agents";
 export { fetchArenaOverview } from "./api/arena";
+export {
+  fetchPersonaImprovementDashboard,
+  updatePersonaImprovementSchedule,
+} from "./api/persona-improvement";
 
 // Re-export all agent-detail-related exports
 export {

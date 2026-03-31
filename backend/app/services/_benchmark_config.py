@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import async_session
 from app.models import Agent, Memory, MemoryRevision, Persona, Prompt
 from app.services.agent_crud import get_agent_by_slug
+from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import (
     default_agent_memory_config,
     normalize_memory_config,
@@ -254,6 +255,56 @@ async def _capture_prompt_stack(
     return stack
 
 
+async def _capture_preview_summary(
+    db: AsyncSession,
+    agent: Agent,
+    *,
+    task_type: str | None,
+    project_id: str | None,
+) -> dict[str, Any]:
+    """Capture a compact preview-equivalent token summary for benchmark runs."""
+    if not task_type:
+        return {}
+
+    from app.api.helpers.agent_preview import build_agent_preview
+
+    preview = await build_agent_preview(
+        db,
+        AgentDTO.from_model(agent),
+        task_type=task_type,
+        project_id=project_id,
+    )
+    sections = preview.get("sections")
+    if not isinstance(sections, list):
+        return {}
+
+    compact_sections: list[dict[str, Any]] = []
+    by_source_kind: dict[str, int] = {}
+    total_estimated_tokens = 0
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        estimated_tokens = int(section.get("estimated_tokens") or 0)
+        source_kind = str(section.get("source_kind") or "unknown")
+        compact_sections.append(
+            {
+                "label": str(section.get("label") or source_kind),
+                "source_kind": source_kind,
+                "estimated_tokens": estimated_tokens,
+                "chars": int(section.get("chars") or 0),
+            }
+        )
+        by_source_kind[source_kind] = by_source_kind.get(source_kind, 0) + estimated_tokens
+        total_estimated_tokens += estimated_tokens
+
+    return {
+        "task_type": task_type,
+        "total_estimated_tokens": total_estimated_tokens,
+        "sections": compact_sections,
+        "by_source_kind": by_source_kind,
+    }
+
+
 async def _capture_memory_state(
     db: AsyncSession,
     *,
@@ -305,6 +356,12 @@ async def capture_benchmark_config_snapshot(
         }
 
         snapshot["prompt_stack"] = await _capture_prompt_stack(db, agent, task_type)
+        snapshot["preview_summary"] = await _capture_preview_summary(
+            db,
+            agent,
+            task_type=task_type,
+            project_id=project_id,
+        )
         snapshot["generated_context"] = _capture_generated_context(
             agent,
             task_type=task_type,

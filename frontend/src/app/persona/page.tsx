@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import {
+  Activity,
   Loader2,
   Settings,
   AlertCircle,
@@ -223,6 +224,14 @@ function PersonaContent() {
             </button>
 
             {/* Settings */}
+            <Link
+              href="/persona/analytics"
+              className="p-1.5 rounded-lg transition-all text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
+              title="Jenny improvement"
+            >
+              <Activity className="h-4 w-4" />
+            </Link>
+
             <Link
               href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
               className="p-1.5 rounded-lg transition-all text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"

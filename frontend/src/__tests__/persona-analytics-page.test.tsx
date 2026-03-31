@@ -3,24 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import PersonaAnalyticsPage from "@/app/persona/analytics/page";
 
-vi.mock("@/app/agents/[slug]/analytics/components/AgentAnalyticsDashboard", () => ({
-  AgentAnalyticsDashboard: ({
-    slug,
-    backHref,
-  }: {
-    slug: string;
-    backHref?: string;
-  }) => (
-    <div>
-      dashboard:{slug}:{backHref}
-    </div>
-  ),
+vi.mock("@/app/persona/analytics/components/PersonaImprovementDashboard", () => ({
+  PersonaImprovementDashboard: () => <div>persona-improvement-dashboard</div>,
 }));
 
 describe("PersonaAnalyticsPage", () => {
-  it("renders the shared dashboard for persona with persona back navigation", () => {
+  it("renders the dedicated Jenny improvement dashboard", () => {
     render(<PersonaAnalyticsPage />);
 
-    expect(screen.getByText("dashboard:persona:/persona")).toBeInTheDocument();
+    expect(screen.getByText("persona-improvement-dashboard")).toBeInTheDocument();
   });
 });

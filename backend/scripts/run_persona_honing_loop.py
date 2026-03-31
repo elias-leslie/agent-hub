@@ -56,11 +56,11 @@ from scripts.persona_honing._constants import (
     REQUEST_SOURCE,
 )
 from scripts.persona_honing._experiment import (  # noqa: F401
+    _build_improvement_prompt,
     _run_improvement_pass,
     _run_iteration,
 )
 from scripts.persona_honing._models import _IterationConfig, _LoopState
-from scripts.persona_honing._prompt import build_honing_prompt  # noqa: F401 (re-export)
 from scripts.run_persona_model_benchmark import _parse_csv
 
 LoopResult = dict[str, Any]

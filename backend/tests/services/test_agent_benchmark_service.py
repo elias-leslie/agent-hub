@@ -22,6 +22,7 @@ from app.services.agent_benchmark_service import (
     memory_state_descriptor,
     summarize_benchmark_experiment,
 )
+from app.services.persona_improvement import build_persona_improvement_metadata
 
 
 def _make_run(
@@ -219,6 +220,68 @@ def test_summarize_benchmark_experiment_rolls_back_non_superior_candidate_with_m
     assert summary["decision"] == "rollback"
     assert summary["decision_reason"] == "candidate_matches_quality_with_more_tool_calls"
     assert summary["tool_call_delta"]["mean_delta"] and summary["tool_call_delta"]["mean_delta"] > 0
+
+
+def test_build_persona_improvement_metadata_tracks_reliability_effectiveness_and_prompt_tokens() -> None:
+    metadata = build_persona_improvement_metadata(
+        [
+            {
+                "case_id": "ready_task_dispatch",
+                "passed": True,
+                "infra_failure": False,
+                "failure_kind": None,
+                "failure_detail": None,
+                "composite_score": 100.0,
+                "correctness_score": 1.0,
+                "total_tokens": 1200,
+                "latency_ms": 200,
+                "turns": 2,
+                "tool_calls_count": 2,
+            },
+            {
+                "case_id": "same_task_overlap",
+                "passed": False,
+                "infra_failure": False,
+                "failure_kind": "model",
+                "failure_detail": "wrong_fields: primary_action",
+                "composite_score": 0.0,
+                "correctness_score": 0.0,
+                "total_tokens": 900,
+                "latency_ms": 180,
+                "turns": 1,
+                "tool_calls_count": 1,
+            },
+            {
+                "case_id": "cleanup_blocks_closeout",
+                "passed": True,
+                "infra_failure": False,
+                "failure_kind": None,
+                "failure_detail": None,
+                "composite_score": 100.0,
+                "correctness_score": 1.0,
+                "total_tokens": 800,
+                "latency_ms": 160,
+                "turns": 1,
+                "tool_calls_count": 1,
+            },
+        ],
+        config_snapshot={
+            "preview_summary": {
+                "total_estimated_tokens": 16000,
+                "by_source_kind": {
+                    "agent_system_prompt": 6400,
+                    "memory_context": 4600,
+                    "task_prompt": 4200,
+                },
+            }
+        },
+    )
+
+    assert metadata["reliability"] == 66.7
+    assert metadata["effectiveness"] == 50.0
+    assert metadata["tokens_per_passed_attempt"] == 1450.0
+    assert metadata["prompt_tokens"] == 16000
+    assert metadata["top_failure_detail"] == "wrong_fields: primary_action"
 
 
 def test_summarize_benchmark_experiment_ignores_captured_at_snapshot_drift() -> None:
@@ -651,6 +714,24 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
             "app.services._benchmark_config.format_tool_capability_context",
             return_value="<tool-capabilities>\ntools:\n- tool: st\n</tool-capabilities>",
         ),
+        patch(
+            "app.services._benchmark_config._capture_preview_summary",
+            new=AsyncMock(
+                return_value={
+                    "task_type": "heartbeat",
+                    "total_estimated_tokens": 1234,
+                    "sections": [
+                        {
+                            "label": "Persona Context",
+                            "source_kind": "agent_system_prompt",
+                            "estimated_tokens": 640,
+                            "chars": 2560,
+                        }
+                    ],
+                    "by_source_kind": {"agent_system_prompt": 640},
+                }
+            ),
+        ),
     ):
         snapshot = await capture_benchmark_config_snapshot("persona", task_type="heartbeat")
 
@@ -660,6 +741,7 @@ async def test_capture_benchmark_config_snapshot_includes_completion_reviewer_fo
     assert snapshot["generated_context"]["project_index"]["content_hash"] is not None
     assert snapshot["generated_context"]["tool_capabilities"]["content_hash"] is not None
     assert len(snapshot["generated_context"]["descriptors"]) == 2
+    assert snapshot["preview_summary"]["total_estimated_tokens"] == 1234
     assert snapshot["heartbeat_prompt"]["slug"] == "persona-heartbeat-instructions"
     assert snapshot["completion_reviewer"]["agent_slug"] == "supervisor"
     assert snapshot["completion_reviewer"]["primary_model_id"] == "claude-opus-4-6"
@@ -715,6 +797,10 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
         patch(
             "app.services._benchmark_config.format_tool_capability_context",
             return_value="<tool-capabilities>\ntools:\n- tool: st\n</tool-capabilities>",
+        ),
+        patch(
+            "app.services._benchmark_config._capture_preview_summary",
+            new=AsyncMock(return_value={"task_type": "wake", "total_estimated_tokens": 480}),
         ),
     ):
         snapshot = await capture_benchmark_config_snapshot(

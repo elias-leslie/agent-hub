@@ -17,12 +17,19 @@ from app.services.persona_document_prompt_service import (
 )
 from app.services.persona_documents import normalize_user_profile
 from app.services.persona_identity import PERSONA_SLUG, sync_persona_name_to_agent
+from app.services.persona_improvement import (
+    get_persona_improvement_dashboard,
+    update_persona_self_honing_schedule,
+)
 from app.services.persona_instruction_service import set_persona_heartbeat_instructions
 from app.services.persona_service import get_or_create_persona
 
 from .activity import router as _activity_router
 from .helpers import commit_and_refresh, persona_to_response
 from .schemas import (
+    PersonaImprovementDashboardResponse,
+    PersonaImprovementScheduleResponse,
+    PersonaImprovementScheduleUpdate,
     PersonaPersonalityResponse,
     PersonaPersonalityUpdate,
     PersonaResponse,
@@ -119,6 +126,37 @@ async def update_persona(
         db,
         persona,
     )
+
+
+@router.get("/improvement", response_model=PersonaImprovementDashboardResponse)
+async def get_improvement_dashboard(
+    db: AsyncSession = Depends(get_db),
+    days: int = 30,
+    limit: int = 8,
+) -> PersonaImprovementDashboardResponse:
+    """Return the focused Jenny improvement dashboard payload."""
+    return PersonaImprovementDashboardResponse(
+        **await get_persona_improvement_dashboard(db, days=days, limit=limit)
+    )
+
+
+@router.put("/improvement/schedule", response_model=PersonaImprovementScheduleResponse)
+async def update_improvement_schedule(
+    update: PersonaImprovementScheduleUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> PersonaImprovementScheduleResponse:
+    """Enable or disable Jenny's scheduled improvement loop and update its cadence."""
+    from fastapi import HTTPException
+
+    try:
+        payload = await update_persona_self_honing_schedule(
+            db,
+            enabled=update.enabled,
+            cadence_minutes=update.cadence_minutes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return PersonaImprovementScheduleResponse(**payload)
 
 
 @router.post("/reset-onboarding", response_model=PersonaResponse)
