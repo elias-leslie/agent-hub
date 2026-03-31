@@ -245,13 +245,18 @@ async def _query_recent_workstream_sessions(
     now: datetime | None = None,
 ) -> list[dict[str, object]]:
     """Query workstream sessions from DB and collapse to deduplicated active rows."""
-    from sqlalchemy import and_, or_, select
+    from sqlalchemy import and_, func, or_, select
 
     from app.db import async_session
     from app.models import Session
 
     collected_at = now or datetime.now(UTC)
     cutoff = collected_at - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
+    lane_or_reconciled_scope = or_(
+        Session.workstream_status.isnot(None),
+        Session.external_id.like("task-%"),
+        Session.current_branch.like("task-%/%"),
+    )
     async with async_session() as db:
         raw_rows = (
             await db.execute(
@@ -264,10 +269,17 @@ async def _query_recent_workstream_sessions(
                 .where(and_(
                     Session.agent_slug.isnot(None),
                     Session.created_at >= cutoff,
-                    or_(Session.external_id.isnot(None), Session.current_branch.isnot(None)),
+                    lane_or_reconciled_scope,
                     Session.project_id == target_project_id if target_project_id else True,
                 ))
-                .order_by(Session.created_at.desc())
+                .order_by(
+                    func.coalesce(
+                        Session.workstream_updated_at,
+                        Session.updated_at,
+                        Session.created_at,
+                    ).desc(),
+                    Session.created_at.desc(),
+                )
                 .limit(50)
             )
         ).all()

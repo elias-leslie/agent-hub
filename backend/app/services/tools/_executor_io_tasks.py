@@ -19,6 +19,7 @@ from app.services.ownership_lanes import (
     STALE_WORKSTREAM_IDLE_MINUTES,
     idle_minutes_from_timestamps,
 )
+from app.services.project_permission_service import check_execution_permission
 from app.services.tools._tool_constants import st_cmd as _st_cmd
 
 logger = logging.getLogger(__name__)
@@ -217,12 +218,60 @@ async def _live_dispatch_block_reason(
     return None
 
 
+async def _dispatch_permission_block_reason(project_id: str | None) -> str | None:
+    """Return a blocking reason when project access disallows autonomous dispatch."""
+    if not project_id:
+        return None
+
+    from app.db import async_session
+
+    async with async_session() as db:
+        permission = await check_execution_permission(db, project_id)
+
+    if not (
+        isinstance(permission.allowed, bool)
+        and isinstance(permission.permission_tier, str)
+        and isinstance(permission.auto_exec_enabled, bool)
+        and isinstance(permission.in_time_window, bool)
+    ):
+        logger.debug(
+            "Skipping dispatch permission gate for %s due to invalid permission payload: %r",
+            project_id,
+            permission,
+        )
+        return None
+
+    if permission.allowed:
+        return None
+
+    access_label = (
+        f"{permission.permission_tier}/auto-exec"
+        if permission.auto_exec_enabled
+        else f"{permission.permission_tier}/manual"
+    )
+    if permission.permission_tier == "off":
+        detail = "project access is off"
+    elif not permission.auto_exec_enabled:
+        detail = "project is observe-only for autonomous execution"
+    elif not permission.in_time_window:
+        detail = "project is outside its execution window"
+    else:
+        detail = f"execution permission check returned {permission.reason}"
+    return (
+        f"Dispatch blocked: project {project_id} is {access_label}; {detail}. "
+        "Read/manual projects are observe-only during heartbeat unless access changes."
+    )
+
+
 async def _handle_dispatch(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
     project_id: str | None,
 ) -> str:
     """Dispatch a task via autocode, prefixed with any running-task warning."""
+    permission_block = await _dispatch_permission_block_reason(project_id)
+    if permission_block:
+        return permission_block
     block_reason, cleanup_status = await _cleanup_dispatch_block_reason(bash_fn, project_id)
     if block_reason:
         return block_reason

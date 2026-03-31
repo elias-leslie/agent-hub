@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,6 +28,7 @@ from app.workflows._heartbeat_data import (
     _get_workstream_inventory,
     _query_active_sessions_for_heartbeat,
     _query_active_specialist_sessions,
+    _query_recent_workstream_sessions,
 )
 from app.workflows._heartbeat_recall import HeartbeatRecallSections
 
@@ -339,6 +341,43 @@ class TestCollectAgentHubHeartbeatState:
         assert state.active_sessions == []
         assert state.active_specialist_sessions == []
         assert state.workstream_rows == []
+
+
+class TestQueryRecentWorkstreamSessions:
+    @pytest.mark.asyncio
+    async def test_filters_to_lane_and_reconciled_rows_and_orders_by_recent_lane_activity(self) -> None:
+        now = datetime(2026, 3, 31, 16, 0, tzinfo=UTC)
+        session_factory, mock_db = _mock_async_session_with_rows(
+            [
+                SimpleNamespace(
+                    id="sess-1",
+                    agent_slug="coder",
+                    project_id="terminal",
+                    external_id="task-2c2abc80",
+                    current_branch="task-2c2abc80/main",
+                    provider_metadata={"cwd": "/srv/workspaces/lanes/terminal/task-2c2abc80"},
+                    status="completed",
+                    workstream_status="authoritative",
+                    workstream_note="Selected as authoritative during reconcile",
+                    workstream_updated_at=now,
+                    created_at=now - timedelta(hours=17),
+                    updated_at=now,
+                ),
+            ]
+        )
+
+        with patch("app.db.async_session", session_factory):
+            rows = await _query_recent_workstream_sessions(now=now)
+
+        executed_query = str(mock_db.execute.await_args.args[0])
+        assert rows[0]["external_id"] == "task-2c2abc80"
+        assert "sessions.workstream_status IS NOT NULL" in executed_query
+        assert "sessions.external_id LIKE :external_id_1" in executed_query
+        assert "sessions.current_branch LIKE :current_branch_1" in executed_query
+        assert (
+            "coalesce(sessions.workstream_updated_at, sessions.updated_at, sessions.created_at) DESC"
+            in executed_query
+        )
 
 
 class TestAppendDynamicSections:
