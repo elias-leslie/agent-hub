@@ -184,3 +184,131 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
     assert payload["latest_lab_run"]["reliability"] == 100.0
     assert payload["recent_runs"][0]["run_id"] == "run-iter"
     assert payload["recent_runs"][0]["run_kind"] == "honing_iteration"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_was_held() -> None:
+    now = datetime.now(UTC)
+    experiment = SimpleNamespace(
+        id="exp-1",
+        decision="hold",
+        decision_reason="no_clear_winner",
+        evidence={"final_decision_source": "benchmark"},
+    )
+    latest_candidate = SimpleNamespace(
+        id="run-candidate",
+        benchmark_id="persona-benchmark-candidate",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_candidate",
+        started_at=now - timedelta(minutes=2),
+        completed_at=now,
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=1,
+        infra_failure_count=0,
+        pass_rate=100.0,
+        avg_score=100.0,
+        run_metadata={
+            "persona_improvement": {
+                "reliability": 100.0,
+                "effectiveness": 100.0,
+                "avg_total_tokens": 400.0,
+                "tokens_per_passed_attempt": 400.0,
+                "avg_tool_calls": 0.0,
+                "avg_turns": 1.0,
+                "prompt_tokens": 1500,
+                "failure_count": 0,
+                "top_failure_detail": None,
+                "family_breakdown": [],
+            }
+        },
+        config_snapshot={},
+        experiment_id="exp-1",
+    )
+    paired_baseline = SimpleNamespace(
+        id="run-baseline",
+        benchmark_id="persona-benchmark-baseline",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_baseline",
+        started_at=now - timedelta(minutes=4),
+        completed_at=now - timedelta(minutes=1),
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=1,
+        infra_failure_count=0,
+        pass_rate=100.0,
+        avg_score=100.0,
+        run_metadata={
+            "persona_improvement": {
+                "reliability": 97.0,
+                "effectiveness": 98.0,
+                "avg_total_tokens": 500.0,
+                "tokens_per_passed_attempt": 500.0,
+                "avg_tool_calls": 0.0,
+                "avg_turns": 1.0,
+                "prompt_tokens": 1400,
+                "failure_count": 0,
+                "top_failure_detail": None,
+                "family_breakdown": [],
+            }
+        },
+        config_snapshot={},
+        experiment_id="exp-1",
+    )
+
+    class _ScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    mock_db = AsyncMock()
+    mock_db.execute.side_effect = [
+        _ScalarResult([latest_candidate, paired_baseline]),
+        _ScalarResult([experiment]),
+    ]
+
+    with (
+        patch(
+            "app.services.persona_improvement.get_persona_self_honing_job",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.services.persona_improvement.query_open_regression_clusters",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.persona_improvement.get_persona_heartbeat_field_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "overview": {
+                        "total_heartbeats": 1,
+                        "latest_completed_at": now.isoformat(),
+                        "reliability": 100.0,
+                        "effectiveness": 100.0,
+                        "truth_quality": 100.0,
+                        "tokens_per_healthy_heartbeat": 100.0,
+                        "avg_tool_calls": 1.0,
+                        "avg_turns": 1.0,
+                        "risky_heartbeats": 0,
+                        "critical_heartbeats": 0,
+                    },
+                    "trend": [],
+                    "recent_heartbeats": [],
+                    "risks": [],
+                }
+            ),
+        ),
+    ):
+        payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
+
+    assert payload["recent_runs"][0]["run_id"] == "run-candidate"
+    assert payload["recent_runs"][0]["experiment_decision"] == "hold"
+    assert payload["latest_lab_run"]["run_id"] == "run-baseline"
+    assert payload["latest_lab_run"]["reliability"] == 97.0

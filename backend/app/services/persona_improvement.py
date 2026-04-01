@@ -843,6 +843,40 @@ def _format_recent_run(
     }
 
 
+def _select_current_lab_run(
+    runs: list[AgentBenchmarkRun],
+    experiments_by_id: dict[str, AgentBenchmarkExperiment],
+) -> AgentBenchmarkRun | None:
+    for run in runs:
+        experiment = experiments_by_id.get(run.experiment_id) if run.experiment_id else None
+        decision = experiment.decision if experiment is not None else None
+
+        if run.run_kind == "honing_iteration":
+            return run
+
+        if run.run_kind == "honing_candidate":
+            if decision == "promote":
+                return run
+            if decision in {"hold", "rollback"} and run.experiment_id:
+                baseline = next(
+                    (
+                        candidate
+                        for candidate in runs
+                        if candidate.experiment_id == run.experiment_id
+                        and candidate.run_kind == "honing_baseline"
+                    ),
+                    None,
+                )
+                if baseline is not None:
+                    return baseline
+                continue
+
+        if run.run_kind == "honing_baseline":
+            return run
+
+    return runs[0] if runs else None
+
+
 async def get_persona_improvement_dashboard(
     db: AsyncSession,
     *,
@@ -905,6 +939,7 @@ async def get_persona_improvement_dashboard(
     prompt_values = [run_data["prompt_tokens"] for run_data in recent_runs]
 
     latest_run = runs[0] if runs else None
+    latest_lab_run = _select_current_lab_run(runs, experiments_by_id)
 
     return {
         "generated_at": generated_at.isoformat(),
@@ -925,8 +960,8 @@ async def get_persona_improvement_dashboard(
             "open_regressions": len(open_clusters),
         },
         "latest_lab_run": (
-            _format_recent_run(latest_run, experiments_by_id.get(latest_run.experiment_id))
-            if latest_run is not None
+            _format_recent_run(latest_lab_run, experiments_by_id.get(latest_lab_run.experiment_id))
+            if latest_lab_run is not None
             else None
         ),
         "field_overview": field_snapshot["overview"],
