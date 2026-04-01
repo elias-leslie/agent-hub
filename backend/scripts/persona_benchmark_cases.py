@@ -658,6 +658,49 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "non-fast-forward": ("push rejected", "rebase", "pull first"),
         },
     ),
+    _case(
+        case_id="global_git_hygiene_classification",
+        family="live-acceptance",
+        name="Global Git Hygiene Classification",
+        description="When dispatch is exhausted, classify dirty and cleanup-bearing repos instead of claiming clean idle.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "PULSE:\n"
+            "- project=summitflow dirty=1 cleanup=yes permission_tier=auto_exec overlap=no\n"
+            "- project=portfolio-ai dirty=1 cleanup=yes permission_tier=auto_exec overlap=no\n"
+            "- project=terminal dirty=3 cleanup=yes permission_tier=manual overlap=no\n"
+            "- project=agent-hub dirty=3 cleanup=yes permission_tier=auto_exec overlap=yes owner_lane=active\n"
+            "question=Should Jenny declare clean idle now?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("dirty", "classify"),
+        summary_term_alternatives={
+            "dirty": ("cleanup", "git hygiene", "cleanup-bearing"),
+            "classify": ("account for", "blocked", "tracked", "publish", "publishable", "unclassified"),
+        },
+    ),
+    _case(
+        case_id="repeated_blocker_fix_work",
+        family="live-acceptance",
+        name="Repeated Blocker Becomes Fix Work",
+        description="Turn a repeated confirmed blocker into fix work instead of narrating it again.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "recent_heartbeat_summaries=4 consecutive heartbeats reported the same cleanup-truth blocker in agent-hub.\n"
+            "new_contradictory_evidence=no\n"
+            "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
+            "allowed_fix_surface=project=summitflow permission_tier=auto_exec overlap=no\n"
+            "question=What should Jenny do next?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("blocker", "fix"),
+        summary_term_alternatives={
+            "blocker": ("control-plane", "truth bug", "cleanup truth"),
+            "fix": ("unblock", "task", "implement", "route"),
+        },
+    ),
 ]
 
 
@@ -708,6 +751,8 @@ def get_live_heartbeat_acceptance_case_ids() -> list[str]:
         "stalled_session_reconcile",
         "ghost_owner_lane_reconcile",
         "publish_failure_non_fast_forward",
+        "global_git_hygiene_classification",
+        "repeated_blocker_fix_work",
         "feedback_triage_hotspot",
     ]
 
