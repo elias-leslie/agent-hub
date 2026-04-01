@@ -248,6 +248,7 @@ class PersonaImprovementDashboardResponse(BaseModel):
     days: int
     schedule: PersonaImprovementScheduleResponse
     overview: PersonaImprovementOverview
+    latest_lab_run: PersonaImprovementRecentRun | None = None
     field_overview: PersonaHeartbeatFieldOverview
     trend: list[PersonaImprovementTrendPoint] = Field(default_factory=list)
     field_trend: list[PersonaHeartbeatFieldTrendPoint] = Field(default_factory=list)

@@ -924,6 +924,11 @@ async def get_persona_improvement_dashboard(
             "prompt_tokens": _mean(prompt_values),
             "open_regressions": len(open_clusters),
         },
+        "latest_lab_run": (
+            _format_recent_run(latest_run, experiments_by_id.get(latest_run.experiment_id))
+            if latest_run is not None
+            else None
+        ),
         "field_overview": field_snapshot["overview"],
         "trend": trend,
         "field_trend": field_snapshot["trend"],

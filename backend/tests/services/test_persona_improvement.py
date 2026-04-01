@@ -180,5 +180,7 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
         payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
 
     assert payload["overview"]["latest_completed_at"] == latest_run.completed_at.isoformat()
+    assert payload["latest_lab_run"]["run_id"] == "run-iter"
+    assert payload["latest_lab_run"]["reliability"] == 100.0
     assert payload["recent_runs"][0]["run_id"] == "run-iter"
     assert payload["recent_runs"][0]["run_kind"] == "honing_iteration"
