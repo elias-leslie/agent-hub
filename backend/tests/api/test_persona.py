@@ -318,6 +318,7 @@ class TestPersonaImprovementDashboardEndpoint:
             "recent_heartbeats": [],
             "open_regressions": [],
             "field_risks": [],
+            "schedule_risks": [],
         }
 
         with patch(

@@ -338,15 +338,41 @@ function RecentRunsSection({
 }
 
 function RiskSection({ dashboard }: { dashboard: PersonaImprovementDashboard }) {
+  const hasScheduleRisks = dashboard.schedule_risks.length > 0;
   const hasFieldRisks = dashboard.field_risks.length > 0;
   const hasLabRisks = dashboard.open_regressions.length > 0;
 
   return (
     <ChartCard title="Current Risks">
-      {!hasFieldRisks && !hasLabRisks ? (
-        <p className="text-sm text-slate-400">No open Jenny field or lab risks.</p>
+      {!hasScheduleRisks && !hasFieldRisks && !hasLabRisks ? (
+        <p className="text-sm text-slate-400">No open Jenny schedule, field, or lab risks.</p>
       ) : (
         <div className="space-y-3">
+          {dashboard.schedule_risks.map((item) => (
+            <div
+              key={`${item.kind}:${item.detail ?? item.summary}`}
+              className={`rounded-2xl border px-4 py-3 ${
+                item.critical
+                  ? "border-amber-900/40 bg-amber-950/15"
+                  : "border-slate-800 bg-slate-950/50"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-100">Scheduler</p>
+                <span
+                  className={`text-xs font-medium ${
+                    item.critical ? "text-amber-300" : "text-slate-400"
+                  }`}
+                >
+                  {item.kind}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-300">{item.summary}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {item.detail ? summarizeArenaIssue(item.detail, 140) : "No detail"}
+              </p>
+            </div>
+          ))}
           {dashboard.field_risks.map((item) => (
             <div
               key={item.session_id}
@@ -481,7 +507,8 @@ export function PersonaImprovementDashboard() {
       return "bg-slate-800 text-slate-300 ring-1 ring-slate-700";
     }
     if (
-      (dashboard.overview.open_regressions ?? 0) > 0
+      dashboard.schedule_risks.some((item) => item.critical)
+      || (dashboard.overview.open_regressions ?? 0) > 0
       || dashboard.field_risks.some((item) => item.critical)
     ) {
       return "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800";

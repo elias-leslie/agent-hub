@@ -111,6 +111,13 @@ export interface PersonaHeartbeatFieldRisk {
   critical: boolean;
 }
 
+export interface PersonaImprovementScheduleRisk {
+  kind: string;
+  summary: string;
+  detail: string | null;
+  critical: boolean;
+}
+
 export interface PersonaHeartbeatFieldSession {
   session_id: string;
   completed_at: string;
@@ -145,6 +152,7 @@ export interface PersonaImprovementDashboard {
   recent_heartbeats: PersonaHeartbeatFieldSession[];
   open_regressions: PersonaImprovementOpenRegression[];
   field_risks: PersonaHeartbeatFieldRisk[];
+  schedule_risks: PersonaImprovementScheduleRisk[];
 }
 
 export interface PersonaImprovementScheduleUpdate {

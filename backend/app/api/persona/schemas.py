@@ -218,6 +218,15 @@ class PersonaHeartbeatFieldRisk(BaseModel):
     critical: bool = False
 
 
+class PersonaImprovementScheduleRisk(BaseModel):
+    """Schedule-health risk surfaced into Jenny analytics."""
+
+    kind: str
+    summary: str
+    detail: str | None = None
+    critical: bool = False
+
+
 class PersonaHeartbeatFieldSession(BaseModel):
     """Compact recent real-heartbeat summary."""
 
@@ -256,6 +265,7 @@ class PersonaImprovementDashboardResponse(BaseModel):
     recent_heartbeats: list[PersonaHeartbeatFieldSession] = Field(default_factory=list)
     open_regressions: list[PersonaImprovementOpenRegression] = Field(default_factory=list)
     field_risks: list[PersonaHeartbeatFieldRisk] = Field(default_factory=list)
+    schedule_risks: list[PersonaImprovementScheduleRisk] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

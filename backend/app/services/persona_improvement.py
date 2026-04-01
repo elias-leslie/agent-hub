@@ -877,6 +877,55 @@ def _select_current_lab_run(
     return runs[0] if runs else None
 
 
+def _build_schedule_risks(
+    *,
+    generated_at: datetime,
+    schedule: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if not schedule.get("enabled"):
+        return []
+
+    next_run_at_raw = schedule.get("next_run_at")
+    if not next_run_at_raw:
+        return [
+            {
+                "kind": "schedule_missing_next_run",
+                "summary": "Self-improvement schedule has no next run time.",
+                "detail": "Enabled schedules should always carry the next due run.",
+                "critical": True,
+            }
+        ]
+
+    try:
+        next_run_at = datetime.fromisoformat(next_run_at_raw)
+    except ValueError:
+        return [
+            {
+                "kind": "schedule_invalid_next_run",
+                "summary": "Self-improvement schedule has an invalid next run time.",
+                "detail": str(next_run_at_raw),
+                "critical": True,
+            }
+        ]
+
+    if next_run_at >= generated_at:
+        return []
+
+    overdue_for = generated_at - next_run_at
+    grace = timedelta(minutes=6)
+    if overdue_for <= grace:
+        return []
+
+    return [
+        {
+            "kind": "schedule_overdue",
+            "summary": "Scheduled self-improvement is overdue.",
+            "detail": f"next run was due at {next_run_at.isoformat()}",
+            "critical": True,
+        }
+    ]
+
+
 async def get_persona_improvement_dashboard(
     db: AsyncSession,
     *,
@@ -901,6 +950,7 @@ async def get_persona_improvement_dashboard(
     ).scalars().all()
     job = await get_persona_self_honing_job(db)
     schedule = serialize_persona_self_honing_schedule(job)
+    schedule_risks = _build_schedule_risks(generated_at=generated_at, schedule=schedule)
     open_clusters = await query_open_regression_clusters(
         db,
         agent_slug="persona",
@@ -980,4 +1030,5 @@ async def get_persona_improvement_dashboard(
             for cluster in open_clusters
         ],
         "field_risks": field_snapshot["risks"],
+        "schedule_risks": schedule_risks,
     }
