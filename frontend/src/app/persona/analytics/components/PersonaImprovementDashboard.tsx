@@ -61,6 +61,14 @@ function formatMetricDelta(current: number | null | undefined, average: number |
   return `${prefix}${rounded}`;
 }
 
+function formatRatio(value: number | null | undefined, suffix = "") {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "Pending";
+  }
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded}${suffix}`;
+}
+
 function LoadingState() {
   return (
     <div className="page-shell">
@@ -426,6 +434,62 @@ function RiskSection({ dashboard }: { dashboard: PersonaImprovementDashboard }) 
   );
 }
 
+function FieldRealitySection({
+  dashboard,
+  labRunsPerHeartbeat,
+}: {
+  dashboard: PersonaImprovementDashboard;
+  labRunsPerHeartbeat: number | null;
+}) {
+  const items = [
+    {
+      label: "Healthy rate",
+      value: formatPercent(dashboard.field_overview.healthy_rate),
+      detail: `${dashboard.field_overview.healthy_heartbeats}/${dashboard.field_overview.total_heartbeats} clean heartbeats`,
+    },
+    {
+      label: "Action rate",
+      value: formatPercent(dashboard.field_overview.action_rate),
+      detail: `${dashboard.field_overview.action_heartbeats}/${dashboard.field_overview.total_heartbeats} movement heartbeats`,
+    },
+    {
+      label: "Clean-ok rate",
+      value: formatPercent(dashboard.field_overview.ok_rate),
+      detail: `${dashboard.field_overview.ok_heartbeats}/${dashboard.field_overview.total_heartbeats} clean heartbeats`,
+    },
+    {
+      label: "Repeated issue",
+      value: dashboard.field_overview.top_issue_label
+        ? `${dashboard.field_overview.top_issue_label} x${dashboard.field_overview.top_issue_count}`
+        : "None",
+      detail: dashboard.field_overview.top_issue_label
+        ? "Most common real-heartbeat miss in the selected window"
+        : "No repeated field issue in the selected window",
+    },
+    {
+      label: "Lab pressure",
+      value: formatRatio(labRunsPerHeartbeat, " runs / HB"),
+      detail: `${dashboard.overview.total_runs} lab runs vs ${dashboard.field_overview.total_heartbeats} real heartbeats`,
+    },
+  ];
+
+  return (
+    <ChartCard title="Field Reality">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              {item.label}
+            </p>
+            <p className="mt-2 text-sm font-semibold text-slate-100">{item.value}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </ChartCard>
+  );
+}
+
 export function PersonaImprovementDashboard() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -571,6 +635,9 @@ export function PersonaImprovementDashboard() {
     latestFieldHeartbeat?.truth_quality,
     dashboard.field_overview.truth_quality,
   );
+  const labRunsPerHeartbeat = dashboard.field_overview.total_heartbeats > 0
+    ? dashboard.overview.total_runs / dashboard.field_overview.total_heartbeats
+    : null;
 
   const saveErrorMessage = scheduleMutation.error instanceof Error
     ? scheduleMutation.error.message
@@ -813,6 +880,13 @@ export function PersonaImprovementDashboard() {
             hint={
               `lab avg ${formatMetricTokens(dashboard.overview.prompt_tokens)}${promptDelta !== null ? ` · lab Δ ${promptDelta}` : ""} · field avg ${formatPercent(dashboard.field_overview.truth_quality)}${fieldTruthDelta !== null ? ` · field Δ ${fieldTruthDelta}` : ""} · ${dashboard.overview.open_regressions} open lab regressions`
             }
+          />
+        </div>
+
+        <div className="mt-6">
+          <FieldRealitySection
+            dashboard={dashboard}
+            labRunsPerHeartbeat={labRunsPerHeartbeat}
           />
         </div>
 

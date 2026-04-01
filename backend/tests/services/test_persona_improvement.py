@@ -42,6 +42,8 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_critical_or_low_quality
             "reliability": 82.0,
             "truth_quality": 80.0,
             "critical_heartbeats": 1,
+            "top_issue_count": 0,
+            "unknown_heartbeats": 0,
         },
         "recent_heartbeats": [{"session_id": "sess-1"}],
     }
@@ -57,6 +59,28 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_critical_or_low_quality
     assert "recent critical heartbeat failures" in result["summary"]
 
 
+def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue_and_unknown_outcomes() -> None:
+    snapshot = {
+        "overview": {
+            "reliability": 93.0,
+            "truth_quality": 92.0,
+            "critical_heartbeats": 0,
+            "top_issue_count": 4,
+            "unknown_heartbeats": 1,
+        },
+        "recent_heartbeats": [{"session_id": "sess-1"}],
+    }
+
+    result = evaluate_persona_heartbeat_field_snapshot(snapshot)
+
+    assert result["needs_review"] is True
+    assert result["reason_codes"] == [
+        "field_repeated_issue",
+        "field_unknown_outcomes",
+    ]
+    assert "repeated field issue needs a source fix" in result["summary"]
+
+
 def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue() -> None:
     summary = _summarize_heartbeat_field_sessions(
         [
@@ -70,7 +94,7 @@ def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue(
                 "turns": 1,
                 "issue_codes": [],
                 "completed_at": "2026-04-01T12:00:00+00:00",
-                "result_status": "completed",
+                "result_status": "ok",
             },
             {
                 "reliability": 65.0,
@@ -82,7 +106,7 @@ def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue(
                 "turns": 2,
                 "issue_codes": ["cleanup_actionable", "missing_progress"],
                 "completed_at": "2026-04-01T11:45:00+00:00",
-                "result_status": "partial",
+                "result_status": "action",
             },
             {
                 "reliability": 70.0,
@@ -94,14 +118,19 @@ def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue(
                 "turns": 2,
                 "issue_codes": ["cleanup_actionable"],
                 "completed_at": "2026-04-01T11:30:00+00:00",
-                "result_status": "partial",
+                "result_status": "unknown",
             },
         ]
     )
 
-    assert summary["completed_heartbeats"] == 1
-    assert summary["partial_heartbeats"] == 2
+    assert summary["healthy_heartbeats"] == 1
+    assert summary["healthy_rate"] == 33.3
+    assert summary["action_heartbeats"] == 1
+    assert summary["action_rate"] == 33.3
+    assert summary["ok_heartbeats"] == 1
+    assert summary["ok_rate"] == 33.3
     assert summary["failed_heartbeats"] == 0
+    assert summary["unknown_heartbeats"] == 1
     assert summary["top_issue_code"] == "cleanup_actionable"
     assert summary["top_issue_label"] == "cleanup still actionable"
     assert summary["top_issue_count"] == 2
@@ -218,8 +247,19 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
                         "tokens_per_healthy_heartbeat": 100.0,
                         "avg_tool_calls": 1.0,
                         "avg_turns": 1.0,
+                        "healthy_heartbeats": 1,
+                        "healthy_rate": 100.0,
                         "risky_heartbeats": 0,
                         "critical_heartbeats": 0,
+                        "action_heartbeats": 1,
+                        "action_rate": 100.0,
+                        "ok_heartbeats": 0,
+                        "ok_rate": 0.0,
+                        "failed_heartbeats": 0,
+                        "unknown_heartbeats": 0,
+                        "top_issue_code": None,
+                        "top_issue_label": None,
+                        "top_issue_count": 0,
                     },
                     "trend": [],
                     "recent_heartbeats": [],
@@ -347,8 +387,19 @@ async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_
                         "tokens_per_healthy_heartbeat": 100.0,
                         "avg_tool_calls": 1.0,
                         "avg_turns": 1.0,
+                        "healthy_heartbeats": 1,
+                        "healthy_rate": 100.0,
                         "risky_heartbeats": 0,
                         "critical_heartbeats": 0,
+                        "action_heartbeats": 1,
+                        "action_rate": 100.0,
+                        "ok_heartbeats": 0,
+                        "ok_rate": 0.0,
+                        "failed_heartbeats": 0,
+                        "unknown_heartbeats": 0,
+                        "top_issue_code": None,
+                        "top_issue_label": None,
+                        "top_issue_count": 0,
                     },
                     "trend": [],
                     "recent_heartbeats": [],
@@ -415,8 +466,19 @@ async def test_dashboard_flags_overdue_self_honing_schedule() -> None:
                         "tokens_per_healthy_heartbeat": None,
                         "avg_tool_calls": None,
                         "avg_turns": None,
+                        "healthy_heartbeats": 0,
+                        "healthy_rate": None,
                         "risky_heartbeats": 0,
                         "critical_heartbeats": 0,
+                        "action_heartbeats": 0,
+                        "action_rate": None,
+                        "ok_heartbeats": 0,
+                        "ok_rate": None,
+                        "failed_heartbeats": 0,
+                        "unknown_heartbeats": 0,
+                        "top_issue_code": None,
+                        "top_issue_label": None,
+                        "top_issue_count": 0,
                     },
                     "trend": [],
                     "recent_heartbeats": [],
@@ -487,8 +549,19 @@ async def test_dashboard_allows_scheduler_polling_grace_before_flagging_overdue_
                         "tokens_per_healthy_heartbeat": None,
                         "avg_tool_calls": None,
                         "avg_turns": None,
+                        "healthy_heartbeats": 0,
+                        "healthy_rate": None,
                         "risky_heartbeats": 0,
                         "critical_heartbeats": 0,
+                        "action_heartbeats": 0,
+                        "action_rate": None,
+                        "ok_heartbeats": 0,
+                        "ok_rate": None,
+                        "failed_heartbeats": 0,
+                        "unknown_heartbeats": 0,
+                        "top_issue_code": None,
+                        "top_issue_label": None,
+                        "top_issue_count": 0,
                     },
                     "trend": [],
                     "recent_heartbeats": [],
