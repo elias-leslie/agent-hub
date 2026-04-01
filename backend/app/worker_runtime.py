@@ -39,11 +39,11 @@ WorkflowDef = Any
 AGENT_WORKFLOWS: tuple[WorkflowDef, ...] = (
     completion_task,
     persona_heartbeat_task,
-    persona_scheduler_task,
     agent_wake_task,
 )
 
 OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
+    persona_scheduler_task,
     session_cleanup_task,
     tier_optimizer_task,
     memory_cleanup_task,
