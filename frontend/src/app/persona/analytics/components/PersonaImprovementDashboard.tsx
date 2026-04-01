@@ -538,21 +538,38 @@ export function PersonaImprovementDashboard() {
   }
 
   const latestLabRun = dashboard.latest_lab_run;
+  const latestFieldHeartbeat = dashboard.recent_heartbeats[0];
   const reliabilityDelta = formatMetricDelta(
     latestLabRun?.reliability,
     dashboard.overview.reliability,
+  );
+  const fieldReliabilityDelta = formatMetricDelta(
+    latestFieldHeartbeat?.reliability,
+    dashboard.field_overview.reliability,
   );
   const effectivenessDelta = formatMetricDelta(
     latestLabRun?.effectiveness,
     dashboard.overview.effectiveness,
   );
+  const fieldEffectivenessDelta = formatMetricDelta(
+    latestFieldHeartbeat?.effectiveness,
+    dashboard.field_overview.effectiveness,
+  );
   const tokenDelta = formatMetricDelta(
     latestLabRun?.tokens_per_passed_attempt,
     dashboard.overview.tokens_per_passed_attempt,
   );
+  const fieldTokenDelta = formatMetricDelta(
+    latestFieldHeartbeat?.total_tokens,
+    dashboard.field_overview.tokens_per_healthy_heartbeat,
+  );
   const promptDelta = formatMetricDelta(
     latestLabRun?.prompt_tokens,
     dashboard.overview.prompt_tokens,
+  );
+  const fieldTruthDelta = formatMetricDelta(
+    latestFieldHeartbeat?.truth_quality,
+    dashboard.field_overview.truth_quality,
   );
 
   const saveErrorMessage = scheduleMutation.error instanceof Error
@@ -640,6 +657,11 @@ export function PersonaImprovementDashboard() {
               {latestLabRun ? (
                 <span className="rounded-full bg-emerald-950/20 px-3 py-1 text-emerald-300 ring-1 ring-emerald-900/60">
                   current lab {formatPercent(latestLabRun.reliability)} reliability
+                </span>
+              ) : null}
+              {latestFieldHeartbeat ? (
+                <span className="rounded-full bg-blue-950/20 px-3 py-1 text-blue-300 ring-1 ring-blue-900/60">
+                  current field {formatPercent(latestFieldHeartbeat.reliability)} reliability
                 </span>
               ) : null}
               <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300 ring-1 ring-slate-700">
@@ -740,12 +762,12 @@ export function PersonaImprovementDashboard() {
             colorClass="bg-emerald-950/30 text-emerald-400"
             labLabel="Current lab"
             labValue={formatPercent(latestLabRun?.reliability ?? dashboard.overview.reliability)}
-            fieldLabel="Field"
-            fieldValue={formatPercent(dashboard.field_overview.reliability)}
+            fieldLabel="Current field"
+            fieldValue={formatPercent(
+              latestFieldHeartbeat?.reliability ?? dashboard.field_overview.reliability,
+            )}
             hint={
-              reliabilityDelta !== null
-                ? `window avg ${formatPercent(dashboard.overview.reliability)} · delta ${reliabilityDelta}`
-                : `${dashboard.field_overview.critical_heartbeats} critical real-heartbeat issues in window`
+              `lab avg ${formatPercent(dashboard.overview.reliability)}${reliabilityDelta !== null ? ` · lab Δ ${reliabilityDelta}` : ""} · field avg ${formatPercent(dashboard.field_overview.reliability)}${fieldReliabilityDelta !== null ? ` · field Δ ${fieldReliabilityDelta}` : ""}`
             }
           />
           <MetricSurfaceCard
@@ -754,12 +776,12 @@ export function PersonaImprovementDashboard() {
             colorClass="bg-blue-950/30 text-blue-400"
             labLabel="Current lab"
             labValue={formatPercent(latestLabRun?.effectiveness ?? dashboard.overview.effectiveness)}
-            fieldLabel="Field"
-            fieldValue={formatPercent(dashboard.field_overview.effectiveness)}
+            fieldLabel="Current field"
+            fieldValue={formatPercent(
+              latestFieldHeartbeat?.effectiveness ?? dashboard.field_overview.effectiveness,
+            )}
             hint={
-              effectivenessDelta !== null
-                ? `window avg ${formatPercent(dashboard.overview.effectiveness)} · delta ${effectivenessDelta}`
-                : `${dashboard.field_overview.total_heartbeats} recent real heartbeats scored`
+              `lab avg ${formatPercent(dashboard.overview.effectiveness)}${effectivenessDelta !== null ? ` · lab Δ ${effectivenessDelta}` : ""} · field avg ${formatPercent(dashboard.field_overview.effectiveness)}${fieldEffectivenessDelta !== null ? ` · field Δ ${fieldEffectivenessDelta}` : ""}`
             }
           />
           <MetricSurfaceCard
@@ -770,12 +792,12 @@ export function PersonaImprovementDashboard() {
             labValue={formatMetricTokens(
               latestLabRun?.tokens_per_passed_attempt ?? dashboard.overview.tokens_per_passed_attempt,
             )}
-            fieldLabel="Field tok / healthy HB"
-            fieldValue={formatMetricTokens(dashboard.field_overview.tokens_per_healthy_heartbeat)}
+            fieldLabel="Current HB tokens"
+            fieldValue={formatMetricTokens(
+              latestFieldHeartbeat?.total_tokens ?? dashboard.field_overview.tokens_per_healthy_heartbeat,
+            )}
             hint={
-              tokenDelta !== null
-                ? `window avg ${formatMetricTokens(dashboard.overview.tokens_per_passed_attempt)} · delta ${tokenDelta}`
-                : undefined
+              `lab avg ${formatMetricTokens(dashboard.overview.tokens_per_passed_attempt)}${tokenDelta !== null ? ` · lab Δ ${tokenDelta}` : ""} · field avg ${formatMetricTokens(dashboard.field_overview.tokens_per_healthy_heartbeat)}${fieldTokenDelta !== null ? ` · field Δ ${fieldTokenDelta}` : ""}`
             }
           />
           <MetricSurfaceCard
@@ -784,12 +806,12 @@ export function PersonaImprovementDashboard() {
             colorClass="bg-rose-950/30 text-rose-400"
             labLabel="Current prompt"
             labValue={formatMetricTokens(latestLabRun?.prompt_tokens ?? dashboard.overview.prompt_tokens)}
-            fieldLabel="Field truth"
-            fieldValue={formatPercent(dashboard.field_overview.truth_quality)}
+            fieldLabel="Current truth"
+            fieldValue={formatPercent(
+              latestFieldHeartbeat?.truth_quality ?? dashboard.field_overview.truth_quality,
+            )}
             hint={
-              promptDelta !== null
-                ? `window avg ${formatMetricTokens(dashboard.overview.prompt_tokens)} · delta ${promptDelta} · ${dashboard.overview.open_regressions} open lab regressions`
-                : `${dashboard.overview.open_regressions} open lab regressions`
+              `lab avg ${formatMetricTokens(dashboard.overview.prompt_tokens)}${promptDelta !== null ? ` · lab Δ ${promptDelta}` : ""} · field avg ${formatPercent(dashboard.field_overview.truth_quality)}${fieldTruthDelta !== null ? ` · field Δ ${fieldTruthDelta}` : ""} · ${dashboard.overview.open_regressions} open lab regressions`
             }
           />
         </div>
