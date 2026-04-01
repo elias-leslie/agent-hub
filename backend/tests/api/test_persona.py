@@ -311,6 +311,13 @@ class TestPersonaImprovementDashboardEndpoint:
 class TestPersonaImprovementScheduleEndpoint:
     """Tests for PUT /api/persona/improvement/schedule."""
 
+    def test_schedule_update_schema_defaults_to_15_minutes(self):
+        from app.api.persona.schemas import PersonaImprovementScheduleUpdate
+
+        payload = PersonaImprovementScheduleUpdate(enabled=True)
+
+        assert payload.cadence_minutes == 15
+
     def test_updates_self_honing_schedule(self, api_client, mock_db_session):
         payload = {
             "job_id": "job-123",

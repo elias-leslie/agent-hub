@@ -88,7 +88,7 @@ class PersonaImprovementScheduleResponse(BaseModel):
     schedule_type: str = "every"
     schedule_value: str
     schedule_timezone: str = "UTC"
-    cadence_minutes: int = 1440
+    cadence_minutes: int = 15
     cadence_label: str | None = None
     last_run_at: str | None = None
     next_run_at: str | None = None
@@ -99,7 +99,7 @@ class PersonaImprovementScheduleUpdate(BaseModel):
     """Update the scheduled Jenny improvement loop."""
 
     enabled: bool
-    cadence_minutes: int = Field(default=1440, ge=15, le=10080)
+    cadence_minutes: int = Field(default=15, ge=15, le=10080)
 
 
 class PersonaImprovementOverview(BaseModel):

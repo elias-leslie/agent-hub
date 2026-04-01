@@ -1,8 +1,19 @@
-"""Tests for Jenny improvement service field scoring."""
+"""Tests for Jenny improvement service field scoring and schedule defaults."""
 
 from __future__ import annotations
 
-from app.services.persona_improvement import evaluate_persona_heartbeat_field_snapshot
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from app.services.persona_improvement import (
+    DEFAULT_SELF_HONING_CADENCE_MINUTES,
+    evaluate_persona_heartbeat_field_snapshot,
+    get_persona_improvement_dashboard,
+    serialize_persona_self_honing_schedule,
+)
 
 
 def test_evaluate_persona_heartbeat_field_snapshot_allows_clean_recent_field_data() -> None:
@@ -43,3 +54,131 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_critical_or_low_quality
         "field_truth_quality_low",
     ]
     assert "recent critical heartbeat failures" in result["summary"]
+
+
+def test_serialize_persona_self_honing_schedule_defaults_to_15_minutes() -> None:
+    result = serialize_persona_self_honing_schedule(None)
+
+    assert DEFAULT_SELF_HONING_CADENCE_MINUTES == 15
+    assert result["enabled"] is False
+    assert result["cadence_minutes"] == 15
+    assert result["cadence_label"] == "15m"
+    assert result["schedule_value"] == str(15 * 60000)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_includes_latest_honing_iteration_run() -> None:
+    now = datetime.now(UTC)
+    latest_run = SimpleNamespace(
+        id="run-iter",
+        benchmark_id="persona-benchmark-latest",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_iteration",
+        started_at=now - timedelta(minutes=2),
+        completed_at=now,
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=1,
+        infra_failure_count=0,
+        pass_rate=100.0,
+        avg_score=100.0,
+        run_metadata={
+            "persona_improvement": {
+                "reliability": 100.0,
+                "effectiveness": 100.0,
+                "avg_total_tokens": 500.0,
+                "tokens_per_passed_attempt": 500.0,
+                "avg_tool_calls": 0.0,
+                "avg_turns": 1.0,
+                "prompt_tokens": 1234,
+                "failure_count": 0,
+                "top_failure_detail": None,
+                "family_breakdown": [],
+            }
+        },
+        config_snapshot={},
+        experiment_id=None,
+    )
+    older_candidate = SimpleNamespace(
+        id="run-old",
+        benchmark_id="persona-benchmark-old",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_candidate",
+        started_at=now - timedelta(hours=1, minutes=2),
+        completed_at=now - timedelta(hours=1),
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=0,
+        infra_failure_count=0,
+        pass_rate=0.0,
+        avg_score=0.0,
+        run_metadata={
+            "persona_improvement": {
+                "reliability": 0.0,
+                "effectiveness": 0.0,
+                "avg_total_tokens": 900.0,
+                "tokens_per_passed_attempt": None,
+                "avg_tool_calls": 0.0,
+                "avg_turns": 1.0,
+                "prompt_tokens": 1234,
+                "failure_count": 1,
+                "top_failure_detail": "wrong_fields: primary_action",
+                "family_breakdown": [],
+            }
+        },
+        config_snapshot={},
+        experiment_id=None,
+    )
+
+    class _ScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = _ScalarResult([latest_run, older_candidate])
+
+    with (
+        patch(
+            "app.services.persona_improvement.get_persona_self_honing_job",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.services.persona_improvement.query_open_regression_clusters",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.persona_improvement.get_persona_heartbeat_field_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "overview": {
+                        "total_heartbeats": 1,
+                        "latest_completed_at": now.isoformat(),
+                        "reliability": 100.0,
+                        "effectiveness": 100.0,
+                        "truth_quality": 100.0,
+                        "tokens_per_healthy_heartbeat": 100.0,
+                        "avg_tool_calls": 1.0,
+                        "avg_turns": 1.0,
+                        "risky_heartbeats": 0,
+                        "critical_heartbeats": 0,
+                    },
+                    "trend": [],
+                    "recent_heartbeats": [],
+                    "risks": [],
+                }
+            ),
+        ),
+    ):
+        payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
+
+    assert payload["overview"]["latest_completed_at"] == latest_run.completed_at.isoformat()
+    assert payload["recent_runs"][0]["run_id"] == "run-iter"
+    assert payload["recent_runs"][0]["run_kind"] == "honing_iteration"

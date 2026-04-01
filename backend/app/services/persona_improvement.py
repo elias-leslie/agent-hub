@@ -20,7 +20,6 @@ from app.models import (
     SessionEventType,
 )
 from app.services._benchmark_dashboard import (
-    benchmark_signal_run_clause,
     query_open_regression_clusters,
 )
 from app.services.benchmark_aggregation import aggregate_attempts, attempt_is_infra
@@ -31,7 +30,7 @@ from scripts.persona_benchmark_cases import get_case_by_id
 JENNY_IMPROVEMENT_SUITE_ID = "persona-suite-jenny-improvement"
 SELF_HONING_JOB_NAME = "Jenny improvement loop"
 SELF_HONING_PAYLOAD_MESSAGE = "Scheduled Jenny improvement run."
-DEFAULT_SELF_HONING_CADENCE_MINUTES = 24 * 60
+DEFAULT_SELF_HONING_CADENCE_MINUTES = 15
 MIN_SELF_HONING_CADENCE_MINUTES = 15
 MAX_SELF_HONING_CADENCE_MINUTES = 7 * 24 * 60
 PRODUCTIVE_ACTIONS = frozenset({"dispatch", "monitor", "reconcile"})
@@ -861,7 +860,6 @@ async def get_persona_improvement_dashboard(
                 AgentBenchmarkRun.suite_id == JENNY_IMPROVEMENT_SUITE_ID,
                 AgentBenchmarkRun.completed_at.is_not(None),
                 AgentBenchmarkRun.completed_at >= cutoff,
-                benchmark_signal_run_clause(AgentBenchmarkRun),
                 AgentBenchmarkRun.attempt_count > AgentBenchmarkRun.infra_failure_count,
             )
             .order_by(AgentBenchmarkRun.completed_at.desc())
