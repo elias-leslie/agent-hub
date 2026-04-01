@@ -82,6 +82,7 @@ from app.workflows._heartbeat_workstream import (
 
 logger = logging.getLogger(__name__)
 
+# ── timing & limits ───────────────────────────────────────────────────────────
 _WORKSTREAM_LOOKBACK_HOURS = 24
 _SUMMITFLOW_PROJECT_ID = "summitflow"
 _HEARTBEAT_DIGEST_LOOKBACK_HOURS = 6
@@ -90,6 +91,18 @@ _HEARTBEAT_DIGEST_TOKEN_BUDGET = 420
 _IDLE_HISTORY_LOOKBACK_HOURS = 6
 _IDLE_HISTORY_LIMIT = 4
 _IDLE_HISTORY_TOKEN_BUDGET = 360
+
+# ── magic strings ─────────────────────────────────────────────────────────────
+_PERSONA_AGENT_SLUG = "persona"
+_HEARTBEAT_REQUEST_SOURCE = "heartbeat"
+_TASK_BRANCH_PATTERN = "task-%"
+_TIMESTAMP_FORMAT = "%H:%M UTC"
+_HEARTBEAT_DIGEST_TAG = "recent_heartbeat_digest"
+_HEARTBEAT_DIGEST_HEADING = "Recent heartbeat recall"
+_IDLE_HISTORY_TAG = "recent_idle_improvement_history"
+_IDLE_HISTORY_HEADING = "Recent idle slices"
+
+# ── marker tuples ─────────────────────────────────────────────────────────────
 _IDLE_SUMMARY_MARKERS = (
     "clean and idle",
     "clean-idle",
@@ -254,8 +267,8 @@ async def _query_recent_workstream_sessions(
     cutoff = collected_at - timedelta(hours=_WORKSTREAM_LOOKBACK_HOURS)
     lane_or_reconciled_scope = or_(
         Session.workstream_status.isnot(None),
-        Session.external_id.like("task-%"),
-        Session.current_branch.like("task-%/%"),
+        Session.external_id.like(_TASK_BRANCH_PATTERN),
+        Session.current_branch.like(_TASK_BRANCH_PATTERN + "/%"),
     )
     async with async_session() as db:
         raw_rows = (
@@ -379,28 +392,19 @@ def _render_budgeted_rows_section(
     """Render a compact recall section within a prompt token budget."""
     if not rows:
         return ""
+
+    def _build(rs: list[str]) -> str:
+        return f"\n<{tag}>\n{heading}: {len(rs)}\n" + "\n".join(rs) + f"\n</{tag}>"
+
     selected_rows: list[str] = []
     for row in rows:
-        proposed_rows = [*selected_rows, row]
-        section = (
-            f"\n<{tag}>\n"
-            f"{heading}: {len(proposed_rows)}\n"
-            + "\n".join(proposed_rows)
-            + f"\n</{tag}>"
-        )
-        if selected_rows and count_tokens(section) > token_budget:
+        proposed = [*selected_rows, row]
+        if selected_rows and count_tokens(_build(proposed)) > token_budget:
             break
-        selected_rows = proposed_rows
-        if count_tokens(section) > token_budget:
+        selected_rows = proposed
+        if count_tokens(_build(selected_rows)) > token_budget:
             break
-    if not selected_rows:
-        return ""
-    return (
-        f"\n<{tag}>\n"
-        f"{heading}: {len(selected_rows)}\n"
-        + "\n".join(selected_rows)
-        + f"\n</{tag}>"
-    )
+    return _build(selected_rows) if selected_rows else ""
 
 
 def _row_value(row: object, index: int, attr: str) -> object:
@@ -415,8 +419,34 @@ def _row_value(row: object, index: int, attr: str) -> object:
         return None
 
 
-async def _get_recent_heartbeat_digest(target_project_id: str | None = None) -> str:
-    """Show a compact digest of recent heartbeat outcomes for bounded recall."""
+# ── heartbeat digest helpers ──────────────────────────────────────────────────
+
+
+def _build_digest_candidates(rows: list[object]) -> list[SessionDisplaySummaryCandidate]:
+    """Build display-summary candidates from raw heartbeat digest rows."""
+    return [
+        SessionDisplaySummaryCandidate(
+            session_id=str(_row_value(row, 0, "id") or ""),
+            summary_oneliner=(
+                _row_value(row, 4, "summary_oneliner")
+                if isinstance(_row_value(row, 4, "summary_oneliner"), str)
+                else None
+            ),
+            live_summary=_extract_live_activity_summary(
+                _row_value(row, 5, "provider_metadata")
+                if isinstance(_row_value(row, 5, "provider_metadata"), dict)
+                else None
+            ),
+        )
+        for row in rows
+        if _row_value(row, 0, "id")
+    ]
+
+
+async def _query_heartbeat_digest_data(
+    target_project_id: str | None,
+) -> tuple[list[object], dict[str, object]]:
+    """Query recent heartbeat sessions and their display summaries."""
     from sqlalchemy import and_, select
 
     from app.db import async_session
@@ -424,91 +454,85 @@ async def _get_recent_heartbeat_digest(target_project_id: str | None = None) -> 
 
     cutoff = datetime.now(UTC) - timedelta(hours=_HEARTBEAT_DIGEST_LOOKBACK_HOURS)
     conditions = [
-        Session.agent_slug == "persona",
-        Session.request_source == "heartbeat",
+        Session.agent_slug == _PERSONA_AGENT_SLUG,
+        Session.request_source == _HEARTBEAT_REQUEST_SOURCE,
         Session.status.in_(_HEARTBEAT_DIGEST_STATUSES),
         Session.created_at >= cutoff,
     ]
     if target_project_id:
         conditions.append(Session.project_id == target_project_id)
 
+    async with async_session() as db:
+        result = await db.execute(
+            select(
+                Session.id, Session.project_id, Session.status,
+                Session.created_at, Session.summary_oneliner, Session.provider_metadata,
+            )
+            .where(and_(*conditions))
+            .order_by(Session.created_at.desc())
+            .limit(_HEARTBEAT_DIGEST_LIMIT)
+        )
+        rows = list(result.all())
+        display_summaries = await fetch_session_display_summary_results(
+            db, _build_digest_candidates(rows)
+        )
+    return rows, display_summaries
+
+
+def _render_heartbeat_digest_row(
+    row: object,
+    display_summaries: dict[str, object],
+) -> str | None:
+    """Render one heartbeat digest row, returning None when no summary is available."""
+    session_id = str(_row_value(row, 0, "id") or "")
+    if not session_id:
+        return None
+    project_id = str(_row_value(row, 1, "project_id") or "unknown")
+    status = str(_row_value(row, 2, "status") or "unknown")
+    created_at = _row_value(row, 3, "created_at")
+    summary_oneliner = _row_value(row, 4, "summary_oneliner")
+    provider_metadata = _row_value(row, 5, "provider_metadata")
+    display_result = display_summaries.get(session_id)
+    display_summary = display_result if isinstance(display_result, str) else getattr(display_result, "summary", None)
+    summary = (
+        clean_display_summary_text(display_summary)
+        or clean_display_summary_text(summary_oneliner if isinstance(summary_oneliner, str) else None)
+        or clean_display_summary_text(
+            _extract_live_activity_summary(provider_metadata if isinstance(provider_metadata, dict) else None)
+        )
+    )
+    if not summary:
+        return None
+    timestamp = (
+        created_at.astimezone(UTC).strftime(_TIMESTAMP_FORMAT)
+        if isinstance(created_at, datetime)
+        else "unknown"
+    )
+    return f"- {timestamp} | {status} | {project_id} | {summary}"
+
+
+async def _get_recent_heartbeat_digest(target_project_id: str | None = None) -> str:
+    """Show a compact digest of recent heartbeat outcomes for bounded recall."""
     try:
-        async with async_session() as db:
-            result = await db.execute(
-                select(
-                    Session.id,
-                    Session.project_id,
-                    Session.status,
-                    Session.created_at,
-                    Session.summary_oneliner,
-                    Session.provider_metadata,
-                )
-                .where(and_(*conditions))
-                .order_by(Session.created_at.desc())
-                .limit(_HEARTBEAT_DIGEST_LIMIT)
-            )
-            rows = list(result.all())
-            display_summaries = await fetch_session_display_summary_results(
-                db,
-                [
-                    SessionDisplaySummaryCandidate(
-                        session_id=str(_row_value(row, 0, "id") or ""),
-                        summary_oneliner=(
-                            _row_value(row, 4, "summary_oneliner")
-                            if isinstance(_row_value(row, 4, "summary_oneliner"), str)
-                            else None
-                        ),
-                        live_summary=_extract_live_activity_summary(
-                            _row_value(row, 5, "provider_metadata")
-                            if isinstance(_row_value(row, 5, "provider_metadata"), dict)
-                            else None
-                        ),
-                    )
-                    for row in rows
-                    if _row_value(row, 0, "id")
-                ],
-            )
+        rows, display_summaries = await _query_heartbeat_digest_data(target_project_id)
     except Exception:
         logger.debug("Failed to fetch recent heartbeat digest", exc_info=True)
         return ""
-
-    rendered_rows: list[str] = []
-    for row in rows:
-        session_id = str(_row_value(row, 0, "id") or "")
-        if not session_id:
-            continue
-        project_id = str(_row_value(row, 1, "project_id") or "unknown")
-        status = str(_row_value(row, 2, "status") or "unknown")
-        created_at = _row_value(row, 3, "created_at")
-        summary_oneliner = _row_value(row, 4, "summary_oneliner")
-        provider_metadata = _row_value(row, 5, "provider_metadata")
-        display_result = display_summaries.get(session_id)
-        display_summary = display_result if isinstance(display_result, str) else getattr(display_result, "summary", None)
-        summary = (
-            clean_display_summary_text(display_summary)
-            or clean_display_summary_text(summary_oneliner if isinstance(summary_oneliner, str) else None)
-            or clean_display_summary_text(
-                _extract_live_activity_summary(provider_metadata if isinstance(provider_metadata, dict) else None)
-            )
-        )
-        if not summary:
-            continue
-        timestamp = (
-            created_at.astimezone(UTC).strftime("%H:%M UTC")
-            if isinstance(created_at, datetime)
-            else "unknown"
-        )
-        rendered_rows.append(f"- {timestamp} | {status} | {project_id} | {summary}")
-
+    rendered_rows = [
+        r for row in rows
+        if (r := _render_heartbeat_digest_row(row, display_summaries)) is not None
+    ]
     if not rendered_rows:
         return ""
-
     return _render_budgeted_rows_section(
-        tag="recent_heartbeat_digest",
-        heading="Recent heartbeat recall",
+        tag=_HEARTBEAT_DIGEST_TAG,
+        heading=_HEARTBEAT_DIGEST_HEADING,
         rows=rendered_rows,
         token_budget=_HEARTBEAT_DIGEST_TOKEN_BUDGET,
     )
+
+
+# ── idle improvement history helpers ─────────────────────────────────────────
 
 
 def _extract_idle_validation_command(provider_metadata: dict[str, object] | None) -> str | None:
@@ -548,6 +572,22 @@ def _is_recent_idle_slice_session(session: object) -> bool:
     return any(marker in summary_lower for marker in _IDLE_SUMMARY_MARKERS)
 
 
+def _render_idle_improvement_row(session: object) -> str | None:
+    """Render one idle improvement row, returning None when incomplete."""
+    command = _extract_idle_validation_command(getattr(session, "provider_metadata", None))
+    if not command:
+        return None
+    command_label = _idle_validation_label(session)
+    summary = str(getattr(session, "summary_oneliner", "")).strip()
+    created_at = getattr(session, "created_at", None)
+    timestamp = (
+        created_at.astimezone(UTC).strftime(_TIMESTAMP_FORMAT)
+        if isinstance(created_at, datetime)
+        else "unknown"
+    )
+    return f"- {timestamp} | {command_label}=`{command}` | {summary}"
+
+
 async def _get_recent_idle_improvement_history(
     target_project_id: str | None = None,
 ) -> str:
@@ -559,8 +599,8 @@ async def _get_recent_idle_improvement_history(
 
     cutoff = datetime.now(UTC) - timedelta(hours=_IDLE_HISTORY_LOOKBACK_HOURS)
     conditions = [
-        Session.agent_slug == "persona",
-        Session.request_source == "heartbeat",
+        Session.agent_slug == _PERSONA_AGENT_SLUG,
+        Session.request_source == _HEARTBEAT_REQUEST_SOURCE,
         Session.status == "completed",
         Session.created_at >= cutoff,
     ]
@@ -584,27 +624,17 @@ async def _get_recent_idle_improvement_history(
     for session in sessions:
         if not _is_recent_idle_slice_session(session):
             continue
-        command = _extract_idle_validation_command(getattr(session, "provider_metadata", None))
-        if not command:
-            continue
-        command_label = _idle_validation_label(session)
-        summary = str(getattr(session, "summary_oneliner", "")).strip()
-        created_at = getattr(session, "created_at", None)
-        timestamp = (
-            created_at.astimezone(UTC).strftime("%H:%M UTC")
-            if isinstance(created_at, datetime)
-            else "unknown"
-        )
-        rendered_rows.append(f"- {timestamp} | {command_label}=`{command}` | {summary}")
+        rendered = _render_idle_improvement_row(session)
+        if rendered:
+            rendered_rows.append(rendered)
         if len(rendered_rows) >= _IDLE_HISTORY_LIMIT:
             break
 
     if not rendered_rows:
         return ""
-
     return _render_budgeted_rows_section(
-        tag="recent_idle_improvement_history",
-        heading="Recent idle slices",
+        tag=_IDLE_HISTORY_TAG,
+        heading=_IDLE_HISTORY_HEADING,
         rows=rendered_rows,
         token_budget=_IDLE_HISTORY_TOKEN_BUDGET,
     )
