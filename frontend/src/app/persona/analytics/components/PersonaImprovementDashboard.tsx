@@ -468,9 +468,9 @@ function FieldRealitySection({
       detail: `${dashboard.field_overview.action_heartbeats}/${dashboard.field_overview.total_heartbeats} movement heartbeats`,
     },
     {
-      label: "Clean-ok rate",
-      value: formatPercent(dashboard.field_overview.ok_rate),
-      detail: `${dashboard.field_overview.ok_heartbeats}/${dashboard.field_overview.total_heartbeats} clean heartbeats`,
+      label: "Partial rate",
+      value: formatPercent(dashboard.field_overview.partial_rate),
+      detail: `${dashboard.field_overview.partial_heartbeats}/${dashboard.field_overview.total_heartbeats} partial heartbeats`,
     },
     {
       label: "Repeated issue",

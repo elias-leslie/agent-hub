@@ -94,6 +94,9 @@ export interface PersonaHeartbeatFieldOverview {
   action_rate: number | null;
   ok_heartbeats: number;
   ok_rate: number | null;
+  partial_heartbeats: number;
+  partial_rate: number | null;
+  completed_heartbeats: number;
   failed_heartbeats: number;
   unknown_heartbeats: number;
   top_issue_code: string | null;

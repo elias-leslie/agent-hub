@@ -197,6 +197,9 @@ class PersonaHeartbeatFieldOverview(BaseModel):
     action_rate: float | None = None
     ok_heartbeats: int = 0
     ok_rate: float | None = None
+    partial_heartbeats: int = 0
+    partial_rate: float | None = None
+    completed_heartbeats: int = 0
     failed_heartbeats: int = 0
     unknown_heartbeats: int = 0
     top_issue_code: str | None = None

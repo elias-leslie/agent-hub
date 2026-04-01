@@ -23,6 +23,7 @@ from app.services._benchmark_dashboard import (
     query_open_regression_clusters,
 )
 from app.services.benchmark_aggregation import aggregate_attempts, attempt_is_infra
+from app.services.memory.citation_parser import parse_summary_tags
 from app.services.persona_service import get_or_create_persona
 from app.workflows.persona_scheduler import compute_next_run
 from scripts.persona_benchmark_cases import get_case_by_id
@@ -40,6 +41,8 @@ HEARTBEAT_FIELD_PROMPT_LIMIT = 4
 HEARTBEAT_FIELD_PROMPT_LOOKBACK_DAYS = 1
 FIELD_REVIEW_RELIABILITY_FLOOR = 88.0
 FIELD_REVIEW_TRUTH_FLOOR = 85.0
+FIELD_REVIEW_PARTIAL_RATE_CEILING = 50.0
+FIELD_REVIEW_PARTIAL_COUNT_FLOOR = 3
 FIELD_REVIEW_REPEATED_ISSUE_THRESHOLD = 3
 
 _HEARTBEAT_CRITICAL_ISSUES = frozenset(
@@ -81,6 +84,7 @@ _FIELD_REVIEW_REASON_LABELS = {
     "critical_heartbeat_failures": "recent critical heartbeat failures",
     "field_reliability_low": "field reliability below review floor",
     "field_truth_quality_low": "field truth quality below review floor",
+    "field_partial_churn": "partial heartbeat rate above review ceiling",
     "field_repeated_issue": "repeated field issue needs a source fix",
 }
 
@@ -434,10 +438,17 @@ def _heartbeat_result_status(final_content: str | None, session_status: str) -> 
     if session_status == "failed":
         return "failed"
     text = str(final_content or "")
+    summary_tags = parse_summary_tags(text).tags
+    if summary_tags:
+        outcome = summary_tags[-1].outcome
+        if outcome in {"partial", "failed"}:
+            return outcome
     if "HEARTBEAT_ACTION" in text:
         return "action"
     if "HEARTBEAT_OK" in text:
         return "ok"
+    if summary_tags and summary_tags[-1].outcome == "completed":
+        return "completed"
     return "unknown"
 
 
@@ -468,6 +479,10 @@ def _score_heartbeat_session(
         effectiveness = 100.0
         if _heartbeat_has_critical_issues(issue_codes):
             effectiveness = min(effectiveness, 35.0)
+        if result_status == "partial":
+            effectiveness = min(effectiveness, 65.0)
+        if result_status == "completed":
+            effectiveness = min(effectiveness, 90.0)
         if result_status == "unknown":
             effectiveness -= 10.0
         if "missing_prefix" in issue_codes:
@@ -478,7 +493,11 @@ def _score_heartbeat_session(
             effectiveness -= 8.0
         effectiveness = max(0.0, effectiveness)
 
-    healthy = session_status == "completed" and not _heartbeat_has_critical_issues(issue_codes)
+    healthy = (
+        session_status == "completed"
+        and result_status in {"action", "ok"}
+        and not _heartbeat_has_critical_issues(issue_codes)
+    )
     return round(reliability, 1), round(effectiveness, 1), round(truth_quality, 1), healthy
 
 
@@ -685,6 +704,8 @@ def _summarize_heartbeat_field_sessions(
     healthy_count = len(healthy_sessions)
     action_count = int(result_counts.get("action", 0))
     ok_count = int(result_counts.get("ok", 0))
+    partial_count = int(result_counts.get("partial", 0))
+    completed_count = int(result_counts.get("completed", 0))
     failed_count = int(result_counts.get("failed", 0))
     unknown_count = int(result_counts.get("unknown", 0))
     issue_counts = Counter(
@@ -710,6 +731,9 @@ def _summarize_heartbeat_field_sessions(
         "action_rate": _round_metric((action_count / total_heartbeats) * 100 if total_heartbeats else None),
         "ok_heartbeats": ok_count,
         "ok_rate": _round_metric((ok_count / total_heartbeats) * 100 if total_heartbeats else None),
+        "partial_heartbeats": partial_count,
+        "partial_rate": _round_metric((partial_count / total_heartbeats) * 100 if total_heartbeats else None),
+        "completed_heartbeats": completed_count,
         "failed_heartbeats": failed_count,
         "unknown_heartbeats": unknown_count,
         "top_issue_code": top_issue_code,
@@ -737,6 +761,14 @@ def evaluate_persona_heartbeat_field_snapshot(snapshot: dict[str, Any]) -> dict[
     truth_quality = overview.get("truth_quality")
     if truth_quality is not None and float(truth_quality) < FIELD_REVIEW_TRUTH_FLOOR:
         reason_codes.append("field_truth_quality_low")
+    partial_rate = overview.get("partial_rate")
+    partial_count = int(overview.get("partial_heartbeats") or 0)
+    if (
+        partial_rate is not None
+        and float(partial_rate) >= FIELD_REVIEW_PARTIAL_RATE_CEILING
+        and partial_count >= FIELD_REVIEW_PARTIAL_COUNT_FLOOR
+    ):
+        reason_codes.append("field_partial_churn")
     top_issue_count = int(overview.get("top_issue_count") or 0)
     if top_issue_count >= FIELD_REVIEW_REPEATED_ISSUE_THRESHOLD:
         reason_codes.append("field_repeated_issue")
@@ -812,6 +844,7 @@ async def build_persona_heartbeat_field_digest(
             f"- last {days * 24}h field lookback: {overview['total_heartbeats']} real heartbeats; "
             f"action {overview.get('action_heartbeats') or 0} ({overview.get('action_rate') or 0:.1f}%); "
             f"clean-ok {overview.get('ok_heartbeats') or 0} ({overview.get('ok_rate') or 0:.1f}%); "
+            f"partial {overview.get('partial_heartbeats') or 0} ({overview.get('partial_rate') or 0:.1f}%); "
             f"healthy {overview.get('healthy_heartbeats') or 0} ({overview.get('healthy_rate') or 0:.1f}%); "
             f"avg reliability {overview['reliability'] or 0:.1f}%; "
             f"avg effectiveness {overview['effectiveness'] or 0:.1f}%; "
