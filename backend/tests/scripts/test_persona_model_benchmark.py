@@ -1010,6 +1010,26 @@ def test_feedback_triage_case_requires_manage_feedback_tool() -> None:
     assert case.required_tool_names == ("manage_feedback",)
 
 
+def test_global_git_hygiene_case_requires_dirty_repo_classification() -> None:
+    case = get_case_by_id("global_git_hygiene_classification")
+
+    prompt = case.build_prompt()
+
+    assert "declare clean idle" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "dirty" in case.required_summary_terms
+
+
+def test_repeated_blocker_case_requires_fix_work_language() -> None:
+    case = get_case_by_id("repeated_blocker_fix_work")
+
+    prompt = case.build_prompt()
+
+    assert "4 consecutive heartbeats" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "fix" in case.required_summary_terms
+
+
 def test_performance_honing_case_requires_instruction_and_performance_tools() -> None:
     case = get_case_by_id("performance_review_honing")
 
@@ -1226,4 +1246,6 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
         "manual_project_access_block",
         "ghost_owner_lane_reconcile",
         "publish_failure_non_fast_forward",
+        "global_git_hygiene_classification",
+        "repeated_blocker_fix_work",
     ]
