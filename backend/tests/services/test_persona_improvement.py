@@ -312,3 +312,140 @@ async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_
     assert payload["recent_runs"][0]["experiment_decision"] == "hold"
     assert payload["latest_lab_run"]["run_id"] == "run-baseline"
     assert payload["latest_lab_run"]["reliability"] == 97.0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_flags_overdue_self_honing_schedule() -> None:
+    now = datetime.now(UTC)
+
+    class _ScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = _ScalarResult([])
+
+    overdue_job = SimpleNamespace(
+        id="job-1",
+        enabled=True,
+        schedule_type="every",
+        schedule_value=str(15 * 60 * 1000),
+        schedule_timezone="UTC",
+        last_run_at=now - timedelta(minutes=30),
+        next_run_at=now - timedelta(minutes=10),
+        run_count=4,
+    )
+
+    with (
+        patch(
+            "app.services.persona_improvement.get_persona_self_honing_job",
+            new=AsyncMock(return_value=overdue_job),
+        ),
+        patch(
+            "app.services.persona_improvement.query_open_regression_clusters",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.persona_improvement.get_persona_heartbeat_field_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "overview": {
+                        "total_heartbeats": 0,
+                        "latest_completed_at": None,
+                        "reliability": None,
+                        "effectiveness": None,
+                        "truth_quality": None,
+                        "tokens_per_healthy_heartbeat": None,
+                        "avg_tool_calls": None,
+                        "avg_turns": None,
+                        "risky_heartbeats": 0,
+                        "critical_heartbeats": 0,
+                    },
+                    "trend": [],
+                    "recent_heartbeats": [],
+                    "risks": [],
+                }
+            ),
+        ),
+    ):
+        payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
+
+    assert payload["schedule_risks"] == [
+        {
+            "kind": "schedule_overdue",
+            "summary": "Scheduled self-improvement is overdue.",
+            "detail": f"next run was due at {overdue_job.next_run_at.isoformat()}",
+            "critical": True,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dashboard_allows_scheduler_polling_grace_before_flagging_overdue_schedule() -> None:
+    now = datetime.now(UTC)
+
+    class _ScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = _ScalarResult([])
+
+    just_due_job = SimpleNamespace(
+        id="job-1",
+        enabled=True,
+        schedule_type="every",
+        schedule_value=str(15 * 60 * 1000),
+        schedule_timezone="UTC",
+        last_run_at=now - timedelta(minutes=18),
+        next_run_at=now - timedelta(minutes=3),
+        run_count=4,
+    )
+
+    with (
+        patch(
+            "app.services.persona_improvement.get_persona_self_honing_job",
+            new=AsyncMock(return_value=just_due_job),
+        ),
+        patch(
+            "app.services.persona_improvement.query_open_regression_clusters",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.persona_improvement.get_persona_heartbeat_field_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "overview": {
+                        "total_heartbeats": 0,
+                        "latest_completed_at": None,
+                        "reliability": None,
+                        "effectiveness": None,
+                        "truth_quality": None,
+                        "tokens_per_healthy_heartbeat": None,
+                        "avg_tool_calls": None,
+                        "avg_turns": None,
+                        "risky_heartbeats": 0,
+                        "critical_heartbeats": 0,
+                    },
+                    "trend": [],
+                    "recent_heartbeats": [],
+                    "risks": [],
+                }
+            ),
+        ),
+    ):
+        payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
+
+    assert payload["schedule_risks"] == []
