@@ -88,6 +88,50 @@ async def _handle_create(
     return await bash_fn(cmd)
 
 
+async def _filtered_cleanup_action_items(
+    bash_fn: Callable[..., Awaitable[str]],
+    cleanup_status: str,
+    project_id: str,
+) -> list:
+    """Return cleanup items after dropping reconciled authoritative/superseded residue."""
+    items = extract_cleanup_action_items(cleanup_status)
+    if not items:
+        return []
+    workstream_output = await bash_fn(_st_cmd("sessions ownership", project_id))
+    workstream_rows: list[dict[str, object]] = []
+    for raw_line in workstream_output.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("- "):
+            continue
+        parts = [part.strip() for part in line[2:].split("|")]
+        if len(parts) < 4:
+            continue
+        project_value, task_value = parts[0], parts[1]
+        status_field = parts[-1]
+        status_tokens = {token.strip() for token in status_field.split(",") if token.strip()}
+        workstream_rows.extend(
+            {
+                "project_id": project_value,
+                "external_id": task_value,
+                "workstream_status": status,
+            }
+            for status in status_tokens
+        )
+    if not workstream_rows:
+        return items
+    return filter_reconciled_cleanup_items(items, workstream_rows)
+
+
+async def _build_filtered_actionable_cleanup_summary(
+    bash_fn: Callable[..., Awaitable[str]],
+    cleanup_status: str,
+    project_id: str,
+) -> str:
+    """Build actionable cleanup summary with reconciled residue filtered out."""
+    items = await _filtered_cleanup_action_items(bash_fn, cleanup_status, project_id)
+    return build_actionable_cleanup_summary_from_items(items)
+
+
 async def _build_dispatch_warning(
     bash_fn: Callable[..., Awaitable[str]],
     project_id: str | None,
@@ -134,13 +178,17 @@ async def _cleanup_dispatch_block_reason(
     # Plain finalize residue means a merge-ready branch exists, which should warn
     # but not freeze unrelated dispatches across the whole project.
     if " conflicts:" in cleanup_status or " review:" in cleanup_status:
-        actionable = build_actionable_cleanup_summary(cleanup_status)
-        detail = f"\n\n{actionable}" if actionable else ""
-        return (
-            "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
-            "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
-            f"{detail}"
-        ), cleanup_status
+        actionable = await _build_filtered_actionable_cleanup_summary(
+            bash_fn,
+            cleanup_status,
+            project_id,
+        )
+        if actionable:
+            return (
+                "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
+                "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
+                f"\n\n{actionable}"
+            ), cleanup_status
     return None, cleanup_status
 
 
@@ -294,17 +342,10 @@ async def _handle_cleanup_status(
     if not actionable:
         return cleanup_status
 
-    workstream_output = await bash_fn(_st_cmd("sessions ownership --project all --format json", project_id))
-    try:
-        workstream_rows = json.loads(workstream_output)
-    except json.JSONDecodeError:
-        return f"{cleanup_status}\n\n{actionable}"
-
-    filtered_actionable = build_actionable_cleanup_summary_from_items(
-        filter_reconciled_cleanup_items(
-            extract_cleanup_action_items(cleanup_status),
-            workstream_rows if isinstance(workstream_rows, list) else None,
-        )
+    filtered_actionable = await _build_filtered_actionable_cleanup_summary(
+        bash_fn,
+        cleanup_status,
+        project_id,
     )
     return f"{cleanup_status}\n\n{filtered_actionable}" if filtered_actionable else cleanup_status
 
@@ -358,39 +399,26 @@ async def _handle_smart_sync(
     """Publish one project's coherent repo state via the canonical smart-sync path."""
     if not project_id:
         return "Error: project_id required for smart_sync"
-    return await bash_fn(f"st git smart-sync {shlex.quote(project_id)}")
+    return await bash_fn(_st_cmd("smart-sync", project_id))
 
 
-async def _handle_finalize_merge(
+async def _handle_done(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str | None,
-    project_id: str | None,
 ) -> str:
-    """Finalize merge/cleanup for a residue task lane."""
+    """Mark a task complete using the admin path required for autonomous closeout."""
     if not task_id:
-        return "Error: task_id required for finalize_merge"
-    result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
-    if "no_worktree" in result:
-        return (
-            f"{result}\n"
-            "Task already appears closed: no worktree remains to finalize. "
-            "Treat this as closure evidence unless other task context still shows a live lane."
-        )
-    if "task not found" in result.lower():
-        return (
-            f"{result}\n"
-            "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
-            "Use cleanup_worktrees, get_context, query_sessions, or reconcile first."
-        )
-    return result
+        return "Error: task_id required for done"
+    return await bash_fn(f"st complete {shlex.quote(task_id)} --admin")
 
 
-async def _handle_resolve_conflict(
-    bash_fn: Callable[..., Awaitable[str]],
-    task_id: str | None,
-    project_id: str | None,
-) -> str:
-    """Reopen residue conflict work and hand it to the canonical execution path."""
-    if not task_id:
-        return "Error: task_id required for resolve_conflict"
-    return await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
+__all__ = [
+    "_handle_cleanup_all_safe",
+    "_handle_cleanup_salvage_orphan",
+    "_handle_cleanup_status",
+    "_handle_cleanup_worktrees",
+    "_handle_create",
+    "_handle_dispatch",
+    "_handle_done",
+    "_handle_smart_sync",
+]
