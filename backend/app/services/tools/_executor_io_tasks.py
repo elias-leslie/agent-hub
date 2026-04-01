@@ -402,6 +402,41 @@ async def _handle_smart_sync(
     return await bash_fn(_st_cmd("smart-sync", project_id))
 
 
+async def _handle_finalize_merge(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Finalize merge/cleanup for a residue task lane."""
+    if not task_id:
+        return "Error: task_id required for finalize_merge"
+    result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+    if "no_worktree" in result:
+        return (
+            f"{result}\n"
+            "Task already appears closed: no worktree remains to finalize. "
+            "Treat this as closure evidence unless other task context still shows a live lane."
+        )
+    if "task not found" in result.lower():
+        return (
+            f"{result}\n"
+            "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
+            "Use cleanup_worktrees, get_context, query_sessions, or reconcile first."
+        )
+    return result
+
+
+async def _handle_resolve_conflict(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str | None,
+    project_id: str | None,
+) -> str:
+    """Reopen residue conflict work and hand it to the canonical execution path."""
+    if not task_id:
+        return "Error: task_id required for resolve_conflict"
+    return await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
+
+
 async def _handle_done(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str | None,
@@ -420,5 +455,7 @@ __all__ = [
     "_handle_create",
     "_handle_dispatch",
     "_handle_done",
+    "_handle_finalize_merge",
+    "_handle_resolve_conflict",
     "_handle_smart_sync",
 ]

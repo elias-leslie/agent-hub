@@ -10,6 +10,7 @@ import pytest
 
 from app.services.persona_improvement import (
     DEFAULT_SELF_HONING_CADENCE_MINUTES,
+    _summarize_heartbeat_field_sessions,
     evaluate_persona_heartbeat_field_snapshot,
     get_persona_improvement_dashboard,
     serialize_persona_self_honing_schedule,
@@ -54,6 +55,56 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_critical_or_low_quality
         "field_truth_quality_low",
     ]
     assert "recent critical heartbeat failures" in result["summary"]
+
+
+def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue() -> None:
+    summary = _summarize_heartbeat_field_sessions(
+        [
+            {
+                "reliability": 100.0,
+                "effectiveness": 100.0,
+                "truth_quality": 100.0,
+                "healthy": True,
+                "total_tokens": 100,
+                "tool_calls": 1,
+                "turns": 1,
+                "issue_codes": [],
+                "completed_at": "2026-04-01T12:00:00+00:00",
+                "result_status": "completed",
+            },
+            {
+                "reliability": 65.0,
+                "effectiveness": 65.0,
+                "truth_quality": 70.0,
+                "healthy": False,
+                "total_tokens": 90,
+                "tool_calls": 2,
+                "turns": 2,
+                "issue_codes": ["cleanup_actionable", "missing_progress"],
+                "completed_at": "2026-04-01T11:45:00+00:00",
+                "result_status": "partial",
+            },
+            {
+                "reliability": 70.0,
+                "effectiveness": 70.0,
+                "truth_quality": 75.0,
+                "healthy": False,
+                "total_tokens": 80,
+                "tool_calls": 2,
+                "turns": 2,
+                "issue_codes": ["cleanup_actionable"],
+                "completed_at": "2026-04-01T11:30:00+00:00",
+                "result_status": "partial",
+            },
+        ]
+    )
+
+    assert summary["completed_heartbeats"] == 1
+    assert summary["partial_heartbeats"] == 2
+    assert summary["failed_heartbeats"] == 0
+    assert summary["top_issue_code"] == "cleanup_actionable"
+    assert summary["top_issue_label"] == "cleanup still actionable"
+    assert summary["top_issue_count"] == 2
 
 
 def test_serialize_persona_self_honing_schedule_defaults_to_15_minutes() -> None:

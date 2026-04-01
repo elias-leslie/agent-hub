@@ -53,10 +53,10 @@ async def _build_agent_response(
     )
 
 
-async def _require_agent(db: AsyncSession, slug: str) -> AgentDTO:
+async def _require_agent(db: AsyncSession, slug: str, *, active_only: bool = True) -> AgentDTO:
     """Fetch agent by slug or raise 404."""
     service = get_agent_service()
-    agent = await service.get_by_slug(db, slug)
+    agent = await service.get_by_slug(db, slug, active_only=active_only)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
     return agent
@@ -190,7 +190,7 @@ async def get_agent(
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentResponse:
     """Get a single agent by slug."""
-    agent = await _require_agent(db, slug)
+    agent = await _require_agent(db, slug, active_only=False)
     return await _build_agent_response(db, agent)
 
 
@@ -233,7 +233,7 @@ async def update_agent(
     else:
         logger.debug("No tool_permissions in request")
 
-    agent = await _require_agent(db, slug)
+    agent = await _require_agent(db, slug, active_only=False)
 
     try:
         updated = await service.update(db, agent.id, **_agent_update_kwargs(request, auth))
@@ -261,7 +261,7 @@ async def delete_agent(
     Use hard_delete=true to permanently delete.
     """
     service = get_agent_service()
-    agent = await _require_agent(db, slug)
+    agent = await _require_agent(db, slug, active_only=False)
 
     deleted = await service.delete(db, agent.id, hard_delete=hard_delete)
     if not deleted:
