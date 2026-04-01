@@ -701,6 +701,28 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "fix": ("unblock", "task", "implement", "route"),
         },
     ),
+    _case(
+        case_id="partial_blocker_churn_fix_work",
+        family="live-acceptance",
+        name="Repeated Partial Blocker Churn Becomes Fix Work",
+        description="Repeated partial heartbeats on the same blocker must become source-fix work, not another partial narration pass.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "recent_heartbeat_summaries=6 consecutive heartbeats ended partial on the same cleanup-truth blocker in agent-hub.\n"
+            "real_queue_movement=0\n"
+            "new_contradictory_evidence=no\n"
+            "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
+            "allowed_fix_surface=project=summitflow permission_tier=auto_exec overlap=no\n"
+            "question=What should Jenny do next instead of another partial blocker report?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("partial", "fix"),
+        summary_term_alternatives={
+            "partial": ("unfinished", "repeat", "same blocker", "churn"),
+            "fix": ("unblock", "task", "implement", "route", "source-fix"),
+        },
+    ),
 ]
 
 
@@ -753,6 +775,7 @@ def get_live_heartbeat_acceptance_case_ids() -> list[str]:
         "publish_failure_non_fast_forward",
         "global_git_hygiene_classification",
         "repeated_blocker_fix_work",
+        "partial_blocker_churn_fix_work",
         "feedback_triage_hotspot",
     ]
 

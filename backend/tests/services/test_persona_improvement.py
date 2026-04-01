@@ -10,6 +10,8 @@ import pytest
 
 from app.services.persona_improvement import (
     DEFAULT_SELF_HONING_CADENCE_MINUTES,
+    _heartbeat_result_status,
+    _score_heartbeat_session,
     _summarize_heartbeat_field_sessions,
     evaluate_persona_heartbeat_field_snapshot,
     get_persona_heartbeat_field_snapshot,
@@ -66,6 +68,8 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue() -> Non
             "reliability": 93.0,
             "truth_quality": 92.0,
             "critical_heartbeats": 0,
+            "partial_rate": 0.0,
+            "partial_heartbeats": 0,
             "top_issue_count": 4,
             "unknown_heartbeats": 1,
         },
@@ -79,6 +83,29 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue() -> Non
         "field_repeated_issue",
     ]
     assert "repeated field issue needs a source fix" in result["summary"]
+
+
+def test_evaluate_persona_heartbeat_field_snapshot_flags_partial_churn() -> None:
+    snapshot = {
+        "overview": {
+            "reliability": 92.0,
+            "truth_quality": 96.0,
+            "critical_heartbeats": 0,
+            "partial_rate": 82.0,
+            "partial_heartbeats": 9,
+            "top_issue_count": 0,
+            "unknown_heartbeats": 0,
+        },
+        "recent_heartbeats": [{"session_id": "sess-1"}],
+    }
+
+    result = evaluate_persona_heartbeat_field_snapshot(snapshot)
+
+    assert result["needs_review"] is True
+    assert result["reason_codes"] == [
+        "field_partial_churn",
+    ]
+    assert "partial heartbeat rate above review ceiling" in result["summary"]
 
 
 def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue() -> None:
@@ -106,7 +133,7 @@ def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue(
                 "turns": 2,
                 "issue_codes": ["cleanup_actionable", "missing_progress"],
                 "completed_at": "2026-04-01T11:45:00+00:00",
-                "result_status": "action",
+                "result_status": "partial",
             },
             {
                 "reliability": 70.0,
@@ -125,15 +152,42 @@ def test_summarize_heartbeat_field_sessions_tracks_completion_mix_and_top_issue(
 
     assert summary["healthy_heartbeats"] == 1
     assert summary["healthy_rate"] == 33.3
-    assert summary["action_heartbeats"] == 1
-    assert summary["action_rate"] == 33.3
+    assert summary["action_heartbeats"] == 0
+    assert summary["action_rate"] == 0.0
     assert summary["ok_heartbeats"] == 1
     assert summary["ok_rate"] == 33.3
+    assert summary["partial_heartbeats"] == 1
+    assert summary["partial_rate"] == 33.3
+    assert summary["completed_heartbeats"] == 0
     assert summary["failed_heartbeats"] == 0
     assert summary["unknown_heartbeats"] == 1
     assert summary["top_issue_code"] == "cleanup_actionable"
     assert summary["top_issue_label"] == "cleanup still actionable"
     assert summary["top_issue_count"] == 2
+
+
+def test_heartbeat_result_status_prefers_partial_summary_tag_over_ok_prefix() -> None:
+    content = (
+        "HEARTBEAT_OK queue checked.\n"
+        "[[S:partial:Confirmed only manual-project ready tasks remain undispatchable.]]"
+    )
+
+    result = _heartbeat_result_status(content, "completed")
+
+    assert result == "partial"
+
+
+def test_score_heartbeat_session_marks_partial_outcome_unhealthy() -> None:
+    reliability, effectiveness, truth_quality, healthy = _score_heartbeat_session(
+        session_status="completed",
+        issue_codes=[],
+        result_status="partial",
+    )
+
+    assert reliability == 100.0
+    assert effectiveness == 65.0
+    assert truth_quality == 100.0
+    assert healthy is False
 
 
 def test_serialize_persona_self_honing_schedule_defaults_to_15_minutes() -> None:
