@@ -123,6 +123,8 @@ class TestAgentDetailEndpoint:
             assert data["slug"] == "coder"
             assert data["name"] == "Code Generator"
             assert data["effective_memory_config"]["continuity_max_sessions"] == 5
+            mock_svc.get_by_slug.assert_awaited_once()
+            assert mock_svc.get_by_slug.await_args.kwargs["active_only"] is False
 
     @pytest.mark.asyncio
     async def test_get_agent_normalizes_sparse_memory_config_in_response(self, api_client):
@@ -288,6 +290,7 @@ class TestAgentUpdateEndpoint:
             data = response.json()
             assert data["name"] == "Updated Coder"
             assert data["version"] == 2
+            assert mock_svc.get_by_slug.await_args.kwargs["active_only"] is False
 
     @pytest.mark.asyncio
     async def test_update_agent_forwards_new_parameter_fields(self, api_client):

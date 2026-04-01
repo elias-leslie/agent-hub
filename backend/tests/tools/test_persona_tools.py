@@ -1126,6 +1126,7 @@ class TestManageTasks:
             side_effect=[
                 "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\n"
                 "agent-hub worktrees:2 dirty:0 orphan:1 prunable:0 finalize:task-old conflicts:task-conflict",
+                "OWNERSHIP[0]",
             ]
         )
 
@@ -1142,7 +1143,7 @@ class TestManageTasks:
         assert "ACTIONABLE-CLEANUP[2]" in result
         assert "agent-hub | finalize | task-old" in result
         assert "agent-hub | conflicts | task-conflict" in result
-        assert mock_bash.await_count == 1
+        assert mock_bash.await_count == 2
 
     @pytest.mark.asyncio
     async def test_dispatch_warns_on_running_tasks_when_cleanup_is_clear(self):
@@ -1333,7 +1334,7 @@ class TestManageTasks:
                     "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=3 prunable=0\n"
                     "agent-hub worktrees:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
                 ),
-                "not-json",
+                "OWNERSHIP[0]",
             ]
         )
         result = await manage_tasks(
@@ -1347,7 +1348,7 @@ class TestManageTasks:
         assert "agent-hub | finalize | task-aa44180c" in result
         assert mock_bash.await_args_list == [
             call("st -P agent-hub cleanup status"),
-            call("st -P agent-hub sessions ownership --project all --format json"),
+            call("st -P agent-hub sessions ownership"),
         ]
 
     @pytest.mark.asyncio
@@ -1522,7 +1523,7 @@ class TestManageTasks:
         )
 
         assert '"status":"success"' in result
-        mock_bash.assert_awaited_once_with("st git smart-sync agent-hub")
+        mock_bash.assert_awaited_once_with("st -P agent-hub smart-sync")
 
     @pytest.mark.asyncio
     async def test_finalize_merge(self):

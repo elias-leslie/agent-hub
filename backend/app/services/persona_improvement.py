@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -37,6 +37,7 @@ PRODUCTIVE_ACTIONS = frozenset({"dispatch", "monitor", "reconcile"})
 HEARTBEAT_FIELD_LOOKBACK_DAYS = 7
 HEARTBEAT_FIELD_LIMIT = 8
 HEARTBEAT_FIELD_PROMPT_LIMIT = 4
+HEARTBEAT_FIELD_PROMPT_LOOKBACK_DAYS = 1
 FIELD_REVIEW_RELIABILITY_FLOOR = 88.0
 FIELD_REVIEW_TRUTH_FLOOR = 85.0
 
@@ -675,6 +676,13 @@ def _summarize_heartbeat_field_sessions(
     risky = [item for item in sessions if item["issue_codes"]]
     critical = [item for item in risky if _heartbeat_has_critical_issues(item["issue_codes"])]
     latest = sessions[0] if sessions else None
+    result_counts = Counter(str(item.get("result_status") or "unknown") for item in sessions)
+    issue_counts = Counter(
+        issue_code
+        for item in sessions
+        for issue_code in list(item.get("issue_codes") or [])
+    )
+    top_issue_code, top_issue_count = issue_counts.most_common(1)[0] if issue_counts else (None, 0)
     return {
         "total_heartbeats": len(sessions),
         "latest_completed_at": latest["completed_at"] if latest else None,
@@ -686,6 +694,12 @@ def _summarize_heartbeat_field_sessions(
         "avg_turns": _mean(turn_values),
         "risky_heartbeats": len(risky),
         "critical_heartbeats": len(critical),
+        "completed_heartbeats": int(result_counts.get("completed", 0)),
+        "partial_heartbeats": int(result_counts.get("partial", 0)),
+        "failed_heartbeats": int(result_counts.get("failed", 0)),
+        "top_issue_code": top_issue_code,
+        "top_issue_label": _HEARTBEAT_ISSUE_LABELS.get(top_issue_code, top_issue_code) if top_issue_code else None,
+        "top_issue_count": int(top_issue_count),
     }
 
 
@@ -763,7 +777,7 @@ async def get_persona_heartbeat_field_snapshot(
 
 async def build_persona_heartbeat_field_digest(
     *,
-    days: int = HEARTBEAT_FIELD_LOOKBACK_DAYS,
+    days: int = HEARTBEAT_FIELD_PROMPT_LOOKBACK_DAYS,
     limit: int = HEARTBEAT_FIELD_PROMPT_LIMIT,
 ) -> str:
     from app.db import async_session
@@ -776,12 +790,18 @@ async def build_persona_heartbeat_field_digest(
         return "- none"
     lines = [
         (
-            f"- {overview['total_heartbeats']} recent real heartbeats; "
+            f"- last {days * 24}h field lookback: {overview['total_heartbeats']} real heartbeats; "
+            f"completed {overview['completed_heartbeats']}; "
+            f"partial {overview['partial_heartbeats']}; "
             f"avg reliability {overview['reliability'] or 0:.1f}%; "
             f"avg effectiveness {overview['effectiveness'] or 0:.1f}%; "
             f"critical issues {overview['critical_heartbeats']}."
         )
     ]
+    if int(overview.get("top_issue_count") or 0) > 1 and overview.get("top_issue_label"):
+        lines.append(
+            f"- repeated field issue: {overview['top_issue_label']} x{overview['top_issue_count']} in the last {days * 24}h."
+        )
     for item in recent[:limit]:
         lines.append(
             "- "

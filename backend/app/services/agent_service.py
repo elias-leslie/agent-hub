@@ -65,20 +65,28 @@ class AgentService:
         url = redis_url or settings.agent_hub_redis_url
         self._cache = AgentCache(url)
 
-    async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
+    async def get_by_slug(
+        self,
+        db: AsyncSession,
+        slug: str,
+        *,
+        active_only: bool = True,
+    ) -> AgentDTO | None:
         """Get agent by slug with caching."""
-        cached = await self._cache.get(slug)
-        if cached:
-            return await _apply_display_name_overrides(db, cached)
+        if active_only:
+            cached = await self._cache.get(slug)
+            if cached:
+                return await _apply_display_name_overrides(db, cached)
 
-        agent = await get_agent_by_slug(db, slug, active_only=True)
+        agent = await get_agent_by_slug(db, slug, active_only=active_only)
         if agent:
             dto = AgentDTO.from_model(
                 agent,
                 system_prompt_override=await _resolve_system_prompt(db, agent),
             )
             dto = await _apply_display_name_overrides(db, dto)
-            await self._cache.set(dto)
+            if active_only:
+                await self._cache.set(dto)
             return dto
 
         return None
