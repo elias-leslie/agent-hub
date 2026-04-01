@@ -796,6 +796,60 @@ def test_generate_markdown_report_includes_ranking_table() -> None:
     assert "precision_code_search" in report
 
 
+def test_benchmark_run_to_dict_includes_failing_attempts() -> None:
+    attempts = [
+        PersonaBenchmarkAttempt(
+            model_id="model-a",
+            case_id="c1",
+            run_number=1,
+            latency_ms=1000,
+            composite_score=100.0,
+            correctness_score=1.0,
+            passed=True,
+            total_tokens=100,
+            turns=1,
+            tool_calls_count=0,
+            used_tool_names=[],
+        ),
+        PersonaBenchmarkAttempt(
+            model_id="model-a",
+            case_id="c2",
+            run_number=1,
+            latency_ms=1200,
+            composite_score=83.0,
+            correctness_score=0.8,
+            passed=False,
+            failure_kind="model",
+            failure_detail="wrong_fields: primary_action",
+            total_tokens=110,
+            turns=1,
+            tool_calls_count=0,
+            used_tool_names=[],
+        ),
+    ]
+    summaries = summarize_attempts(attempts)
+    from scripts.persona_benchmark_eval import PersonaBenchmarkRun
+
+    run = PersonaBenchmarkRun(
+        benchmark_id="bench-2",
+        project_id="persona-sandbox",
+        models=["model-a"],
+        case_ids=["c1", "c2"],
+        runs_per_case=1,
+        started_at="2026-03-11T00:00:00+00:00",
+        completed_at="2026-03-11T00:01:00+00:00",
+        attempts=attempts,
+        summaries=summaries,
+    )
+
+    payload = run.to_dict()
+
+    assert len(payload["attempts"]) == 2
+    assert len(payload["failing_attempts"]) == 1
+    assert payload["failing_attempts"][0]["case_id"] == "c2"
+    assert payload["failing_attempts"][0]["failure_detail"] == "wrong_fields: primary_action"
+
+
 async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     from scripts.persona_benchmark_runner import _run_one_attempt
 

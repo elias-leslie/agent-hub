@@ -101,6 +101,8 @@ class PersonaBenchmarkRun:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize complete run to dict."""
+        failing_attempts = [attempt.to_dict() for attempt in self.attempts if not attempt.passed]
+        infra_failures = [attempt.to_dict() for attempt in self.attempts if attempt.infra_failure]
         return {
             "benchmark_id": self.benchmark_id,
             "project_id": self.project_id,
@@ -110,6 +112,8 @@ class PersonaBenchmarkRun:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "attempts": [attempt.to_dict() for attempt in self.attempts],
+            "failing_attempts": failing_attempts,
+            "infra_failures": infra_failures,
             "summaries": [asdict(summary) for summary in self.summaries],
         }
 
