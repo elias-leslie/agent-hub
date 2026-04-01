@@ -12,6 +12,7 @@ from app.services.persona_improvement import (
     DEFAULT_SELF_HONING_CADENCE_MINUTES,
     _summarize_heartbeat_field_sessions,
     evaluate_persona_heartbeat_field_snapshot,
+    get_persona_heartbeat_field_snapshot,
     get_persona_improvement_dashboard,
     serialize_persona_self_honing_schedule,
 )
@@ -59,7 +60,7 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_critical_or_low_quality
     assert "recent critical heartbeat failures" in result["summary"]
 
 
-def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue_and_unknown_outcomes() -> None:
+def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue() -> None:
     snapshot = {
         "overview": {
             "reliability": 93.0,
@@ -76,7 +77,6 @@ def test_evaluate_persona_heartbeat_field_snapshot_flags_repeated_issue_and_unkn
     assert result["needs_review"] is True
     assert result["reason_codes"] == [
         "field_repeated_issue",
-        "field_unknown_outcomes",
     ]
     assert "repeated field issue needs a source fix" in result["summary"]
 
@@ -144,6 +144,81 @@ def test_serialize_persona_self_honing_schedule_defaults_to_15_minutes() -> None
     assert result["cadence_minutes"] == 15
     assert result["cadence_label"] == "15m"
     assert result["schedule_value"] == str(15 * 60000)
+
+
+@pytest.mark.asyncio
+async def test_field_snapshot_uses_full_window_for_overview_and_limit_for_recent_items() -> None:
+    sessions = [
+        {
+            "session_id": "sess-1",
+            "completed_at": "2026-04-01T12:00:00+00:00",
+            "created_at": "2026-04-01T11:59:00+00:00",
+            "status": "completed",
+            "result_status": "action",
+            "summary_oneliner": "moved work",
+            "reliability": 100.0,
+            "effectiveness": 100.0,
+            "truth_quality": 100.0,
+            "total_tokens": 100,
+            "input_tokens": 60,
+            "output_tokens": 40,
+            "tool_calls": 1,
+            "turns": 1,
+            "issue_codes": [],
+            "issue_summary": "clean",
+            "healthy": True,
+        },
+        {
+            "session_id": "sess-2",
+            "completed_at": "2026-04-01T11:00:00+00:00",
+            "created_at": "2026-04-01T10:59:00+00:00",
+            "status": "completed",
+            "result_status": "ok",
+            "summary_oneliner": "clean idle",
+            "reliability": 100.0,
+            "effectiveness": 100.0,
+            "truth_quality": 100.0,
+            "total_tokens": 80,
+            "input_tokens": 50,
+            "output_tokens": 30,
+            "tool_calls": 1,
+            "turns": 1,
+            "issue_codes": [],
+            "issue_summary": "clean",
+            "healthy": True,
+        },
+        {
+            "session_id": "sess-3",
+            "completed_at": "2026-04-01T10:00:00+00:00",
+            "created_at": "2026-04-01T09:59:00+00:00",
+            "status": "completed",
+            "result_status": "unknown",
+            "summary_oneliner": "needs review",
+            "reliability": 70.0,
+            "effectiveness": 70.0,
+            "truth_quality": 75.0,
+            "total_tokens": 90,
+            "input_tokens": 60,
+            "output_tokens": 30,
+            "tool_calls": 2,
+            "turns": 2,
+            "issue_codes": ["cleanup_actionable"],
+            "issue_summary": "cleanup still actionable",
+            "healthy": False,
+        },
+    ]
+
+    with patch(
+        "app.services.persona_improvement._collect_heartbeat_field_sessions",
+        new=AsyncMock(return_value=sessions),
+    ):
+        snapshot = await get_persona_heartbeat_field_snapshot(AsyncMock(), days=7, limit=2)
+
+    assert snapshot["overview"]["total_heartbeats"] == 3
+    assert snapshot["overview"]["unknown_heartbeats"] == 1
+    assert len(snapshot["recent_heartbeats"]) == 2
+    assert [item["session_id"] for item in snapshot["recent_heartbeats"]] == ["sess-1", "sess-2"]
+    assert [point["session_id"] for point in snapshot["trend"]] == ["sess-2", "sess-1"]
 
 
 @pytest.mark.asyncio
@@ -264,6 +339,11 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
                     "trend": [],
                     "recent_heartbeats": [],
                     "risks": [],
+                    "review_gate": {
+                        "needs_review": False,
+                        "reason_codes": [],
+                        "summary": "field_ok",
+                    },
                 }
             ),
         ),
@@ -273,8 +353,119 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
     assert payload["overview"]["latest_completed_at"] == latest_run.completed_at.isoformat()
     assert payload["latest_lab_run"]["run_id"] == "run-iter"
     assert payload["latest_lab_run"]["reliability"] == 100.0
+    assert payload["field_window_days"] == 7
+    assert payload["field_window_lab_runs"] == 2
+    assert payload["field_review_gate"]["summary"] == "field_ok"
     assert payload["recent_runs"][0]["run_id"] == "run-iter"
     assert payload["recent_runs"][0]["run_kind"] == "honing_iteration"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_counts_lab_runs_on_field_window_horizon() -> None:
+    now = datetime.now(UTC)
+    recent_run = SimpleNamespace(
+        id="run-recent",
+        benchmark_id="persona-benchmark-recent",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_iteration",
+        started_at=now - timedelta(minutes=5),
+        completed_at=now - timedelta(minutes=1),
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=1,
+        infra_failure_count=0,
+        pass_rate=100.0,
+        avg_score=100.0,
+        run_metadata={"persona_improvement": {}},
+        config_snapshot={},
+        experiment_id=None,
+    )
+    older_run = SimpleNamespace(
+        id="run-old",
+        benchmark_id="persona-benchmark-old",
+        suite_id="persona-suite-jenny-improvement",
+        run_kind="honing_baseline",
+        started_at=now - timedelta(days=10, minutes=5),
+        completed_at=now - timedelta(days=10),
+        models=["codex/gpt-5.4"],
+        case_ids=["manual_project_access_block"],
+        attempt_count=1,
+        passed_attempt_count=1,
+        infra_failure_count=0,
+        pass_rate=100.0,
+        avg_score=100.0,
+        run_metadata={"persona_improvement": {}},
+        config_snapshot={},
+        experiment_id=None,
+    )
+
+    class _ScalarResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def scalars(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = _ScalarResult([recent_run, older_run])
+
+    with (
+        patch(
+            "app.services.persona_improvement.get_persona_self_honing_job",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "app.services.persona_improvement.query_open_regression_clusters",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "app.services.persona_improvement.get_persona_heartbeat_field_snapshot",
+            new=AsyncMock(
+                return_value={
+                    "overview": {
+                        "total_heartbeats": 2,
+                        "latest_completed_at": now.isoformat(),
+                        "reliability": 100.0,
+                        "effectiveness": 100.0,
+                        "truth_quality": 100.0,
+                        "tokens_per_healthy_heartbeat": 100.0,
+                        "avg_tool_calls": 1.0,
+                        "avg_turns": 1.0,
+                        "healthy_heartbeats": 2,
+                        "healthy_rate": 100.0,
+                        "risky_heartbeats": 0,
+                        "critical_heartbeats": 0,
+                        "action_heartbeats": 1,
+                        "action_rate": 50.0,
+                        "ok_heartbeats": 1,
+                        "ok_rate": 50.0,
+                        "failed_heartbeats": 0,
+                        "unknown_heartbeats": 0,
+                        "top_issue_code": None,
+                        "top_issue_label": None,
+                        "top_issue_count": 0,
+                    },
+                    "trend": [],
+                    "recent_heartbeats": [],
+                    "risks": [],
+                    "review_gate": {
+                        "needs_review": False,
+                        "reason_codes": [],
+                        "summary": "field_ok",
+                    },
+                }
+            ),
+        ),
+    ):
+        payload = await get_persona_improvement_dashboard(mock_db, days=30, limit=8)
+
+    assert payload["overview"]["total_runs"] == 2
+    assert payload["field_window_days"] == 7
+    assert payload["field_window_lab_runs"] == 1
 
 
 @pytest.mark.asyncio
@@ -404,6 +595,11 @@ async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_
                     "trend": [],
                     "recent_heartbeats": [],
                     "risks": [],
+                    "review_gate": {
+                        "needs_review": False,
+                        "reason_codes": [],
+                        "summary": "field_ok",
+                    },
                 }
             ),
         ),
@@ -483,6 +679,11 @@ async def test_dashboard_flags_overdue_self_honing_schedule() -> None:
                     "trend": [],
                     "recent_heartbeats": [],
                     "risks": [],
+                    "review_gate": {
+                        "needs_review": False,
+                        "reason_codes": [],
+                        "summary": "field_ok",
+                    },
                 }
             ),
         ),
@@ -566,6 +767,11 @@ async def test_dashboard_allows_scheduler_polling_grace_before_flagging_overdue_
                     "trend": [],
                     "recent_heartbeats": [],
                     "risks": [],
+                    "review_gate": {
+                        "needs_review": False,
+                        "reason_codes": [],
+                        "summary": "field_ok",
+                    },
                 }
             ),
         ),

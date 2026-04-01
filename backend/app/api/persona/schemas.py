@@ -229,6 +229,14 @@ class PersonaHeartbeatFieldRisk(BaseModel):
     critical: bool = False
 
 
+class PersonaHeartbeatFieldReviewGate(BaseModel):
+    """Aggregate field review decision for recent real heartbeats."""
+
+    needs_review: bool = False
+    reason_codes: list[str] = Field(default_factory=list)
+    summary: str
+
+
 class PersonaImprovementScheduleRisk(BaseModel):
     """Schedule-health risk surfaced into Jenny analytics."""
 
@@ -270,6 +278,9 @@ class PersonaImprovementDashboardResponse(BaseModel):
     overview: PersonaImprovementOverview
     latest_lab_run: PersonaImprovementRecentRun | None = None
     field_overview: PersonaHeartbeatFieldOverview
+    field_window_days: int
+    field_window_lab_runs: int = 0
+    field_review_gate: PersonaHeartbeatFieldReviewGate
     trend: list[PersonaImprovementTrendPoint] = Field(default_factory=list)
     field_trend: list[PersonaHeartbeatFieldTrendPoint] = Field(default_factory=list)
     recent_runs: list[PersonaImprovementRecentRun] = Field(default_factory=list)

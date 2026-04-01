@@ -149,6 +149,12 @@ export interface PersonaHeartbeatFieldSession {
   healthy: boolean;
 }
 
+export interface PersonaHeartbeatFieldReviewGate {
+  needs_review: boolean;
+  reason_codes: string[];
+  summary: string;
+}
+
 export interface PersonaImprovementDashboard {
   generated_at: string;
   suite_id: string;
@@ -157,6 +163,9 @@ export interface PersonaImprovementDashboard {
   overview: PersonaImprovementOverview;
   latest_lab_run: PersonaImprovementRecentRun | null;
   field_overview: PersonaHeartbeatFieldOverview;
+  field_window_days: number;
+  field_window_lab_runs: number;
+  field_review_gate: PersonaHeartbeatFieldReviewGate;
   trend: PersonaImprovementTrendPoint[];
   field_trend: PersonaHeartbeatFieldTrendPoint[];
   recent_runs: PersonaImprovementRecentRun[];

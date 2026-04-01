@@ -82,7 +82,6 @@ _FIELD_REVIEW_REASON_LABELS = {
     "field_reliability_low": "field reliability below review floor",
     "field_truth_quality_low": "field truth quality below review floor",
     "field_repeated_issue": "repeated field issue needs a source fix",
-    "field_unknown_outcomes": "unknown heartbeat outcomes need normalization",
 }
 
 
@@ -492,8 +491,8 @@ def _heartbeat_exists_clause() -> Any:
     )
 
 
-def _build_heartbeat_session_query(*, cutoff: datetime, limit: int) -> Select[Any]:
-    return (
+def _build_heartbeat_session_query(*, cutoff: datetime, limit: int | None) -> Select[Any]:
+    query = (
         select(Session)
         .where(
             Session.agent_slug == "persona",
@@ -503,8 +502,10 @@ def _build_heartbeat_session_query(*, cutoff: datetime, limit: int) -> Select[An
             _heartbeat_exists_clause(),
         )
         .order_by(Session.created_at.desc())
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
+    return query
 
 
 async def _fetch_heartbeat_cost_totals(
@@ -616,7 +617,7 @@ async def _collect_heartbeat_field_sessions(
     db: AsyncSession,
     *,
     days: int,
-    limit: int,
+    limit: int | None,
 ) -> list[dict[str, Any]]:
     cutoff = datetime.now(UTC) - timedelta(days=days)
     sessions = (
@@ -739,8 +740,6 @@ def evaluate_persona_heartbeat_field_snapshot(snapshot: dict[str, Any]) -> dict[
     top_issue_count = int(overview.get("top_issue_count") or 0)
     if top_issue_count >= FIELD_REVIEW_REPEATED_ISSUE_THRESHOLD:
         reason_codes.append("field_repeated_issue")
-    if int(overview.get("unknown_heartbeats") or 0) > 0:
-        reason_codes.append("field_unknown_outcomes")
 
     labels = [_FIELD_REVIEW_REASON_LABELS.get(code, code) for code in reason_codes]
     return {
@@ -756,8 +755,9 @@ async def get_persona_heartbeat_field_snapshot(
     days: int = HEARTBEAT_FIELD_LOOKBACK_DAYS,
     limit: int = HEARTBEAT_FIELD_LIMIT,
 ) -> dict[str, Any]:
-    sessions = await _collect_heartbeat_field_sessions(db, days=days, limit=limit)
+    sessions = await _collect_heartbeat_field_sessions(db, days=days, limit=None)
     overview = _summarize_heartbeat_field_sessions(sessions)
+    recent_sessions = sessions[:limit]
     trend = [
         {
             "session_id": item["session_id"],
@@ -770,7 +770,7 @@ async def get_persona_heartbeat_field_snapshot(
             "turns": item["turns"],
             "result_status": item["result_status"],
         }
-        for item in reversed(sessions)
+        for item in reversed(recent_sessions)
     ]
     risks = [
         {
@@ -781,13 +781,13 @@ async def get_persona_heartbeat_field_snapshot(
             "summary_oneliner": item["summary_oneliner"],
             "critical": _heartbeat_has_critical_issues(item["issue_codes"]),
         }
-        for item in sessions
+        for item in recent_sessions
         if item["issue_codes"]
     ][:6]
     snapshot = {
         "overview": overview,
         "trend": trend,
-        "recent_heartbeats": sessions,
+        "recent_heartbeats": recent_sessions,
         "risks": risks,
     }
     snapshot["review_gate"] = evaluate_persona_heartbeat_field_snapshot(snapshot)
@@ -1011,9 +1011,16 @@ async def get_persona_improvement_dashboard(
             )
         ).scalars().all()
         experiments_by_id = {experiment.id: experiment for experiment in experiments}
+    field_window_days = min(days, HEARTBEAT_FIELD_LOOKBACK_DAYS)
+    field_window_cutoff = generated_at - timedelta(days=field_window_days)
+    field_window_lab_runs = sum(
+        1
+        for run in runs
+        if run.completed_at is not None and run.completed_at >= field_window_cutoff
+    )
     field_snapshot = await get_persona_heartbeat_field_snapshot(
         db,
-        days=min(days, HEARTBEAT_FIELD_LOOKBACK_DAYS),
+        days=field_window_days,
         limit=max(limit, HEARTBEAT_FIELD_LIMIT),
     )
 
@@ -1055,6 +1062,9 @@ async def get_persona_improvement_dashboard(
             else None
         ),
         "field_overview": field_snapshot["overview"],
+        "field_window_days": field_window_days,
+        "field_window_lab_runs": field_window_lab_runs,
+        "field_review_gate": field_snapshot["review_gate"],
         "trend": trend,
         "field_trend": field_snapshot["trend"],
         "recent_runs": recent_runs,

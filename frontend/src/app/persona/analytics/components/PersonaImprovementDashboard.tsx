@@ -349,13 +349,28 @@ function RiskSection({ dashboard }: { dashboard: PersonaImprovementDashboard }) 
   const hasScheduleRisks = dashboard.schedule_risks.length > 0;
   const hasFieldRisks = dashboard.field_risks.length > 0;
   const hasLabRisks = dashboard.open_regressions.length > 0;
+  const hasFieldReviewGate = dashboard.field_review_gate.needs_review;
 
   return (
     <ChartCard title="Current Risks">
-      {!hasScheduleRisks && !hasFieldRisks && !hasLabRisks ? (
+      {!hasScheduleRisks && !hasFieldRisks && !hasLabRisks && !hasFieldReviewGate ? (
         <p className="text-sm text-slate-400">No open Jenny schedule, field, or lab risks.</p>
       ) : (
         <div className="space-y-3">
+          {hasFieldReviewGate ? (
+            <div className="rounded-2xl border border-amber-900/40 bg-amber-950/15 px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-100">Field review</p>
+                <span className="text-xs font-medium text-amber-300">
+                  {dashboard.field_review_gate.reason_codes.join(", ") || "review"}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-300">{dashboard.field_review_gate.summary}</p>
+              <p className="mt-2 text-xs text-slate-500">
+                {dashboard.field_window_lab_runs} lab runs vs {dashboard.field_overview.total_heartbeats} real heartbeats in the last {dashboard.field_window_days}d
+              </p>
+            </div>
+          ) : null}
           {dashboard.schedule_risks.map((item) => (
             <div
               key={`${item.kind}:${item.detail ?? item.summary}`}
@@ -469,7 +484,7 @@ function FieldRealitySection({
     {
       label: "Lab pressure",
       value: formatRatio(labRunsPerHeartbeat, " runs / HB"),
-      detail: `${dashboard.overview.total_runs} lab runs vs ${dashboard.field_overview.total_heartbeats} real heartbeats`,
+      detail: `${dashboard.field_window_lab_runs} lab runs vs ${dashboard.field_overview.total_heartbeats} real heartbeats in the last ${dashboard.field_window_days}d`,
     },
   ];
 
@@ -636,7 +651,7 @@ export function PersonaImprovementDashboard() {
     dashboard.field_overview.truth_quality,
   );
   const labRunsPerHeartbeat = dashboard.field_overview.total_heartbeats > 0
-    ? dashboard.overview.total_runs / dashboard.field_overview.total_heartbeats
+    ? dashboard.field_window_lab_runs / dashboard.field_overview.total_heartbeats
     : null;
 
   const saveErrorMessage = scheduleMutation.error instanceof Error

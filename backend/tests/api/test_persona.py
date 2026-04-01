@@ -297,6 +297,13 @@ class TestPersonaImprovementDashboardEndpoint:
                 "top_issue_label": "cleanup still actionable",
                 "top_issue_count": 2,
             },
+            "field_window_days": 7,
+            "field_window_lab_runs": 5,
+            "field_review_gate": {
+                "needs_review": True,
+                "reason_codes": ["field_repeated_issue"],
+                "summary": "repeated field issue needs a source fix",
+            },
             "trend": [
                 {
                     "run_id": "run-1",
@@ -344,6 +351,8 @@ class TestPersonaImprovementDashboardEndpoint:
         assert data["schedule"]["enabled"] is True
         assert data["overview"]["reliability"] == 91.2
         assert data["latest_lab_run"]["run_id"] == "run-12"
+        assert data["field_window_lab_runs"] == 5
+        assert data["field_review_gate"]["needs_review"] is True
         mock_dashboard.assert_awaited_once()
 
 
