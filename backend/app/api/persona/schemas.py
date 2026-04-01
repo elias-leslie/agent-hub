@@ -189,8 +189,19 @@ class PersonaHeartbeatFieldOverview(BaseModel):
     tokens_per_healthy_heartbeat: float | None = None
     avg_tool_calls: float | None = None
     avg_turns: float | None = None
+    healthy_heartbeats: int = 0
+    healthy_rate: float | None = None
     risky_heartbeats: int = 0
     critical_heartbeats: int = 0
+    action_heartbeats: int = 0
+    action_rate: float | None = None
+    ok_heartbeats: int = 0
+    ok_rate: float | None = None
+    failed_heartbeats: int = 0
+    unknown_heartbeats: int = 0
+    top_issue_code: str | None = None
+    top_issue_label: str | None = None
+    top_issue_count: int = 0
 
 
 class PersonaHeartbeatFieldTrendPoint(BaseModel):

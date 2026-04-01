@@ -86,8 +86,19 @@ export interface PersonaHeartbeatFieldOverview {
   tokens_per_healthy_heartbeat: number | null;
   avg_tool_calls: number | null;
   avg_turns: number | null;
+  healthy_heartbeats: number;
+  healthy_rate: number | null;
   risky_heartbeats: number;
   critical_heartbeats: number;
+  action_heartbeats: number;
+  action_rate: number | null;
+  ok_heartbeats: number;
+  ok_rate: number | null;
+  failed_heartbeats: number;
+  unknown_heartbeats: number;
+  top_issue_code: string | null;
+  top_issue_label: string | null;
+  top_issue_count: number;
 }
 
 export interface PersonaHeartbeatFieldTrendPoint {

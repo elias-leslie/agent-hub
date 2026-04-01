@@ -40,6 +40,7 @@ HEARTBEAT_FIELD_PROMPT_LIMIT = 4
 HEARTBEAT_FIELD_PROMPT_LOOKBACK_DAYS = 1
 FIELD_REVIEW_RELIABILITY_FLOOR = 88.0
 FIELD_REVIEW_TRUTH_FLOOR = 85.0
+FIELD_REVIEW_REPEATED_ISSUE_THRESHOLD = 3
 
 _HEARTBEAT_CRITICAL_ISSUES = frozenset(
     {
@@ -80,6 +81,8 @@ _FIELD_REVIEW_REASON_LABELS = {
     "critical_heartbeat_failures": "recent critical heartbeat failures",
     "field_reliability_low": "field reliability below review floor",
     "field_truth_quality_low": "field truth quality below review floor",
+    "field_repeated_issue": "repeated field issue needs a source fix",
+    "field_unknown_outcomes": "unknown heartbeat outcomes need normalization",
 }
 
 
@@ -666,6 +669,7 @@ async def _collect_heartbeat_field_sessions(
 def _summarize_heartbeat_field_sessions(
     sessions: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    total_heartbeats = len(sessions)
     reliability_values = [float(item["reliability"]) for item in sessions]
     effectiveness_values = [float(item["effectiveness"]) for item in sessions]
     truth_values = [float(item["truth_quality"]) for item in sessions]
@@ -677,6 +681,11 @@ def _summarize_heartbeat_field_sessions(
     critical = [item for item in risky if _heartbeat_has_critical_issues(item["issue_codes"])]
     latest = sessions[0] if sessions else None
     result_counts = Counter(str(item.get("result_status") or "unknown") for item in sessions)
+    healthy_count = len(healthy_sessions)
+    action_count = int(result_counts.get("action", 0))
+    ok_count = int(result_counts.get("ok", 0))
+    failed_count = int(result_counts.get("failed", 0))
+    unknown_count = int(result_counts.get("unknown", 0))
     issue_counts = Counter(
         issue_code
         for item in sessions
@@ -684,7 +693,7 @@ def _summarize_heartbeat_field_sessions(
     )
     top_issue_code, top_issue_count = issue_counts.most_common(1)[0] if issue_counts else (None, 0)
     return {
-        "total_heartbeats": len(sessions),
+        "total_heartbeats": total_heartbeats,
         "latest_completed_at": latest["completed_at"] if latest else None,
         "reliability": _mean(reliability_values),
         "effectiveness": _mean(effectiveness_values),
@@ -692,11 +701,16 @@ def _summarize_heartbeat_field_sessions(
         "tokens_per_healthy_heartbeat": _mean(token_values),
         "avg_tool_calls": _mean(tool_values),
         "avg_turns": _mean(turn_values),
+        "healthy_heartbeats": healthy_count,
+        "healthy_rate": _round_metric((healthy_count / total_heartbeats) * 100 if total_heartbeats else None),
         "risky_heartbeats": len(risky),
         "critical_heartbeats": len(critical),
-        "completed_heartbeats": int(result_counts.get("completed", 0)),
-        "partial_heartbeats": int(result_counts.get("partial", 0)),
-        "failed_heartbeats": int(result_counts.get("failed", 0)),
+        "action_heartbeats": action_count,
+        "action_rate": _round_metric((action_count / total_heartbeats) * 100 if total_heartbeats else None),
+        "ok_heartbeats": ok_count,
+        "ok_rate": _round_metric((ok_count / total_heartbeats) * 100 if total_heartbeats else None),
+        "failed_heartbeats": failed_count,
+        "unknown_heartbeats": unknown_count,
         "top_issue_code": top_issue_code,
         "top_issue_label": _HEARTBEAT_ISSUE_LABELS.get(top_issue_code, top_issue_code) if top_issue_code else None,
         "top_issue_count": int(top_issue_count),
@@ -722,6 +736,11 @@ def evaluate_persona_heartbeat_field_snapshot(snapshot: dict[str, Any]) -> dict[
     truth_quality = overview.get("truth_quality")
     if truth_quality is not None and float(truth_quality) < FIELD_REVIEW_TRUTH_FLOOR:
         reason_codes.append("field_truth_quality_low")
+    top_issue_count = int(overview.get("top_issue_count") or 0)
+    if top_issue_count >= FIELD_REVIEW_REPEATED_ISSUE_THRESHOLD:
+        reason_codes.append("field_repeated_issue")
+    if int(overview.get("unknown_heartbeats") or 0) > 0:
+        reason_codes.append("field_unknown_outcomes")
 
     labels = [_FIELD_REVIEW_REASON_LABELS.get(code, code) for code in reason_codes]
     return {
@@ -791,8 +810,9 @@ async def build_persona_heartbeat_field_digest(
     lines = [
         (
             f"- last {days * 24}h field lookback: {overview['total_heartbeats']} real heartbeats; "
-            f"completed {overview['completed_heartbeats']}; "
-            f"partial {overview['partial_heartbeats']}; "
+            f"action {overview.get('action_heartbeats') or 0} ({overview.get('action_rate') or 0:.1f}%); "
+            f"clean-ok {overview.get('ok_heartbeats') or 0} ({overview.get('ok_rate') or 0:.1f}%); "
+            f"healthy {overview.get('healthy_heartbeats') or 0} ({overview.get('healthy_rate') or 0:.1f}%); "
             f"avg reliability {overview['reliability'] or 0:.1f}%; "
             f"avg effectiveness {overview['effectiveness'] or 0:.1f}%; "
             f"critical issues {overview['critical_heartbeats']}."
