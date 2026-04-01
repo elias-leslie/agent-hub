@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 from app.services.cleanup_summary import (
     CleanupActionItem,
     build_actionable_cleanup_summary_from_items,
+    build_filtered_reconciled_cleanup_note,
     extract_cleanup_action_items,
     extract_cleanup_action_items_from_payload,
 )
@@ -169,7 +170,7 @@ async def _coerce_task_overview(
     target_project_id: str | None,
 ) -> str:
     """Resolve task overview text from state, payload, or raw fetch."""
-    from app.workflows._heartbeat_data import _fetch_task_overview
+    from app.workflows._heartbeat_data import _fetch_task_overview, _fetch_task_overview_raw
 
     if task_overview_payload is None and heartbeat_state is not None:
         task_overview_payload = heartbeat_state.task_overview_payload
@@ -179,6 +180,8 @@ async def _coerce_task_overview(
         task_overview = build_compact_task_overview_from_payload(task_overview_payload)
     if task_overview is None:
         task_overview = await _fetch_task_overview(target_project_id)
+        if not task_overview:
+            task_overview = await _fetch_task_overview_raw(target_project_id)
     return task_overview or ""
 
 
@@ -274,18 +277,21 @@ async def _collect_summitflow_heartbeat_state(
     from app.workflows._heartbeat_data import (
         _fetch_cleanup_status_response,
         _fetch_git_status_rows,
+        _fetch_recent_failed_tasks,
         _fetch_task_overview_response,
     )
 
-    task_overview_response, cleanup_status_response, git_status_rows = await asyncio.gather(
+    task_overview_response, cleanup_status_response, git_status_rows, recent_failed_tasks = await asyncio.gather(
         _fetch_task_overview_response(),
         _fetch_cleanup_status_response(target_project_id),
         _fetch_git_status_rows(target_project_id),
+        _fetch_recent_failed_tasks(target_project_id),
     )
     return SummitFlowHeartbeatState(
         task_overview_response=task_overview_response,
         cleanup_status_response=cleanup_status_response,
         git_status_rows=git_status_rows,
+        recent_failed_tasks=recent_failed_tasks,
     )
 
 
@@ -386,6 +392,78 @@ async def _get_workstream_inventory(
         return f"\n<workstream_inventory>\n{chr(10).join(lines)}\n</workstream_inventory>"
     except Exception:
         logger.debug("Failed to build workstream inventory for heartbeat", exc_info=True)
+        return ""
+
+
+def _format_recent_failed_task_age(last_changed_at: object, *, now: datetime) -> str:
+    """Format one failed-task timestamp for heartbeat display."""
+    if not isinstance(last_changed_at, datetime):
+        return "unknown"
+    normalized = (
+        last_changed_at.replace(tzinfo=UTC)
+        if last_changed_at.tzinfo is None
+        else last_changed_at.astimezone(UTC)
+    )
+    minutes = max(int((now - normalized).total_seconds() / 60), 0)
+    if minutes < 60:
+        return f"{minutes}m ago"
+    hours = minutes // 60
+    return f"{hours}h ago" if hours < 24 else f"{hours // 24}d ago"
+
+
+async def _get_recent_failed_tasks_summary(
+    target_project_id: str | None = None,
+    *,
+    heartbeat_state: SummitFlowHeartbeatState | None = None,
+) -> str:
+    """Build a heartbeat section listing recent failed tasks that still need recovery."""
+    from app.workflows._heartbeat_data import _fetch_recent_failed_tasks
+
+    try:
+        failed_tasks = (
+            heartbeat_state.recent_failed_tasks
+            if heartbeat_state is not None
+            else await _fetch_recent_failed_tasks(target_project_id)
+        )
+        if not failed_tasks:
+            return ""
+        now = datetime.now(UTC)
+        lines = [f"Recent failed tasks: {len(failed_tasks)}"]
+        top_task = failed_tasks[0]
+        top_project_id = str(top_task.get("project_id") or "unknown")
+        top_task_id = str(top_task.get("id") or "unknown")
+        top_title = str(top_task.get("title") or "Untitled task")
+        top_phase = str(top_task.get("current_phase") or "").strip()
+        top_details = [
+            top_project_id,
+            top_task_id,
+            "failed",
+            _format_recent_failed_task_age(top_task.get("last_changed_at"), now=now),
+        ]
+        if top_phase:
+            top_details.append(f"phase={top_phase}")
+        lines.append(f"Follow first: {' | '.join(top_details)} | {top_title}")
+        for task in failed_tasks:
+            project_id = str(task.get("project_id") or "unknown")
+            task_id = str(task.get("id") or "unknown")
+            title = str(task.get("title") or "Untitled task")
+            phase = str(task.get("current_phase") or "").strip()
+            error_message = str(task.get("error_message") or "").strip()
+            details = [
+                project_id,
+                task_id,
+                "failed",
+                _format_recent_failed_task_age(task.get("last_changed_at"), now=now),
+            ]
+            if phase:
+                details.append(f"phase={phase}")
+            line = f"- {' | '.join(details)} | {title}"
+            if error_message:
+                line += f" | error={error_message}"
+            lines.append(line)
+        return f"\n<recent_failed_tasks>\n{chr(10).join(lines)}\n</recent_failed_tasks>"
+    except Exception:
+        logger.debug("Failed to build recent failed tasks summary for heartbeat", exc_info=True)
         return ""
 
 
@@ -490,8 +568,10 @@ async def _get_cleanup_status_summary(
         if isinstance(payload, dict)
         else extract_cleanup_action_items(compact)
     )
-    actionable = build_actionable_cleanup_summary_from_items(
-        _filter_reconciled_cleanup_items(items, workstream_rows)
+    filtered_items = _filter_reconciled_cleanup_items(items, workstream_rows)
+    actionable = (
+        build_actionable_cleanup_summary_from_items(filtered_items)
+        or build_filtered_reconciled_cleanup_note(items, filtered_items)
     )
     if not compact and not actionable:
         return ""

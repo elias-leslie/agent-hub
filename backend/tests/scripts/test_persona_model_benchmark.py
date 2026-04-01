@@ -1095,6 +1095,86 @@ def test_partial_blocker_churn_case_requires_partial_fix_language() -> None:
     assert "fix" in case.required_summary_terms
 
 
+def test_failed_active_lane_recovery_case_requires_recovery_before_dispatch() -> None:
+    case = get_case_by_id("failed_active_lane_recovery_before_dispatch")
+
+    prompt = case.build_prompt()
+
+    assert "recover the failed active lanes first" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "failed" in case.required_summary_terms
+    assert "recover" in case.required_summary_terms
+
+
+def test_blocker_fix_task_case_requires_readying_the_fix_task() -> None:
+    case = get_case_by_id("blocker_fix_task_must_be_shaped_ready")
+
+    prompt = case.build_prompt()
+
+    assert "task-40efc3b9|pending COMPLETE_READY:no" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "ready" in case.required_summary_terms
+    assert "shape" in case.required_summary_terms
+
+
+def test_failed_task_record_recovery_case_requires_recovery_before_dispatch() -> None:
+    case = get_case_by_id("failed_task_record_recovery_before_dispatch")
+
+    prompt = case.build_prompt()
+
+    assert "recent failed task records first" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "failed" in case.required_summary_terms
+    assert "recover" in case.required_summary_terms
+
+
+def test_failed_task_beats_unrelated_cleanup_case_prioritizes_failed_chain() -> None:
+    case = get_case_by_id("failed_task_beats_unrelated_cleanup")
+
+    prompt = case.build_prompt()
+
+    assert "recent failed task in a writable project should outrank unrelated cleanup" in case.description.lower()
+    assert "What should Jenny follow first?" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "agent-hub" in case.required_summary_terms
+    assert "recover" in case.required_summary_terms
+
+
+def test_failed_task_inspection_case_requires_same_heartbeat_recovery_action() -> None:
+    case = get_case_by_id("failed_task_inspection_requires_recovery_action")
+
+    prompt = case.build_prompt()
+
+    assert "task-1025819f|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "failed" in case.required_summary_terms
+    assert "recover" in case.required_summary_terms
+
+
+def test_cli_usage_error_case_requires_help_recovery_language() -> None:
+    case = get_case_by_id("cli_usage_error_requires_help_recovery")
+
+    prompt = case.build_prompt()
+
+    assert "st cleanup status --project agent-hub" in prompt
+    assert "--help" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "help" in case.required_summary_terms
+    assert "recover" in case.required_summary_terms
+
+
+def test_stale_reviewer_path_case_requires_verified_path_language() -> None:
+    case = get_case_by_id("stale_reviewer_path_requires_verification")
+
+    prompt = case.build_prompt()
+
+    assert "File not found" in prompt
+    assert "backend/app/workflows/_heartbeat_data.py" in prompt
+    assert case.expected["primary_action"] == "reconcile"
+    assert "verify" in case.required_summary_terms
+    assert "path" in case.required_summary_terms
+
+
 def test_performance_honing_case_requires_instruction_and_performance_tools() -> None:
     case = get_case_by_id("performance_review_honing")
 
@@ -1314,4 +1394,11 @@ def test_benchmark_case_battery_includes_honing_and_review_cases() -> None:
         "global_git_hygiene_classification",
         "repeated_blocker_fix_work",
         "partial_blocker_churn_fix_work",
+        "blocker_fix_task_must_be_shaped_ready",
+        "failed_active_lane_recovery_before_dispatch",
+        "failed_task_record_recovery_before_dispatch",
+        "failed_task_beats_unrelated_cleanup",
+        "failed_task_inspection_requires_recovery_action",
+        "cli_usage_error_requires_help_recovery",
+        "stale_reviewer_path_requires_verification",
     ]

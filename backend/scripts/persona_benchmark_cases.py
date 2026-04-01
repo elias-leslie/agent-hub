@@ -723,6 +723,160 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "fix": ("unblock", "task", "implement", "route", "source-fix"),
         },
     ),
+    _case(
+        case_id="blocker_fix_task_must_be_shaped_ready",
+        family="live-acceptance",
+        name="Blocker Fix Task Must Become Execution-Ready",
+        description="Do not stop after filing or noticing a blocker fix task if it is still non-ready or missing scope.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "recent_heartbeat_summaries=4 consecutive heartbeats reported the same cleanup-truth blocker in agent-hub.\n"
+            "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
+            "blocker_fix_task='TASK:task-40efc3b9|pending COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps READINESS:missing:context'\n"
+            "question=Can Jenny stop after noting task-40efc3b9 exists, or must she shape it into execution-ready fix work first?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("ready", "shape"),
+        summary_term_alternatives={
+            "ready": ("execution-ready", "scope", "context", "non-ready"),
+            "shape": ("shape", "flesh out", "ready the task", "add concrete steps"),
+        },
+    ),
+    _case(
+        case_id="failed_active_lane_recovery_before_dispatch",
+        family="live-acceptance",
+        name="Failed Active Lane Recovery Before Dispatch",
+        description="Do not dispatch fresh same-project work while active lanes just failed or paused; recover or reshape them first.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=1\n"
+            "ready_task=task-68c4c077 project=agent-hub task_type=refactor title='Refactor: backend/app/services/memory/context_injector.py (Medium line count)'\n"
+            "active_lane_1=task-1025819f project=agent-hub status=failed task_context='TASK:task-1025819f|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps'\n"
+            "active_lane_1_exec_log='Execution paused - subtask verification failed; Subtask 1.1 error: timed out'\n"
+            "active_lane_2=task-03fe8c2e project=agent-hub status=failed task_context='TASK:task-03fe8c2e|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps'\n"
+            "active_lane_2_exec_log='Execution paused - subtask verification failed; Subtask 1.1 error: timed out'\n"
+            "question=Should Jenny dispatch task-68c4c077 now or recover the failed active lanes first?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("failed", "recover"),
+        summary_term_alternatives={
+            "failed": ("timed out", "paused", "broken lane", "task failure"),
+            "recover": ("reshape", "reconcile", "split", "follow up"),
+        },
+    ),
+    _case(
+        case_id="failed_task_record_recovery_before_dispatch",
+        family="live-acceptance",
+        name="Failed Task Record Recovery Before Dispatch",
+        description="Do not dispatch fresh same-project work when recent failed-task truth shows broken execution that needs recovery first.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=1\n"
+            "ready_task=task-40efc3b9 project=agent-hub task_type=refactor title='Refactor: backend/app/services/persona_improvement.py (High line count)'\n"
+            "workstream_inventory='no active agent-hub implementation lanes remain in live session truth'\n"
+            "recent_failed_tasks:\n"
+            "- agent-hub | task-1025819f | failed | 16m ago | phase=plan | Refactor: backend/app/workflows/_heartbeat_data.py (High line count)\n"
+            "- agent-hub | task-68c4c077 | failed | 13m ago | phase=plan | Refactor: backend/app/services/memory/context_injector.py (Medium line count)\n"
+            "task_1025819f_observability='agent sessions exist, but no live failed session row remains; task context still says COMPLETE_READY:no and SYNC_SKIPS:1.1:no-steps'\n"
+            "question=Should Jenny dispatch task-40efc3b9 now or recover the recent failed task records first?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("failed", "recover"),
+        summary_term_alternatives={
+            "failed": ("broken", "timed out", "task failure", "failed task"),
+            "recover": ("reconcile", "reshape", "follow up", "fix"),
+        },
+    ),
+    _case(
+        case_id="failed_task_beats_unrelated_cleanup",
+        family="live-acceptance",
+        name="Failed Task Beats Unrelated Cleanup",
+        description="A recent failed task in a writable project should outrank unrelated cleanup reduction in another project.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "recent_failed_tasks:\n"
+            "- agent-hub | task-1025819f | failed | 12m ago | phase=plan | Refactor: backend/app/workflows/_heartbeat_data.py (High line count)\n"
+            "cleanup_residue:\n"
+            "- test1 | task-8d5aebcd | completed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps\n"
+            "- test1 | task-24f8b59a | completed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps\n"
+            "access_summary=agent-hub:yolo test1:yolo terminal:manual vantage:read\n"
+            "overlap_truth=none\n"
+            "question=What should Jenny follow first?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("agent-hub", "failed", "recover"),
+        summary_term_alternatives={
+            "agent-hub": ("same project", "writable project", "failed task chain"),
+            "failed": ("broken", "timed out", "task failure"),
+            "recover": ("reconcile", "inspect", "reshape", "follow up"),
+        },
+    ),
+    _case(
+        case_id="failed_task_inspection_requires_recovery_action",
+        family="live-acceptance",
+        name="Failed Task Inspection Requires Recovery Action",
+        description="After inspecting the freshest failed task and confirming it is still broken, Jenny must take same-heartbeat recovery action instead of ending clean-ok.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "recent_failed_tasks:\n"
+            "Follow first: agent-hub | task-1025819f | failed | 12m ago | phase=plan | Refactor: backend/app/workflows/_heartbeat_data.py (High line count)\n"
+            "inspected_task_context='TASK:task-1025819f|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps SNAPSHOT:active|claimed_by:autonomous'\n"
+            "same_project_overlap=none\n"
+            "manual_ready_tasks_only=yes\n"
+            "question=Can Jenny finish this heartbeat as clean-ok after inspection alone, or must she turn the failed chain into explicit recovery work now?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("failed", "recover"),
+        summary_term_alternatives={
+            "failed": ("broken", "no-steps", "task failure", "sync_skips"),
+            "recover": ("reconcile", "reshape", "fix work", "follow up"),
+        },
+    ),
+    _case(
+        case_id="cli_usage_error_requires_help_recovery",
+        family="live-acceptance",
+        name="CLI Usage Error Requires Help Recovery",
+        description="A usage or invalid-flag error is not a clean-ok heartbeat; Jenny must read help and correct or explicitly abandon the command path.",
+        scenario=(
+            "HEARTBEAT_SCOPE: global\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "attempted_command='st cleanup status --project agent-hub'\n"
+            "tool_result='Usage: st cleanup status [OPTIONS]\\nTry \"st cleanup status --help\" for help.\\n\\nError: No such option: --project'\n"
+            "same_failed_chain='agent-hub task-1025819f still needs recovery follow-up'\n"
+            "question=What should Jenny do next instead of ending the heartbeat as ok?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("help", "recover"),
+        summary_term_alternatives={
+            "help": ("--help", "usage", "correct command", "read help"),
+            "recover": ("retry correctly", "reconcile", "fix the command path", "follow up"),
+        },
+    ),
+    _case(
+        case_id="stale_reviewer_path_requires_verification",
+        family="live-acceptance",
+        name="Stale Reviewer Path Requires Verification",
+        description="Reviewer or summary-provided file names are advisory; Jenny must verify the real repo path before editing after a file-not-found read.",
+        scenario=(
+            "HEARTBEAT_SCOPE: agent-hub\n"
+            "GLOBAL_READY_TASKS=0\n"
+            "reviewer_summary='Check app/services/heartbeat_data.py and app/services/heartbeat_orchestrator.py for the cleanup-truth regression.'\n"
+            "read_file_result_1='Error: File not found: /srv/workspaces/projects/agent-hub/app/services/heartbeat_data.py'\n"
+            "read_file_result_2='Error: File not found: /srv/workspaces/projects/agent-hub/app/services/heartbeat_orchestrator.py'\n"
+            "shell_search_result='/bin/sh: 1: rg: not found'\n"
+            "confirmed_real_paths='backend/app/workflows/_heartbeat_data.py and backend/app/workflows/_heartbeat_orchestrators.py'\n"
+            "question=What should Jenny do before editing any file?\n"
+        ),
+        action="reconcile",
+        required_summary_terms=("verify", "path"),
+        summary_term_alternatives={
+            "verify": ("confirm", "search first", "file not found", "validate the path"),
+            "path": ("actual file", "real path", "repo path", "confirmed file"),
+        },
+    ),
 ]
 
 
@@ -776,6 +930,13 @@ def get_live_heartbeat_acceptance_case_ids() -> list[str]:
         "global_git_hygiene_classification",
         "repeated_blocker_fix_work",
         "partial_blocker_churn_fix_work",
+        "blocker_fix_task_must_be_shaped_ready",
+        "failed_active_lane_recovery_before_dispatch",
+        "failed_task_record_recovery_before_dispatch",
+        "failed_task_beats_unrelated_cleanup",
+        "failed_task_inspection_requires_recovery_action",
+        "cli_usage_error_requires_help_recovery",
+        "stale_reviewer_path_requires_verification",
         "feedback_triage_hotspot",
     ]
 

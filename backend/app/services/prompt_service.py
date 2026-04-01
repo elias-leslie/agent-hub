@@ -19,6 +19,17 @@ def _prompt_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+def _sanitize_runtime_prompt_content(content: str) -> str:
+    """Strip transport metadata accidentally copied into DB-backed prompt bodies."""
+    lines = content.splitlines()
+    index = 0
+    while index < len(lines) and lines[index].startswith("PROMPT:"):
+        index += 1
+    if index == 0:
+        return content
+    return "\n".join(lines[index:]).lstrip("\n")
+
+
 async def record_prompt_revision(
     db: AsyncSession,
     prompt: Prompt,
@@ -393,7 +404,7 @@ async def get_prompt_content(slug: str, default: str) -> str:
         async with async_session() as db:
             prompt = await get_prompt_by_slug(db, slug)
             if prompt:
-                return prompt.content
+                return _sanitize_runtime_prompt_content(prompt.content)
     except Exception as e:
         logger.debug("Prompt lookup for '%s' failed (using default): %s", slug, e)
     return default
@@ -405,8 +416,9 @@ async def require_prompt_content(slug: str) -> str:
 
     async with async_session() as db:
         prompt = await get_prompt_by_slug(db, slug)
-        if not prompt or not prompt.content.strip():
+        content = _sanitize_runtime_prompt_content(prompt.content) if prompt else ""
+        if not prompt or not content.strip():
             raise RuntimeError(f"Required prompt '{slug}' is missing or empty")
         if not prompt.enabled:
             raise RuntimeError(f"Required prompt '{slug}' is disabled")
-        return prompt.content
+        return content

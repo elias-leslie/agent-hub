@@ -8,8 +8,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.models import SessionEventType
 from app.services.persona_improvement import (
     DEFAULT_SELF_HONING_CADENCE_MINUTES,
+    _heartbeat_issue_codes_from_events,
     _heartbeat_result_status,
     _score_heartbeat_session,
     _summarize_heartbeat_field_sessions,
@@ -175,6 +177,51 @@ def test_heartbeat_result_status_prefers_partial_summary_tag_over_ok_prefix() ->
     result = _heartbeat_result_status(content, "completed")
 
     assert result == "partial"
+
+
+def test_heartbeat_issue_codes_from_events_flags_unrecovered_cli_usage_error() -> None:
+    issue_codes = _heartbeat_issue_codes_from_events(
+        [
+            (SessionEventType.TOOL_USE, "$ st cleanup status --project agent-hub"),
+            (
+                SessionEventType.TOOL_RESULT,
+                "Usage: st cleanup status [OPTIONS]\nTry 'st cleanup status --help' for help.\n\nError: No such option: --project",
+            ),
+            (SessionEventType.TOOL_USE, '{"action":"overview"}'),
+        ]
+    )
+
+    assert issue_codes == ["cli_usage_error"]
+
+
+def test_heartbeat_issue_codes_from_events_clears_cli_usage_error_after_help() -> None:
+    issue_codes = _heartbeat_issue_codes_from_events(
+        [
+            (SessionEventType.TOOL_USE, "$ st cleanup status --project agent-hub"),
+            (
+                SessionEventType.TOOL_RESULT,
+                "Usage: st cleanup status [OPTIONS]\nTry 'st cleanup status --help' for help.\n\nError: No such option: --project",
+            ),
+            (SessionEventType.TOOL_USE, "$ st cleanup status --help"),
+            (SessionEventType.TOOL_RESULT, "Usage: st cleanup status [OPTIONS]\n\nOptions:\n  --all"),
+        ]
+    )
+
+    assert issue_codes == []
+
+
+def test_heartbeat_issue_codes_from_events_flags_dispatch_not_ready() -> None:
+    issue_codes = _heartbeat_issue_codes_from_events(
+        [
+            (SessionEventType.TOOL_USE, '{"action":"dispatch","task_id":"task-76d306d6"}'),
+            (
+                SessionEventType.TOOL_RESULT,
+                "ERROR Task task-76d306d6 is not execution-ready for autocode.",
+            ),
+        ]
+    )
+
+    assert issue_codes == ["dispatch_not_ready"]
 
 
 def test_score_heartbeat_session_marks_partial_outcome_unhealthy() -> None:

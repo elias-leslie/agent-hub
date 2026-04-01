@@ -8,10 +8,12 @@ import shlex
 import tempfile
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
+from typing import Any
 
 from app.services.cleanup_summary import (
     build_actionable_cleanup_summary,
     build_actionable_cleanup_summary_from_items,
+    build_filtered_reconciled_cleanup_note,
     extract_cleanup_action_items,
     filter_reconciled_cleanup_items,
 )
@@ -24,6 +26,30 @@ from app.services.tools._tool_constants import st_cmd as _st_cmd
 
 logger = logging.getLogger(__name__)
 _CANONICAL_TASK_ID_PREFIX = "task-"
+
+
+def _normalize_subtask_plan(
+    subtasks: list[dict[str, object]] | None,
+) -> list[dict[str, object]] | None:
+    """Ensure plan subtasks include at least one explicit step for execution readiness."""
+    if not subtasks:
+        return subtasks
+
+    normalized: list[dict[str, object]] = []
+    for subtask in subtasks:
+        if not isinstance(subtask, dict):
+            continue
+        normalized_subtask = dict(subtask)
+        raw_steps = normalized_subtask.get("steps")
+        has_steps = isinstance(raw_steps, list) and any(
+            isinstance(step, str) and step.strip() for step in raw_steps
+        )
+        if not has_steps:
+            description = normalized_subtask.get("description")
+            step_text = description.strip() if isinstance(description, str) else ""
+            normalized_subtask["steps"] = [step_text or "Complete this subtask."]
+        normalized.append(normalized_subtask)
+    return normalized
 
 
 def _build_plan_json(
@@ -47,7 +73,7 @@ def _build_plan_json(
     if labels:
         plan["labels"] = labels.split(",")
     if subtasks:
-        plan["subtasks"] = subtasks
+        plan["subtasks"] = _normalize_subtask_plan(subtasks)
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", delete=False, prefix="st-plan-"
@@ -94,29 +120,13 @@ async def _filtered_cleanup_action_items(
     project_id: str,
 ) -> list:
     """Return cleanup items after dropping reconciled authoritative/superseded residue."""
+    del bash_fn
     items = extract_cleanup_action_items(cleanup_status)
     if not items:
         return []
-    workstream_output = await bash_fn(_st_cmd("sessions ownership", project_id))
-    workstream_rows: list[dict[str, object]] = []
-    for raw_line in workstream_output.splitlines():
-        line = raw_line.strip()
-        if not line.startswith("- "):
-            continue
-        parts = [part.strip() for part in line[2:].split("|")]
-        if len(parts) < 4:
-            continue
-        project_value, task_value = parts[0], parts[1]
-        status_field = parts[-1]
-        status_tokens = {token.strip() for token in status_field.split(",") if token.strip()}
-        workstream_rows.extend(
-            {
-                "project_id": project_value,
-                "external_id": task_value,
-                "workstream_status": status,
-            }
-            for status in status_tokens
-        )
+    from app.workflows._heartbeat_data import _query_recent_workstream_sessions
+
+    workstream_rows = await _query_recent_workstream_sessions(project_id)
     if not workstream_rows:
         return items
     return filter_reconciled_cleanup_items(items, workstream_rows)
@@ -128,8 +138,12 @@ async def _build_filtered_actionable_cleanup_summary(
     project_id: str,
 ) -> str:
     """Build actionable cleanup summary with reconciled residue filtered out."""
-    items = await _filtered_cleanup_action_items(bash_fn, cleanup_status, project_id)
-    return build_actionable_cleanup_summary_from_items(items)
+    raw_items = extract_cleanup_action_items(cleanup_status)
+    filtered_items = await _filtered_cleanup_action_items(bash_fn, cleanup_status, project_id)
+    return (
+        build_actionable_cleanup_summary_from_items(filtered_items)
+        or build_filtered_reconciled_cleanup_note(raw_items, filtered_items)
+    )
 
 
 async def _build_dispatch_warning(
@@ -178,12 +192,13 @@ async def _cleanup_dispatch_block_reason(
     # Plain finalize residue means a merge-ready branch exists, which should warn
     # but not freeze unrelated dispatches across the whole project.
     if " conflicts:" in cleanup_status or " review:" in cleanup_status:
-        actionable = await _build_filtered_actionable_cleanup_summary(
+        filtered_items = await _filtered_cleanup_action_items(
             bash_fn,
             cleanup_status,
             project_id,
         )
-        if actionable:
+        actionable = build_actionable_cleanup_summary_from_items(filtered_items)
+        if filtered_items:
             return (
                 "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
                 "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
@@ -411,6 +426,13 @@ async def _handle_finalize_merge(
     if not task_id:
         return "Error: task_id required for finalize_merge"
     result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
+    parsed: dict[str, Any] | None = None
+    try:
+        maybe_json = json.loads(result)
+        if isinstance(maybe_json, dict):
+            parsed = maybe_json
+    except json.JSONDecodeError:
+        parsed = None
     if "no_worktree" in result:
         return (
             f"{result}\n"
@@ -423,6 +445,11 @@ async def _handle_finalize_merge(
             "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
             "Use cleanup_worktrees, get_context, query_sessions, or reconcile first."
         )
+    if parsed and parsed.get("status") == "merged":
+        from ._executor_io_lanes import _cleanup_explicit_lane
+
+        cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
+        return f"{result}\nLane cleanup: {cleanup_result}"
     return result
 
 

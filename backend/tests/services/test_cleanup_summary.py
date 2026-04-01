@@ -86,3 +86,37 @@ def test_filter_reconciled_cleanup_items_drops_authoritative_superseded_task() -
     filtered = filter_reconciled_cleanup_items(items, workstream_rows)
 
     assert filtered == [CleanupActionItem(project_id="agent-hub", kind="review", task_id="task-live1234")]
+
+
+def test_filter_reconciled_cleanup_items_handles_lane_rows_with_branch_context() -> None:
+    items = [
+        CleanupActionItem(project_id="agent-hub", kind="review", task_id="task-ff895807"),
+        CleanupActionItem(project_id="agent-hub", kind="review", task_id="task-live1234"),
+    ]
+    workstream_rows = [
+        {
+            "project_id": "agent-hub",
+            "external_id": "task-ff895807",
+            "current_branch": "task-ff895807/main",
+            "status": "completed",
+            "workstream_status": "authoritative",
+        },
+        {
+            "project_id": "agent-hub",
+            "external_id": "task-ff895807",
+            "current_branch": "task-ff895807/old",
+            "status": "completed",
+            "workstream_status": "superseded",
+        },
+        {
+            "project_id": "agent-hub",
+            "external_id": "task-live1234",
+            "current_branch": "task-live1234/main",
+            "status": "completed",
+            "workstream_status": "authoritative",
+        },
+    ]
+
+    filtered = filter_reconciled_cleanup_items(items, workstream_rows)
+
+    assert filtered == [CleanupActionItem(project_id="agent-hub", kind="review", task_id="task-live1234")]

@@ -54,6 +54,8 @@ _HEARTBEAT_CRITICAL_ISSUES = frozenset(
         "completed_ready_for_closure",
         "completion_review_continue",
         "completion_review_escalate",
+        "cli_usage_error",
+        "dispatch_not_ready",
     }
 )
 _HEARTBEAT_ISSUE_LABELS = {
@@ -67,6 +69,8 @@ _HEARTBEAT_ISSUE_LABELS = {
     "completed_ready_for_closure": "closeout residue missed",
     "completion_review_continue": "completion review said continue",
     "completion_review_escalate": "completion review escalated",
+    "cli_usage_error": "CLI usage error left unrecovered",
+    "dispatch_not_ready": "attempted dispatch on a non-ready task",
 }
 _HEARTBEAT_RELIABILITY_PENALTIES = {
     "runtime_error": 60,
@@ -76,6 +80,8 @@ _HEARTBEAT_RELIABILITY_PENALTIES = {
     "completed_ready_for_closure": 35,
     "completion_review_continue": 30,
     "completion_review_escalate": 35,
+    "cli_usage_error": 25,
+    "dispatch_not_ready": 25,
     "missing_prefix": 15,
     "missing_summary": 10,
     "missing_progress": 12,
@@ -427,6 +433,56 @@ def _heartbeat_issue_codes_from_logs(logs: list[AgentPerformanceLog], status: st
     return sorted(issue_codes)
 
 
+def _session_event_text(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return str(content)
+
+
+def _is_cli_usage_error_result(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        "no such option:" in lowered
+        or ("try 'st " in lowered and "--help' for help" in lowered)
+        or lowered.startswith("usage: st ")
+    )
+
+
+def _heartbeat_issue_codes_from_events(
+    events: list[tuple[SessionEventType, str]],
+) -> list[str]:
+    issue_codes: set[str] = set()
+    unrecovered_cli_usage_error = False
+    help_request_active = False
+
+    for event_type, raw_text in events:
+        text = _session_event_text(raw_text)
+        lowered = text.lower()
+
+        if event_type == SessionEventType.TOOL_USE:
+            if unrecovered_cli_usage_error and "--help" in lowered:
+                unrecovered_cli_usage_error = False
+                help_request_active = True
+            else:
+                help_request_active = False
+        elif event_type == SessionEventType.TOOL_RESULT:
+            if help_request_active:
+                help_request_active = False
+                continue
+            if _is_cli_usage_error_result(text):
+                unrecovered_cli_usage_error = True
+                continue
+            if "not execution-ready for autocode" in lowered:
+                issue_codes.add("dispatch_not_ready")
+
+    if unrecovered_cli_usage_error:
+        issue_codes.add("cli_usage_error")
+
+    return sorted(issue_codes)
+
+
 def _heartbeat_issue_summary(issue_codes: list[str]) -> str:
     if not issue_codes:
         return "clean"
@@ -557,9 +613,13 @@ async def _fetch_heartbeat_cost_totals(
 async def _fetch_heartbeat_event_metrics(
     db: AsyncSession,
     session_ids: list[str],
-) -> tuple[dict[str, dict[str, int]], dict[str, str | None]]:
+) -> tuple[
+    dict[str, dict[str, int]],
+    dict[str, str | None],
+    dict[str, list[tuple[SessionEventType, str]]],
+]:
     if not session_ids:
-        return {}, {}
+        return {}, {}, {}
     metric_rows = (
         await db.execute(
             select(
@@ -605,7 +665,38 @@ async def _fetch_heartbeat_event_metrics(
         )
     ).all()
     final_content = {row.session_id: row.content for row in content_rows}
-    return metrics, final_content
+    tool_event_rows = (
+        await db.execute(
+            select(
+                SessionEvent.session_id,
+                SessionEvent.event_type,
+                SessionEvent.content,
+            )
+            .where(
+                SessionEvent.session_id.in_(session_ids),
+                SessionEvent.event_type.in_(
+                    (
+                        SessionEventType.TOOL_USE,
+                        SessionEventType.TOOL_RESULT,
+                    )
+                ),
+            )
+            .order_by(
+                SessionEvent.session_id.asc(),
+                SessionEvent.turn.asc(),
+                SessionEvent.sequence.asc(),
+            )
+        )
+    ).all()
+    tool_events: dict[str, list[tuple[SessionEventType, str]]] = defaultdict(list)
+    for row in tool_event_rows:
+        tool_events[str(row.session_id)].append(
+            (
+                row.event_type,
+                _session_event_text(row.content),
+            )
+        )
+    return metrics, final_content, tool_events
 
 
 async def _fetch_heartbeat_performance_logs(
@@ -647,7 +738,7 @@ async def _collect_heartbeat_field_sessions(
 
     session_ids = [session.id for session in sessions]
     cost_totals = await _fetch_heartbeat_cost_totals(db, session_ids)
-    event_metrics, final_content = await _fetch_heartbeat_event_metrics(db, session_ids)
+    event_metrics, final_content, tool_events = await _fetch_heartbeat_event_metrics(db, session_ids)
     performance_logs = await _fetch_heartbeat_performance_logs(db, session_ids)
 
     items: list[dict[str, Any]] = []
@@ -655,7 +746,10 @@ async def _collect_heartbeat_field_sessions(
         cost = cost_totals.get(session.id, {})
         event = event_metrics.get(session.id, {})
         logs = performance_logs.get(session.id, [])
-        issue_codes = _heartbeat_issue_codes_from_logs(logs, session.status)
+        issue_codes = sorted(
+            set(_heartbeat_issue_codes_from_logs(logs, session.status))
+            | set(_heartbeat_issue_codes_from_events(tool_events.get(str(session.id), [])))
+        )
         result_status = _heartbeat_result_status(final_content.get(session.id), session.status)
         reliability, effectiveness, truth_quality, healthy = _score_heartbeat_session(
             session_status=session.status,

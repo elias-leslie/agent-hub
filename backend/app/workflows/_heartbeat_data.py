@@ -24,6 +24,7 @@ from app.services.git_status_summary import RepoGitStatus
 from app.services.ownership_lanes import collapse_active_workstream_rows
 from app.services.session_display_summary import (
     SessionDisplaySummaryCandidate,
+    SessionDisplaySummaryResult,
     clean_display_summary_text,
     fetch_session_display_summary_results,
 )
@@ -91,6 +92,9 @@ _HEARTBEAT_DIGEST_TOKEN_BUDGET = 420
 _IDLE_HISTORY_LOOKBACK_HOURS = 6
 _IDLE_HISTORY_LIMIT = 4
 _IDLE_HISTORY_TOKEN_BUDGET = 360
+_FAILED_TASK_LOOKBACK_HOURS = 48
+_FAILED_TASK_PER_PROJECT_LIMIT = 3
+_FAILED_TASK_GLOBAL_LIMIT = 8
 
 # ── magic strings ─────────────────────────────────────────────────────────────
 _PERSONA_AGENT_SLUG = "persona"
@@ -250,6 +254,77 @@ async def _fetch_backup_status(target_project_id: str | None = None) -> str:
 async def _fetch_backup_schedule(target_project_id: str | None = None) -> str:
     """Fetch the compact backup-source schedule line from structured SummitFlow data."""
     return await fetch_backup_schedule_line(target_project_id)
+
+
+def _parse_recent_failed_task_timestamp(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        dt_value = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            dt_value = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if dt_value.tzinfo is None:
+        return dt_value.replace(tzinfo=UTC)
+    return dt_value.astimezone(UTC)
+
+
+def _recent_failed_task_sort_key(task: dict[str, object]) -> datetime:
+    timestamp = _parse_recent_failed_task_timestamp(task.get("last_changed_at"))
+    if timestamp is None:
+        return datetime.min.replace(tzinfo=UTC)
+    return timestamp
+
+
+async def _fetch_recent_failed_tasks(
+    target_project_id: str | None = None,
+) -> list[dict[str, object]]:
+    """Fetch recent failed tasks that heartbeat should inspect before new dispatch or clean idle."""
+    try:
+        from sqlalchemy import select
+
+        from app.db import get_async_session_context
+        from app.models.task import Task
+
+        cutoff = datetime.now(UTC) - timedelta(hours=_FAILED_TASK_LOOKBACK_HOURS)
+        async with get_async_session_context() as session:
+            stmt = select(Task).where(
+                Task.status == "failed",
+                Task.updated_at >= cutoff,
+            )
+            if target_project_id:
+                stmt = stmt.where(Task.project_id == target_project_id)
+            stmt = stmt.order_by(Task.updated_at.desc()).limit(_FAILED_TASK_GLOBAL_LIMIT)
+            result = await session.execute(stmt)
+            tasks = list(result.scalars())
+
+        rows: list[dict[str, object]] = []
+        per_project_counts: dict[str, int] = {}
+        for task in tasks:
+            project_id = str(task.project_id or "")
+            count = per_project_counts.get(project_id, 0)
+            if count >= _FAILED_TASK_PER_PROJECT_LIMIT:
+                continue
+            per_project_counts[project_id] = count + 1
+            rows.append(
+                {
+                    "id": task.id,
+                    "project_id": project_id,
+                    "title": task.title,
+                    "current_phase": task.current_phase,
+                    "error_message": task.error_message,
+                    "last_changed_at": task.updated_at,
+                }
+            )
+
+        rows.sort(key=_recent_failed_task_sort_key, reverse=True)
+        return rows
+    except Exception:
+        logger.debug("Failed to fetch recent failed tasks for heartbeat prompt", exc_info=True)
+        return []
 
 
 async def _query_recent_workstream_sessions(
@@ -445,7 +520,7 @@ def _build_digest_candidates(rows: list[object]) -> list[SessionDisplaySummaryCa
 
 async def _query_heartbeat_digest_data(
     target_project_id: str | None,
-) -> tuple[list[object], dict[str, object]]:
+) -> tuple[list[object], dict[str, SessionDisplaySummaryResult]]:
     """Query recent heartbeat sessions and their display summaries."""
     from sqlalchemy import and_, select
 
@@ -472,7 +547,7 @@ async def _query_heartbeat_digest_data(
             .order_by(Session.created_at.desc())
             .limit(_HEARTBEAT_DIGEST_LIMIT)
         )
-        rows = list(result.all())
+        rows: list[object] = list(result.all())
         display_summaries = await fetch_session_display_summary_results(
             db, _build_digest_candidates(rows)
         )
@@ -481,7 +556,7 @@ async def _query_heartbeat_digest_data(
 
 def _render_heartbeat_digest_row(
     row: object,
-    display_summaries: dict[str, object],
+    display_summaries: dict[str, SessionDisplaySummaryResult],
 ) -> str | None:
     """Render one heartbeat digest row, returning None when no summary is available."""
     session_id = str(_row_value(row, 0, "id") or "")
@@ -652,6 +727,7 @@ __all__ = [
     "_fetch_backup_status",
     "_fetch_cleanup_status",
     "_fetch_git_status_compact",
+    "_fetch_recent_failed_tasks",
     "_fetch_recently_completed_sessions_section",
     "_fetch_task_overview",
     "_fetch_task_overview_raw",

@@ -1,8 +1,13 @@
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, call
 
 import pytest
 
-from app.services.tools._executor_io_tasks import _cleanup_dispatch_block_reason
+from app.services.tools._executor_io_tasks import (
+    _build_plan_json,
+    _cleanup_dispatch_block_reason,
+)
 
 
 @pytest.mark.asyncio
@@ -54,3 +59,26 @@ async def test_cleanup_dispatch_block_reason_blocks_live_review_residue() -> Non
     assert "Dispatch blocked" in block_reason
     assert "task-live1234" in block_reason
     assert cleanup_status is not None
+
+
+def test_build_plan_json_adds_default_steps_for_subtasks_without_steps() -> None:
+    plan_path = Path(
+        _build_plan_json(
+            title="Fix blocker",
+            description="Make the unblock task execution-ready.",
+            done_when=["Dispatch succeeds"],
+            labels="dispatch,cleanup",
+            complexity="STANDARD",
+            subtasks=[
+                {"id": "1.1", "description": "Localize the cleanup truth mismatch"},
+                {"id": "1.2", "description": "Patch the gate", "steps": []},
+            ],
+        )
+    )
+    try:
+        payload = json.loads(plan_path.read_text())
+    finally:
+        plan_path.unlink(missing_ok=True)
+
+    assert payload["subtasks"][0]["steps"] == ["Localize the cleanup truth mismatch"]
+    assert payload["subtasks"][1]["steps"] == ["Patch the gate"]

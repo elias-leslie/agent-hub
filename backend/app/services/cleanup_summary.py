@@ -17,6 +17,10 @@ _ORPHAN_BRANCH_RE = re.compile(
     r"orphan_branches:(?P<branches>task-[a-z0-9]+/main(?:,task-[a-z0-9]+/main)*)"
 )
 _RECONCILED_WORKSTREAM_STATUSES = {"authoritative", "superseded"}
+_FILTERED_RECONCILED_ACTIONABLE_NOTE = (
+    "ACTIONABLE-CLEANUP[0]\n"
+    "- none (all task-backed cleanup residue is already reconciled authoritative/superseded)"
+)
 
 
 @dataclass(frozen=True)
@@ -100,7 +104,26 @@ def filter_reconciled_cleanup_items(
     if not items or not workstream_rows:
         return items
 
+    from app.workflows._heartbeat_workstream import (
+        _classify_workstream_lane,
+        _group_rows_by_lane,
+        _infer_lane_task_id,
+    )
+
     reconciled_task_keys: set[tuple[str, str]] = set()
+    for (project_id, _lane_key), lane_rows in _group_rows_by_lane(workstream_rows).items():
+        if _classify_workstream_lane(lane_rows) != "reconciled":
+            continue
+        task_id = _infer_lane_task_id(lane_rows)
+        if task_id:
+            reconciled_task_keys.add((project_id, task_id))
+
+    if reconciled_task_keys:
+        return [
+            item for item in items
+            if (item.project_id, item.task_id) not in reconciled_task_keys
+        ]
+
     statuses_by_task: dict[tuple[str, str], set[str]] = {}
     for row in workstream_rows:
         project_id = row.get("project_id")
@@ -146,11 +169,22 @@ def build_actionable_cleanup_summary_from_items(items: list[CleanupActionItem]) 
     return "\n".join(lines)
 
 
+def build_filtered_reconciled_cleanup_note(
+    raw_items: list[CleanupActionItem],
+    filtered_items: list[CleanupActionItem],
+) -> str:
+    """Explain when cleanup residue exists in raw status but none remains actionable."""
+    if raw_items and not filtered_items:
+        return _FILTERED_RECONCILED_ACTIONABLE_NOTE
+    return ""
+
+
 __all__ = [
     "CleanupActionItem",
     "build_actionable_cleanup_summary",
     "build_actionable_cleanup_summary_from_items",
     "build_actionable_cleanup_summary_from_payload",
+    "build_filtered_reconciled_cleanup_note",
     "extract_cleanup_action_items",
     "extract_cleanup_action_items_from_payload",
     "filter_reconciled_cleanup_items",
