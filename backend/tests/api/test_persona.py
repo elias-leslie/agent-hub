@@ -248,6 +248,32 @@ class TestPersonaImprovementDashboardEndpoint:
                 "prompt_tokens": 16780.0,
                 "open_regressions": 2,
             },
+            "latest_lab_run": {
+                "run_id": "run-12",
+                "benchmark_id": "persona-benchmark-latest",
+                "suite_id": "persona-suite-jenny-improvement",
+                "run_kind": "honing_iteration",
+                "started_at": "2026-03-31T16:55:00Z",
+                "completed_at": "2026-03-31T17:00:00Z",
+                "models": ["codex/gpt-5.4"],
+                "case_ids": ["manual_project_access_block"],
+                "attempt_count": 9,
+                "passed_attempt_count": 9,
+                "infra_failure_count": 0,
+                "reliability": 100.0,
+                "effectiveness": 100.0,
+                "avg_total_tokens": 1600.0,
+                "tokens_per_passed_attempt": 1600.0,
+                "avg_tool_calls": 0.1,
+                "avg_turns": 1.0,
+                "prompt_tokens": 16780,
+                "failure_count": 0,
+                "top_failure_detail": None,
+                "family_breakdown": [],
+                "experiment_decision": None,
+                "experiment_decision_reason": None,
+                "decision_source": None,
+            },
             "field_overview": {
                 "total_heartbeats": 4,
                 "latest_completed_at": "2026-03-31T17:15:00Z",
@@ -305,6 +331,7 @@ class TestPersonaImprovementDashboardEndpoint:
         assert data["suite_id"] == "persona-suite-jenny-improvement"
         assert data["schedule"]["enabled"] is True
         assert data["overview"]["reliability"] == 91.2
+        assert data["latest_lab_run"]["run_id"] == "run-12"
         mock_dashboard.assert_awaited_once()
 
 

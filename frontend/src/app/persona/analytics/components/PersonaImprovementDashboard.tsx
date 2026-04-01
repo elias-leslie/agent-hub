@@ -51,6 +51,16 @@ function formatMetricTokens(value: number | null | undefined) {
   return formatTokens(Math.round(value));
 }
 
+function formatMetricDelta(current: number | null | undefined, average: number | null | undefined) {
+  if (current === null || current === undefined || average === null || average === undefined) {
+    return null;
+  }
+  const delta = current - average;
+  const rounded = Math.abs(delta) < 0.05 ? 0 : Math.round(delta * 10) / 10;
+  const prefix = rounded > 0 ? "+" : "";
+  return `${prefix}${rounded}`;
+}
+
 function LoadingState() {
   return (
     <div className="page-shell">
@@ -500,6 +510,24 @@ export function PersonaImprovementDashboard() {
     );
   }
 
+  const latestLabRun = dashboard.latest_lab_run;
+  const reliabilityDelta = formatMetricDelta(
+    latestLabRun?.reliability,
+    dashboard.overview.reliability,
+  );
+  const effectivenessDelta = formatMetricDelta(
+    latestLabRun?.effectiveness,
+    dashboard.overview.effectiveness,
+  );
+  const tokenDelta = formatMetricDelta(
+    latestLabRun?.tokens_per_passed_attempt,
+    dashboard.overview.tokens_per_passed_attempt,
+  );
+  const promptDelta = formatMetricDelta(
+    latestLabRun?.prompt_tokens,
+    dashboard.overview.prompt_tokens,
+  );
+
   const saveErrorMessage = scheduleMutation.error instanceof Error
     ? scheduleMutation.error.message
     : null;
@@ -582,6 +610,11 @@ export function PersonaImprovementDashboard() {
               <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300 ring-1 ring-slate-700">
                 last run {formatRelativeTime(dashboard.overview.latest_completed_at)}
               </span>
+              {latestLabRun ? (
+                <span className="rounded-full bg-emerald-950/20 px-3 py-1 text-emerald-300 ring-1 ring-emerald-900/60">
+                  current lab {formatPercent(latestLabRun.reliability)} reliability
+                </span>
+              ) : null}
               <span className="rounded-full bg-slate-800 px-3 py-1 text-slate-300 ring-1 ring-slate-700">
                 {dashboard.overview.total_runs} runs in window
               </span>
@@ -678,40 +711,59 @@ export function PersonaImprovementDashboard() {
             label="Reliability"
             icon={ShieldCheck}
             colorClass="bg-emerald-950/30 text-emerald-400"
-            labLabel="Lab"
-            labValue={formatPercent(dashboard.overview.reliability)}
+            labLabel="Current lab"
+            labValue={formatPercent(latestLabRun?.reliability ?? dashboard.overview.reliability)}
             fieldLabel="Field"
             fieldValue={formatPercent(dashboard.field_overview.reliability)}
-            hint={`${dashboard.field_overview.critical_heartbeats} critical real-heartbeat issues in window`}
+            hint={
+              reliabilityDelta !== null
+                ? `window avg ${formatPercent(dashboard.overview.reliability)} · delta ${reliabilityDelta}`
+                : `${dashboard.field_overview.critical_heartbeats} critical real-heartbeat issues in window`
+            }
           />
           <MetricSurfaceCard
             label="Effectiveness"
             icon={Activity}
             colorClass="bg-blue-950/30 text-blue-400"
-            labLabel="Lab"
-            labValue={formatPercent(dashboard.overview.effectiveness)}
+            labLabel="Current lab"
+            labValue={formatPercent(latestLabRun?.effectiveness ?? dashboard.overview.effectiveness)}
             fieldLabel="Field"
             fieldValue={formatPercent(dashboard.field_overview.effectiveness)}
-            hint={`${dashboard.field_overview.total_heartbeats} recent real heartbeats scored`}
+            hint={
+              effectivenessDelta !== null
+                ? `window avg ${formatPercent(dashboard.overview.effectiveness)} · delta ${effectivenessDelta}`
+                : `${dashboard.field_overview.total_heartbeats} recent real heartbeats scored`
+            }
           />
           <MetricSurfaceCard
             label="Token Efficiency"
             icon={Gauge}
             colorClass="bg-amber-950/30 text-amber-400"
-            labLabel="Lab tok / pass"
-            labValue={formatMetricTokens(dashboard.overview.tokens_per_passed_attempt)}
+            labLabel="Current lab tok / pass"
+            labValue={formatMetricTokens(
+              latestLabRun?.tokens_per_passed_attempt ?? dashboard.overview.tokens_per_passed_attempt,
+            )}
             fieldLabel="Field tok / healthy HB"
             fieldValue={formatMetricTokens(dashboard.field_overview.tokens_per_healthy_heartbeat)}
+            hint={
+              tokenDelta !== null
+                ? `window avg ${formatMetricTokens(dashboard.overview.tokens_per_passed_attempt)} · delta ${tokenDelta}`
+                : undefined
+            }
           />
           <MetricSurfaceCard
             label="Context And Truth"
             icon={TimerReset}
             colorClass="bg-rose-950/30 text-rose-400"
-            labLabel="Prompt context"
-            labValue={formatMetricTokens(dashboard.overview.prompt_tokens)}
+            labLabel="Current prompt"
+            labValue={formatMetricTokens(latestLabRun?.prompt_tokens ?? dashboard.overview.prompt_tokens)}
             fieldLabel="Field truth"
             fieldValue={formatPercent(dashboard.field_overview.truth_quality)}
-            hint={`${dashboard.overview.open_regressions} open lab regressions`}
+            hint={
+              promptDelta !== null
+                ? `window avg ${formatMetricTokens(dashboard.overview.prompt_tokens)} · delta ${promptDelta} · ${dashboard.overview.open_regressions} open lab regressions`
+                : `${dashboard.overview.open_regressions} open lab regressions`
+            }
           />
         </div>
 

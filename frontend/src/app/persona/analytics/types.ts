@@ -137,6 +137,7 @@ export interface PersonaImprovementDashboard {
   days: number;
   schedule: PersonaImprovementSchedule;
   overview: PersonaImprovementOverview;
+  latest_lab_run: PersonaImprovementRecentRun | null;
   field_overview: PersonaHeartbeatFieldOverview;
   trend: PersonaImprovementTrendPoint[];
   field_trend: PersonaHeartbeatFieldTrendPoint[];
