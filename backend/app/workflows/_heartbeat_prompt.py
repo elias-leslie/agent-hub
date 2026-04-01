@@ -24,6 +24,7 @@ from app.workflows._heartbeat_data import (
     _get_workstream_inventory,
     get_project_access_summary,
 )
+from app.workflows._heartbeat_orchestrators import _get_recent_failed_tasks_summary
 from app.workflows._heartbeat_recall import (
     HeartbeatRecallSections,
     build_heartbeat_recall_sections,
@@ -153,6 +154,7 @@ async def _append_dynamic_sections(
         active_specialists,
         agent_roster,
         workstream_inventory,
+        recent_failed_tasks,
         git_status,
         feedback_summary,
     ) = await asyncio.gather(
@@ -182,6 +184,10 @@ async def _append_dynamic_sections(
             heartbeat_state=heartbeat_state,
             agent_hub_state=agent_hub_state,
         ),
+        _get_recent_failed_tasks_summary(
+            target_project_id,
+            heartbeat_state=heartbeat_state,
+        ),
         _get_git_status_summary(
             target_project_id,
             git_status_rows=heartbeat_state.git_status_rows,
@@ -196,6 +202,7 @@ async def _append_dynamic_sections(
         active_specialists,
         agent_roster,
         workstream_inventory,
+        recent_failed_tasks,
         git_status,
         feedback_summary,
         recall_sections.improvement_signal_digest,

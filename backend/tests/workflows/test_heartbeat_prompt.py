@@ -224,6 +224,7 @@ class TestFetchGitStatusCompact:
 
 class TestCollectSummitflowHeartbeatState:
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_recent_failed_tasks", new_callable=AsyncMock)
     @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
     @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
     @patch("app.workflows._heartbeat_data._fetch_task_overview_response", new_callable=AsyncMock)
@@ -232,6 +233,7 @@ class TestCollectSummitflowHeartbeatState:
         mock_task_overview: AsyncMock,
         mock_cleanup_status: AsyncMock,
         mock_git_rows: AsyncMock,
+        mock_recent_failed: AsyncMock,
     ) -> None:
         from app.services.git_status_summary import RepoGitStatus
 
@@ -253,6 +255,13 @@ class TestCollectSummitflowHeartbeatState:
                 behind=0,
             )
         ]
+        mock_recent_failed.return_value = [
+            {
+                "id": "task-failed-1",
+                "project_id": "agent-hub",
+                "title": "Fix failed task",
+            }
+        ]
 
         state = await _collect_summitflow_heartbeat_state("agent-hub")
 
@@ -261,11 +270,14 @@ class TestCollectSummitflowHeartbeatState:
         assert state.task_overview_raw == "READY-ALL[1]\n..."
         assert state.cleanup_status_response == mock_cleanup_status.return_value
         assert len(state.git_status_rows) == 1
+        assert state.recent_failed_tasks == mock_recent_failed.return_value
         mock_task_overview.assert_awaited_once_with()
         mock_cleanup_status.assert_awaited_once_with("agent-hub")
         mock_git_rows.assert_awaited_once_with("agent-hub")
+        mock_recent_failed.assert_awaited_once_with("agent-hub")
 
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_recent_failed_tasks", new_callable=AsyncMock, return_value=[])
     @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock, return_value=[])
     @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock, return_value=None)
     @patch("app.workflows._heartbeat_data._fetch_task_overview_response", new_callable=AsyncMock, return_value=None)
@@ -274,6 +286,7 @@ class TestCollectSummitflowHeartbeatState:
         _mock_task_overview: AsyncMock,
         _mock_cleanup_status: AsyncMock,
         _mock_git_rows: AsyncMock,
+        _mock_recent_failed: AsyncMock,
     ) -> None:
         state = await _collect_summitflow_heartbeat_state()
 
@@ -282,6 +295,7 @@ class TestCollectSummitflowHeartbeatState:
         assert state.task_overview_raw == ""
         assert state.cleanup_status_response is None
         assert state.git_status_rows == []
+        assert state.recent_failed_tasks == []
 
 
 class TestCollectAgentHubHeartbeatState:
@@ -389,6 +403,7 @@ class TestAppendDynamicSections:
     )
     @patch("app.workflows._heartbeat_prompt._get_feedback_summary_section", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_recent_failed_tasks_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_workstream_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
@@ -407,6 +422,7 @@ class TestAppendDynamicSections:
         mock_active_specialists: AsyncMock,
         mock_roster: AsyncMock,
         mock_workstreams: AsyncMock,
+        mock_recent_failed: AsyncMock,
         mock_git: AsyncMock,
         mock_feedback: AsyncMock,
         mock_recall: AsyncMock,
@@ -418,6 +434,7 @@ class TestAppendDynamicSections:
             task_overview_response={"raw": "READY-ALL[1]", "payload": {"projects": []}},
             cleanup_status_response={"compact": "CLEANUP[all]:repos=0 needs_cleanup=0"},
             git_status_rows=[],
+            recent_failed_tasks=[],
         )
         agent_hub_state = AgentHubHeartbeatState(
             collected_at=datetime(2026, 3, 25, tzinfo=UTC),
@@ -459,9 +476,45 @@ class TestAppendDynamicSections:
             heartbeat_state=summitflow_state,
             agent_hub_state=agent_hub_state,
         )
+        mock_recent_failed.assert_awaited_once_with(
+            "agent-hub",
+            heartbeat_state=summitflow_state,
+        )
         mock_git.assert_awaited_once_with("agent-hub", git_status_rows=[])
         mock_feedback.assert_awaited_once_with()
         mock_recall.assert_awaited_once_with("agent-hub")
+
+
+class TestRecentFailedTasksSummary:
+    @pytest.mark.asyncio
+    async def test_renders_recent_failed_tasks_from_heartbeat_state(self) -> None:
+        from app.workflows._heartbeat_orchestrators import _get_recent_failed_tasks_summary
+        from app.workflows._heartbeat_state import SummitFlowHeartbeatState
+
+        state = SummitFlowHeartbeatState(
+            task_overview_response=None,
+            cleanup_status_response=None,
+            git_status_rows=[],
+            recent_failed_tasks=[
+                {
+                    "id": "task-1025819f",
+                    "project_id": "agent-hub",
+                    "title": "Refactor: backend/app/workflows/_heartbeat_data.py",
+                    "current_phase": "plan",
+                    "last_changed_at": datetime(2026, 4, 1, 22, 9, tzinfo=UTC),
+                }
+            ],
+        )
+
+        result = await _get_recent_failed_tasks_summary("agent-hub", heartbeat_state=state)
+
+        assert result.startswith("\n<recent_failed_tasks>")
+        assert "Recent failed tasks: 1" in result
+        assert "Follow first: agent-hub | task-1025819f | failed" in result
+        assert "task-1025819f" in result
+        assert "phase=plan" in result
+        assert "Refactor: backend/app/workflows/_heartbeat_data.py" in result
+        assert result.endswith("</recent_failed_tasks>")
 
 
 class TestRecentHeartbeatDigest:
@@ -719,6 +772,11 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
+        "app.workflows._heartbeat_prompt._get_recent_failed_tasks_summary",
+        new_callable=AsyncMock,
+        return_value="\n<recent_failed_tasks>\nRecent failed tasks: 1\n- agent-hub | task-1025819f | failed | 12m ago | phase=plan | Refactor: backend/app/workflows/_heartbeat_data.py\n</recent_failed_tasks>",
+    )
+    @patch(
         "app.workflows._heartbeat_prompt._get_protection_status_summary",
         new_callable=AsyncMock,
         return_value="\n<protection_status>\nLATEST bkp-123|completed|8.5MB\nSOURCE:agent-hub|enabled|daily|retention_days:30\n</protection_status>",
@@ -765,6 +823,8 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "LATEST bkp-123|completed|8.5MB" in prompt
         assert "<cleanup_status>" in prompt
         assert "CLEANUP[all]:repos=2 needs_cleanup=1" in prompt
+        assert "<recent_failed_tasks>" in prompt
+        assert "task-1025819f" in prompt
         assert "<git_state>" in prompt
         assert "[summitflow] test data" in prompt
         assert "Run your regular heartbeat check." in prompt
@@ -777,6 +837,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @pytest.mark.asyncio
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
+    @patch("app.workflows._heartbeat_prompt._get_recent_failed_tasks_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_protection_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_cleanup_status_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_git_status_summary", new_callable=AsyncMock, return_value="")
@@ -968,6 +1029,55 @@ class TestCleanupStatusSummary:
         assert "ACTIONABLE-CLEANUP[1]" in result
         assert "- summitflow | review | task-bb22cc33" in result
         assert "- summitflow | finalize | task-aa44180c" not in result
+
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_cleanup_status_response", new_callable=AsyncMock)
+    async def test_reports_zero_actionable_cleanup_when_only_reconciled_residue_remains(
+        self,
+        mock_fetch_response: AsyncMock,
+    ) -> None:
+        mock_fetch_response.return_value = {
+            "compact": (
+                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
+                "summitflow worktrees:2 dirty:0 orphan:0 prunable:0 review:task-aa44180c"
+            ),
+            "payload": {
+                "repositories": [
+                    {
+                        "project_id": "summitflow",
+                        "needs_merge_tasks": [],
+                        "conflict_tasks": [],
+                        "review_tasks": ["task-aa44180c"],
+                        "salvage_task_ids": [],
+                        "review_orphan_task_ids": [],
+                        "orphan_branch_names": [],
+                    }
+                ]
+            },
+        }
+
+        result = await _get_cleanup_status_summary(
+            workstream_rows=[
+                {
+                    "project_id": "summitflow",
+                    "external_id": "task-aa44180c",
+                    "current_branch": "task-aa44180c/main",
+                    "status": "completed",
+                    "workstream_status": "authoritative",
+                },
+                {
+                    "project_id": "summitflow",
+                    "external_id": "task-aa44180c",
+                    "current_branch": "task-aa44180c/old",
+                    "status": "completed",
+                    "workstream_status": "superseded",
+                },
+            ]
+        )
+
+        assert "ACTIONABLE-CLEANUP[0]" in result
+        assert "already reconciled authoritative/superseded" in result
+        assert "- summitflow | review | task-aa44180c" not in result
 
 
 class TestFetchCleanupStatus:

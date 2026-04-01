@@ -51,6 +51,7 @@ class SummitFlowHeartbeatState:
     task_overview_response: dict[str, object] | None
     cleanup_status_response: dict[str, object] | None
     git_status_rows: list[RepoGitStatus]
+    recent_failed_tasks: list[dict[str, object]]
 
     @property
     def task_overview_payload(self) -> dict[str, object] | None:

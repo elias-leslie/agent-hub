@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 from app.models.prompt import Prompt, PromptRevision
 from app.services.prompt_service import (
     create_prompt,
+    get_prompt_content,
+    require_prompt_content,
     restore_prompt_revision,
     update_prompt,
 )
@@ -128,3 +131,55 @@ class TestPromptServiceRevisions:
         assert isinstance(recorded_revision, PromptRevision)
         assert recorded_revision.action == "restore"
         assert recorded_revision.change_reason == "rollback test"
+
+
+class TestPromptRuntimeReads:
+    @pytest.mark.asyncio
+    async def test_get_prompt_content_strips_transport_headers(self) -> None:
+        prompt = _make_prompt(
+            content=(
+                "PROMPT:persona-heartbeat-instructions|Persona Heartbeat Instructions|N|181L\n"
+                "PROMPT:persona-heartbeat-instructions|Persona Heartbeat Instructions|N|177L\n"
+                "# Heartbeat Contract\n\n## Goal\nShip fixes."
+            )
+        )
+
+        @asynccontextmanager
+        async def _session():
+            yield object()
+
+        with (
+            patch("app.db.async_session", _session),
+            patch(
+                "app.services.prompt_service.get_prompt_by_slug",
+                new=AsyncMock(return_value=prompt),
+            ),
+        ):
+            content = await get_prompt_content("persona-heartbeat-instructions", "fallback")
+
+        assert content.startswith("# Heartbeat Contract")
+        assert "PROMPT:" not in content
+
+    @pytest.mark.asyncio
+    async def test_require_prompt_content_strips_transport_headers(self) -> None:
+        prompt = _make_prompt(
+            content=(
+                "PROMPT:persona-heartbeat-instructions|Persona Heartbeat Instructions|N|181L\n"
+                "# Heartbeat Contract\nShip fixes."
+            )
+        )
+
+        @asynccontextmanager
+        async def _session():
+            yield object()
+
+        with (
+            patch("app.db.async_session", _session),
+            patch(
+                "app.services.prompt_service.get_prompt_by_slug",
+                new=AsyncMock(return_value=prompt),
+            ),
+        ):
+            content = await require_prompt_content("persona-heartbeat-instructions")
+
+        assert content == "# Heartbeat Contract\nShip fixes."

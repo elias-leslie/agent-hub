@@ -1126,11 +1126,16 @@ class TestManageTasks:
             side_effect=[
                 "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\n"
                 "agent-hub worktrees:2 dirty:0 orphan:1 prunable:0 finalize:task-old conflicts:task-conflict",
-                "OWNERSHIP[0]",
             ]
         )
 
-        with _allow_execution_permission_patch():
+        with (
+            _allow_execution_permission_patch(),
+            patch(
+                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                new=AsyncMock(return_value=[]),
+            ),
+        ):
             result = await manage_tasks(
                 mock_bash,
                 action="dispatch",
@@ -1143,7 +1148,7 @@ class TestManageTasks:
         assert "ACTIONABLE-CLEANUP[2]" in result
         assert "agent-hub | finalize | task-old" in result
         assert "agent-hub | conflicts | task-conflict" in result
-        assert mock_bash.await_count == 2
+        assert mock_bash.await_count == 1
 
     @pytest.mark.asyncio
     async def test_dispatch_warns_on_running_tasks_when_cleanup_is_clear(self):
@@ -1334,22 +1339,164 @@ class TestManageTasks:
                     "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=3 prunable=0\n"
                     "agent-hub worktrees:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
                 ),
-                "OWNERSHIP[0]",
             ]
         )
-        result = await manage_tasks(
-            mock_bash,
-            action="cleanup_status",
-            project_id="agent-hub",
-        )
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new=AsyncMock(return_value=[]),
+        ):
+            result = await manage_tasks(
+                mock_bash,
+                action="cleanup_status",
+                project_id="agent-hub",
+            )
 
         assert "CLEANUP[current]" in result
         assert "ACTIONABLE-CLEANUP[1]" in result
         assert "agent-hub | finalize | task-aa44180c" in result
         assert mock_bash.await_args_list == [
             call("st -P agent-hub cleanup status"),
-            call("st -P agent-hub sessions ownership"),
         ]
+
+    @pytest.mark.asyncio
+    async def test_cleanup_status_omits_reconciled_authoritative_residue(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            return_value=(
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807,task-live1234"
+            )
+        )
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "project_id": "agent-hub",
+                        "external_id": "task-ff895807",
+                        "current_branch": "task-ff895807/main",
+                        "status": "completed",
+                        "workstream_status": "authoritative",
+                    },
+                    {
+                        "project_id": "agent-hub",
+                        "external_id": "task-ff895807",
+                        "current_branch": "task-ff895807/old",
+                        "status": "completed",
+                        "workstream_status": "superseded",
+                    },
+                ]
+            ),
+        ):
+            result = await manage_tasks(
+                mock_bash,
+                action="cleanup_status",
+                project_id="agent-hub",
+            )
+
+        assert "ACTIONABLE-CLEANUP[1]" in result
+        assert "ACTIONABLE-CLEANUP[0]" not in result
+        assert "agent-hub | review | task-live1234" in result
+        assert "agent-hub | review | task-ff895807" not in result
+
+    @pytest.mark.asyncio
+    async def test_cleanup_status_reports_zero_actionable_when_all_residue_is_reconciled(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            return_value=(
+                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
+            )
+        )
+
+        with patch(
+            "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+            new=AsyncMock(
+                return_value=[
+                    {
+                        "project_id": "agent-hub",
+                        "external_id": "task-ff895807",
+                        "current_branch": "task-ff895807/main",
+                        "status": "completed",
+                        "workstream_status": "authoritative",
+                    },
+                    {
+                        "project_id": "agent-hub",
+                        "external_id": "task-ff895807",
+                        "current_branch": "task-ff895807/old",
+                        "status": "completed",
+                        "workstream_status": "superseded",
+                    },
+                ]
+            ),
+        ):
+            result = await manage_tasks(
+                mock_bash,
+                action="cleanup_status",
+                project_id="agent-hub",
+            )
+
+        assert "ACTIONABLE-CLEANUP[0]" in result
+        assert "already reconciled authoritative/superseded" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_ignores_reconciled_cleanup_review_residue(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(
+            side_effect=[
+                (
+                    "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
+                    "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
+                ),
+                '{"task_id":"task-42","status":"queued"}',
+            ]
+        )
+
+        with (
+            _allow_execution_permission_patch(),
+            patch(
+                "app.workflows._heartbeat_data._query_recent_workstream_sessions",
+                new=AsyncMock(
+                    return_value=[
+                        {
+                            "project_id": "agent-hub",
+                            "external_id": "task-ff895807",
+                            "current_branch": "task-ff895807/main",
+                            "status": "completed",
+                            "workstream_status": "authoritative",
+                        },
+                        {
+                            "project_id": "agent-hub",
+                            "external_id": "task-ff895807",
+                            "current_branch": "task-ff895807/old",
+                            "status": "completed",
+                            "workstream_status": "superseded",
+                        },
+                    ]
+                ),
+            ),
+            patch(
+                "app.services.tools._executor_io_tasks._live_dispatch_block_reason",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.tools._executor_io_tasks._build_dispatch_warning",
+                new=AsyncMock(return_value=""),
+            ),
+        ):
+            result = await manage_tasks(
+                mock_bash,
+                action="dispatch",
+                task_id="task-42",
+                project_id="agent-hub",
+            )
+
+        assert '"status":"queued"' in result
+        assert "Dispatch blocked" not in result
 
     @pytest.mark.asyncio
     async def test_cleanup_worktrees_requires_project_id(self):
@@ -1529,7 +1676,13 @@ class TestManageTasks:
     async def test_finalize_merge(self):
         from app.services.tools._executor_io import manage_tasks
 
-        mock_bash = AsyncMock(return_value='{"status":"merged"}')
+        mock_bash = AsyncMock(
+            side_effect=[
+                '{"status":"merged"}',
+                "Cleanup preview for task-42 --confirm abcdef12",
+                "Deleted lane task-42",
+            ]
+        )
         result = await manage_tasks(
             mock_bash,
             action="finalize_merge",
@@ -1538,7 +1691,12 @@ class TestManageTasks:
         )
 
         assert '"status":"merged"' in result
-        mock_bash.assert_awaited_once_with("st -P summitflow git finalize-task task-42")
+        assert "Lane cleanup: Deleted lane task-42" in result
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-42"
+        assert mock_bash.await_args_list[2].args[0] == (
+            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
+        )
 
     @pytest.mark.asyncio
     async def test_finalize_merge_not_found_adds_review_hint(self):
@@ -1977,6 +2135,8 @@ class TestManageTasks:
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
+                "Cleanup preview for task-42 --confirm abcdef12",
+                "Deleted lane task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -2002,6 +2162,7 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
+        assert "Lane cleanup: Deleted lane task-42" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
@@ -2012,6 +2173,10 @@ class TestManageTasks:
         )
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[4].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[5].args[0] == "st -P summitflow cleanup lanes task-42"
+        assert mock_bash.await_args_list[6].args[0] == (
+            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
+        )
 
     @pytest.mark.asyncio
     async def test_reconcile_admin_closes_after_status_update_failure_recovery_hint(self):
@@ -2074,6 +2239,8 @@ class TestManageTasks:
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
+                "Cleanup preview for task-42 --confirm abcdef12",
+                "Deleted lane task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -2099,6 +2266,7 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
+        assert "Lane cleanup: Deleted lane task-42" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
     @pytest.mark.asyncio
@@ -2111,6 +2279,8 @@ class TestManageTasks:
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
+                "Cleanup preview for task-42 --confirm abcdef12",
+                "Deleted lane task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -2136,12 +2306,17 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
+        assert "Lane cleanup: Deleted lane task-42" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup lanes task-42"
+        assert mock_bash.await_args_list[5].args[0] == (
+            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
+        )
 
     @pytest.mark.asyncio
     async def test_reconcile_treats_no_worktree_finalize_as_already_closed(self):
