@@ -28,13 +28,13 @@ def test_agent_workflows_match_long_lived_agent_runtime() -> None:
     assert (
         completion_task,
         persona_heartbeat_task,
-        persona_scheduler_task,
         agent_wake_task,
     ) == AGENT_WORKFLOWS
 
 
 def test_ops_workflows_match_maintenance_runtime() -> None:
     assert (
+        persona_scheduler_task,
         session_cleanup_task,
         tier_optimizer_task,
         memory_cleanup_task,
