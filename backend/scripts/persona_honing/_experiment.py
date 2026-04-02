@@ -23,10 +23,7 @@ from scripts.completion_review_benchmark_eval import (
     CompletionReviewBenchmarkRun,
     summarize_completion_review_attempts,
 )
-from scripts.persona_benchmark_eval import (
-    PersonaBenchmarkRun,
-    summarize_attempts,
-)
+from scripts.persona_benchmark_eval import PersonaBenchmarkRun, summarize_attempts
 from scripts.persona_benchmark_persistence import build_persistence_payload
 from scripts.persona_benchmark_report import generate_markdown_report
 from scripts.persona_benchmark_runner import _fetch_used_tool_names
@@ -83,10 +80,7 @@ async def _load_recent_improvement_signals(project_id: str) -> str | None:
     from app.services.improvement_signals import build_improvement_signal_digest
 
     review = await build_improvement_signal_digest(
-        project_id=project_id,
-        primary_agent_slug="persona",
-        days_back=7,
-        include_team=True,
+        project_id=project_id, primary_agent_slug="persona", days_back=7, include_team=True,
     )
     return review.strip() or None
 
@@ -101,10 +95,7 @@ async def _load_field_snapshot() -> dict[str, Any]:
 def _format_delta_block(label: str, delta: dict[str, Any] | None) -> str:
     if not isinstance(delta, dict):
         return f"- {label}: unavailable"
-    return (
-        f"- {label}: mean={delta.get('mean_delta')} "
-        f"ci=[{delta.get('ci_low')}, {delta.get('ci_high')}]"
-    )
+    return f"- {label}: mean={delta.get('mean_delta')} ci=[{delta.get('ci_low')}, {delta.get('ci_high')}]"
 
 
 def _format_experiment_summary_block(summary: dict[str, Any] | None) -> str:
@@ -112,23 +103,20 @@ def _format_experiment_summary_block(summary: dict[str, Any] | None) -> str:
         return "- not available"
     baseline = dict(summary.get("baseline") or {})
     candidate = dict(summary.get("candidate") or {})
-    lines = [
+    return "\n".join([
         f"- decision={summary.get('decision')} reason={summary.get('decision_reason')}",
         (
-            f"- baseline: runs={baseline.get('run_count')} "
-            f"score={baseline.get('avg_score')} pass_rate={baseline.get('avg_pass_rate')} "
-            f"tools={baseline.get('avg_tool_calls')}"
+            f"- baseline: runs={baseline.get('run_count')} score={baseline.get('avg_score')} "
+            f"pass_rate={baseline.get('avg_pass_rate')} tools={baseline.get('avg_tool_calls')}"
         ),
         (
-            f"- candidate: runs={candidate.get('run_count')} "
-            f"score={candidate.get('avg_score')} pass_rate={candidate.get('avg_pass_rate')} "
-            f"tools={candidate.get('avg_tool_calls')}"
+            f"- candidate: runs={candidate.get('run_count')} score={candidate.get('avg_score')} "
+            f"pass_rate={candidate.get('avg_pass_rate')} tools={candidate.get('avg_tool_calls')}"
         ),
         _format_delta_block("score_delta", summary.get("score_delta")),
         _format_delta_block("pass_rate_delta", summary.get("pass_rate_delta")),
         _format_delta_block("tool_call_delta", summary.get("tool_call_delta")),
-    ]
-    return "\n".join(lines)
+    ])
 
 
 def _format_improvement_summary_block(record: PersonaHoningIteration) -> str:
@@ -159,8 +147,7 @@ def _needs_supervisor_review(
         return True
     if review_summary is not None and str(review_summary.get("decision")) == "hold":
         return True
-    field_gate = dict((field_snapshot or {}).get("review_gate") or {})
-    return bool(field_gate.get("needs_review"))
+    return bool(dict((field_snapshot or {}).get("review_gate") or {}).get("needs_review"))
 
 
 async def _persist_final_experiment_decision(
@@ -227,35 +214,17 @@ async def _run_decision_review(
             project_id=project_id,
             agent_slug="supervisor",
             external_id=f"persona-honing-review:{experiment_key}:iteration-{iteration}",
-            enable_caching=False,
-            skip_cache=True,
-            use_memory=False,
-            max_turns=1,
-            working_dir=str(working_root),
-            execute_tools=False,
-            timeout_seconds=timeout_seconds,
+            enable_caching=False, skip_cache=True, use_memory=False, max_turns=1,
+            working_dir=str(working_root), execute_tools=False, timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
-        return {
-            "used": False,
-            "session_id": None,
-            "decision": None,
-            "reason": f"review_unavailable:{type(exc).__name__}",
-        }
+        return {"used": False, "session_id": None, "decision": None, "reason": f"review_unavailable:{type(exc).__name__}"}
     parsed = parse_decision_review_content(response.content)
     if parsed is None:
-        return {
-            "used": False,
-            "session_id": response.session_id,
-            "decision": None,
-            "reason": "review_unparseable",
-            "raw_content": response.content,
-        }
+        return {"used": False, "session_id": response.session_id, "decision": None, "reason": "review_unparseable", "raw_content": response.content}
     return {
-        "used": True,
-        "session_id": response.session_id,
-        "decision": parsed["decision"],
-        "reason": parsed["reason"],
+        "used": True, "session_id": response.session_id,
+        "decision": parsed["decision"], "reason": parsed["reason"],
         "raw_content": response.content,
         "field_gate": dict((field_snapshot or {}).get("review_gate") or {}),
     }
@@ -279,34 +248,49 @@ async def _determine_final_experiment_decision(
         review_reason = str(review_summary.get("decision_reason") or "completion_review_regression")
         return "rollback", review_reason, "completion_review", None
     if _needs_supervisor_review(
-        raw_decision=raw_decision,
-        raw_reason=raw_reason,
-        review_summary=review_summary,
-        field_snapshot=field_snapshot,
+        raw_decision=raw_decision, raw_reason=raw_reason,
+        review_summary=review_summary, field_snapshot=field_snapshot,
     ):
         decision_review = await _run_decision_review(
-            client=client,
-            iteration=iteration,
-            experiment_key=experiment_key,
-            project_id=cfg["project_id"],
-            timeout_seconds=cfg["timeout_seconds"],
-            working_root=cfg["working_root"],
-            proposed_decision=raw_decision,
-            proposed_reason=raw_reason,
-            experiment_summary=experiment_summary,
-            review_summary=review_summary,
-            field_snapshot=field_snapshot,
-            record=record,
+            client=client, iteration=iteration, experiment_key=experiment_key,
+            project_id=cfg["project_id"], timeout_seconds=cfg["timeout_seconds"],
+            working_root=cfg["working_root"], proposed_decision=raw_decision,
+            proposed_reason=raw_reason, experiment_summary=experiment_summary,
+            review_summary=review_summary, field_snapshot=field_snapshot, record=record,
         )
         if decision_review.get("used"):
-            return (
-                str(decision_review["decision"]),
-                str(decision_review["reason"]),
-                "supervisor_review",
-                decision_review,
-            )
+            return str(decision_review["decision"]), str(decision_review["reason"]), "supervisor_review", decision_review
         return raw_decision, raw_reason, "benchmark", decision_review
     return raw_decision, raw_reason, "benchmark", None
+
+
+def _build_review_prompt_blocks(
+    review_run: CompletionReviewBenchmarkRun | None,
+    previous_review_clusters: list[dict[str, Any]] | None,
+    max_failures: int,
+) -> tuple[str, str, str]:
+    """Return (review_ranking_block, review_failure_block, review_persistent_block)."""
+    if review_run is None:
+        return (
+            "- not run",
+            "Completion-review failure clusters:\n- not run",
+            "Persistent completion-review clusters from the previous iteration:\n- not run",
+        )
+    review_ranking_lines = [
+        f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
+        f"pass_rate={s.pass_rate:.1f} avg_turns={s.avg_turns:.2f}"
+        for i, s in enumerate(review_run.summaries[:3], start=1)
+    ]
+    review_clusters = _group_failures(review_run.attempts)
+    review_persistent_clusters, _, _ = _diff_failure_clusters(previous_review_clusters, review_clusters)
+    return (
+        "\n".join(review_ranking_lines) if review_ranking_lines else "- none",
+        _render_cluster_block(review_clusters[:max_failures], "Completion-review failure clusters"),
+        _render_cluster_block(
+            review_persistent_clusters[:max_failures],
+            "Persistent completion-review clusters from the previous iteration",
+        ),
+    )
 
 
 async def _build_improvement_prompt(
@@ -322,62 +306,29 @@ async def _build_improvement_prompt(
 ) -> str:
     current_clusters = _group_failures(run.attempts)
     persistent_clusters, new_clusters, resolved_clusters = _diff_failure_clusters(
-        previous_clusters,
-        current_clusters,
+        previous_clusters, current_clusters,
     )
-    ranking_lines = [
+    ranking_block = "\n".join(
         f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
         f"pass_rate={s.pass_rate:.3f} avg_tools={s.avg_tool_calls:.1f}"
         for i, s in enumerate(run.summaries[:3], start=1)
-    ]
-    ranking_block = "\n".join(ranking_lines) if ranking_lines else "- none"
-    reference_block = "\n".join(f"- {note}" for note in _REFERENCE_NOTES)
-    failure_block = _render_cluster_block(current_clusters[:max_failures], "Top failure clusters")
-    persistent_block = _render_cluster_block(
-        persistent_clusters[:max_failures],
-        "Persistent unresolved clusters from the previous iteration",
+    ) or "- none"
+    review_ranking_block, review_failure_block, review_persistent_block = (
+        _build_review_prompt_blocks(review_run, previous_review_clusters, max_failures)
     )
-    new_block = _render_cluster_block(new_clusters[:max_failures], "New clusters this iteration")
-    resolved_block = _render_cluster_block(
-        resolved_clusters[:max_failures],
-        "Resolved clusters since the previous iteration",
-    )
-    review_ranking_block = "- not run"
-    review_failure_block = "Completion-review failure clusters:\n- not run"
-    review_persistent_block = "Persistent completion-review clusters from the previous iteration:\n- not run"
-    if review_run is not None:
-        review_ranking_lines = [
-            f"- rank={i} model={s.model_id} avg_score={s.avg_composite_score:.1f} "
-            f"pass_rate={s.pass_rate:.1f} avg_turns={s.avg_turns:.2f}"
-            for i, s in enumerate(review_run.summaries[:3], start=1)
-        ]
-        review_ranking_block = "\n".join(review_ranking_lines) if review_ranking_lines else "- none"
-        review_clusters = _group_failures(review_run.attempts)
-        review_persistent_clusters, _, _ = _diff_failure_clusters(
-            previous_review_clusters,
-            review_clusters,
-        )
-        review_failure_block = _render_cluster_block(
-            review_clusters[:max_failures],
-            "Completion-review failure clusters",
-        )
-        review_persistent_block = _render_cluster_block(
-            review_persistent_clusters[:max_failures],
-            "Persistent completion-review clusters from the previous iteration",
-        )
     return await render_persona_improvement_prompt(
         iteration=iteration,
         ranking_block=ranking_block,
-        failure_block=failure_block,
-        persistent_block=persistent_block,
-        new_block=new_block,
-        resolved_block=resolved_block,
+        failure_block=_render_cluster_block(current_clusters[:max_failures], "Top failure clusters"),
+        persistent_block=_render_cluster_block(persistent_clusters[:max_failures], "Persistent unresolved clusters from the previous iteration"),
+        new_block=_render_cluster_block(new_clusters[:max_failures], "New clusters this iteration"),
+        resolved_block=_render_cluster_block(resolved_clusters[:max_failures], "Resolved clusters since the previous iteration"),
         review_ranking_block=review_ranking_block,
         review_failure_block=review_failure_block,
         review_persistent_block=review_persistent_block,
         improvement_signals_block=improvement_signals or "- none",
         field_signals_block=field_signals or "- none",
-        reference_block=reference_block,
+        reference_block="\n".join(f"- {note}" for note in _REFERENCE_NOTES),
     )
 
 
@@ -397,15 +348,10 @@ def _merge_benchmark_runs(runs: list[Any], *, benchmark_id: str, summarize_fn: A
             if c not in case_ids:
                 case_ids.append(c)
     return type(runs[0])(
-        benchmark_id=benchmark_id,
-        project_id=runs[0].project_id,
-        models=models,
-        case_ids=case_ids,
-        runs_per_case=sum(r.runs_per_case for r in runs),
-        started_at=runs[0].started_at,
-        completed_at=runs[-1].completed_at,
-        attempts=attempts,
-        summaries=summarize_fn(attempts),
+        benchmark_id=benchmark_id, project_id=runs[0].project_id, models=models,
+        case_ids=case_ids, runs_per_case=sum(r.runs_per_case for r in runs),
+        started_at=runs[0].started_at, completed_at=runs[-1].completed_at,
+        attempts=attempts, summaries=summarize_fn(attempts),
     )
 
 
@@ -426,12 +372,10 @@ def _count_failures(run: Any) -> int:
 def _cohort_run_summary(run: Any, *, cohort: str, config_snapshot: dict[str, Any]) -> SimpleNamespace:
     count = len(run.attempts)
     passed = sum(1 for a in run.attempts if a.passed)
-    avg_score = (sum(float(a.composite_score) for a in run.attempts) / count) if count else 0.0
-    pass_rate = ((passed / count) * 100) if count else 0.0
     return SimpleNamespace(
         experiment_cohort=cohort,
-        avg_score=avg_score,
-        pass_rate=pass_rate,
+        avg_score=(sum(float(a.composite_score) for a in run.attempts) / count) if count else 0.0,
+        pass_rate=((passed / count) * 100) if count else 0.0,
         config_snapshot=config_snapshot,
         completed_at=datetime.fromisoformat(run.completed_at.replace("Z", "+00:00")),
     )
@@ -455,18 +399,13 @@ async def _run_improvement_pass(
     improvement_signals = await _load_recent_improvement_signals(project_id)
     field_signals = await build_persona_heartbeat_field_digest()
     prompt = await _build_improvement_prompt(
-        run=run,
-        iteration=iteration,
-        previous_clusters=previous_clusters,
-        review_run=review_run,
-        previous_review_clusters=previous_review_clusters,
-        improvement_signals=improvement_signals,
-        field_signals=field_signals,
+        run=run, iteration=iteration, previous_clusters=previous_clusters,
+        review_run=review_run, previous_review_clusters=previous_review_clusters,
+        improvement_signals=improvement_signals, field_signals=field_signals,
     )
     response = await client.complete(
         messages=[{"role": "user", "content": prompt}],
-        project_id=project_id,
-        agent_slug="persona",
+        project_id=project_id, agent_slug="persona",
         external_id=f"persona-honing:{run.benchmark_id}:iteration-{iteration}",
         enable_caching=False, skip_cache=True, use_memory=False, max_turns=12,
         working_dir=str(working_root), execute_tools=True, timeout_seconds=timeout_seconds,
@@ -561,9 +500,7 @@ async def _run_review_cohort_experiment(
     review_candidate_runs = await _run_review_cohort_benchmarks(
         **common, seed_base=cfg["seed"] + iteration * 20000,
     )
-    review_experiment_key = (
-        f"persona-honing-review-{review_suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
-    )
+    review_experiment_key = f"persona-honing-review-{review_suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
     record.review_experiment_key = review_experiment_key
     review_candidate_config = await _get_config_snapshot(cfg["agent_slug"], "review")
     if cfg["persist_results"]:
@@ -666,12 +603,8 @@ async def _run_and_evaluate_main_cohorts(
         client_id=cfg["client_id"], use_memory=cfg["use_memory"],
         benchmark_task_type=cfg["benchmark_task_type"], count=cfg["cohort_repetitions"],
     )
-    baseline_runs = await _run_cohort_benchmarks(
-        **cohort_kw, seed_base=cfg["seed"] + iteration * 100, first_run=benchmark_run,
-    )
-    candidate_runs = await _run_cohort_benchmarks(
-        **cohort_kw, seed_base=cfg["seed"] + iteration * 1000,
-    )
+    baseline_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=cfg["seed"] + iteration * 100, first_run=benchmark_run)
+    candidate_runs = await _run_cohort_benchmarks(**cohort_kw, seed_base=cfg["seed"] + iteration * 1000)
     experiment_key = f"persona-honing-{suite_name}-iter-{iteration}-{uuid.uuid4().hex[:8]}"
     record.experiment_key = experiment_key
     candidate_config = await _get_config_snapshot(cfg["agent_slug"], cfg["benchmark_task_type"])
@@ -691,14 +624,37 @@ async def _run_and_evaluate_main_cohorts(
             candidate_runs, cohort="candidate", run_kind=RUN_KIND_HONING_CANDIDATE,
             seed_start=cfg["seed"] + iteration * 1000, config_snapshot=candidate_config, **shared,
         )
-    experiment_summary = await _evaluate_experiment(
+    record.experiment_summary = await _evaluate_experiment(
         experiment_key=experiment_key, iteration=iteration, suite_name=suite_name,
         baseline_runs=baseline_runs, candidate_runs=candidate_runs,
         baseline_config=baseline_config, candidate_config=candidate_config,
         cohort_repetitions=cfg["cohort_repetitions"], persist_results=cfg["persist_results"],
     )
-    record.experiment_summary = experiment_summary
     return baseline_runs, candidate_runs, experiment_key
+
+
+async def _maybe_run_review_cohorts(
+    *,
+    record: PersonaHoningIteration,
+    review_run: CompletionReviewBenchmarkRun | None,
+    review_baseline_config: dict[str, Any] | None,
+    experiment_key: str,
+    iteration: int,
+    cfg: _IterationConfig,
+) -> tuple[list[CompletionReviewBenchmarkRun], list[CompletionReviewBenchmarkRun], dict[str, Any] | None]:
+    """Run review cohorts only when enabled and review data is available."""
+    if (
+        cfg["disable_completion_review"]
+        or review_run is None
+        or not cfg["reviewer_models"]
+        or not cfg["reviewer_case_ids"]
+        or review_baseline_config is None
+    ):
+        return [], [], None
+    return await _run_review_cohort_experiment(
+        record=record, review_run=review_run, review_baseline_config=review_baseline_config,
+        experiment_key=experiment_key, iteration=iteration, cfg=cfg,
+    )
 
 
 async def _run_experiment_and_decide(
@@ -724,50 +680,26 @@ async def _run_experiment_and_decide(
         record=record, benchmark_run=benchmark_run, baseline_config=baseline_config,
         suite_name=suite_name, iteration=iteration, cfg=cfg,
     )
-    review_baseline_runs: list[CompletionReviewBenchmarkRun] = []
-    review_candidate_runs: list[CompletionReviewBenchmarkRun] = []
-    review_summary: dict[str, Any] | None = None
-    if (
-        not cfg["disable_completion_review"]
-        and review_run is not None
-        and cfg["reviewer_models"]
-        and cfg["reviewer_case_ids"]
-        and review_baseline_config is not None
-    ):
-        review_baseline_runs, review_candidate_runs, review_summary = (
-            await _run_review_cohort_experiment(
-                record=record, review_run=review_run,
-                review_baseline_config=review_baseline_config,
-                experiment_key=experiment_key, iteration=iteration, cfg=cfg,
-            )
-        )
+    review_baseline_runs, review_candidate_runs, review_summary = await _maybe_run_review_cohorts(
+        record=record, review_run=review_run, review_baseline_config=review_baseline_config,
+        experiment_key=experiment_key, iteration=iteration, cfg=cfg,
+    )
     final_decision, final_reason, final_source, decision_review = (
         await _determine_final_experiment_decision(
-            client=client,
-            iteration=iteration,
-            record=record,
-            experiment_key=experiment_key,
-            experiment_summary=record.experiment_summary,
-            review_summary=review_summary,
-            field_snapshot=record.field_snapshot,
-            cfg=cfg,
+            client=client, iteration=iteration, record=record, experiment_key=experiment_key,
+            experiment_summary=record.experiment_summary, review_summary=review_summary,
+            field_snapshot=record.field_snapshot, cfg=cfg,
         )
     )
     record.decision_review = decision_review
     await _persist_final_experiment_decision(
-        experiment_key=experiment_key,
-        decision=final_decision,
-        reason=final_reason,
-        source=final_source,
-        field_snapshot=record.field_snapshot,
-        decision_review=decision_review,
+        experiment_key=experiment_key, decision=final_decision, reason=final_reason,
+        source=final_source, field_snapshot=record.field_snapshot, decision_review=decision_review,
     )
     await _resolve_experiment_decision(
-        final_decision=final_decision,
-        final_decision_reason=final_reason,
-        final_decision_source=final_source,
-        baseline_state=baseline_state, agent_slug=cfg["agent_slug"], iteration=iteration,
-        experiment_key=experiment_key,
+        final_decision=final_decision, final_decision_reason=final_reason,
+        final_decision_source=final_source, baseline_state=baseline_state,
+        agent_slug=cfg["agent_slug"], iteration=iteration, experiment_key=experiment_key,
         baseline_runs=baseline_runs, candidate_runs=candidate_runs,
         review_baseline_runs=review_baseline_runs, review_candidate_runs=review_candidate_runs,
         record=record, loop_state=loop_state,
