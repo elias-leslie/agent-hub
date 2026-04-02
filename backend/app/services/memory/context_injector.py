@@ -53,32 +53,27 @@ __all__ = [
 ]
 
 
-def _extract_query_text(content: Any) -> str | None:
-    """Extract the most task-relevant query text from one message payload."""
-    text = ""
-    if isinstance(content, str):
-        text = content
-    elif isinstance(content, list):
-        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
-        text = " ".join(parts)
-    if not text:
-        return None
-    task_marker = "\nTask:\n"
-    task_index = text.rfind(task_marker)
-    if task_index >= 0:
-        text = text[task_index + len(task_marker):]
-    elif text.startswith("Task:\n"):
-        text = text[len("Task:\n"):]
-    text = text.strip()
-    return text[:500] if text else None
-
-
 def extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
     """Extract query text from the most recent user message."""
     for msg in reversed(messages):
         if msg.get("role") != "user":
             continue
-        return _extract_query_text(msg.get("content", ""))
+        content = msg.get("content", "")
+        if isinstance(content, list):
+            text = " ".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+        elif isinstance(content, str):
+            text = content
+        else:
+            continue
+        if not text:
+            return None
+        task_marker = "\nTask:\n"
+        idx = text.rfind(task_marker)
+        if idx >= 0:
+            text = text[idx + len(task_marker):]
+        elif text.startswith("Task:\n"):
+            text = text[len("Task:\n"):]
+        return (text.strip())[:500] or None
     return None
 
 
@@ -189,33 +184,6 @@ async def _apply_continuity_to_context(
     return f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
 
 
-def _build_optional_blocks(
-    context: ProgressiveContext,
-    memory_config: dict[str, Any] | None,
-    effective_project_id: str | None,
-    consumer_profile: str | None,
-    task_type: str | None,
-) -> tuple[str, str]:
-    """Build project index and tool capability blocks, annotating debug_info for each."""
-    project_index_block = ""
-    if resolve_project_index_enabled(memory_config):
-        project_index_block = format_project_index_context(
-            effective_project_id, consumer_profile=consumer_profile, task_type=task_type,
-        )
-        if project_index_block:
-            context.debug_info["project_index_included"] = True
-            context.debug_info["project_index_chars"] = len(project_index_block)
-    tool_capability_block = ""
-    if resolve_tool_capabilities_enabled(memory_config):
-        tool_capability_block = format_tool_capability_context(
-            consumer_profile=consumer_profile, task_type=task_type, project_id=effective_project_id,
-        )
-        if tool_capability_block:
-            context.debug_info["tool_capabilities_included"] = True
-            context.debug_info["tool_capabilities_chars"] = len(tool_capability_block)
-    return project_index_block, tool_capability_block
-
-
 def _inject_memory_block(messages: list[dict[str, Any]], memory_block: str) -> list[dict[str, Any]]:
     """Inject memory block into system message or prepend new system message."""
     modified = list(messages)
@@ -226,19 +194,25 @@ def _inject_memory_block(messages: list[dict[str, Any]], memory_block: str) -> l
     return modified
 
 
-def _annotate_reference_observability(context: ProgressiveContext) -> None:
-    """Attach selected-reference observability to context.debug_info."""
-    selected_uuids = context.get_reference_uuids()
-    index_uuids = context.get_reference_index_uuids()
+def _build_failed_context(
+    failure_notice: str, *, operation: str, attempts: int,
+    latency_ms: int, error_type: str, error_message: str,
+) -> ProgressiveContext:
+    """Create a synthetic context object for fail-closed delivery."""
+    context = ProgressiveContext()
     context.debug_info.update({
-        "reference_selected_count": len(selected_uuids),
-        "reference_selected_uuids": selected_uuids,
-        "reference_index_count": len(index_uuids),
-        "reference_index_uuids": index_uuids,
+        "memory_system_failed": True, "failure_mode": "stop",
+        "failure_notice": failure_notice, "failure_operation": operation,
+        "failure_attempts": attempts, "failure_latency_ms": latency_ms,
+        "failure_error_type": error_type, "failure_error_message": error_message,
     })
+    return context
 
 
-def _log_injection(context: ProgressiveContext, resolved_variant: Any, latency_ms: int, scope: MemoryScope, scope_id: str | None) -> None:
+def _log_injection(
+    context: ProgressiveContext, resolved_variant: Any, latency_ms: int,
+    scope: MemoryScope, scope_id: str | None,
+) -> None:
     """Log injection summary."""
     continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
     logger.info(
@@ -252,59 +226,28 @@ def _log_injection(context: ProgressiveContext, resolved_variant: Any, latency_m
     )
 
 
-def _build_failed_context(
-    failure_notice: str,
-    *,
-    operation: str,
-    attempts: int,
-    latency_ms: int,
-    error_type: str,
-    error_message: str,
-) -> ProgressiveContext:
-    """Create a synthetic context object for fail-closed delivery."""
-    context = ProgressiveContext()
-    context.debug_info.update(
-        {
-            "memory_system_failed": True,
-            "failure_mode": "stop",
-            "failure_notice": failure_notice,
-            "failure_operation": operation,
-            "failure_attempts": attempts,
-            "failure_latency_ms": latency_ms,
-            "failure_error_type": error_type,
-            "failure_error_message": error_message,
-        }
-    )
-    return context
-
-
 async def _finalize_injection(
-    messages: list[dict[str, Any]],
-    context: ProgressiveContext,
-    formatted: str | None,
-    project_index_block: str,
-    tool_capability_block: str,
-    resolved_variant: Any,
-    scope: MemoryScope,
-    scope_id: str | None,
-    session_id: str | None,
-    memory_config: dict[str, Any] | None,
-    current_branch: str | None,
-    include_continuity: bool,
-    start_time: float,
-    query: str,
-    external_id: str | None,
-    project_id: str | None,
-    collect_metrics: bool,
+    messages: list[dict[str, Any]], context: ProgressiveContext, formatted: str | None,
+    project_index_block: str, tool_capability_block: str, resolved_variant: Any,
+    scope: MemoryScope, scope_id: str | None, session_id: str | None,
+    memory_config: dict[str, Any] | None, current_branch: str | None,
+    include_continuity: bool, start_time: float, query: str,
+    external_id: str | None, project_id: str | None, collect_metrics: bool,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
-    """Guard, assemble blocks, inject into messages, log, and record metrics."""
+    """Assemble blocks, inject into messages, log, and record metrics."""
     if not formatted and not project_index_block and not tool_capability_block:
         return messages, context
-    _annotate_reference_observability(context)
+    selected_uuids = context.get_reference_uuids()
+    index_uuids = context.get_reference_index_uuids()
+    context.debug_info.update({
+        "reference_selected_count": len(selected_uuids), "reference_selected_uuids": selected_uuids,
+        "reference_index_count": len(index_uuids), "reference_index_uuids": index_uuids,
+    })
     blocks: list[str] = [b for b in [project_index_block, tool_capability_block] if b]
     if formatted:
         blocks.append(await _apply_continuity_to_context(
-            context, formatted, scope, scope_id, session_id, memory_config, current_branch, include_continuity,
+            context, formatted, scope, scope_id, session_id, memory_config,
+            current_branch, include_continuity,
         ))
     modified = _inject_memory_block(messages, "\n".join(blocks))
     latency_ms = int((time.monotonic() - start_time) * 1000)
@@ -312,93 +255,99 @@ async def _finalize_injection(
     _log_injection(context, resolved_variant, latency_ms, scope, scope_id)
     if collect_metrics:
         _record_injection_metrics(
-            context=context, latency_ms=latency_ms, query=query, variant=resolved_variant.value,
-            session_id=session_id, external_id=external_id, project_id=project_id,
+            context=context, latency_ms=latency_ms, query=query,
+            variant=resolved_variant.value, session_id=session_id,
+            external_id=external_id, project_id=project_id,
         )
     return modified, context
 
 
+async def _run_injection_operation(
+    messages: list[dict[str, Any]], scope: MemoryScope, scope_id: str | None,
+    query: str, variant: str | None, session_id: str | None, external_id: str | None,
+    project_id: str | None, collect_metrics: bool, task_type: str | None,
+    phase: str | None, include_continuity: bool, memory_config: dict[str, Any] | None,
+    current_branch: str | None, consumer_profile: str | None,
+    consumer_agent_slug: str | None, consumer_tags: list[str] | None,
+) -> tuple[list[dict[str, Any]], ProgressiveContext]:
+    """Execute the core injection operation (caller retries on failure)."""
+    start_time = time.monotonic()
+    settings = await get_memory_settings()
+    resolved_variant = assign_variant(
+        external_id=external_id, project_id=project_id or scope_id,
+        variant_override=variant, active_variant=settings.active_variant,
+    )
+    context, formatted = await _build_context_and_format(
+        query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
+        memory_config=memory_config, consumer_profile=consumer_profile,
+        consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
+        variant=resolved_variant.value,
+    )
+    project_index_block = ""
+    if resolve_project_index_enabled(memory_config):
+        project_index_block = format_project_index_context(
+            project_id or scope_id, consumer_profile=consumer_profile, task_type=task_type,
+        )
+        if project_index_block:
+            context.debug_info.update({"project_index_included": True, "project_index_chars": len(project_index_block)})
+    tool_capability_block = ""
+    if resolve_tool_capabilities_enabled(memory_config):
+        tool_capability_block = format_tool_capability_context(
+            consumer_profile=consumer_profile, task_type=task_type, project_id=project_id or scope_id,
+        )
+        if tool_capability_block:
+            context.debug_info.update({"tool_capabilities_included": True, "tool_capabilities_chars": len(tool_capability_block)})
+    return await _finalize_injection(
+        messages, context, formatted, project_index_block, tool_capability_block,
+        resolved_variant, scope, scope_id, session_id, memory_config, current_branch,
+        include_continuity, start_time, query, external_id, project_id, collect_metrics,
+    )
+
+
 async def inject_progressive_context(
     messages: list[dict[str, Any]],
-    scope: MemoryScope = MemoryScope.GLOBAL,
-    scope_id: str | None = None,
-    query: str | None = None,
-    variant: str | None = None,
-    session_id: str | None = None,
-    external_id: str | None = None,
-    project_id: str | None = None,
-    collect_metrics: bool = True,
-    task_type: str | None = None,
-    phase: str | None = None,
-    include_continuity: bool = True,
-    memory_config: dict[str, Any] | None = None,
-    current_branch: str | None = None,
-    consumer_profile: str | None = None,
-    consumer_agent_slug: str | None = None,
-    consumer_tags: list[str] | None = None,
+    scope: MemoryScope = MemoryScope.GLOBAL, scope_id: str | None = None,
+    query: str | None = None, variant: str | None = None,
+    session_id: str | None = None, external_id: str | None = None,
+    project_id: str | None = None, collect_metrics: bool = True,
+    task_type: str | None = None, phase: str | None = None,
+    include_continuity: bool = True, memory_config: dict[str, Any] | None = None,
+    current_branch: str | None = None, consumer_profile: str | None = None,
+    consumer_agent_slug: str | None = None, consumer_tags: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """Inject mandates and guardrails context into messages. Main entry point for memory injection."""
     if not messages or not (query or (query := extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
-    async def _operation() -> tuple[list[dict[str, Any]], ProgressiveContext]:
-        start_time = time.monotonic()
-        settings = await get_memory_settings()
-        resolved_variant = assign_variant(
-            external_id=external_id, project_id=project_id or scope_id,
-            variant_override=variant, active_variant=settings.active_variant,
-        )
-        context, formatted = await _build_context_and_format(
-            query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
-            memory_config=memory_config, consumer_profile=consumer_profile,
-            consumer_agent_slug=consumer_agent_slug, consumer_tags=consumer_tags,
-            variant=resolved_variant.value,
-        )
-        project_index_block, tool_capability_block = _build_optional_blocks(
-            context, memory_config, project_id or scope_id, consumer_profile, task_type,
-        )
-        return await _finalize_injection(
-            messages, context, formatted, project_index_block, tool_capability_block,
-            resolved_variant, scope, scope_id, session_id, memory_config, current_branch,
-            include_continuity, start_time, query, external_id, project_id, collect_metrics,
+    async def _op() -> tuple[list[dict[str, Any]], ProgressiveContext]:
+        return await _run_injection_operation(
+            messages, scope, scope_id, query, variant, session_id, external_id,
+            project_id, collect_metrics, task_type, phase, include_continuity,
+            memory_config, current_branch, consumer_profile, consumer_agent_slug, consumer_tags,
         )
 
     injected, failure, attempts, latency_ms = await run_with_memory_retries(
-        _operation,
-        operation_name="inject-progressive-context",
+        _op, operation_name="inject-progressive-context",
     )
     if failure:
+        eff_pid = project_id or scope_id
         failure_notice = build_memory_failure_notice(
-            failure,
-            consumer_profile=consumer_profile,
-            project_id=project_id or scope_id,
+            failure, consumer_profile=consumer_profile, project_id=eff_pid,
         )
-        await report_memory_failure(
-            MemoryFailureReport(
-                failure=failure,
-                consumer_profile=consumer_profile,
-                project_id=project_id or scope_id,
-                session_id=session_id,
-                external_id=external_id,
-                current_branch=current_branch,
-                source="context_injector",
-            )
-        )
+        await report_memory_failure(MemoryFailureReport(
+            failure=failure, consumer_profile=consumer_profile, project_id=eff_pid,
+            session_id=session_id, external_id=external_id,
+            current_branch=current_branch, source="context_injector",
+        ))
         logger.error(
             "Injecting fail-closed memory notice after repeated failures: scope=%s scope_id=%s attempts=%d",
-            scope,
-            scope_id,
-            attempts,
+            scope, scope_id, attempts,
         )
         return _inject_memory_block(messages, failure_notice), _build_failed_context(
-            failure_notice,
-            operation=failure.operation,
-            attempts=attempts,
-            latency_ms=latency_ms,
-            error_type=failure.error_type,
+            failure_notice, operation=failure.operation, attempts=attempts,
+            latency_ms=latency_ms, error_type=failure.error_type,
             error_message=failure.error_message,
         )
-
     assert injected is not None
     return injected
 
