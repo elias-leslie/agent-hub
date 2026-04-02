@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from app.services.cleanup_summary import (
     CleanupActionItem,
@@ -25,40 +25,23 @@ from app.services.git_status_summary import (
     build_actionable_git_summary_from_rows,
     build_compact_git_status,
 )
-from app.services.session_display_summary import SessionDisplaySummaryCandidate
 from app.services.task_overview_summary import (
-    build_compact_task_overview_from_payload,
-    collect_visible_task_ids_from_payload,
-    extract_stale_task_candidates_from_payload,
     parse_task_overview_stats,
     parse_task_overview_stats_from_payload,
 )
+
+# Re-export helpers consumed by callers outside this module
 from app.workflows._heartbeat_state import (
-    _BENCHMARK_EXTERNAL_ID_PREFIXES,
-    _TASK_ID_PATTERN,
     AgentHubHeartbeatState,
     SummitFlowHeartbeatState,
 )
-
-logger = logging.getLogger(__name__)
-
-# Time window constants
-_COMPLETED_SESSION_LOOKBACK_HOURS = 2
-_COMPLETED_SESSION_LIMIT = 10
-
-# Task overview section definitions: (header_prefix, bucket_key, output_label, always_count_one)
-# Projects always renders as count=1 for single-project filters.
-_TASK_SECTIONS: tuple[tuple[str, str, str, bool], ...] = (
-    ("PROJECTS[",          "projects", "PROJECTS",          True),
-    ("ACTIONABLE-READY[",  "ready",    "ACTIONABLE-READY",  False),
-    ("ACTIONABLE-BLOCKED[","blocked",  "ACTIONABLE-BLOCKED", False),
-    ("ACTIONABLE-STALE[",  "stale",    "ACTIONABLE-STALE",  False),
+from app.workflows._heartbeat_task_overview import (
+    _coerce_task_overview,
+    _filter_task_overview_for_project,
+    _resolve_workstream_task_context,
 )
 
-# Session / lane classification constants
-_SESSION_STATUS_COMPLETED = "completed"
-_PERSONA_AGENT_SLUG = "persona"
-_LANE_RECONCILED = "reconciled"
+logger = logging.getLogger(__name__)
 
 # Cleanup response payload keys
 _CLEANUP_KEY_COMPACT = "compact"
@@ -67,204 +50,8 @@ _CLEANUP_KEY_PAYLOAD = "payload"
 # Display labels
 _SPECIALIST_SESSIONS_HEADER = "Active specialist sessions:"
 
-
-# --- Task overview resolution helpers ---
-
-
-def _filter_task_overview_for_project(task_overview: str, project_id: str) -> str:
-    """Return the compact task overview narrowed to one project."""
-    if not task_overview or not project_id:
-        return task_overview
-    buckets: dict[str, list[str]] = {key: [] for _, key, _, _ in _TASK_SECTIONS}
-    current_key: str | None = None
-    project_prefix = f"- {project_id} |"
-    for raw_line in task_overview.splitlines():
-        line = raw_line.rstrip()
-        if not line:
-            continue
-        matched = next((key for pfx, key, _, _ in _TASK_SECTIONS if line.startswith(pfx)), None)
-        if matched is not None:
-            current_key = matched
-            continue
-        if current_key and line.startswith(project_prefix):
-            buckets[current_key].append(line)
-    sections: list[str] = []
-    for _, key, label, is_single in _TASK_SECTIONS:
-        if buckets[key]:
-            count = 1 if is_single else len(buckets[key])
-            sections.append(f"{label}[{count}]\n" + "\n".join(buckets[key]))
-    return "\n\n".join(sections)
-
-
-def _resolve_task_overview_from_payload(
-    *,
-    task_overview_payload: dict[str, object],
-    task_overview: str | None,
-    target_project_id: str | None,
-) -> tuple[bool, list[dict[str, str]], set[str], str]:
-    """Resolve stale tasks and visible IDs from structured payload."""
-    stale_tasks = [
-        {"project_id": candidate.project_id, "task_id": candidate.task_id}
-        for candidate in extract_stale_task_candidates_from_payload(
-            task_overview_payload,
-            per_project_limit=None,
-            project_id=target_project_id,
-        )
-    ]
-    visible_task_ids = collect_visible_task_ids_from_payload(
-        task_overview_payload,
-        project_id=target_project_id,
-    )
-    resolved = task_overview or build_compact_task_overview_from_payload(task_overview_payload)
-    return True, stale_tasks, visible_task_ids, resolved
-
-
-async def _resolve_task_overview_from_raw(
-    *,
-    task_overview: str | None,
-    target_project_id: str | None,
-) -> tuple[bool, list[dict[str, str]], set[str], str]:
-    """Resolve stale tasks and visible IDs from raw task overview text."""
-    from app.workflows._heartbeat_data import _fetch_task_overview_raw
-    from app.workflows._heartbeat_workstream import _parse_stale_running_tasks
-
-    if task_overview is None:
-        task_overview = await _fetch_task_overview_raw(target_project_id)
-    stale_tasks = [
-        task
-        for task in _parse_stale_running_tasks(task_overview)
-        if not target_project_id or task["project_id"] == target_project_id
-    ]
-    visible_task_ids = {m.group(0) for m in _TASK_ID_PATTERN.finditer(task_overview)}
-    return bool(task_overview), stale_tasks, visible_task_ids, task_overview
-
-
-async def _resolve_workstream_task_context(
-    *,
-    task_overview: str | None,
-    task_overview_payload: dict[str, object] | None,
-    heartbeat_state: SummitFlowHeartbeatState | None,
-    target_project_id: str | None,
-) -> tuple[bool, list[dict[str, str]], set[str], str]:
-    """Resolve task overview data from state/payload/raw for workstream inventory."""
-    if task_overview_payload is None and heartbeat_state is not None:
-        task_overview_payload = heartbeat_state.task_overview_payload
-    if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
-        task_overview = heartbeat_state.task_overview_raw
-    if task_overview_payload is not None:
-        return _resolve_task_overview_from_payload(
-            task_overview_payload=task_overview_payload,
-            task_overview=task_overview,
-            target_project_id=target_project_id,
-        )
-    return await _resolve_task_overview_from_raw(
-        task_overview=task_overview,
-        target_project_id=target_project_id,
-    )
-
-
-async def _coerce_task_overview(
-    task_overview: str | None,
-    task_overview_payload: dict[str, object] | None,
-    heartbeat_state: SummitFlowHeartbeatState | None,
-    target_project_id: str | None,
-) -> str:
-    """Resolve task overview text from state, payload, or raw fetch."""
-    from app.workflows._heartbeat_data import _fetch_task_overview, _fetch_task_overview_raw
-
-    if task_overview_payload is None and heartbeat_state is not None:
-        task_overview_payload = heartbeat_state.task_overview_payload
-    if task_overview is None and heartbeat_state is not None and task_overview_payload is None:
-        task_overview = heartbeat_state.task_overview_raw
-    if task_overview is None and task_overview_payload is not None:
-        task_overview = build_compact_task_overview_from_payload(task_overview_payload)
-    if task_overview is None:
-        task_overview = await _fetch_task_overview(target_project_id)
-        if not task_overview:
-            task_overview = await _fetch_task_overview_raw(target_project_id)
-    return task_overview or ""
-
-
-# --- Completed session helpers ---
-
-
-async def _query_completed_sessions_with_summaries(
-    target_project_id: str | None,
-    *,
-    now: datetime,
-) -> tuple[list[object], object]:
-    """Query completed sessions and their display summaries from DB."""
-    from sqlalchemy import and_, select
-
-    from app.db import async_session
-    from app.models import Session
-    from app.workflows._heartbeat_data import fetch_session_display_summary_results
-
-    cutoff = now - timedelta(hours=_COMPLETED_SESSION_LOOKBACK_HOURS)
-    async with async_session() as db:
-        result = await db.execute(
-            select(
-                Session.id, Session.agent_slug, Session.project_id,
-                Session.external_id, Session.summary_oneliner, Session.created_at,
-            )
-            .where(and_(
-                Session.status == _SESSION_STATUS_COMPLETED,
-                Session.created_at >= cutoff,
-                Session.summary_oneliner.isnot(None),
-                Session.agent_slug != _PERSONA_AGENT_SLUG,
-                Session.project_id == target_project_id if target_project_id else True,
-            ))
-            .order_by(Session.created_at.desc())
-            .limit(_COMPLETED_SESSION_LIMIT)
-        )
-        rows = list(result.all())
-        display_summaries = await fetch_session_display_summary_results(
-            db,
-            [
-                SessionDisplaySummaryCandidate(
-                    session_id=row.id,
-                    summary_oneliner=row.summary_oneliner,
-                )
-                for row in rows
-            ],
-        )
-    return rows, display_summaries  # type: ignore[return-value]
-
-
-def _is_valid_summary_result(summary_result: object) -> bool:
-    """Return True if a summary result is valid for heartbeat display."""
-    if not summary_result:
-        return False
-    return bool(
-        getattr(summary_result, "summary", None)
-        and getattr(summary_result, "has_summary_tag", False)
-        and getattr(summary_result, "summary_outcome", None) == _SESSION_STATUS_COMPLETED
-        and not getattr(summary_result, "has_unresolved_blocker", False)
-    )
-
-
-def _render_completed_session_rows(
-    rows: list[object],
-    display_summaries: dict[object, object],
-    now: datetime,
-) -> list[tuple[object, str]]:
-    """Filter and render completed session rows for heartbeat display."""
-    rendered_rows: list[tuple[object, str]] = []
-    for row in rows:
-        external_id = str(getattr(row, "external_id", "") or "")
-        if external_id.startswith(_BENCHMARK_EXTERNAL_ID_PREFIXES):
-            continue
-        ago = int((now - getattr(row, "created_at", now)).total_seconds() / 60)
-        time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
-        summary_result = display_summaries.get(getattr(row, "id", None))
-        if not _is_valid_summary_result(summary_result):
-            continue
-        rendered_rows.append((
-            row,
-            f"- {getattr(row, 'agent_slug', None) or '?'} on {getattr(row, 'project_id', '?')}: "
-            f"{summary_result.summary} ({time_label})",  # type: ignore[union-attr]
-        ))
-    return rendered_rows
+# Lane classification constant
+_LANE_RECONCILED = "reconciled"
 
 
 # --- State collectors ---
@@ -281,11 +68,13 @@ async def _collect_summitflow_heartbeat_state(
         _fetch_task_overview_response,
     )
 
-    task_overview_response, cleanup_status_response, git_status_rows, recent_failed_tasks = await asyncio.gather(
-        _fetch_task_overview_response(),
-        _fetch_cleanup_status_response(target_project_id),
-        _fetch_git_status_rows(target_project_id),
-        _fetch_recent_failed_tasks(target_project_id),
+    task_overview_response, cleanup_status_response, git_status_rows, recent_failed_tasks = (
+        await asyncio.gather(
+            _fetch_task_overview_response(),
+            _fetch_cleanup_status_response(target_project_id),
+            _fetch_git_status_rows(target_project_id),
+            _fetch_recent_failed_tasks(target_project_id),
+        )
     )
     return SummitFlowHeartbeatState(
         task_overview_response=task_overview_response,
@@ -395,78 +184,6 @@ async def _get_workstream_inventory(
         return ""
 
 
-def _format_recent_failed_task_age(last_changed_at: object, *, now: datetime) -> str:
-    """Format one failed-task timestamp for heartbeat display."""
-    if not isinstance(last_changed_at, datetime):
-        return "unknown"
-    normalized = (
-        last_changed_at.replace(tzinfo=UTC)
-        if last_changed_at.tzinfo is None
-        else last_changed_at.astimezone(UTC)
-    )
-    minutes = max(int((now - normalized).total_seconds() / 60), 0)
-    if minutes < 60:
-        return f"{minutes}m ago"
-    hours = minutes // 60
-    return f"{hours}h ago" if hours < 24 else f"{hours // 24}d ago"
-
-
-async def _get_recent_failed_tasks_summary(
-    target_project_id: str | None = None,
-    *,
-    heartbeat_state: SummitFlowHeartbeatState | None = None,
-) -> str:
-    """Build a heartbeat section listing recent failed tasks that still need recovery."""
-    from app.workflows._heartbeat_data import _fetch_recent_failed_tasks
-
-    try:
-        failed_tasks = (
-            heartbeat_state.recent_failed_tasks
-            if heartbeat_state is not None
-            else await _fetch_recent_failed_tasks(target_project_id)
-        )
-        if not failed_tasks:
-            return ""
-        now = datetime.now(UTC)
-        lines = [f"Recent failed tasks: {len(failed_tasks)}"]
-        top_task = failed_tasks[0]
-        top_project_id = str(top_task.get("project_id") or "unknown")
-        top_task_id = str(top_task.get("id") or "unknown")
-        top_title = str(top_task.get("title") or "Untitled task")
-        top_phase = str(top_task.get("current_phase") or "").strip()
-        top_details = [
-            top_project_id,
-            top_task_id,
-            "failed",
-            _format_recent_failed_task_age(top_task.get("last_changed_at"), now=now),
-        ]
-        if top_phase:
-            top_details.append(f"phase={top_phase}")
-        lines.append(f"Follow first: {' | '.join(top_details)} | {top_title}")
-        for task in failed_tasks:
-            project_id = str(task.get("project_id") or "unknown")
-            task_id = str(task.get("id") or "unknown")
-            title = str(task.get("title") or "Untitled task")
-            phase = str(task.get("current_phase") or "").strip()
-            error_message = str(task.get("error_message") or "").strip()
-            details = [
-                project_id,
-                task_id,
-                "failed",
-                _format_recent_failed_task_age(task.get("last_changed_at"), now=now),
-            ]
-            if phase:
-                details.append(f"phase={phase}")
-            line = f"- {' | '.join(details)} | {title}"
-            if error_message:
-                line += f" | error={error_message}"
-            lines.append(line)
-        return f"\n<recent_failed_tasks>\n{chr(10).join(lines)}\n</recent_failed_tasks>"
-    except Exception:
-        logger.debug("Failed to build recent failed tasks summary for heartbeat", exc_info=True)
-        return ""
-
-
 async def _get_active_specialist_inventory(
     target_project_id: str | None = None,
     *,
@@ -555,9 +272,7 @@ async def _get_cleanup_status_summary(
     """Build a <cleanup_status> XML block from the canonical st cleanup summary."""
     from app.workflows._heartbeat_data import _fetch_cleanup_status_response
 
-    response = cleanup_status_response
-    if response is None:
-        response = await _fetch_cleanup_status_response(target_project_id)
+    response = cleanup_status_response or await _fetch_cleanup_status_response(target_project_id)
     if not response:
         return ""
     output = response.get(_CLEANUP_KEY_COMPACT)
