@@ -740,7 +740,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         required_summary_terms=("ready", "shape"),
         summary_term_alternatives={
             "ready": ("execution-ready", "scope", "context", "non-ready"),
-            "shape": ("shape", "flesh out", "ready the task", "add concrete steps"),
+            "shape": ("shape", "shaping", "shape it", "flesh out", "ready the task", "add concrete steps"),
         },
     ),
     _case(
