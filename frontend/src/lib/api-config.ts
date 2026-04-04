@@ -11,6 +11,7 @@
 
 export const PORTS = { frontend: 3003, backend: 8003 }
 const PROD_DOMAIN = 'agent.summitflow.dev'
+const DEFAULT_DASHBOARD_CLIENT_ID = 'agent-hub-dashboard'
 
 /**
  * Get the base URL for Agent Hub backend API calls.
@@ -116,7 +117,9 @@ export function buildInternalHeaders(): Record<string, string> {
     // Client-side: SSE/WS paths bypass the Next.js proxy (which injects
     // auth headers), so we must include the dashboard client identity
     // directly.  The NEXT_PUBLIC_ prefix makes these available at build time.
-    const clientId = process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID?.trim()
+    const clientId =
+      process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID?.trim() ||
+      DEFAULT_DASHBOARD_CLIENT_ID
     if (clientId) {
       headers['X-Client-Id'] = clientId
       headers['X-Request-Source'] = 'agent-hub-dashboard'
@@ -126,7 +129,9 @@ export function buildInternalHeaders(): Record<string, string> {
 
   // Server-side: attach full internal auth headers from the runtime env.
   const internalSecret = process.env.INTERNAL_SERVICE_SECRET?.trim()
-  const dashboardClientId = process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim()
+  const dashboardClientId =
+    process.env.AGENT_HUB_DASHBOARD_CLIENT_ID?.trim() ||
+    DEFAULT_DASHBOARD_CLIENT_ID
   const dashboardRequestSource =
     process.env.AGENT_HUB_DASHBOARD_REQUEST_SOURCE?.trim() || 'agent-hub-dashboard'
 

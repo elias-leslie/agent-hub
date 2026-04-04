@@ -24,7 +24,7 @@ from app.workflows._heartbeat_data import (
     _get_workstream_inventory,
     get_project_access_summary,
 )
-from app.workflows._heartbeat_orchestrators import _get_recent_failed_tasks_summary
+from app.workflows._heartbeat_failed_tasks import _get_recent_failed_tasks_summary
 from app.workflows._heartbeat_recall import (
     HeartbeatRecallSections,
     build_heartbeat_recall_sections,

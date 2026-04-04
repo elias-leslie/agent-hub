@@ -30,6 +30,7 @@ RUN uv export --frozen --no-dev --no-editable --format requirements-txt \
 
 # Copy application source
 COPY backend/app ./app
+COPY backend/scripts ./scripts
 COPY backend/alembic.ini ./
 COPY backend/alembic ./alembic
 
@@ -46,6 +47,7 @@ WORKDIR /app
 
 COPY --chown=appuser:appuser --from=builder /app/.venv /app/.venv
 COPY --chown=appuser:appuser --from=builder /app/app ./app
+COPY --chown=appuser:appuser --from=builder /app/scripts ./scripts
 COPY --chown=appuser:appuser --from=builder /app/alembic.ini ./
 COPY --chown=appuser:appuser --from=builder /app/alembic ./alembic
 

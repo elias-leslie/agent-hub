@@ -1,0 +1,225 @@
+services:
+  agent-hub-db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: agent_hub
+      POSTGRES_USER: agent_hub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agent_hub}
+    ports:
+      - "${AGENT_HUB_DB_HOST_PORT:-5432}:5432"
+    volumes:
+      - agent-hub-db-data:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_hub -d agent_hub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  agent-hub-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${AGENT_HUB_REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hatchet-migrate:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:${HATCHET_TAG:-latest}
+    environment:
+      DATABASE_URL: postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/hatchet
+    depends_on:
+      agent-hub-db:
+        condition: service_healthy
+
+  hatchet-setup-config:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-admin:${HATCHET_TAG:-latest}
+    command: /hatchet/hatchet-admin quickstart --skip certs --generated-config-dir /hatchet/config --overwrite=false
+    environment:
+      DATABASE_URL: postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/hatchet
+      SERVER_AUTH_COOKIE_DOMAIN: localhost
+      SERVER_AUTH_COOKIE_INSECURE: "t"
+      SERVER_AUTH_SET_EMAIL_VERIFIED: "t"
+      SERVER_URL: http://localhost:${HATCHET_HEALTH_HOST_PORT:-8888}
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_GRPC_BIND_ADDRESS: 0.0.0.0
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet:7070
+      SERVER_MSGQUEUE_KIND: postgres
+      SERVER_LOGGER_LEVEL: warn
+    volumes:
+      - ./docker/hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-migrate:
+        condition: service_completed_successfully
+      agent-hub-db:
+        condition: service_healthy
+
+  hatchet:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:${HATCHET_TAG:-latest}
+    command: /hatchet/hatchet-engine --config /hatchet/config
+    environment:
+      DATABASE_URL: postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/hatchet
+      SERVER_GRPC_BIND_ADDRESS: 0.0.0.0
+      SERVER_GRPC_INSECURE: "t"
+    ports:
+      - "${HATCHET_GRPC_HOST_PORT:-7070}:7070"
+      - "${HATCHET_HEALTH_HOST_PORT:-8888}:8733"
+    volumes:
+      - ./docker/hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-setup-config:
+        condition: service_completed_successfully
+      hatchet-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8733/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  hatchet-token:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-admin:${HATCHET_TAG:-latest}
+    profiles: ["tools"]
+    environment:
+      DATABASE_URL: postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/hatchet
+      HATCHET_TENANT_ID: ${HATCHET_TENANT_ID:-}
+    command:
+      - /bin/sh
+      - -lc
+      - |
+        test -n "$$HATCHET_TENANT_ID" || {
+          echo "Set HATCHET_TENANT_ID before running hatchet-token." >&2
+          exit 1
+        }
+        exec /hatchet/hatchet-admin token create --config /hatchet/config --tenant-id "$$HATCHET_TENANT_ID"
+    volumes:
+      - ./docker/hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-setup-config:
+        condition: service_completed_successfully
+
+  agent-hub-api:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    depends_on:
+      agent-hub-db:
+        condition: service_healthy
+      agent-hub-redis:
+        condition: service_healthy
+      hatchet:
+        condition: service_healthy
+    environment:
+      AGENT_HUB_DB_URL: ${AGENT_HUB_DOCKER_DB_URL:-postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/agent_hub}
+      AGENT_HUB_REDIS_URL: ${AGENT_HUB_DOCKER_REDIS_URL:-redis://agent-hub-redis:6379/2}
+      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:?Set HATCHET_CLIENT_TOKEN in .env.local or .env}
+      HATCHET_CLIENT_HOST_PORT: hatchet:7070
+      HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
+      AGENT_HUB_ENCRYPTION_KEY: ${AGENT_HUB_ENCRYPTION_KEY:?Set AGENT_HUB_ENCRYPTION_KEY in .env.local or .env}
+      AGENT_HUB_SECRET_KEY: ${AGENT_HUB_SECRET_KEY:?Set AGENT_HUB_SECRET_KEY in .env.local or .env}
+      AGENT_HUB_BIND_HOST: 0.0.0.0
+      AGENT_HUB_PORT: 8003
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:${AGENT_HUB_FRONTEND_HOST_PORT:-3003},http://127.0.0.1:${AGENT_HUB_FRONTEND_HOST_PORT:-3003}}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      AGENT_HUB_DASHBOARD_CLIENT_ID: ${AGENT_HUB_DASHBOARD_CLIENT_ID:-}
+      AGENT_HUB_DASHBOARD_REQUEST_SOURCE: ${AGENT_HUB_DASHBOARD_REQUEST_SOURCE:-agent-hub-dashboard}
+      SUMMITFLOW_CLIENT_ID: ${SUMMITFLOW_CLIENT_ID:-}
+      PORTFOLIO_CLIENT_ID: ${PORTFOLIO_CLIENT_ID:-}
+      MONKEY_FIGHT_CLIENT_ID: ${MONKEY_FIGHT_CLIENT_ID:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@summitflow.dev}
+      SF_BROWSER_HOST: ${SF_BROWSER_HOST:-192.168.8.234}
+      WEB_SEARCH_SEARXNG_URL: ${WEB_SEARCH_SEARXNG_URL:-}
+      WEB_FETCH_BROWSER_CDP_URL: ${WEB_FETCH_BROWSER_CDP_URL:-}
+    ports:
+      - "${AGENT_HUB_BACKEND_HOST_PORT:-8003}:8003"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8003/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    init: true
+
+  agent-hub-worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      hatchet:
+        condition: service_healthy
+      agent-hub-api:
+        condition: service_healthy
+    environment:
+      AGENT_HUB_DB_URL: ${AGENT_HUB_DOCKER_DB_URL:-postgresql://agent_hub:${POSTGRES_PASSWORD:-agent_hub}@agent-hub-db:5432/agent_hub}
+      AGENT_HUB_REDIS_URL: ${AGENT_HUB_DOCKER_REDIS_URL:-redis://agent-hub-redis:6379/2}
+      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:?Set HATCHET_CLIENT_TOKEN in .env.local or .env}
+      HATCHET_CLIENT_HOST_PORT: hatchet:7070
+      HATCHET_CLIENT_TLS_STRATEGY: ${HATCHET_CLIENT_TLS_STRATEGY:-none}
+      AGENT_HUB_ENCRYPTION_KEY: ${AGENT_HUB_ENCRYPTION_KEY:?Set AGENT_HUB_ENCRYPTION_KEY in .env.local or .env}
+      AGENT_HUB_SECRET_KEY: ${AGENT_HUB_SECRET_KEY:?Set AGENT_HUB_SECRET_KEY in .env.local or .env}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      DEBUG: ${DEBUG:-false}
+      AGENT_HUB_DASHBOARD_CLIENT_ID: ${AGENT_HUB_DASHBOARD_CLIENT_ID:-}
+      AGENT_HUB_DASHBOARD_REQUEST_SOURCE: ${AGENT_HUB_DASHBOARD_REQUEST_SOURCE:-agent-hub-dashboard}
+      SUMMITFLOW_CLIENT_ID: ${SUMMITFLOW_CLIENT_ID:-}
+      PORTFOLIO_CLIENT_ID: ${PORTFOLIO_CLIENT_ID:-}
+      MONKEY_FIGHT_CLIENT_ID: ${MONKEY_FIGHT_CLIENT_ID:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@summitflow.dev}
+      SF_BROWSER_HOST: ${SF_BROWSER_HOST:-192.168.8.234}
+      WEB_SEARCH_SEARXNG_URL: ${WEB_SEARCH_SEARXNG_URL:-}
+      WEB_FETCH_BROWSER_CDP_URL: ${WEB_FETCH_BROWSER_CDP_URL:-}
+    init: true
+
+  agent-hub-web:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      args:
+        AGENT_HUB_API_URL: http://agent-hub-api:8003
+        SUMMITFLOW_API_URL: ${SUMMITFLOW_API_URL:-http://summitflow-api:8001}
+        AGENT_HUB_DASHBOARD_CLIENT_ID: ${AGENT_HUB_DASHBOARD_CLIENT_ID:-}
+    depends_on:
+      agent-hub-api:
+        condition: service_healthy
+    environment:
+      PORT: 3003
+      HOSTNAME: 0.0.0.0
+      AGENT_HUB_API_URL: http://agent-hub-api:8003
+      SUMMITFLOW_API_URL: ${SUMMITFLOW_API_URL:-http://summitflow-api:8001}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-}
+      AGENT_HUB_DASHBOARD_CLIENT_ID: ${AGENT_HUB_DASHBOARD_CLIENT_ID:-}
+      AGENT_HUB_DASHBOARD_REQUEST_SOURCE: ${AGENT_HUB_DASHBOARD_REQUEST_SOURCE:-agent-hub-dashboard}
+      NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID: ${AGENT_HUB_DASHBOARD_CLIENT_ID:-}
+    ports:
+      - "${AGENT_HUB_FRONTEND_HOST_PORT:-3003}:3003"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://localhost:3003').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  agent-hub-db-data:

@@ -38,10 +38,11 @@ ENHANCED_MEMORY_CONFIG = {
 
 def upgrade() -> None:
     config_json = json.dumps(ENHANCED_MEMORY_CONFIG)
-    op.execute(
+    op.get_bind().execute(
         sa.text(
-            "UPDATE agents SET memory_config = :config WHERE slug = 'persona'"
-        ).bindparams(config=config_json)
+            "UPDATE agents SET memory_config = CAST(:config AS JSON) WHERE slug = 'persona'"
+        ),
+        {"config": config_json},
     )
 
 
@@ -60,8 +61,9 @@ def downgrade() -> None:
         "exclude_tags": [],
     }
     config_json = json.dumps(previous)
-    op.execute(
+    op.get_bind().execute(
         sa.text(
-            "UPDATE agents SET memory_config = :config WHERE slug = 'persona'"
-        ).bindparams(config=config_json)
+            "UPDATE agents SET memory_config = CAST(:config AS JSON) WHERE slug = 'persona'"
+        ),
+        {"config": config_json},
     )

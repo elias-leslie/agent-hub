@@ -11,7 +11,7 @@ EnvironmentFile=-%h/.env.local
 Environment="PYTHONUNBUFFERED=1"
 Environment="HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070"
 Environment="HATCHET_CLIENT_TLS_STRATEGY=none"
-ExecStart=__PROJECT_ROOT__/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8003
+ExecStart=/bin/bash -lc '__PROJECT_ROOT__/backend/.venv/bin/uvicorn app.main:app --host "${AGENT_HUB_BIND_HOST:-0.0.0.0}" --port "${AGENT_HUB_PORT:-8003}"'
 Restart=always
 RestartSec=10
 

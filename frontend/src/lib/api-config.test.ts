@@ -74,4 +74,28 @@ describe('fetchApi', () => {
 
     expect(getCompleteApiUrl()).toBe('/api/complete')
   })
+
+  it('uses the built-in dashboard identity when no client id env is set', async () => {
+    delete process.env.INTERNAL_SERVICE_SECRET
+    delete process.env.AGENT_HUB_DASHBOARD_CLIENT_ID
+    delete process.env.NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID
+    vi.stubGlobal('window', undefined)
+
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { fetchApi } = await import('./api-config')
+
+    await fetchApi('http://localhost:8003/api/persona')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8003/api/persona',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'X-Client-Id': 'agent-hub-dashboard',
+          'X-Request-Source': 'agent-hub-dashboard',
+        }),
+      }),
+    )
+  })
 })

@@ -78,6 +78,28 @@ def _append_unique_string(values: list[str] | None, item: str | None) -> list[st
     return existing
 
 
+def _sanitize_event_value(value: Any) -> Any:
+    """Strip NUL bytes from event payloads before persistence.
+
+    PostgreSQL rejects text and JSON strings containing ``\x00``. Session
+    transcripts can include raw binary fragments, so sanitize at the shared
+    storage boundary instead of letting individual ingestion paths explode.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_sanitize_event_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_event_value(item) for item in value)
+    if isinstance(value, dict):
+        sanitized: dict[Any, Any] = {}
+        for key, item in value.items():
+            sanitized_key = key.replace("\x00", "") if isinstance(key, str) else key
+            sanitized[sanitized_key] = _sanitize_event_value(item)
+        return sanitized
+    return value
+
+
 def _reconcile_session_from_event(
     session: Session,
     *,
@@ -199,6 +221,15 @@ async def store_event(
     """
     if turn is None or sequence is None:
         turn, sequence = await _resolve_turn_sequence(db, session_id)
+
+    role = _sanitize_event_value(role)
+    content = _sanitize_event_value(content)
+    tool_name = _sanitize_event_value(tool_name)
+    tool_input = _sanitize_event_value(tool_input)
+    tool_output = _sanitize_event_value(tool_output)
+    model_used = _sanitize_event_value(model_used)
+    agent_id = _sanitize_event_value(agent_id)
+    agent_name = _sanitize_event_value(agent_name)
 
     event = SessionEvent(
         session_id=session_id, turn=turn, sequence=sequence, event_type=event_type,

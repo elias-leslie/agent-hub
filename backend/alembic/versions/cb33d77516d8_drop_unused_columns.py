@@ -45,6 +45,31 @@ def _int_pk_col() -> sa.Column:
     return sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False)
 
 
+def _foreign_key_exists(table_name: str, constraint_name: str, schema: str = "public") -> bool:
+    """Return whether a foreign-key constraint exists for the given table."""
+    bind = op.get_bind()
+    result = bind.execute(
+        sa.text(
+            """
+            SELECT 1
+            FROM pg_constraint constraint_def
+            JOIN pg_class table_def ON table_def.oid = constraint_def.conrelid
+            JOIN pg_namespace namespace_def ON namespace_def.oid = table_def.relnamespace
+            WHERE constraint_def.contype = 'f'
+              AND table_def.relname = :table_name
+              AND namespace_def.nspname = :schema_name
+              AND constraint_def.conname = :constraint_name
+            """
+        ),
+        {
+            "table_name": table_name,
+            "schema_name": schema,
+            "constraint_name": constraint_name,
+        },
+    )
+    return result.scalar() is not None
+
+
 def upgrade() -> None:
     """Upgrade schema."""
     tables_to_drop = [
@@ -58,7 +83,9 @@ def upgrade() -> None:
     for table, indexes in tables_to_drop:
         _drop_table_with_indexes(table, indexes)
     op.drop_column("memory_settings", "max_references")
-    op.drop_constraint(op.f("request_logs_session_id_fkey"), "request_logs", type_="foreignkey")
+    request_logs_session_fk = op.f("request_logs_session_id_fkey")
+    if _foreign_key_exists("request_logs", request_logs_session_fk):
+        op.drop_constraint(request_logs_session_fk, "request_logs", type_="foreignkey")
     op.create_index(op.f("ix_sessions_parent_session_id"), "sessions", ["parent_session_id"], unique=False)
     op.drop_column("sessions", "task_outcome")
     op.drop_column("webhook_subscriptions", "last_triggered_at")

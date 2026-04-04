@@ -5,11 +5,13 @@ Uses pydantic-settings for validated configuration with environment variable sup
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # ---------------------------------------------------------------------------
 # Port allocation — single source of truth for Agent Hub.
@@ -20,16 +22,25 @@ AGENT_HUB_FRONTEND_PORT = 3003
 SUMMITFLOW_FRONTEND_PORT = 3001
 PORTFOLIO_FRONTEND_PORT = 3000
 REDIS_PORT = 6379
+ROOT_DIR = Path(__file__).resolve().parents[2]
+ENV_FILES = tuple(
+    str(path)
+    for path in (
+        ROOT_DIR / ".env.local",
+        ROOT_DIR / ".env",
+        Path.home() / ".env.local",
+    )
+)
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
 
-    Loads from ~/.env.local by default.
+    Prefers repo-local env files, then falls back to ~/.env.local.
     """
 
     model_config = SettingsConfigDict(
-        env_file=str(Path.home() / ".env.local"),
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -56,6 +67,7 @@ class Settings(BaseSettings):
 
     # Hatchet
     hatchet_client_token: str = ""
+    hatchet_client_host_port: str = "127.0.0.1:7070"
     hatchet_client_tls_strategy: str = "none"
 
     # Shared browser / web research infrastructure
@@ -68,8 +80,33 @@ class Settings(BaseSettings):
     agent_hub_secret_key: str = ""  # Session secret
     internal_service_secret: str = ""  # Internal service auth (set via env)
 
+    # First-party client registrations for standalone and companion installs
+    agent_hub_dashboard_client_id: str = "agent-hub-dashboard"
+    agent_hub_dashboard_request_source: str = "agent-hub-dashboard"
+    summitflow_client_id: str = ""
+    portfolio_client_id: str = ""
+    monkey_fight_client_id: str = ""
+
+    @field_validator("agent_hub_dashboard_client_id", mode="before")
+    @classmethod
+    def default_dashboard_client_id(cls, v: str | None) -> str:
+        """Treat blank env values as the built-in dashboard client id."""
+        if v is None:
+            return "agent-hub-dashboard"
+        cleaned = v.strip()
+        return cleaned or "agent-hub-dashboard"
+
+    @field_validator("agent_hub_dashboard_request_source", mode="before")
+    @classmethod
+    def default_dashboard_request_source(cls, v: str | None) -> str:
+        """Treat blank env values as the built-in dashboard request source."""
+        if v is None:
+            return "agent-hub-dashboard"
+        cleaned = v.strip()
+        return cleaned or "agent-hub-dashboard"
+
     # CORS (comma-separated list via CORS_ORIGINS env var)
-    cors_origins: list[str] = [
+    cors_origins: Annotated[list[str], NoDecode] = [
         f"http://localhost:{PORTFOLIO_FRONTEND_PORT}",
         f"http://localhost:{SUMMITFLOW_FRONTEND_PORT}",
         f"http://localhost:{AGENT_HUB_FRONTEND_PORT}",
@@ -91,6 +128,14 @@ class Settings(BaseSettings):
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:admin@summitflow.dev"
 
+    # Optional provider credentials for standalone and Docker installs.
+    # These are overlaid into the runtime credential cache at startup so
+    # clean installs work without manual dashboard credential entry.
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    openai_api_key: str = ""
+    openrouter_api_key: str = ""
+
 
 
 @lru_cache
@@ -104,3 +149,11 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+for key, value in {
+    "HATCHET_CLIENT_TOKEN": settings.hatchet_client_token,
+    "HATCHET_CLIENT_HOST_PORT": settings.hatchet_client_host_port,
+    "HATCHET_CLIENT_TLS_STRATEGY": settings.hatchet_client_tls_strategy,
+}.items():
+    if value:
+        os.environ.setdefault(key, value)

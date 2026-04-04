@@ -393,6 +393,43 @@ class TestMemoryInjectEvent:
         assert session.observed_read_paths == ["backend/app/adapters/claude.py"]
 
     @pytest.mark.asyncio
+    async def test_store_event_strips_null_bytes_from_event_fields(self) -> None:
+        db = MagicMock()
+        parent_session = MagicMock()
+        parent_session.provider_metadata = {}
+        parent_session.updated_at = None
+        db.get = AsyncMock(return_value=parent_session)
+        db.execute = AsyncMock(side_effect=[MagicMock(scalar_one_or_none=lambda: None), None])
+        get_sequencer()._sessions.clear()
+
+        event = await store_event(
+            db=db,
+            session_id="sess-null-bytes",
+            event_type="tool_result",
+            role="assistant\x00",
+            content="hello\x00world",
+            tool_name="Bash\x00",
+            tool_input={"cmd": "printf 'a\\x00b'"},
+            tool_output={
+                "output": "result\x00text",
+                "nested": ["value\x00one", {"path": "tmp\x00/file"}],
+            },
+            model_used="codex/gpt-5.4\x00",
+            agent_name="persona\x00",
+        )
+
+        assert event.role == "assistant"
+        assert event.content == "helloworld"
+        assert event.tool_name == "Bash"
+        assert event.tool_input == {"cmd": "printf 'a\\x00b'"}
+        assert event.tool_output == {
+            "output": "resulttext",
+            "nested": ["valueone", {"path": "tmp/file"}],
+        }
+        assert event.model_used == "codex/gpt-5.4"
+        assert event.agent_name == "persona"
+
+    @pytest.mark.asyncio
     async def test_store_memory_inject_event_includes_reference_breakdown(self) -> None:
         db = MagicMock()
         parent_session = MagicMock()
