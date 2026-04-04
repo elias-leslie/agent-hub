@@ -113,7 +113,7 @@ export function WorkspaceTimeline({
 
   return (
     <>
-      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-5 py-5 bg-[#0a0b0f]">
+      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-5 py-5 bg-slate-950">
         <div className="mx-auto max-w-3xl">
           <PulseOverviewPanels
             visiblePulseMetrics={visiblePulseMetrics}

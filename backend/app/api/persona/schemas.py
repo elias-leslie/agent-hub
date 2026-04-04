@@ -81,7 +81,7 @@ class PersonaUpdate(BaseModel):
 
 
 class PersonaImprovementScheduleResponse(BaseModel):
-    """Current scheduled Jenny improvement-loop configuration."""
+    """Current scheduled persona improvement-loop configuration."""
 
     job_id: str | None = None
     enabled: bool = False
@@ -96,14 +96,14 @@ class PersonaImprovementScheduleResponse(BaseModel):
 
 
 class PersonaImprovementScheduleUpdate(BaseModel):
-    """Update the scheduled Jenny improvement loop."""
+    """Update the scheduled persona improvement loop."""
 
     enabled: bool
     cadence_minutes: int = Field(default=15, ge=15, le=10080)
 
 
 class PersonaImprovementOverview(BaseModel):
-    """Top-level Jenny improvement KPIs."""
+    """Top-level persona improvement KPIs."""
 
     total_runs: int = 0
     latest_completed_at: str | None = None
@@ -115,7 +115,7 @@ class PersonaImprovementOverview(BaseModel):
 
 
 class PersonaImprovementTrendPoint(BaseModel):
-    """One Jenny improvement trend point."""
+    """One persona improvement trend point."""
 
     run_id: str
     completed_at: str | None = None
@@ -131,7 +131,7 @@ class PersonaImprovementTrendPoint(BaseModel):
 
 
 class PersonaImprovementFamilySummary(BaseModel):
-    """Per-family pass-rate summary for one Jenny improvement run."""
+    """Per-family pass-rate summary for one persona improvement run."""
 
     family: str
     attempts: int = 0
@@ -140,7 +140,7 @@ class PersonaImprovementFamilySummary(BaseModel):
 
 
 class PersonaImprovementRecentRun(BaseModel):
-    """Compact Jenny improvement run summary for the dashboard."""
+    """Compact persona improvement run summary for the dashboard."""
 
     run_id: str
     benchmark_id: str
@@ -169,7 +169,7 @@ class PersonaImprovementRecentRun(BaseModel):
 
 
 class PersonaImprovementOpenRegression(BaseModel):
-    """Open Jenny improvement regression cluster."""
+    """Open persona improvement regression cluster."""
 
     case_id: str
     failure_detail: str
@@ -179,7 +179,7 @@ class PersonaImprovementOpenRegression(BaseModel):
 
 
 class PersonaHeartbeatFieldOverview(BaseModel):
-    """Scored recent real-heartbeat summary for Jenny."""
+    """Scored recent real-heartbeat summary for the persona."""
 
     total_heartbeats: int = 0
     latest_completed_at: str | None = None
@@ -222,7 +222,7 @@ class PersonaHeartbeatFieldTrendPoint(BaseModel):
 
 
 class PersonaHeartbeatFieldRisk(BaseModel):
-    """Recent real-heartbeat risk surfaced into Jenny analytics."""
+    """Recent real-heartbeat risk surfaced into persona analytics."""
 
     session_id: str
     completed_at: str | None = None
@@ -241,7 +241,7 @@ class PersonaHeartbeatFieldReviewGate(BaseModel):
 
 
 class PersonaImprovementScheduleRisk(BaseModel):
-    """Schedule-health risk surfaced into Jenny analytics."""
+    """Schedule-health risk surfaced into persona analytics."""
 
     kind: str
     summary: str
@@ -272,7 +272,7 @@ class PersonaHeartbeatFieldSession(BaseModel):
 
 
 class PersonaImprovementDashboardResponse(BaseModel):
-    """Focused Jenny improvement dashboard response."""
+    """Focused persona improvement dashboard response."""
 
     generated_at: str
     suite_id: str

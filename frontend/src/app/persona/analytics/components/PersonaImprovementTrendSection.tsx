@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   CartesianGrid,
   Line,
@@ -15,10 +16,12 @@ import type {
   PersonaHeartbeatFieldTrendPoint,
   PersonaImprovementTrendPoint,
 } from "@/app/persona/analytics/types";
+import { getPersonaDisplayName } from "../../utils/displayName";
 
 interface PersonaImprovementTrendSectionProps {
   labTrend: PersonaImprovementTrendPoint[];
   fieldTrend: PersonaHeartbeatFieldTrendPoint[];
+  personaName?: string;
 }
 
 interface TrendDatum {
@@ -33,8 +36,8 @@ interface TrendDatum {
 }
 
 const TOOLTIP_STYLE = {
-  backgroundColor: "#020617",
-  border: "1px solid #1e293b",
+  backgroundColor: "var(--color-slate-950)",
+  border: "1px solid var(--color-slate-700)",
   borderRadius: "10px",
   fontSize: "12px",
 };
@@ -98,8 +101,8 @@ function buildChartData(
     .map(({ sortKey: _sortKey, ...point }) => point);
 }
 
-function EmptyState() {
-  return <p className="text-sm text-slate-400">No Jenny trend data yet.</p>;
+function EmptyState({ personaName }: { personaName?: string }) {
+  return <p className="text-sm text-slate-400">No {getPersonaDisplayName(personaName)} trend data yet.</p>;
 }
 
 function TrendLegend() {
@@ -125,6 +128,7 @@ function TrendCard({
   yDomain,
   labLabel,
   fieldLabel,
+  emptyState,
 }: {
   title: string;
   chartData: TrendDatum[];
@@ -133,11 +137,12 @@ function TrendCard({
   yDomain?: [number, number];
   labLabel: string;
   fieldLabel: string;
+  emptyState?: ReactNode;
 }) {
   return (
     <ChartCard title={title}>
       {chartData.length === 0 ? (
-        <EmptyState />
+        emptyState ?? <EmptyState />
       ) : (
         <>
           <TrendLegend />
@@ -198,6 +203,7 @@ function TrendCard({
 export function PersonaImprovementTrendSection({
   labTrend,
   fieldTrend,
+  personaName,
 }: PersonaImprovementTrendSectionProps) {
   const chartData = buildChartData(labTrend, fieldTrend);
 
@@ -211,6 +217,7 @@ export function PersonaImprovementTrendSection({
         yDomain={[0, 100]}
         labLabel="Lab reliability"
         fieldLabel="Field reliability"
+        emptyState={<EmptyState personaName={personaName} />}
       />
       <TrendCard
         title="Effectiveness Trend"
@@ -220,6 +227,7 @@ export function PersonaImprovementTrendSection({
         yDomain={[0, 100]}
         labLabel="Lab effectiveness"
         fieldLabel="Field effectiveness"
+        emptyState={<EmptyState personaName={personaName} />}
       />
       <TrendCard
         title="Token Spend Trend"
@@ -228,6 +236,7 @@ export function PersonaImprovementTrendSection({
         fieldKey="fieldTokens"
         labLabel="Lab tok / pass"
         fieldLabel="Field tok / heartbeat"
+        emptyState={<EmptyState personaName={personaName} />}
       />
     </div>
   );

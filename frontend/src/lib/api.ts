@@ -88,6 +88,7 @@ export {
   fetchPersonaImprovementDashboard,
   updatePersonaImprovementSchedule,
 } from "./api/persona-improvement";
+export { fetchPersona, PERSONA_QUERY_KEY } from "./api/persona";
 
 // Re-export all agent-detail-related exports
 export {

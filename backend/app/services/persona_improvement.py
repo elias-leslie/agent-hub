@@ -1,4 +1,4 @@
-"""Jenny improvement dashboard metrics and self-honing schedule helpers."""
+"""Persona improvement dashboard metrics and self-honing schedule helpers."""
 
 from __future__ import annotations
 
@@ -28,9 +28,13 @@ from app.services.persona_service import get_or_create_persona
 from app.workflows.persona_scheduler import compute_next_run
 from scripts.persona_benchmark_cases import get_case_by_id
 
-JENNY_IMPROVEMENT_SUITE_ID = "persona-suite-jenny-improvement"
-SELF_HONING_JOB_NAME = "Jenny improvement loop"
-SELF_HONING_PAYLOAD_MESSAGE = "Scheduled Jenny improvement run."
+PERSONA_IMPROVEMENT_SUITE_ID = "persona-suite-self-improvement"
+LEGACY_PERSONA_IMPROVEMENT_SUITE_IDS = frozenset({"persona-suite-jenny-improvement"})
+PERSONA_IMPROVEMENT_SUITE_IDS = frozenset(
+    {PERSONA_IMPROVEMENT_SUITE_ID, *LEGACY_PERSONA_IMPROVEMENT_SUITE_IDS}
+)
+SELF_HONING_JOB_NAME = "Persona improvement loop"
+SELF_HONING_PAYLOAD_MESSAGE = "Scheduled persona improvement run."
 DEFAULT_SELF_HONING_CADENCE_MINUTES = 15
 MIN_SELF_HONING_CADENCE_MINUTES = 15
 MAX_SELF_HONING_CADENCE_MINUTES = 7 * 24 * 60
@@ -159,7 +163,7 @@ def build_persona_improvement_metadata(
     *,
     config_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Derive Jenny-focused quality and efficiency metrics for one benchmark run."""
+    """Derive persona-focused quality and efficiency metrics for one benchmark run."""
     aggregate = aggregate_attempts(attempts)
     scored_attempts = [attempt for attempt in attempts if not attempt_is_infra(attempt)]
     passed_attempts = [
@@ -277,7 +281,7 @@ def _metadata_for_run(run: AgentBenchmarkRun) -> dict[str, Any]:
 
 
 async def get_persona_self_honing_job(db: AsyncSession) -> PersonaScheduledJob | None:
-    """Return the most relevant Jenny self-honing job, if any."""
+    """Return the most relevant persona self-honing job, if any."""
     persona = await get_or_create_persona(db)
     jobs = (
         await db.execute(
@@ -300,7 +304,7 @@ def serialize_persona_self_honing_schedule(
     *,
     fallback_cadence_minutes: int | None = None,
 ) -> dict[str, Any]:
-    """Serialize the Jenny self-honing schedule for the UI/API."""
+    """Serialize the persona self-honing schedule for the UI/API."""
     cadence_minutes = _parse_cadence_minutes(job) or fallback_cadence_minutes
     return {
         "job_id": job.id if job else None,
@@ -326,7 +330,7 @@ async def update_persona_self_honing_schedule(
     enabled: bool,
     cadence_minutes: int | None,
 ) -> dict[str, Any]:
-    """Create or update the single scheduled Jenny improvement loop."""
+    """Create or update the single scheduled persona improvement loop."""
     minutes = cadence_minutes or DEFAULT_SELF_HONING_CADENCE_MINUTES
     if minutes < MIN_SELF_HONING_CADENCE_MINUTES or minutes > MAX_SELF_HONING_CADENCE_MINUTES:
         raise ValueError(
@@ -1099,7 +1103,7 @@ async def get_persona_improvement_dashboard(
     days: int = 30,
     limit: int = 8,
 ) -> dict[str, Any]:
-    """Return the focused Jenny improvement dashboard payload."""
+    """Return the focused persona improvement dashboard payload."""
     generated_at = datetime.now(UTC)
     cutoff = generated_at - timedelta(days=days)
     runs = (
@@ -1107,7 +1111,7 @@ async def get_persona_improvement_dashboard(
             select(AgentBenchmarkRun)
             .where(
                 AgentBenchmarkRun.agent_slug == "persona",
-                AgentBenchmarkRun.suite_id == JENNY_IMPROVEMENT_SUITE_ID,
+                AgentBenchmarkRun.suite_id.in_(PERSONA_IMPROVEMENT_SUITE_IDS),
                 AgentBenchmarkRun.completed_at.is_not(None),
                 AgentBenchmarkRun.completed_at >= cutoff,
                 AgentBenchmarkRun.attempt_count > AgentBenchmarkRun.infra_failure_count,
@@ -1118,13 +1122,17 @@ async def get_persona_improvement_dashboard(
     job = await get_persona_self_honing_job(db)
     schedule = serialize_persona_self_honing_schedule(job)
     schedule_risks = _build_schedule_risks(generated_at=generated_at, schedule=schedule)
-    open_clusters = await query_open_regression_clusters(
-        db,
-        agent_slug="persona",
-        cutoff=cutoff,
-        suite_id=JENNY_IMPROVEMENT_SUITE_ID,
-        limit=6,
-    )
+    open_clusters = [
+        cluster
+        for cluster in await query_open_regression_clusters(
+            db,
+            agent_slug="persona",
+            cutoff=cutoff,
+            suite_id=None,
+            limit=24,
+        )
+        if str(getattr(cluster, "suite_id", "") or "") in PERSONA_IMPROVEMENT_SUITE_IDS
+    ][:6]
     experiment_ids = {
         run.experiment_id
         for run in runs
@@ -1167,7 +1175,7 @@ async def get_persona_improvement_dashboard(
 
     return {
         "generated_at": generated_at.isoformat(),
-        "suite_id": JENNY_IMPROVEMENT_SUITE_ID,
+        "suite_id": PERSONA_IMPROVEMENT_SUITE_ID,
         "days": days,
         "schedule": schedule,
         "overview": {

@@ -3,6 +3,7 @@ import Script from "next/script";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/layout";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const ibmPlexSans = IBM_Plex_Sans({
@@ -43,7 +44,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4efe8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
+  ],
   width: "device-width",
   initialScale: 1,
 };
@@ -54,8 +58,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -106,9 +106,9 @@ async def test_execute_self_honing_skips_when_persona_or_supervisor_is_active():
 
 @pytest.mark.asyncio
 async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_path):
-    from app.services.persona_improvement import JENNY_IMPROVEMENT_SUITE_ID
+    from app.services.persona_improvement import PERSONA_IMPROVEMENT_SUITE_ID
     from app.workflows.persona_scheduler import _execute_self_honing
-    from scripts.persona_benchmark_cases import get_jenny_improvement_case_ids
+    from scripts.persona_benchmark_cases import get_persona_improvement_case_ids
 
     job = SimpleNamespace(name="Nightly self-honing")
 
@@ -147,5 +147,5 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
     assert "honed=True" in result
     assert "persona-benchmark-1234abcd" in result
     mock_honing.assert_awaited_once()
-    assert mock_honing.await_args.kwargs["case_ids"] == get_jenny_improvement_case_ids()
-    assert mock_honing.await_args.kwargs["suite_id"] == JENNY_IMPROVEMENT_SUITE_ID
+    assert mock_honing.await_args.kwargs["case_ids"] == get_persona_improvement_case_ids()
+    assert mock_honing.await_args.kwargs["suite_id"] == PERSONA_IMPROVEMENT_SUITE_ID

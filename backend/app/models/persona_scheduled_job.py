@@ -29,7 +29,7 @@ class PersonaScheduledJob(Base):
     Payload types:
     - "agent_turn": inject message as user input to complete_internal
     - "push": send a push notification directly
-    - "self_honing": run Jenny's scheduled self-honing loop directly
+    - "self_honing": run the persona's scheduled self-honing loop directly
     """
 
     __tablename__ = "persona_scheduled_jobs"

@@ -269,7 +269,7 @@ class TestSaveLearningEndpoint:
                     "applicability": {
                         "consumer_profiles": ["codex_startup"],
                         "exclude_consumer_profiles": ["agent_runtime"],
-                        "agent_slugs": ["jenny"],
+                        "agent_slugs": ["persona"],
                         "exclude_agent_slugs": ["formatter"],
                         "audience_tags": ["operator-tooling"],
                         "exclude_audience_tags": ["narrow-output"],
@@ -289,7 +289,7 @@ class TestSaveLearningEndpoint:
             {
                 "consumer_profiles": ["codex_startup"],
                 "exclude_consumer_profiles": ["agent_runtime"],
-                "agent_slugs": ["jenny"],
+                "agent_slugs": ["persona"],
                 "exclude_agent_slugs": ["formatter"],
                 "audience_tags": ["operator-tooling"],
                 "exclude_audience_tags": ["narrow-output"],

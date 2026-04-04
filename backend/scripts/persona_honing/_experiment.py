@@ -6,21 +6,24 @@ from typing import Any
 
 from agent_hub import AsyncAgentHubClient
 
+from app.services.agent_benchmark_service import get_benchmark_experiment_summary_by_key
+from app.services.persona_prompt_service import render_persona_improvement_decision_review_prompt
 from scripts.completion_review_benchmark_eval import CompletionReviewBenchmarkRun
 from scripts.persona_benchmark_eval import PersonaBenchmarkRun
 from scripts.persona_benchmark_report import generate_markdown_report
+from scripts.persona_benchmark_runner import _fetch_used_tool_names
+from scripts.persona_honing import _cohort_experiment as _cohort_experiment_module
 from scripts.persona_honing._benchmarks import _get_config_snapshot, _run_initial_benchmarks
-from scripts.persona_honing._cohort_experiment import (
-    _maybe_run_review_cohorts,
-    _run_and_evaluate_main_cohorts,
-)
 from scripts.persona_honing._constants import DECISION_PROMOTE
 from scripts.persona_honing._decision import (
     _determine_final_experiment_decision,
     _persist_final_experiment_decision,
-    _run_decision_review,  # re-exported for tests
 )
-from scripts.persona_honing._improvement import _build_improvement_prompt, _run_improvement_pass
+from scripts.persona_honing._formatting import (
+    _format_experiment_summary_block,
+    _format_improvement_summary_block,
+)
+from scripts.persona_honing._improvement import _build_improvement_prompt
 from scripts.persona_honing._iteration_record import (
     _apply_decision_to_loop_state,
     _build_iteration_record,
@@ -33,16 +36,27 @@ from scripts.persona_honing._models import (
     _LoopState,
 )
 from scripts.persona_honing._persistence import _persist_iteration_record
-from scripts.persona_honing._signals import _load_field_snapshot
+from scripts.persona_honing._response import (
+    _HONING_RESPONSE_SCHEMA,
+    parse_decision_review_content,
+    parse_improvement_content,
+)
+from scripts.persona_honing._signals import _load_field_snapshot, _load_recent_improvement_signals
 from scripts.persona_honing._state import _restore_persona_mutable_state
 from scripts.run_persona_model_benchmark import derive_suite_id
 
 # Re-export public API consumed by external callers
 __all__ = [
     "_build_improvement_prompt",
+    "_fetch_used_tool_names",
+    "_load_recent_improvement_signals",
+    "_maybe_run_review_cohorts",
+    "_run_and_evaluate_main_cohorts",
     "_run_decision_review",
     "_run_improvement_pass",
     "_run_iteration",
+    "get_benchmark_experiment_summary_by_key",
+    "render_persona_improvement_decision_review_prompt",
 ]
 
 
@@ -51,6 +65,150 @@ def _write_iteration_report(output_dir: Path, run: PersonaBenchmarkRun, iteratio
     report_path = output_dir / f"iteration-{iteration:02d}-{run.benchmark_id}.md"
     report_path.write_text(generate_markdown_report(run))
     return str(report_path)
+
+
+async def _run_improvement_pass(
+    *,
+    client: AsyncAgentHubClient,
+    project_id: str,
+    iteration: int,
+    run: PersonaBenchmarkRun,
+    previous_clusters: list[dict[str, Any]] | None,
+    review_run: CompletionReviewBenchmarkRun | None,
+    previous_review_clusters: list[dict[str, Any]] | None,
+    timeout_seconds: float | None,
+    working_root: Path,
+) -> tuple[str | None, str, list[str], dict[str, Any] | None]:
+    """Prompt the persona to improve itself based on benchmark failures."""
+    from app.services.persona_improvement import build_persona_heartbeat_field_digest
+
+    improvement_signals = await _load_recent_improvement_signals(project_id)
+    field_signals = await build_persona_heartbeat_field_digest()
+    prompt = await _build_improvement_prompt(
+        run=run,
+        iteration=iteration,
+        previous_clusters=previous_clusters,
+        review_run=review_run,
+        previous_review_clusters=previous_review_clusters,
+        improvement_signals=improvement_signals,
+        field_signals=field_signals,
+    )
+    response = await client.complete(
+        messages=[{"role": "user", "content": prompt}],
+        project_id=project_id,
+        agent_slug="persona",
+        external_id=f"persona-honing:{run.benchmark_id}:iteration-{iteration}",
+        enable_caching=False,
+        skip_cache=True,
+        use_memory=False,
+        max_turns=12,
+        working_dir=str(working_root),
+        execute_tools=True,
+        timeout_seconds=timeout_seconds,
+        response_format={"type": "json_object", "schema": _HONING_RESPONSE_SCHEMA},
+    )
+    used_tools = await _fetch_used_tool_names(response.session_id)
+    return (
+        response.session_id,
+        response.content,
+        used_tools,
+        parse_improvement_content(response.content),
+    )
+
+
+async def _run_decision_review(
+    *,
+    client: AsyncAgentHubClient,
+    iteration: int,
+    experiment_key: str,
+    project_id: str,
+    timeout_seconds: float | None,
+    working_root: Path,
+    proposed_decision: str,
+    proposed_reason: str,
+    experiment_summary: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+    field_snapshot: dict[str, Any] | None,
+    record: PersonaHoningIteration,
+) -> dict[str, Any]:
+    """Run the supervisor review prompt for a honing experiment decision."""
+    from app.services.persona_improvement import build_persona_heartbeat_field_digest
+
+    prompt = await render_persona_improvement_decision_review_prompt(
+        proposed_decision=proposed_decision,
+        proposed_reason=proposed_reason,
+        experiment_summary_block=_format_experiment_summary_block(experiment_summary),
+        completion_review_block=_format_experiment_summary_block(review_summary),
+        field_signals_block=await build_persona_heartbeat_field_digest(),
+        improvement_summary_block=_format_improvement_summary_block(record),
+    )
+    try:
+        response = await client.complete(
+            messages=[{"role": "user", "content": prompt}],
+            project_id=project_id,
+            agent_slug="supervisor",
+            external_id=f"persona-honing-review:{experiment_key}:iteration-{iteration}",
+            enable_caching=False,
+            skip_cache=True,
+            use_memory=False,
+            max_turns=1,
+            working_dir=str(working_root),
+            execute_tools=False,
+            timeout_seconds=timeout_seconds,
+        )
+    except Exception as exc:
+        return {
+            "used": False,
+            "session_id": None,
+            "decision": None,
+            "reason": f"review_unavailable:{type(exc).__name__}",
+        }
+
+    parsed = parse_decision_review_content(response.content)
+    if parsed is None:
+        return {
+            "used": False,
+            "session_id": response.session_id,
+            "decision": None,
+            "reason": "review_unparseable",
+            "raw_content": response.content,
+        }
+    return {
+        "used": True,
+        "session_id": response.session_id,
+        "decision": parsed["decision"],
+        "reason": parsed["reason"],
+        "raw_content": response.content,
+        "field_gate": dict((field_snapshot or {}).get("review_gate") or {}),
+    }
+
+
+async def _run_and_evaluate_main_cohorts(
+    **kwargs: Any,
+) -> tuple[list[PersonaBenchmarkRun], list[PersonaBenchmarkRun], str]:
+    """Delegate to the cohort module with legacy patch points preserved."""
+    original = _cohort_experiment_module.get_benchmark_experiment_summary_by_key
+    _cohort_experiment_module.get_benchmark_experiment_summary_by_key = (
+        get_benchmark_experiment_summary_by_key
+    )
+    try:
+        return await _cohort_experiment_module._run_and_evaluate_main_cohorts(**kwargs)
+    finally:
+        _cohort_experiment_module.get_benchmark_experiment_summary_by_key = original
+
+
+async def _maybe_run_review_cohorts(
+    **kwargs: Any,
+) -> tuple[list[CompletionReviewBenchmarkRun], list[CompletionReviewBenchmarkRun], dict[str, Any] | None]:
+    """Delegate to the cohort module with legacy patch points preserved."""
+    original = _cohort_experiment_module.get_benchmark_experiment_summary_by_key
+    _cohort_experiment_module.get_benchmark_experiment_summary_by_key = (
+        get_benchmark_experiment_summary_by_key
+    )
+    try:
+        return await _cohort_experiment_module._maybe_run_review_cohorts(**kwargs)
+    finally:
+        _cohort_experiment_module.get_benchmark_experiment_summary_by_key = original
 
 
 async def _apply_improvement_pass(

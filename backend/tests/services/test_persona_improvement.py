@@ -1,4 +1,4 @@
-"""Tests for Jenny improvement service field scoring and schedule defaults."""
+"""Tests for persona improvement service field scoring and schedule defaults."""
 
 from __future__ import annotations
 
@@ -328,7 +328,7 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
     latest_run = SimpleNamespace(
         id="run-iter",
         benchmark_id="persona-benchmark-latest",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_iteration",
         started_at=now - timedelta(minutes=2),
         completed_at=now,
@@ -359,7 +359,7 @@ async def test_dashboard_includes_latest_honing_iteration_run() -> None:
     older_candidate = SimpleNamespace(
         id="run-old",
         benchmark_id="persona-benchmark-old",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_candidate",
         started_at=now - timedelta(hours=1, minutes=2),
         completed_at=now - timedelta(hours=1),
@@ -467,7 +467,7 @@ async def test_dashboard_counts_lab_runs_on_field_window_horizon() -> None:
     recent_run = SimpleNamespace(
         id="run-recent",
         benchmark_id="persona-benchmark-recent",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_iteration",
         started_at=now - timedelta(minutes=5),
         completed_at=now - timedelta(minutes=1),
@@ -485,7 +485,7 @@ async def test_dashboard_counts_lab_runs_on_field_window_horizon() -> None:
     older_run = SimpleNamespace(
         id="run-old",
         benchmark_id="persona-benchmark-old",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_baseline",
         started_at=now - timedelta(days=10, minutes=5),
         completed_at=now - timedelta(days=10),
@@ -581,7 +581,7 @@ async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_
     latest_candidate = SimpleNamespace(
         id="run-candidate",
         benchmark_id="persona-benchmark-candidate",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_candidate",
         started_at=now - timedelta(minutes=2),
         completed_at=now,
@@ -612,7 +612,7 @@ async def test_dashboard_current_lab_run_prefers_baseline_when_latest_candidate_
     paired_baseline = SimpleNamespace(
         id="run-baseline",
         benchmark_id="persona-benchmark-baseline",
-        suite_id="persona-suite-jenny-improvement",
+        suite_id="persona-suite-self-improvement",
         run_kind="honing_baseline",
         started_at=now - timedelta(minutes=4),
         completed_at=now - timedelta(minutes=1),

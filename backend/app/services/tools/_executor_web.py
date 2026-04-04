@@ -38,7 +38,7 @@ DEFAULT_FETCH_ACCEPT = (
     "text/plain;q=0.7, application/json;q=0.5, */*;q=0.1"
 )
 DEFAULT_USER_AGENT = (
-    "agent-hub/1.0 (+http://localhost:3003; Jenny web research tool)"
+    "agent-hub/1.0 (+http://localhost:3003; persona web research tool)"
 )
 _SEARCH_TYPES = frozenset({"text", "news"})
 _TIMELIMITS = frozenset({"d", "w", "m", "y"})

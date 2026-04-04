@@ -8,7 +8,13 @@ vi.mock("@/lib/api", () => ({
   fetchArenaOverview: vi.fn(),
 }));
 
+vi.mock("@/lib/api/persona", () => ({
+  PERSONA_QUERY_KEY: ["persona"],
+  fetchPersona: vi.fn(),
+}));
+
 import { fetchArenaOverview } from "@/lib/api";
+import { fetchPersona } from "@/lib/api/persona";
 
 function renderCommandCenter() {
   const queryClient = new QueryClient({
@@ -28,6 +34,10 @@ function renderCommandCenter() {
 
 describe("ArenaCommandCenter", () => {
   it("shows autonomy and memory pulse from the overview payload", async () => {
+    vi.mocked(fetchPersona).mockResolvedValue({
+      id: 1,
+      name: "Astra",
+    } as never);
     vi.mocked(fetchArenaOverview).mockResolvedValue({
       generated_at: "2026-03-22T15:30:00Z",
       project_id: "agent-hub",
@@ -45,7 +55,7 @@ describe("ArenaCommandCenter", () => {
       scheduled_jobs: [
         {
           id: "job-review",
-          name: "Daily Jenny Improvement Review",
+          name: "Daily Persona Improvement Review",
           payload_type: "agent_turn",
           enabled: true,
           last_run_at: null,
@@ -54,7 +64,7 @@ describe("ArenaCommandCenter", () => {
         },
         {
           id: "job-honing",
-          name: "Nightly Jenny Self-Honing",
+          name: "Nightly Persona Self-Honing",
           payload_type: "self_honing",
           enabled: true,
           last_run_at: null,
@@ -162,7 +172,7 @@ describe("ArenaCommandCenter", () => {
       agents: [
         {
           slug: "persona",
-          name: "Jenny",
+          name: "Astra",
           description: "Primary persona",
           benchmark: {
             total_runs: 12,
@@ -207,7 +217,7 @@ describe("ArenaCommandCenter", () => {
     renderCommandCenter();
 
     await waitFor(() => {
-      expect(screen.getByText("Jenny + Agent Pulse")).toBeInTheDocument();
+      expect(screen.getByText("Astra + Agent Pulse")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Daily review")).toBeInTheDocument();
@@ -222,7 +232,7 @@ describe("ArenaCommandCenter", () => {
     expect(screen.getAllByText("behavior")).toHaveLength(1);
     expect(screen.getAllByText("missed rebuild.sh before verification")).toHaveLength(2);
     expect(screen.getByText("noisy-ref")).toBeInTheDocument();
-    expect(screen.getByText("Jenny")).toBeInTheDocument();
+    expect(screen.getByText("Astra")).toBeInTheDocument();
     expect(screen.getByText("Debugger")).toBeInTheDocument();
   });
 });

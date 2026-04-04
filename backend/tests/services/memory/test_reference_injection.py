@@ -110,7 +110,7 @@ class TestReferenceInjection:
                         [
                             MemorySearchResult(
                                 uuid="persona-targeted",
-                                content="Use st persona first for Jenny work.",
+                                content="Use st persona first for persona work.",
                                 summary="Persona CLI first",
                                 source=MemorySource.SYSTEM,
                                 relevance_score=1.0,

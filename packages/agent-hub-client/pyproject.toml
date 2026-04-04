@@ -7,16 +7,16 @@ name = "agent-hub-client"
 version = "0.3.0"
 description = "Python client SDK for Agent Hub API"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Agent Hub", email = "dev@agenthub.local"},
+    {name = "Agent Hub"},
 ]
 keywords = ["agent-hub", "llm", "api", "sdk", "claude", "gemini"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -38,9 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/agent-hub/agent-hub"
-Documentation = "https://agent-hub.dev/docs/sdk/python"
-Repository = "https://github.com/agent-hub/agent-hub"
+Homepage = "https://github.com/summitflow-solutions/agent-hub"
+Documentation = "https://github.com/summitflow-solutions/agent-hub/tree/main/packages/agent-hub-client"
+Repository = "https://github.com/summitflow-solutions/agent-hub"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_hub"]

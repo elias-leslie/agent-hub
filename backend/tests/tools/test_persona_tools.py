@@ -720,7 +720,7 @@ class TestScheduleJob:
                 name="Nightly self-honing",
                 schedule_type="cron",
                 schedule_value="0 4 * * *",
-                payload_message="Nightly Jenny self-honing",
+                payload_message="Nightly persona self-honing",
                 payload_type="self_honing",
             )
 

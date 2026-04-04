@@ -1,95 +1,50 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getModels, type CatalogModel } from "@/lib/models";
+import { Palette, SunMoon } from "lucide-react";
+import { ThemeSelector } from "@/components/theme-selector";
 
 export function PreferencesTab() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [availableModels, setAvailableModels] = useState<CatalogModel[]>([]);
-
-  const [loadError, setLoadError] = useState(false);
-
-  // Load models on mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const models = await getModels();
-        setAvailableModels(models);
-      } catch {
-        setLoadError(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-sm text-slate-400">
-          Loading preferences...
-        </div>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-sm text-red-400">
-          Failed to load preferences. Please try refreshing the page.
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Other Preferences */}
-      <div>
-        <h3 className="text-sm font-medium text-slate-100 mb-3">
-          Response Preferences
-        </h3>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700">
-            <div>
-              <p className="text-sm font-medium text-slate-100">
-                Response Verbosity
-              </p>
-              <p className="text-xs text-slate-400">
-                Control detail level in responses
-              </p>
-            </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-sm">
-              <option>Concise</option>
-              <option>Balanced</option>
-              <option>Detailed</option>
-            </select>
+      <section className="section-card space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="page-title-icon h-11 w-11 rounded-2xl">
+            <Palette className="h-5 w-5" />
           </div>
-          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-700">
-            <div>
-              <p className="text-sm font-medium text-slate-100">
-                Default Model
-              </p>
-              <p className="text-xs text-slate-400">
-                Preferred model for new sessions
-              </p>
-            </div>
-            <select className="px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 text-sm">
-              {availableModels.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
-              ))}
-            </select>
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-slate-100">
+              Appearance
+            </h3>
+            <p className="text-sm text-slate-400">
+              Choose the default look for the dashboard. System mode respects
+              your device preference and updates automatically when it changes.
+            </p>
           </div>
         </div>
-      </div>
-      <div className="pt-4 border-t border-slate-700">
-        <p className="text-xs text-slate-400">
-          Preferences are saved locally and applied to future sessions.
+        <ThemeSelector />
+      </section>
+
+      <section className="section-card space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="page-title-icon h-11 w-11 rounded-2xl">
+            <SunMoon className="h-5 w-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100">
+              Release-ready defaults
+            </h3>
+            <p className="text-sm text-slate-400">
+              This tab now exposes only live, working preferences. Removed the
+              placeholder response and model settings that were not actually
+              persisted anywhere.
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500">
+          Theme preference is stored locally and applies immediately across the
+          public landing page and the app shell.
         </p>
-      </div>
+      </section>
     </div>
   );
 }

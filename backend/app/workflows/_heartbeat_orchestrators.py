@@ -53,6 +53,28 @@ _SPECIALIST_SESSIONS_HEADER = "Active specialist sessions:"
 # Lane classification constant
 _LANE_RECONCILED = "reconciled"
 
+_QUEUE_TRUTH_SKIPPABLE_LANE_STATES = frozenset({
+    "active",
+    "mixed",
+    "stale_active",
+})
+
+
+async def _get_recent_failed_tasks_summary(
+    target_project_id: str | None = None,
+    *,
+    heartbeat_state: SummitFlowHeartbeatState | None = None,
+) -> str:
+    """Delegate recent-failed-task rendering through the stable orchestrator seam."""
+    from app.workflows._heartbeat_failed_tasks import (
+        _get_recent_failed_tasks_summary as _impl,
+    )
+
+    return await _impl(
+        target_project_id,
+        heartbeat_state=heartbeat_state,
+    )
+
 
 # --- State collectors ---
 
@@ -150,28 +172,50 @@ async def _get_workstream_inventory(
 ) -> str:
     """Build a heartbeat section that classifies active/recent work lanes."""
     from app.workflows._heartbeat_data import _query_recent_workstream_sessions
-    from app.workflows._heartbeat_workstream import _build_workstream_lines, _group_rows_by_lane
+    from app.workflows._heartbeat_workstream import (
+        _build_workstream_lines,
+        _classify_workstream_lane,
+        _group_rows_by_lane,
+    )
 
     try:
-        queue_truth_available, stale_tasks, visible_task_ids, _ = (
-            await _resolve_workstream_task_context(
-                task_overview=task_overview,
-                task_overview_payload=task_overview_payload,
-                heartbeat_state=heartbeat_state,
-                target_project_id=target_project_id,
-            )
-        )
         rows = (
             agent_hub_state.workstream_rows
             if agent_hub_state is not None
             else await _query_recent_workstream_sessions(target_project_id)
         )
-        if not rows and not stale_tasks:
-            return ""
         grouped = _group_rows_by_lane(rows)
-        stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
+        lane_states = {
+            _classify_workstream_lane(lane_rows)
+            for lane_rows in grouped.values()
+        }
+
+        needs_queue_truth = (
+            task_overview is not None
+            or task_overview_payload is not None
+            or heartbeat_state is not None
+            or not rows
+            or not lane_states
+            or not lane_states.issubset(_QUEUE_TRUTH_SKIPPABLE_LANE_STATES)
+        )
+
+        if needs_queue_truth:
+            queue_truth_available, stale_tasks, visible_task_ids, _ = (
+                await _resolve_workstream_task_context(
+                    task_overview=task_overview,
+                    task_overview_payload=task_overview_payload,
+                    heartbeat_state=heartbeat_state,
+                    target_project_id=target_project_id,
+                )
+            )
+        else:
+            queue_truth_available = False
+            stale_tasks = []
+            visible_task_ids = set()
+
         if not grouped and not stale_tasks:
             return ""
+        stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
         lines = _build_workstream_lines(
             grouped, stale_keys, visible_task_ids,
             queue_truth_available=queue_truth_available, provider=provider,

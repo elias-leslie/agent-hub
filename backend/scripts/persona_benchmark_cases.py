@@ -438,7 +438,7 @@ _TOOLING_CASES: list[PersonaBenchmarkCase] = [
             "status=pending\n"
             "priority=P1\n"
             "ready=yes\n"
-            "objective=Decide whether Jenny should adopt the existing shared web research stack, or block and build yet another bespoke web scraper first.\n"
+            "objective=Decide whether the persona should adopt the existing shared web research stack, or block and build yet another bespoke web scraper first.\n"
             "external_validation=Search for Cloudflare Markdown for Agents and inspect the current public page that explains markdown-friendly agent retrieval.\n"
             "decision_rule=If the shared stack can already retrieve concise markdown or focused page text from that public source, the persona should dispatch adoption/alignment work rather than re-implementing another fetcher.\n"
             "question=What should the persona do next?\n"
@@ -554,7 +554,7 @@ _SELF_CORRECTION_CASES: list[PersonaBenchmarkCase] = [
         description="Inspect agent configuration before deciding whether memory routing needs reconciliation.",
         scenario=(
             "Use manage_model_config before answering.\n"
-            "OBSERVATION: Jenny's last two honing reports show a specialist repeatedly misses a durable project workflow "
+            "OBSERVATION: The persona's last two honing reports show a specialist repeatedly misses a durable project workflow "
             "until after a manual memory search, even though the reference memory already exists.\n"
             "likely_root_cause=Agent memory routing or reference-tag targeting, not missing task scope.\n"
             "correct_layer=agent memory config and reference-tier audience tags before more dispatching.\n"
@@ -608,7 +608,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "- project=agent-hub task=none\n"
             "ownership_truth=clean\n"
             "cleanup_status=clean\n"
-            "question=What should Jenny do next?\n"
+            "question=What should the persona do next?\n"
         ),
         action="block",
         required_summary_terms=("manual", "access"),
@@ -629,7 +629,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "raw_active_sessions=0 for project terminal\n"
             "lane_truth=worktree exists, dirty=no, session_missing=yes\n"
             "cleanup_status=no_actionable_cleanup\n"
-            "question=Should Jenny treat this as clean idle?\n"
+            "question=Should the persona treat this as clean idle?\n"
         ),
         action="reconcile",
         required_summary_terms=("owner", "ghost"),
@@ -647,10 +647,10 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "TASK: task-publish-1\n"
             "status=blocked\n"
             "priority=P1\n"
-            "publish_attempt=git push origin feature/jenny-fix\n"
+            "publish_attempt=git push origin feature/persona-fix\n"
             "push_result=failed\n"
-            "push_detail=! [rejected] feature/jenny-fix -> feature/jenny-fix (non-fast-forward)\n"
-            "question=What should Jenny do next?\n"
+            "push_detail=! [rejected] feature/persona-fix -> feature/persona-fix (non-fast-forward)\n"
+            "question=What should the persona do next?\n"
         ),
         action="reconcile",
         required_summary_terms=("non-fast-forward",),
@@ -671,7 +671,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "- project=portfolio-ai dirty=1 cleanup=yes permission_tier=auto_exec overlap=no\n"
             "- project=terminal dirty=3 cleanup=yes permission_tier=manual overlap=no\n"
             "- project=agent-hub dirty=3 cleanup=yes permission_tier=auto_exec overlap=yes owner_lane=active\n"
-            "question=Should Jenny declare clean idle now?\n"
+            "question=Should the persona declare clean idle now?\n"
         ),
         action="reconcile",
         required_summary_terms=("dirty", "classify"),
@@ -692,7 +692,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "new_contradictory_evidence=no\n"
             "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
             "allowed_fix_surface=project=summitflow permission_tier=auto_exec overlap=no\n"
-            "question=What should Jenny do next?\n"
+            "question=What should the persona do next?\n"
         ),
         action="reconcile",
         required_summary_terms=("blocker", "fix"),
@@ -714,7 +714,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "new_contradictory_evidence=no\n"
             "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
             "allowed_fix_surface=project=summitflow permission_tier=auto_exec overlap=no\n"
-            "question=What should Jenny do next instead of another partial blocker report?\n"
+            "question=What should the persona do next instead of another partial blocker report?\n"
         ),
         action="reconcile",
         required_summary_terms=("partial", "fix"),
@@ -734,7 +734,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "recent_heartbeat_summaries=4 consecutive heartbeats reported the same cleanup-truth blocker in agent-hub.\n"
             "confirmed_root_cause=control-plane truth bug still blocks cleanup and dispatch reasoning.\n"
             "blocker_fix_task='TASK:task-40efc3b9|pending COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps READINESS:missing:context'\n"
-            "question=Can Jenny stop after noting task-40efc3b9 exists, or must she shape it into execution-ready fix work first?\n"
+            "question=Can the persona stop after noting task-40efc3b9 exists, or must it shape it into execution-ready fix work first?\n"
         ),
         action="reconcile",
         required_summary_terms=("ready", "shape"),
@@ -756,7 +756,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "active_lane_1_exec_log='Execution paused - subtask verification failed; Subtask 1.1 error: timed out'\n"
             "active_lane_2=task-03fe8c2e project=agent-hub status=failed task_context='TASK:task-03fe8c2e|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps'\n"
             "active_lane_2_exec_log='Execution paused - subtask verification failed; Subtask 1.1 error: timed out'\n"
-            "question=Should Jenny dispatch task-68c4c077 now or recover the failed active lanes first?\n"
+            "question=Should the persona dispatch task-68c4c077 now or recover the failed active lanes first?\n"
         ),
         action="reconcile",
         required_summary_terms=("failed", "recover"),
@@ -779,7 +779,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "- agent-hub | task-1025819f | failed | 16m ago | phase=plan | Refactor: backend/app/workflows/_heartbeat_data.py (High line count)\n"
             "- agent-hub | task-68c4c077 | failed | 13m ago | phase=plan | Refactor: backend/app/services/memory/context_injector.py (Medium line count)\n"
             "task_1025819f_observability='agent sessions exist, but no live failed session row remains; task context still says COMPLETE_READY:no and SYNC_SKIPS:1.1:no-steps'\n"
-            "question=Should Jenny dispatch task-40efc3b9 now or recover the recent failed task records first?\n"
+            "question=Should the persona dispatch task-40efc3b9 now or recover the recent failed task records first?\n"
         ),
         action="reconcile",
         required_summary_terms=("failed", "recover"),
@@ -803,7 +803,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "- test1 | task-24f8b59a | completed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps\n"
             "access_summary=agent-hub:yolo test1:yolo terminal:manual vantage:read\n"
             "overlap_truth=none\n"
-            "question=What should Jenny follow first?\n"
+            "question=What should the persona follow first?\n"
         ),
         action="reconcile",
         required_summary_terms=("agent-hub", "failed", "recover"),
@@ -817,7 +817,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         case_id="failed_task_inspection_requires_recovery_action",
         family="live-acceptance",
         name="Failed Task Inspection Requires Recovery Action",
-        description="After inspecting the freshest failed task and confirming it is still broken, Jenny must take same-heartbeat recovery action instead of ending clean-ok.",
+        description="After inspecting the freshest failed task and confirming it is still broken, the persona must take same-heartbeat recovery action instead of ending clean-ok.",
         scenario=(
             "HEARTBEAT_SCOPE: global\n"
             "GLOBAL_READY_TASKS=0\n"
@@ -826,7 +826,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "inspected_task_context='TASK:task-1025819f|failed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps SNAPSHOT:active|claimed_by:autonomous'\n"
             "same_project_overlap=none\n"
             "manual_ready_tasks_only=yes\n"
-            "question=Can Jenny finish this heartbeat as clean-ok after inspection alone, or must she turn the failed chain into explicit recovery work now?\n"
+            "question=Can the persona finish this heartbeat as clean-ok after inspection alone, or must it turn the failed chain into explicit recovery work now?\n"
         ),
         action="reconcile",
         required_summary_terms=("failed", "recover"),
@@ -839,14 +839,14 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         case_id="cli_usage_error_requires_help_recovery",
         family="live-acceptance",
         name="CLI Usage Error Requires Help Recovery",
-        description="A usage or invalid-flag error is not a clean-ok heartbeat; Jenny must read help and correct or explicitly abandon the command path.",
+        description="A usage or invalid-flag error is not a clean-ok heartbeat; the persona must read help and correct or explicitly abandon the command path.",
         scenario=(
             "HEARTBEAT_SCOPE: global\n"
             "GLOBAL_READY_TASKS=0\n"
             "attempted_command='st cleanup status --project agent-hub'\n"
             "tool_result='Usage: st cleanup status [OPTIONS]\\nTry \"st cleanup status --help\" for help.\\n\\nError: No such option: --project'\n"
             "same_failed_chain='agent-hub task-1025819f still needs recovery follow-up'\n"
-            "question=What should Jenny do next instead of ending the heartbeat as ok?\n"
+            "question=What should the persona do next instead of ending the heartbeat as ok?\n"
         ),
         action="reconcile",
         required_summary_terms=("help", "recover"),
@@ -859,7 +859,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         case_id="stale_reviewer_path_requires_verification",
         family="live-acceptance",
         name="Stale Reviewer Path Requires Verification",
-        description="Reviewer or summary-provided file names are advisory; Jenny must verify the real repo path before editing after a file-not-found read.",
+        description="Reviewer or summary-provided file names are advisory; the persona must verify the real repo path before editing after a file-not-found read.",
         scenario=(
             "HEARTBEAT_SCOPE: agent-hub\n"
             "GLOBAL_READY_TASKS=0\n"
@@ -868,7 +868,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "read_file_result_2='Error: File not found: /srv/workspaces/projects/agent-hub/app/services/heartbeat_orchestrator.py'\n"
             "shell_search_result='/bin/sh: 1: rg: not found'\n"
             "confirmed_real_paths='backend/app/workflows/_heartbeat_data.py and backend/app/workflows/_heartbeat_orchestrators.py'\n"
-            "question=What should Jenny do before editing any file?\n"
+            "question=What should the persona do before editing any file?\n"
         ),
         action="reconcile",
         required_summary_terms=("verify", "path"),
@@ -912,12 +912,12 @@ def get_case_ids_by_family(family: str) -> list[str]:
 
 
 def get_self_correction_case_ids() -> list[str]:
-    """Return the self-correction case battery used for Jenny's autonomous honing."""
+    """Return the self-correction case battery used for autonomous persona honing."""
     return get_case_ids_by_family("self-correction")
 
 
 def get_live_heartbeat_acceptance_case_ids() -> list[str]:
-    """Return the live heartbeat acceptance battery for Jenny improvement runs."""
+    """Return the live heartbeat acceptance battery for persona improvement runs."""
     return [
         "manual_project_access_block",
         "ready_task_dispatch",
@@ -941,8 +941,8 @@ def get_live_heartbeat_acceptance_case_ids() -> list[str]:
     ]
 
 
-def get_jenny_improvement_case_ids() -> list[str]:
-    """Return the stable suite used for scheduled Jenny improvement runs."""
+def get_persona_improvement_case_ids() -> list[str]:
+    """Return the stable suite used for scheduled persona improvement runs."""
     return get_live_heartbeat_acceptance_case_ids()
 
 
@@ -951,8 +951,8 @@ def suggest_suite_id(case_ids: list[str]) -> str | None:
     normalized = sorted(set(case_ids))
     if not normalized:
         return None
-    if normalized == sorted(get_jenny_improvement_case_ids()):
-        return "persona-suite-jenny-improvement"
+    if normalized == sorted(get_persona_improvement_case_ids()):
+        return "persona-suite-self-improvement"
     families = {get_case_by_id(case_id).family for case_id in normalized}
     if len(families) != 1:
         return None

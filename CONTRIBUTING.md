@@ -24,12 +24,9 @@ Quality checks should use the project wrappers:
 dt --check --changed-only
 ```
 
-Use the repo service scripts when you need to verify runtime behavior:
-
-```bash
-bash scripts/restart.sh
-bash scripts/rebuild.sh
-```
+When you need to verify runtime behavior, use the same backend, worker, and
+frontend startup commands documented in the README. Do not assume repo-local
+restart helpers exist unless they are checked into this repository.
 
 ## Licensing
 

@@ -219,9 +219,9 @@ async def _active_self_honing_conflicts() -> list[dict[str, Any]]:
 
 
 async def _execute_self_honing(job: Any) -> str:
-    from app.services.persona_improvement import JENNY_IMPROVEMENT_SUITE_ID
+    from app.services.persona_improvement import PERSONA_IMPROVEMENT_SUITE_ID
     from scripts.completion_review_benchmark_cases import get_default_completion_review_case_ids
-    from scripts.persona_benchmark_cases import get_jenny_improvement_case_ids
+    from scripts.persona_benchmark_cases import get_persona_improvement_case_ids
 
     conflicts = await _active_self_honing_conflicts()
     if conflicts:
@@ -238,7 +238,7 @@ async def _execute_self_honing(job: Any) -> str:
 
     result = await run_honing_loop(
         models=models,
-        case_ids=get_jenny_improvement_case_ids(),
+        case_ids=get_persona_improvement_case_ids(),
         runs_per_case=_SELF_HONING_RUNS_PER_CASE,
         reviewer_models=reviewer_models or None,
         reviewer_case_ids=reviewer_case_ids,
@@ -255,7 +255,7 @@ async def _execute_self_honing(job: Any) -> str:
         cohort_repetitions=_SELF_HONING_COHORT_REPETITIONS,
         base_url="http://localhost:8003",
         output_json_path=output_json_path,
-        suite_id=JENNY_IMPROVEMENT_SUITE_ID,
+        suite_id=PERSONA_IMPROVEMENT_SUITE_ID,
         agent_slug="persona",
         persist_results=True,
         disable_completion_review=not bool(reviewer_models),

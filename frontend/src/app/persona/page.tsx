@@ -139,14 +139,14 @@ function PersonaContent() {
 
   if (personaLoading) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#0a0b0f]">
+      <div className="h-full flex items-center justify-center bg-slate-950">
         <Loader2 className="h-6 w-6 animate-spin text-amber-500/50" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0a0b0f]">
+    <div className="h-full flex flex-col bg-slate-950">
       {/* ── Status bar ── */}
       <header className="flex-shrink-0 border-b border-slate-800/60 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-slate-950/95 backdrop-blur-xl z-20 relative">
         <div className="flex items-center gap-3.5 px-5 py-3">
@@ -227,7 +227,7 @@ function PersonaContent() {
             <Link
               href="/persona/analytics"
               className="p-1.5 rounded-lg transition-all text-slate-500 hover:bg-slate-800/80 hover:text-slate-300"
-              title="Jenny improvement"
+              title={`${personaName} improvement`}
             >
               <Activity className="h-4 w-4" />
             </Link>
@@ -286,7 +286,7 @@ export default function PersonaPage() {
   return (
     <Suspense
       fallback={
-        <div className="h-full flex items-center justify-center bg-[#0a0b0f]">
+        <div className="h-full flex items-center justify-center bg-slate-950">
           <Loader2 className="h-6 w-6 animate-spin text-amber-500/50" />
         </div>
       }

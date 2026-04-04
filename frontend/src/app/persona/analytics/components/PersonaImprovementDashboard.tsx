@@ -31,6 +31,7 @@ import type {
   PersonaImprovementDashboard,
   PersonaImprovementRecentRun,
 } from "../types";
+import { usePersonaDisplayName } from "../../hooks/usePersonaDisplayName";
 import { PersonaImprovementTrendSection } from "./PersonaImprovementTrendSection";
 
 type DashboardWindow = 7 | 30 | 90;
@@ -229,17 +230,19 @@ function RecentRunsSection({
   runDetail,
   runDetailLoading,
   onRunClick,
+  personaName,
 }: {
   recentRuns: PersonaImprovementRecentRun[];
   expandedRunId: string | null;
   runDetail: AgentBenchmarkRunDetail | null;
   runDetailLoading: boolean;
   onRunClick: (runId: string) => void;
+  personaName: string;
 }) {
   return (
     <ChartCard title="Recent Runs">
       {recentRuns.length === 0 ? (
-        <p className="text-sm text-slate-400">No Jenny improvement runs yet.</p>
+        <p className="text-sm text-slate-400">No {personaName} improvement runs yet.</p>
       ) : (
         <div className="space-y-3">
           {recentRuns.map((run) => {
@@ -345,7 +348,13 @@ function RecentRunsSection({
   );
 }
 
-function RiskSection({ dashboard }: { dashboard: PersonaImprovementDashboard }) {
+function RiskSection({
+  dashboard,
+  personaName,
+}: {
+  dashboard: PersonaImprovementDashboard;
+  personaName: string;
+}) {
   const hasScheduleRisks = dashboard.schedule_risks.length > 0;
   const hasFieldRisks = dashboard.field_risks.length > 0;
   const hasLabRisks = dashboard.open_regressions.length > 0;
@@ -354,7 +363,7 @@ function RiskSection({ dashboard }: { dashboard: PersonaImprovementDashboard }) 
   return (
     <ChartCard title="Current Risks">
       {!hasScheduleRisks && !hasFieldRisks && !hasLabRisks && !hasFieldReviewGate ? (
-        <p className="text-sm text-slate-400">No open Jenny schedule, field, or lab risks.</p>
+        <p className="text-sm text-slate-400">No open {personaName} schedule, field, or lab risks.</p>
       ) : (
         <div className="space-y-3">
           {hasFieldReviewGate ? (
@@ -508,6 +517,7 @@ function FieldRealitySection({
 export function PersonaImprovementDashboard() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { personaName, personaPossessive } = usePersonaDisplayName();
   const [windowDays, setWindowDays] = useState<DashboardWindow>(30);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [runDetail, setRunDetail] = useState<AgentBenchmarkRunDetail | null>(null);
@@ -603,13 +613,13 @@ export function PersonaImprovementDashboard() {
   }
 
   if (error || !dashboard) {
-    const message = error instanceof Error ? error.message : "Failed to load Jenny improvement dashboard";
+    const message = error instanceof Error ? error.message : `Failed to load ${personaName} improvement dashboard`;
     return (
       <div className="flex min-h-screen items-center justify-center px-6">
         <div className="fixed inset-0 bg-grid-pattern pointer-events-none opacity-30" />
         <div className="relative max-w-md rounded-2xl border border-rose-900 bg-slate-900/90 p-8 text-center">
           <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-rose-500" />
-          <p className="text-sm font-semibold text-slate-100">Jenny improvement unavailable</p>
+          <p className="text-sm font-semibold text-slate-100">{personaName} improvement unavailable</p>
           <p className="mt-2 text-sm text-slate-400">{message}</p>
         </div>
       </div>
@@ -676,7 +686,7 @@ export function PersonaImprovementDashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-bold tracking-tight text-slate-100">
-                  Jenny Improvement
+                  {personaName} Improvement
                 </h1>
                 <span className={`rounded px-2 py-0.5 text-xs font-semibold ${statusTone}`}>
                   {dashboard.schedule.enabled ? "Scheduled" : "Paused"}
@@ -725,11 +735,11 @@ export function PersonaImprovementDashboard() {
               Improvement Loop
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-50">
-              One place to manage Jenny’s honing loop.
+              One place to manage {personaPossessive} honing loop.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
               This view keeps the fast protected evaluator and the outer-loop real heartbeat signal
-              in one place. It answers whether Jenny is reliable, whether she is moving the right work,
+              in one place. It answers whether {personaName} is reliable, whether {personaName} is moving the right work,
               and what token/context cost it takes to get there in the lab and in the field.
             </p>
             <div className="mt-5 flex flex-wrap gap-2 text-xs">
@@ -761,7 +771,7 @@ export function PersonaImprovementDashboard() {
                 <div>
                   <p className="text-sm font-semibold text-slate-100">Scheduled self-improvement</p>
                   <p className="text-xs text-slate-400">
-                    Turn the recurring Jenny improvement loop on or off.
+                    Turn the recurring {personaName} improvement loop on or off.
                   </p>
                 </div>
                 <button
@@ -909,6 +919,7 @@ export function PersonaImprovementDashboard() {
           <PersonaImprovementTrendSection
             labTrend={dashboard.trend}
             fieldTrend={dashboard.field_trend}
+            personaName={personaName}
           />
         </div>
 
@@ -919,8 +930,9 @@ export function PersonaImprovementDashboard() {
             runDetail={runDetail}
             runDetailLoading={runDetailLoading}
             onRunClick={handleRunClick}
+            personaName={personaName}
           />
-          <RiskSection dashboard={dashboard} />
+          <RiskSection dashboard={dashboard} personaName={personaName} />
         </div>
       </main>
     </div>
