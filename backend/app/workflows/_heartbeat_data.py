@@ -422,7 +422,7 @@ async def _fetch_recently_completed_sessions_section(
 
     Gives the persona automatic visibility into what dispatched agents accomplished.
     """
-    from app.workflows._heartbeat_orchestrators import (
+    from app.workflows._heartbeat_completed_sessions import (
         _query_completed_sessions_with_summaries,
         _render_completed_session_rows,
     )

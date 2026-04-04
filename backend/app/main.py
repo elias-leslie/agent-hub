@@ -14,8 +14,14 @@ from app.config import settings
 from app.db import async_session
 from app.exception_handlers import setup_exception_handlers
 from app.middleware.access_control import AccessControlMiddleware
+from app.services.agent_bootstrap_service import bootstrap_default_agents
+from app.services.agent_model_reconciliation_service import (
+    reconcile_agent_models_to_available_providers,
+)
 from app.services.credential_manager import get_credential_manager
+from app.services.env_credential_service import load_env_credentials_into_cache
 from app.services.events import stop_all_stream_bridges
+from app.services.first_party_client_service import reconcile_first_party_clients
 from app.services.memory.scope_normalization import normalize_legacy_scope_rows
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.project_permission_service import reconcile_registered_project_access
@@ -39,6 +45,16 @@ async def _startup() -> None:
     loaded = await credential_manager.load_with_retry(async_session)
     logger.info("Loaded %d credentials at startup", loaded)
 
+    env_credentials = load_env_credentials_into_cache()
+    if env_credentials:
+        logger.warning(
+            "Loaded %d env-backed credential override(s): %s",
+            len(env_credentials),
+            ", ".join(env_credentials),
+        )
+    else:
+        logger.info("No env-backed credential overrides configured")
+
     await start_usage_tracker()
     logger.info("Usage tracker started")
 
@@ -58,6 +74,44 @@ async def _startup() -> None:
             logger.info("Memory scope integrity check passed")
     except Exception as e:
         logger.warning("Failed memory scope normalization at startup: %s", e)
+
+    try:
+        async with async_session() as db:
+            seeded_agents = await bootstrap_default_agents(db)
+        if seeded_agents:
+            logger.warning("Seeded %d default agent(s) for a fresh database", seeded_agents)
+        else:
+            logger.info("Default agents already present")
+    except Exception as e:
+        logger.warning("Failed default agent bootstrap at startup: %s", e)
+
+    try:
+        async with async_session() as db:
+            changed_agent_slugs = await reconcile_agent_models_to_available_providers(db)
+        if changed_agent_slugs:
+            logger.warning(
+                "Reconciled %d agent model chain(s) to available providers: %s",
+                len(changed_agent_slugs),
+                ", ".join(changed_agent_slugs),
+            )
+        else:
+            logger.info("Agent model chains already align with available providers")
+    except Exception as e:
+        logger.warning("Failed agent model reconciliation at startup: %s", e)
+
+    try:
+        async with async_session() as db:
+            changed_client_ids = await reconcile_first_party_clients(db)
+        if changed_client_ids:
+            logger.warning(
+                "Reconciled %d first-party client registration(s): %s",
+                len(changed_client_ids),
+                ", ".join(changed_client_ids),
+            )
+        else:
+            logger.info("First-party client registrations already aligned")
+    except Exception as e:
+        logger.warning("Failed first-party client reconciliation at startup: %s", e)
 
     try:
         async with async_session() as db:

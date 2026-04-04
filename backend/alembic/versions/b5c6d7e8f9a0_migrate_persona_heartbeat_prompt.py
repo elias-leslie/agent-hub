@@ -28,7 +28,7 @@ def upgrade() -> None:
             """
             INSERT INTO prompts (slug, name, content, description, is_global, enabled, exclude_agents)
             SELECT
-                :slug,
+                CAST(:slug AS VARCHAR),
                 'Persona Heartbeat Instructions',
                 heartbeat_instructions,
                 'Jenny-specific mutable guidance for heartbeat runs.',
@@ -39,7 +39,7 @@ def upgrade() -> None:
             WHERE heartbeat_instructions IS NOT NULL
               AND btrim(heartbeat_instructions) <> ''
               AND NOT EXISTS (
-                    SELECT 1 FROM prompts p WHERE p.slug = :slug
+                    SELECT 1 FROM prompts p WHERE p.slug = CAST(:slug AS VARCHAR)
               )
             """
         ),
@@ -53,7 +53,7 @@ def downgrade() -> None:
         sa.text(
             """
             DELETE FROM prompts
-            WHERE slug = :slug
+            WHERE slug = CAST(:slug AS VARCHAR)
               AND description = 'Jenny-specific mutable guidance for heartbeat runs.'
             """
         ),

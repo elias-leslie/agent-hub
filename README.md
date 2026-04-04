@@ -101,7 +101,7 @@ agent-hub/
 Infrastructure dependencies:
 - PostgreSQL: 5432
 - Redis: 6379
-- Hatchet: 8888 (HTTP) / 7077 (gRPC)
+- Hatchet: 8888 (HTTP) / 7070 (gRPC)
 
 ## Getting Started
 
@@ -109,46 +109,67 @@ Infrastructure dependencies:
 
 - Python 3.13+
 - Node.js 20+
-- PostgreSQL 15+
-- Redis
+- Docker (recommended for the quickest standalone install)
 
-### Backend
+### Quick Start: Docker Standalone
 
 ```bash
+cp .env.example .env
+
+# Generate and write these values into .env before bootstrapping:
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# For the bundled Docker stack, leave AGENT_HUB_DB_URL and
+# AGENT_HUB_REDIS_URL blank. docker-compose injects the internal service URLs.
+./scripts/generate-hatchet-dev-token.sh .env
+docker compose up -d --build
+```
+
+Standalone Docker URLs:
+
+- Frontend: `http://localhost:3003`
+- Backend: `http://localhost:8003`
+
+### Quick Start: Native Standalone
+
+```bash
+cp .env.example .env.local
+
+# Install frontend workspace deps from the repo root so bundled packages resolve
+pnpm install
+
 cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
-
-# Run migrations
 alembic upgrade head
 
-# Start server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8003
+# Start backend
+uvicorn app.main:app --reload --host "${AGENT_HUB_BIND_HOST:-0.0.0.0}" --port "${AGENT_HUB_PORT:-8003}"
 
-# Start Hatchet worker (separate terminal)
+# Start worker in a second shell
 python -m app.worker
-```
 
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
+# Start frontend in a third shell
+cd ../frontend
+pnpm dev --hostname 0.0.0.0 --port 3003
 ```
 
 ### Environment
 
-Create `~/.env.local` using [`.env.example`](.env.example) and
+Create `.env.local` in the repo root using [`.env.example`](.env.example) and
 [backend/.env.example](backend/.env.example) as the placeholder references:
 
 ```bash
 # Required
-AGENT_HUB_DB_URL=postgresql://agent_hub_app:password@localhost:5432/agent_hub
+AGENT_HUB_DB_URL=postgresql://agent_hub:password@localhost:5432/agent_hub
 AGENT_HUB_REDIS_URL=redis://localhost:6379/2
 AGENT_HUB_ENCRYPTION_KEY=<44-char-fernet-key>
 AGENT_HUB_SECRET_KEY=<random-urlsafe-token>
+HATCHET_CLIENT_TOKEN=<generated-by-scripts/generate-hatchet-dev-token.sh>
+HATCHET_CLIENT_HOST_PORT=127.0.0.1:7070
+HATCHET_CLIENT_TLS_STRATEGY=none
 
 # AI providers (at least one)
 ANTHROPIC_API_KEY=
@@ -157,6 +178,28 @@ GEMINI_API_KEY=
 # Optional
 CORS_ORIGINS=http://localhost:3003
 LOG_LEVEL=INFO
+AGENT_HUB_BIND_HOST=0.0.0.0
+AGENT_HUB_PORT=8003
+AGENT_HUB_DASHBOARD_CLIENT_ID=
+AGENT_HUB_DASHBOARD_REQUEST_SOURCE=agent-hub-dashboard
+NEXT_PUBLIC_AGENT_HUB_DASHBOARD_CLIENT_ID=<same-as-AGENT_HUB_DASHBOARD_CLIENT_ID>
+```
+
+For the bundled Docker quickstart, keep `AGENT_HUB_DB_URL`,
+`AGENT_HUB_REDIS_URL`, and `TEST_AGENT_HUB_DB_URL` blank in `.env`. The compose
+stack injects container-internal defaults. Only the generated secrets, Hatchet
+token, optional provider keys, and optional host port overrides need values.
+
+For same-machine-only installs you can set `AGENT_HUB_BIND_HOST=127.0.0.1`. If companion apps like Monkey Fight, Terminal, or Portfolio AI need to reach Agent Hub from another machine, keep it on an externally reachable bind address and tighten access with network policy or a reverse proxy instead of loopback-only binding.
+
+When Agent Hub is installed alongside companion apps, also set the matching
+first-party client IDs in the same `.env.local` so clean installs auto-register
+them on startup:
+
+```bash
+SUMMITFLOW_CLIENT_ID=
+PORTFOLIO_CLIENT_ID=
+MONKEY_FIGHT_CLIENT_ID=
 ```
 
 ## Frontend Pages
@@ -206,13 +249,7 @@ pip install agent-hub-client  # from packages/agent-hub-client
 
 ## Services
 
-All services run as Docker containers via the shared SummitFlow Compose file (`~/summitflow/docker/compose/docker-compose.yml`, `--profile agent-hub` or `--profile full`).
-
-```bash
-scripts/rebuild.sh            # Full rebuild and restart (auto-detects Docker)
-scripts/rebuild.sh --restart  # Restart only
-scripts/rebuild.sh --status   # Check service health
-```
+Public standalone installs should use this repo's own `docker-compose.yml` or the native commands above. The shared SummitFlow compose file is an internal deployment path, not the public install story.
 
 ## Testing
 
