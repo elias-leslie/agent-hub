@@ -30,6 +30,7 @@ import {
   formatScore,
   summarizeArenaIssue,
 } from "../utils";
+import { usePersonaDisplayName } from "@/app/persona/hooks/usePersonaDisplayName";
 import { ArenaAgentCard } from "./ArenaAgentCard";
 
 type ArenaWindow = 7 | 30 | 90;
@@ -60,12 +61,12 @@ function deriveMemoryGovernanceTone(status: string) {
   return "bg-emerald-950/30 text-emerald-300 ring-1 ring-emerald-800";
 }
 
-function deriveSystemStatus(overview: ArenaOverview) {
+function deriveSystemStatus(overview: ArenaOverview, personaName: string) {
   if (overview.system.total_regressions >= 8 || (overview.system.avg_pass_rate ?? 100) < 60) {
     return {
       label: "Regression pressure",
       tone: "bg-rose-950/30 text-rose-300 ring-1 ring-rose-800",
-      detail: "Jenny and the workforce have active failures worth triaging before confidence rises.",
+      detail: `${personaName} and the workforce have active failures worth triaging before confidence rises.`,
     };
   }
   if (
@@ -144,6 +145,7 @@ function LoadingState() {
 }
 
 export function ArenaCommandCenter() {
+  const { personaName, personaPossessive } = usePersonaDisplayName();
   const [windowDays, setWindowDays] = useState<ArenaWindow>(30);
 
   const {
@@ -157,8 +159,8 @@ export function ArenaCommandCenter() {
 
   const overview = data ?? null;
   const systemStatus = useMemo(
-    () => (overview ? deriveSystemStatus(overview) : null),
-    [overview],
+    () => (overview ? deriveSystemStatus(overview, personaName) : null),
+    [overview, personaName],
   );
   const memoryGovernance = useMemo(() => {
     if (!overview) {
@@ -268,7 +270,7 @@ export function ArenaCommandCenter() {
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full bg-amber-950/60 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">
                 <Sparkles className="h-3.5 w-3.5" />
-                Jenny + Agent Pulse
+                {personaName} + Agent Pulse
               </div>
               <h2 className="mt-4 text-3xl font-semibold tracking-tight lg:text-4xl">
                 <span className="gradient-text-amber">See autonomy, memory, and benchmark</span>
@@ -400,7 +402,7 @@ export function ArenaCommandCenter() {
               <div>
                 <p className="text-sm font-semibold text-slate-100">Daily review</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Jenny’s evidence review loop for small justified changes.
+                  {personaPossessive} evidence review loop for small justified changes.
                 </p>
               </div>
               <CalendarClock className="h-5 w-5 text-emerald-500" />
@@ -426,7 +428,7 @@ export function ArenaCommandCenter() {
               <div>
                 <p className="text-sm font-semibold text-slate-100">Nightly honing</p>
                 <p className="mt-1 text-sm text-slate-400">
-                  Benchmark-backed self-correction for Jenny and her routing choices.
+                  Benchmark-backed self-correction for {personaName} and {personaPossessive} routing choices.
                 </p>
               </div>
               <FlaskConical className="h-5 w-5 text-violet-400" />
@@ -492,7 +494,7 @@ export function ArenaCommandCenter() {
               <div>
                 <h3 className="text-sm font-semibold text-slate-100">Recent issues</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                  Latest negative signals that are actually worth Jenny’s attention.
+                  Latest negative signals that are actually worth {personaPossessive} attention.
                 </p>
               </div>
               <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -714,7 +716,7 @@ export function ArenaCommandCenter() {
                 <div>
                   <h3 className="text-sm font-semibold text-slate-100">Experiment + regression pulse</h3>
                   <p className="mt-1 text-sm text-slate-400">
-                    Recent experiment decisions and open benchmark failures from Jenny’s loop.
+                    Recent experiment decisions and open benchmark failures from {personaPossessive} loop.
                   </p>
                 </div>
                 <Trophy className="h-5 w-5 text-amber-500" />

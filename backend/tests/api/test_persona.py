@@ -225,7 +225,7 @@ class TestPersonaImprovementDashboardEndpoint:
     def test_returns_focused_improvement_dashboard(self, api_client, mock_db_session):
         payload = {
             "generated_at": "2026-03-31T18:00:00Z",
-            "suite_id": "persona-suite-jenny-improvement",
+            "suite_id": "persona-suite-self-improvement",
             "days": 30,
             "schedule": {
                 "job_id": "job-123",
@@ -251,7 +251,7 @@ class TestPersonaImprovementDashboardEndpoint:
             "latest_lab_run": {
                 "run_id": "run-12",
                 "benchmark_id": "persona-benchmark-latest",
-                "suite_id": "persona-suite-jenny-improvement",
+                "suite_id": "persona-suite-self-improvement",
                 "run_kind": "honing_iteration",
                 "started_at": "2026-03-31T16:55:00Z",
                 "completed_at": "2026-03-31T17:00:00Z",
@@ -312,7 +312,7 @@ class TestPersonaImprovementDashboardEndpoint:
                     "run_id": "run-1",
                     "completed_at": "2026-03-31T17:00:00Z",
                     "run_kind": "honing_baseline",
-                    "suite_id": "persona-suite-jenny-improvement",
+                    "suite_id": "persona-suite-self-improvement",
                     "reliability": 90.0,
                     "effectiveness": 82.0,
                     "avg_total_tokens": 1600.0,
@@ -350,7 +350,7 @@ class TestPersonaImprovementDashboardEndpoint:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["suite_id"] == "persona-suite-jenny-improvement"
+        assert data["suite_id"] == "persona-suite-self-improvement"
         assert data["schedule"]["enabled"] is True
         assert data["overview"]["reliability"] == 91.2
         assert data["latest_lab_run"]["run_id"] == "run-12"

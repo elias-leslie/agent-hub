@@ -324,7 +324,7 @@ async def collect_improvement_signal_snapshot(
     max_clusters: int = 5,
     max_reference_items: int = 6,
 ) -> dict[str, Any]:
-    """Return structured evidence for Jenny's self-improvement loops."""
+    """Return structured evidence for persona self-improvement loops."""
     cutoff = datetime.now(UTC) - timedelta(days=days_back)
     async with async_session() as db:
         performance_logs, open_clusters, memory_events, experiment_summaries, memory_governance = (
@@ -373,7 +373,7 @@ async def build_improvement_signal_digest(
     max_clusters: int = 5,
     max_reference_items: int = 6,
 ) -> str:
-    """Return a compact evidence digest for Jenny's self-improvement loops."""
+    """Return a compact evidence digest for persona self-improvement loops."""
     snapshot = await collect_improvement_signal_snapshot(
         project_id=project_id,
         primary_agent_slug=primary_agent_slug,

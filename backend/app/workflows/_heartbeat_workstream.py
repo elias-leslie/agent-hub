@@ -274,14 +274,6 @@ def _build_workstream_lines(
     for (project_id, lane_key), lane_rows in sorted(grouped.items()):
         task_id = _infer_lane_task_id(lane_rows)
         lane_state = _classify_workstream_lane(lane_rows)
-        if _should_skip_lane(
-            lane_state,
-            task_id,
-            lane_rows,
-            visible_task_ids,
-            queue_truth_available=queue_truth_available,
-        ):
-            continue
         if task_id and (project_id, task_id) in stale_keys:
             next_a = _tool_call(
                 "manage_tasks",
@@ -292,6 +284,14 @@ def _build_workstream_lines(
                 f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
             )
             stale_keys.discard((project_id, task_id))
+            continue
+        if _should_skip_lane(
+            lane_state,
+            task_id,
+            lane_rows,
+            visible_task_ids,
+            queue_truth_available=queue_truth_available,
+        ):
             continue
         lines.append(_build_lane_line(project_id, lane_key, task_id, lane_state, lane_rows, provider))
     for project_id, task_id in sorted(stale_keys):

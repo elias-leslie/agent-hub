@@ -134,7 +134,7 @@ async def get_improvement_dashboard(
     days: int = 30,
     limit: int = 8,
 ) -> PersonaImprovementDashboardResponse:
-    """Return the focused Jenny improvement dashboard payload."""
+    """Return the focused persona improvement dashboard payload."""
     return PersonaImprovementDashboardResponse(
         **await get_persona_improvement_dashboard(db, days=days, limit=limit)
     )
@@ -145,7 +145,7 @@ async def update_improvement_schedule(
     update: PersonaImprovementScheduleUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> PersonaImprovementScheduleResponse:
-    """Enable or disable Jenny's scheduled improvement loop and update its cadence."""
+    """Enable or disable the persona's scheduled improvement loop and update its cadence."""
     from fastapi import HTTPException
 
     try:

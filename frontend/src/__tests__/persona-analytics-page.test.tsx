@@ -8,7 +8,7 @@ vi.mock("@/app/persona/analytics/components/PersonaImprovementDashboard", () => 
 }));
 
 describe("PersonaAnalyticsPage", () => {
-  it("renders the dedicated Jenny improvement dashboard", () => {
+  it("renders the dedicated persona improvement dashboard", () => {
     render(<PersonaAnalyticsPage />);
 
     expect(screen.getByText("persona-improvement-dashboard")).toBeInTheDocument();

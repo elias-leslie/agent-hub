@@ -25,7 +25,7 @@ const NAV_ITEMS: NavItem[] = [
     href: "/persona",
     label: "Persona",
     icon: User,
-    description: "Your AI companion",
+    description: "Workspace & automation",
   },
   {
     href: "/dashboard",

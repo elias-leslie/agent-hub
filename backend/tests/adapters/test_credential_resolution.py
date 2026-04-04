@@ -9,6 +9,15 @@ import pytest
 from app.services.credential_manager import CredentialManager
 
 
+@pytest.fixture(autouse=True)
+def _reset_credential_manager_singleton() -> None:
+    CredentialManager.reset()
+    try:
+        yield
+    finally:
+        CredentialManager.reset()
+
+
 class TestOpenAICompatCredentialResolution:
     """Test credential resolution for OpenAI-compatible adapters."""
 

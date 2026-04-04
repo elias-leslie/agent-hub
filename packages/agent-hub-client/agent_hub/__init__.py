@@ -1,20 +1,9 @@
 """Agent Hub Python Client SDK.
 
-Provides sync and async clients for interacting with Agent Hub API.
+Provides Python clients for interacting with Agent Hub API.
 
 Example usage:
 
-    # Sync client
-    from agent_hub import AgentHubClient
-
-    client = AgentHubClient(base_url="http://localhost:8003")
-    response = client.complete(
-        model="claude-sonnet-4-6",
-        messages=[{"role": "user", "content": "Hello!"}]
-    )
-    print(response.content)
-
-    # Async client
     from agent_hub import AsyncAgentHubClient
 
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
@@ -25,7 +14,7 @@ Example usage:
         print(response.content)
 
     # Streaming
-    async for chunk in client.stream(
+    async for chunk in client.stream_sse(
         model="claude-sonnet-4-6",
         messages=[{"role": "user", "content": "Tell me a story"}]
     ):
@@ -78,7 +67,7 @@ from agent_hub.models import (
 )
 from agent_hub.session import Session, SessionContext
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 __all__ = [
     # Clients
     "AgentHubClient",

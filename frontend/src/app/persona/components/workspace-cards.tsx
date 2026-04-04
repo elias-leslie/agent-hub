@@ -13,6 +13,7 @@ import type {
 import { entryStatusClasses, formatTimeLabel, TimelineTimestamp } from "./workspace-utils";
 import { entrySummary, SessionTranscript } from "./workspace-transcript";
 import type { NarrationTag } from "../hooks/useNarrationTags";
+import { getPersonaDisplayName } from "../utils/displayName";
 
 export type { FilterMode } from "./pulse-helpers";
 export { PulseOverviewPanels } from "./workspace-pulse-panels";
@@ -173,7 +174,7 @@ export function ChildRunCard({ entry, activeIssueTag, selected, expanded, onTogg
   return (
     <div
       className={cn(
-        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0a0b0f]",
+        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950",
         selected ? "border-sky-700/40 bg-sky-950/10 shadow-sm shadow-sky-900/10" : "border-slate-800/30 bg-slate-900/15 hover:border-slate-700/50 hover:bg-slate-800/20",
       )}
       onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggle(); }}
@@ -211,13 +212,13 @@ export function ChildRunCard({ entry, activeIssueTag, selected, expanded, onTogg
 export function HeartbeatCard({ entry, activeIssueTag, selected, expanded, onToggle, details, narrationTags, narrationLoading, personaName }: CardProps) {
   const issueMarkers = visibleIssueMarkers(entry, activeIssueTag);
   const isActive = entry.status === "active";
-  const speakerName = personaName || "Jenny";
+  const speakerName = getPersonaDisplayName(personaName);
   const summaryText = entrySummary(entry, "Routine check completed");
 
   return (
     <div
       className={cn(
-        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0a0b0f]",
+        "group relative rounded-xl border px-3.5 py-3 transition-all duration-200 cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950",
         selected ? "border-amber-700/40 bg-amber-950/10 shadow-sm shadow-amber-900/10" : "border-slate-800/30 bg-slate-900/15 hover:border-slate-700/50 hover:bg-slate-800/20",
       )}
       onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggle(); }}

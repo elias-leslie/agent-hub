@@ -115,7 +115,7 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     });
   });
 
-  it("shows chat errors without pretending Jenny is still responding", async () => {
+  it("shows chat errors without pretending the persona is still responding", async () => {
     mockUseChatStream.mockReturnValue({
       messages: [],
       status: "error",
@@ -137,7 +137,7 @@ describe("UnifiedPersonaWorkspace chat state", () => {
       />,
     );
 
-    expect(screen.queryByText("Jenny is responding")).not.toBeInTheDocument();
+    expect(screen.queryByText(/is responding$/)).not.toBeInTheDocument();
     expect(screen.getByText("Request failed")).toBeInTheDocument();
   });
 });

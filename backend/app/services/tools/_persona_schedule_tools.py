@@ -11,7 +11,7 @@ SCHEDULE_JOB_TOOL = Tool(
     description=(
         "Create a scheduled job — set reminders, daily summaries, or recurring tasks. "
         "Supports one-shot (at), interval (every), and cron expressions. "
-        "Can also schedule Jenny's autonomous self-honing loop."
+        "Can also schedule the persona's autonomous self-honing loop."
     ),
     input_schema={
         "type": "object",
@@ -41,7 +41,7 @@ SCHEDULE_JOB_TOOL = Tool(
                 "enum": ["agent_turn", "push", "self_honing"],
                 "description": (
                     "agent_turn=run as agent, push=send notification, "
-                    "self_honing=run Jenny's scheduled self-honing loop"
+                    "self_honing=run the persona's scheduled self-honing loop"
                 ),
                 "default": "agent_turn",
             },

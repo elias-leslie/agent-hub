@@ -3,6 +3,7 @@ import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import { useToastActions } from "@/components/error/toast";
 import type { Persona, PersonaUpdate } from "@/types/persona";
 import { useDebouncedAutosave } from "./useDebouncedAutosave";
+import { fetchPersona as fetchPersonaRecord } from "@/lib/api/persona";
 
 export interface PersonaAutosaveState {
   status: "idle" | "scheduled" | "saving" | "saved" | "error";
@@ -32,11 +33,9 @@ export function usePersona(): UsePersonaReturn {
 
   useEffect(() => {
     let cancelled = false;
-    async function fetchPersona() {
+    async function loadPersona() {
       try {
-        const res = await fetchApi(buildApiUrl("/api/persona"));
-        if (!res.ok) throw new Error(`Failed to fetch persona: ${res.status}`);
-        const data = await res.json();
+        const data = await fetchPersonaRecord();
         if (!cancelled) {
           setPersona(data);
           setError(null);
@@ -49,7 +48,7 @@ export function usePersona(): UsePersonaReturn {
         if (!cancelled) setLoading(false);
       }
     }
-    fetchPersona();
+    loadPersona();
     return () => { cancelled = true; };
   }, []);
 

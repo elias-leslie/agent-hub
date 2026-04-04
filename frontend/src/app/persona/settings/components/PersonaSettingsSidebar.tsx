@@ -1,6 +1,7 @@
 import { User, Cpu, ScrollText, Volume2, Timer, Shield, Brain, X, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PersonaTabId } from "../types";
+import { getPersonaDisplayName } from "../../utils/displayName";
 
 const TABS: { id: PersonaTabId; label: string; description: string; icon: React.ElementType }[] = [
   { id: "identity", label: "Identity", description: "Persona name, profile, and onboarding state.", icon: User },
@@ -33,6 +34,8 @@ export function PersonaSettingsSidebar({
   mobileOpen,
   onMobileClose,
 }: PersonaSettingsSidebarProps) {
+  const displayName = getPersonaDisplayName(personaName);
+
   const handleTabClick = (tabId: PersonaTabId) => {
     onTabChange(tabId);
     onMobileClose?.();
@@ -67,7 +70,7 @@ export function PersonaSettingsSidebar({
             <div>
               <h2 className="text-sm font-semibold text-slate-100">Settings Flow</h2>
               <p className="text-xs text-slate-400">
-                Tune the identity, runtime, and autonomy rules for Jenny.
+                Tune the identity, runtime, and autonomy rules for {displayName}.
               </p>
             </div>
           </div>

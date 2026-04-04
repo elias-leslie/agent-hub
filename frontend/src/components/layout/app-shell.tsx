@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStatus } from "@/lib/api";
-import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import { SettingsModal } from "@/components/settings-modal";
 import { SidebarLogo } from "./sidebar-logo";
 import { SidebarNav } from "./sidebar-nav";
 import { SidebarFooter } from "./sidebar-footer";
 import { MobileHeader } from "./mobile-header";
+import { usePersonaDisplayName } from "@/app/persona/hooks/usePersonaDisplayName";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -29,17 +29,7 @@ export function AppShell({ children }: AppShellProps) {
     refetchInterval: 30000,
     staleTime: 10000,
   });
-
-  // Fetch persona name for sidebar display
-  const { data: personaData } = useQuery({
-    queryKey: ["persona-name"],
-    queryFn: async () => {
-      const res = await fetchApi(buildApiUrl("/api/persona"));
-      if (!res.ok) return null;
-      return res.json();
-    },
-    staleTime: 60000,
-  });
+  const { personaName } = usePersonaDisplayName();
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -86,7 +76,7 @@ export function AppShell({ children }: AppShellProps) {
           onMobileClose={() => setIsMobileOpen(false)}
         />
 
-        <SidebarNav isCollapsed={isCollapsed} pathname={pathname} personaName={personaData?.name} />
+        <SidebarNav isCollapsed={isCollapsed} pathname={pathname} personaName={personaName} />
 
         <SidebarFooter
           isCollapsed={isCollapsed}

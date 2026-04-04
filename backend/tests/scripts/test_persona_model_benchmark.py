@@ -11,8 +11,8 @@ import pytest
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_case_by_id,
-    get_jenny_improvement_case_ids,
     get_persona_benchmark_cases,
+    get_persona_improvement_case_ids,
     prepare_case_workspace,
     suggest_suite_id,
 )
@@ -72,10 +72,10 @@ def test_suggest_suite_id_returns_none_for_mixed_case_families() -> None:
     assert suite_id is None
 
 
-def test_suggest_suite_id_uses_jenny_improvement_suite_for_stable_battery() -> None:
-    suite_id = suggest_suite_id(get_jenny_improvement_case_ids())
+def test_suggest_suite_id_uses_persona_improvement_suite_for_stable_battery() -> None:
+    suite_id = suggest_suite_id(get_persona_improvement_case_ids())
 
-    assert suite_id == "persona-suite-jenny-improvement"
+    assert suite_id == "persona-suite-self-improvement"
 
 
 def test_parse_benchmark_json_strips_code_fences() -> None:
@@ -1134,7 +1134,7 @@ def test_failed_task_beats_unrelated_cleanup_case_prioritizes_failed_chain() -> 
     prompt = case.build_prompt()
 
     assert "recent failed task in a writable project should outrank unrelated cleanup" in case.description.lower()
-    assert "What should Jenny follow first?" in prompt
+    assert "What should the persona follow first?" in prompt
     assert case.expected["primary_action"] == "reconcile"
     assert "agent-hub" in case.required_summary_terms
     assert "recover" in case.required_summary_terms

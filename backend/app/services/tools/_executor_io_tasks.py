@@ -28,6 +28,35 @@ logger = logging.getLogger(__name__)
 _CANONICAL_TASK_ID_PREFIX = "task-"
 
 
+def _ownership_rows_to_workstream_rows(
+    ownership_output: str,
+    *,
+    project_id: str,
+) -> list[dict[str, object]]:
+    """Convert `st sessions ownership` text output into minimal workstream rows."""
+    rows: list[dict[str, object]] = []
+    for raw_line in ownership_output.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("- "):
+            continue
+        parts = [part.strip() for part in line[2:].split("|")]
+        if len(parts) < 4:
+            continue
+        owner_project_id, task_id, _idle, statuses = parts[:4]
+        if owner_project_id != project_id or not task_id.startswith(_CANONICAL_TASK_ID_PREFIX):
+            continue
+        for status in (status.strip() for status in statuses.split(",")):
+            if status:
+                rows.append(
+                    {
+                        "project_id": owner_project_id,
+                        "external_id": task_id,
+                        "workstream_status": status,
+                    }
+                )
+    return rows
+
+
 def _normalize_subtask_plan(
     subtasks: list[dict[str, object]] | None,
 ) -> list[dict[str, object]] | None:
@@ -118,18 +147,33 @@ async def _filtered_cleanup_action_items(
     bash_fn: Callable[..., Awaitable[str]],
     cleanup_status: str,
     project_id: str,
+    *,
+    use_live_ownership: bool = False,
 ) -> list:
     """Return cleanup items after dropping reconciled authoritative/superseded residue."""
-    del bash_fn
     items = extract_cleanup_action_items(cleanup_status)
     if not items:
         return []
+
+    if use_live_ownership:
+        try:
+            ownership_output = await bash_fn(_st_cmd("sessions ownership", project_id))
+        except Exception:
+            ownership_output = ""
+
+        workstream_rows = _ownership_rows_to_workstream_rows(
+            ownership_output,
+            project_id=project_id,
+        )
+        if workstream_rows:
+            return filter_reconciled_cleanup_items(items, workstream_rows)
+
     from app.workflows._heartbeat_data import _query_recent_workstream_sessions
 
-    workstream_rows = await _query_recent_workstream_sessions(project_id)
-    if not workstream_rows:
+    fallback_rows = await _query_recent_workstream_sessions(project_id)
+    if not fallback_rows:
         return items
-    return filter_reconciled_cleanup_items(items, workstream_rows)
+    return filter_reconciled_cleanup_items(items, fallback_rows)
 
 
 async def _build_filtered_actionable_cleanup_summary(
@@ -181,6 +225,8 @@ async def _build_dispatch_warning(
 async def _cleanup_dispatch_block_reason(
     bash_fn: Callable[..., Awaitable[str]],
     project_id: str | None,
+    *,
+    use_live_ownership: bool = True,
 ) -> tuple[str | None, str | None]:
     """Return a blocking reason when cleanup residue should stop new dispatches."""
     if not project_id:
@@ -196,6 +242,7 @@ async def _cleanup_dispatch_block_reason(
             bash_fn,
             cleanup_status,
             project_id,
+            use_live_ownership=use_live_ownership and " review:" in cleanup_status,
         )
         actionable = build_actionable_cleanup_summary_from_items(filtered_items)
         if filtered_items:
@@ -335,7 +382,11 @@ async def _handle_dispatch(
     permission_block = await _dispatch_permission_block_reason(project_id)
     if permission_block:
         return permission_block
-    block_reason, cleanup_status = await _cleanup_dispatch_block_reason(bash_fn, project_id)
+    block_reason, cleanup_status = await _cleanup_dispatch_block_reason(
+        bash_fn,
+        project_id,
+        use_live_ownership=False,
+    )
     if block_reason:
         return block_reason
     live_block = await _live_dispatch_block_reason(bash_fn, task_id, project_id)

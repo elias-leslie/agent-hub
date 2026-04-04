@@ -46,7 +46,7 @@ def _mock_persona_improvement_prompt():
             return (
                 "You are the persona reviewing your own benchmark results for honing iteration {iteration}.\n\n"
                 "Your job is to improve your own operating model only where the evidence justifies it.\n"
-                "Stay inside Jenny-improvement work: canonical prompts, memory, model/config, performance logging, and valid control-plane/runtime fixes.\n"
+                "Stay inside persona-improvement work: canonical prompts, memory, model/config, performance logging, and valid control-plane/runtime fixes.\n"
                 "Do not create or dispatch project tasks.\n\n"
                 "Benchmark ranking:\n"
                 "{ranking_block}\n\n"
@@ -66,7 +66,7 @@ def _mock_persona_improvement_prompt():
                 "{reference_block}\n\n"
                 "Required behavior:\n"
                 "- Diagnose the canonical layer first: prompt, memory, config, truth pipeline, evaluator, or runtime.\n"
-                "- Use `persona-evolution-guidelines` as the canonical Jenny improvement prompt and DB-backed prompts rather than Python prompt files.\n"
+                "- Use `persona-evolution-guidelines` as the canonical persona improvement prompt and DB-backed prompts rather than Python prompt files.\n"
                 "- When reviewing your own performance history, use agent_slug=\"persona\" rather than a display name string.\n"
                 "- Use repeated issue clusters, benchmark decisions, and low-yield reference evidence to choose the smallest effective fix.\n"
                 "- If model assignment looks implicated, inspect model/performance tools before changing config.\n"
@@ -79,7 +79,7 @@ def _mock_persona_improvement_prompt():
             )
         if slug == "persona-improvement-review":
             return (
-                "You are reviewing a proposed Jenny self-improvement decision.\n\n"
+                "You are reviewing a proposed persona self-improvement decision.\n\n"
                 "Protected lab summary:\n"
                 "{experiment_summary_block}\n\n"
                 "Completion-review summary:\n"

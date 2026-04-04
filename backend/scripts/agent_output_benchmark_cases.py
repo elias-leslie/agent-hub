@@ -84,7 +84,7 @@ _EXPLICIT_CASES: tuple[AgentOutputBenchmarkCase, ...] = (
         prompt=(
             "Format this note and return ONLY the formatted note body.\n\n"
             "project: agent-hub\n"
-            "owner: jenny\n"
+            "owner: persona\n"
             "status: in progress\n"
             "items:\n"
             "- rotate keys\n"

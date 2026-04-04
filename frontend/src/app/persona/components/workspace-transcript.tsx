@@ -15,6 +15,7 @@ import {
 } from "./workspace-utils";
 import { describeValue } from "./workspace-event-details";
 import type { NarrationTag } from "../hooks/useNarrationTags";
+import { getPersonaDisplayName } from "../utils/displayName";
 
 // ─── Strip observability tags from display text ───
 
@@ -253,7 +254,7 @@ export function SessionTranscript({
     );
   }
 
-  const name = personaName || "Jenny";
+  const name = getPersonaDisplayName(personaName);
 
   return (
     <div className="mt-3 border-t border-slate-800/40 pt-3 space-y-2">

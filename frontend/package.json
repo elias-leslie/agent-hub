@@ -12,7 +12,6 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
     "screenshot:all": "node screenshot-scripts/all.js"
   },
   "dependencies": {
@@ -33,7 +32,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",
-    "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",

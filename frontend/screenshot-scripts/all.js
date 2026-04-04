@@ -1,55 +1,118 @@
-// Run all screenshot scripts
-const { chromium } = require("@playwright/test");
-const path = require("path");
-const fs = require("fs");
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
-const screenshotsDir = path.join(__dirname, "..", "screenshots");
+const repoRoot = path.resolve(__dirname, "..", "..");
+const indexPath = path.join(repoRoot, ".index.yaml");
+const screenshotsDir = process.env.AGENT_HUB_SCREENSHOT_DIR
+  ? path.resolve(process.env.AGENT_HUB_SCREENSHOT_DIR)
+  : path.join(repoRoot, "docs", "screenshots");
 
-// Ensure screenshots directory exists
-if (!fs.existsSync(screenshotsDir)) {
-  fs.mkdirSync(screenshotsDir, { recursive: true });
+const sessionName =
+  process.env.AGENT_HUB_SCREENSHOT_SESSION || "agenthub-screenshots";
+const theme = process.env.AGENT_HUB_SCREENSHOT_THEME || "dark";
+
+function readHostIp() {
+  if (!fs.existsSync(indexPath)) {
+    return null;
+  }
+
+  const content = fs.readFileSync(indexPath, "utf8");
+  const match = content.match(/^\s*host_ip:\s*([^\s]+)\s*$/m);
+
+  return match ? match[1] : null;
+}
+
+function resolveBaseUrl() {
+  const explicitBaseUrl = process.env.AGENT_HUB_SCREENSHOT_BASE_URL?.trim();
+  if (explicitBaseUrl) {
+    return explicitBaseUrl.replace(/\/$/, "");
+  }
+
+  const hostIp = readHostIp();
+  if (hostIp) {
+    return `http://${hostIp}:3003`;
+  }
+
+  return "http://localhost:3003";
+}
+
+const baseUrl = resolveBaseUrl();
+
+function runSfBrowser(args, { allowFailure = false } = {}) {
+  const result = spawnSync(
+    "sf-browser",
+    ["--session", sessionName, "--engine", "chrome", "--color-scheme", theme, ...args],
+    {
+      cwd: repoRoot,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        SF_BROWSER_VIEWPORT_WIDTH:
+          process.env.SF_BROWSER_VIEWPORT_WIDTH || "1440",
+        SF_BROWSER_VIEWPORT_HEIGHT:
+          process.env.SF_BROWSER_VIEWPORT_HEIGHT || "960",
+      },
+    },
+  );
+
+  if (result.status === 0 || allowFailure) {
+    return;
+  }
+
+  throw new Error(`sf-browser ${args.join(" ")} failed with exit code ${result.status}`);
+}
+
+function closeBrowser() {
+  runSfBrowser(["close"], { allowFailure: true });
 }
 
 async function captureAll() {
-  const browser = await chromium.launch();
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-  });
+  fs.mkdirSync(screenshotsDir, { recursive: true });
 
   const pages = [
-    { url: "/dashboard", name: "dashboard", fullPage: true },
-    { url: "/chat", name: "chat", fullPage: false },
-    { url: "/settings", name: "settings", fullPage: true },
-    { url: "/sessions", name: "sessions-list", fullPage: true },
+    { route: "/", name: "landing" },
+    { route: "/dashboard", name: "dashboard" },
+    { route: "/persona", name: "persona-workspace" },
+    { route: "/persona/settings", name: "persona-settings" },
+    { route: "/sessions", name: "sessions-list" },
   ];
 
-  for (const { url, name, fullPage } of pages) {
-    const page = await context.newPage();
+  console.log(`Using base URL: ${baseUrl}`);
+  console.log(`Writing screenshots to: ${screenshotsDir}`);
 
-    console.log(`Capturing ${name}...`);
+  let failed = false;
+
+  for (const page of pages) {
+    const url = `${baseUrl}${page.route}`;
+    const outputPath = path.join(screenshotsDir, `${page.name}.png`);
+
+    console.log(`\nCapturing ${page.name}: ${url}`);
+
     try {
-      await page.goto(`http://localhost:3003${url}`, { timeout: 60000 });
-      await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(2000);
-
-      await page.screenshot({
-        path: path.join(screenshotsDir, `${name}.png`),
-        fullPage,
-      });
-
-      console.log(`  Saved: screenshots/${name}.png`);
-    } catch (err) {
-      console.error(`  Failed to capture ${name}:`, err.message);
-    } finally {
-      await page.close();
+      closeBrowser();
+      runSfBrowser(["open", url]);
+      runSfBrowser(["wait", "--load", "networkidle"]);
+      runSfBrowser(["wait", "1500"]);
+      runSfBrowser(["screenshot", outputPath]);
+      console.log(`Saved: ${path.relative(repoRoot, outputPath)}`);
+    } catch (error) {
+      failed = true;
+      console.error(`Failed to capture ${page.name}: ${error.message}`);
     }
   }
 
-  await browser.close();
-  console.log("\nScreenshot capture complete!");
+  closeBrowser();
+
+  if (failed) {
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("\nScreenshot capture complete.");
 }
 
-captureAll().catch((err) => {
-  console.error("Screenshot capture failed:", err);
+captureAll().catch((error) => {
+  console.error("Screenshot capture failed:", error);
   process.exit(1);
 });

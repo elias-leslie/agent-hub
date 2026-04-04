@@ -15,7 +15,7 @@ class TestArenaOverviewEndpoint:
     @pytest.mark.asyncio
     async def test_get_arena_overview_returns_aggregated_payload(self, api_client) -> None:
         agents = [
-            make_mock_dto(slug="persona", name="Jenny"),
+            make_mock_dto(slug="persona", name="Astra"),
             make_mock_dto(id=2, slug="debugger", name="Debugger"),
         ]
         payload = {
@@ -35,7 +35,7 @@ class TestArenaOverviewEndpoint:
             "scheduled_jobs": [
                 {
                     "id": "job-1",
-                    "name": "Daily Jenny Improvement Review",
+                    "name": "Daily Persona Improvement Review",
                     "payload_type": "agent_turn",
                     "enabled": True,
                     "last_run_at": None,
@@ -119,7 +119,7 @@ class TestArenaOverviewEndpoint:
             "agents": [
                 {
                     "slug": "persona",
-                    "name": "Jenny",
+                    "name": "Astra",
                     "description": "Primary persona",
                     "benchmark": {
                         "total_runs": 12,
@@ -160,7 +160,7 @@ class TestArenaOverviewEndpoint:
             assert response.status_code == 200
             data = response.json()
             assert data["system"]["total_agents"] == 2
-            assert data["scheduled_jobs"][0]["name"] == "Daily Jenny Improvement Review"
+            assert data["scheduled_jobs"][0]["name"] == "Daily Persona Improvement Review"
             assert data["agents"][0]["slug"] == "persona"
             mock_get_overview.assert_awaited_once()
 
