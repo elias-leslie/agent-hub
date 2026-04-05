@@ -2,7 +2,7 @@
 
 **Status:** Draft — Discussion
 **Date:** 2026-03-14
-**Scope:** Agent-Hub, SummitFlow, Portfolio-AI, Terminal
+**Scope:** Agent-Hub, SummitFlow, Portfolio-AI, A-Term
 
 ---
 
@@ -30,7 +30,7 @@ The Artifact Hub lives as a new module inside Agent-Hub (not a standalone micros
 **Justification:**
 - Agent-Hub already owns auth (API keys, clients, project permissions), 32 routers, and is the central dependency for all projects.
 - All agent workflows run through `complete_internal()` — artifact creation is a storage call added to existing flows.
-- SummitFlow, Portfolio-AI, and Terminal already make HTTP calls to Agent-Hub. Same pattern, new endpoints.
+- SummitFlow, Portfolio-AI, and A-Term already make HTTP calls to Agent-Hub. Same pattern, new endpoints.
 - No independent scaling need — we're on a single server with Docker containers sharing a volume.
 
 **New components:**
@@ -311,7 +311,7 @@ import { ArtifactBrowser } from '@agent-hub/artifact-panel';
   types={['research', 'screenshot', 'analysis', 'document']}
 />
 
-// Terminal — upload and browse from terminal UI
+// A-Term — upload and browse from the A-Term UI
 import { ArtifactDropZone, ArtifactBrowser } from '@agent-hub/artifact-panel';
 // Accessible via a slide-out panel or tab
 ```
@@ -424,11 +424,11 @@ These tools are registered in the tool execution layer alongside existing tools.
 - Move `data/artifacts/` (screenshots, evidence.json) into the Hub as `artifact_type=research` and `artifact_type=screenshot`.
 - Watchlist narratives stored as `artifact_type=analysis`.
 
-### 2.3 Terminal File Uploads
+### 2.3 A-Term File Uploads
 
-- Modify Terminal's `files.py` upload endpoint to optionally forward to the Artifact Hub.
-- Add the `ArtifactBrowser` component as a slide-out panel in Terminal's UI.
-- Low priority — Terminal's file uploads are transient by nature.
+- Modify A-Term's `files.py` upload endpoint to optionally forward to the Artifact Hub.
+- Add the `ArtifactBrowser` component as a slide-out panel in A-Term's UI.
+- Low priority — A-Term's file uploads are transient by nature.
 
 ---
 
@@ -716,7 +716,7 @@ BUSINESS_OPS_SCHEDULE = [
         "payload_message": (
             "Run the weekly market research cycle. "
             "Dispatch market-researcher to analyze: "
-            "1) Competitor updates for Agent-Hub, SummitFlow, Portfolio-AI, Terminal. "
+            "1) Competitor updates for Agent-Hub, SummitFlow, Portfolio-AI, A-Term. "
             "2) Emerging trends in AI developer tools, autonomous agents, portfolio management. "
             "3) Pricing benchmarks for similar products. "
             "Store all findings as artifacts in the Hub. "
@@ -963,7 +963,7 @@ This is the single most important gap for autonomous business ops. Without web a
 
 - [ ] Integrate `@agent-hub/artifact-panel` into SummitFlow frontend
 - [ ] Integrate into Portfolio-AI frontend
-- [ ] Integrate into Terminal frontend
+- [ ] Integrate into A-Term frontend
 - [ ] SummitFlow dual-write for new design assets
 - [ ] Portfolio-AI dual-write for new document uploads
 - [ ] Docker shared volume configuration
@@ -1034,7 +1034,7 @@ This is the single most important gap for autonomous business ops. Without web a
 │                                                                  │
 ├──────────┬──────────┬──────────┬──────────┬─────────────────────┤
 │          │          │          │          │                      │
-│ Agent-Hub│SummitFlow│Portfolio │ Terminal │  Future Projects     │
+│ Agent-Hub│SummitFlow│Portfolio │ A-Term   │  Future Projects     │
 │          │          │   -AI    │          │                      │
 │ Full     │ Design   │ Research │ Upload & │  Import package,     │
 │ panel    │ assets,  │ docs,    │ browse   │  pass URL +          │
@@ -1089,10 +1089,10 @@ This is the single most important gap for autonomous business ops. Without web a
 - Investment research feeds into business strategy (equity-analyst outputs are artifacts)
 - Household documents have a backup canonical location
 
-**Terminal:**
+**A-Term:**
 - File uploads can persist beyond sessions via the Hub
-- Browse any artifact from the terminal UI
-- Agents running in terminal sessions can store outputs
+- Browse any artifact from the aterm UI
+- Agents running in aterm sessions can store outputs
 
 ### 10.3 What We Might Be Missing
 

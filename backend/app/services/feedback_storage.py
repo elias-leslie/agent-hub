@@ -16,7 +16,7 @@ from app.models.feedback import FeedbackItem, FeedbackVote
 logger = logging.getLogger(__name__)
 
 ACTIVE_FEEDBACK_STATUSES = ("open", "acknowledged")
-TERMINAL_FEEDBACK_STATUSES = ("resolved", "wont_fix")
+ATERM_FEEDBACK_STATUSES = ("resolved", "wont_fix")
 ARCHIVED_FEEDBACK_STATUS = "archived"
 
 
@@ -325,7 +325,7 @@ async def update_feedback_status(
 
     if status:
         item.status = status
-        if status in TERMINAL_FEEDBACK_STATUSES:
+        if status in ATERM_FEEDBACK_STATUSES:
             item.resolved_at = datetime.now(UTC)
         elif status in ACTIVE_FEEDBACK_STATUSES:
             item.resolved_at = None
@@ -427,7 +427,7 @@ async def archive_stale_feedback_items(
     result = await db.execute(
         update(FeedbackItem)
         .where(
-            FeedbackItem.status.in_(TERMINAL_FEEDBACK_STATUSES),
+            FeedbackItem.status.in_(ATERM_FEEDBACK_STATUSES),
             FeedbackItem.resolved_at.is_not(None),
             FeedbackItem.resolved_at < cutoff,
         )

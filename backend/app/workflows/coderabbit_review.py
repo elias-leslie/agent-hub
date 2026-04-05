@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 REVIEW_PROJECT_IDS = (
     "summitflow",
     "agent-hub",
-    "terminal",
+    "aterm",
     "portfolio-ai",
     "monkey-fight",
 )

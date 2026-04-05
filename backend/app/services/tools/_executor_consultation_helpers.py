@@ -54,7 +54,7 @@ def _terminal_result_line(session: DBSession) -> str | None:
         from app.services.session_live_activity import build_live_activity_response
         activity = build_live_activity_response(session)
     except Exception:
-        logger.debug("Failed to build terminal live activity for inspect_session", exc_info=True)
+        logger.debug("Failed to build aterm live activity for inspect_session", exc_info=True)
         return None
 
     if not activity:

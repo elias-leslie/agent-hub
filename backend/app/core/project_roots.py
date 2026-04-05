@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 
 _CANONICAL_WORKSPACE_ROOT = Path("/srv/workspaces/projects")
+_MANIFEST_NAME = "project.identity.json"
 
 
 def _env_override(project_id: str) -> Path | None:
@@ -46,6 +48,41 @@ def resolve_project_root(project_id: str) -> Path | None:
     candidate = (_CANONICAL_WORKSPACE_ROOT / project_id).resolve()
     if candidate.exists():
         return candidate
+
+    manifest_root = _resolve_manifest_root(project_id)
+    if manifest_root is not None:
+        return manifest_root
+    return None
+
+
+@lru_cache(maxsize=32)
+def _resolve_manifest_root(project_id: str) -> Path | None:
+    if not _CANONICAL_WORKSPACE_ROOT.exists():
+        return None
+
+    for manifest_path in sorted(_CANONICAL_WORKSPACE_ROOT.glob(f"*/{_MANIFEST_NAME}")):
+        try:
+            payload = json.loads(manifest_path.read_text())
+        except Exception:
+            continue
+
+        project = payload.get("project")
+        if not isinstance(project, dict):
+            continue
+
+        aliases = {
+            value
+            for key in ("id", "repo_name")
+            if isinstance((value := project.get(key)), str) and value
+        }
+        for key in ("legacy_ids", "repo_aliases"):
+            values = project.get(key)
+            if isinstance(values, list):
+                aliases.update(value for value in values if isinstance(value, str) and value)
+
+        if project_id in aliases:
+            return manifest_path.parent.resolve()
+
     return None
 
 

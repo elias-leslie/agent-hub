@@ -3,8 +3,8 @@
 Claude CLI PTY wrapper for headless/service environments.
 Fixes: https://github.com/anthropics/claude-code/issues/9026
 
-Creates a pseudo-terminal for the Claude CLI while forwarding
-stdin/stdout and stripping terminal escape sequences.
+Creates a pseudo-aterm for the Claude CLI while forwarding
+stdin/stdout and stripping aterm escape sequences.
 
 Usage: claude-pty-wrapper.py [claude args...]
 """

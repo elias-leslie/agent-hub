@@ -55,7 +55,7 @@ declare -A DB_URLS=(
     ["summitflow"]="${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}"
     ["agent-hub"]="${AGENT_HUB_DB_URL:-postgresql://agent_hub_app@localhost:5432/agent_hub}"
     ["portfolio-ai"]="${PORTFOLIO_AI_DB_URL:-postgresql://portfolio_app@localhost:5432/portfolio_ai}"
-    ["terminal"]="${TERMINAL_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
+    ["aterm"]="${ATERM_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
     ["hatchet"]="${HATCHET_DATABASE_URL:-postgresql://db_admin@localhost:5432/hatchet?sslmode=disable}"
 )
 
@@ -130,6 +130,46 @@ resolve_project_root() {
         return 0
     fi
 
+    local manifest_root
+    manifest_root="$(
+        python3 - "$WORKSPACES_ROOT/projects" "$project" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+workspace_root = Path(sys.argv[1])
+project_id = sys.argv[2]
+
+for manifest_path in sorted(workspace_root.glob("*/project.identity.json")):
+    try:
+        payload = json.loads(manifest_path.read_text())
+    except Exception:
+        continue
+
+    project = payload.get("project")
+    if not isinstance(project, dict):
+        continue
+
+    aliases = {
+        value
+        for key in ("id", "repo_name")
+        if isinstance((value := project.get(key)), str) and value
+    }
+    for key in ("legacy_ids", "repo_aliases"):
+        values = project.get(key)
+        if isinstance(values, list):
+            aliases.update(value for value in values if isinstance(value, str) and value)
+
+    if project_id in aliases:
+        print(manifest_path.parent)
+        break
+PY
+    )"
+    if [[ -n "$manifest_root" && -d "$manifest_root" ]]; then
+        printf '%s\n' "$manifest_root"
+        return 0
+    fi
+
     if [[ -d "$HOME/$project" ]]; then
         printf '%s\n' "$HOME/$project"
         return 0
@@ -143,7 +183,7 @@ declare -A ALEMBIC_DIRS=(
     ["summitflow"]="$(resolve_project_root summitflow)/backend"
     ["agent-hub"]="$(resolve_project_root agent-hub)/backend"
     ["portfolio-ai"]="$(resolve_project_root portfolio-ai)/backend"
-    ["terminal"]="$(resolve_project_root terminal)"
+    ["aterm"]="$(resolve_project_root aterm)"
 )
 
 # Colors

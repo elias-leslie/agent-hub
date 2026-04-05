@@ -127,7 +127,7 @@ export function CodeBlock({
         className,
       )}
     >
-      {/* Header bar with terminal aesthetic */}
+      {/* Header bar with aterm aesthetic */}
       <div
         className={cn(
           "flex items-center justify-between px-3 py-2",
@@ -226,7 +226,7 @@ export function CodeBlock({
         </div>
       </div>
 
-      {/* Subtle scan-line overlay for terminal feel */}
+      {/* Subtle scan-line overlay for aterm feel */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.015]"
         style={{

@@ -30,7 +30,7 @@ FRONTEND_SERVICES: dict[str, tuple[str, int]] = {
     "summitflow": ("summitflow-web", 3001),
     "agent-hub": ("agent-hub-web", 3003),
     "portfolio-ai": ("portfolio-web", 3000),
-    "terminal": ("terminal-web", 3002),
+    "aterm": ("aterm-web", 3002),
     "monkey-fight": ("monkey-fight", 4001),
 }
 

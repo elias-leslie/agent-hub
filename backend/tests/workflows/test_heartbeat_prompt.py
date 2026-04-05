@@ -366,10 +366,10 @@ class TestQueryRecentWorkstreamSessions:
                 SimpleNamespace(
                     id="sess-1",
                     agent_slug="coder",
-                    project_id="terminal",
+                    project_id="aterm",
                     external_id="task-2c2abc80",
                     current_branch="task-2c2abc80/main",
-                    provider_metadata={"cwd": "/srv/workspaces/lanes/terminal/task-2c2abc80"},
+                    provider_metadata={"cwd": "/srv/workspaces/lanes/aterm/task-2c2abc80"},
                     status="completed",
                     workstream_status="authoritative",
                     workstream_note="Selected as authoritative during reconcile",
@@ -1765,7 +1765,7 @@ class TestGetWorkstreamInventory:
             {
                 "session_id": "sess-branch-only",
                 "agent_slug": "refactor",
-                "project_id": "terminal",
+                "project_id": "aterm",
                 "external_id": None,
                 "current_branch": "task-a3903361/main",
                 "status": "completed",
@@ -1780,13 +1780,13 @@ class TestGetWorkstreamInventory:
             return_value=fake_rows,
         ), patch(
             "app.workflows._heartbeat_data._fetch_task_overview_raw",
-            return_value="terminal (1)\n  * task-a3903361 pending Refactor",
+            return_value="aterm (1)\n  * task-a3903361 pending Refactor",
         ):
             result = await _get_workstream_inventory()
 
         assert "task-a3903361" in result
         assert "state=completed_ready_for_closure" in result
-        assert 'manage_tasks(action="reconcile", task_id="task-a3903361", project_id="terminal")' in result
+        assert 'manage_tasks(action="reconcile", task_id="task-a3903361", project_id="aterm")' in result
 
     @pytest.mark.asyncio
     async def test_reports_stale_active_lane(self) -> None:
@@ -1990,10 +1990,10 @@ class TestGetWorkstreamInventory:
             {
                 "session_id": "sess-7",
                 "agent_slug": "refactor",
-                "project_id": "terminal",
+                "project_id": "aterm",
                 "external_id": "task-999",
                 "current_branch": "task-999/main",
-                "working_dir": "/home/testuser/.local/share/st/worktrees/terminal/task-999",
+                "working_dir": "/home/testuser/.local/share/st/worktrees/aterm/task-999",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -2009,7 +2009,7 @@ class TestGetWorkstreamInventory:
             result = await _get_workstream_inventory()
 
         assert "task-999" in result
-        assert "worktree=/home/testuser/.local/share/st/worktrees/terminal/task-999" in result
+        assert "worktree=/home/testuser/.local/share/st/worktrees/aterm/task-999" in result
 
     @pytest.mark.asyncio
     async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:

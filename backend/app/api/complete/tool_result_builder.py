@@ -85,7 +85,7 @@ async def finalize_result(
     fallback_used: bool = False,
     fallback_reason: str | None = None,
 ) -> ToolExecutionResult:
-    """Finalize result: track citations and build the terminal tool result."""
+    """Finalize result: track citations and build the aterm tool result."""
     cited_uuids, estimated_output_tokens = await _track_citations_and_estimate_output(
         db, session_id, content, loaded_memory_uuids, memory_group_id
     )

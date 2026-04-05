@@ -64,7 +64,7 @@ def _convert_user_message(
 
 
 def _convert_result_message(msg: Any) -> list[ToolEvent]:
-    """Convert Claude ResultMessage into a terminal result event."""
+    """Convert Claude ResultMessage into a aterm result event."""
     subtype = getattr(msg, "subtype", None)
     finish_reason = resolve_result_finish_reason(msg)
     result_text = getattr(msg, "result", None)

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from app.models import Session
 
-_TERMINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "failed"}
+_FINAL_TASK_STATUSES = {"blocked", "completed", "cancelled", "abandoned", "failed"}
 _MISSING_CHECKPOINT_PHRASE = "No checkpoint found"
 _RETIRE_NOTE = 'Retired via manage_tasks(action="retire_lane")'
 _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
@@ -120,8 +120,8 @@ def _extract_task_status(context_output: str) -> str | None:
     return match.group(1).strip().lower() or None
 
 
-def _task_is_terminal(task_status: str | None) -> bool:
-    return bool(task_status and task_status in _TERMINAL_TASK_STATUSES)
+def _task_is_final(task_status: str | None) -> bool:
+    return bool(task_status and task_status in _FINAL_TASK_STATUSES)
 
 
 from app.services.tools._tool_constants import st_cmd as _st_cmd  # noqa: E402
@@ -339,7 +339,7 @@ async def _retire_stale_active_sessions(
     stale_prefix: str,
     terminal_prefix: str,
 ) -> tuple[list[Session], list[Session], str | None]:
-    """Retire stale/terminal active sessions; return updated sessions, active remainder, and last task_status."""
+    """Retire stale/aterm active sessions; return updated sessions, active remainder, and last task_status."""
     active_sessions = [s for s in sessions if s.status == "active"]
     task_status: str | None = None
     if not active_sessions:
@@ -353,7 +353,7 @@ async def _retire_stale_active_sessions(
         active_sessions = [s for s in sessions if s.status == "active"]
 
     task_status = await _get_task_status(bash_fn, task_id, project_id)
-    if active_sessions and _task_is_terminal(task_status):
+    if active_sessions and _task_is_final(task_status):
         retired = await _mark_stale_active_sessions(
             sessions,
             workstream_status=workstream_status,
@@ -392,7 +392,7 @@ async def _finalize_merge_if_terminal_residue(
     project_id: str | None,
     result: str,
 ) -> str:
-    """Run finalize-merge when the result contains a terminal merge-residue error."""
+    """Run finalize-merge when the result contains a aterm merge-residue error."""
     from ._executor_io_tasks import _handle_finalize_merge
 
     lowered = result.lower()
@@ -403,7 +403,7 @@ async def _finalize_merge_if_terminal_residue(
     ):
         return result
     task_status = await _get_task_status(bash_fn, task_id, project_id)
-    if _task_is_terminal(task_status):
+    if _task_is_final(task_status):
         return await _handle_finalize_merge(bash_fn, task_id, project_id)
     return result
 
