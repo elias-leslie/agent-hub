@@ -114,7 +114,7 @@ async def cancel_task(task_id: str) -> dict[str, str]:
         if stored:
             raise HTTPException(
                 status_code=409,
-                detail="Task already in terminal state",
+                detail="Task already in aterm state",
             )
         raise HTTPException(
             status_code=404,

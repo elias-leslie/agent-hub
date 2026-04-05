@@ -266,7 +266,7 @@ class TestBuildFindingsPrompt:
 
     def test_prompt_includes_checked_and_issue_counts(self) -> None:
         result = self._make_result(
-            {"summitflow": "Critical: crash", "terminal": "No issues found."}
+            {"summitflow": "Critical: crash", "aterm": "No issues found."}
         )
         prompt = _build_findings_prompt(result)
         assert prompt is not None

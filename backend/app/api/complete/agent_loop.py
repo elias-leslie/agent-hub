@@ -58,7 +58,7 @@ class AgentLoopRequest:
 
 @dataclass
 class _LoopOutcome:
-    """Normalized terminal state for either tool or multi-turn execution."""
+    """Normalized aterm state for either tool or multi-turn execution."""
 
     final_result: Any
     final_content: str

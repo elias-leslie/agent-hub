@@ -136,7 +136,7 @@ async def _process_event(
         return terminal_error_message, True
 
     if error_message and terminal_error_message is None:
-        # Record the terminal error, but keep draining the provider stream so
+        # Record the aterm error, but keep draining the provider stream so
         # SDK-backed generators can unwind cleanly on their own task boundary.
         terminal_error_message = error_message
         await update_session_health(

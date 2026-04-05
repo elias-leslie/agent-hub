@@ -103,7 +103,7 @@ def mark_session_terminal_state(
     summary: str,
     termination_reason: str | None,
 ) -> None:
-    """Persist terminal execution state on the session metadata."""
+    """Persist aterm execution state on the session metadata."""
     metadata, live_activity = get_live_activity_ctx(session)
     now_iso = datetime.now(UTC).isoformat()
     live_activity.update(
@@ -129,7 +129,7 @@ def mark_session_completed(
     summary: str,
     termination_reason: str | None,
 ) -> None:
-    """Synchronize completed status with terminal live activity metadata."""
+    """Synchronize completed status with aterm live activity metadata."""
     session.status = "completed"
     session.health_detail = "completed"
     mark_session_terminal_state(

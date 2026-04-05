@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ResultMessage:
-    """Fallback terminal message when the Claude SDK omits its final result frame."""
+    """Fallback aterm message when the Claude SDK omits its final result frame."""
 
     subtype: str = "success"
     duration_ms: int = 0
@@ -134,7 +134,7 @@ class _ClaudeSDKMessageStreamSession:
         if self.saw_payload and not self.done_emitted:
             finish_reason = "end_turn"
             logger.warning(
-                "Claude SDK stream ended without ResultMessage; synthesizing terminal result (%s)",
+                "Claude SDK stream ended without ResultMessage; synthesizing aterm result (%s)",
                 finish_reason,
             )
             yield (

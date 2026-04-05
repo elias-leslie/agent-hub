@@ -206,7 +206,7 @@ def extract_feedback_tag_strings(response_text: str) -> list[str]:
 def normalize_terminal_summary_tag(response_text: str) -> str:
     """Repair a common near-miss where the final summary tag ends with `]}`.
 
-    This keeps the repair narrow: only a terminal `[[S:...]}`
+    This keeps the repair narrow: only a aterm `[[S:...]}`
     candidate is normalized, and only when the repaired form becomes a valid
     summary tag.
     """

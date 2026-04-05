@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,7 +49,7 @@ def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
         ),
         patch("pathlib.Path.exists", return_value=True),
     ):
-        resolved = resolve_project_root("terminal")
+        resolved = resolve_project_root("aterm")
 
     assert resolved == tmp_path.resolve()
 
@@ -69,3 +70,32 @@ def test_resolve_project_root_falls_back_when_st_times_out(tmp_path: Path) -> No
         resolved = resolve_project_root("summitflow")
 
     assert resolved == candidate.resolve()
+
+
+def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differs(
+    tmp_path: Path,
+) -> None:
+    resolve_project_root.cache_clear()
+    repo_root = tmp_path / "terminal"
+    repo_root.mkdir()
+    (repo_root / "project.identity.json").write_text(
+        json.dumps(
+            {
+                "project": {
+                    "id": "aterm",
+                    "repo_name": "aterm",
+                    "legacy_ids": ["terminal"],
+                    "repo_aliases": ["terminal"],
+                    "display_name": "A-Term",
+                }
+            }
+        )
+    )
+
+    with (
+        patch("app.core.project_roots._CANONICAL_WORKSPACE_ROOT", tmp_path),
+        patch("app.core.project_roots.shutil.which", return_value=None),
+    ):
+        resolved = resolve_project_root("aterm")
+
+    assert resolved == repo_root.resolve()

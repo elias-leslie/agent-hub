@@ -16,7 +16,7 @@ _COMMANDY_SUMMARY_RE = re.compile(
     r"^(?:now|next|then|let me|let's|run|use|check|verify|commit|publish|open|inspect)\b",
     re.IGNORECASE,
 )
-_PROGRESS_TERMINAL_TAGS = frozenset({"modified", "tested", "blocked", "decision", "confidence"})
+_PROGRESS_EVIDENCE_TAGS = frozenset({"modified", "tested", "blocked", "decision", "confidence"})
 _PROGRESS_TAG_WITH_TRAILING_TEXT_RE = re.compile(r"\[\[P:[a-z_]+:(.*?)\]\]\s*([^\[]+)", re.IGNORECASE | re.DOTALL)
 
 
@@ -72,7 +72,7 @@ def progress_tag_contract_issues(
         issues.append("task session has fewer than 2 progress tags")
     if not ({"started", "found"} & tag_types):
         issues.append("task session is missing an initial progress tag")
-    if not (_PROGRESS_TERMINAL_TAGS & tag_types):
+    if not (_PROGRESS_EVIDENCE_TAGS & tag_types):
         issues.append("task session is missing a later proof/decision/blocker progress tag")
     if _has_mirrored_progress_text(content or ""):
         issues.append("progress tag content is duplicated in surrounding prose")

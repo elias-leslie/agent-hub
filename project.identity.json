@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "project": {
+    "id": "agent-hub",
+    "repo_name": "agent-hub",
+    "display_name": "Agent Hub"
+  },
+  "branding": {
+    "short_name": "Agent Hub",
+    "description": "Companion service for agent orchestration, model access, and voice workflows."
+  },
+  "runtime": {
+    "backend_port": 8003,
+    "frontend_port": 3003,
+    "backend_dir": "backend",
+    "frontend_dir": "frontend",
+    "health_endpoint": "/health"
+  },
+  "services": {
+    "backend": "agent-hub-backend.service",
+    "frontend": "agent-hub-frontend.service",
+    "default_workers": [
+      "agent-hub-hatchet-ops-worker.service"
+    ],
+    "optional_workers": [
+      "agent-hub-hatchet-agent-worker.service"
+    ]
+  },
+  "hosts": {
+    "production_frontend": "agent.summitflow.dev",
+    "production_api": "agentapi.summitflow.dev"
+  }
+}
