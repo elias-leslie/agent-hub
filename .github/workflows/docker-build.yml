@@ -70,7 +70,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/summitflow-solutions/agent-hub-${{ matrix.image-suffix }}:latest
-            ghcr.io/summitflow-solutions/agent-hub-${{ matrix.image-suffix }}:${{ inputs.tag || github.ref_name }}
+            ghcr.io/elias-leslie/agent-hub-${{ matrix.image-suffix }}:latest
+            ghcr.io/elias-leslie/agent-hub-${{ matrix.image-suffix }}:${{ inputs.tag || github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

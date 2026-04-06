@@ -37,7 +37,7 @@ def _dedupe_exact_repeated_closeout(content: str) -> str:
     """Collapse exact repeated summary-tagged closeout blocks.
 
     Some providers occasionally echo the full final closeout twice. When the
-    entire normalized response is an exact repetition and contains a aterm
+    entire normalized response is an exact repetition and contains a terminal
     summary tag, keep the single canonical block.
     """
     normalized = normalize_terminal_summary_tag(content)

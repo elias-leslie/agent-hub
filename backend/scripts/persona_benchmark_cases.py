@@ -603,7 +603,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         scenario=(
             "HEARTBEAT_SCOPE: global\n"
             "GLOBAL_READY_TASKS:\n"
-            "- project=aterm task=task-e4edac6c ready=yes permission_tier=manual mode=read_only\n"
+            "- project=a-term task=task-e4edac6c ready=yes permission_tier=manual mode=read_only\n"
             "- project=summitflow task=none\n"
             "- project=agent-hub task=none\n"
             "ownership_truth=clean\n"
@@ -625,8 +625,8 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
         scenario=(
             "HEARTBEAT_SCOPE: global\n"
             "GLOBAL_READY_TASKS=0\n"
-            "ownership_truth=OWN aterm lane=lane-aterm-1 status=owner_lane branch=main\n"
-            "raw_active_sessions=0 for project aterm\n"
+            "ownership_truth=OWN a-term lane=lane-a-term-1 status=owner_lane branch=main\n"
+            "raw_active_sessions=0 for project a-term\n"
             "lane_truth=worktree exists, dirty=no, session_missing=yes\n"
             "cleanup_status=no_actionable_cleanup\n"
             "question=Should the persona treat this as clean idle?\n"
@@ -669,7 +669,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "PULSE:\n"
             "- project=summitflow dirty=1 cleanup=yes permission_tier=auto_exec overlap=no\n"
             "- project=portfolio-ai dirty=1 cleanup=yes permission_tier=auto_exec overlap=no\n"
-            "- project=aterm dirty=3 cleanup=yes permission_tier=manual overlap=no\n"
+            "- project=a-term dirty=3 cleanup=yes permission_tier=manual overlap=no\n"
             "- project=agent-hub dirty=3 cleanup=yes permission_tier=auto_exec overlap=yes owner_lane=active\n"
             "question=Should the persona declare clean idle now?\n"
         ),
@@ -801,7 +801,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "cleanup_residue:\n"
             "- test1 | task-8d5aebcd | completed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps\n"
             "- test1 | task-24f8b59a | completed COMPLETE_READY:no SYNC_SKIPS:1.1:no-steps\n"
-            "access_summary=agent-hub:yolo test1:yolo aterm:manual vantage:read\n"
+            "access_summary=agent-hub:yolo test1:yolo a-term:manual vantage:read\n"
             "overlap_truth=none\n"
             "question=What should the persona follow first?\n"
         ),

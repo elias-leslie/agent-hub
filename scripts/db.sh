@@ -55,7 +55,7 @@ declare -A DB_URLS=(
     ["summitflow"]="${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}"
     ["agent-hub"]="${AGENT_HUB_DB_URL:-postgresql://agent_hub_app@localhost:5432/agent_hub}"
     ["portfolio-ai"]="${PORTFOLIO_AI_DB_URL:-postgresql://portfolio_app@localhost:5432/portfolio_ai}"
-    ["aterm"]="${ATERM_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
+    ["a-term"]="${A_TERM_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
     ["hatchet"]="${HATCHET_DATABASE_URL:-postgresql://db_admin@localhost:5432/hatchet?sslmode=disable}"
 )
 
@@ -183,7 +183,7 @@ declare -A ALEMBIC_DIRS=(
     ["summitflow"]="$(resolve_project_root summitflow)/backend"
     ["agent-hub"]="$(resolve_project_root agent-hub)/backend"
     ["portfolio-ai"]="$(resolve_project_root portfolio-ai)/backend"
-    ["aterm"]="$(resolve_project_root aterm)"
+    ["a-term"]="$(resolve_project_root a-term)"
 )
 
 # Colors

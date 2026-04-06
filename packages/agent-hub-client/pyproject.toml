@@ -38,9 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/summitflow-solutions/agent-hub"
-Documentation = "https://github.com/summitflow-solutions/agent-hub/tree/main/packages/agent-hub-client"
-Repository = "https://github.com/summitflow-solutions/agent-hub"
+Homepage = "https://github.com/elias-leslie/agent-hub"
+Documentation = "https://github.com/elias-leslie/agent-hub/tree/main/packages/agent-hub-client"
+Repository = "https://github.com/elias-leslie/agent-hub"
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent_hub"]

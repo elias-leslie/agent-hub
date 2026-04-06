@@ -159,7 +159,7 @@ async def test_agent_wake_stores_summary_for_completed_session():
                 model="codex/gpt-5.4",
                 provider="codex",
                 prompt="Inspect the dirty worktree and decide if it is valid progress.",
-                project_id="aterm",
+                project_id="a-term",
                 event_type="dispatch",
                 thinking_level="medium",
                 max_turns=25,

@@ -1,5 +1,5 @@
 # Agent Hub Web — multi-stage Docker build with standalone output
-# Image: ghcr.io/summitflow-solutions/agent-hub-web
+# Image: ghcr.io/elias-leslie/agent-hub-web
 # Port: 3003
 # Requires: workspace packages (chat-ui, passport-client) pre-packed as tarballs
 

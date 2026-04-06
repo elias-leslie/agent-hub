@@ -13,7 +13,7 @@ def test_parse_git_status_rows_reads_compact_output() -> None:
     git_status = """GIT[3]
 summitflow      main            clean   uncommitted:0 ahead:0 behind:0
 agent-hub       main            dirty   uncommitted:14 ahead:2 behind:0
-aterm        main            behind  uncommitted:0 ahead:0 behind:3
+a-term       main            behind  uncommitted:0 ahead:0 behind:3
 """
 
     rows = parse_git_status_rows(git_status)
@@ -21,7 +21,7 @@ aterm        main            behind  uncommitted:0 ahead:0 behind:3
     assert [(row.project_id, row.state, row.uncommitted, row.ahead, row.behind) for row in rows] == [
         ("summitflow", "clean", 0, 0, 0),
         ("agent-hub", "dirty", 14, 2, 0),
-        ("aterm", "behind", 0, 0, 3),
+        ("a-term", "behind", 0, 0, 3),
     ]
 
 
@@ -29,7 +29,7 @@ def test_build_actionable_git_summary_formats_next_actions() -> None:
     git_status = """GIT[4]
 summitflow      main            clean   uncommitted:0 ahead:0 behind:0
 agent-hub       main            dirty   uncommitted:14 ahead:2 behind:0
-aterm        main            dirty   uncommitted:2 ahead:0 behind:0
+a-term       main            dirty   uncommitted:2 ahead:0 behind:0
 portfolio-ai    main            ahead   uncommitted:0 ahead:5 behind:0
 """
 
@@ -37,7 +37,7 @@ portfolio-ai    main            ahead   uncommitted:0 ahead:5 behind:0
 
     assert "ACTIONABLE-GIT[3]" in summary
     assert "agent-hub | branch=main | state=dirty | uncommitted=14 | ahead=2 | behind=0 | next=inspect_then_publish" in summary
-    assert "aterm | branch=main | state=dirty | uncommitted=2 | ahead=0 | behind=0 | next=inspect_then_commit_or_dispatch" in summary
+    assert "a-term | branch=main | state=dirty | uncommitted=2 | ahead=0 | behind=0 | next=inspect_then_commit_or_dispatch" in summary
     assert "portfolio-ai | branch=main | state=ahead | uncommitted=0 | ahead=5 | behind=0 | next=publish_pending_commits" in summary
 
 
@@ -88,7 +88,7 @@ def test_build_actionable_git_summary_from_rows_formats_next_actions() -> None:
             behind=0,
         ),
         RepoGitStatus(
-            project_id="aterm",
+            project_id="a-term",
             branch="main",
             state="dirty",
             uncommitted=2,
@@ -109,5 +109,5 @@ def test_build_actionable_git_summary_from_rows_formats_next_actions() -> None:
 
     assert "ACTIONABLE-GIT[3]" in summary
     assert "agent-hub | branch=main | state=dirty | uncommitted=14 | ahead=2 | behind=0 | next=inspect_then_publish" in summary
-    assert "aterm | branch=main | state=dirty | uncommitted=2 | ahead=0 | behind=0 | next=inspect_then_commit_or_dispatch" in summary
+    assert "a-term | branch=main | state=dirty | uncommitted=2 | ahead=0 | behind=0 | next=inspect_then_commit_or_dispatch" in summary
     assert "portfolio-ai | branch=main | state=ahead | uncommitted=0 | ahead=5 | behind=0 | next=publish_pending_commits" in summary

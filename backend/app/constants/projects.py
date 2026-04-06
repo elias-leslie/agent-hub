@@ -25,7 +25,7 @@ _FALLBACK_PROJECT_IDS: frozenset[str] = frozenset({
     "agent-hub",
     "vantage",
     "portfolio-ai",
-    "aterm",
+    "a-term",
     "monkey-fight",
     "persona-sandbox",
     "st-cli",

@@ -543,7 +543,7 @@ class TestParseSummaryTags:
         assert tags[0].description == "Done"
 
     def test_parse_summary_repairs_terminal_curly_brace_near_miss(self):
-        """A aterm `]}` near-miss should be normalized for parsing."""
+        """A terminal `]}` near-miss should be normalized for parsing."""
         text = "[[S:completed:Reported the current git branch name]}"
         result = parse_summary_tags(text)
 
