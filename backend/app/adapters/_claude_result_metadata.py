@@ -1,4 +1,4 @@
-"""Normalize Claude SDK aterm result metadata for Agent Hub."""
+"""Normalize Claude SDK terminal result metadata for Agent Hub."""
 
 from __future__ import annotations
 

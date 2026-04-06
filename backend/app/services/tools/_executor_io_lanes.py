@@ -339,7 +339,7 @@ async def _retire_stale_active_sessions(
     stale_prefix: str,
     terminal_prefix: str,
 ) -> tuple[list[Session], list[Session], str | None]:
-    """Retire stale/aterm active sessions; return updated sessions, active remainder, and last task_status."""
+    """Retire stale/active sessions; return updated sessions, active remainder, and last task_status."""
     active_sessions = [s for s in sessions if s.status == "active"]
     task_status: str | None = None
     if not active_sessions:
@@ -392,7 +392,7 @@ async def _finalize_merge_if_terminal_residue(
     project_id: str | None,
     result: str,
 ) -> str:
-    """Run finalize-merge when the result contains a aterm merge-residue error."""
+    """Run finalize-merge when the result contains a terminal merge-residue error."""
     from ._executor_io_tasks import _handle_finalize_merge
 
     lowered = result.lower()

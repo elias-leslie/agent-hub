@@ -29,5 +29,11 @@
   "hosts": {
     "production_frontend": "agent.summitflow.dev",
     "production_api": "agentapi.summitflow.dev"
+  },
+  "repository": {
+    "owner": "elias-leslie",
+    "name": "agent-hub",
+    "ssh_url": "git@github.com:elias-leslie/agent-hub.git",
+    "https_url": "https://github.com/elias-leslie/agent-hub"
   }
 }

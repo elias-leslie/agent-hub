@@ -1,5 +1,5 @@
 # Agent Hub API — multi-stage Docker build
-# Image: ghcr.io/summitflow-solutions/agent-hub-api
+# Image: ghcr.io/elias-leslie/agent-hub-api
 # Port: 8003
 # Worker: same image with CMD ["python", "-m", "app.worker"]
 

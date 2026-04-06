@@ -1091,8 +1091,8 @@ This is the single most important gap for autonomous business ops. Without web a
 
 **A-Term:**
 - File uploads can persist beyond sessions via the Hub
-- Browse any artifact from the aterm UI
-- Agents running in aterm sessions can store outputs
+- Browse any artifact from the A-Term UI
+- Agents running in A-Term sessions can store outputs
 
 ### 10.3 What We Might Be Missing
 

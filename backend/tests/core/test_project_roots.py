@@ -49,7 +49,7 @@ def test_resolve_project_root_uses_st_projects_root(tmp_path: Path) -> None:
         ),
         patch("pathlib.Path.exists", return_value=True),
     ):
-        resolved = resolve_project_root("aterm")
+        resolved = resolve_project_root("a-term")
 
     assert resolved == tmp_path.resolve()
 
@@ -76,16 +76,16 @@ def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differ
     tmp_path: Path,
 ) -> None:
     resolve_project_root.cache_clear()
-    repo_root = tmp_path / "terminal"
+    repo_root = tmp_path / "a-term"
     repo_root.mkdir()
     (repo_root / "project.identity.json").write_text(
         json.dumps(
             {
                 "project": {
-                    "id": "aterm",
-                    "repo_name": "aterm",
-                    "legacy_ids": ["terminal"],
-                    "repo_aliases": ["terminal"],
+                    "id": "a-term",
+                    "repo_name": "a-term",
+                    "legacy_ids": ["aterm", "terminal"],
+                    "repo_aliases": ["aterm", "terminal"],
                     "display_name": "A-Term",
                 }
             }
@@ -96,6 +96,6 @@ def test_resolve_project_root_uses_manifest_aliases_when_workspace_folder_differ
         patch("app.core.project_roots._CANONICAL_WORKSPACE_ROOT", tmp_path),
         patch("app.core.project_roots.shutil.which", return_value=None),
     ):
-        resolved = resolve_project_root("aterm")
+        resolved = resolve_project_root("a-term")
 
     assert resolved == repo_root.resolve()

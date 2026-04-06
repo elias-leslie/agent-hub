@@ -95,7 +95,7 @@ describe("CodeBlock", () => {
     });
   });
 
-  it("renders aterm dots in header", () => {
+  it("renders terminal dots in header", () => {
     const { container } = render(<CodeBlock code="test" />);
     const dots = container.querySelectorAll(".rounded-full");
     expect(dots.length).toBe(3);

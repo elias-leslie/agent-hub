@@ -1109,11 +1109,11 @@ class TestManageTasks:
                 mock_bash,
                 action="dispatch",
                 task_id="task-42",
-                project_id="aterm",
+                project_id="a-term",
             )
 
         assert "Dispatch blocked" in result
-        assert "aterm" in result
+        assert "a-term" in result
         assert "read/manual" in result
         assert "observe-only" in result
         assert mock_bash.await_count == 0
@@ -1624,7 +1624,7 @@ class TestManageTasks:
             (
                 "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4\n"
                 "agent-hub worktrees:1 dirty:0 orphan:7 prunable:3\n"
-                "aterm worktrees:1 dirty:0 orphan:3 prunable:1"
+                "a-term worktrees:1 dirty:0 orphan:3 prunable:1"
             ),
             "Cleaned 0, skipped 0, errors 0\n  Pruned git worktree registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4\n  Pruned closed orphan task branches: 10",
             (

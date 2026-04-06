@@ -38,7 +38,7 @@ _PROJECT_SEEDS = [
     ("summitflow", "read", False, 0, 24, "$HOME/summitflow"),
     ("agent-hub", "read", False, 0, 24, "$HOME/agent-hub"),
     ("portfolio-ai", "read", False, 0, 24, "$HOME/portfolio-ai"),
-    ("aterm", "read", False, 0, 24, "$HOME/aterm"),
+    ("a-term", "read", False, 0, 24, "$HOME/a-term"),
     ("monkey-fight", "read", False, 0, 24, "$HOME/monkey-fight"),
     # Utility scopes — no root_path
     ("st-cli", "read", False, 0, 24, None),
