@@ -66,6 +66,8 @@ def test_build_plan_json_adds_default_steps_for_subtasks_without_steps() -> None
         _build_plan_json(
             title="Fix blocker",
             description="Make the unblock task execution-ready.",
+            priority=2,
+            task_type="task",
             done_when=["Dispatch succeeds"],
             labels="dispatch,cleanup",
             complexity="STANDARD",
@@ -82,3 +84,84 @@ def test_build_plan_json_adds_default_steps_for_subtasks_without_steps() -> None
 
     assert payload["subtasks"][0]["steps"] == ["Localize the cleanup truth mismatch"]
     assert payload["subtasks"][1]["steps"] == ["Patch the gate"]
+
+
+def test_build_plan_json_preserves_structured_steps_and_rich_context() -> None:
+    plan_path = Path(
+        _build_plan_json(
+            title="Preserve plan fidelity",
+            description="Keep the richer task shape intact.",
+            priority=1,
+            task_type="feature",
+            done_when=["Rich metadata survives import"],
+            labels="planning,persona",
+            complexity="STANDARD",
+            objective="Preserve plan metadata end to end.",
+            constraints=["Keep legacy callers working."],
+            spirit_anti="No duplicate schema.",
+            testing_strategy="Run the focused tool tests and inspect the imported task context.",
+            context={
+                "files_to_modify": ["backend/app/services/tools/_executor_io_tasks.py"],
+                "files_to_create": ["backend/tests/tools/test_executor_io_tasks.py"],
+                "risks": ["Schema drift between Agent Hub and SummitFlow."],
+                "references": [
+                    {"title": "Plan schema", "url": "https://summitflow.dev/schemas/plan.json"},
+                    {"title": "", "url": "https://invalid.example.com"}
+                ],
+                "second_opinion": {
+                    "required": True,
+                    "stage": "task_shape",
+                    "status": "pending",
+                    "summary": "Control-plane schema touch."
+                },
+                "unsupported": ["ignored"]
+            },
+            subtasks=[
+                {
+                    "id": "1.1",
+                    "phase": "backend",
+                    "description": "Preserve structured steps",
+                    "subtask_type": "backend",
+                    "unexpected": "drop me",
+                    "steps": [
+                        {
+                            "description": "Carry step metadata through the plan builder.",
+                            "spec": {"verify_command": "dt pytest backend/tests/tools/test_executor_io_tasks.py"},
+                            "extra": "ignored"
+                        }
+                    ]
+                }
+            ],
+        )
+    )
+    try:
+        payload = json.loads(plan_path.read_text())
+    finally:
+        plan_path.unlink(missing_ok=True)
+
+    assert payload["task_type"] == "feature"
+    assert payload["priority"] == 1
+    assert payload["objective"] == "Preserve plan metadata end to end."
+    assert payload["constraints"] == ["Keep legacy callers working."]
+    assert payload["spirit_anti"] == "No duplicate schema."
+    assert payload["testing_strategy"] == "Run the focused tool tests and inspect the imported task context."
+    assert payload["context"] == {
+        "files_to_modify": ["backend/app/services/tools/_executor_io_tasks.py"],
+        "files_to_create": ["backend/tests/tools/test_executor_io_tasks.py"],
+        "risks": ["Schema drift between Agent Hub and SummitFlow."],
+        "references": [{"title": "Plan schema", "url": "https://summitflow.dev/schemas/plan.json"}],
+        "second_opinion": {
+            "required": True,
+            "stage": "task_shape",
+            "status": "pending",
+            "summary": "Control-plane schema touch."
+        }
+    }
+    assert payload["subtasks"][0]["phase"] == "backend"
+    assert "unexpected" not in payload["subtasks"][0]
+    assert payload["subtasks"][0]["steps"] == [
+        {
+            "description": "Carry step metadata through the plan builder.",
+            "spec": {"verify_command": "dt pytest backend/tests/tools/test_executor_io_tasks.py"}
+        }
+    ]

@@ -17,7 +17,7 @@ export function SidebarLogo({
   return (
     <div className="flex items-center justify-between border-b border-slate-800/70 px-3 py-3">
       <Link
-        href="/"
+        href="/dashboard"
         className={cn(
           "flex items-center gap-3",
           isCollapsed && "lg:justify-center",

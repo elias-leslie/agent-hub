@@ -11,6 +11,7 @@ from agent_hub._completion import build_completion_payload, handle_completion_re
 from agent_hub._image import generate_image_sync
 from agent_hub._memory import MemoryOperationsMixin
 from agent_hub._sessions import SessionOperationsMixin
+from agent_hub._workflow import build_workflow_payload, handle_workflow_response
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -188,6 +189,44 @@ class AgentHubClient(
         )
 
         return handle_completion_response(response, self)
+
+    def workflow(
+        self,
+        *,
+        project_id: str,
+        shared_context: str | None = None,
+        external_id: str | None = None,
+        trace_id: str | None = None,
+        clarify: dict[str, Any] | None = None,
+        plan: dict[str, Any] | None = None,
+        execute: dict[str, Any] | None = None,
+        review: dict[str, Any] | None = None,
+        qa: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run the canonical clarify -> plan -> execute -> review -> qa workflow."""
+
+        self._check_disabled()
+
+        client = self._get_client()
+        payload = build_workflow_payload(
+            project_id=project_id,
+            shared_context=shared_context,
+            external_id=external_id,
+            trace_id=trace_id,
+            clarify=clarify,
+            plan=plan,
+            execute=execute,
+            review=review,
+            qa=qa,
+        )
+        headers = self._inject_tracking_headers("sdk.workflow")
+        response = client.post(
+            "/api/orchestration/workflow",
+            json=payload,
+            headers=headers,
+            timeout=self.timeout,
+        )
+        return handle_workflow_response(response, self)
 
     def generate_image(
         self,

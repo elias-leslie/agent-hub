@@ -26,6 +26,8 @@ from app.services.tools._tool_constants import st_cmd as _st_cmd
 
 logger = logging.getLogger(__name__)
 _CANONICAL_TASK_ID_PREFIX = "task-"
+_PLAN_CONTEXT_LIST_FIELDS = ("files_to_modify", "files_to_create", "risks")
+_PLAN_ROOT_LIST_FIELDS = ("done_when", "constraints")
 
 
 def _ownership_rows_to_workstream_rows(
@@ -57,6 +59,81 @@ def _ownership_rows_to_workstream_rows(
     return rows
 
 
+def _clean_text(value: object) -> str | None:
+    """Return stripped text or None for empty/non-string-compatible values."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _normalize_string_list(value: object) -> list[str]:
+    """Normalize a list of strings, dropping empty entries."""
+    if not isinstance(value, list):
+        return []
+    normalized: list[str] = []
+    for item in value:
+        text = _clean_text(item)
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _normalize_references(value: object) -> list[dict[str, str]]:
+    """Normalize plan context references to {title,url} objects."""
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        title = _clean_text(item.get("title"))
+        url = _clean_text(item.get("url"))
+        if title and url:
+            normalized.append({"title": title, "url": url})
+    return normalized
+
+
+def _normalize_step(step: object) -> str | dict[str, object] | None:
+    """Normalize a plan step to the SummitFlow schema shape."""
+    if isinstance(step, str):
+        return _clean_text(step)
+    if not isinstance(step, dict):
+        return None
+
+    description = _clean_text(step.get("description"))
+    if not description:
+        return None
+
+    normalized: dict[str, object] = {"description": description}
+    spec = step.get("spec")
+    if isinstance(spec, dict) and spec:
+        normalized["spec"] = dict(spec)
+    return normalized
+
+
+def _normalize_context(context: dict[str, object] | None) -> dict[str, object] | None:
+    """Keep only the explicit plan-context mapping supported by SummitFlow."""
+    if not context:
+        return None
+
+    normalized: dict[str, object] = {}
+    for field in _PLAN_CONTEXT_LIST_FIELDS:
+        values = _normalize_string_list(context.get(field))
+        if values:
+            normalized[field] = values
+
+    references = _normalize_references(context.get("references"))
+    if references:
+        normalized["references"] = references
+
+    second_opinion = context.get("second_opinion")
+    if isinstance(second_opinion, dict) and second_opinion:
+        normalized["second_opinion"] = dict(second_opinion)
+
+    return normalized or None
+
+
 def _normalize_subtask_plan(
     subtasks: list[dict[str, object]] | None,
 ) -> list[dict[str, object]] | None:
@@ -68,14 +145,32 @@ def _normalize_subtask_plan(
     for subtask in subtasks:
         if not isinstance(subtask, dict):
             continue
-        normalized_subtask = dict(subtask)
-        raw_steps = normalized_subtask.get("steps")
-        has_steps = isinstance(raw_steps, list) and any(
-            isinstance(step, str) and step.strip() for step in raw_steps
+        subtask_id = _clean_text(subtask.get("id"))
+        description = _clean_text(subtask.get("description"))
+        if not subtask_id or not description:
+            continue
+
+        normalized_subtask: dict[str, object] = {
+            "id": subtask_id,
+            "description": description,
+        }
+        if phase := _clean_text(subtask.get("phase")):
+            normalized_subtask["phase"] = phase
+        if subtask_type := _clean_text(subtask.get("subtask_type")):
+            normalized_subtask["subtask_type"] = subtask_type
+        if depends_on := _normalize_string_list(subtask.get("depends_on")):
+            normalized_subtask["depends_on"] = depends_on
+
+        raw_steps = subtask.get("steps")
+        normalized_steps = (
+            [step for step in (_normalize_step(step) for step in raw_steps) if step]
+            if isinstance(raw_steps, list)
+            else []
         )
-        if not has_steps:
-            description = normalized_subtask.get("description")
-            step_text = description.strip() if isinstance(description, str) else ""
+        if normalized_steps:
+            normalized_subtask["steps"] = normalized_steps
+        else:
+            step_text = description.strip()
             normalized_subtask["steps"] = [step_text or "Complete this subtask."]
         normalized.append(normalized_subtask)
     return normalized
@@ -84,14 +179,23 @@ def _normalize_subtask_plan(
 def _build_plan_json(
     title: str,
     description: str | None,
+    priority: int,
+    task_type: str,
     done_when: list[str] | None,
     labels: str | None,
     complexity: str | None,
+    objective: str | None = None,
+    constraints: list[str] | None = None,
+    spirit_anti: str | None = None,
+    testing_strategy: str | None = None,
+    context: dict[str, object] | None = None,
     subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Write a plan JSON to a temp file and return its path."""
     plan: dict[str, object] = {
         "title": title,
+        "task_type": task_type,
+        "priority": priority,
         "complexity": complexity or "STANDARD",
         "autonomous": True,
     }
@@ -101,6 +205,16 @@ def _build_plan_json(
         plan["done_when"] = done_when
     if labels:
         plan["labels"] = labels.split(",")
+    if objective_text := _clean_text(objective):
+        plan["objective"] = objective_text
+    if constraint_list := _normalize_string_list(constraints):
+        plan["constraints"] = constraint_list
+    if anti_text := _clean_text(spirit_anti):
+        plan["spirit_anti"] = anti_text
+    if testing_text := _clean_text(testing_strategy):
+        plan["testing_strategy"] = testing_text
+    if normalized_context := _normalize_context(context):
+        plan["context"] = normalized_context
     if subtasks:
         plan["subtasks"] = _normalize_subtask_plan(subtasks)
 
@@ -121,12 +235,39 @@ async def _handle_create(
     project_id: str | None,
     done_when: list[str] | None,
     complexity: str | None,
+    objective: str | None = None,
+    constraints: list[str] | None = None,
+    spirit_anti: str | None = None,
+    testing_strategy: str | None = None,
+    context: dict[str, object] | None = None,
     subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Handle task creation — plan-based or basic."""
-    if done_when or subtasks:
+    if any(
+        (
+            done_when,
+            complexity,
+            objective,
+            constraints,
+            spirit_anti,
+            testing_strategy,
+            context,
+            subtasks,
+        )
+    ):
         tmpfile = _build_plan_json(
-            title, description, done_when, labels, complexity,
+            title,
+            description,
+            priority,
+            task_type,
+            done_when,
+            labels,
+            complexity,
+            objective=objective,
+            constraints=constraints,
+            spirit_anti=spirit_anti,
+            testing_strategy=testing_strategy,
+            context=context,
             subtasks=subtasks,
         )
         cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)

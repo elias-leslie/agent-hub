@@ -19,6 +19,9 @@ importers:
       '@agent-hub/passport-client':
         specifier: workspace:*
         version: link:../packages/passport-client
+      '@summitflow/notes-ui':
+        specifier: file:../../summitflow/packages/notes-ui
+        version: file:../summitflow/packages/notes-ui(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react@19.2.14)(clsx@2.1.1)(lucide-react@0.562.0(react@19.2.3))(motion@12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@tanstack/react-query':
         specifier: ^5.90.18
         version: 5.90.21(react@19.2.3)
@@ -1008,6 +1011,16 @@ packages:
 
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
+
+  '@summitflow/notes-ui@file:../summitflow/packages/notes-ui':
+    resolution: {directory: ../summitflow/packages/notes-ui, type: directory}
+    peerDependencies:
+      '@tanstack/react-query': ^5.0.0
+      clsx: ^2.0.0
+      lucide-react: '>=0.300.0'
+      motion: ^12.0.0
+      react: '>=18 || ^19.0.0'
+      react-dom: '>=18 || ^19.0.0'
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -3131,6 +3144,20 @@ snapshots:
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
+
+  '@summitflow/notes-ui@file:../summitflow/packages/notes-ui(@tanstack/react-query@5.90.21(react@19.2.3))(@types/react@19.2.14)(clsx@2.1.1)(lucide-react@0.562.0(react@19.2.3))(motion@12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@tanstack/react-query': 5.90.21(react@19.2.3)
+      clsx: 2.1.1
+      lucide-react: 0.562.0(react@19.2.3)
+      motion: 12.38.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+      react-markdown: 10.1.0(@types/react@19.2.14)(react@19.2.3)
+      remark-gfm: 4.0.1
+    transitivePeerDependencies:
+      - '@types/react'
+      - supports-color
 
   '@swc/helpers@0.5.15':
     dependencies:

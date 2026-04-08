@@ -3,10 +3,10 @@
   "project": {
     "id": "agent-hub",
     "repo_name": "agent-hub",
-    "display_name": "Agent Hub"
+    "display_name": "Agent-Hub"
   },
   "branding": {
-    "short_name": "Agent Hub",
+    "short_name": "Agent-Hub",
     "description": "Companion service for agent orchestration, model access, and voice workflows."
   },
   "runtime": {

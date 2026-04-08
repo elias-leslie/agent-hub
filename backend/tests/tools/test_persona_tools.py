@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import shlex
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -1032,6 +1035,23 @@ class TestCancelConsultation:
 class TestManageTasks:
     """Tests for manage_tasks tool."""
 
+    def test_manage_tasks_tool_schema_exposes_rich_plan_contract(self):
+        from app.services.tools._persona_ops_tools import MANAGE_TASKS_TOOL
+
+        properties = MANAGE_TASKS_TOOL.input_schema["properties"]
+        subtask_properties = properties["subtasks"]["items"]["properties"]
+        step_item = subtask_properties["steps"]["items"]["anyOf"][1]
+
+        assert "objective" in properties
+        assert "constraints" in properties
+        assert "testing_strategy" in properties
+        assert "context" in properties
+        assert "phase" in subtask_properties
+        assert "steps" in subtask_properties
+        assert step_item["properties"]["spec"]["description"] == (
+            "Free-form step metadata such as verify_command"
+        )
+
     @pytest.mark.asyncio
     async def test_overview(self):
         from app.services.tools._executor_io import manage_tasks
@@ -1073,6 +1093,75 @@ class TestManageTasks:
         )
 
         assert "Task #42 created" in result
+
+    @pytest.mark.asyncio
+    async def test_create_task_preserves_rich_plan_fields_in_generated_plan(self):
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="IMPORT:task-123|STANDARD|1 subtasks")
+
+        result = await manage_tasks(
+            mock_bash,
+            action="create",
+            title="Preserve plan shape",
+            description="Keep rich metadata.",
+            priority=1,
+            task_type="feature",
+            labels="planning,persona",
+            done_when=["Task context keeps rich metadata"],
+            complexity="STANDARD",
+            objective="Preserve rich plan metadata.",
+            constraints=["Keep thin-schema callers working."],
+            spirit_anti="No duplicate schema.",
+            testing_strategy="Run focused tests and inspect the generated plan payload.",
+            context={
+                "files_to_modify": ["backend/app/services/tools/_executor_io_tasks.py"],
+                "risks": ["Schema drift"],
+                "references": [{"title": "Schema", "url": "https://summitflow.dev/schemas/plan.json"}],
+                "second_opinion": {
+                    "required": True,
+                    "stage": "task_shape",
+                    "status": "pending",
+                    "summary": "Needs contract review."
+                }
+            },
+            subtasks=[
+                {
+                    "id": "1.1",
+                    "phase": "backend",
+                    "description": "Carry structured step metadata",
+                    "subtask_type": "backend",
+                    "steps": [
+                        {
+                            "description": "Preserve verify metadata.",
+                            "spec": {"verify_command": "dt pytest backend/tests/tools/test_persona_tools.py"}
+                        }
+                    ]
+                }
+            ],
+            project_id="agent-hub",
+        )
+
+        assert result == "IMPORT:task-123|STANDARD|1 subtasks"
+        command = mock_bash.await_args.args[0]
+        plan_path = Path(shlex.split(command)[-1])
+        try:
+            payload = json.loads(plan_path.read_text())
+        finally:
+            plan_path.unlink(missing_ok=True)
+
+        assert command.startswith("st -P agent-hub create --plan ")
+        assert payload["task_type"] == "feature"
+        assert payload["priority"] == 1
+        assert payload["objective"] == "Preserve rich plan metadata."
+        assert payload["constraints"] == ["Keep thin-schema callers working."]
+        assert payload["spirit_anti"] == "No duplicate schema."
+        assert payload["testing_strategy"] == "Run focused tests and inspect the generated plan payload."
+        assert payload["context"]["files_to_modify"] == ["backend/app/services/tools/_executor_io_tasks.py"]
+        assert payload["subtasks"][0]["phase"] == "backend"
+        assert payload["subtasks"][0]["steps"][0]["spec"]["verify_command"] == (
+            "dt pytest backend/tests/tools/test_persona_tools.py"
+        )
 
     @pytest.mark.asyncio
     async def test_create_requires_title(self):

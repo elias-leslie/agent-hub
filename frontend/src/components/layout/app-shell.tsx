@@ -36,11 +36,6 @@ export function AppShell({ children }: AppShellProps) {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  // Don't show shell on landing page
-  if (pathname === "/") {
-    return <>{children}</>;
-  }
-
   return (
     <div className="relative flex h-screen overflow-hidden bg-transparent">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.08),transparent_24%),radial-gradient(circle_at_top_right,rgba(56,189,248,0.06),transparent_22%)]" />

@@ -1,3 +1,4 @@
+import { NotesButton, NotesProvider } from "@summitflow/notes-ui";
 import { Settings, Activity, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,23 @@ export function SidebarFooter({
           </div>
         </div>
       )}
+
+      <div
+        className={cn(
+          "mb-1 flex w-full items-center gap-2 rounded-xl px-1.5 py-1",
+          isCollapsed && "justify-center",
+        )}
+      >
+        <NotesProvider apiPrefix="/api" projectScope="agent-hub">
+          <NotesButton popOutUrl="/notes" />
+        </NotesProvider>
+        {!isCollapsed && (
+          <span className="text-[13px] text-slate-400 hidden lg:block">
+            Notes
+          </span>
+        )}
+        <span className="text-[13px] text-slate-400 lg:hidden">Notes</span>
+      </div>
 
       {/* Settings button */}
       <button

@@ -1,42 +1,53 @@
-"""Orchestration example - multi-agent subagent spawning."""
+"""Canonical clarify -> plan -> execute -> review -> QA workflow example."""
 
 import asyncio
 
-import httpx
+from agent_hub import AsyncAgentHubClient
 
-BASE_URL = "http://localhost:8003/api"
+PROJECT_ID = "agent-hub"
 
 
 async def main() -> None:
-    """Run a subagent orchestration."""
-    async with httpx.AsyncClient() as client:
-        # Spawn a subagent
-        response = await client.post(
-            f"{BASE_URL}/orchestration/subagent",
-            json={
-                "prompt": "Analyze this code and suggest improvements",
-                "agent_slug": "coder",
-                "parent_session_id": None,
+    """Run the canonical operator workflow through the SDK."""
+    async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
+        workflow = await client.workflow(
+            project_id=PROJECT_ID,
+            shared_context=(
+                "Repository: agent-hub\n"
+                "Goal: add one canonical operator workflow contract without duplicating routing logic."
+            ),
+            clarify={
+                "task": "List the ambiguities that must be resolved before coding and answer them directly when the codebase already provides the evidence.",
             },
-            timeout=120.0,
+            plan={
+                "task": "Produce an execution-ready implementation plan using the clarified scope and prior workflow outputs.",
+            },
+            execute={
+                "task": "Implement the approved plan in the repo, reusing existing orchestration and agent-routing primitives.",
+                "execute_tools": True,
+                "max_turns": 6,
+                "working_dir": "/srv/workspaces/projects/agent-hub",
+                "current_branch": "main",
+            },
+            review={
+                "task": "Review the implementation for concrete bugs, drift from the clarified request, and missing verification.",
+            },
+            qa={
+                "task": "Run final QA over the full workflow and call out any remaining blockers before closeout.",
+            },
         )
-        data = response.json()
-        print("Subagent completed")
-        print(f"Response: {data.get('content', '')[:200]}...")
 
-        # Run parallel execution
-        parallel_response = await client.post(
-            f"{BASE_URL}/orchestration/parallel",
-            json={
-                "tasks": [
-                    {"prompt": "Summarize the README", "agent_slug": "observer"},
-                    {"prompt": "List the main endpoints", "agent_slug": "observer"},
-                ],
-            },
-            timeout=120.0,
-        )
-        parallel_data = parallel_response.json()
-        print(f"\nParallel results: {len(parallel_data.get('results', []))} tasks completed")
+    print(f"Workflow status: {workflow['status']}")
+    for stage in workflow["stages"]:
+        preview = stage["content"].strip().replace("\n", " ")
+        print(f"\n[{stage['stage']}] agent={stage.get('agent_used')}")
+        print(preview[:240] + ("..." if len(preview) > 240 else ""))
+
+    print(
+        "\nTotals:",
+        f"input={workflow['total_input_tokens']}",
+        f"output={workflow['total_output_tokens']}",
+    )
 
 
 if __name__ == "__main__":
