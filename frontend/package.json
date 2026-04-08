@@ -17,6 +17,7 @@
   "dependencies": {
     "@agent-hub/chat-ui": "workspace:*",
     "@agent-hub/passport-client": "workspace:*",
+    "@summitflow/notes-ui": "file:../../summitflow/packages/notes-ui",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-virtual": "^3.13.18",
     "clsx": "^2.1.1",

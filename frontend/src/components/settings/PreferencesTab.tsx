@@ -42,7 +42,7 @@ export function PreferencesTab() {
         </div>
         <p className="text-xs text-slate-500">
           Theme preference is stored locally and applies immediately across the
-          public landing page and the app shell.
+          app shell.
         </p>
       </section>
     </div>

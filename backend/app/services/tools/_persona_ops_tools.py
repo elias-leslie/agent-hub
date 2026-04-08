@@ -77,6 +77,73 @@ MANAGE_TASKS_TOOL = Tool(
                 "enum": ["SIMPLE", "STANDARD", "COMPLEX"],
                 "description": "Task complexity level (for create with intent)",
             },
+            "objective": {
+                "type": "string",
+                "description": "Short statement of the task's concrete objective (for plan-based create)",
+            },
+            "constraints": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Scope boundaries, non-goals, or hard requirements to preserve during execution",
+            },
+            "spirit_anti": {
+                "type": "string",
+                "description": "Explicit anti-goal describing what the task must avoid or refuse to become",
+            },
+            "testing_strategy": {
+                "type": "string",
+                "description": "How the implementation should be verified beyond generic quality checks",
+            },
+            "context": {
+                "type": "object",
+                "description": "Optional rich plan context passed through to SummitFlow task_spirit context",
+                "properties": {
+                    "files_to_modify": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Existing files expected to change",
+                    },
+                    "files_to_create": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "New files expected to be created",
+                    },
+                    "risks": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Known risks, gotchas, or rollout concerns",
+                    },
+                    "references": {
+                        "type": "array",
+                        "description": "External references for the task",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "url": {"type": "string"}
+                            },
+                            "required": ["title", "url"]
+                        }
+                    },
+                    "second_opinion": {
+                        "type": "object",
+                        "description": "Optional critique-tracking metadata for task-shape or pre-close review",
+                        "properties": {
+                            "required": {"type": "boolean"},
+                            "stage": {
+                                "type": "string",
+                                "enum": ["task_shape", "pre_close", "both"]
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": ["pending", "completed", "waived", "needs_revision"]
+                            },
+                            "summary": {"type": "string"}
+                        },
+                        "required": ["required", "stage", "status", "summary"]
+                    }
+                }
+            },
             "subtasks": {
                 "type": "array",
                 "description": "Typed subtasks for plan-based creation. Each gets routed to the right specialist agent.",
@@ -91,6 +158,10 @@ MANAGE_TASKS_TOOL = Tool(
                             "type": "string",
                             "description": "What this subtask accomplishes",
                         },
+                        "phase": {
+                            "type": "string",
+                            "description": "Grouping label such as backend, frontend, or verification",
+                        },
                         "subtask_type": {
                             "type": "string",
                             "enum": list(SUBTASK_TYPES),
@@ -101,6 +172,27 @@ MANAGE_TASKS_TOOL = Tool(
                             "items": {"type": "string"},
                             "description": "Subtask IDs that must complete first",
                         },
+                        "steps": {
+                            "type": "array",
+                            "description": "Ordered implementation or verification steps for the subtask",
+                            "items": {
+                                "anyOf": [
+                                    {"type": "string"},
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "description": {"type": "string"},
+                                            "spec": {
+                                                "type": "object",
+                                                "description": "Free-form step metadata such as verify_command",
+                                                "additionalProperties": True
+                                            }
+                                        },
+                                        "required": ["description"]
+                                    }
+                                ]
+                            }
+                        }
                     },
                     "required": ["id", "description"],
                 },

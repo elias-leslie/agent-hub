@@ -20,7 +20,7 @@ pip install -e packages/agent-hub-client
 | `simple_completion.py` | Basic completion request with httpx |
 | `streaming_example.py` | SSE streaming responses |
 | `session_management.py` | Multi-turn conversations with sessions |
-| `orchestration_example.py` | Multi-agent queries with tracing |
+| `orchestration_example.py` | Canonical clarify -> plan -> execute -> review -> QA workflow |
 | `sdk_example.py` | Full SDK features: completion, streaming, sessions, vision |
 
 ## Running
@@ -34,6 +34,9 @@ python examples/streaming_example.py
 
 # Sessions
 python examples/session_management.py
+
+# Canonical workflow
+python examples/orchestration_example.py
 
 # SDK
 python examples/sdk_example.py

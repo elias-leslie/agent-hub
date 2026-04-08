@@ -1,10 +1,12 @@
 """Orchestration API request/response models."""
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.adapters.registry import ValidProvider
+from app.api.complete.request_schemas import ResponseFormat
+from app.api.complete.usage_schemas import ContextUsageInfo, OutputUsageInfo, UsageInfo
 
 # ========== Subagent Models ==========
 
@@ -213,6 +215,131 @@ class ChainResponse(BaseModel):
     steps_completed: int
     steps_total: int
     trace_id: str | None = None
+
+
+# ========== Canonical Workflow Models ==========
+
+WorkflowStageName = Literal["clarify", "plan", "execute", "review", "qa"]
+
+
+class WorkflowStageRequest(BaseModel):
+    """One explicit stage in the canonical operator workflow."""
+
+    task: str = Field(..., description="Stage-specific instructions for this workflow step")
+    agent_slug: str | None = Field(
+        default=None,
+        description=(
+            "Optional agent override. Defaults are chat=clarify, planner=plan, "
+            "coder=execute, reviewer=review, critic=qa."
+        ),
+    )
+    task_type: str | None = Field(
+        default=None,
+        description="Optional task type passed through to /api/complete",
+    )
+    phase: str | None = Field(
+        default=None,
+        description="Optional phase passed through to /api/complete",
+    )
+    include_roles: list[str] | None = Field(
+        default=None,
+        description="Optional prompt roles to inject for this stage",
+    )
+    response_format: ResponseFormat | None = Field(
+        default=None,
+        description="Optional structured output contract for this stage",
+    )
+    use_memory: bool = Field(
+        default=True,
+        description="Whether to inject memory context for this stage",
+    )
+    execute_tools: bool = Field(
+        default=False,
+        description="Enable direct tool execution for this stage",
+    )
+    max_turns: int = Field(
+        default=1,
+        ge=1,
+        description="Maximum turn budget for this stage",
+    )
+    working_dir: str | None = Field(
+        default=None,
+        description="Optional working directory for tool-capable stages",
+    )
+    current_branch: str | None = Field(
+        default=None,
+        description="Optional git branch context for this stage",
+    )
+    thinking_level: str | None = Field(
+        default=None,
+        pattern="^(minimal|low|medium|high|ultrathink)$",
+        description="Optional thinking depth override for this stage",
+    )
+    disable_agent_fallbacks: bool = Field(
+        default=False,
+        description="Disable fallback models for this stage",
+    )
+
+
+class WorkflowRequest(BaseModel):
+    """Explicit clarify -> plan -> execute -> review -> qa workflow request."""
+
+    project_id: str = Field(..., description="Project ID for all stages in the workflow")
+    shared_context: str | None = Field(
+        default=None,
+        description="Optional shared context prepended to every stage prompt",
+    )
+    external_id: str | None = Field(
+        default=None,
+        description="Optional external identifier reused across workflow stages",
+    )
+    trace_id: str | None = Field(
+        default=None,
+        description="Optional trace identifier reused across workflow stages",
+    )
+    clarify: WorkflowStageRequest | None = Field(default=None, description="Clarification stage")
+    plan: WorkflowStageRequest | None = Field(default=None, description="Planning stage")
+    execute: WorkflowStageRequest | None = Field(default=None, description="Implementation stage")
+    review: WorkflowStageRequest | None = Field(default=None, description="Review stage")
+    qa: WorkflowStageRequest | None = Field(default=None, description="Final QA stage")
+
+    @model_validator(mode="after")
+    def validate_has_stage(self) -> "WorkflowRequest":
+        if not any(
+            getattr(self, stage_name) is not None
+            for stage_name in ("clarify", "plan", "execute", "review", "qa")
+        ):
+            raise ValueError("At least one workflow stage must be provided.")
+        return self
+
+
+class WorkflowStageResponse(BaseModel):
+    """One completed stage in the canonical workflow."""
+
+    stage: WorkflowStageName
+    agent_used: str | None = None
+    content: str
+    model: str
+    provider: str
+    session_id: str
+    usage: UsageInfo
+    context_usage: ContextUsageInfo | None = None
+    output_usage: OutputUsageInfo | None = None
+    finish_reason: str | None = None
+    memory_facts_injected: int = 0
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    cited_uuids: list[str] = Field(default_factory=list)
+
+
+class WorkflowResponse(BaseModel):
+    """Canonical workflow response."""
+
+    status: str
+    stages: list[WorkflowStageResponse]
+    final_output: str
+    total_input_tokens: int
+    total_output_tokens: int
 
 
 # ========== Agent Progress Model ==========
