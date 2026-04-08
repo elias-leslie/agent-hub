@@ -22,6 +22,7 @@ async def test_finalize_result_tracks_citations_without_side_effect_commits() ->
             model="claude-sonnet-4-6",
             provider="claude",
             content="Verified pulse and overlap state.",
+            estimated_input_tokens=42,
             loaded_memory_uuids=["mem-1"],
             memory_group_id="grp-1",
             thinking_content="reasoning",
@@ -37,6 +38,7 @@ async def test_finalize_result_tracks_citations_without_side_effect_commits() ->
     mock_track.assert_awaited_once()
     db.commit.assert_not_awaited()
     assert result.cited_uuids == ["mem-1"]
+    assert result.input_tokens == 42
     assert result.output_tokens == len("Verified pulse and overlap state.") // 4
     assert result.finish_reason == "max_turns"
     assert result.fallback_used is True

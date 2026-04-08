@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message
 from app.services.memory.citation_parser import normalize_terminal_summary_tag, parse_summary_tags
+from app.services.token_counter import count_message_tokens
 
 from .closeout_policy import (
     append_closeout_turn,
@@ -23,6 +24,13 @@ if TYPE_CHECKING:
     from .tool_progress import ProgressTracker
 
 logger = logging.getLogger(__name__)
+
+
+def _estimate_input_tokens(base_messages: list[Message]) -> int:
+    """Estimate tool-loop prompt tokens from the final request message set."""
+    return count_message_tokens(
+        [{"role": message.role, "content": message.content} for message in base_messages]
+    )
 
 
 def _resolve_reported_turn(turn: int, tracker: ProgressTracker) -> int:
@@ -162,6 +170,7 @@ async def finalize_response(
         model=model,
         provider=provider,
         content=final_content,
+        estimated_input_tokens=_estimate_input_tokens(base_messages),
         loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id,
         thinking_content=thinking_content,

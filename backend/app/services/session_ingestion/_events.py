@@ -179,6 +179,7 @@ async def _store_events_general(
             events_skipped += 1
         elif event_id is not None:
             event_ids.append(event_id)
+            existing_pairs.add((turn, sequence))
         last_turn = turn
         last_sequence = sequence
     await db.commit()

@@ -127,3 +127,43 @@ async def test_tool_catalog_dispatches_to_real_tool() -> None:
     handler._executor.dispatch.assert_awaited_once_with(
         "schedule_job", {"when": "tomorrow"}
     )
+
+
+@pytest.mark.asyncio
+async def test_tool_catalog_dispatches_top_level_arguments_to_real_tool() -> None:
+    """Catalog compatibility should preserve top-level args from provider tool calls."""
+    handler = create_direct_handler(
+        tool_catalog=[
+            {
+                "name": "manage_memory_tags",
+                "description": "Update memory tags",
+                "input_schema": {"type": "object"},
+                "defer_loading": True,
+            }
+        ],
+    )
+    handler._executor.dispatch = AsyncMock(return_value="updated")  # type: ignore[attr-defined]
+
+    result = await handler.execute(
+        ToolCall(
+            id="t2",
+            name="tool_catalog",
+            input={
+                "tool_name": "manage_memory_tags",
+                "action": "add_tags",
+                "memory_uuid": "mem-123",
+                "tags": ["routing"],
+            },
+        )
+    )
+
+    assert result.is_error is False
+    assert result.content == "updated"
+    handler._executor.dispatch.assert_awaited_once_with(
+        "manage_memory_tags",
+        {
+            "action": "add_tags",
+            "memory_uuid": "mem-123",
+            "tags": ["routing"],
+        },
+    )

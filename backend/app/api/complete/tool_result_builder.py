@@ -31,6 +31,7 @@ def _build_success_result(
     model: str,
     provider: str,
     session_id: str,
+    estimated_input_tokens: int,
     loaded_memory_uuids: list[str],
     cited_uuids: list[str],
     estimated_output_tokens: int,
@@ -48,7 +49,7 @@ def _build_success_result(
         content=content,
         model=model,
         provider=provider,
-        input_tokens=0,
+        input_tokens=estimated_input_tokens,
         output_tokens=estimated_output_tokens,
         finish_reason=finish_reason,
         session_id=session_id,
@@ -74,6 +75,7 @@ async def finalize_result(
     model: str,
     provider: str,
     content: str,
+    estimated_input_tokens: int,
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
     thinking_content: str | None = None,
@@ -90,7 +92,7 @@ async def finalize_result(
         db, session_id, content, loaded_memory_uuids, memory_group_id
     )
     return _build_success_result(
-        content, model, provider, session_id, loaded_memory_uuids,
+        content, model, provider, session_id, estimated_input_tokens, loaded_memory_uuids,
         cited_uuids, estimated_output_tokens, thinking_content,
         thinking_tokens, turn, tool_calls_count, finish_reason, progress_log,
         fallback_used, fallback_reason,

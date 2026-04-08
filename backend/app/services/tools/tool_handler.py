@@ -91,10 +91,18 @@ class DirectToolHandler(ToolHandler):
             str(tool_call.input.get("tool_name", "")),
         )
         target_args = tool_call.input.get("arguments", {})
+        if not isinstance(target_args, dict):
+            target_args = {}
+        if not target_args:
+            target_args = {
+                key: value
+                for key, value in tool_call.input.items()
+                if key not in {"tool_name", "arguments"}
+            }
         nested_call = ToolCall(
             id=tool_call.id,
             name=target_name,
-            input=target_args if isinstance(target_args, dict) else {},
+            input=target_args,
             caller=tool_call.caller,
             original_id=tool_call.original_id,
         )
