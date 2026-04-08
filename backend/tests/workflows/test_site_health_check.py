@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import yaml
@@ -15,6 +17,7 @@ from app.workflows.site_health_check import (
     _findings_have_issues,
     _get_frontend_url,
     _get_page_paths,
+    _wake_persona_with_site_findings,
     build_user_content,
 )
 
@@ -278,8 +281,7 @@ class TestBuildFindingsPrompt:
         result = self._make_result({"proj": long_finding})
         prompt = _build_findings_prompt(result)
         assert prompt is not None
-        # The raw long text beyond 2000 should not appear
-        assert "x" * 2001 not in prompt
+        assert "x" * 1201 not in prompt
 
     def test_skips_error_prefixed_findings(self) -> None:
         result = self._make_result(
@@ -289,3 +291,65 @@ class TestBuildFindingsPrompt:
         assert prompt is not None
         assert "bad-project" not in prompt
         assert "good-project" in prompt
+
+    def test_keeps_only_actionable_lines_in_prompt(self) -> None:
+        result = self._make_result(
+            {
+                "agent-hub": "\n".join(
+                    [
+                        "Info: layout structure is intact.",
+                        "Warning: login CTA is off-screen on /agents",
+                        "Critical: /chat fails to render",
+                    ]
+                )
+            }
+        )
+
+        prompt = _build_findings_prompt(result, project_id="agent-hub")
+
+        assert prompt is not None
+        assert "Info:" not in prompt
+        assert "Warning: login CTA is off-screen on /agents" in prompt
+        assert "Critical: /chat fails to render" in prompt
+
+
+@pytest.mark.asyncio
+async def test_wake_persona_dispatches_one_project_scoped_wake_per_actionable_project() -> None:
+    db = AsyncMock()
+
+    @asynccontextmanager
+    async def _session():
+        yield db
+
+    agent_service = SimpleNamespace(
+        get_by_slug=AsyncMock(
+            return_value=SimpleNamespace(
+                primary_model_id="codex/gpt-5.4",
+                temperature=0.2,
+                thinking_level="medium",
+            )
+        )
+    )
+    result = HealthCheckResult(
+        status="issues_found",
+        projects_checked=3,
+        projects_with_issues=2,
+        project_findings={
+            "agent-hub": "Warning: login CTA is off-screen on /agents",
+            "summitflow": "Error analyzing summitflow: timeout",
+            "portfolio-ai": "Critical: dashboard crashes on load",
+        },
+    )
+
+    with (
+        patch("app.db.async_session", _session),
+        patch("app.services.agent_service.get_agent_service", return_value=agent_service),
+        patch("app.services.agent_routing.get_provider_for_model", return_value="codex"),
+        patch("app.workflows.persona_wake.agent_wake_task.run_no_wait") as mock_run_no_wait,
+    ):
+        await _wake_persona_with_site_findings(result)
+
+    assert mock_run_no_wait.call_count == 2
+    wake_inputs = [call.args[0] for call in mock_run_no_wait.call_args_list]
+    assert {wake.project_id for wake in wake_inputs} == {"agent-hub", "portfolio-ai"}
+    assert all(wake.event_type == "site_health_check" for wake in wake_inputs)

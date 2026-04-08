@@ -39,6 +39,12 @@ FRONTEND_PORTS: dict[str, int] = {k: v[1] for k, v in FRONTEND_SERVICES.items()}
 
 MAX_PAGES_PER_PROJECT = 5
 CHECK_TIMEOUT_PER_PROJECT = 180  # seconds
+MAX_TRIAGE_LINES_PER_PROJECT = 6
+MAX_TRIAGE_CHARS_PER_PROJECT = 1200
+_ACTIONABLE_FINDING_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?(critical|warning|error|broken|failed to load)\b",
+    re.IGNORECASE,
+)
 
 
 def _get_frontend_url(project_id: str) -> str:
@@ -257,6 +263,36 @@ def _findings_have_issues(content: str) -> bool:
     )
 
 
+def _extract_actionable_findings(findings: str) -> list[str]:
+    """Return unique actionable finding lines, trimmed for persona triage."""
+    actionable: list[str] = []
+    seen: set[str] = set()
+    for raw_line in findings.splitlines():
+        line = raw_line.strip()
+        if not line or not _ACTIONABLE_FINDING_RE.match(line):
+            continue
+        normalized = line.lstrip("-* ").strip()
+        dedupe_key = normalized.casefold()
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        actionable.append(normalized)
+        if len(actionable) >= MAX_TRIAGE_LINES_PER_PROJECT:
+            break
+    return actionable
+
+
+def _build_project_triage_section(project_id: str, findings: str) -> str | None:
+    """Return a compact per-project issue block for persona triage."""
+    if not findings or findings.startswith("Error"):
+        return None
+    actionable = _extract_actionable_findings(findings)
+    if not actionable:
+        return None
+    body = "\n".join(f"- {line}" for line in actionable)
+    return f"## {project_id}\n{body[:MAX_TRIAGE_CHARS_PER_PROJECT]}"
+
+
 async def _try_model_analysis(
     model: str,
     messages: list[dict[str, Any]],
@@ -330,23 +366,37 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
     return await analyze_captures(project_id, build_user_content(captures, project_id, url))
 
 
-def _build_findings_prompt(result: HealthCheckResult) -> str | None:
+def _build_findings_prompt(
+    result: HealthCheckResult,
+    *,
+    project_id: str | None = None,
+) -> str | None:
     """Build a triage prompt from health check findings, or None if no actionable findings."""
+    findings_by_project = result.project_findings
+    if project_id is not None:
+        findings = findings_by_project.get(project_id)
+        findings_by_project = {project_id: findings} if findings is not None else {}
+
     sections = [
-        f"## {project}\n{findings[:2000]}"
-        for project, findings in result.project_findings.items()
-        if findings and not findings.startswith("Error")
+        section
+        for project, findings in findings_by_project.items()
+        if (section := _build_project_triage_section(project, findings))
     ]
     if not sections:
         return None
+    scope_line = (
+        f"This wake is scoped to {project_id}."
+        if project_id
+        else f"{len(sections)} project-specific wake(s) will be dispatched."
+    )
     return (
         f"Site health check completed. "
         f"{result.projects_with_issues} project(s) with issues "
-        f"out of {result.projects_checked} checked.\n\n"
+        f"out of {result.projects_checked} checked. {scope_line}\n\n"
         f"Review the findings and take action:\n"
-        f"- For critical issues: create tasks or dispatch the debugger agent\n"
-        f"- For warnings: log them and monitor\n"
-        f"- For info items: note in journal if patterns emerge\n\n"
+        f"- For critical issues: create tasks or dispatch the debugger agent now\n"
+        f"- For warnings: create a durable follow-up only if the risk is concrete\n"
+        f"- If a tool, permission, or network blocker prevents action, record it once and stop retrying the same path\n\n"
         f"Findings:\n" + "\n\n".join(sections)
     )
 
@@ -358,10 +408,6 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
     from app.services.agent_service import get_agent_service
     from app.workflows.persona_wake import WakeInput, agent_wake_task
 
-    prompt = _build_findings_prompt(result)
-    if not prompt:
-        return
-
     async with async_session() as db:
         agent_service = get_agent_service()
         agent = await agent_service.get_by_slug(db, "persona")
@@ -369,20 +415,30 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
             logger.warning("Persona agent not found, skipping wake for site health findings")
             return
         provider = get_provider_for_model(agent.primary_model_id)
-
-    agent_wake_task.run_no_wait(
-        WakeInput(
-            agent_slug="persona",
-            model=agent.primary_model_id,
-            provider=provider,
-            temperature=agent.temperature,
-            prompt=prompt,
-            project_id="agent-hub",
-            event_type="site_health_check",
-            thinking_level=agent.thinking_level,
+    dispatched = 0
+    for project_id in result.project_findings:
+        prompt = _build_findings_prompt(result, project_id=project_id)
+        if not prompt:
+            continue
+        agent_wake_task.run_no_wait(
+            WakeInput(
+                agent_slug="persona",
+                model=agent.primary_model_id,
+                provider=provider,
+                temperature=agent.temperature,
+                prompt=prompt,
+                project_id=project_id,
+                event_type="site_health_check",
+                thinking_level=agent.thinking_level,
+            )
         )
-    )
-    logger.info("Persona woken with site health findings (%d issues)", result.projects_with_issues)
+        dispatched += 1
+    if dispatched > 0:
+        logger.info(
+            "Persona woken with site health findings (%d issues across %d project wakes)",
+            result.projects_with_issues,
+            dispatched,
+        )
 
 
 class SingleProjectCheckInput(BaseModel):

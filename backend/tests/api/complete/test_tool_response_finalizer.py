@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.base import Message
 from app.api.complete.tool_response_finalizer import finalize_response
+from app.services.token_counter import count_message_tokens
 
 
 def _tracker() -> SimpleNamespace:
@@ -330,3 +331,49 @@ async def test_finalize_response_prefers_progress_turns_for_reported_turn_count(
 
     tracker.report_complete.assert_awaited_once_with(4, 3)
     assert mock_finalize.await_args.kwargs["turn"] == 4
+
+
+@pytest.mark.asyncio
+async def test_finalize_response_passes_estimated_input_tokens(mocker) -> None:
+    mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    base_messages = [
+        Message(role="system", content="Follow the repo rules."),
+        Message(role="user", content="Inspect the current queue state."),
+    ]
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="debugger"),
+        session_id="sess-input-tokens",
+        is_new_session=True,
+        model="claude-sonnet-4-6",
+        provider="claude",
+        content_parts=["Verified queue state and overlap risk."],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=1,
+        tool_calls_count=1,
+        finish_reason="end_turn",
+        tracker=_tracker(),
+        adapter=SimpleNamespace(complete=AsyncMock()),
+        base_messages=base_messages,
+        temperature=0.0,
+        working_dir=None,
+        tool_result_summaries=["Bash: PULSE:agent-hub|tasks=0"],
+    )
+
+    assert (
+        mock_finalize.await_args.kwargs["estimated_input_tokens"]
+        == count_message_tokens(
+            [{"role": message.role, "content": message.content} for message in base_messages]
+        )
+    )

@@ -83,6 +83,64 @@ async def test_append_normalized_events_skips_existing_turn_sequence_pair() -> N
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_append_normalized_events_skips_duplicate_turn_sequence_within_same_batch() -> None:
+    db = AsyncMock()
+
+    existing_pairs = MagicMock()
+    existing_pairs.all.return_value = []
+    db.execute = AsyncMock(return_value=existing_pairs)
+
+    stored_event = MagicMock()
+    stored_event.id = "evt-2"
+
+    with (
+        patch(
+            "app.services.session_ingestion._events.get_max_turn",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch(
+            "app.services.session_ingestion._events.get_max_sequence",
+            new_callable=AsyncMock,
+            return_value=1,
+        ),
+        patch(
+            "app.services.session_ingestion._events.store_event",
+            new_callable=AsyncMock,
+            return_value=stored_event,
+        ) as mock_store,
+    ):
+        result = await append_normalized_events(
+            db=db,
+            session_id="session-dup-batch",
+            request=AppendNormalizedEventsRequest(
+                events=[
+                    NormalizedEvent(
+                        event_type="assistant_message",
+                        turn=8,
+                        sequence=2,
+                        role="assistant",
+                        content="first",
+                    ),
+                    NormalizedEvent(
+                        event_type="assistant_message",
+                        turn=8,
+                        sequence=2,
+                        role="assistant",
+                        content="duplicate",
+                    ),
+                ]
+            ),
+        )
+
+    assert result.events_appended == 1
+    assert result.events_skipped == 1
+    assert result.event_ids == ["evt-2"]
+    mock_store.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_append_normalized_events_single_implicit_event_uses_fast_path() -> None:
     db = AsyncMock()
     session = MagicMock()
