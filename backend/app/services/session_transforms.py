@@ -22,6 +22,7 @@ from app.services._session_metadata_helpers import (
     repo_root,
     resolve_model_display_name,
     scope_list,
+    session_attribution,
     session_model_info,
     source_client,
     source_path,
@@ -41,6 +42,7 @@ _repo_root = repo_root
 _worktree_path = worktree_path
 _source_client = source_client
 _source_path = source_path
+_session_attribution = session_attribution
 _session_model_info = session_model_info
 _is_worktree = is_worktree
 _effective_model = effective_model
@@ -77,6 +79,7 @@ def _session_list_item(
     specialist_session_ids: set[str] | None = None,
 ) -> SessionListItem:
     model_info = session_model_info(session)
+    attribution = session_attribution(session)
     wd = working_dir(session)
     session_tokens = token_stats.get(session.id, {})
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
@@ -107,6 +110,9 @@ def _session_list_item(
         request_source=optional_str(session.request_source),
         source_client=source_client(session),
         source_path=source_path(session),
+        attribution_kind=optional_str(attribution.get("attribution_kind")),
+        attribution_label=optional_str(attribution.get("attribution_label")),
+        attribution_detail=optional_str(attribution.get("attribution_detail")),
         current_branch=optional_str(session.current_branch),
         working_dir=wd,
         repo_root=repo_root(session),
@@ -165,6 +171,7 @@ def build_session_response(
     specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
     model_info = session_model_info(session)
+    attribution = session_attribution(session)
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
     batch_task_ids = [
         str(task_id).strip()
@@ -193,6 +200,9 @@ def build_session_response(
         request_source=optional_str(session.request_source),
         source_client=source_client(session),
         source_path=source_path(session),
+        attribution_kind=optional_str(attribution.get("attribution_kind")),
+        attribution_label=optional_str(attribution.get("attribution_label")),
+        attribution_detail=optional_str(attribution.get("attribution_detail")),
         current_branch=optional_str(session.current_branch),
         working_dir=working_dir(session),
         repo_root=repo_root(session),

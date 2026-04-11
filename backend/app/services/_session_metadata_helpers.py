@@ -83,6 +83,55 @@ def source_path(session: Session) -> str | None:
     return metadata_value(session, "source_path")
 
 
+def session_attribution(session: Session) -> dict[str, str | None]:
+    request_source = optional_str(session.request_source)
+    logical_client = source_client(session)
+
+    if request_source and request_source.startswith("manual/caveman"):
+        return {
+            "attribution_kind": "benchmark",
+            "attribution_label": "Benchmark",
+            "attribution_detail": request_source,
+        }
+
+    if request_source and request_source.startswith("verification/"):
+        return {
+            "attribution_kind": "verification",
+            "attribution_label": "Verification",
+            "attribution_detail": request_source,
+        }
+
+    if request_source and (
+        request_source.startswith("persona_wake:")
+        or request_source == "codex-transcript-sync"
+    ):
+        return {
+            "attribution_kind": "system",
+            "attribution_label": "System",
+            "attribution_detail": request_source,
+        }
+
+    if request_source == "consultation":
+        return {
+            "attribution_kind": "consultation",
+            "attribution_label": "Consultation",
+            "attribution_detail": request_source,
+        }
+
+    if request_source == "summitflow" or logical_client == "summitflow":
+        return {
+            "attribution_kind": "autonomous",
+            "attribution_label": "Autonomous",
+            "attribution_detail": request_source or logical_client,
+        }
+
+    return {
+        "attribution_kind": "user",
+        "attribution_label": "User",
+        "attribution_detail": request_source or logical_client,
+    }
+
+
 def requested_model(session: Session) -> str:
     return metadata_value(session, "requested_model") or list_first(session.models_used) or str(session.model)
 

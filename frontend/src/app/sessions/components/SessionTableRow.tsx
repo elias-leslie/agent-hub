@@ -9,6 +9,23 @@ import { Tooltip } from "@/components/memory/Tooltip";
 import { CopyIdButton } from "./CopyIdButton";
 import { ExpandedRowContent } from "./ExpandedRowContent";
 
+function attributionTone(kind?: string | null): string {
+  switch (kind) {
+    case "benchmark":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-200";
+    case "autonomous":
+      return "border-sky-500/30 bg-sky-500/10 text-sky-200";
+    case "verification":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+    case "system":
+      return "border-violet-500/30 bg-violet-500/10 text-violet-200";
+    case "consultation":
+      return "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200";
+    default:
+      return "border-slate-700 bg-slate-800/70 text-slate-300";
+  }
+}
+
 export function SessionTableRow({
   session,
   isExpanded,
@@ -64,10 +81,20 @@ export function SessionTableRow({
         <StatusCell status={session.status} isLive={isLive} />
 
         {/* Project */}
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-1">
           <span className="text-xs font-semibold text-slate-100 truncate block">
             {session.project_id}
           </span>
+          {session.attribution_label && (
+            <span
+              className={cn(
+                "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]",
+                attributionTone(session.attribution_kind)
+              )}
+            >
+              {session.attribution_label}
+            </span>
+          )}
         </div>
 
         {/* Agent */}

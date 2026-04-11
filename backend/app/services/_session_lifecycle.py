@@ -22,6 +22,7 @@ _STALL_AFTER_SECONDS = 30 * 60
 _NO_ACTIVITY_STALL_AFTER_SECONDS = 90 * 60
 _DEAD_CANDIDATE_AFTER_SECONDS = 30 * 60
 _REAPABLE_AFTER_SECONDS = 6 * 60 * 60
+_ZERO_EVENT_REAP_AFTER_SECONDS = 60 * 60
 _NON_REAPABLE_PHASES = {
     "injecting_memory",
     "planning",
@@ -37,6 +38,7 @@ _DETACHED_AGENT_HUB_RESTART_TOKENS = (
 _STRONG_DEAD_SIGNALS = {
     "no_structured_activity", "heartbeat_only", "heartbeat_missing",
     "heartbeat_absent_6h", "termination_signal", "detached_control_plane_rebuild",
+    "zero_event_session",
 }
 _NON_ACTIONABLE_LIFECYCLE_STATES = {
     "dead_candidate",
@@ -136,6 +138,12 @@ def _should_reap(
 ) -> bool:
     if not dead_signals or anti_reap_signals:
         return False
+    if (
+        quiet_for is not None
+        and quiet_for >= _ZERO_EVENT_REAP_AFTER_SECONDS
+        and "zero_event_session" in dead_signals
+    ):
+        return True
     if detached_rebuild_stale and "detached_control_plane_rebuild" in dead_signals:
         return True
     return (
@@ -162,10 +170,20 @@ def _compute_dead_signals_and_state(
         return dead_signals, state
 
     last_event_type = str(response.get("last_event_type") or "")
+    is_zero_event_session = (
+        phase == "unknown"
+        and quiet_for is not None
+        and quiet_for >= _ZERO_EVENT_REAP_AFTER_SECONDS
+        and not last_event_type
+        and int(response.get("tool_calls_count") or 0) == 0
+        and int(response.get("outstanding_tool_calls") or 0) == 0
+    )
     if quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
         dead_signals.append("no_model_activity_30m")
     if phase == "unknown" and quiet_for is not None and quiet_for >= _NO_ACTIVITY_STALL_AFTER_SECONDS:
         dead_signals.append("no_structured_activity")
+    if is_zero_event_session:
+        dead_signals.append("zero_event_session")
     if last_event_type == "heartbeat" and quiet_for is not None and quiet_for >= _DEAD_CANDIDATE_AFTER_SECONDS:
         dead_signals.append("heartbeat_only")
     if response.get("termination_reason"):
