@@ -384,6 +384,27 @@ class TestFormatProgressiveContext:
         result = format_progressive_context(ctx, consumer_profile="codex_startup")
 
         assert "If local memory lookup is unavailable in this shell" in result
+        assert "Terse like caveman." in result
+
+    def test_agent_runtime_does_not_add_startup_caveman_directive(self):
+        """Runtime memory injection should not inherit startup-only output shaping."""
+        now = datetime.now(UTC)
+        ctx = ProgressiveContext(
+            mandates=[
+                MemorySearchResult(
+                    uuid="m1-uuid",
+                    content="Runtime rule.",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
+                ),
+            ],
+        )
+
+        result = format_progressive_context(ctx, consumer_profile="agent_runtime")
+
+        assert "Terse like caveman." not in result
 
 
 class TestGetContextTokenStats:

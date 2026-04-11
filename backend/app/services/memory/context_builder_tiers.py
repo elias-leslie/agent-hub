@@ -6,7 +6,11 @@ import re
 from collections import Counter
 
 from .budget import count_tokens
-from .context_profiles import full_render_tags_for_profile
+from .context_profiles import (
+    MemoryConsumerProfile,
+    full_render_tags_for_profile,
+    resolve_consumer_profile,
+)
 from .service import MemorySearchResult
 
 PROMPT_TIER_L0 = "L0"
@@ -35,6 +39,7 @@ def plan_context_render_tiers(
 ) -> None:
     """Assign an initial render tier to each injected memory item."""
     query_terms = _tokenize(query)
+    profile = resolve_consumer_profile(consumer_profile)
     force_full_tags = full_render_tags_for_profile(consumer_profile)
     for block, items in (
         ("mandate", mandates),
@@ -46,6 +51,7 @@ def plan_context_render_tiers(
             tier, reason = _select_initial_tier(
                 item,
                 block=block,
+                profile=profile,
                 query_terms=query_terms,
                 force_full_tags=force_full_tags,
             )
@@ -119,6 +125,7 @@ def _select_initial_tier(
     item: MemorySearchResult,
     *,
     block: str,
+    profile: MemoryConsumerProfile,
     query_terms: set[str],
     force_full_tags: set[str],
 ) -> tuple[str, str]:
@@ -129,9 +136,19 @@ def _select_initial_tier(
     # Token budget is managed by episode count (target: 25-30 mandates),
     # not by compressing instructions into useless summaries.
     if block == "mandate":
+        if profile in {
+            MemoryConsumerProfile.CODEX_STARTUP,
+            MemoryConsumerProfile.CLAUDE_SESSION_START,
+        }:
+            return PROMPT_TIER_L0, "startup_policy_summary"
         return PROMPT_TIER_L2, "mandate"
 
     if block == "guardrail":
+        if profile in {
+            MemoryConsumerProfile.CODEX_STARTUP,
+            MemoryConsumerProfile.CLAUDE_SESSION_START,
+        }:
+            return PROMPT_TIER_L0, "startup_policy_summary"
         return PROMPT_TIER_L2, "guardrail"
 
     if block == "reference_index":
