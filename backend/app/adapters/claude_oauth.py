@@ -5,7 +5,7 @@ import logging
 import time
 from typing import cast
 
-from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
+from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError, RateLimitError
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
@@ -22,6 +22,16 @@ def _append_unique_thinking(thinking_parts: list[str], thinking: str) -> None:
     if not thinking or thinking in thinking_parts:
         return
     thinking_parts.append(thinking)
+
+
+def _raise_for_usage_limit_banner(raw_content: str, provider_name: str) -> None:
+    """Convert Claude CLI/SDK usage-limit banners into a provider rate-limit error."""
+    normalized = " ".join(raw_content.strip().split())
+    if not normalized:
+        return
+    simplified = normalized.replace("\u2019", "'").lower()
+    if simplified.startswith(("you've hit your limit", "you have hit your limit")):
+        raise RateLimitError(provider=provider_name, quota_details={"message": normalized})
 
 
 def _process_assistant_blocks(msg: object, content_parts: list[str], thinking_parts: list[str]) -> dict[str, object] | None:
@@ -88,6 +98,7 @@ def _build_result(
     json_mode: bool, sdk_model: str, provider_name: str, start_time: float,
 ) -> CompletionResult:
     raw_content = "".join(content_parts)
+    _raise_for_usage_limit_banner(raw_content, provider_name)
     content = (json.dumps(structured_output, indent=2) if structured_output else extract_json_from_response(raw_content)) if json_mode else raw_content
     if json_mode:
         logger.info(f"OAuth: {'Native' if structured_output else 'Fallback'} JSON ({len(content)} chars)")
@@ -147,6 +158,8 @@ async def complete_oauth(
             content_parts, thinking_parts, structured_output, usage,
             cache_metrics, json_mode, sdk_model, provider_name, start_time,
         )
+    except RateLimitError:
+        raise
     except TimeoutError as e:
         detail = f": {e}" if str(e) else ""
         raise ProviderError(

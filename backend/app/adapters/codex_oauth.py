@@ -209,15 +209,14 @@ class CodexOAuthAdapter(ProviderAdapter):
 
     def __init__(self, credentials: CodexCredentials | None = None) -> None:
         self._credentials = credentials
+        self._credentials_override = credentials is not None
         self._refresh_lock = asyncio.Lock()
         # Eagerly verify credentials exist so the registry/prober can skip
         # this provider when unconfigured, rather than deferring to health_check.
         if credentials is None:
             self._get_credentials()
 
-    def _get_credentials(self) -> CodexCredentials:
-        if self._credentials is not None:
-            return self._credentials
+    def _load_credentials_from_manager(self) -> CodexCredentials | None:
         try:
             from app.services.credential_manager import get_credential_manager
 
@@ -227,16 +226,49 @@ class CodexOAuthAdapter(ProviderAdapter):
                 refresh = cm.get("codex", "refresh_token")
                 access_token, expires_at = parse_stored_oauth_token(token_value)
                 if access_token:
-                    self._credentials = CodexCredentials(
+                    return CodexCredentials(
                         access_token=access_token,
                         refresh_token=refresh,
                         account_id=extract_account_id(access_token),
                         expires_at=expires_at,
                     )
-                    return self._credentials
         except Exception:
-            logger.warning("Credential refresh failed", exc_info=True)
+            logger.warning("Failed to resolve Codex credentials from cache", exc_info=True)
+        return None
+
+    def _get_credentials(self) -> CodexCredentials:
+        if self._credentials_override and self._credentials is not None:
+            return self._credentials
+
+        creds = self._load_credentials_from_manager()
+        if creds is not None:
+            self._credentials = creds
+            return creds
+
+        if self._credentials is not None:
+            return self._credentials
         raise AuthenticationError(provider="codex")
+
+    async def _reload_credentials_from_db(self) -> CodexCredentials | None:
+        """Reload the credential manager from DB and return the latest Codex creds."""
+        if self._credentials_override:
+            return self._credentials
+
+        try:
+            from app.db import async_session
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            async with async_session() as db:
+                await cm.load(db)
+        except Exception:
+            logger.warning("Failed to reload Codex credentials from DB", exc_info=True)
+            return None
+
+        creds = self._load_credentials_from_manager()
+        if creds is not None:
+            self._credentials = creds
+        return creds
 
     async def _persist_credentials(self, credentials: CodexCredentials) -> None:
         """Persist refreshed Codex credentials to cache and DB."""
@@ -268,7 +300,13 @@ class CodexOAuthAdapter(ProviderAdapter):
         if not creds.is_expired:
             return creds
         if not creds.refresh_token:
-            raise AuthenticationError(provider="codex")
+            reloaded = await self._reload_credentials_from_db()
+            if reloaded is not None:
+                creds = reloaded
+            if not creds.refresh_token:
+                raise AuthenticationError(provider="codex")
+            if not creds.is_expired:
+                return creds
         async with self._refresh_lock:
             creds = self._get_credentials()
             if not creds.is_expired:
@@ -286,6 +324,13 @@ class CodexOAuthAdapter(ProviderAdapter):
                 return new_creds
             except Exception as exc:
                 logger.warning("Codex token refresh failed", exc_info=True)
+                reloaded = await self._reload_credentials_from_db()
+                if reloaded is not None:
+                    current_pair = (creds.access_token, creds.refresh_token)
+                    reloaded_pair = (reloaded.access_token, reloaded.refresh_token)
+                    if reloaded_pair != current_pair or not reloaded.is_expired:
+                        logger.info("Recovered Codex credentials from DB after refresh failure")
+                        return reloaded
                 raise AuthenticationError(provider="codex") from exc
 
     async def complete(

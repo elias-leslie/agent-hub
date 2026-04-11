@@ -10,7 +10,6 @@ from typing import Any
 
 from app.hatchet_app import hatchet
 from app.worker_diagnostics import install_asyncio_task_dump_signal
-from app.workflows.coderabbit_review import coderabbit_daily_review_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
@@ -53,7 +52,6 @@ OPS_WORKFLOWS: tuple[WorkflowDef, ...] = (
     session_summary_task,
     observation_processing_task,
     model_enrichment_sync_task,
-    coderabbit_daily_review_task,
     site_health_check_task,
     single_project_health_check_task,
     session_reaper_task,
