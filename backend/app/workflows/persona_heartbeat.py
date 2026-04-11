@@ -99,9 +99,16 @@ def create_heartbeat_session_id() -> str:
 
 async def _run_persona_heartbeat(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
     """Periodic persona check-in via complete_internal."""
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
     manual = input.manual
     target_project_id = input.target_project_id
     execution_project = target_project_id or HEARTBEAT_PROJECT
+
+    if not manual and not await is_workflow_schedule_enabled("persona_heartbeat"):
+        await record_heartbeat_skip("schedule_disabled")
+        ctx.log("Heartbeat skipped (schedule disabled)")
+        return HeartbeatResult(status="skipped", error="schedule_disabled").model_dump()
 
     may_proceed, interval_minutes, skip_reason = await _check_schedule_guards(manual)
     if not may_proceed:

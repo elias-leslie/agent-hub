@@ -330,9 +330,14 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
 
     from app.db import async_session
     from app.models.persona_scheduled_job import PersonaScheduledJob
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
     errors: list[str] = []
     executed = 0
+
+    if not await is_workflow_schedule_enabled("persona_scheduler"):
+        ctx.log("Persona scheduler skipped (schedule disabled)")
+        return SchedulerResult(status="disabled").model_dump()
 
     async with async_session() as db:
         now = datetime.now(UTC)

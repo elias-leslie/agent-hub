@@ -25,7 +25,7 @@ from .context_builder_settings import (
 )
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
-from .context_profiles import priority_tags_for_profile
+from .context_profiles import priority_tags_for_profile, startup_limits_for_profile
 from .memory_models import MemoryContextKind
 from .scoring import MemoryScoreInput, score_memory
 from .service import MemoryScope, MemorySearchResult
@@ -393,6 +393,11 @@ def _apply_priority_and_limits(
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
     context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
+    startup_mandate_limit, startup_guardrail_limit = startup_limits_for_profile(consumer_profile)
+    if startup_mandate_limit > 0:
+        context.mandates = context.mandates[:startup_mandate_limit]
+    if startup_guardrail_limit > 0:
+        context.guardrails = context.guardrails[:startup_guardrail_limit]
     context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
     context.reference_index = _limit_references_for_variant(
         context.reference_index, variant_config.max_reference_items, consumer_profile

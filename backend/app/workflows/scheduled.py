@@ -21,6 +21,10 @@ class EmptyInput(BaseModel):
     pass
 
 
+def _disabled_schedule_result(schedule_id: str) -> dict[str, Any]:
+    return {"status": "disabled", "schedule_id": schedule_id}
+
+
 class CleanupResult(BaseModel):
     status: str
     sessions_cleaned: int = 0
@@ -87,7 +91,12 @@ class MemoryGovernanceResult(BaseModel):
 )
 async def session_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.db import async_session
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
     from app.tasks.session_cleanup import cleanup_stale_sessions
+
+    if not await is_workflow_schedule_enabled("session_cleanup"):
+        ctx.log("Session cleanup skipped (schedule disabled)")
+        return _disabled_schedule_result("session_cleanup")
 
     async with async_session() as db:
         cleaned = await cleanup_stale_sessions(db)
@@ -110,6 +119,11 @@ async def session_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any
 )
 async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.services.memory.tier_optimizer import optimize_tiers
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("tier_optimizer"):
+        ctx.log("Tier optimizer skipped (schedule disabled)")
+        return _disabled_schedule_result("tier_optimizer")
 
     result_data = await optimize_tiers()
 
@@ -142,6 +156,11 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.services.memory.cleanup_ttl import cleanup_stale_memories
     from app.services.memory.redundancy import find_and_consolidate_redundant
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("memory_cleanup"):
+        ctx.log("Memory cleanup skipped (schedule disabled)")
+        return _disabled_schedule_result("memory_cleanup")
 
     # Step 1: Graduated retirement (replaces hard delete)
     cleanup_data = await cleanup_stale_memories(ttl_days=90)
@@ -181,7 +200,12 @@ async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     ),
 )
 async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
     from app.tasks.feedback_cleanup import cleanup_feedback_lifecycle
+
+    if not await is_workflow_schedule_enabled("feedback_cleanup"):
+        ctx.log("Feedback cleanup skipped (schedule disabled)")
+        return _disabled_schedule_result("feedback_cleanup")
 
     result_data = await cleanup_feedback_lifecycle()
     result = FeedbackCleanupResult(
@@ -208,7 +232,12 @@ async def feedback_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, An
 )
 async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.db import async_session
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
     from app.tasks.data_retention import run_data_retention
+
+    if not await is_workflow_schedule_enabled("data_retention"):
+        ctx.log("Data retention skipped (schedule disabled)")
+        return _disabled_schedule_result("data_retention")
 
     async with async_session() as db:
         result_data = await run_data_retention(db)
@@ -236,6 +265,11 @@ async def data_retention_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 async def memory_governance_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.db import async_session
     from app.services.memory.governance import collect_memory_governance_snapshot
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("memory_governance"):
+        ctx.log("Memory governance skipped (schedule disabled)")
+        return _disabled_schedule_result("memory_governance")
 
     async with async_session() as db:
         snapshot = await collect_memory_governance_snapshot(db)

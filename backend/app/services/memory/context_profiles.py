@@ -16,6 +16,10 @@ class MemoryConsumerProfile(StrEnum):
     CODEX_STARTUP = "codex_startup"
 
 
+_STARTUP_MAX_MANDATES = 28
+_STARTUP_MAX_GUARDRAILS = 6
+
+
 def resolve_consumer_profile(consumer_profile: str | None) -> MemoryConsumerProfile:
     """Normalize caller-provided profile names to a known profile."""
     if not consumer_profile:
@@ -37,3 +41,14 @@ def full_render_tags_for_profile(consumer_profile: str | None) -> set[str]:
 def priority_tags_for_profile(consumer_profile: str | None) -> set[str]:
     """Return memory tags that should be surfaced first for a profile."""
     return full_render_tags_for_profile(consumer_profile)
+
+
+def startup_limits_for_profile(consumer_profile: str | None) -> tuple[int, int]:
+    """Return mandate/guardrail caps for startup-style consumers."""
+    profile = resolve_consumer_profile(consumer_profile)
+    if profile in {
+        MemoryConsumerProfile.CODEX_STARTUP,
+        MemoryConsumerProfile.CLAUDE_SESSION_START,
+    }:
+        return (_STARTUP_MAX_MANDATES, _STARTUP_MAX_GUARDRAILS)
+    return (0, 0)

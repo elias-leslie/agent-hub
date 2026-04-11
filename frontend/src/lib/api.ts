@@ -102,12 +102,26 @@ export {
 export { fetchRequestLog, fetchMonitoringMetrics } from "./api/monitoring";
 
 // Re-export all admin-related exports
-export type { ClientControl, BlockedRequest } from "./api/admin";
+export type {
+  BlockedRequest,
+  ClientControl,
+  HotspotBreakdownRow,
+  HotspotTotals,
+  LowYieldSessionRow,
+  RepeatedWorkloadRow,
+  SessionHotspots,
+  WorkflowSchedule,
+  WorkflowScheduleUpdate,
+  ZeroEventActiveSessionRow,
+} from "./api/admin";
 export {
   fetchClients,
   fetchBlockedRequests,
+  fetchSessionHotspots,
+  fetchWorkflowSchedules,
   disableClient,
   enableClient,
+  updateWorkflowSchedule,
 } from "./api/admin";
 
 // Re-export all project-permissions-related exports
