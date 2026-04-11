@@ -251,7 +251,34 @@ def test_build_live_activity_response_marks_stale_untracked_session_reapable() -
     assert response["phase"] == "unknown"
     assert response["lifecycle_state"] == "reapable"
     assert "no_structured_activity" in response["dead_signals"]
-    assert response["reapable_reason"] == "no_model_activity_30m+no_structured_activity+heartbeat_missing+no_lane"
+    assert response["reapable_reason"] == (
+        "no_model_activity_30m+no_structured_activity+zero_event_session+heartbeat_missing+no_lane"
+    )
+
+
+def test_build_live_activity_response_reaps_lane_free_zero_event_session_after_one_hour() -> None:
+    session = MagicMock()
+    session.status = "active"
+    session.provider_metadata = {
+        "live_activity": {
+            "phase": "unknown",
+            "status": "active",
+            "summary": "No structured activity recorded",
+            "last_event_type": None,
+            "last_event_at": (datetime.now(UTC) - timedelta(minutes=75)).isoformat(),
+            "last_model_activity_at": (datetime.now(UTC) - timedelta(minutes=75)).isoformat(),
+            "outstanding_tool_calls": 0,
+            "tool_calls_count": 0,
+        }
+    }
+
+    response = build_live_activity_response(session, has_owner_lane=False, has_specialist_lane=False)
+
+    assert response is not None
+    assert response["lifecycle_state"] == "reapable"
+    assert response["reapable"] is True
+    assert "zero_event_session" in response["dead_signals"]
+    assert response["reapable_reason"] == "no_model_activity_30m+zero_event_session+no_lane"
 
 
 def test_build_live_activity_response_blocks_reaping_when_lane_is_active() -> None:

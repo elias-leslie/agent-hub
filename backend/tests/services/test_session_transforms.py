@@ -60,3 +60,35 @@ def test_build_session_list_items_exposes_batch_task_ids() -> None:
     item = build_session_list_items([session], {}, {})[0]
 
     assert item.batch_task_ids == ["task-a", "task-b"]
+
+
+def test_build_session_list_items_classifies_benchmark_attribution() -> None:
+    session = _session(
+        request_source="manual/caveman-mini-baseline",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "source_client": "summitflow",
+        },
+    )
+
+    item = build_session_list_items([session], {}, {})[0]
+
+    assert item.attribution_kind == "benchmark"
+    assert item.attribution_label == "Benchmark"
+    assert item.attribution_detail == "manual/caveman-mini-baseline"
+
+
+def test_build_session_response_classifies_autonomous_attribution() -> None:
+    session = _session(
+        request_source="summitflow",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "source_client": "summitflow",
+        },
+    )
+
+    response = build_session_response(session)
+
+    assert response.attribution_kind == "autonomous"
+    assert response.attribution_label == "Autonomous"
+    assert response.attribution_detail == "summitflow"

@@ -86,6 +86,9 @@ export interface Session {
   request_source?: string | null;
   source_client?: string | null;
   source_path?: string | null;
+  attribution_kind?: string | null;
+  attribution_label?: string | null;
+  attribution_detail?: string | null;
   created_at: string;
   updated_at: string;
   live_activity?: LiveActivity | null;
@@ -118,6 +121,9 @@ export interface SessionListItem {
   request_source?: string | null;
   source_client?: string | null;
   source_path?: string | null;
+  attribution_kind?: string | null;
+  attribution_label?: string | null;
+  attribution_detail?: string | null;
   current_branch?: string | null;
   live_activity?: LiveActivity | null;
   message_count: number;

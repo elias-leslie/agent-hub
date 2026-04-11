@@ -42,6 +42,14 @@ export function SessionInfo({ session, memorySummary }: SessionInfoProps) {
       {/* Session Info Grid */}
       <div className="detail-grid">
         <StatCard icon={Layers} label="Project" value={session.project_id} />
+        {session.attribution_label && (
+          <StatCard
+            icon={Layers}
+            label="Attribution"
+            value={session.attribution_label}
+            subValue={session.attribution_detail || undefined}
+          />
+        )}
         <StatCard
           icon={Cpu}
           label="Provider"
