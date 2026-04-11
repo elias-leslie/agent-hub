@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import time
 from typing import NoReturn
 
@@ -10,9 +11,11 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
+from app.adapters.registry import list_providers
 from app.adapters.thinking import get_thinking_config
 from app.constants.catalog import get_model_capabilities
 from app.services.agent_dto import AgentDTO
+from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.health_prober import record_provider_failure, record_provider_success
 
 from .agent_routing_models import CompletionResult
@@ -21,6 +24,8 @@ from .agent_routing_utils import get_adapter, get_provider_for_model
 logger = logging.getLogger(__name__)
 
 _COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.TimeoutError)
+_DEFAULT_RATE_LIMIT_COOLDOWN = 60.0
+_RATE_LIMIT_BREAKER = CircuitBreakerManager(list_providers())
 
 
 def _format_fallback_reason(error: BaseException | None) -> str | None:
@@ -28,6 +33,31 @@ def _format_fallback_reason(error: BaseException | None) -> str | None:
     if error is None:
         return None
     return f"{type(error).__name__}: {error}"
+
+
+def _resolve_retry_after_seconds(error: RateLimitError) -> float:
+    """Return the cooldown window to enforce for a provider rate limit."""
+    retry_after = error.retry_after
+    if retry_after is None or retry_after <= 0:
+        return _DEFAULT_RATE_LIMIT_COOLDOWN
+    return float(retry_after)
+
+
+async def get_provider_rate_limit_cooldown_remaining(provider: str) -> float | None:
+    """Return remaining seconds for an active provider rate-limit cooldown."""
+    return await _RATE_LIMIT_BREAKER.get_cooldown_remaining(provider)
+
+
+async def _active_cooldown_error(provider: str) -> RateLimitError | None:
+    """Return a synthetic RateLimitError when a provider cooldown is still active."""
+    remaining = await get_provider_rate_limit_cooldown_remaining(provider)
+    if remaining is None:
+        return None
+    return RateLimitError(
+        provider=provider,
+        retry_after=max(1.0, math.ceil(remaining)),
+        quota_details={"message": "Provider cooldown active"},
+    )
 
 
 async def _try_model(
@@ -41,6 +71,15 @@ async def _try_model(
 ) -> tuple[object | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error."""
     provider = get_provider_for_model(model)
+    cooldown_error = await _active_cooldown_error(provider)
+    if cooldown_error is not None:
+        logger.warning(
+            "Skipping model %s because provider %s is cooling down for %.0fs",
+            model,
+            provider,
+            cooldown_error.retry_after or 0,
+        )
+        return None, cooldown_error
     start = time.monotonic()
     try:
         adapter = get_adapter(provider)
@@ -64,8 +103,15 @@ async def _try_model(
             **extra_kwargs,
         )
         record_provider_success(provider, (time.monotonic() - start) * 1000)
+        await _RATE_LIMIT_BREAKER.on_success(provider)
         return result, None
     except _COMPLETION_ERRORS as e:
+        if isinstance(e, RateLimitError):
+            await _RATE_LIMIT_BREAKER.trip(
+                provider,
+                cooldown_seconds=_resolve_retry_after_seconds(e),
+                error_signature=f"rate_limit:{provider}",
+            )
         record_provider_failure(provider, str(e), (time.monotonic() - start) * 1000)
         logger.warning("Model %s failed: %s", model, e)
         return None, e
@@ -103,15 +149,27 @@ async def _try_fallbacks(
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
     verbosity_level: str | None = None,
+    blocked_providers: set[str] | None = None,
 ) -> CompletionResult | None:
     """Try each fallback model in order; return first success or None."""
+    blocked_providers = blocked_providers or set()
     for fallback_model in agent.fallback_models or []:
+        fallback_provider = get_provider_for_model(fallback_model)
+        if fallback_provider in blocked_providers:
+            logger.info(
+                "Skipping fallback model %s because provider %s is rate-limited",
+                fallback_model,
+                fallback_provider,
+            )
+            continue
         result, _error = await _try_model(
             messages, fallback_model, temperature, max_tokens, tools, thinking_level, verbosity_level
         )
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
             return CompletionResult(result=result, model_used=fallback_model, used_fallback=True)
+        if isinstance(_error, RateLimitError):
+            blocked_providers.add(fallback_provider)
     return None
 
 
@@ -124,16 +182,28 @@ async def _try_escalation(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     tried_models: set[str] | None = None,
+    blocked_providers: set[str] | None = None,
 ) -> CompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
+    blocked_providers = blocked_providers or set()
     escalation = agent.escalation_model_id
     if not escalation or escalation in tried_models:
+        return None
+    escalation_provider = get_provider_for_model(escalation)
+    if escalation_provider in blocked_providers:
+        logger.info(
+            "Skipping escalation model %s because provider %s is rate-limited",
+            escalation,
+            escalation_provider,
+        )
         return None
     result, _error = await _try_model(
         messages, escalation, temperature, max_tokens, tools, thinking_level, verbosity_level
     )
     if result is None:
+        if isinstance(_error, RateLimitError):
+            blocked_providers.add(escalation_provider)
         return None
     logger.info("Agent %s escalated to model: %s", agent.slug, escalation)
     return CompletionResult(result=result, model_used=escalation, used_fallback=True)
@@ -171,6 +241,7 @@ async def complete_with_fallback(
     """
     primary_model = primary_model_override or agent.primary_model_id
     verbosity_level = getattr(agent, "verbosity_level", None)
+    blocked_providers: set[str] = set()
 
     result, primary_error = await _try_model(
         messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level
@@ -182,19 +253,52 @@ async def complete_with_fallback(
             fallback_reason=None,
         )
     logger.warning("Primary model %s failed for agent %s", primary_model, agent.slug)
+    if isinstance(primary_error, RateLimitError):
+        blocked_providers.add(primary_error.provider)
     primary_reason = _format_fallback_reason(primary_error)
 
-    fallback_args = (messages, agent, temperature, max_tokens, tools, thinking_level, verbosity_level)
-    fallback_result = await _try_fallbacks(*fallback_args)
+    fallback_result = await _try_fallbacks(
+        messages,
+        agent,
+        temperature,
+        max_tokens,
+        tools,
+        thinking_level,
+        verbosity_level,
+        blocked_providers,
+    )
     if fallback_result is not None:
         fallback_result.fallback_reason = primary_reason
         return fallback_result
 
     tried_models = {primary_model} | set(agent.fallback_models or [])
-    escalation_result = await _try_escalation(*fallback_args, tried_models=tried_models)
+    escalation_result = await _try_escalation(
+        messages,
+        agent,
+        temperature,
+        max_tokens,
+        tools,
+        thinking_level,
+        verbosity_level,
+        tried_models=tried_models,
+        blocked_providers=blocked_providers,
+    )
     if escalation_result is not None:
         escalation_result.fallback_reason = primary_reason
         return escalation_result
+
+    if isinstance(primary_error, RateLimitError):
+        raise RateLimitError(
+            provider=primary_error.provider,
+            retry_after=max(
+                1.0,
+                math.ceil(
+                    await get_provider_rate_limit_cooldown_remaining(primary_error.provider)
+                    or _resolve_retry_after_seconds(primary_error)
+                ),
+            ),
+            quota_details=primary_error.quota_details,
+        )
 
     _raise_all_models_failed(agent, primary_model, primary_reason)
 

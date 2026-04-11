@@ -164,6 +164,23 @@ class CircuitBreakerManager:
         # HALF_OPEN: allow one test request
         return True
 
+    async def get_cooldown_remaining(self, provider: str) -> float | None:
+        """Return remaining cooldown seconds for an open circuit, if any."""
+        redis = await get_redis_client()
+        if redis:
+            redis_state = await self._get_circuit_state_from_redis(provider, redis)
+            if redis_state:
+                self._circuit_state[provider] = redis_state
+
+        state = self._get_circuit_state(provider)
+        if state.state != CircuitState.OPEN or state.cooldown_until is None:
+            return None
+
+        remaining = state.cooldown_until - time.time()
+        if remaining <= 0:
+            return None
+        return remaining
+
     async def on_success(self, provider: str) -> None:
         """Handle successful request - reset circuit state."""
         state = self._get_circuit_state(provider)
@@ -212,6 +229,26 @@ class CircuitBreakerManager:
                 await self._save_circuit_state_to_redis(provider, state, redis)
         elif redis:
             # Save non-threshold state to Redis
+            await self._save_circuit_state_to_redis(provider, state, redis)
+
+        return state
+
+    async def trip(
+        self,
+        provider: str,
+        *,
+        cooldown_seconds: float,
+        error_signature: str,
+    ) -> CircuitBreakerState:
+        """Open a provider circuit immediately for a known cooldown window."""
+        state = self._get_circuit_state(provider)
+        state.state = CircuitState.OPEN
+        state.consecutive_failures = max(state.consecutive_failures, CIRCUIT_BREAKER_THRESHOLD)
+        state.last_error_signature = error_signature
+        state.cooldown_until = time.time() + max(cooldown_seconds, 0.0)
+
+        redis = await get_redis_client()
+        if redis:
             await self._save_circuit_state_to_redis(provider, state, redis)
 
         return state

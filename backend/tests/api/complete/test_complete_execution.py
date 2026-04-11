@@ -219,6 +219,57 @@ async def test_dispatch_db_bypasses_agentic_fallback_chain_when_disabled() -> No
 
 
 @pytest.mark.asyncio
+async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() -> None:
+    from app.api.complete.complete_execution import execute_completion
+
+    request = SimpleNamespace(
+        temperature=0.0,
+        tools=None,
+        response_format=None,
+        thinking_level=None,
+        auto_thinking=False,
+        disable_agent_fallbacks=False,
+        enable_programmatic_tools=False,
+        enable_caching=False,
+        cache_ttl=None,
+        container_id=None,
+    )
+    adapter_result = CompletionResult(
+        content="ok",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=5,
+        output_tokens=7,
+    )
+
+    with patch(
+        "app.api.complete.complete_execution.execute_without_db",
+        new=AsyncMock(return_value=(adapter_result, "claude-sonnet-4-6")),
+    ) as execute_without_db, patch(
+        "app.api.complete.complete_execution._dispatch_db",
+        new=AsyncMock(),
+    ) as dispatch_db:
+        result = await execute_completion(
+            request=request,
+            resolved_model="claude-sonnet-4-6",
+            provider="claude",
+            resolved_agent=None,
+            messages_dict=[{"role": "user", "content": "hi"}],
+            all_messages=[Message(role="user", content="hi")],
+            is_agentic=False,
+            db=AsyncMock(),
+            session_id="sess-1",
+            client_id=None,
+            request_source=None,
+            skip_cache=False,
+        )
+
+    assert result == (adapter_result, "claude-sonnet-4-6", False, [], "sess-1", None)
+    execute_without_db.assert_awaited_once()
+    dispatch_db.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_execute_without_db_records_provider_success() -> None:
     from app.api.complete.execution import execute_without_db
 

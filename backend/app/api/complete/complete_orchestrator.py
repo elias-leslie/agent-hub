@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.registry import get_provider_for_model
 from app.api.complete.async_dispatch import dispatch_async_completion
 from app.api.complete.handlers import build_cached_completion_response
 from app.api.complete.orchestration_helpers import (
@@ -23,6 +25,7 @@ from app.api.complete.resolution import (
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
+from app.services.agent_routing_completion import get_provider_rate_limit_cooldown_remaining
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -31,6 +34,40 @@ if TYPE_CHECKING:
     from app.services.agent_routing import ResolvedAgent
 
 logger = logging.getLogger(__name__)
+
+
+async def _guard_provider_cooldowns(
+    *,
+    request: CompletionRequest,
+    provider: str,
+    resolved_agent: ResolvedAgent | None,
+) -> None:
+    """Reject early when every candidate provider is cooling down after rate limits."""
+    candidate_providers = {provider}
+    if resolved_agent and not request.disable_agent_fallbacks:
+        candidate_providers.update(
+            get_provider_for_model(model_id)
+            for model_id in (resolved_agent.agent.fallback_models or [])
+        )
+        if resolved_agent.agent.escalation_model_id:
+            candidate_providers.add(get_provider_for_model(resolved_agent.agent.escalation_model_id))
+
+    cooldowns: dict[str, float] = {}
+    for candidate in candidate_providers:
+        remaining = await get_provider_rate_limit_cooldown_remaining(candidate)
+        if remaining is not None:
+            cooldowns[candidate] = remaining
+
+    if cooldowns and len(cooldowns) == len(candidate_providers):
+        max_wait = max(1, math.ceil(max(cooldowns.values())))
+        detail = ", ".join(
+            f"{name} {max(1, math.ceil(wait))}s"
+            for name, wait in sorted(cooldowns.items())
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=f"Provider cooldown active ({detail}). Wait {max_wait}s before retrying the same provider.",
+        )
 
 
 async def _validate_and_resolve(
@@ -94,12 +131,17 @@ async def orchestrate_completion(
     http_request: Request,
     skip_cache: bool,
     db: AsyncSession | None,
-) -> CompletionResponse | StreamingResponse | JSONResponse:
+    ) -> CompletionResponse | StreamingResponse | JSONResponse:
     """Orchestrate a completion request through the entire pipeline."""
     rh, client_id, source, resolved_model, provider, resolved_agent, mandate, agent_used = (
         await _validate_and_resolve(request, http_request, db)
     )
     await _check_quotas(request, resolved_agent, db)
+    await _guard_provider_cooldowns(
+        request=request,
+        provider=provider,
+        resolved_agent=resolved_agent,
+    )
     if request.stream:
         return await handle_streaming_request(
             request=request, resolved_model=resolved_model, provider=provider,

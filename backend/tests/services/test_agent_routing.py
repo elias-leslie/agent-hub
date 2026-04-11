@@ -21,6 +21,7 @@ from app.services.agent_routing import (
     inject_system_prompt_into_messages,
     resolve_agent,
 )
+from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.agent_service import AgentDTO
 from app.services.prompt_service import get_runtime_excluded_prompt_roles
 
@@ -454,26 +455,34 @@ class TestCompleteWithFallback:
         assert captured.kwargs["verbosity_level"] == "high"
 
     @pytest.mark.asyncio
-    async def test_primary_fails_fallback_succeeds(self, mock_agent: AgentDTO) -> None:
+    async def test_primary_rate_limit_skips_same_provider_fallbacks_and_uses_other_provider(
+        self,
+        mock_agent: AgentDTO,
+    ) -> None:
         mock_result = MagicMock()
         mock_result.content = "Hello from fallback!"
 
-        call_count = 0
-
-        async def mock_complete(**kwargs: object) -> MagicMock:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RateLimitError(provider="claude", retry_after=60)
-            return mock_result
-
         with (
+            patch(
+                "app.services.circuit_breaker.get_redis_client",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
+                new=CircuitBreakerManager(["claude", "gemini"]),
+            ),
             patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
             patch("app.services.agent_routing_completion.record_provider_failure") as record_failure,
         ):
-            mock_adapter = AsyncMock()
-            mock_adapter.complete = mock_complete
-            mock_get_adapter.return_value = mock_adapter
+            claude_adapter = AsyncMock()
+            claude_adapter.complete = AsyncMock(
+                side_effect=RateLimitError(provider="claude", retry_after=60)
+            )
+            gemini_adapter = AsyncMock()
+            gemini_adapter.complete = AsyncMock(return_value=mock_result)
+            mock_get_adapter.side_effect = (
+                lambda provider: claude_adapter if provider == "claude" else gemini_adapter
+            )
 
             result = await complete_with_fallback(
                 messages=[Message(role="user", content="Hi")],
@@ -484,10 +493,55 @@ class TestCompleteWithFallback:
 
         assert isinstance(result, CompletionResult)
         assert result.result == mock_result
-        assert result.model_used == CLAUDE_HAIKU
+        assert result.model_used == GEMINI_FLASH
         assert result.used_fallback is True
         assert result.fallback_reason == "RateLimitError: Rate limit exceeded for claude"
-        assert record_failure.call_count >= 1
+        claude_adapter.complete.assert_awaited_once()
+        gemini_adapter.complete.assert_awaited_once()
+        assert record_failure.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_provider_rate_limit_cooldown_blocks_immediate_retry(
+        self,
+        mock_agent_no_fallbacks: AgentDTO,
+    ) -> None:
+        with (
+            patch(
+                "app.services.circuit_breaker.get_redis_client",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "app.services.agent_routing_completion._RATE_LIMIT_BREAKER",
+                new=CircuitBreakerManager(["claude"]),
+            ),
+            patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter,
+        ):
+            claude_adapter = AsyncMock()
+            claude_adapter.complete = AsyncMock(
+                side_effect=RateLimitError(provider="claude", retry_after=60)
+            )
+            mock_get_adapter.return_value = claude_adapter
+
+            with pytest.raises(RateLimitError) as first_exc:
+                await complete_with_fallback(
+                    messages=[Message(role="user", content="Hi")],
+                    agent=mock_agent_no_fallbacks,
+                    max_tokens=100,
+                    temperature=0.5,
+                )
+
+            with pytest.raises(RateLimitError) as second_exc:
+                await complete_with_fallback(
+                    messages=[Message(role="user", content="Hi again")],
+                    agent=mock_agent_no_fallbacks,
+                    max_tokens=100,
+                    temperature=0.5,
+                )
+
+        claude_adapter.complete.assert_awaited_once()
+        assert first_exc.value.retry_after == 60
+        assert second_exc.value.retry_after is not None
+        assert 0 < second_exc.value.retry_after <= 60
 
     @pytest.mark.asyncio
     async def test_all_models_fail(self, mock_agent: AgentDTO) -> None:
