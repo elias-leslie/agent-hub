@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.models.prompt import Prompt, PromptRevision
+from app.services.compactness import CompactnessValidationError
 
 
 def _make_revision(**overrides):
@@ -51,6 +52,35 @@ def _make_prompt(**overrides):
 
 
 class TestPromptRevisionEndpoints:
+    @pytest.mark.asyncio
+    async def test_create_prompt_returns_422_for_non_caveman_content(self, api_client):
+        with patch(
+            "app.api.prompts.get_prompt_by_slug",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.api.prompts.create_prompt",
+            new=AsyncMock(
+                side_effect=CompactnessValidationError(
+                    "prompt",
+                    ["example markers found. Strip examples; keep direct rules only."],
+                )
+            ),
+        ):
+            response = api_client.post(
+                "/api/prompts",
+                json={
+                    "slug": "test-prompt",
+                    "name": "Test Prompt",
+                    "content": "You should be thorough. For example, explain every option.",
+                    "is_global": False,
+                },
+            )
+
+        assert response.status_code == 422
+        data = response.json()
+        detail = data.get("detail", data)
+        assert detail["error"] == "compactness_error"
+
     @pytest.mark.asyncio
     async def test_list_prompt_revisions_returns_history(self, api_client):
         with patch(
@@ -113,3 +143,53 @@ class TestPromptRevisionEndpoints:
 
         assert response.status_code == 400
         assert "Ambiguous prompt revision prefix" in response.text
+
+    @pytest.mark.asyncio
+    async def test_update_prompt_returns_422_for_non_caveman_content(self, api_client):
+        with patch(
+            "app.api.prompts.update_prompt",
+            new=AsyncMock(
+                side_effect=CompactnessValidationError(
+                    "prompt",
+                    ["hedging found. Replace maybe/should/could-style phrasing with direct rules."],
+                )
+            ),
+        ):
+            response = api_client.put(
+                "/api/prompts/persona-heartbeat-instructions",
+                json={"content": "You should maybe explain every option."},
+            )
+
+        assert response.status_code == 422
+        data = response.json()
+        detail = data.get("detail", data)
+        assert detail["error"] == "compactness_error"
+
+    @pytest.mark.asyncio
+    async def test_create_prompt_returns_422_for_offer_back_content(self, api_client):
+        with patch(
+            "app.api.prompts.get_prompt_by_slug",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "app.api.prompts.create_prompt",
+            new=AsyncMock(
+                side_effect=CompactnessValidationError(
+                    "prompt",
+                    ["offer-back phrasing found. Remove optional follow-up or helper language."],
+                )
+            ),
+        ):
+            response = api_client.post(
+                "/api/prompts",
+                json={
+                    "slug": "offer-back-prompt",
+                    "name": "Offer Back Prompt",
+                    "content": "Answer exact. If you want more, ask for details.",
+                    "is_global": False,
+                },
+            )
+
+        assert response.status_code == 422
+        data = response.json()
+        detail = data.get("detail", data)
+        assert detail["error"] == "compactness_error"

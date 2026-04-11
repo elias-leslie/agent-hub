@@ -91,6 +91,16 @@ class TestEpisodeCreatorValidation:
             tier="mandate",
         )
 
+    def test_rejects_non_caveman_example_heavy_content(self) -> None:
+        with pytest.raises(EpisodeValidationError) as exc:
+            EpisodeValidator.validate_content(
+                "**Prompt Hygiene**: Use strict prose. For example, explain every option.",
+                tier="mandate",
+            )
+
+        assert "strict caveman gate" in str(exc.value).lower()
+        assert "example markers found" in str(exc.value).lower()
+
     def test_rejects_missing_bold_topic_header_when_tier_is_provided(self):
         """Tier-aware validation should still require a bold topic header."""
         with pytest.raises(EpisodeValidationError) as exc:
@@ -259,6 +269,7 @@ class TestEpisodeCreatorCreate:
             )
 
         assert result.success is False
+        assert result.validation_error is not None
         assert "Memory creation error" in result.validation_error
 
 

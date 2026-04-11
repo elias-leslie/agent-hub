@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.prompt import AgentPrompt, Prompt, PromptRevision
+from app.services.compactness import validate_compactness
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ async def create_prompt(
     change_reason: str | None = None,
 ) -> Prompt:
     """Create a new prompt."""
+    validate_compactness(content, kind="prompt")
     prompt = Prompt(
         slug=slug,
         name=name,
@@ -154,6 +156,8 @@ async def update_prompt(
     }
     for key, value in kwargs.items():
         if key in allowed_fields and value is not None:
+            if key == "content":
+                validate_compactness(str(value), kind="prompt")
             setattr(prompt, key, value)
 
     await db.flush()
@@ -271,6 +275,7 @@ async def restore_prompt_revision(
 
     prompt.name = revision.prompt_name
     prompt.content = revision.content
+    validate_compactness(prompt.content, kind="prompt")
     prompt.description = revision.description
     prompt.is_global = revision.is_global
     prompt.enabled = revision.enabled

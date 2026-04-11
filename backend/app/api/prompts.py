@@ -28,6 +28,7 @@ from app.api.schemas.prompt_schemas import (
 from app.db import get_db
 from app.services.agent_service import get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
+from app.services.compactness import CompactnessValidationError
 from app.services.prompt_service import (
     assign_prompt,
     create_prompt,
@@ -142,17 +143,20 @@ async def create_prompt_endpoint(
     if existing:
         raise HTTPException(status_code=409, detail=f"Prompt '{request.slug}' already exists")
 
-    prompt = await create_prompt(
-        db,
-        slug=request.slug,
-        name=request.name,
-        content=request.content,
-        description=request.description,
-        is_global=request.is_global,
-        enabled=request.enabled,
-        exclude_agents=request.exclude_agents,
-        changed_by="api",
-    )
+    try:
+        prompt = await create_prompt(
+            db,
+            slug=request.slug,
+            name=request.name,
+            content=request.content,
+            description=request.description,
+            is_global=request.is_global,
+            enabled=request.enabled,
+            exclude_agents=request.exclude_agents,
+            changed_by="api",
+        )
+    except CompactnessValidationError as exc:
+        raise HTTPException(status_code=422, detail={"error": "compactness_error", "errors": list(exc.errors)}) from exc
     return _prompt_to_response(prompt)
 
 
@@ -177,13 +181,16 @@ async def update_prompt_endpoint(
 ) -> PromptResponse:
     update_data = request.model_dump(exclude_unset=True)
     change_reason = update_data.pop("change_reason", None)
-    updated = await update_prompt(
-        db,
-        slug,
-        changed_by="api",
-        change_reason=change_reason,
-        **update_data,
-    )
+    try:
+        updated = await update_prompt(
+            db,
+            slug,
+            changed_by="api",
+            change_reason=change_reason,
+            **update_data,
+        )
+    except CompactnessValidationError as exc:
+        raise HTTPException(status_code=422, detail={"error": "compactness_error", "errors": list(exc.errors)}) from exc
     if not updated:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
     await _invalidate_owned_agent_cache(updated)
@@ -219,13 +226,16 @@ async def restore_prompt_revision_endpoint(
     if not revision:
         raise HTTPException(status_code=404, detail="Prompt revision not found")
 
-    restored = await restore_prompt_revision(
-        db,
-        slug,
-        revision_id,
-        changed_by="api",
-        change_reason=request.change_reason,
-    )
+    try:
+        restored = await restore_prompt_revision(
+            db,
+            slug,
+            revision_id,
+            changed_by="api",
+            change_reason=request.change_reason,
+        )
+    except CompactnessValidationError as exc:
+        raise HTTPException(status_code=422, detail={"error": "compactness_error", "errors": list(exc.errors)}) from exc
     if not restored:
         raise HTTPException(status_code=404, detail=f"Prompt '{slug}' not found")
     await _invalidate_owned_agent_cache(restored)

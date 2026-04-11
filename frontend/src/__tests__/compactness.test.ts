@@ -12,8 +12,8 @@ describe("analyzeCompactness", () => {
     expect(report.tokens).toBeGreaterThan(350);
     expect(report.warnings.some((warning) => warning.includes("large prompt"))).toBe(true);
     expect(report.warnings.some((warning) => warning.includes("long prompt"))).toBe(true);
-    expect(report.warnings.some((warning) => warning.includes("filler terms found"))).toBe(true);
-    expect(report.warnings.some((warning) => warning.includes("repeated example markers"))).toBe(true);
+    expect(report.errors.some((error) => error.includes("filler terms found"))).toBe(true);
+    expect(report.errors.some((error) => error.includes("example markers found"))).toBe(true);
   });
 
   it("flags long multi-line memories", () => {
@@ -32,8 +32,21 @@ describe("analyzeCompactness", () => {
   });
 
   it("leaves lean content warning-free", () => {
-    expect(
-      analyzeCompactness("**Quality Checks**: Use dt for repo checks.", "memory").warnings
-    ).toEqual([]);
+    const report = analyzeCompactness(
+      "**Quality Checks**: Use dt for repo checks.",
+      "memory"
+    );
+
+    expect(report.warnings).toEqual([]);
+    expect(report.errors).toEqual([]);
+  });
+
+  it("flags offer-back phrasing", () => {
+    const report = analyzeCompactness(
+      "Answer exact. If you want more, ask for details.",
+      "prompt"
+    );
+
+    expect(report.errors.some((error) => error.includes("offer-back phrasing found"))).toBe(true);
   });
 });

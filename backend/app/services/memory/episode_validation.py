@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
+from app.services.compactness import CompactnessValidationError, validate_compactness
+
 
 class EpisodeValidationError(Exception):
     """Raised when episode content fails validation."""
@@ -126,6 +128,14 @@ class EpisodeValidator:
                 detected_patterns=["Custom Delimiters"],
             )
 
+        try:
+            validate_compactness(content, kind="memory")
+        except CompactnessValidationError as exc:
+            raise EpisodeValidationError(
+                message="Episode failed strict Caveman gate. " + "; ".join(exc.errors),
+                detected_patterns=list(exc.errors),
+            ) from exc
+
     @classmethod
     def validate_content_simple(cls, content: str) -> str | None:
         """
@@ -149,6 +159,10 @@ class EpisodeValidator:
                 "Content is too verbose. Write declarative facts, not conversational advice. "
                 f"Detected patterns: {', '.join(repr(p) for p in detected)}"
             )
+        try:
+            validate_compactness(content, kind="memory")
+        except CompactnessValidationError as exc:
+            return "Episode failed strict Caveman gate. " + "; ".join(exc.errors)
         return None
 
     @classmethod
