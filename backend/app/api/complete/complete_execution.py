@@ -161,6 +161,17 @@ async def execute_completion(
             getattr(result, "fallback_reason", None),
         )
     if db is not None:
+        if not is_agentic:
+            result, model_used = await execute_without_db(
+                _to_messages(messages_dict),
+                resolved_model,
+                provider,
+                request,
+                thinking,
+                tools,
+                fmt,
+            )
+            return (result, model_used, False, [], session_id, None)
         return await _dispatch_db(request, resolved_model, provider, resolved_agent, messages_dict, db, is_agentic, session_id, client_id, request_source, thinking, tools, fmt, skip_cache)
     result, model_used = await execute_without_db(_to_messages(messages_dict), resolved_model, provider, request, thinking, tools, fmt)
     return (result, model_used, False, [], session_id, None)

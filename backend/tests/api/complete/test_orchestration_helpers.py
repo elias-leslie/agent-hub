@@ -74,3 +74,57 @@ async def test_handle_completion_error_maps_cancelled_error_to_http_500() -> Non
     assert exc_info.value.status_code == 500
     assert exc_info.value.detail == "Completion cancelled unexpectedly."
     notify_error.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_guard_provider_cooldowns_raises_when_all_candidates_blocked() -> None:
+    from app.api.complete.complete_orchestrator import _guard_provider_cooldowns
+
+    request = SimpleNamespace(disable_agent_fallbacks=False)
+    resolved_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            fallback_models=["claude-haiku-4-5"],
+            escalation_model_id=None,
+        )
+    )
+
+    with patch(
+        "app.api.complete.complete_orchestrator.get_provider_rate_limit_cooldown_remaining",
+        new=AsyncMock(return_value=45.2),
+    ), pytest.raises(HTTPException) as exc_info:
+        await _guard_provider_cooldowns(
+            request=request,
+            provider="claude",
+            resolved_agent=resolved_agent,
+        )
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.detail == (
+        "Provider cooldown active (claude 46s). Wait 46s before retrying the same provider."
+    )
+
+
+@pytest.mark.asyncio
+async def test_guard_provider_cooldowns_allows_request_when_alternate_provider_is_available() -> None:
+    from app.api.complete.complete_orchestrator import _guard_provider_cooldowns
+
+    request = SimpleNamespace(disable_agent_fallbacks=False)
+    resolved_agent = SimpleNamespace(
+        agent=SimpleNamespace(
+            fallback_models=["gemini-3-flash-preview"],
+            escalation_model_id=None,
+        )
+    )
+
+    async def fake_cooldown(provider: str) -> float | None:
+        return 30.0 if provider == "claude" else None
+
+    with patch(
+        "app.api.complete.complete_orchestrator.get_provider_rate_limit_cooldown_remaining",
+        new=AsyncMock(side_effect=fake_cooldown),
+    ):
+        await _guard_provider_cooldowns(
+            request=request,
+            provider="claude",
+            resolved_agent=resolved_agent,
+        )

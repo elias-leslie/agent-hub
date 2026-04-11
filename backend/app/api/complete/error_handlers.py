@@ -108,7 +108,7 @@ async def _handle_rate_limit_error(
     retry_after = str(int(error.retry_after)) if error.retry_after else "60"
     raise HTTPException(
         status_code=429,
-        detail=f"{error_detail} Wait {retry_after}s.",
+        detail=f"{error_detail} Wait {retry_after}s before retrying the same provider.",
         headers={"Retry-After": retry_after},
     ) from error
 
