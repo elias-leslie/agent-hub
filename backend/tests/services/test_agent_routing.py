@@ -21,8 +21,8 @@ from app.services.agent_routing import (
     inject_system_prompt_into_messages,
     resolve_agent,
 )
-from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.agent_service import AgentDTO
+from app.services.circuit_breaker import CircuitBreakerManager
 from app.services.prompt_service import get_runtime_excluded_prompt_roles
 
 
