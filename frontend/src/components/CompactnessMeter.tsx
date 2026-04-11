@@ -17,13 +17,16 @@ export function CompactnessMeter({
   className,
 }: CompactnessMeterProps) {
   const report = analyzeCompactness(content, kind);
-  const healthy = report.warnings.length === 0;
+  const blocked = report.errors.length > 0;
+  const healthy = !blocked && report.warnings.length === 0;
 
   return (
     <div
       className={cn(
         "rounded-lg border px-3 py-3",
-        healthy
+        blocked
+          ? "border-rose-900/80 bg-rose-950/20"
+          : healthy
           ? "border-emerald-900/80 bg-emerald-950/20"
           : "border-amber-900/80 bg-amber-950/20",
         className
@@ -38,10 +41,18 @@ export function CompactnessMeter({
           <p
             className={cn(
               "mt-1 text-sm",
-              healthy ? "text-emerald-100" : "text-amber-100"
+              blocked
+                ? "text-rose-100"
+                : healthy
+                  ? "text-emerald-100"
+                  : "text-amber-100"
             )}
           >
-            {healthy
+            {blocked
+              ? kind === "prompt"
+                ? "Write strict Caveman. Save should fail until prose is tightened."
+                : "Write one strict Caveman rule. Save should fail until tightened."
+              : healthy
               ? kind === "prompt"
                 ? "Lean enough for routine edits."
                 : "Lean enough for one reusable rule."
@@ -65,7 +76,11 @@ export function CompactnessMeter({
       <div
         className={cn(
           "mt-3 flex items-start gap-2 text-xs",
-          healthy ? "text-emerald-200" : "text-amber-200"
+          blocked
+            ? "text-rose-200"
+            : healthy
+              ? "text-emerald-200"
+              : "text-amber-200"
         )}
       >
         {healthy ? (
@@ -81,7 +96,9 @@ export function CompactnessMeter({
                 : "Keep one atomic rule and avoid conversational phrasing."}
             </p>
           ) : (
-            report.warnings.map((warning) => <p key={warning}>{warning}</p>)
+            [...report.errors, ...report.warnings].map((message) => (
+              <p key={message}>{message}</p>
+            ))
           )}
         </div>
       </div>
