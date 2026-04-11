@@ -99,3 +99,17 @@ class TestPromptRevisionEndpoints:
             )
 
         assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_restore_prompt_revision_returns_400_for_ambiguous_prefix(self, api_client):
+        with patch(
+            "app.api.prompts.get_prompt_revision",
+            new=AsyncMock(side_effect=ValueError("Ambiguous prompt revision prefix 'rev-1234'")),
+        ):
+            response = api_client.post(
+                "/api/prompts/persona-heartbeat-instructions/revisions/rev-1234/restore",
+                json={},
+            )
+
+        assert response.status_code == 400
+        assert "Ambiguous prompt revision prefix" in response.text

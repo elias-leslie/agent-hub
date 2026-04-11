@@ -212,7 +212,10 @@ async def restore_prompt_revision_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> PromptResponse:
-    revision = await get_prompt_revision(db, slug, revision_id)
+    try:
+        revision = await get_prompt_revision(db, slug, revision_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not revision:
         raise HTTPException(status_code=404, detail="Prompt revision not found")
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -11,7 +11,9 @@ from app.models.prompt import Prompt, PromptRevision
 from app.services.prompt_service import (
     create_prompt,
     get_prompt_content,
+    get_prompt_revision,
     require_prompt_content,
+    resolve_prompt_revision_id_prefix,
     restore_prompt_revision,
     update_prompt,
 )
@@ -131,6 +133,50 @@ class TestPromptServiceRevisions:
         assert isinstance(recorded_revision, PromptRevision)
         assert recorded_revision.action == "restore"
         assert recorded_revision.change_reason == "rollback test"
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_revision_resolves_short_prefix_before_lookup(self) -> None:
+        db = AsyncMock()
+        mock_result = Mock()
+        mock_result.scalar_one_or_none.return_value = {"id": "full-revision-id"}
+        db.execute.return_value = mock_result
+
+        with patch(
+            "app.services.prompt_service.resolve_prompt_revision_id_prefix",
+            new=AsyncMock(return_value="12345678-1234-1234-1234-123456789abc"),
+        ) as mock_resolve:
+            revision = await get_prompt_revision(
+                db,
+                "persona-heartbeat-instructions",
+                "12345678",
+            )
+
+        assert revision == {"id": "full-revision-id"}
+        mock_resolve.assert_awaited_once_with(
+            db,
+            "persona-heartbeat-instructions",
+            "12345678",
+        )
+        db.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_resolve_prompt_revision_id_prefix_rejects_ambiguous_matches(self) -> None:
+        db = AsyncMock()
+        mock_result = Mock()
+        mock_scalars = Mock()
+        mock_scalars.all.return_value = [
+            "12345678-1234-1234-1234-123456789abc",
+            "12345678-9999-9999-9999-999999999999",
+        ]
+        mock_result.scalars.return_value = mock_scalars
+        db.execute.return_value = mock_result
+
+        with pytest.raises(ValueError, match="Ambiguous prompt revision prefix"):
+            await resolve_prompt_revision_id_prefix(
+                db,
+                "persona-heartbeat-instructions",
+                "12345678",
+            )
 
 
 class TestPromptRuntimeReads:
