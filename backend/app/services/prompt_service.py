@@ -6,7 +6,7 @@ import hashlib
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import String, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -214,12 +214,45 @@ async def get_prompt_revision(
     revision_id: str,
 ) -> PromptRevision | None:
     """Fetch a specific revision for one prompt slug."""
+    resolved_revision_id = revision_id
+    normalized_revision_id = revision_id.replace("-", "")
+    if len(normalized_revision_id) != 32:
+        resolved_revision_id = await resolve_prompt_revision_id_prefix(db, slug, revision_id)
+
     stmt = select(PromptRevision).where(
         PromptRevision.prompt_slug == slug,
-        PromptRevision.id == revision_id,
+        PromptRevision.id == resolved_revision_id,
     )
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def resolve_prompt_revision_id_prefix(
+    db: AsyncSession,
+    slug: str,
+    prefix: str,
+) -> str:
+    """Resolve a short prompt revision UUID prefix within one prompt's history."""
+    normalized_prefix = prefix.replace("-", "")
+    stmt = (
+        select(cast(PromptRevision.id, String))
+        .where(
+            PromptRevision.prompt_slug == slug,
+            func.replace(cast(PromptRevision.id, String), "-", "").like(f"{normalized_prefix}%"),
+        )
+        .limit(2)
+    )
+    result = await db.execute(stmt)
+    rows = [str(value) for value in result.scalars().all()]
+
+    if not rows:
+        raise ValueError(f"Prompt revision not found with UUID prefix '{prefix}' for prompt '{slug}'")
+    if len(rows) > 1:
+        raise ValueError(
+            f"Ambiguous prompt revision prefix '{prefix}' for prompt '{slug}': "
+            f"{', '.join(row[:8] for row in rows)}. Please provide more characters."
+        )
+    return rows[0]
 
 
 async def restore_prompt_revision(
