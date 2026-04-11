@@ -365,8 +365,8 @@ class TestFormatProgressiveContext:
         assert "Compact overview of the rule." in result
         assert "Full rule body with detailed rationale" not in result
 
-    def test_codex_startup_adds_local_lookup_fallback_line(self):
-        """Codex startup should explain what to do when later memory lookups are blocked."""
+    def test_codex_startup_adds_local_lookup_fallback_line_without_overlay_directive(self):
+        """Codex startup keeps the fallback note without adding a separate style overlay."""
         now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
@@ -384,7 +384,7 @@ class TestFormatProgressiveContext:
         result = format_progressive_context(ctx, consumer_profile="codex_startup")
 
         assert "If local memory lookup is unavailable in this shell" in result
-        assert "Terse like caveman." in result
+        assert "Terse like caveman." not in result
 
     def test_agent_runtime_does_not_add_startup_caveman_directive(self):
         """Runtime memory injection should not inherit startup-only output shaping."""

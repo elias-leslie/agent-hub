@@ -42,6 +42,12 @@ async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str
     Fetches external benchmark and pricing data, enriches catalog models,
     and stores results in model_enrichments table.
     """
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("model_enrichment_sync"):
+        ctx.log("Model enrichment sync skipped (schedule disabled)")
+        return ModelSyncResult(status="disabled").model_dump()
+
     ctx.log("Starting model enrichment sync")
 
     try:

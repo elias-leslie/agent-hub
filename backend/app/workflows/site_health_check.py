@@ -512,6 +512,12 @@ async def single_project_health_check_task(
 )
 async def site_health_check_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
     """Scheduled site health check across all frontend projects."""
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("site_health_check"):
+        ctx.log("Site health check skipped (schedule disabled)")
+        return HealthCheckResult(status="disabled").model_dump()
+
     try:
         project_findings: dict[str, str] = {}
         projects_with_issues = 0

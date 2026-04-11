@@ -345,6 +345,61 @@ class TestReferenceInjection:
         assert context.debug_info["consumer_profile"] == "codex_startup"
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_codex_startup_caps_policy_counts(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        mandates = [
+            MemorySearchResult(
+                uuid=f"m-{idx:02d}",
+                content=f"Mandate {idx}: keep startup concise and reliable.",
+                summary=f"Mandate {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0 - (idx * 0.01),
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(40)
+        ]
+        guardrails = [
+            MemorySearchResult(
+                uuid=f"g-{idx:02d}",
+                content=f"Guardrail {idx}: avoid unsafe startup behavior.",
+                summary=f"Guardrail {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0 - (idx * 0.01),
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(10)
+        ]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=(mandates, guardrails, [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="General startup guidance.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="codex_startup",
+            )
+
+        assert len(context.mandates) == 28
+        assert len(context.guardrails) == 6
+        assert context.mandates[0].uuid == "m-00"
+        assert context.mandates[-1].uuid == "m-27"
+        assert context.guardrails[0].uuid == "g-00"
+        assert context.guardrails[-1].uuid == "g-05"
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_dedupes_selected_references(self) -> None:
         existing = _reference_result(
             "f2ae2668-da26-46e1-b499-ffac6141e377",

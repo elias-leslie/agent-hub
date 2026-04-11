@@ -31,7 +31,10 @@ from .admin_schemas import (
     ClientListResponse,
     DisableRequest,
     RequestAuditResponse,
+    SessionHotspotsResponse,
     UnknownCallersResponse,
+    WorkflowScheduleResponse,
+    WorkflowScheduleUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,6 +139,40 @@ async def enable_client(
     return client_to_response(client)
 
 
+@router.get("/schedules", response_model=list[WorkflowScheduleResponse])
+async def list_workflow_schedules(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[WorkflowScheduleResponse]:
+    """List every static Hatchet cron workflow with its enablement state."""
+    from app.services.workflow_schedule_registry import list_workflow_schedule_states
+
+    states = await list_workflow_schedule_states(db)
+    return [WorkflowScheduleResponse(**state) for state in states]
+
+
+@router.patch("/schedules/{schedule_id}", response_model=WorkflowScheduleResponse)
+async def update_workflow_schedule(
+    schedule_id: str,
+    payload: WorkflowScheduleUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> WorkflowScheduleResponse:
+    """Enable or disable one static Hatchet cron workflow."""
+    from app.services.workflow_schedule_registry import set_workflow_schedule_enabled
+
+    try:
+        state = await set_workflow_schedule_enabled(
+            schedule_id,
+            enabled=payload.enabled,
+            updated_by=payload.updated_by or "admin-api",
+            db=db,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown schedule '{schedule_id}'") from exc
+
+    await db.commit()
+    return WorkflowScheduleResponse(**state)
+
+
 # Blocked requests log endpoint
 @router.get("/blocked-requests", response_model=BlockedRequestsResponse)
 async def get_blocked_requests(
@@ -182,6 +219,19 @@ async def get_request_audit(
     except Exception as e:
         logger.warning(f"Failed to read audit log from Redis: {e}")
         return RequestAuditResponse(requests=[], total=0)
+
+
+@router.get("/session-hotspots", response_model=SessionHotspotsResponse)
+async def get_session_hotspots(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    hours: int = Query(default=24, ge=1, le=168, description="Window size in hours"),
+    limit: int = Query(default=5, ge=1, le=20, description="Rows per hotspot section"),
+) -> SessionHotspotsResponse:
+    """Return the current churn / token-waste hotspot summary."""
+    from app.services.admin_session_hotspots import build_session_hotspot_snapshot
+
+    payload = await build_session_hotspot_snapshot(db, hours=hours, limit=limit)
+    return SessionHotspotsResponse(**payload)
 
 
 # Unknown callers endpoint

@@ -88,3 +88,101 @@ class UnknownCallersResponse(BaseModel):
     callers: list[UnknownCallerStats]
     total: int
     total_requests: int
+
+
+class WorkflowScheduleResponse(BaseModel):
+    """Admin-facing static workflow schedule state."""
+
+    schedule_id: str
+    label: str
+    description: str
+    cron: str
+    category: str
+    default_enabled: bool
+    enabled: bool
+    notes: str | None
+    updated_by: str | None
+
+
+class WorkflowScheduleUpdate(BaseModel):
+    """Enable/disable payload for a static workflow schedule."""
+
+    enabled: bool
+    updated_by: str | None = Field(default=None, max_length=100)
+
+
+class HotspotTotals(BaseModel):
+    """Top-line hotspot metrics for the selected window."""
+
+    sessions: int
+    input_tokens: int
+    output_tokens: int
+    total_cost_usd: float
+    active_sessions: int
+    zero_event_active_sessions: int
+    rate_limit_fallback_sessions: int
+    missing_attribution_sessions: int
+
+
+class HotspotBreakdownRow(BaseModel):
+    """Grouped hotspot breakdown row."""
+
+    kind: str
+    label: str
+    sessions: int
+    input_tokens: int
+    output_tokens: int
+    total_cost_usd: float
+
+
+class RepeatedWorkloadRow(BaseModel):
+    """Repeated workload group for the hotspot panel."""
+
+    workload_key: str
+    label: str
+    detail: str | None
+    project_id: str
+    agent_slug: str | None
+    sessions: int
+    input_tokens: int
+    output_tokens: int
+    total_cost_usd: float
+
+
+class LowYieldSessionRow(BaseModel):
+    """Session with high input and low output."""
+
+    session_id: str
+    project_id: str
+    agent_slug: str | None
+    status: str
+    model: str
+    label: str
+    input_tokens: int
+    output_tokens: int
+    total_cost_usd: float
+    attribution_label: str | None
+    efficiency_ratio: float
+
+
+class ZeroEventActiveSessionRow(BaseModel):
+    """Currently active session with no event trail."""
+
+    session_id: str
+    project_id: str
+    agent_slug: str | None
+    request_source: str | None
+    quiet_for_seconds: int
+    lifecycle_state: str | None
+
+
+class SessionHotspotsResponse(BaseModel):
+    """Admin hotspot snapshot for recent session churn."""
+
+    generated_at: datetime
+    window_hours: int
+    totals: HotspotTotals
+    attribution_breakdown: list[HotspotBreakdownRow]
+    repeated_workloads: list[RepeatedWorkloadRow]
+    low_yield_sessions: list[LowYieldSessionRow]
+    zero_event_active_sessions: list[ZeroEventActiveSessionRow]

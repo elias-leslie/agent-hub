@@ -1,6 +1,7 @@
 "use client";
 
 import { FileText, Pin } from "lucide-react";
+import { CompactnessMeter } from "@/components/CompactnessMeter";
 import type { MemoryApplicability, MemoryContextKind } from "@/lib/memory-api";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +81,7 @@ export function EpisodeFormFields({
           value={summary}
           onChange={(e) => onSummaryChange(e.target.value)}
           disabled={disabled}
-          maxLength={50}
+          maxLength={40}
           className={cn(
             "w-full px-3 py-2.5 rounded-lg text-sm font-mono",
             "bg-slate-800/50",
@@ -309,6 +310,7 @@ export function EpisodeFormFields({
           placeholder="Enter memory content..."
         />
         <p className="text-xs text-slate-400">{content.length} characters</p>
+        <CompactnessMeter content={content} kind="memory" />
       </div>
     </>
   );

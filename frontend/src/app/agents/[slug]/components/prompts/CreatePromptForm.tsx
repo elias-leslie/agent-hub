@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus } from "lucide-react";
 
+import { CompactnessMeter } from "@/components/CompactnessMeter";
 import {
   type AgentPromptAssignment,
   assignPrompt,
@@ -122,6 +123,7 @@ export function CreatePromptForm({
           rows={12}
           className="min-h-[220px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none transition"
         />
+        <CompactnessMeter content={newContent} kind="prompt" />
       </label>
       <div className="flex justify-end gap-2">
         <button

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 
+import { CompactnessMeter } from "@/components/CompactnessMeter";
 import { type Prompt, updatePrompt } from "@/lib/api/prompts";
 
 interface LinkedPromptCardProps {
@@ -99,6 +100,7 @@ export function LinkedPromptCard({ prompt, onUpdated }: LinkedPromptCardProps) {
               rows={14}
               className="min-h-[220px] w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-xs outline-none transition"
             />
+            <CompactnessMeter content={content} kind="prompt" />
           </label>
           <div className="flex items-center justify-between gap-3">
             <label className="inline-flex items-center gap-2 text-xs text-slate-400">

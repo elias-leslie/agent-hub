@@ -127,6 +127,11 @@ async def session_reaper_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
     from datetime import UTC, datetime
 
     from app.db import async_session
+    from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
+
+    if not await is_workflow_schedule_enabled("session_reaper"):
+        ctx.log("Session reaper skipped (schedule disabled)")
+        return ReaperResult(status="disabled").model_dump()
 
     now = datetime.now(UTC)
 

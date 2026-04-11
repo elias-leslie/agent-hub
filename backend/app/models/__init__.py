@@ -43,6 +43,7 @@ from .session import (
     SessionSummarySegment,
 )
 from .telemetry import RequestLog, TruncationEvent
+from .workflow_schedule_control import WorkflowScheduleControl
 
 # Export all models for backward compatibility
 __all__ = [
@@ -82,4 +83,5 @@ __all__ = [
     "TruncationEvent",
     "UsageStatLog",
     "WebhookSubscription",
+    "WorkflowScheduleControl",
 ]

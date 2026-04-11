@@ -19,6 +19,7 @@ import {
   restorePromptRevision,
   updatePrompt,
 } from "@/lib/api/prompts";
+import { CompactnessMeter } from "@/components/CompactnessMeter";
 import { PromptRevisionHistory } from "@/app/prompts/[slug]/components/PromptRevisionHistory";
 import { cn } from "@/lib/utils";
 
@@ -284,6 +285,7 @@ export default function PromptEditPage() {
                     onChange={(e) => setContent(e.target.value)}
                     className="control-input min-h-[26rem] resize-y font-mono text-[13px] leading-6"
                   />
+                  <CompactnessMeter content={content} kind="prompt" />
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-2">
