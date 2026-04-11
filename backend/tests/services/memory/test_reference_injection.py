@@ -339,7 +339,9 @@ class TestReferenceInjection:
         assert context.mandates[0].render_tier == "L2"
         assert context.mandates[0].render_reason == "consumer_profile_tag"
         assert context.mandates[0].rendered_content == context.mandates[0].content
-        assert context.mandates[1].render_tier == "L2"
+        assert context.mandates[1].render_tier == "L0"
+        assert context.mandates[1].render_reason == "startup_policy_summary"
+        assert context.mandates[1].rendered_content == "Generic startup guidance."
         assert context.debug_info["consumer_profile"] == "codex_startup"
 
     @pytest.mark.asyncio

@@ -44,6 +44,13 @@ MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
 CODEX_STARTUP_FALLBACK_LINE = (
     "- If local memory lookup is unavailable in this shell, treat the full-text startup-critical rules below as authoritative for command-shape and workflow questions. Use repo-local evidence for implementation facts or explicit local overrides, not to dilute these rules."
 )
+STARTUP_CAVEMAN_DIRECTIVE = (
+    "Terse like caveman.\n"
+    'Technical substance exact. Only fluff die. Drop: articles, filler (just/really/basically), '
+    'pleasantries, hedging. Fragments OK. Short synonyms. Code unchanged. Pattern: [thing] [action] '
+    '[reason]. [next step]. ACTIVE EVERY RESPONSE. No revert after many turns. No filler drift. '
+    'Code/commits/PRs: normal. Off: "stop caveman" / "normal mode".'
+)
 
 # Keep for backward compatibility
 MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
@@ -145,6 +152,11 @@ def _build_memory_context_header(
 ) -> str:
     header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
     lines = header.splitlines()
+    if profile in {
+        MemoryConsumerProfile.CODEX_STARTUP,
+        MemoryConsumerProfile.CLAUDE_SESSION_START,
+    }:
+        lines.extend(["", STARTUP_CAVEMAN_DIRECTIVE])
     if getattr(context, "mandates", []) or getattr(context, "guardrails", []):
         lines.insert(1, "- Mandates/Guardrails below are authoritative - follow them exactly")
         if include_citations:
