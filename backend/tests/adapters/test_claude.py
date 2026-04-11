@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import Message, ProviderError
+from app.adapters.base import Message, ProviderError, RateLimitError
 from app.adapters.claude import ClaudeAdapter
+from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_utils import build_claude_prompt
 from app.constants.models import CLAUDE_SONNET
 
@@ -112,6 +114,46 @@ class TestClaudeTimeout:
         source = inspect.getsource(oauth_module.complete_oauth)
         assert "timeout=300" not in source
         assert "timeout=300.0" not in source
+
+
+class TestClaudeOAuthLimitHandling:
+    """Tests for Claude OAuth rate-limit classification."""
+
+    @pytest.mark.asyncio
+    async def test_complete_oauth_raises_rate_limit_for_usage_limit_banner(self) -> None:
+        """A Claude usage-limit banner should trigger fallback, not a fake success."""
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.query = AsyncMock(return_value=None)
+        fake_sdk_module = ModuleType("claude_agent_sdk")
+        fake_sdk_module.ClaudeSDKClient = MagicMock(return_value=mock_client)
+
+        async def fake_process_response_stream(
+            client: object,
+            content_parts: list[str],
+            thinking_parts: list[str],
+        ) -> tuple[dict[str, object] | None, dict[str, object] | None, object | None]:
+            del client, thinking_parts
+            content_parts.append("You've hit your limit - resets 11pm (UTC)")
+            return None, {"output_tokens": 10}, None
+
+        with (
+            patch.dict("sys.modules", {"claude_agent_sdk": fake_sdk_module}),
+            patch("app.adapters.claude_oauth.build_sdk_options", return_value=(object(), None)),
+            patch("app.adapters.claude_oauth._process_response_stream", side_effect=fake_process_response_stream),
+            pytest.raises(RateLimitError) as exc_info,
+        ):
+            await complete_oauth(
+                messages=[Message(role="user", content="Hello")],
+                model=CLAUDE_SONNET,
+                cli_path="/usr/local/bin/claude",
+                model_map={CLAUDE_SONNET: "sonnet-4-6"},
+                provider_name="claude",
+            )
+
+        assert exc_info.value.provider == "claude"
+        assert exc_info.value.quota_details == {"message": "You've hit your limit - resets 11pm (UTC)"}
 
 
 class TestBuildClaudePrompt:

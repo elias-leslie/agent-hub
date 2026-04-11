@@ -59,14 +59,14 @@ async def test_handle_search_memory_searches_all_groups() -> None:
     memory.search = AsyncMock(return_value=[])
 
     await handle_search_memory(
-        query="coderabbit",
+        query="cleanup",
         memory=memory,
         limit=10,
         min_score=0.0,
     )
 
     memory.search.assert_awaited_once_with(
-        query="coderabbit",
+        query="cleanup",
         limit=10,
         min_score=0.0,
         all_groups=True,
@@ -83,7 +83,7 @@ async def test_handle_search_memory_passes_category() -> None:
     memory.search = AsyncMock(return_value=[])
 
     await handle_search_memory(
-        query="coderabbit",
+        query="cleanup",
         memory=memory,
         limit=10,
         min_score=0.0,
@@ -91,7 +91,7 @@ async def test_handle_search_memory_passes_category() -> None:
     )
 
     memory.search.assert_awaited_once_with(
-        query="coderabbit",
+        query="cleanup",
         limit=10,
         min_score=0.0,
         all_groups=True,
@@ -106,14 +106,14 @@ async def test_handle_text_search_memory_searches_all_groups() -> None:
     memory.text_search = AsyncMock(return_value=[])
 
     await handle_text_search_memory(
-        query="coderabbit",
+        query="cleanup",
         memory=memory,
         limit=10,
         category=None,
     )
 
     memory.text_search.assert_awaited_once_with(
-        query="coderabbit",
+        query="cleanup",
         limit=10,
         category=None,
         all_groups=True,

@@ -576,6 +576,28 @@ def test_init_derives_expiry_from_legacy_stored_jwt(monkeypatch: pytest.MonkeyPa
     assert adapter._credentials.expires_at == pytest.approx(expires_at, abs=1)
 
 
+def test_get_credentials_reads_latest_manager_values_after_adapter_init(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_expiry = time.time() + 1800
+    second_expiry = time.time() + 7200
+    cm = _FakeCredentialManager(_build_codex_jwt(expires_at=first_expiry), "refresh-token-1")
+
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+
+    adapter = CodexOAuthAdapter()
+    original = adapter._get_credentials()
+    assert original.refresh_token == "refresh-token-1"
+
+    cm.set("codex", "oauth_token", _build_codex_jwt(expires_at=second_expiry))
+    cm.set("codex", "refresh_token", "refresh-token-2")
+
+    updated = adapter._get_credentials()
+
+    assert updated.refresh_token == "refresh-token-2"
+    assert updated.expires_at == pytest.approx(second_expiry, abs=1)
+
+
 @pytest.mark.asyncio
 async def test_ensure_fresh_credentials_persists_refreshed_token(
     monkeypatch: pytest.MonkeyPatch,
@@ -632,6 +654,51 @@ async def test_ensure_fresh_credentials_persists_refreshed_token(
         "access_token": refreshed.access_token,
         "expires_at": refreshed.expires_at,
     }
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_credentials_reloads_db_after_refresh_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expired_at = time.time() - 300
+    recovered_at = time.time() + 7200
+    stale_token = _build_codex_jwt(expires_at=expired_at)
+    recovered_token = _build_codex_jwt(expires_at=recovered_at)
+
+    class _ReloadingCredentialManager(_FakeCredentialManager):
+        def __init__(self) -> None:
+            super().__init__(stale_token, "stale-refresh")
+            self.load_calls = 0
+
+        async def load(self, _db: object) -> int:
+            self.load_calls += 1
+            self.set("codex", "oauth_token", recovered_token)
+            self.set("codex", "refresh_token", "fresh-refresh")
+            return 2
+
+    cm = _ReloadingCredentialManager()
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+    monkeypatch.setattr(
+        "app.adapters.codex_oauth.refresh_access_token",
+        AsyncMock(side_effect=RuntimeError("Codex token refresh failed (HTTP 401)")),
+    )
+
+    class _FakeAsyncSession:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    monkeypatch.setattr("app.db.async_session", lambda: _FakeAsyncSession())
+
+    adapter = CodexOAuthAdapter()
+
+    result = await adapter._ensure_fresh_credentials()
+
+    assert cm.load_calls == 1
+    assert result.refresh_token == "fresh-refresh"
+    assert result.expires_at == pytest.approx(recovered_at, abs=1)
 
 
 @pytest.mark.asyncio
