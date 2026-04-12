@@ -891,7 +891,9 @@ class TestSteerConsultation:
             )
 
         assert "sess-456" in result
-        kwargs = mock_complete.await_args.kwargs
+        complete_args = mock_complete.await_args
+        assert complete_args is not None
+        kwargs = complete_args.kwargs
         tool_names = {tool["name"] for tool in kwargs["tools"]}
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
@@ -903,8 +905,6 @@ class TestSteerConsultation:
             "research_web",
             "search_web",
         }
-        assert kwargs["permission_config"]["mode"] == "granular"
-        assert set(kwargs["permission_config"]["allow_list"]) == tool_names
 
     @pytest.mark.asyncio
     async def test_sends_followup(self):
@@ -942,7 +942,9 @@ class TestSteerConsultation:
 
         assert "sess-123" in result
         assert "follow-up advice" in result
-        kwargs = mock_complete.await_args.kwargs
+        complete_args = mock_complete.await_args
+        assert complete_args is not None
+        kwargs = complete_args.kwargs
         tool_names = {tool["name"] for tool in kwargs["tools"]}
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
@@ -953,8 +955,6 @@ class TestSteerConsultation:
             "research_web",
             "search_web",
         }
-        assert kwargs["permission_config"]["mode"] == "granular"
-        assert set(kwargs["permission_config"]["allow_list"]) == tool_names
 
     @pytest.mark.asyncio
     async def test_no_project_id_error(self):
@@ -1143,7 +1143,9 @@ class TestManageTasks:
         )
 
         assert result == "IMPORT:task-123|STANDARD|1 subtasks"
-        command = mock_bash.await_args.args[0]
+        bash_args = mock_bash.await_args
+        assert bash_args is not None
+        command = bash_args.args[0]
         plan_path = Path(shlex.split(command)[-1])
         try:
             payload = json.loads(plan_path.read_text())

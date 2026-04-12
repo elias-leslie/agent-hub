@@ -19,7 +19,6 @@ import { SessionLimitsTab } from "./components/SessionLimitsTab";
 import { ModelsTab } from "@/app/agents/[slug]/components/ModelsTab";
 import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
 import { PromptsTab } from "@/app/agents/[slug]/components/PromptsTab";
-import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
 import type { PreviewScenario, PreviewTaskType } from "@/app/agents/[slug]/types";
 import { useAgentPreview } from "@/app/agents/[slug]/hooks/useAgentPreview";
@@ -234,12 +233,6 @@ export default function PersonaSettingsPage() {
               )}
               {activeTab === "session" && (
                 <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />
-              )}
-              {activeTab === "permissions" && (
-                <PermissionsTab
-                  formData={agentFormData}
-                  updateField={updateAgentField}
-                />
               )}
               {activeTab === "memory" && (
                 <MemoryTab

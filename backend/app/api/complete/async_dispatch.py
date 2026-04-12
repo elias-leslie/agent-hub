@@ -48,16 +48,6 @@ def _build_async_response_format(
     }
 
 
-def _resolve_permission_config(
-    request: CompletionRequest,
-    resolved_agent: ResolvedAgent | None,
-) -> Any:
-    """Resolve permission_config from request or agent defaults."""
-    if request.permission_config:
-        return request.permission_config.model_dump()
-    return resolved_agent.agent.tool_permissions if resolved_agent else None
-
-
 def _build_completion_kwargs(
     request: CompletionRequest,
     messages_dict: list[dict[str, Any]],
@@ -87,7 +77,6 @@ def _build_completion_kwargs(
         container_id=request.container_id, response_format=async_response_format,
         skip_cache=skip_cache, max_turns=request.max_turns,
         execute_tools=request.execute_tools, working_dir=request.working_dir,
-        permission_config=_resolve_permission_config(request, resolved_agent),
         trace_id=request.trace_id, task_type=request.task_type,
         phase=request.phase,
         user_messages_for_db=(

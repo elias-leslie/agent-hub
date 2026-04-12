@@ -1,6 +1,6 @@
 """Direct tool executors for agent tool execution.
 
-Executes bash, read, write, and consult_agent tools directly with proper
+Executes bash and file tools directly with proper
 environment inheritance. Commands run in the specified working directory
 with full access to parent environment variables.
 

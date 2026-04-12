@@ -11,7 +11,6 @@ import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
 import { ModelsTab } from "./components/ModelsTab";
 import { ParametersTab } from "./components/ParametersTab";
-import { PermissionsTab } from "./components/PermissionsTab";
 import { PromptsTab } from "./components/PromptsTab";
 import { MemoryTab } from "./components/MemoryTab";
 import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
@@ -239,9 +238,6 @@ export default function AgentEditorPage() {
                         availableModels={availableModels}
                         updateField={updateField}
                       />
-                    )}
-                    {activeTab === "permissions" && (
-                      <PermissionsTab formData={formData} updateField={updateField} />
                     )}
                     {activeTab === "prompts" && (
                       <PromptsTab

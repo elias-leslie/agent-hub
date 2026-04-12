@@ -58,7 +58,7 @@ class Agent(Base):
     is_coding_agent: Mapped[bool] = mapped_column(Boolean, default=False)
     tool_permissions: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, default=None
-    )  # PermissionConfig serialized as JSON
+    )  # Legacy inert field retained for storage compatibility
     memory_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, default=None
     )

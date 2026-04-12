@@ -10,19 +10,6 @@ export type {
 } from "@/types/agent-preview";
 import type { MemoryConfig } from "./components/memory/types";
 
-export interface ToolPermission {
-  name: string;
-  allowed: boolean;
-  requires_confirmation: boolean;
-}
-
-export interface PermissionConfig {
-  mode: "yolo" | "ask" | "granular";
-  tool_permissions: Record<string, ToolPermission>;
-  allow_list: string[];
-  deny_list: string[];
-}
-
 export interface Agent {
   id: number;
   slug: string;
@@ -38,7 +25,6 @@ export interface Agent {
   verbosity_level: string | null;
   is_active: boolean;
   is_coding_agent: boolean;
-  tool_permissions: PermissionConfig | null;
   memory_config: (MemoryConfig & Record<string, unknown>) | null;
   effective_memory_config: MemoryConfig & Record<string, unknown>;
   max_concurrency: number | null;
@@ -57,6 +43,5 @@ export type TabId =
   | "general"
   | "models"
   | "parameters"
-  | "permissions"
   | "prompts"
   | "memory";

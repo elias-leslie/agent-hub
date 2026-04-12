@@ -15,7 +15,6 @@ from app.constants.models import FAST_CLAUDE_MODEL
 from ._executor_consultation_helpers import (
     _build_consultation_messages,
     _consultation_max_turns,
-    _consultation_permission_config,
     _consultation_tools,
     cancel_consultation,
     inspect_session,
@@ -136,7 +135,6 @@ async def consult_agent(
                 max_turns=consultation_max_turns,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,
-                permission_config=_consultation_permission_config(consultation_tools),
             )
         session_id = result.session_id if hasattr(result, "session_id") else None
         return f"[session:{session_id}] {result.content}" if session_id else result.content
@@ -164,7 +162,6 @@ async def steer_consultation(project_id: str | None, session_id: str, message: s
                 max_turns=consultation_max_turns,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,
-                permission_config=_consultation_permission_config(consultation_tools),
             )
             return f"[session:{session_id}] {result.content}"
     except Exception as e:

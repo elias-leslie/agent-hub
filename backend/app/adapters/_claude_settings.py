@@ -49,10 +49,8 @@ def build_boundary_settings(working_dir: str) -> dict[str, Any]:
         "permissions": {
             "defaultMode": "acceptEdits",
             "allow": [
-                # Read / search: unrestricted
+                # Read: unrestricted
                 "Read(*)",
-                "Glob(*)",
-                "Grep(*)",
                 # Write / Edit: scoped to worktree + allowlist
                 "Write(./**)",
                 "Edit(./**)",

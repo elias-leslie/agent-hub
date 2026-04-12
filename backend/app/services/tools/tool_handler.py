@@ -1,8 +1,8 @@
 """Tool handler implementation for direct tool execution.
 
 Provides DirectToolHandler which routes tool calls to DirectToolExecutor
-methods and handles permission checking, including project-level
-permission tier enforcement.
+methods and handles real runtime boundaries: project policy, cross-project
+checks, and worktree scope.
 """
 
 from __future__ import annotations
@@ -209,13 +209,12 @@ def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
 
 def _collect_hooks(
     working_dir: str | None,
-    permission_config: dict[str, str | list[str]] | None,
     project_id: str | None,
 ) -> list[PreToolUseHook]:
     """Build the ordered list of pre-hooks for a new DirectToolHandler.
 
-    Order: project permission → cross-project boundary → worktree boundary →
-    config-based permission. First DENY wins during execution.
+    Order: project permission → cross-project boundary → worktree boundary.
+    First DENY wins during execution.
     """
     hooks: list[PreToolUseHook] = []
 
@@ -228,39 +227,29 @@ def _collect_hooks(
 
         hooks.append(create_worktree_boundary_hook(working_dir))
 
-    if permission_config:
-        from app.services.tools.permissions import PermissionChecker, PermissionConfig
-
-        config = PermissionConfig.from_dict(permission_config)
-        checker = PermissionChecker(config)
-        hooks.append(checker.create_hook())
-        logger.info(f"Created tool handler with permission mode: {config.mode.value}")
-
     return hooks
 
 
 def create_direct_handler(
     working_dir: str | None = None,
-    permission_config: dict[str, str | list[str]] | None = None,
     project_id: str | None = None,
     session_id: str | None = None,
     agent_slug: str | None = None,
     tool_catalog: list[dict[str, object]] | None = None,
 ) -> DirectToolHandler:
-    """Create a direct tool handler with optional permission checking.
+    """Create a direct tool handler with project/worktree enforcement.
 
     Composes hooks in order: project permission first, then cross-project
-    path enforcement, then config-based permission. First DENY wins.
+    path enforcement, then worktree boundary. First DENY wins.
 
     Args:
         working_dir: Base directory for tool operations
-        permission_config: Optional PermissionConfig as dict (mode, allow_list, etc.)
         project_id: Project ID for agent consultation (enables consult_agent tool)
 
     Returns:
         DirectToolHandler configured for the directory with permission hook
     """
-    hooks = _collect_hooks(working_dir, permission_config, project_id)
+    hooks = _collect_hooks(working_dir, project_id)
 
     pre_hook: PreToolUseHook | None = None
     if len(hooks) == 1:

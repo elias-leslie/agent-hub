@@ -23,9 +23,10 @@ vi.mock("next/link", () => ({
 vi.mock("@/lib/api", () => ({
   fetchSessions: vi.fn(),
   fetchSession: vi.fn(),
+  fetchAllSessionEvents: vi.fn(),
 }));
 
-import { fetchSessions } from "@/lib/api";
+import { fetchAllSessionEvents, fetchSessions } from "@/lib/api";
 
 const mockSessions = {
   sessions: [
@@ -82,6 +83,12 @@ describe("SessionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchSessions).mockResolvedValue(mockSessions);
+    vi.mocked(fetchAllSessionEvents).mockResolvedValue({
+      session_id: "session-123-abc",
+      events: [],
+      total: 0,
+      max_turn: 0,
+    });
   });
 
   it("renders sessions page header", async () => {
@@ -113,6 +120,7 @@ describe("SessionsPage", () => {
 
     expect(screen.getByTestId("filter-status")).toBeInTheDocument();
     expect(screen.getByText("All status")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Failed" })).toBeInTheDocument();
   });
 
   it("filters by status when selected", async () => {
@@ -143,6 +151,48 @@ describe("SessionsPage", () => {
     expect(
       screen.getByPlaceholderText("Search..."),
     ).toBeInTheDocument();
+  });
+
+  it("hides benchmark traffic by default and can show it again", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue({
+      sessions: [
+        ...mockSessions.sessions,
+        {
+          id: "session-benchmark",
+          project_id: "agent-hub",
+          provider: "claude",
+          model: "claude-opus-4-6",
+          status: "failed",
+          agent_slug: "chat",
+          session_type: "completion",
+          request_source: "manual/caveman-opus-consult",
+          attribution_kind: "benchmark",
+          attribution_label: "Benchmark",
+          attribution_detail: "manual/caveman-opus-consult",
+          message_count: 2,
+          total_input_tokens: 0,
+          total_output_tokens: 0,
+          created_at: "2026-01-03T00:00:00Z",
+          updated_at: "2026-01-03T00:00:00Z",
+        },
+      ],
+      total: 3,
+      page: 1,
+      page_size: 20,
+    });
+
+    render(<SessionsPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(screen.queryByText("agent-hub")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId("toggle-benchmark-traffic"));
+
+    await waitFor(() => {
+      expect(screen.getByText("agent-hub")).toBeInTheDocument();
+      expect(screen.getByText("Benchmark")).toBeInTheDocument();
+    });
   });
 
   it("filters sessions by search query", async () => {

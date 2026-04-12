@@ -31,7 +31,6 @@ async def route_tool_execution(
     tools: list[dict[str, Any]],
     tool_catalog: list[dict[str, Any]] | None,
     working_dir: str | None,
-    permission_config: dict[str, Any] | None,
     db: AsyncSession,
     session: DBSession,
     session_id: str,
@@ -53,7 +52,6 @@ async def route_tool_execution(
         temperature: Sampling temperature
         tools: Tool definitions
         working_dir: Working directory for tool execution
-        permission_config: Permission configuration
         db: Database session
         session: DB session object
         session_id: Session ID
@@ -82,7 +80,6 @@ async def route_tool_execution(
         tools=tools,
         tool_catalog=tool_catalog,
         working_dir=working_dir,
-        permission_config=permission_config,
         db=db,
         session=session,
         session_id=session_id,

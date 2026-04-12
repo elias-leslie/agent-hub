@@ -15,7 +15,6 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
     verbosity_level: agent.verbosity_level,
     is_active: agent.is_active,
     is_coding_agent: agent.is_coding_agent,
-    tool_permissions: agent.tool_permissions,
     memory_config: agent.memory_config
       ? parseConfig(agent.memory_config, effectiveMemoryConfig)
       : null,

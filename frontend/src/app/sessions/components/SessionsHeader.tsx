@@ -7,18 +7,24 @@ export function SessionsHeader({
   pageStats,
   searchQuery,
   statusFilter,
+  hideBenchmarkTraffic,
+  hiddenBenchmarkCount,
   isRefreshing,
   onSearchChange,
   onStatusFilterChange,
+  onHideBenchmarkTrafficChange,
   onRefresh,
 }: {
   total: number;
   pageStats: { totalTokens: number; totalCost: number } | null;
   searchQuery: string;
   statusFilter: string;
+  hideBenchmarkTraffic: boolean;
+  hiddenBenchmarkCount: number;
   isRefreshing: boolean;
   onSearchChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
+  onHideBenchmarkTrafficChange: (value: boolean) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -73,8 +79,23 @@ export function SessionsHeader({
               <option value="">All status</option>
               <option value="active">Active</option>
               <option value="completed">Completed</option>
-              <option value="error">Error</option>
+              <option value="failed">Failed</option>
             </select>
+
+            <button
+              type="button"
+              data-testid="toggle-benchmark-traffic"
+              onClick={() => onHideBenchmarkTrafficChange(!hideBenchmarkTraffic)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                hideBenchmarkTraffic
+                  ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+                  : "border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200",
+              )}
+            >
+              {hideBenchmarkTraffic ? "Hidden" : "Showing"} benchmark traffic
+              {hiddenBenchmarkCount > 0 && ` (${hiddenBenchmarkCount})`}
+            </button>
 
             <button
               onClick={onRefresh}

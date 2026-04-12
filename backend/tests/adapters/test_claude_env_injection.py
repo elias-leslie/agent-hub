@@ -219,7 +219,7 @@ class TestClaudeOAuthEnvInjection:
         """Default allowed_tools matches the expected CLI-builtin list."""
         captured_opts = self._build_and_capture(tmp_path)
 
-        assert captured_opts["allowed_tools"] == ["Read", "Write", "Bash", "Edit", "Glob", "Grep"]
+        assert captured_opts["allowed_tools"] == ["Read", "Write", "Bash", "Edit"]
 
     def test_allowed_tools_custom(self, tmp_path: Path) -> None:
         """Custom allowed_tools list is forwarded as-is."""

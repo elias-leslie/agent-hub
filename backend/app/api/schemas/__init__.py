@@ -14,8 +14,6 @@ from app.api.schemas.agent_schemas import (
     AgentRegressionClusterSummary,
     AgentResponse,
     AgentUpdateRequest,
-    PermissionConfigSchema,
-    ToolPermissionSchema,
 )
 from app.api.schemas.api_key_schemas import (
     APIKeyCreate,
@@ -62,7 +60,6 @@ __all__ = [
     "CloseSessionResponse",
     "ContextUsageResponse",
     "MessageResponse",
-    "PermissionConfigSchema",
     "SessionCreate",
     "SessionForkRequest",
     "SessionForkResponse",
@@ -71,5 +68,4 @@ __all__ = [
     "SessionPromoteRequest",
     "SessionPromoteResponse",
     "SessionResponse",
-    "ToolPermissionSchema",
 ]

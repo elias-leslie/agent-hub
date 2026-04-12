@@ -104,11 +104,23 @@ def _tool_spec_to_api_tool(tool: Tool) -> dict[str, Any]:
 
 
 def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
-    from app.services.tools._standard_tools import STANDARD_TOOLS
+    from app.services.tools._standard_tools import (
+        FETCH_WEB_PAGE_TOOL,
+        PRECISION_CODE_SEARCH_TOOL,
+        READ_FILE_TOOL,
+        RESEARCH_WEB_TOOL,
+        SEARCH_WEB_TOOL,
+    )
     from app.services.tools.tool_definitions import get_agent_tool_specs
 
     tool_specs = get_agent_tool_specs(agent_slug) if agent_slug else None
-    source_tools = tool_specs or STANDARD_TOOLS
+    source_tools = tool_specs or [
+        READ_FILE_TOOL,
+        PRECISION_CODE_SEARCH_TOOL,
+        RESEARCH_WEB_TOOL,
+        SEARCH_WEB_TOOL,
+        FETCH_WEB_PAGE_TOOL,
+    ]
     allowed_names = _consultation_allowed_tool_names()
     return [_tool_spec_to_api_tool(tool) for tool in source_tools if tool.name in allowed_names]
 
@@ -119,14 +131,6 @@ async def _consultation_max_turns(db: Any) -> int:
 
     persona = await get_persona(db)
     return get_persona_limit(persona, "max_turns")
-
-
-def _consultation_permission_config(tools: list[dict[str, Any]]) -> dict[str, Any]:
-    from app.services.tools.permissions import PermissionConfig
-
-    return PermissionConfig.granular(
-        allow=[str(tool["name"]) for tool in tools],
-    ).to_dict()
 
 
 async def parent_dispatch_limit_block(db: Any, parent_session_id: str | None) -> str | None:

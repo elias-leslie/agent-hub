@@ -26,7 +26,6 @@ class AgentDTO:
     verbosity_level: str | None
     is_active: bool
     is_coding_agent: bool
-    tool_permissions: dict[str, Any] | None
     memory_config: dict[str, Any] | None
     max_concurrency: int | None
     max_subagent_concurrency: int | None
@@ -55,7 +54,6 @@ class AgentDTO:
             verbosity_level=agent.verbosity_level,
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
-            tool_permissions=agent.tool_permissions,
             memory_config=normalize_memory_config(agent.memory_config),
             max_concurrency=agent.max_concurrency,
             max_subagent_concurrency=agent.max_subagent_concurrency,
@@ -84,7 +82,6 @@ class AgentDTO:
             "verbosity_level": self.verbosity_level,
             "is_active": self.is_active,
             "is_coding_agent": self.is_coding_agent,
-            "tool_permissions": self.tool_permissions,
             "memory_config": self.memory_config,
             "max_concurrency": self.max_concurrency,
             "max_subagent_concurrency": self.max_subagent_concurrency,
@@ -114,7 +111,6 @@ class AgentDTO:
             verbosity_level=data.get("verbosity_level"),
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
-            tool_permissions=data.get("tool_permissions"),
             memory_config=normalize_memory_config(data.get("memory_config")),
             max_concurrency=data.get("max_concurrency"),
             max_subagent_concurrency=data.get("max_subagent_concurrency"),

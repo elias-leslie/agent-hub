@@ -105,19 +105,6 @@ def extract_system_and_conversation(messages: list[object]) -> tuple[str | None,
     return system_prompt, conversation
 
 
-def build_permission_checker(
-    permission_config: dict[str, object] | None,
-) -> tuple[object | None, bool]:
-    """Return (checker, yolo_mode): (None, True) for yolo, (PermissionChecker, False) otherwise."""
-    from app.services.tools.permissions import PermissionChecker, PermissionConfig, PermissionMode
-    if not permission_config:
-        return None, True
-    config = PermissionConfig.from_dict(permission_config)
-    if config.mode == PermissionMode.YOLO:
-        return None, True
-    return PermissionChecker(config), False
-
-
 def get_claude_thinking_config(thinking_level: str | None) -> dict[str, object] | None:
     """Convert thinking_level to Claude SDK ThinkingConfig dict, or None."""
     if not thinking_level:

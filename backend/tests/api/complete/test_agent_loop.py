@@ -38,7 +38,6 @@ def _request(**overrides) -> AgentLoopRequest:
         tools=[],
         tool_catalog=None,
         working_dir=None,
-        permission_config=None,
         enable_programmatic_tools=False,
         defer_tool_loading=False,
         enable_caching=False,
@@ -101,10 +100,14 @@ async def test_execute_agent_loop_routes_tools_with_resolved_turn_budget() -> No
         result = await execute_agent_loop(_request(), should_execute_tools=True)
 
     assert isinstance(result, CompletionInternalResult)
-    assert mock_route.await_args.kwargs["max_turns"] == 3
-    assert mock_finalize.await_args.kwargs["orchestration_path"] == "tool_loop"
-    assert mock_finalize.await_args.kwargs["requested_max_turns"] == 1
-    assert mock_finalize.await_args.args[4] == "codex/gpt-5.4"
+    route_args = mock_route.await_args
+    finalize_args = mock_finalize.await_args
+    assert route_args is not None
+    assert finalize_args is not None
+    assert route_args.kwargs["max_turns"] == 3
+    assert finalize_args.kwargs["orchestration_path"] == "tool_loop"
+    assert finalize_args.kwargs["requested_max_turns"] == 1
+    assert finalize_args.args[4] == "codex/gpt-5.4"
 
 
 @pytest.mark.asyncio
@@ -159,12 +162,14 @@ async def test_execute_agent_loop_propagates_tool_error_outcome_to_finalizer() -
         result = await execute_agent_loop(_request(), should_execute_tools=True)
 
     assert isinstance(result, CompletionInternalResult)
-    assert mock_finalize.await_args.args[4] == "claude/opus-4-6"
-    assert mock_finalize.await_args.kwargs["execution_status"] == "error"
-    assert mock_finalize.await_args.kwargs["execution_error"] == "tool loop cancelled"
-    assert mock_finalize.await_args.kwargs["fallback_used"] is True
-    assert mock_finalize.await_args.kwargs["fallback_reason"] == "primary provider failed"
-    assert mock_finalize.await_args.kwargs["orchestration_path"] == "tool_loop"
+    finalize_args = mock_finalize.await_args
+    assert finalize_args is not None
+    assert finalize_args.args[4] == "claude/opus-4-6"
+    assert finalize_args.kwargs["execution_status"] == "error"
+    assert finalize_args.kwargs["execution_error"] == "tool loop cancelled"
+    assert finalize_args.kwargs["fallback_used"] is True
+    assert finalize_args.kwargs["fallback_reason"] == "primary provider failed"
+    assert finalize_args.kwargs["orchestration_path"] == "tool_loop"
 
 
 @pytest.mark.asyncio
@@ -222,7 +227,9 @@ async def test_execute_agent_loop_finalizes_multi_turn_results() -> None:
 
     assert isinstance(result, CompletionInternalResult)
     mock_finalize.assert_awaited_once()
-    assert mock_finalize.await_args.args[4] == "codex/gpt-5.4"
-    assert mock_finalize.await_args.args[5] == "codex"
-    assert mock_finalize.await_args.kwargs["requested_max_turns"] == 1
-    assert mock_finalize.await_args.kwargs["orchestration_path"] == "multi_turn"
+    finalize_args = mock_finalize.await_args
+    assert finalize_args is not None
+    assert finalize_args.args[4] == "codex/gpt-5.4"
+    assert finalize_args.args[5] == "codex"
+    assert finalize_args.kwargs["requested_max_turns"] == 1
+    assert finalize_args.kwargs["orchestration_path"] == "multi_turn"
