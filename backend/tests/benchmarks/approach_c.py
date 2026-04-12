@@ -1,12 +1,11 @@
 """Approach C: Auto-Claude Pattern (SDK Fully Manages).
 
 SDK manages the entire tool loop with generous max_turns.
-can_use_tool callback enforces permissions on CLI builtins.
+can_use_tool callback enforces current project/cross-project hooks.
 MCP server with DirectToolExecutor handles custom tools (current behavior).
-No permission changes to MCP handler — relies on can_use_tool for CLI tools.
 
 Preserves: everything the SDK provides (caching, session, single subprocess).
-Missing: fine-grained permission enforcement on custom tools (MCP bypasses can_use_tool).
+Missing: full parity for custom-tool enforcement because MCP still uses the executor path.
 """
 
 from __future__ import annotations
@@ -18,10 +17,7 @@ from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server, query
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import (
     AssistantMessage,
-    PermissionResultAllow,
-    PermissionResultDeny,
     ResultMessage,
-    ToolPermissionContext,
     UserMessage,
 )
 
@@ -77,39 +73,18 @@ async def run_approach_c(
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
 ) -> BenchmarkResult:
     """SDK fully manages with can_use_tool for permission enforcement."""
     result = BenchmarkResult(approach="C", approach_name="Auto-Claude (SDK Manages)")
     cli_path = get_cli_path()
     metrics: dict[str, int] = {"permission_checks": 0, "permission_denials": 0}
 
-    # Build permission callback that checks via PermissionChecker
-    # This only catches CLI builtins (Bash, Read, Write, Edit) — NOT MCP tools
-    from app.services.tools.base import ToolCall, ToolDecision
-    from app.services.tools.permissions import PermissionChecker, PermissionConfig
+    from app.adapters.claude_tools_permissions import (
+        compose_permission_hooks,
+        make_can_use_tool_callback,
+    )
 
-    checker = None
-    if permission_config:
-        config = PermissionConfig.from_dict(permission_config)
-        checker = PermissionChecker(config)
-
-    async def can_use_tool(
-        tool_name: str,
-        tool_input: dict[str, Any],
-        context: ToolPermissionContext,
-    ) -> PermissionResultAllow | PermissionResultDeny:
-        metrics["permission_checks"] += 1
-        if checker:
-            tool_call = ToolCall(id="", name=tool_name, input=tool_input)
-            decision = await checker.check(tool_call)
-            if decision == ToolDecision.DENY:
-                metrics["permission_denials"] += 1
-                return PermissionResultDeny(message=f"Tool '{tool_name}' denied")
-            elif decision == ToolDecision.ASK:
-                metrics["permission_denials"] += 1
-                return PermissionResultDeny(message=f"Tool '{tool_name}' requires confirmation")
-        return PermissionResultAllow()
+    can_use_tool = make_can_use_tool_callback(compose_permission_hooks(project_id))
 
     mcp_server = _build_mcp_server_with_executor(
         tools=BENCHMARK_TOOLS,

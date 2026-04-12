@@ -1,4 +1,4 @@
-import { User, Cpu, ScrollText, Volume2, Timer, Shield, Brain, X, ChevronRight } from "lucide-react";
+import { User, Cpu, ScrollText, Volume2, Timer, Brain, X, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PersonaTabId } from "../types";
 import { getPersonaDisplayName } from "../../utils/displayName";
@@ -9,7 +9,6 @@ const TABS: { id: PersonaTabId; label: string; description: string; icon: React.
   { id: "prompts", label: "Prompts", description: "Prompt stack, workflow docs, and previews.", icon: ScrollText },
   { id: "voice", label: "Voice & Heartbeat", description: "Speech preferences and heartbeat readiness.", icon: Volume2 },
   { id: "session", label: "Session & Limits", description: "Reset policy and execution ceilings.", icon: Timer },
-  { id: "permissions", label: "Permissions", description: "Tool access and approval controls.", icon: Shield },
   { id: "memory", label: "Memory", description: "Memory inheritance and audience filters.", icon: Brain },
 ];
 

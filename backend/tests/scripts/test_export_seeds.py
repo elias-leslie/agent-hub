@@ -18,7 +18,6 @@ def test_serialize_agent_normalizes_persona_name_for_seed_defaults() -> None:
         temperature=0.2,
         thinking_level="medium",
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config=None,
     )
 
@@ -40,7 +39,6 @@ def test_serialize_agent_keeps_non_persona_names() -> None:
         temperature=0.2,
         thinking_level="medium",
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
     )
 

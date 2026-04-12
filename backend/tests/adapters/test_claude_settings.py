@@ -51,12 +51,12 @@ class TestBuildBoundarySettings:
         assert f"Write({home_claude}/**)" in allow
         assert f"Edit({home_claude}/**)" in allow
 
-    def test_read_tools_unrestricted(self) -> None:
+    def test_read_tool_unrestricted(self) -> None:
         settings = self._build("/tmp/worktree")
         allow = settings["permissions"]["allow"]
         assert "Read(*)" in allow
-        assert "Glob(*)" in allow
-        assert "Grep(*)" in allow
+        assert "Glob(*)" not in allow
+        assert "Grep(*)" not in allow
 
     def test_bash_unrestricted(self) -> None:
         settings = self._build("/tmp/worktree")

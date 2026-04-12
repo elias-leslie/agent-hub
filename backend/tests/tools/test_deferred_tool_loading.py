@@ -68,38 +68,6 @@ def test_persona_heartbeat_hot_tools_stay_loaded_in_deferred_mode() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_catalog_checks_nested_tool_permissions() -> None:
-    """The virtual dispatcher must not bypass permission checks on the real tool."""
-    handler = create_direct_handler(
-        permission_config={
-            "mode": "granular",
-            "deny_list": ["schedule_job"],
-            "allow_list": ["tool_catalog"],
-        },
-        tool_catalog=[
-            {
-                "name": "schedule_job",
-                "description": "Schedule work",
-                "input_schema": {"type": "object"},
-                "defer_loading": True,
-            }
-        ],
-    )
-
-    result = await handler.execute(
-        ToolCall(
-            id="t1",
-            name="tool_catalog",
-            input={"tool_name": "schedule_job", "arguments": {"when": "tomorrow"}},
-        )
-    )
-
-    assert result.is_error is True
-    assert "schedule_job" in result.content
-    assert "denied" in result.content
-
-
-@pytest.mark.asyncio
 async def test_tool_catalog_dispatches_to_real_tool() -> None:
     """The virtual dispatcher should call the underlying executor tool by name."""
     handler = create_direct_handler(

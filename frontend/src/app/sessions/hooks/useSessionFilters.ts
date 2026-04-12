@@ -7,14 +7,28 @@ interface UseSessionFiltersProps {
   sessions: SessionListItem[];
   sortField: SortField;
   sortDirection: SortDirection;
+  hideBenchmarkTraffic: boolean;
 }
 
-export function useSessionFilters({ sessions, sortField, sortDirection }: UseSessionFiltersProps) {
+export function useSessionFilters({
+  sessions,
+  sortField,
+  sortDirection,
+  hideBenchmarkTraffic,
+}: UseSessionFiltersProps) {
   const [modelFilter, setModelFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const hiddenBenchmarkCount = useMemo(
+    () => sessions.filter((session) => session.attribution_kind === "benchmark").length,
+    [sessions],
+  );
 
   const filteredAndSorted = useMemo(() => {
     let filtered = sessions;
+
+    if (hideBenchmarkTraffic) {
+      filtered = filtered.filter((session) => session.attribution_kind !== "benchmark");
+    }
 
     // Filter by model
     if (modelFilter) {
@@ -29,7 +43,10 @@ export function useSessionFilters({ sessions, sortField, sortDirection }: UseSes
           s.id.toLowerCase().includes(query) ||
           s.project_id.toLowerCase().includes(query) ||
           s.model.toLowerCase().includes(query) ||
-          s.agent_slug?.toLowerCase().includes(query)
+          s.agent_slug?.toLowerCase().includes(query) ||
+          s.request_source?.toLowerCase().includes(query) ||
+          s.attribution_label?.toLowerCase().includes(query) ||
+          s.attribution_detail?.toLowerCase().includes(query)
       );
     }
 
@@ -63,7 +80,7 @@ export function useSessionFilters({ sessions, sortField, sortDirection }: UseSes
     });
 
     return sorted;
-  }, [sessions, modelFilter, searchQuery, sortField, sortDirection]);
+  }, [sessions, modelFilter, searchQuery, sortField, sortDirection, hideBenchmarkTraffic]);
 
   const pageStats = useMemo(() => {
     if (!filteredAndSorted.length) return null;
@@ -83,6 +100,7 @@ export function useSessionFilters({ sessions, sortField, sortDirection }: UseSes
     setModelFilter,
     searchQuery,
     setSearchQuery,
+    hiddenBenchmarkCount,
     filteredAndSorted,
     pageStats,
   };

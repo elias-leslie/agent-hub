@@ -83,7 +83,7 @@ async def inject_agent_mandates(
 
 _TIER_DESCRIPTIONS: dict[str, str] = {
     "off": "You have NO access to this project. Do not attempt any tool calls.",
-    "read": "You have READ-ONLY access. You may use read_file, consult_agent, and other read tools. Do NOT write files or execute commands.",
+    "read": "You have READ-ONLY access. You may use read_file and other exposed read-only tools. Do NOT write files or execute commands.",
     "write": "You have READ+WRITE access. You may read and write files. Do NOT use bash or execute commands.",
     "yolo": "You have FULL access including bash execution.",
 }
@@ -120,12 +120,12 @@ def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
 
 async def _build_project_permissions_block(project_id: str, db: AsyncSession | None) -> str | None:
     try:
-        from app.services.project_permission_service import get_tools_for_tier
+        from app.services.project_permission_service import get_visible_tools_for_tier
         perm, all_perms = await _fetch_permissions(project_id, db)
         if perm is None:
             return None
         tier = perm.permission_tier
-        tools_list = ", ".join(sorted(get_tools_for_tier(tier))) or "none"
+        tools_list = ", ".join(sorted(get_visible_tools_for_tier(tier))) or "none"
         lines = [
             "<project_permissions>",
             f"Current project: {project_id}",

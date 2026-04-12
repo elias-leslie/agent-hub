@@ -2,7 +2,6 @@ import {
   Settings2,
   Cpu,
   Sliders,
-  Shield,
   ScrollText,
   Brain,
   X,
@@ -15,7 +14,6 @@ const TABS: { id: TabId; label: string; description: string; icon: React.Element
   { id: "general", label: "General", description: "Name, state, and execution role.", icon: Settings2 },
   { id: "models", label: "Models", description: "Primary, fallback, and escalation routing.", icon: Cpu },
   { id: "parameters", label: "Parameters", description: "Reasoning depth, temperature, and limits.", icon: Sliders },
-  { id: "permissions", label: "Permissions", description: "Tool access and confirmation posture.", icon: Shield },
   { id: "prompts", label: "Prompts", description: "Prompt stack ordering, docs, and preview.", icon: ScrollText },
   { id: "memory", label: "Memory", description: "Memory inheritance, filters, and retrieval.", icon: Brain },
 ];

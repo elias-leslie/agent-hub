@@ -19,7 +19,6 @@ import { SessionLimitsTab } from "./components/SessionLimitsTab";
 import { ModelsTab } from "@/app/agents/[slug]/components/ModelsTab";
 import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
 import { PromptsTab } from "@/app/agents/[slug]/components/PromptsTab";
-import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
 import type { PreviewScenario, PreviewTaskType } from "@/app/agents/[slug]/types";
 import { useAgentPreview } from "@/app/agents/[slug]/hooks/useAgentPreview";
@@ -179,15 +178,15 @@ export default function PersonaSettingsPage() {
                 <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
                   <div className="section-header gap-4">
                     <div>
-                      <p className="section-kicker">Editing Surface</p>
+                      <p className="section-kicker">Runtime Profile</p>
                       <h2 className="section-heading mt-2">{activeTabMeta.label}</h2>
                       <p className="section-copy mt-2 max-w-3xl">
                         {activeTabMeta.description}
                       </p>
                     </div>
                     <div className="page-meta">
-                      <span className="page-pill">Persona config</span>
-                      <span className="page-pill">Autosave for identity</span>
+                      <span className="page-pill">Persona runtime</span>
+                      <span className="page-pill">Identity autosave</span>
                     </div>
                   </div>
                 </div>
@@ -234,12 +233,6 @@ export default function PersonaSettingsPage() {
               )}
               {activeTab === "session" && (
                 <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />
-              )}
-              {activeTab === "permissions" && (
-                <PermissionsTab
-                  formData={agentFormData}
-                  updateField={updateAgentField}
-                />
               )}
               {activeTab === "memory" && (
                 <MemoryTab

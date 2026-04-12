@@ -31,7 +31,6 @@ def _agent(*, slug: str = "note-titler", system_prompt: str = "Title notes terse
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,

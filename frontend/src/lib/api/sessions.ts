@@ -214,3 +214,50 @@ export async function fetchSessionEvents(
   }
   return response.json();
 }
+
+export async function fetchAllSessionEvents(
+  sessionId: string,
+  params?: {
+    event_type?: string;
+    turn?: number;
+    page_size?: number;
+    max_pages?: number;
+  },
+): Promise<SessionEventsResponse> {
+  const pageSize = params?.page_size ?? 1000;
+  const maxPages = params?.max_pages ?? 100;
+  const firstPage = await fetchSessionEvents(sessionId, {
+    event_type: params?.event_type,
+    turn: params?.turn,
+    page: 1,
+    page_size: pageSize,
+  });
+
+  if (firstPage.events.length >= firstPage.total || firstPage.events.length === 0) {
+    return firstPage;
+  }
+
+  const allEvents = [...firstPage.events];
+  let maxTurn = firstPage.max_turn;
+
+  for (let page = 2; page <= maxPages && allEvents.length < firstPage.total; page += 1) {
+    const nextPage = await fetchSessionEvents(sessionId, {
+      event_type: params?.event_type,
+      turn: params?.turn,
+      page,
+      page_size: pageSize,
+    });
+    if (nextPage.events.length === 0) {
+      break;
+    }
+    allEvents.push(...nextPage.events);
+    maxTurn = Math.max(maxTurn, nextPage.max_turn);
+  }
+
+  return {
+    session_id: firstPage.session_id,
+    events: allEvents,
+    total: firstPage.total,
+    max_turn: maxTurn,
+  };
+}

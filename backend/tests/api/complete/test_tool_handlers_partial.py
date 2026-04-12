@@ -161,7 +161,6 @@ async def test_run_tool_loop_drains_stream_after_terminal_error() -> None:
         tools=[],
         tool_catalog=None,
         working_dir=None,
-        permission_config=None,
         session_id="session-123",
         loaded_memory_uuids=[],
         db=db,
@@ -208,7 +207,6 @@ async def test_run_tool_loop_does_not_reclose_exhausted_stream() -> None:
         tools=[],
         tool_catalog=None,
         working_dir=None,
-        permission_config=None,
         session_id="session-789",
         loaded_memory_uuids=[],
         db=db,
@@ -249,7 +247,6 @@ async def test_run_tool_loop_interrupts_owned_runtime_session_on_cancellation() 
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-cancelled",
             loaded_memory_uuids=[],
             db=db,
@@ -281,7 +278,6 @@ async def test_run_tool_loop_floors_codex_tool_turns_before_adapter_call() -> No
         tools=[],
         tool_catalog=None,
         working_dir=None,
-        permission_config=None,
         session_id="sess-1",
         loaded_memory_uuids=[],
         db=db,
@@ -313,7 +309,6 @@ async def test_run_tool_loop_preserves_claude_tool_turns_before_adapter_call() -
         tools=[],
         tool_catalog=None,
         working_dir=None,
-        permission_config=None,
         session_id="sess-2",
         loaded_memory_uuids=[],
         db=db,
@@ -382,7 +377,6 @@ async def test_run_tool_loop_tracks_tool_result_summaries() -> None:
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-456",
             loaded_memory_uuids=[],
             db=db,
@@ -459,7 +453,6 @@ async def test_run_tool_loop_short_circuits_after_detached_agent_hub_rebuild_que
             tools=[],
             tool_catalog=None,
             working_dir="/srv/workspaces/projects/agent-hub",
-            permission_config=None,
             session_id="session-detached-rebuild",
             loaded_memory_uuids=[],
             db=db,
@@ -543,7 +536,6 @@ async def test_run_tool_loop_formats_detached_rebuild_closeout_for_task_session(
             tools=[],
             tool_catalog=None,
             working_dir="/srv/workspaces/projects/agent-hub",
-            permission_config=None,
             session_id="session-detached-rebuild-task",
             loaded_memory_uuids=[],
             db=db,
@@ -624,7 +616,6 @@ async def test_run_tool_loop_preserves_max_turn_finish_reason() -> None:
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-789",
             loaded_memory_uuids=[],
             db=db,
@@ -711,7 +702,6 @@ async def test_run_tool_loop_counts_one_model_turn_for_multiple_tool_results_in_
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-multi-tool",
             loaded_memory_uuids=[],
             db=db,
@@ -782,7 +772,6 @@ async def test_run_tool_loop_counts_one_model_turn_for_batched_top_level_claude_
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-batched-claude",
             loaded_memory_uuids=[],
             db=db,
@@ -876,7 +865,6 @@ async def test_run_tool_loop_counts_one_model_turn_for_consecutive_assistant_too
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             session_id="session-consecutive-assistant-events",
             loaded_memory_uuids=[],
             db=db,
@@ -927,7 +915,6 @@ async def test_complete_with_tools_returns_error_result_when_finalize_response_i
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             db=db,
             session=session,
             session_id="session-123",
@@ -980,7 +967,6 @@ async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer()
             tools=[],
             tool_catalog=None,
             working_dir="/home/testuser/agent-hub",
-            permission_config=None,
             db=db,
             session=session,
             session_id="session-123",
@@ -993,11 +979,13 @@ async def test_complete_with_tools_passes_shared_closeout_context_to_finalizer()
         )
 
     assert result is tool_result
-    assert mock_finalize.await_args.kwargs["adapter"] is adapter
-    assert mock_finalize.await_args.kwargs["temperature"] == 0.25
-    assert mock_finalize.await_args.kwargs["working_dir"] == "/home/testuser/agent-hub"
-    assert mock_finalize.await_args.kwargs["base_messages"][0].role == "user"
-    assert mock_finalize.await_args.kwargs["base_messages"][0].content == "hello"
+    finalize_args = mock_finalize.await_args
+    assert finalize_args is not None
+    assert finalize_args.kwargs["adapter"] is adapter
+    assert finalize_args.kwargs["temperature"] == 0.25
+    assert finalize_args.kwargs["working_dir"] == "/home/testuser/agent-hub"
+    assert finalize_args.kwargs["base_messages"][0].role == "user"
+    assert finalize_args.kwargs["base_messages"][0].content == "hello"
 
 
 @pytest.mark.asyncio
@@ -1038,7 +1026,6 @@ async def test_complete_with_tools_returns_error_result_when_partial_store_is_ca
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             db=db,
             session=session,
             session_id="session-123",
@@ -1088,7 +1075,6 @@ async def test_complete_with_tools_handles_cancelled_tool_loop() -> None:
             tools=[],
             tool_catalog=None,
             working_dir=None,
-            permission_config=None,
             db=db,
             session=session,
             session_id="session-123",

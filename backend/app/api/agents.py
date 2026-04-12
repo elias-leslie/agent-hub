@@ -78,7 +78,6 @@ def _agent_create_kwargs(request: AgentCreateRequest, auth: AuthenticatedKey | N
         verbosity_level=request.verbosity_level,
         is_active=request.is_active,
         is_coding_agent=request.is_coding_agent,
-        tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
         memory_config=request.memory_config,
         max_concurrency=request.max_concurrency,
         max_subagent_concurrency=request.max_subagent_concurrency,
@@ -104,7 +103,6 @@ def _agent_update_kwargs(request: AgentUpdateRequest, auth: AuthenticatedKey | N
         verbosity_level=request.verbosity_level,
         is_active=request.is_active,
         is_coding_agent=request.is_coding_agent,
-        tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
         memory_config=request.memory_config,
         max_concurrency=request.max_concurrency,
         max_subagent_concurrency=request.max_subagent_concurrency,
@@ -227,11 +225,6 @@ async def update_agent(
 ) -> AgentResponse:
     """Update an existing agent."""
     service = get_agent_service()
-
-    if request.tool_permissions is not None:
-        logger.debug(f"Received tool_permissions: {request.tool_permissions.model_dump()}")
-    else:
-        logger.debug("No tool_permissions in request")
 
     agent = await _require_agent(db, slug, active_only=False)
 
