@@ -9,6 +9,7 @@ export type SessionTimelineEvent = TimelineEvent;
 export type { SessionEventsResponse };
 
 const API_BASE = `${getApiBaseUrl()}/api`;
+const SESSION_EVENTS_MAX_PAGE_SIZE = 500;
 
 export interface SessionMessage {
   id: number;
@@ -224,7 +225,10 @@ export async function fetchAllSessionEvents(
     max_pages?: number;
   },
 ): Promise<SessionEventsResponse> {
-  const pageSize = params?.page_size ?? 1000;
+  const pageSize = Math.min(
+    params?.page_size ?? SESSION_EVENTS_MAX_PAGE_SIZE,
+    SESSION_EVENTS_MAX_PAGE_SIZE,
+  );
   const maxPages = params?.max_pages ?? 100;
   const firstPage = await fetchSessionEvents(sessionId, {
     event_type: params?.event_type,
