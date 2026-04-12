@@ -1,14 +1,13 @@
-"""Approach C Enhanced: Auto-Claude with full 3-layer permissions in can_use_tool.
+"""Approach C Enhanced: Auto-Claude with current runtime hooks in can_use_tool.
 
 SDK manages the entire tool loop with generous max_turns.
-can_use_tool callback enforces ALL 3 permission layers (not just PermissionChecker):
-  1. Project permission tier (off/read/write/yolo)
+can_use_tool callback enforces the current runtime hook stack:
+  1. Project permission tier
   2. Cross-project path enforcement
-  3. Per-request PermissionConfig (granular allow/deny)
-MCP server with DirectToolExecutor handles custom tools (no handler overhead).
+MCP server with DirectToolExecutor handles custom tools.
 
 Preserves: everything the SDK provides (caching, session, single subprocess).
-Adds: full permission parity with DirectToolHandler, enforced at SDK level.
+Adds: current built-in tool parity without dead per-request permission config.
 """
 
 from __future__ import annotations
@@ -20,10 +19,7 @@ from claude_agent_sdk import ClaudeAgentOptions, create_sdk_mcp_server, query
 from claude_agent_sdk import tool as sdk_tool
 from claude_agent_sdk.types import (
     AssistantMessage,
-    PermissionResultAllow,
-    PermissionResultDeny,
     ResultMessage,
-    ToolPermissionContext,
     UserMessage,
 )
 
@@ -77,39 +73,16 @@ def _build_mcp_server_with_executor(
 
 def _build_3_layer_can_use_tool(
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
     metrics_collector: dict[str, int],
 ) -> Any:
-    """Build a can_use_tool callback with all 3 permission layers.
-
-    Reuses the same hook functions from tool_handler.py to ensure
-    parity with DirectToolHandler's permission enforcement.
-    """
-    from app.services.tools.base import ToolCall, ToolDecision
-    from app.services.tools.tool_handler import (
-        _compose_hooks,
-        _create_cross_project_permission_hook,
-        _create_project_permission_hook,
+    """Build a can_use_tool callback with the current runtime hook stack."""
+    from app.adapters.claude_tools_permissions import (
+        compose_permission_hooks,
+        make_can_use_tool_callback,
     )
-    from tests.benchmarks._shared import normalize_tool_name
+    from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 
-    # Compose the same 3 layers as create_direct_handler
-    hooks = []
-
-    if project_id:
-        hooks.append(_create_project_permission_hook(project_id))
-
-    if project_id:
-        hooks.append(_create_cross_project_permission_hook(project_id))
-
-    if permission_config:
-        from app.services.tools.permissions import PermissionChecker, PermissionConfig
-
-        config = PermissionConfig.from_dict(permission_config)
-        checker = PermissionChecker(config)
-        hooks.append(checker.create_hook())
-
-    composed_hook = _compose_hooks(hooks) if len(hooks) > 1 else (hooks[0] if hooks else None)
+    base_callback = make_can_use_tool_callback(compose_permission_hooks(project_id))
 
     async def can_use_tool(
         tool_name: str,
@@ -117,20 +90,10 @@ def _build_3_layer_can_use_tool(
         context: ToolPermissionContext,
     ) -> PermissionResultAllow | PermissionResultDeny:
         metrics_collector["permission_checks"] += 1
-
-        if composed_hook is None:
-            return PermissionResultAllow()
-
-        # SDK passes MCP-prefixed names (mcp__agent-hub__write_user_context).
-        # Permission hooks expect unprefixed names (write_user_context).
-        normalized_name = normalize_tool_name(tool_name)
-        tool_call = ToolCall(id="", name=normalized_name, input=tool_input)
-        decision = await composed_hook(tool_call)
-
-        if decision == ToolDecision.DENY:
+        result = await base_callback(tool_name, tool_input, context)
+        if isinstance(result, PermissionResultDeny):
             metrics_collector["permission_denials"] += 1
-            return PermissionResultDeny(message=f"Tool '{tool_name}' denied by permission policy")
-        return PermissionResultAllow()
+        return result
 
     return can_use_tool
 
@@ -139,16 +102,14 @@ async def run_approach_c_enhanced(
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
 ) -> BenchmarkResult:
-    """SDK fully manages with 3-layer can_use_tool for full permission enforcement."""
-    result = BenchmarkResult(approach="C+", approach_name="Auto-Claude (3-Layer Permissions)")
+    """SDK fully manages with current runtime hooks in can_use_tool."""
+    result = BenchmarkResult(approach="C+", approach_name="Auto-Claude (Current Hooks)")
     cli_path = get_cli_path()
     metrics: dict[str, int] = {"permission_checks": 0, "permission_denials": 0}
 
     can_use_tool_cb = _build_3_layer_can_use_tool(
         project_id=project_id,
-        permission_config=permission_config,
         metrics_collector=metrics,
     )
 

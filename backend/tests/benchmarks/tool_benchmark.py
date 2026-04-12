@@ -28,44 +28,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Default permission config for benchmark (granular with persona tools allowed)
-DEFAULT_PERMISSION_CONFIG = {
-    "mode": "yolo",
-    "tool_permissions": {},
-    "allow_list": [
-        "write_user_context",
-        "read_user_context",
-        "read_file",
-        "write_file",
-        "bash",
-    ],
-    "deny_list": [],
-}
-
-
 async def run_single_approach(
     approach: str,
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict,
 ) -> BenchmarkResult:
     """Run a single approach and return its result."""
     if approach == "A":
         from tests.benchmarks.approach_a import run_approach_a
-        return await run_approach_a(model, working_dir, project_id, permission_config)
+        return await run_approach_a(model, working_dir, project_id)
     elif approach == "B":
         from tests.benchmarks.approach_b import run_approach_b
-        return await run_approach_b(model, working_dir, project_id, permission_config)
+        return await run_approach_b(model, working_dir, project_id)
     elif approach == "C":
         from tests.benchmarks.approach_c import run_approach_c
-        return await run_approach_c(model, working_dir, project_id, permission_config)
+        return await run_approach_c(model, working_dir, project_id)
     elif approach == "C+":
         from tests.benchmarks.approach_c_enhanced import run_approach_c_enhanced
-        return await run_approach_c_enhanced(model, working_dir, project_id, permission_config)
+        return await run_approach_c_enhanced(model, working_dir, project_id)
     elif approach == "D":
         from tests.benchmarks.approach_d import run_approach_d
-        return await run_approach_d(model, working_dir, project_id, permission_config)
+        return await run_approach_d(model, working_dir, project_id)
     else:
         msg = f"Unknown approach: {approach}"
         raise ValueError(msg)
@@ -109,7 +93,6 @@ async def main() -> None:
                     model=args.model,
                     working_dir=working_dir,
                     project_id=args.project_id,
-                    permission_config=DEFAULT_PERMISSION_CONFIG,
                 )
                 all_runs[approach].append(result)
 
