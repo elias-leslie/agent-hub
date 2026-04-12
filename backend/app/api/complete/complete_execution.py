@@ -39,13 +39,6 @@ def _to_messages(msgs: _MsgsDict) -> list[Message]:
     return [Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"]) for m in msgs]
 
 
-def _permission_config(req: CompletionRequest, agent: ResolvedAgent | None) -> dict[str, object] | None:
-    """Resolve permission_config from request or agent fallback."""
-    if req.permission_config:
-        return req.permission_config.model_dump()
-    return agent.agent.tool_permissions if agent else None
-
-
 def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _NonAgenticResult:
     """Wrap CompletionInternalResult as a non-agentic result tuple."""
     cr = CompletionResult(
@@ -74,7 +67,6 @@ async def _run_internal(
         enable_programmatic_tools=req.enable_programmatic_tools, container_id=req.container_id,
         response_format=fmt, skip_cache=skip_cache, user_messages_for_db=req.messages,
         max_turns=req.max_turns, execute_tools=req.execute_tools, working_dir=req.working_dir,
-        permission_config=_permission_config(req, agent),
         trace_id=req.trace_id, task_type=req.task_type, phase=req.phase,
     )
     return internal if is_agentic else _to_result(internal, model, sid)

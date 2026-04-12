@@ -72,6 +72,7 @@ export {
   fetchSessions,
   fetchSession,
   fetchSessionEvents,
+  fetchAllSessionEvents,
 } from "./api/sessions";
 
 // Re-export all preferences-related exports

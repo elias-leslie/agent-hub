@@ -118,6 +118,13 @@ _SAFE_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "search_persona_history",
 })
 
+_VISIBLE_PERSONA_TOOLS_BY_TIER: dict[str, frozenset[str]] = {
+    "off": frozenset(),
+    "read": _PERSONA_INTERNAL | _SAFE_PERSONA_OPERATIONAL,
+    "write": _PERSONA_INTERNAL | _SAFE_PERSONA_OPERATIONAL,
+    "yolo": _PERSONA_TOOLS,
+}
+
 _READ_SAFE_MANAGE_TASK_ACTIONS: frozenset[str] = frozenset({
     "overview",
     "get_context",
@@ -176,6 +183,18 @@ def get_tools_for_tier(tier: str) -> frozenset[str]:
         Frozen set of allowed tool names. Empty set for "off".
     """
     return TIER_TOOLS.get(tier, frozenset())
+
+
+def get_visible_tools_for_tier(tier: str) -> frozenset[str]:
+    """Return tools that should be exposed up front for a project tier.
+
+    This differs from runtime permission checks for persona tools: expose only
+    the subset that is always callable for the tier. Tools like manage_tasks
+    and dispatch_agent stay hidden until yolo because their runtime policy is
+    action-sensitive or tier-sensitive and otherwise create visible-but-denied
+    tool churn.
+    """
+    return get_tools_for_tier(tier) | _VISIBLE_PERSONA_TOOLS_BY_TIER.get(tier, frozenset())
 
 
 # ---------------------------------------------------------------------------

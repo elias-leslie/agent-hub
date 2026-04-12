@@ -81,7 +81,6 @@ def adapt_stream_event(
 
 def create_tool_handler(
     working_dir: str | None,
-    permission_config: dict[str, Any] | None,
     project_id: str | None = None,
     session_id: str | None = None,
     agent_slug: str | None = None,
@@ -93,7 +92,6 @@ def create_tool_handler(
 
     handler = create_direct_handler(
         working_dir,
-        permission_config,
         project_id,
         session_id=session_id,
         agent_slug=agent_slug,
@@ -118,7 +116,6 @@ async def adapt_openai_stream(
     model: str,
     tools: list[dict[str, Any]],
     working_dir: str | None,
-    permission_config: dict[str, Any] | None,
     max_turns: int = 20,
     project_id: str | None = None,
     session_id: str | None = None,
@@ -128,7 +125,6 @@ async def adapt_openai_stream(
     """Run a StreamEvent-based provider's complete_with_tools and yield ToolEvents."""
     handler = create_tool_handler(
         working_dir,
-        permission_config,
         project_id,
         session_id=session_id,
         agent_slug=agent_slug,

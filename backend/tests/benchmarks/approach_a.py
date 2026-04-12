@@ -6,7 +6,7 @@ instead of DirectToolExecutor (no permission checking).
 can_use_tool callback handles CLI builtins; MCP handler handles custom tools.
 
 Preserves: prompt caching, session continuity, single subprocess.
-Adds: 3-layer permission enforcement on custom tools via DirectToolHandler.
+Adds: current runtime boundary enforcement on custom tools via DirectToolHandler.
 """
 
 from __future__ import annotations
@@ -39,20 +39,18 @@ def _build_mcp_server_with_handler(
     tools: list[dict[str, Any]],
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
     metrics_collector: dict[str, int],
 ) -> Any:
     """Build MCP server backed by DirectToolHandler (with permissions).
 
     This is the key difference from production: instead of DirectToolExecutor
     (no permissions), we use create_direct_handler which composes 3 permission
-    layers: project tier, cross-project path, and config-based permissions.
+    layers: project tier plus cross-project/worktree boundaries.
     """
     from app.services.tools.tool_handler import create_direct_handler
 
     handler = create_direct_handler(
         working_dir=working_dir,
-        permission_config=permission_config,
         project_id=project_id,
     )
 
@@ -86,7 +84,6 @@ async def run_approach_a(
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
 ) -> BenchmarkResult:
     """SDK-managed loop with DirectToolHandler in MCP handler."""
     result = BenchmarkResult(approach="A", approach_name="MCP + DirectToolHandler")
@@ -97,7 +94,6 @@ async def run_approach_a(
         tools=BENCHMARK_TOOLS,
         working_dir=working_dir,
         project_id=project_id,
-        permission_config=permission_config,
         metrics_collector=metrics,
     )
 

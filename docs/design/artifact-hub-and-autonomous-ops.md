@@ -380,7 +380,7 @@ ARTIFACT_TOOLS = [
 ]
 ```
 
-These tools are registered in the tool execution layer alongside existing tools. Agent `tool_permissions` control access — agents with `"write"` artifact permission get create/update tools; read-only agents only get search/get.
+These tools are registered in the tool execution layer alongside existing tools. Project/runtime policy controls access — write-capable runs get create/update tools; read-only runs only get search/get.
 
 ---
 
@@ -936,7 +936,7 @@ Agents currently lack the ability to search the web or fetch URLs. This is criti
 **Recommendation:** Add web_search and web_fetch as agent tools:
 - `web_search` — uses a search API (SerpAPI, Brave Search, or Tavily) to find relevant pages
 - `web_fetch` — fetches and extracts content from a URL (similar to Claude Code's WebFetch)
-- Both gated behind agent tool_permissions
+- Both gated behind project/runtime policy
 - Rate-limited to prevent abuse
 
 This is the single most important gap for autonomous business ops. Without web access, "market research" is limited to the agent's training data.

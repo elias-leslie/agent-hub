@@ -47,7 +47,6 @@ class CompletionInput(BaseModel):
     max_turns: int = 1
     execute_tools: bool = False
     working_dir: str | None = None
-    permission_config: dict[str, Any] | None = None
     trace_id: str | None = None
     task_type: str | None = None
     phase: str | None = None
@@ -234,7 +233,6 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
             "max_turns": input.max_turns,
             "execute_tools": input.execute_tools,
             "working_dir": input.working_dir,
-            "permission_config": input.permission_config,
             "trace_id": input.trace_id,
             "task_type": input.task_type,
             "phase": input.phase,

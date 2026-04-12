@@ -26,7 +26,6 @@ async def test_build_agent_preview_uses_runtime_mandate_composition() -> None:
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -125,7 +124,6 @@ async def test_build_agent_preview_adds_task_prompt_as_user_section() -> None:
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -211,7 +209,6 @@ async def test_build_agent_preview_includes_compact_project_index_when_enabled()
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -287,7 +284,6 @@ async def test_build_agent_preview_includes_tool_capabilities_when_enabled() -> 
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -367,7 +363,6 @@ async def test_build_agent_preview_passes_agent_memory_config_to_context_builder
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config={"include_references": True, "audience_tags": ["memory-curator"]},
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -416,10 +411,12 @@ async def test_build_agent_preview_passes_agent_memory_config_to_context_builder
             prompt_input="Audit one memory target.",
         )
 
-    assert build_progressive_context.await_args.kwargs["include_mandates"] is True
-    assert build_progressive_context.await_args.kwargs["include_guardrails"] is True
-    assert build_progressive_context.await_args.kwargs["include_references"] is True
-    assert build_progressive_context.await_args.kwargs["memory_config"] == agent.memory_config
+    progressive_args = build_progressive_context.await_args
+    assert progressive_args is not None
+    assert progressive_args.kwargs["include_mandates"] is True
+    assert progressive_args.kwargs["include_guardrails"] is True
+    assert progressive_args.kwargs["include_references"] is True
+    assert progressive_args.kwargs["memory_config"] == agent.memory_config
 
 
 @pytest.mark.asyncio
@@ -439,7 +436,6 @@ async def test_build_agent_preview_keeps_runtime_prompt_when_injection_disabled(
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config={"enabled": False, "injection_enabled": True},
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -506,8 +502,10 @@ async def test_build_agent_preview_keeps_runtime_prompt_when_injection_disabled(
     assert preview["guardrail_count"] == 0
     assert preview["full_context"] == "<agent_persona>legacy system prompt</agent_persona>"
     assert preview["sections"][0]["source_kind"] == "agent_system_prompt"
-    assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
-    assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is False
+    collect_args = collect_runtime_prompt_sections.await_args
+    assert collect_args is not None
+    assert collect_args.kwargs["include_mandates"] is False
+    assert collect_args.kwargs["include_guardrails"] is False
 
 
 @pytest.mark.asyncio
@@ -527,7 +525,6 @@ async def test_build_agent_preview_disables_mandate_runtime_prompts_when_include
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config={"include_mandates": False, "include_guardrails": True},
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -576,8 +573,10 @@ async def test_build_agent_preview_disables_mandate_runtime_prompts_when_include
             prompt_input="Title this note.",
         )
 
-    assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
-    assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is True
+    collect_args = collect_runtime_prompt_sections.await_args
+    assert collect_args is not None
+    assert collect_args.kwargs["include_mandates"] is False
+    assert collect_args.kwargs["include_guardrails"] is True
 
 
 @pytest.mark.asyncio
@@ -597,7 +596,6 @@ async def test_build_agent_preview_respects_memory_config_include_flags() -> Non
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config={
             "include_mandates": False,
             "include_guardrails": False,
@@ -650,9 +648,11 @@ async def test_build_agent_preview_respects_memory_config_include_flags() -> Non
             prompt_input="Rate one injected memory.",
         )
 
-    assert build_progressive_context.await_args.kwargs["include_mandates"] is False
-    assert build_progressive_context.await_args.kwargs["include_guardrails"] is False
-    assert build_progressive_context.await_args.kwargs["include_references"] is True
+    progressive_args = build_progressive_context.await_args
+    assert progressive_args is not None
+    assert progressive_args.kwargs["include_mandates"] is False
+    assert progressive_args.kwargs["include_guardrails"] is False
+    assert progressive_args.kwargs["include_references"] is True
 
 
 @pytest.mark.asyncio
@@ -672,7 +672,6 @@ async def test_build_agent_preview_truncates_memory_query_like_runtime_injection
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -727,7 +726,9 @@ async def test_build_agent_preview_truncates_memory_query_like_runtime_injection
             task_type="heartbeat",
         )
 
-    assert build_progressive_context.await_args.kwargs["query"] == ("x" * 500)
+    progressive_args = build_progressive_context.await_args
+    assert progressive_args is not None
+    assert progressive_args.kwargs["query"] == ("x" * 500)
 
 
 @pytest.mark.asyncio
@@ -747,7 +748,6 @@ async def test_build_agent_preview_uses_task_block_for_wake_memory_query() -> No
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -807,8 +807,10 @@ async def test_build_agent_preview_uses_task_block_for_wake_memory_query() -> No
             task_type="wake",
         )
 
+    progressive_args = build_progressive_context.await_args
+    assert progressive_args is not None
     assert (
-        build_progressive_context.await_args.kwargs["query"]
+        progressive_args.kwargs["query"]
         == "Inspect the agent preview command before coding."
     )
 
@@ -830,7 +832,6 @@ async def test_build_agent_preview_includes_memory_debug() -> None:
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,

@@ -9,7 +9,6 @@ from .request_schemas import (
     CompletionRequest,
     EstimateRequest,
     MessageInput,
-    PermissionConfigInput,
     ResponseFormat,
     ToolDefinition,
 )
@@ -42,7 +41,6 @@ __all__ = [
     "EstimateResponse",
     "MessageInput",
     "OutputUsageInfo",
-    "PermissionConfigInput",
     "ResponseFormat",
     "StreamingChunk",
     "ThinkingInfo",

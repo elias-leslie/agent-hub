@@ -26,11 +26,8 @@ def normalize_tool_name(name: str) -> str:
     return _SDK_TOOL_NAME_MAP.get(name, name)
 
 
-def compose_permission_hooks(
-    checker: Any | None,
-    project_id: str | None,
-) -> Any | None:
-    """Build a composed PreToolUseHook from all enabled permission layers.
+def compose_permission_hooks(project_id: str | None) -> Any | None:
+    """Build a composed PreToolUseHook from real runtime permission layers.
 
     Note: worktree boundary enforcement for the Claude SDK path is handled
     by settings-based enforcement (see ``_claude_settings.py``), not via
@@ -48,8 +45,6 @@ def compose_permission_hooks(
     if project_id:
         hooks.append(_create_project_permission_hook(project_id))
         hooks.append(_create_cross_project_permission_hook(project_id))
-    if checker:
-        hooks.append(checker.create_hook())
 
     if not hooks:
         return None
@@ -90,8 +85,6 @@ def make_can_use_tool_callback(composed_hook: Any | None, agent_slug: str | None
 
         if decision == ToolDecision.DENY:
             return PermissionResultDeny(message=f"Tool '{tool_name}' denied by permission policy")
-        if decision == ToolDecision.ASK:
-            return PermissionResultDeny(message=f"Tool '{tool_name}' requires confirmation (autonomous mode)")
         return PermissionResultAllow()
 
     return can_use_tool

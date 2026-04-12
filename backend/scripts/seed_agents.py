@@ -83,7 +83,6 @@ async def seed_agents(db: AsyncSession) -> int:
             thinking_level=agent_data.get("thinking_level"),
             is_active=True,
             is_coding_agent=agent_data.get("is_coding_agent", False),
-            tool_permissions=agent_data.get("tool_permissions"),
             memory_config=agent_data.get("memory_config"),
             version=1,
         )

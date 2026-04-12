@@ -42,8 +42,7 @@ def _filter_tools_by_tier(
 ) -> list[dict[str, Any]]:
     """Filter tools by project permission tier using Redis cache (best-effort)."""
     from app.services.project_permission_service import (
-        _PERSONA_TOOLS,
-        get_tools_for_tier,
+        get_visible_tools_for_tier,
     )
 
     try:
@@ -64,8 +63,7 @@ def _filter_tools_by_tier(
         if not tier:
             return result
 
-        # Persona tools are tier-exempt (checked at runtime by the permission hook).
-        allowed = get_tools_for_tier(tier) | _PERSONA_TOOLS
+        allowed = get_visible_tools_for_tier(tier)
         before = len(result)
         result = [t for t in result if t.get("name") in allowed]
         if len(result) < before:

@@ -136,7 +136,7 @@ def test_reminder_mentions_tool_registration_and_exact_symbol_name() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_and_build_result_injects_guidance_before_tool_execution() -> None:
+async def test_execute_and_build_result_skips_precision_reminder_before_tool_execution() -> None:
     captured_messages: list[dict[str, object]] = []
 
     async def _capture_loop(ctx, *, should_execute_tools):
@@ -182,7 +182,6 @@ async def test_execute_and_build_result_injects_guidance_before_tool_execution()
             user_messages_for_db=[],
             tools=None,
             working_dir=None,
-            permission_config=None,
             db=AsyncMock(),
             session=SimpleNamespace(),
             session_id="sess-1",
@@ -204,12 +203,13 @@ async def test_execute_and_build_result_injects_guidance_before_tool_execution()
             agent_slug="coder",
         )
 
-    assert captured_messages[0]["role"] == "system"
-    assert captured_messages[0]["content"] == PRECISION_CODE_SEARCH_REMINDER
+    assert captured_messages == [
+        {"role": "user", "content": "Where is get_file_tree implemented?"},
+    ]
 
 
 @pytest.mark.asyncio
-async def test_execute_and_build_result_injects_claude_alias_guidance_before_precision_reminder() -> None:
+async def test_execute_and_build_result_injects_only_claude_alias_guidance() -> None:
     captured_messages: list[dict[str, object]] = []
 
     async def _capture_loop(ctx, *, should_execute_tools):
@@ -261,7 +261,6 @@ async def test_execute_and_build_result_injects_claude_alias_guidance_before_pre
             user_messages_for_db=[],
             tools=None,
             working_dir=None,
-            permission_config=None,
             db=AsyncMock(),
             session=SimpleNamespace(),
             session_id="sess-1",
@@ -285,5 +284,7 @@ async def test_execute_and_build_result_injects_claude_alias_guidance_before_pre
 
     assert captured_messages[0]["role"] == "system"
     assert "mcp__agent-hub__<tool_name>" in str(captured_messages[0]["content"])
-    assert captured_messages[1]["role"] == "system"
-    assert captured_messages[1]["content"] == PRECISION_CODE_SEARCH_REMINDER
+    assert captured_messages[1] == {
+        "role": "user",
+        "content": "Where is get_file_tree implemented?",
+    }

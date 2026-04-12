@@ -13,10 +13,7 @@ from app.services.response_cache import get_response_cache
 from .agent_loop import AgentLoopRequest, execute_agent_loop
 from .cache_handler import handle_cached_response
 from .memory_handler import inject_memory_context
-from .precision_search_guidance import (
-    maybe_inject_claude_tool_alias_guidance,
-    maybe_inject_precision_search_guidance,
-)
+from .precision_search_guidance import maybe_inject_claude_tool_alias_guidance
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress
 from .tool_provisioner import provision_standard_tools
@@ -69,7 +66,6 @@ async def execute_and_build_result(
     provider: str, model: str, temperature: float, project_id: str,
     messages_dict: list[dict[str, Any]], user_messages_for_db: list[MessageInput],
     tools: list[dict[str, Any]] | None, working_dir: str | None,
-    permission_config: dict[str, Any] | None,
     db: AsyncSession, session: Any, session_id: str, is_new_session: bool,
     loaded_memory_uuids: list[str], memory_group_id: str | None, skip_cache: bool,
     progress_callback: Callable[[AgentProgress], Any] | None, max_turns: int,
@@ -106,23 +102,12 @@ async def execute_and_build_result(
                 project_id,
                 agent_slug,
             )
-        messages_with_guidance, reminder_injected = maybe_inject_precision_search_guidance(
-            messages_with_guidance,
-            provisioned.loaded_tools,
-        )
-        if reminder_injected:
-            logger.info(
-                "Injected precision_code_search reminder for session=%s project=%s agent=%s",
-                session_id,
-                project_id,
-                agent_slug,
-            )
     ctx = AgentLoopRequest(
         provider=provider, messages_dict=messages_with_guidance,
         user_messages_for_db=user_messages_for_db, model=model,
         temperature=temperature, tools=provisioned.loaded_tools,
         tool_catalog=provisioned.catalog_tools, working_dir=working_dir,
-        permission_config=permission_config, db=db, session=session,
+        db=db, session=session,
         session_id=session_id, is_new_session=is_new_session,
         loaded_memory_uuids=loaded_memory_uuids, memory_group_id=memory_group_id,
         skip_cache=skip_cache, progress_callback=progress_callback,

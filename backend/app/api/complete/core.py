@@ -36,7 +36,6 @@ class _CompletionCtx:
     project_id: str
     tools: list[dict[str, Any]] | None = None
     working_dir: str | None = None
-    permission_config: dict[str, Any] | None = None
     use_memory: bool = False
     memory_group_id: str | None = None
     task_type: str | None = None
@@ -62,7 +61,7 @@ def _build_ctx(
     messages_dict: list[dict[str, Any]], user_messages_for_db: list[MessageInput],
     model: str, temperature: float, provider: str, project_id: str,
     tools: list[dict[str, Any]] | None, working_dir: str | None,
-    permission_config: dict[str, Any] | None, use_memory: bool,
+    use_memory: bool,
     memory_group_id: str | None, task_type: str | None, phase: str | None,
     memory_config: dict[str, Any] | None, current_branch: str | None,
     agent_slug: str | None, skip_cache: bool,
@@ -77,7 +76,7 @@ def _build_ctx(
         db=db, session=session, session_id=session_id, is_new_session=is_new,
         messages_dict=messages_dict, user_messages_for_db=user_messages_for_db,
         model=model, temperature=temperature, provider=provider, project_id=project_id,
-        tools=tools, working_dir=working_dir, permission_config=permission_config,
+        tools=tools, working_dir=working_dir,
         use_memory=use_memory, memory_group_id=memory_group_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
         current_branch=current_branch, agent_slug=agent_slug,
@@ -118,7 +117,7 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
         provider=ctx.provider, messages_dict=msgs,
         user_messages_for_db=ctx.user_messages_for_db, model=ctx.model,
         temperature=ctx.temperature, tools=ctx.tools,
-        working_dir=ctx.working_dir, permission_config=ctx.permission_config,
+        working_dir=ctx.working_dir,
         db=ctx.db, session=ctx.session, session_id=ctx.session_id,
         is_new_session=ctx.is_new_session, loaded_memory_uuids=loaded_uuids,
         memory_group_id=ctx.memory_group_id, skip_cache=ctx.skip_cache,
@@ -151,7 +150,6 @@ async def complete_internal(
     user_messages_for_db: list[MessageInput] | None = None,
     max_turns: int = 1, execute_tools: bool = False,
     working_dir: str | None = None,
-    permission_config: dict[str, Any] | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
     trace_id: str | None = None,
     task_type: str | None = None, phase: str | None = None,
@@ -173,7 +171,7 @@ async def complete_internal(
         db=db, session=session, session_id=session_id, is_new=is_new,
         messages_dict=messages_dict, user_messages_for_db=user_messages_for_db,
         model=model, temperature=temperature, provider=provider, project_id=project_id,
-        tools=tools, working_dir=working_dir, permission_config=permission_config,
+        tools=tools, working_dir=working_dir,
         use_memory=use_memory, memory_group_id=memory_group_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
         current_branch=current_branch, agent_slug=agent_slug, skip_cache=skip_cache,

@@ -59,34 +59,6 @@ class ResponseFormat(BaseModel):
     )
 
     model_config = {"populate_by_name": True}
-
-
-class PermissionConfigInput(BaseModel):
-    """Permission configuration for tool execution (optional override).
-
-    NOTE: Agents have tool_permissions stored in the database which are used
-    by default. This API parameter overrides the agent's stored settings.
-
-    Supports three modes:
-    - YOLO: Auto-approve all tools without asking (default)
-    - GRANULAR: Check per-tool allow/deny lists
-    """
-
-    mode: str = Field(
-        default="yolo",
-        pattern="^(yolo|granular)$",
-        description="Permission mode: 'yolo' (auto-approve all) or 'granular' (use allow/deny lists)",
-    )
-    allow_list: list[str] = Field(
-        default_factory=list,
-        description="Tools to auto-approve in granular mode (e.g., ['bash', 'read_file'])",
-    )
-    deny_list: list[str] = Field(
-        default_factory=list,
-        description="Tools to deny in granular mode",
-    )
-
-
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -192,10 +164,6 @@ class CompletionRequest(BaseModel):
     execute_tools: bool = Field(
         default=False,
         description="Execute tool calls in an agentic loop. When True, tools are executed and results fed back.",
-    )
-    permission_config: PermissionConfigInput | None = Field(
-        default=None,
-        description="Override for agent's tool permissions. If not provided, uses agent's stored tool_permissions.",
     )
     trace_id: str | None = Field(
         default=None,

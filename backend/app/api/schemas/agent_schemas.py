@@ -8,26 +8,6 @@ from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import normalize_memory_config
 
 
-class ToolPermissionSchema(BaseModel):
-    """Schema for a single tool permission."""
-
-    name: str
-    allowed: bool = True
-    requires_confirmation: bool = False
-
-
-class PermissionConfigSchema(BaseModel):
-    """Schema for tool permission configuration.
-
-    Matches PermissionConfig.to_dict() output format.
-    """
-
-    mode: str = Field(default="yolo", pattern=r"^(yolo|ask|granular)$")
-    tool_permissions: dict[str, ToolPermissionSchema] = Field(default_factory=dict)
-    allow_list: list[str] = Field(default_factory=list)
-    deny_list: list[str] = Field(default_factory=list)
-
-
 class AgentCreateRequest(BaseModel):
     """Request schema for creating an agent."""
 
@@ -47,7 +27,6 @@ class AgentCreateRequest(BaseModel):
     )
     is_active: bool = True
     is_coding_agent: bool = False
-    tool_permissions: PermissionConfigSchema | None = None
     memory_config: dict[str, Any] | None = None
     max_concurrency: int | None = Field(default=None, ge=1, le=100, description="Max parallel executions")
     max_subagent_concurrency: int | None = Field(
@@ -76,7 +55,6 @@ class AgentUpdateRequest(BaseModel):
     )
     is_active: bool | None = None
     is_coding_agent: bool | None = None
-    tool_permissions: PermissionConfigSchema | None = None
     memory_config: dict[str, Any] | None = None
     max_concurrency: int | None = Field(default=None, ge=1, le=100)
     max_subagent_concurrency: int | None = Field(default=None, ge=1, le=100)
@@ -103,7 +81,6 @@ class AgentResponse(BaseModel):
     verbosity_level: str | None
     is_active: bool
     is_coding_agent: bool
-    tool_permissions: dict[str, Any] | None
     memory_config: dict[str, Any] | None
     effective_memory_config: dict[str, Any]
     max_concurrency: int | None
@@ -138,7 +115,6 @@ class AgentResponse(BaseModel):
             verbosity_level=dto.verbosity_level,
             is_active=dto.is_active,
             is_coding_agent=dto.is_coding_agent,
-            tool_permissions=dto.tool_permissions,
             memory_config=normalize_memory_config(dto.memory_config),
             effective_memory_config=effective_memory_config,
             max_concurrency=dto.max_concurrency,

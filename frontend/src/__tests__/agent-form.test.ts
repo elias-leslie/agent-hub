@@ -21,7 +21,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     verbosity_level: "high",
     is_active: true,
     is_coding_agent: false,
-    tool_permissions: null,
     memory_config: null,
     effective_memory_config: {
       injection_enabled: true,

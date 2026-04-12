@@ -11,7 +11,6 @@ import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
 import { ModelsTab } from "./components/ModelsTab";
 import { ParametersTab } from "./components/ParametersTab";
-import { PermissionsTab } from "./components/PermissionsTab";
 import { PromptsTab } from "./components/PromptsTab";
 import { MemoryTab } from "./components/MemoryTab";
 import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
@@ -209,15 +208,15 @@ export default function AgentEditorPage() {
                 <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
                   <div className="section-header gap-4">
                     <div>
-                      <p className="section-kicker">Editing Surface</p>
+                      <p className="section-kicker">Runtime Profile</p>
                       <h2 className="section-heading mt-2">{activeTabLabel}</h2>
                       <p className="section-copy mt-2 max-w-3xl">
                         {activeTabDescription}
                       </p>
                     </div>
                     <div className="page-meta">
-                      <span className="page-pill">Agent config</span>
-                      <span className="page-pill">Live preview available</span>
+                      <span className="page-pill">Agent runtime</span>
+                      <span className="page-pill">Prompt preview</span>
                     </div>
                   </div>
                 </div>
@@ -239,9 +238,6 @@ export default function AgentEditorPage() {
                         availableModels={availableModels}
                         updateField={updateField}
                       />
-                    )}
-                    {activeTab === "permissions" && (
-                      <PermissionsTab formData={formData} updateField={updateField} />
                     )}
                     {activeTab === "prompts" && (
                       <PromptsTab

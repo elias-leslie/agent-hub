@@ -23,7 +23,6 @@ def _mock_agent() -> MagicMock:
     mock_agent.agent.slug = "coder"
     mock_agent.agent.fallback_models = []
     mock_agent.agent.memory_config = None
-    mock_agent.agent.tool_permissions = None
     mock_agent.agent.hourly_request_limit = None
     mock_agent.agent.daily_token_budget = None
     return mock_agent

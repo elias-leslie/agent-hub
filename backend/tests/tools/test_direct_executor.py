@@ -308,48 +308,18 @@ class TestStandardTools:
     """Tests for standard tool definitions."""
 
     def test_get_standard_tools_returns_all(self) -> None:
-        """Test that standard tools include the shared baseline toolset."""
+        """Test that standard tools expose only the primitive shell/file baseline."""
         tools = get_standard_tools()
         names = [t.name for t in tools]
-        assert "bash" in names
-        assert "read_file" in names
-        assert "write_file" in names
-        assert "consult_agent" in names
-        assert "precision_code_search" in names
-        assert "research_web" in names
-        assert "search_web" in names
-        assert "fetch_web_page" in names
+        assert names == ["bash", "read_file", "write_file"]
 
-    def test_consult_agent_description_prefers_direct_sources_for_exact_facts(self) -> None:
-        """Consultation should be framed as advice, not a shortcut around direct lookup."""
+    def test_bash_description_prefers_shell_wrappers(self) -> None:
+        """Bash should nudge callers toward canonical wrapper CLIs."""
         tools = {tool.name: tool for tool in get_standard_tools()}
         bash_tool = tools["bash"]
-        consult_tool = tools["consult_agent"]
-        research_tool = tools["research_web"]
-        fetch_tool = tools["fetch_web_page"]
-        search_tool = tools["search_web"]
-
-        assert "expert review" in consult_tool.description
-        assert "read-only research tools" in consult_tool.description
-        assert "`search_web`" in consult_tool.description
-        assert "Do not use it for exact rule text" in consult_tool.description
-        assert "`st memory get/search`" in consult_tool.description
-        assert consult_tool.usage_examples == [
-            "Ask the reviewer agent for risk-focused feedback after inspecting the code.",
-        ]
-        assert "Do not use bash/curl" in bash_tool.description
-        assert "`web-research research`" in bash_tool.description
-        assert "one-call public-web research pass" in research_tool.description
-        assert "Prefer this for ordinary query-based research" in research_tool.description
-        assert "result_index" in research_tool.input_schema["properties"]
-        assert "Prefer this over bash/curl" in search_tool.description
-        assert "call it directly" in search_tool.description
-        assert "`research_web`" in search_tool.description
-        assert "Prefer this over bash/curl" in fetch_tool.description
-        assert "call it directly" in fetch_tool.description
-        assert "`research_web`" in fetch_tool.description
-        assert "focus_query" in fetch_tool.input_schema["properties"]
-        assert "large pages" in fetch_tool.input_schema["properties"]["focus_query"]["description"]
+        assert "canonical" in bash_tool.description
+        assert "`st`, `dt`, `db`, `commit.sh`, and `web-research`" in bash_tool.description
+        assert "Prefer wrapper CLIs" in bash_tool.description
 
     def test_create_handler_with_workdir(self, tmp_path: Path) -> None:
         """Test handler creation with working directory."""

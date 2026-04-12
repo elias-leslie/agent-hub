@@ -6,6 +6,7 @@ Tests cover:
 - Error handling
 """
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -36,7 +37,6 @@ def make_mock_dto(
         "verbosity_level": None,
         "is_active": True,
         "is_coding_agent": False,
-        "tool_permissions": {},
         "memory_config": None,
         "max_concurrency": None,
         "max_subagent_concurrency": None,
@@ -52,7 +52,7 @@ def make_mock_dto(
 
 
 @pytest.fixture(autouse=True)
-def _mock_memory_settings() -> MemorySettingsDTO:
+def _mock_memory_settings() -> Iterator[MemorySettingsDTO]:
     settings = MemorySettingsDTO(
         enabled=True,
         budget_enabled=True,
@@ -124,7 +124,9 @@ class TestAgentDetailEndpoint:
             assert data["name"] == "Code Generator"
             assert data["effective_memory_config"]["continuity_max_sessions"] == 5
             mock_svc.get_by_slug.assert_awaited_once()
-            assert mock_svc.get_by_slug.await_args.kwargs["active_only"] is False
+            get_by_slug_args = mock_svc.get_by_slug.await_args
+            assert get_by_slug_args is not None
+            assert get_by_slug_args.kwargs["active_only"] is False
 
     @pytest.mark.asyncio
     async def test_get_agent_normalizes_sparse_memory_config_in_response(self, api_client):
@@ -203,7 +205,9 @@ class TestAgentCreateEndpoint:
             data = response.json()
             assert data["slug"] == "new-agent"
             mock_svc.create.assert_called_once()
-            create_kwargs = mock_svc.create.await_args.kwargs
+            create_args = mock_svc.create.await_args
+            assert create_args is not None
+            create_kwargs = create_args.kwargs
             assert create_kwargs["thinking_level"] is None
             assert create_kwargs["verbosity_level"] is None
 
@@ -238,7 +242,9 @@ class TestAgentCreateEndpoint:
             )
 
             assert response.status_code == 201
-            create_kwargs = mock_svc.create.await_args.kwargs
+            create_args = mock_svc.create.await_args
+            assert create_args is not None
+            create_kwargs = create_args.kwargs
             assert create_kwargs["thinking_level"] == "xhigh"
             assert create_kwargs["verbosity_level"] == "high"
             assert create_kwargs["timeout_seconds"] == 120
@@ -290,7 +296,9 @@ class TestAgentUpdateEndpoint:
             data = response.json()
             assert data["name"] == "Updated Coder"
             assert data["version"] == 2
-            assert mock_svc.get_by_slug.await_args.kwargs["active_only"] is False
+            get_by_slug_args = mock_svc.get_by_slug.await_args
+            assert get_by_slug_args is not None
+            assert get_by_slug_args.kwargs["active_only"] is False
 
     @pytest.mark.asyncio
     async def test_update_agent_forwards_new_parameter_fields(self, api_client):
@@ -319,7 +327,9 @@ class TestAgentUpdateEndpoint:
             )
 
             assert response.status_code == 200
-            update_kwargs = mock_svc.update.await_args.kwargs
+            update_args = mock_svc.update.await_args
+            assert update_args is not None
+            update_kwargs = update_args.kwargs
             assert update_kwargs["thinking_level"] == "high"
             assert update_kwargs["verbosity_level"] == "medium"
             assert update_kwargs["timeout_seconds"] == 60

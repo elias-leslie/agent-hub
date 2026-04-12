@@ -85,7 +85,6 @@ async def run_approach_d(
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
 ) -> BenchmarkResult:
     """SDK manages with bypassPermissions + event normalization."""
     result = BenchmarkResult(approach="D", approach_name="AutoMaker (Bypass + Normalize)")
