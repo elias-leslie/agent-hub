@@ -106,9 +106,6 @@ async def run_approach_c(
             if decision == ToolDecision.DENY:
                 metrics["permission_denials"] += 1
                 return PermissionResultDeny(message=f"Tool '{tool_name}' denied")
-            elif decision == ToolDecision.ASK:
-                metrics["permission_denials"] += 1
-                return PermissionResultDeny(message=f"Tool '{tool_name}' requires confirmation")
         return PermissionResultAllow()
 
     mcp_server = _build_mcp_server_with_executor(

@@ -179,14 +179,6 @@ class GeminiToolHandler(ToolHandler):
                 is_error=True,
             )
 
-        if decision == ToolDecision.ASK:
-            logger.info(f"Function call requires confirmation: {tool_call.name}")
-            return ToolResult(
-                tool_use_id=tool_call.id,
-                content=f"Function '{tool_call.name}' requires user confirmation",
-                is_error=True,
-            )
-
         # Permission granted, execute
         executor_fn = self._executor.get(tool_call.name)
         if not executor_fn:

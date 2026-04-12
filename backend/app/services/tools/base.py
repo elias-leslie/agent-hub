@@ -12,7 +12,6 @@ class ToolDecision(Enum):
 
     ALLOW = "allow"
     DENY = "deny"
-    ASK = "ask"  # Requires user confirmation
 
 
 # Supported caller types for programmatic tool calling

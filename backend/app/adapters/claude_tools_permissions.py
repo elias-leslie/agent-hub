@@ -85,8 +85,6 @@ def make_can_use_tool_callback(composed_hook: Any | None, agent_slug: str | None
 
         if decision == ToolDecision.DENY:
             return PermissionResultDeny(message=f"Tool '{tool_name}' denied by permission policy")
-        if decision == ToolDecision.ASK:
-            return PermissionResultDeny(message=f"Tool '{tool_name}' requires confirmation (autonomous mode)")
         return PermissionResultAllow()
 
     return can_use_tool

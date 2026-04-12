@@ -130,11 +130,6 @@ def _build_3_layer_can_use_tool(
         if decision == ToolDecision.DENY:
             metrics_collector["permission_denials"] += 1
             return PermissionResultDeny(message=f"Tool '{tool_name}' denied by permission policy")
-        elif decision == ToolDecision.ASK:
-            metrics_collector["permission_denials"] += 1
-            return PermissionResultDeny(
-                message=f"Tool '{tool_name}' requires confirmation (autonomous mode)"
-            )
         return PermissionResultAllow()
 
     return can_use_tool
