@@ -17,6 +17,7 @@ from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import (
     default_agent_memory_config,
     normalize_memory_config,
+    resolve_memory_consumer_profile,
 )
 from app.services.memory.governance import collect_memory_governance_snapshot
 from app.services.memory.project_index_context import format_project_index_context
@@ -126,13 +127,14 @@ def _capture_generated_context(
     project_id: str | None = None,
 ) -> dict[str, Any]:
     memory_config = _effective_memory_config_for_agent(agent)
+    consumer_profile = resolve_memory_consumer_profile(memory_config, surface="runtime")
     descriptors: list[str] = []
 
     project_index_enabled = bool(memory_config.get("project_index_enabled", True))
     project_index_text = (
         format_project_index_context(
             project_id,
-            consumer_profile="agent_runtime",
+            consumer_profile=consumer_profile,
             task_type=task_type,
         )
         if project_index_enabled
@@ -144,7 +146,7 @@ def _capture_generated_context(
     tool_capabilities_enabled = bool(memory_config.get("tool_capabilities_enabled", True))
     tool_capability_text = (
         format_tool_capability_context(
-            consumer_profile="agent_runtime",
+            consumer_profile=consumer_profile,
             task_type=task_type,
             project_id=project_id,
         )
@@ -156,6 +158,7 @@ def _capture_generated_context(
 
     return {
         "memory_config": memory_config,
+        "consumer_profile": consumer_profile,
         "descriptors": descriptors,
         "project_index": {
             "enabled": project_index_enabled,

@@ -7,6 +7,7 @@ from app.services.memory.context_builder_settings import (
     normalize_memory_config,
     resolve_continuity_settings,
     resolve_effective_memory_config,
+    resolve_memory_consumer_profile,
 )
 from app.services.memory.context_injector_formatter import format_progressive_context
 from app.services.memory.memory_models import MemoryScope, MemorySearchResult, MemorySource
@@ -38,6 +39,44 @@ def test_normalize_memory_config_materializes_core_fields_and_preserves_extensio
         "exclude_tags": ["draft"],
         "exclude_memory_uuids": [],
     }
+
+
+def test_resolve_memory_consumer_profile_uses_surface_specific_overrides() -> None:
+    memory_config = {
+        "consumer_profile": "agent_general",
+        "runtime_consumer_profile": "agent_coding",
+        "preview_consumer_profile": "agent_operator",
+    }
+
+    assert resolve_memory_consumer_profile(memory_config, surface="runtime") == "agent_coding"
+    assert resolve_memory_consumer_profile(memory_config, surface="preview") == "agent_operator"
+
+
+def test_resolve_memory_consumer_profile_preview_falls_back_to_runtime_profile() -> None:
+    memory_config = {"runtime_consumer_profile": "agent_promptops"}
+
+    assert resolve_memory_consumer_profile(memory_config, surface="runtime") == "agent_promptops"
+    assert resolve_memory_consumer_profile(memory_config, surface="preview") == "agent_promptops"
+
+
+def test_resolve_memory_consumer_profile_defaults_preview_to_agent_preview() -> None:
+    assert resolve_memory_consumer_profile(None, surface="runtime") is None
+    assert resolve_memory_consumer_profile(None, surface="preview") == "agent_preview"
+
+
+def test_normalize_memory_config_canonicalizes_known_consumer_profiles() -> None:
+    normalized = normalize_memory_config(
+        {
+            "consumer_profile": " agent_general ",
+            "runtime_consumer_profile": "agent_coding",
+            "preview_consumer_profile": "not-a-real-profile",
+        }
+    )
+
+    assert normalized is not None
+    assert normalized["consumer_profile"] == "agent_general"
+    assert normalized["runtime_consumer_profile"] == "agent_coding"
+    assert "preview_consumer_profile" not in normalized
 
 
 def test_normalize_memory_config_folds_legacy_enabled_into_injection_enabled() -> None:

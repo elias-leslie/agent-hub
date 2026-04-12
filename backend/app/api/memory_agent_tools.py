@@ -165,7 +165,12 @@ async def get_progressive_context(
     consumer_profile: Annotated[
         str | None,
         Query(
-            description="Caller profile for path-specific rendering (agent_runtime, agent_preview, claude_session_start, codex_startup)"
+            description=(
+                "Caller profile for path-specific rendering "
+                "(agent_general, agent_visual, agent_coding, agent_operator, "
+                "agent_promptops, agent_runtime, agent_preview, "
+                "claude_session_start, codex_startup)"
+            )
         ),
     ] = None,
 ) -> ProgressiveContextResponse:

@@ -243,5 +243,8 @@ async def get_query_relevant_references_as_search_results(
             continue
         result.relevance_score = float(row.get("relevance_score") or result.relevance_score)
         result.scope = MemoryScope(row.get("scope") or "global")
-        results.append(result.model_dump())
+        payload = result.model_dump()
+        payload["trigger_task_types"] = list(row.get("trigger_task_types") or [])
+        payload["trigger_phases"] = list(row.get("trigger_phases") or [])
+        results.append(payload)
     return results

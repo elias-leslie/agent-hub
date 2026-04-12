@@ -179,7 +179,7 @@ export function EpisodeFormFields({
                 handleApplicabilityChange("consumer_profiles", e.target.value)
               }
               disabled={disabled}
-              placeholder="codex_startup, claude_startup, agent_preview"
+              placeholder="agent_coding, agent_operator, codex_startup"
               className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
             />
           </div>
@@ -197,7 +197,7 @@ export function EpisodeFormFields({
                 )
               }
               disabled={disabled}
-              placeholder="agent_runtime"
+              placeholder="agent_general, agent_visual"
               className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
             />
           </div>

@@ -128,4 +128,30 @@ describe("MemoryTab", () => {
     expect(screen.getByRole("button", { name: "Session Continuity" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Memory Injection" })).not.toBeDisabled();
   });
+
+  it("updates consumer profile overrides through routing inputs", () => {
+    const updateField = vi.fn();
+
+    render(<MemoryTab formData={makeFormData()} updateField={updateField} />);
+
+    fireEvent.change(screen.getByLabelText("Runtime Profile Override"), {
+      target: { value: "agent_coding" },
+    });
+
+    expect(updateField).toHaveBeenCalledWith("memory_config", {
+      injection_enabled: true,
+      project_index_enabled: true,
+      tool_capabilities_enabled: true,
+      include_mandates: true,
+      include_guardrails: true,
+      include_references: true,
+      reference_index_enabled: true,
+      continuity_enabled: true,
+      continuity_max_sessions: 5,
+      audience_tags: [],
+      exclude_tags: [],
+      exclude_memory_uuids: [],
+      runtime_consumer_profile: "agent_coding",
+    });
+  });
 });

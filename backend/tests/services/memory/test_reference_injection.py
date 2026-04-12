@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,6 +11,9 @@ import pytest
 from app.services.memory.context_builder import build_progressive_context
 from app.services.memory.context_injector import format_progressive_context
 from app.services.memory.context_injector_blocks_helpers import episode_to_result
+from app.services.memory.context_injector_queries import (
+    get_query_relevant_references_as_search_results,
+)
 from app.services.memory.context_profiles import CODEX_STARTUP_FULL_TAG
 from app.services.memory.memory_models import MemoryApplicability
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource
@@ -40,6 +44,34 @@ class TestReferenceInjection:
 
         assert result is not None
         assert result.tags == []
+
+    @pytest.mark.asyncio
+    async def test_query_relevant_reference_payload_preserves_trigger_hints(self) -> None:
+        row = {
+            "id": "8ac96de8-a4e4-4ba7-a7a2-b4a3162e8eb5",
+            "content": "**Runtime Proxmox**: Keep integration read-only.",
+            "summary": "runtime proxmox read-only api",
+            "scope": "global",
+            "tier": 3,
+            "context_kind": "reference",
+            "applicability": {},
+            "trigger_task_types": ["devops", "verification"],
+            "trigger_phases": ["verification"],
+            "relevance_score": 0.81,
+            "created_at": datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+        }
+
+        with patch(
+            "app.services.memory.context_injector_queries.get_query_relevant_references",
+            new=AsyncMock(return_value=[row]),
+        ):
+            payloads = await get_query_relevant_references_as_search_results(
+                "Inspect runtime health",
+                [(MemoryScope.GLOBAL, None)],
+            )
+
+        assert payloads[0]["trigger_task_types"] == ["devops", "verification"]
+        assert payloads[0]["trigger_phases"] == ["verification"]
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_injects_query_relevant_references(self) -> None:
@@ -400,6 +432,103 @@ class TestReferenceInjection:
         assert context.guardrails[-1].uuid == "g-05"
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_agent_coding_uses_compact_policy_profile(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        mandates = [
+            MemorySearchResult(
+                uuid=f"m-{idx:02d}",
+                content=f"Mandate {idx}: keep coding context focused and durable.",
+                summary=f"Mandate {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0 - (idx * 0.01),
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(25)
+        ]
+        guardrails = [
+            MemorySearchResult(
+                uuid=f"g-{idx:02d}",
+                content=f"Guardrail {idx}: avoid broad context poison.",
+                summary=f"Guardrail {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0 - (idx * 0.01),
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(8)
+        ]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=(mandates, guardrails, [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Fix one failing backend test.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="agent_coding",
+            )
+
+        assert len(context.mandates) == 16
+        assert len(context.guardrails) == 4
+        assert context.mandates[0].render_tier == "L0"
+        assert context.guardrails[0].render_tier == "L0"
+        assert context.debug_info["consumer_profile"] == "agent_coding"
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_query_selected_refs_respect_triggers_and_applicability(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        targeted = _reference_result(
+            "b54378e2-d12e-4510-bfad-59eba8e7350a",
+            "**Session Events Memory Summary**: Operator-only reference.",
+        )
+        targeted.applicability.consumer_profiles = ["agent_operator"]
+        frontend_only = _reference_result(
+            "49372f37-2d06-414d-bb4d-f97c53224199",
+            "**SF Browser Canonical Interface**: Frontend-only reference.",
+        )
+        targeted_payload = targeted.model_dump()
+        frontend_payload = frontend_only.model_dump()
+        frontend_payload["context_kind"] = "capability"
+        frontend_payload["trigger_task_types"] = ["frontend"]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(
+                    return_value=[targeted_payload, frontend_payload]
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Answer user question about feature",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="agent_general",
+                task_type=None,
+            )
+
+        assert context.reference == []
+        assert context.reference_index == []
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_dedupes_selected_references(self) -> None:
         existing = _reference_result(
             "f2ae2668-da26-46e1-b499-ffac6141e377",
@@ -555,6 +684,45 @@ class TestReferenceInjection:
         assert context.debug_info["reference_count"] == 1
 
     @pytest.mark.asyncio
+    async def test_build_progressive_context_skips_query_selected_refs_for_general_profile_by_default(
+        self,
+    ) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        selector = AsyncMock(
+            return_value=[
+                _reference_result(
+                    "f2ae2668-da26-46e1-b499-ffac6141e377",
+                    "**Prompt Surfaces**: Example reference that should stay out of chat.",
+                ).model_dump()
+            ]
+        )
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=([], [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=selector,
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Say ok.",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                consumer_profile="agent_general",
+            )
+
+        selector.assert_not_awaited()
+        assert context.reference == []
+        assert context.debug_info["reference_count"] == 0
+
+    @pytest.mark.asyncio
     async def test_build_progressive_context_skips_references_when_disabled(self) -> None:
         auto_reference = _reference_result(
             "f2ae2668-da26-46e1-b499-ffac6141e377",
@@ -696,15 +864,16 @@ class TestReferenceInjection:
         ]
 
     def test_format_progressive_context_renders_selected_references_without_passive_index(self) -> None:
-        context = type("Ctx", (), {})()
-        context.mandates = []
-        context.guardrails = []
-        context.reference = [
+        context = SimpleNamespace(
+            mandates=[],
+            guardrails=[],
+            reference=[
             _reference_result(
                 "f2ae2668-da26-46e1-b499-ffac6141e377",
                 "**Session Surfaces**: Use st sessions ownership for normalized lane truth.",
             )
-        ]
+            ],
+        )
 
         result = format_progressive_context(context, include_citations=True)
 

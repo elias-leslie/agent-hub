@@ -18,4 +18,7 @@ export interface MemoryConfig extends Record<string, unknown> {
   audience_tags: string[];
   exclude_tags: string[];
   exclude_memory_uuids: string[];
+  consumer_profile?: string;
+  runtime_consumer_profile?: string;
+  preview_consumer_profile?: string;
 }

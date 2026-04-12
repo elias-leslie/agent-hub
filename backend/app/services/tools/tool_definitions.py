@@ -105,6 +105,7 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     ],
     "governance-auditor": [
         *STANDARD_TOOLS,
+        PRECISION_CODE_SEARCH_TOOL,
         INSPECT_SESSION_TOOL,
         MANAGE_FEEDBACK_TOOL,
         QUERY_SESSIONS_TOOL,

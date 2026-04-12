@@ -152,15 +152,41 @@ async def test_inject_memory_tracks_loaded_batch_when_enabled() -> None:
     assert injected_count == 3
     assert loaded == ["11111111-1111-1111-1111-111111111111"]
     mock_inject.assert_awaited_once()
-    assert mock_inject.await_args.kwargs["variant"] == "MINIMAL"
+    inject_args = mock_inject.await_args
+    assert inject_args is not None
+    assert inject_args.kwargs["variant"] == "MINIMAL"
+    assert inject_args.kwargs["consumer_profile"] is None
     mock_track.assert_awaited_once_with(["11111111-1111-1111-1111-111111111111"])
     mock_store.assert_awaited_once()
-    assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
-    assert mock_store.await_args.kwargs["reference_index_uuids"] == []
-    assert mock_store.await_args.kwargs["memory_debug"] == {
+    store_args = mock_store.await_args
+    assert store_args is not None
+    assert store_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
+    assert store_args.kwargs["reference_index_uuids"] == []
+    assert store_args.kwargs["memory_debug"] == {
         "reference_selected_uuids": ["ref-selected-1"],
         "reference_index_uuids": [],
     }
+
+
+@pytest.mark.asyncio
+async def test_inject_memory_forwards_runtime_consumer_profile_from_agent_config() -> None:
+    request = _request()
+
+    with patch(
+        "app.api.complete.request_setup.inject_progressive_context",
+        new_callable=AsyncMock,
+        return_value=([{"role": "system", "content": "mem"}], _FakeContext()),
+    ) as mock_inject:
+        await inject_memory(
+            request=request,
+            messages_dict=[{"role": "user", "content": "hi"}],
+            session_id="s1",
+            resolved_agent=_resolved_agent({"runtime_consumer_profile": "agent_coding"}),
+            db=None,
+        )
+
+    assert mock_inject.await_args is not None
+    assert mock_inject.await_args.kwargs["consumer_profile"] == "agent_coding"
 
 
 @pytest.mark.asyncio
@@ -223,9 +249,11 @@ async def test_build_session_and_messages_records_reference_breakdown_on_non_str
     assert result[1] == "sess-123"
     assert result[6] == 3
     assert result[7] == ["11111111-1111-1111-1111-111111111111"]
-    assert mock_store.await_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
-    assert mock_store.await_args.kwargs["reference_index_uuids"] == []
-    assert mock_store.await_args.kwargs["memory_debug"] == {
+    store_args = mock_store.await_args
+    assert store_args is not None
+    assert store_args.kwargs["reference_selected_uuids"] == ["ref-selected-1"]
+    assert store_args.kwargs["reference_index_uuids"] == []
+    assert store_args.kwargs["memory_debug"] == {
         "reference_selected_uuids": ["ref-selected-1"],
         "reference_index_uuids": [],
     }
@@ -261,8 +289,10 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
     assert context_messages == []
     assert is_new_session is True
     mock_get_or_create.assert_awaited_once()
-    assert mock_get_or_create.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-123"
-    assert mock_get_or_create.await_args.kwargs["current_branch"] == "task-123/main"
+    get_args = mock_get_or_create.await_args
+    assert get_args is not None
+    assert get_args.kwargs["working_dir"] == "/tmp/worktrees/task-123"
+    assert get_args.kwargs["current_branch"] == "task-123/main"
     mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-4-6", "summitflow")
 
 
@@ -291,4 +321,6 @@ async def test_setup_session_forwards_trace_id_to_session_creation() -> None:
     assert returned_session is session
     assert context_messages == []
     assert is_new_session is False
-    assert mock_get_or_create.await_args.kwargs["trace_id"] == "vantage:issue:iss-123:run:run-456"
+    get_args = mock_get_or_create.await_args
+    assert get_args is not None
+    assert get_args.kwargs["trace_id"] == "vantage:issue:iss-123:run:run-456"

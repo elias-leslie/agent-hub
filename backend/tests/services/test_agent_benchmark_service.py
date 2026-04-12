@@ -759,7 +759,10 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
         escalation_model_id=None,
         thinking_level="medium",
         temperature=0.3,
-        memory_config={"tool_capabilities_enabled": False},
+        memory_config={
+            "tool_capabilities_enabled": False,
+            "runtime_consumer_profile": "agent_coding",
+        },
     )
     memory_revision = SimpleNamespace(
         id=42,
@@ -793,11 +796,11 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
         patch(
             "app.services._benchmark_config.format_project_index_context",
             return_value="",
-        ),
+        ) as format_project_index_context,
         patch(
             "app.services._benchmark_config.format_tool_capability_context",
             return_value="<tool-capabilities>\ntools:\n- tool: st\n</tool-capabilities>",
-        ),
+        ) as format_tool_capability_context,
         patch(
             "app.services._benchmark_config._capture_preview_summary",
             new=AsyncMock(return_value={"task_type": "wake", "total_estimated_tokens": 480}),
@@ -810,8 +813,11 @@ async def test_capture_benchmark_config_snapshot_includes_memory_variant_overrid
         )
 
     assert snapshot["memory_state"]["variant_override"] == "MINIMAL"
+    assert snapshot["generated_context"]["consumer_profile"] == "agent_coding"
     assert snapshot["generated_context"]["tool_capabilities"]["enabled"] is False
     assert snapshot["generated_context"]["tool_capabilities"]["content_hash"] is None
+    assert format_project_index_context.call_args.kwargs["consumer_profile"] == "agent_coding"
+    assert format_tool_capability_context.call_args is None
     assert memory_state_descriptor(snapshot) == "2026-03-12T08:00:00+00:00:42:MINIMAL"
 
 

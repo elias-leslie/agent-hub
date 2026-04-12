@@ -250,6 +250,41 @@ class TestAgentCreateEndpoint:
             assert create_kwargs["timeout_seconds"] == 120
 
     @pytest.mark.asyncio
+    async def test_create_agent_forwards_typed_memory_config(self, api_client):
+        """Typed memory config payloads should arrive at service as plain dicts."""
+        mock_dto = make_mock_dto(slug="router", name="Router")
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=None)
+            mock_svc.create = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.post(
+                "/api/agents",
+                json={
+                    "slug": "router",
+                    "name": "Router",
+                    "system_prompt": "You route context.",
+                    "primary_model_id": CLAUDE_SONNET,
+                    "memory_config": {
+                        "runtime_consumer_profile": "agent_operator",
+                        "preview_consumer_profile": "agent_operator",
+                        "exclude_memory_uuids": ["deadbeef"],
+                    },
+                },
+            )
+
+            assert response.status_code == 201
+            create_args = mock_svc.create.await_args
+            assert create_args is not None
+            assert create_args.kwargs["memory_config"] == {
+                "runtime_consumer_profile": "agent_operator",
+                "preview_consumer_profile": "agent_operator",
+                "exclude_memory_uuids": ["deadbeef"],
+            }
+
+    @pytest.mark.asyncio
     async def test_create_agent_returns_409_for_duplicate(self, api_client):
         """Test creating duplicate agent returns 409."""
         mock_dto = make_mock_dto(slug="existing")

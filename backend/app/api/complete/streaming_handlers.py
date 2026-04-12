@@ -15,6 +15,7 @@ from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
+from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 from app.services.session_live_activity import mark_session_execution_start
 
 if TYPE_CHECKING:
@@ -110,6 +111,7 @@ async def _inject_streaming_memory(
     scope, scope_id = parse_memory_group_id(request.memory_group_id)
     try:
         agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
+        consumer_profile = resolve_memory_consumer_profile(agent_memory_config, surface="runtime")
         messages_dict, progressive_context = await inject_progressive_context(
             messages=messages_dict,
             scope=scope,
@@ -122,6 +124,7 @@ async def _inject_streaming_memory(
             external_id=request.external_id,
             memory_config=agent_memory_config,
             current_branch=request.current_branch,
+            consumer_profile=consumer_profile,
             consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
         )
         memory_facts_count = (
