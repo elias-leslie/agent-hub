@@ -19,7 +19,7 @@ export function useSessionExpansion() {
     try {
       const [sessionData, eventsData] = await Promise.all([
         fetchSession(sessionId),
-        fetchAllSessionEvents(sessionId, { page_size: 1000 }),
+        fetchAllSessionEvents(sessionId, { page_size: 500 }),
       ]);
       setExpandedSessionData(sessionData);
       setExpandedEventsData(eventsData);
