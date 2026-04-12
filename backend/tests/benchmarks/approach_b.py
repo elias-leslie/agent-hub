@@ -92,7 +92,6 @@ async def run_approach_b(
     model: str,
     working_dir: str | None,
     project_id: str | None,
-    permission_config: dict[str, Any] | None,
 ) -> BenchmarkResult:
     """SDK single-turn + our DirectToolHandler loop."""
     result = BenchmarkResult(approach="B", approach_name="Deny-All + Our Tool Loop")
@@ -104,7 +103,6 @@ async def run_approach_b(
 
     handler = create_direct_handler(
         working_dir=working_dir,
-        permission_config=permission_config,
         project_id=project_id,
     )
 

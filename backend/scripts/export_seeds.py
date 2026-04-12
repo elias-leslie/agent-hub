@@ -31,7 +31,7 @@ AGENT_EXPORT_FIELDS = [
     "slug", "name", "description", "system_prompt",
     "primary_model_id", "fallback_models", "escalation_model_id",
     "strategies", "temperature", "thinking_level",
-    "is_coding_agent", "tool_permissions", "memory_config",
+    "is_coding_agent", "memory_config",
 ]
 
 # Agents to mark inactive on fresh install
