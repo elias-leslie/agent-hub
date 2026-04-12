@@ -126,8 +126,9 @@ PRECISION_CODE_SEARCH_TOOL = Tool(
     name="precision_code_search",
     description=(
         "Retrieve focused code context for symbol and implementation lookup. "
-        "Use this before broad file search when you need functions, classes, "
-        "components, handlers, endpoints, schemas, or where something is implemented."
+        "When this tool is explicitly provisioned, use it for functions, classes, "
+        "components, handlers, endpoints, schemas, or implementation lookup. "
+        "In shell-first coding lanes, prefer `bash` with `st search`."
     ),
     input_schema={
         "type": "object",
@@ -219,8 +220,8 @@ SEARCH_WEB_TOOL = Tool(
         "Search the public web for current information and candidate sources. "
         "Use this when you need manual search control or multiple candidate sources before "
         "calling `fetch_web_page`. For the common search-plus-fetch flow, prefer `research_web`. "
-        "Prefer this over bash/curl or provider-native web tools for ordinary public-web research. "
-        "When this tool is available, call it directly instead of routing through bash wrappers."
+        "This is for explicitly provisioned research profiles; in shell-first coding lanes, "
+        "prefer `bash` with `web-research`."
     ),
     input_schema={
         "type": "object",
@@ -263,9 +264,9 @@ FETCH_WEB_PAGE_TOOL = Tool(
     description=(
         "Fetch a webpage and extract readable content. "
         "Use this when you already have a URL or need manual fetch control after `search_web`. "
-        "For ordinary query-based research, prefer `research_web`. Prefer this over bash/curl for "
-        "public webpage retrieval. For large pages, pass `focus_query` to return the most relevant "
-        "sections. When this tool is available, call it directly instead of routing through bash wrappers."
+        "For ordinary query-based research, prefer `research_web`. For large pages, pass "
+        "`focus_query` to return the most relevant sections. This is for explicitly provisioned "
+        "research profiles; in shell-first coding lanes, prefer `bash` with `web-research`."
     ),
     input_schema={
         "type": "object",

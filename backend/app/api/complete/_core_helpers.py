@@ -13,10 +13,7 @@ from app.services.response_cache import get_response_cache
 from .agent_loop import AgentLoopRequest, execute_agent_loop
 from .cache_handler import handle_cached_response
 from .memory_handler import inject_memory_context
-from .precision_search_guidance import (
-    maybe_inject_claude_tool_alias_guidance,
-    maybe_inject_precision_search_guidance,
-)
+from .precision_search_guidance import maybe_inject_claude_tool_alias_guidance
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress
 from .tool_provisioner import provision_standard_tools
@@ -101,17 +98,6 @@ async def execute_and_build_result(
         if alias_guidance_injected:
             logger.info(
                 "Injected Claude MCP alias guidance for session=%s project=%s agent=%s",
-                session_id,
-                project_id,
-                agent_slug,
-            )
-        messages_with_guidance, reminder_injected = maybe_inject_precision_search_guidance(
-            messages_with_guidance,
-            provisioned.loaded_tools,
-        )
-        if reminder_injected:
-            logger.info(
-                "Injected precision_code_search reminder for session=%s project=%s agent=%s",
                 session_id,
                 project_id,
                 agent_slug,
