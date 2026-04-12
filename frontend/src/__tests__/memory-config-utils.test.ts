@@ -102,4 +102,21 @@ describe("parseConfig", () => {
       query_reference_selection_enabled: true,
     });
   });
+
+  it("normalizes consumer profile overrides without treating them as opaque extras", () => {
+    expect(
+      parseConfig(
+        {
+          runtime_consumer_profile: " agent_coding ",
+          preview_consumer_profile: "",
+          consumer_profile: "agent_general",
+        },
+        fallback
+      )
+    ).toMatchObject({
+      runtime_consumer_profile: "agent_coding",
+      preview_consumer_profile: undefined,
+      consumer_profile: "agent_general",
+    });
+  });
 });

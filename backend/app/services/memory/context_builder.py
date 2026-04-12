@@ -11,6 +11,8 @@ from .applicability import (
     applicability_has_exclusions,
     applicability_has_targets,
     applicability_matches,
+    normalize_trigger_phases,
+    normalize_trigger_task_types,
 )
 from .budget import BudgetUsage
 from .context_builder_fetcher import fetch_all_episodes
@@ -25,7 +27,11 @@ from .context_builder_settings import (
 )
 from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
 from .context_injector_queries import get_query_relevant_references_as_search_results
-from .context_profiles import priority_tags_for_profile, startup_limits_for_profile
+from .context_profiles import (
+    policy_limits_for_profile,
+    priority_tags_for_profile,
+    query_reference_selection_default_for_profile,
+)
 from .memory_models import MemoryContextKind
 from .scoring import MemoryScoreInput, score_memory
 from .service import MemoryScope, MemorySearchResult
@@ -287,11 +293,15 @@ def _finalize_context(
 def _should_select_query_references(
     task_type: str | None,
     memory_config: dict[str, Any] | None,
+    consumer_profile: str | None,
 ) -> bool:
     """Return True when semantic/text-selected references should be added."""
     normalized_config = normalize_memory_config(memory_config)
     if normalized_config and "query_reference_selection_enabled" in normalized_config:
         return bool(normalized_config["query_reference_selection_enabled"])
+    profile_default = query_reference_selection_default_for_profile(consumer_profile)
+    if profile_default is not None:
+        return profile_default
     task_kind = (task_type or "").strip().lower()
     return task_kind != "heartbeat"
 
@@ -332,13 +342,20 @@ async def _merge_query_selected_references(
     scopes_to_query: list[tuple[MemoryScope, str | None]],
     variant_config: Any,
     consumer_profile: str | None,
+    task_type: str | None,
+    phase: str | None,
 ) -> None:
     """Fetch query-relevant references and merge them into the context."""
     payloads = await get_query_relevant_references_as_search_results(query, scopes_to_query)
     if not payloads:
         return
+    filtered_payloads = [
+        payload for payload in payloads if _query_selected_matches_triggers(payload, task_type, phase)
+    ]
+    if not filtered_payloads:
+        return
     existing = {item.uuid for item in [*context.reference_index, *context.reference]}
-    selected = _deduplicate_query_selected(payloads, existing)
+    selected = _deduplicate_query_selected(filtered_payloads, existing)
     if selected:
         selected_uuids = {r.uuid for r in selected}
         context.reference_index = [
@@ -347,6 +364,27 @@ async def _merge_query_selected_references(
     context.reference.extend(
         _limit_references_for_variant(selected, variant_config.max_query_selected_references, consumer_profile)
     )
+
+
+def _query_selected_matches_triggers(
+    payload: dict[str, Any],
+    task_type: str | None,
+    phase: str | None,
+) -> bool:
+    """Respect explicit trigger hints when semantic/text query selection adds references."""
+    trigger_task_types = normalize_trigger_task_types(payload.get("trigger_task_types"))
+    if trigger_task_types:
+        resolved_task_type = (task_type or "").strip().lower()
+        if not resolved_task_type or resolved_task_type not in trigger_task_types:
+            return False
+
+    trigger_phases = normalize_trigger_phases(payload.get("trigger_phases"))
+    if trigger_phases:
+        resolved_phase = (phase or "").strip().lower()
+        if not resolved_phase or resolved_phase not in trigger_phases:
+            return False
+
+    return True
 
 
 def _apply_all_filters(
@@ -393,11 +431,11 @@ def _apply_priority_and_limits(
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
     context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
-    startup_mandate_limit, startup_guardrail_limit = startup_limits_for_profile(consumer_profile)
-    if startup_mandate_limit > 0:
-        context.mandates = context.mandates[:startup_mandate_limit]
-    if startup_guardrail_limit > 0:
-        context.guardrails = context.guardrails[:startup_guardrail_limit]
+    policy_mandate_limit, policy_guardrail_limit = policy_limits_for_profile(consumer_profile)
+    if policy_mandate_limit > 0:
+        context.mandates = context.mandates[:policy_mandate_limit]
+    if policy_guardrail_limit > 0:
+        context.guardrails = context.guardrails[:policy_guardrail_limit]
     context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
     context.reference_index = _limit_references_for_variant(
         context.reference_index, variant_config.max_reference_items, consumer_profile
@@ -449,9 +487,9 @@ async def build_progressive_context(
     if not include_references:
         context.reference = []
         context.reference_index = []
-    elif _should_select_query_references(task_type, memory_config):
+    elif _should_select_query_references(task_type, memory_config, consumer_profile):
         await _merge_query_selected_references(
-            context, query, scopes_to_query, variant_config, consumer_profile
+            context, query, scopes_to_query, variant_config, consumer_profile, task_type, phase
         )
     _apply_all_filters(context, memory_config, consumer_profile, consumer_agent_slug, consumer_tags)
     _apply_priority_and_limits(context, query, variant, variant_config, consumer_profile)

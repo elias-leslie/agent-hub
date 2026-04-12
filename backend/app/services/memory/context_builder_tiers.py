@@ -10,6 +10,7 @@ from .context_profiles import (
     MemoryConsumerProfile,
     full_render_tags_for_profile,
     resolve_consumer_profile,
+    summarize_policies_for_profile,
 )
 from .service import MemorySearchResult
 
@@ -136,18 +137,12 @@ def _select_initial_tier(
     # Token budget is managed by episode count (target: 25-30 mandates),
     # not by compressing instructions into useless summaries.
     if block == "mandate":
-        if profile in {
-            MemoryConsumerProfile.CODEX_STARTUP,
-            MemoryConsumerProfile.CLAUDE_SESSION_START,
-        }:
+        if summarize_policies_for_profile(profile.value):
             return PROMPT_TIER_L0, "startup_policy_summary"
         return PROMPT_TIER_L2, "mandate"
 
     if block == "guardrail":
-        if profile in {
-            MemoryConsumerProfile.CODEX_STARTUP,
-            MemoryConsumerProfile.CLAUDE_SESSION_START,
-        }:
+        if summarize_policies_for_profile(profile.value):
             return PROMPT_TIER_L0, "startup_policy_summary"
         return PROMPT_TIER_L2, "guardrail"
 

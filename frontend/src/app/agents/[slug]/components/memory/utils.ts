@@ -14,6 +14,9 @@ const KNOWN_KEYS = new Set([
   "audience_tags",
   "exclude_tags",
   "exclude_memory_uuids",
+  "consumer_profile",
+  "runtime_consumer_profile",
+  "preview_consumer_profile",
 ]);
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -34,6 +37,12 @@ function parseStringArray(value: unknown, fallback: string[]): string[] {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter((item, index, items) => item.length > 0 && items.indexOf(item) === index);
+}
+
+function parseOptionalString(value: unknown, fallback?: string): string | undefined {
+  if (typeof value !== "string") return fallback;
+  const cleaned = value.trim();
+  return cleaned.length > 0 ? cleaned : undefined;
 }
 
 export function cloneConfig<T extends MemoryConfig>(config: T): T {
@@ -92,6 +101,18 @@ export function parseConfig(
     exclude_memory_uuids: parseStringArray(
       raw.exclude_memory_uuids,
       fallback.exclude_memory_uuids
+    ),
+    consumer_profile: parseOptionalString(
+      raw.consumer_profile,
+      fallback.consumer_profile
+    ),
+    runtime_consumer_profile: parseOptionalString(
+      raw.runtime_consumer_profile,
+      fallback.runtime_consumer_profile
+    ),
+    preview_consumer_profile: parseOptionalString(
+      raw.preview_consumer_profile,
+      fallback.preview_consumer_profile
     ),
   };
 }

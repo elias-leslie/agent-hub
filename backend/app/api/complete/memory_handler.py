@@ -11,6 +11,7 @@ from app.services.memory import (
     parse_memory_group_id,
     track_loaded_batch,
 )
+from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -59,6 +60,7 @@ async def inject_memory_context(
     memory_facts_injected = 0
 
     try:
+        consumer_profile = resolve_memory_consumer_profile(memory_config, surface="runtime")
         messages, progressive_context = await inject_progressive_context(
             messages=messages,
             scope=scope,
@@ -68,6 +70,7 @@ async def inject_memory_context(
             memory_config=memory_config,
             current_branch=current_branch,
             session_id=session_id,
+            consumer_profile=consumer_profile,
             consumer_agent_slug=agent_slug,
         )
         memory_facts_injected = (

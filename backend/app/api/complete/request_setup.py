@@ -19,7 +19,10 @@ from app.services.memory import (
     parse_memory_group_id,
     track_loaded_batch,
 )
-from app.services.memory.context_builder_settings import memory_injection_enabled
+from app.services.memory.context_builder_settings import (
+    memory_injection_enabled,
+    resolve_memory_consumer_profile,
+)
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
@@ -165,6 +168,7 @@ async def inject_memory(
     memory_facts_injected = 0
     loaded_memory_uuids: list[str] = []
     scope, scope_id = parse_memory_group_id(request.memory_group_id)
+    consumer_profile = resolve_memory_consumer_profile(agent_memory_config, surface="runtime")
     try:
         messages_dict, progressive_context = await inject_progressive_context(
             messages=messages_dict,
@@ -178,6 +182,7 @@ async def inject_memory(
             external_id=request.external_id,
             memory_config=agent_memory_config,
             current_branch=request.current_branch,
+            consumer_profile=consumer_profile,
             consumer_agent_slug=resolved_agent.agent.slug if resolved_agent else None,
         )
         memory_facts_injected = _count_memory_facts(progressive_context)

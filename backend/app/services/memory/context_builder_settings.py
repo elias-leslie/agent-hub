@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .context_profiles import MemoryConsumerProfile
 from .settings import MemorySettingsDTO
 
 DEFAULT_AGENT_MEMORY_CONFIG: dict[str, Any] = {
@@ -32,6 +33,11 @@ _CANONICAL_BOOL_KEYS = (
 )
 _CANONICAL_LIST_KEYS = ("audience_tags", "exclude_tags", "exclude_memory_uuids")
 _CANONICAL_INT_DEFAULTS = {"continuity_max_sessions": 5}
+_CANONICAL_PROFILE_KEYS = (
+    "consumer_profile",
+    "runtime_consumer_profile",
+    "preview_consumer_profile",
+)
 _LEGACY_KEYS = {"enabled"}
 
 
@@ -62,6 +68,18 @@ def _normalize_string_list(value: Any) -> list[str]:
     return normalized
 
 
+def _normalize_consumer_profile_name(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    try:
+        return MemoryConsumerProfile(cleaned).value
+    except ValueError:
+        return None
+
+
 def default_agent_memory_config() -> dict[str, Any]:
     """Return the canonical per-agent memory config defaults."""
     return {
@@ -87,6 +105,7 @@ def normalize_memory_config(memory_config: dict[str, Any] | None) -> dict[str, A
         if key not in _CANONICAL_BOOL_KEYS
         and key not in _CANONICAL_LIST_KEYS
         and key not in _CANONICAL_INT_DEFAULTS
+        and key not in _CANONICAL_PROFILE_KEYS
         and key not in _LEGACY_KEYS
     }
     enabled = _coerce_bool(raw.get("enabled"), True)
@@ -106,6 +125,10 @@ def normalize_memory_config(memory_config: dict[str, Any] | None) -> dict[str, A
         "exclude_tags": _normalize_string_list(raw.get("exclude_tags")),
         "exclude_memory_uuids": _normalize_string_list(raw.get("exclude_memory_uuids")),
     }
+    for key in _CANONICAL_PROFILE_KEYS:
+        normalized_value = _normalize_consumer_profile_name(raw.get(key))
+        if normalized_value is not None:
+            normalized[key] = normalized_value
     if not injection_enabled:
         normalized["include_mandates"] = False
         normalized["include_guardrails"] = False
@@ -227,6 +250,42 @@ def resolve_excluded_memory_uuids(memory_config: dict[str, Any] | None) -> list[
     if normalized is None:
         return []
     return normalized["exclude_memory_uuids"]
+
+
+def resolve_memory_consumer_profile(
+    memory_config: dict[str, Any] | None,
+    *,
+    surface: str = "runtime",
+) -> str | None:
+    """Resolve the configured consumer profile for a delivery surface.
+
+    Supported extension keys:
+    - consumer_profile: shared default for runtime + preview
+    - runtime_consumer_profile: runtime-only override
+    - preview_consumer_profile: preview-only override
+    """
+    normalized = normalize_memory_config(memory_config)
+    if normalized is None:
+        return MemoryConsumerProfile.AGENT_PREVIEW.value if surface == "preview" else None
+
+    if surface == "preview":
+        preview_profile = _normalize_consumer_profile_name(
+            normalized.get("preview_consumer_profile")
+        )
+        if preview_profile:
+            return preview_profile
+
+    runtime_profile = _normalize_consumer_profile_name(
+        normalized.get("runtime_consumer_profile")
+    )
+    if runtime_profile:
+        return runtime_profile
+
+    shared_profile = _normalize_consumer_profile_name(normalized.get("consumer_profile"))
+    if shared_profile:
+        return shared_profile
+
+    return MemoryConsumerProfile.AGENT_PREVIEW.value if surface == "preview" else None
 
 
 def apply_memory_config_overrides(

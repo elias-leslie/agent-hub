@@ -2,10 +2,41 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import normalize_memory_config
+
+
+class AgentMemoryConfig(BaseModel):
+    """Per-agent memory routing and injection config."""
+
+    model_config = ConfigDict(extra="allow")
+
+    injection_enabled: bool | None = None
+    project_index_enabled: bool | None = None
+    tool_capabilities_enabled: bool | None = None
+    include_mandates: bool | None = None
+    include_guardrails: bool | None = None
+    include_references: bool | None = None
+    reference_index_enabled: bool | None = None
+    continuity_enabled: bool | None = None
+    continuity_max_sessions: int | None = Field(default=None, ge=1)
+    audience_tags: list[str] | None = None
+    exclude_tags: list[str] | None = None
+    exclude_memory_uuids: list[str] | None = None
+    consumer_profile: str | None = Field(
+        default=None,
+        description="Shared memory consumer profile fallback for runtime + preview surfaces.",
+    )
+    runtime_consumer_profile: str | None = Field(
+        default=None,
+        description="Runtime-only memory consumer profile override.",
+    )
+    preview_consumer_profile: str | None = Field(
+        default=None,
+        description="Preview-only memory consumer profile override.",
+    )
 
 
 class AgentCreateRequest(BaseModel):
@@ -27,7 +58,7 @@ class AgentCreateRequest(BaseModel):
     )
     is_active: bool = True
     is_coding_agent: bool = False
-    memory_config: dict[str, Any] | None = None
+    memory_config: AgentMemoryConfig | None = None
     max_concurrency: int | None = Field(default=None, ge=1, le=100, description="Max parallel executions")
     max_subagent_concurrency: int | None = Field(
         default=None, ge=1, le=100, description="Max parallel subagent spawns"
@@ -55,7 +86,7 @@ class AgentUpdateRequest(BaseModel):
     )
     is_active: bool | None = None
     is_coding_agent: bool | None = None
-    memory_config: dict[str, Any] | None = None
+    memory_config: AgentMemoryConfig | None = None
     max_concurrency: int | None = Field(default=None, ge=1, le=100)
     max_subagent_concurrency: int | None = Field(default=None, ge=1, le=100)
     daily_token_budget: int | None = Field(default=None, ge=0)

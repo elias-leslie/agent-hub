@@ -10,6 +10,7 @@ from app.services.agent_dto import AgentDTO
 from app.services.memory.context_builder_settings import (
     memory_injection_enabled,
     resolve_memory_config_includes,
+    resolve_memory_consumer_profile,
     resolve_project_index_enabled,
     resolve_runtime_prompt_includes,
     resolve_tool_capabilities_enabled,
@@ -120,6 +121,10 @@ async def build_agent_preview(
     runtime_include_mandates, runtime_include_guardrails = resolve_runtime_prompt_includes(
         agent_memory_config
     )
+    preview_consumer_profile = resolve_memory_consumer_profile(
+        agent_memory_config,
+        surface="preview",
+    )
     runtime_sections: list[RuntimePromptSection] = []
     runtime_sections = await collect_runtime_prompt_sections(
         db,
@@ -135,7 +140,7 @@ async def build_agent_preview(
     if resolve_project_index_enabled(agent_memory_config):
         project_index_block = format_project_index_context(
             project_id,
-            consumer_profile="agent_preview",
+            consumer_profile=preview_consumer_profile,
             task_type=task_type,
         )
         if project_index_block:
@@ -152,7 +157,7 @@ async def build_agent_preview(
     tool_capability_block = ""
     if resolve_tool_capabilities_enabled(agent_memory_config):
         tool_capability_block = format_tool_capability_context(
-            consumer_profile="agent_preview",
+            consumer_profile=preview_consumer_profile,
             task_type=task_type,
             project_id=project_id,
         )
@@ -200,14 +205,14 @@ async def build_agent_preview(
             task_type=None if task_type == "chat" else task_type,
             phase=phase,
             memory_config=agent_memory_config,
-            consumer_profile="agent_preview",
+            consumer_profile=preview_consumer_profile,
             consumer_agent_slug=agent.slug,
             consumer_tags=list(agent_memory_config.get("audience_tags", [])) if agent_memory_config else None,
         )
         formatted_memory = format_progressive_context(
             context,
             include_citations=True,
-            consumer_profile="agent_preview",
+            consumer_profile=preview_consumer_profile,
         )
     else:
         context = _EmptyPreviewContext()

@@ -69,7 +69,9 @@ async def test_update_agent_model_normalizes_explicit_alias_inputs() -> None:
 
     assert "codex/gpt-5.2-codex" in result
     service.update.assert_awaited_once()
-    kwargs = service.update.await_args.kwargs
+    await_args = service.update.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
     assert kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
     assert kwargs["fallback_models"] == ["codex/gpt-5.4", "openai/gpt-5.2"]
     assert kwargs["escalation_model_id"] == "claude-sonnet-4-6"
@@ -101,7 +103,9 @@ async def test_update_agent_model_preserves_distinct_prefixed_model_ids() -> Non
         )
 
     assert "primary_model=codex/gpt-5.2" in result
-    kwargs = service.update.await_args.kwargs
+    await_args = service.update.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
     assert kwargs["primary_model_id"] == "codex/gpt-5.2"
 
 
@@ -176,6 +180,7 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
             memory_config_patch={
                 "include_references": True,
                 "query_reference_selection_enabled": True,
+                "runtime_consumer_profile": "agent_promptops",
             },
             add_audience_tags=["persona-relevant", "memory-routing"],
             remove_audience_tags=["old-tag"],
@@ -187,7 +192,9 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
         )
 
     assert "Agent 'persona' memory updated (version 9)." in result
-    kwargs = service.update.await_args.kwargs
+    await_args = service.update.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
     assert kwargs["changed_by"] == "persona"
     assert kwargs["memory_config"] == {
         "injection_enabled": True,
@@ -200,6 +207,7 @@ async def test_update_agent_memory_merges_patch_and_tag_operations() -> None:
         "continuity_enabled": True,
         "continuity_max_sessions": 5,
         "query_reference_selection_enabled": True,
+        "runtime_consumer_profile": "agent_promptops",
         "audience_tags": ["persona-relevant", "memory-routing"],
         "exclude_tags": ["archive"],
         "exclude_memory_uuids": [],
@@ -281,7 +289,9 @@ async def test_update_agent_memory_canonicalizes_disabled_injection_state() -> N
         )
 
     assert "Agent 'git-agent' memory updated (version 10)." in result
-    kwargs = service.update.await_args.kwargs
+    await_args = service.update.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
     assert kwargs["memory_config"] == {
         "injection_enabled": False,
         "project_index_enabled": True,

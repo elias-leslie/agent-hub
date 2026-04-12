@@ -16,6 +16,7 @@ from app.services.completion.episode_storage import (
 from app.services.completion.types import CompletionOptions, CompletionSource
 from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
+from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ async def inject_memory_context(
 
     scope, scope_id = parse_memory_group_id(options.memory_group_id)
     try:
+        consumer_profile = resolve_memory_consumer_profile(options.memory_config, surface="runtime")
         messages, context = await inject_progressive_context(
             messages=messages,
             scope=scope,
@@ -46,6 +48,7 @@ async def inject_memory_context(
             external_id=options.external_id,
             memory_config=options.memory_config,
             current_branch=options.current_branch,
+            consumer_profile=consumer_profile,
         )
         count = (
             _memory_block_len(context, "mandates")

@@ -2,6 +2,18 @@ import { cn } from "@/lib/utils";
 import { MemoryConfig } from "./types";
 import { Toggle } from "./Toggle";
 
+const CONSUMER_PROFILE_SUGGESTIONS = [
+  "agent_general",
+  "agent_visual",
+  "agent_coding",
+  "agent_operator",
+  "agent_promptops",
+  "agent_preview",
+  "agent_runtime",
+  "claude_session_start",
+  "codex_startup",
+] as const;
+
 interface MemoryConfigSectionProps {
   config: MemoryConfig;
   isCustomEnabled: boolean;
@@ -16,6 +28,7 @@ export function MemoryConfigSection({
   const subordinateControlsDisabled = !isCustomEnabled || !config.injection_enabled;
   const referenceIndexDisabled =
     subordinateControlsDisabled || !config.include_references;
+  const profileInputsDisabled = !isCustomEnabled;
 
   return (
     <div
@@ -29,6 +42,94 @@ export function MemoryConfigSection({
       <h3 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
         Injection Settings
       </h3>
+
+      <div className="space-y-3 rounded-lg border border-slate-700/70 bg-slate-900/40 p-4">
+        <div>
+          <p className="text-sm font-medium text-slate-200">
+            Context Routing
+          </p>
+          <p className="text-xs text-slate-400">
+            Set role-fit memory budget and rendering. Leave blank to inherit defaults.
+          </p>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400">
+              Runtime Profile Override
+            </label>
+            <input
+              type="text"
+              list="memory-consumer-profiles"
+              aria-label="Runtime Profile Override"
+              value={config.runtime_consumer_profile ?? ""}
+              onChange={(e) =>
+                onUpdateConfig({
+                  runtime_consumer_profile: e.target.value.trim() || undefined,
+                })
+              }
+              disabled={profileInputsDisabled}
+              placeholder="agent_coding"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
+            />
+            <p className="text-[11px] text-slate-500">
+              Live completion surface. Main switch for no-more-no-less policy routing.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-slate-400">
+              Preview Profile Override
+            </label>
+            <input
+              type="text"
+              list="memory-consumer-profiles"
+              aria-label="Preview Profile Override"
+              value={config.preview_consumer_profile ?? ""}
+              onChange={(e) =>
+                onUpdateConfig({
+                  preview_consumer_profile: e.target.value.trim() || undefined,
+                })
+              }
+              disabled={profileInputsDisabled}
+              placeholder="Leave blank to mirror runtime"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
+            />
+            <p className="text-[11px] text-slate-500">
+              Preview/debug surface. Blank falls back to runtime profile.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-xs font-medium text-slate-400">
+              Shared Profile Fallback
+            </label>
+            <input
+              type="text"
+              list="memory-consumer-profiles"
+              aria-label="Shared Profile Fallback"
+              value={config.consumer_profile ?? ""}
+              onChange={(e) =>
+                onUpdateConfig({
+                  consumer_profile: e.target.value.trim() || undefined,
+                })
+              }
+              disabled={profileInputsDisabled}
+              placeholder="Optional fallback for runtime + preview"
+              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/40 placeholder:text-slate-500"
+            />
+            <p className="text-[11px] text-slate-500">
+              Used only when a surface-specific override is unset.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <datalist id="memory-consumer-profiles">
+        {CONSUMER_PROFILE_SUGGESTIONS.map((profile) => (
+          <option key={profile} value={profile} />
+        ))}
+      </datalist>
 
       {/* Injection Enabled */}
       <div className="flex items-center justify-between">

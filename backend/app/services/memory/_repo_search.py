@@ -87,9 +87,11 @@ class SearchRepository:
             SELECT id, content, name, summary, memory_type, scope, scope_id,
                    group_id, source, source_description, tags,
                    tier, pinned, auto_inject, display_order,
+                   trigger_task_types, trigger_phases,
                    loaded_count, referenced_count, helpful_count, harmful_count,
                    status, token_count, metadata, valid_at,
                    created_at, updated_at, last_accessed_at,
+                   context_kind, applicability,
                    (1 - (embedding <=> CAST(:vec AS vector))) AS relevance_score
             FROM memories
             WHERE {where}
