@@ -76,11 +76,16 @@ def _build_3_layer_can_use_tool(
     metrics_collector: dict[str, int],
 ) -> Any:
     """Build a can_use_tool callback with the current runtime hook stack."""
+    from claude_agent_sdk.types import (
+        PermissionResultAllow,
+        PermissionResultDeny,
+        ToolPermissionContext,
+    )
+
     from app.adapters.claude_tools_permissions import (
         compose_permission_hooks,
         make_can_use_tool_callback,
     )
-    from claude_agent_sdk.types import PermissionResultAllow, PermissionResultDeny, ToolPermissionContext
 
     base_callback = make_can_use_tool_callback(compose_permission_hooks(project_id))
 
