@@ -18,12 +18,9 @@ BASH_TOOL = Tool(
     name="bash",
     description=(
         "Execute a bash command in the working directory. "
-        "Use for running tests, git operations, or system commands. "
-        "Do not use bash/curl for ordinary public-web research when "
-        "`research_web`, `search_web`, or `fetch_web_page` can do the job. "
-        "If the current provider/tool surface cannot call direct web tools, "
-        "prefer a single `web-research research` bash command over ad hoc curl "
-        "or separate shell search/fetch steps."
+        "Use for running tests, git operations, system commands, and canonical "
+        "project wrappers such as `st`, `dt`, `db`, `commit.sh`, and `web-research`. "
+        "Prefer wrapper CLIs over ad hoc raw commands when wrappers already exist."
     ),
     input_schema={
         "type": "object",
@@ -308,11 +305,6 @@ STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,
     WRITE_FILE_TOOL,
-    CONSULT_AGENT_TOOL,
-    PRECISION_CODE_SEARCH_TOOL,
-    RESEARCH_WEB_TOOL,
-    SEARCH_WEB_TOOL,
-    FETCH_WEB_PAGE_TOOL,
 ]
 
 

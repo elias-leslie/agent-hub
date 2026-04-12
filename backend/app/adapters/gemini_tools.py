@@ -216,14 +216,12 @@ async def execute_tool_loop(
     max_tokens: int | None,
     max_turns: int,
     provider_name: str,
-    permission_config: dict[str, Any] | None = None,
     project_id: str | None = None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str]]:
     """Run agentic loop with tool execution."""
     tool_handler = create_direct_handler(
         working_dir,
-        permission_config,
         project_id=project_id,
         agent_slug=kwargs.get("agent_slug"),
         tool_catalog=kwargs.get("tool_catalog"),

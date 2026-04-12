@@ -44,7 +44,6 @@ class AgentLoopRequest:
     tools: list[dict[str, Any]] | None = None
     tool_catalog: list[dict[str, Any]] | None = None
     working_dir: str | None = None
-    permission_config: dict[str, Any] | None = None
     enable_programmatic_tools: bool = False
     defer_tool_loading: bool = False
     enable_caching: bool = True
@@ -171,7 +170,6 @@ async def _execute_tool_loop(req: AgentLoopRequest) -> CompletionInternalResult:
         tools=req.tools,
         tool_catalog=req.tool_catalog,
         working_dir=req.working_dir,
-        permission_config=req.permission_config,
         db=req.db,
         session=req.session,
         session_id=req.session_id,

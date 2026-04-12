@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchSession, fetchSessionEvents, type Session, type SessionEventsResponse } from "@/lib/api";
+import { fetchAllSessionEvents, fetchSession, type Session, type SessionEventsResponse } from "@/lib/api";
 
 export function useSessionExpansion() {
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -19,7 +19,7 @@ export function useSessionExpansion() {
     try {
       const [sessionData, eventsData] = await Promise.all([
         fetchSession(sessionId),
-        fetchSessionEvents(sessionId, { page_size: 500 }),
+        fetchAllSessionEvents(sessionId, { page_size: 1000 }),
       ]);
       setExpandedSessionData(sessionData);
       setExpandedEventsData(eventsData);

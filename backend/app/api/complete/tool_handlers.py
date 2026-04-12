@@ -116,7 +116,6 @@ async def _complete_with_tools(
     tools: list[dict[str, Any]] | None,
     tool_catalog: list[dict[str, Any]] | None,
     working_dir: str | None,
-    permission_config: dict[str, Any] | None,
     db: AsyncSession,
     session: DBSession,
     session_id: str,
@@ -146,7 +145,7 @@ async def _complete_with_tools(
 
     try:
         error_result = await _run_tool_loop(
-            adapter, state, provider, model, tools, tool_catalog, working_dir, permission_config,
+            adapter, state, provider, model, tools, tool_catalog, working_dir,
             session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
         )
         if error_result is not None:

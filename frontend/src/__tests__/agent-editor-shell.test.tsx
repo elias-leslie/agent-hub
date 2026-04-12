@@ -39,7 +39,6 @@ const agent: Agent = {
   verbosity_level: "medium",
   is_active: true,
   is_coding_agent: true,
-  tool_permissions: null,
   memory_config: null,
   effective_memory_config: {
     injection_enabled: true,

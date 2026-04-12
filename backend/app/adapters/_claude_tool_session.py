@@ -30,7 +30,6 @@ class ClaudeToolSessionMixin:
         messages: list[Message],
         model: str,
         tools: list[dict[str, Any]],
-        permission_config: dict[str, Any] | None = None,
         working_dir: str | None = None,
         resume_session_id: str | None = None,
         max_turns: int | None = None,
@@ -42,16 +41,12 @@ class ClaudeToolSessionMixin:
         with Max subscription OAuth tokens.
         """
         from app.adapters.claude_tools_helpers import complete_with_tools as _complete_with_tools
-        from app.adapters.claude_utils import build_permission_checker
 
-        checker, yolo_mode = build_permission_checker(permission_config)
         assert self._cli_path is not None  # type: ignore[attr-defined]
         async for message in _complete_with_tools(
             messages=messages,
             model=model,
             tools=tools,
-            yolo_mode=yolo_mode,
-            permission_checker=checker,
             working_dir=working_dir,
             resume_session_id=resume_session_id,
             cli_path=self._cli_path,  # type: ignore[attr-defined]
@@ -68,7 +63,6 @@ class ClaudeToolSessionMixin:
         model: str,
         tools: list[dict[str, Any]],
         working_dir: str | None,
-        permission_config: dict[str, Any] | None,
         max_turns: int,
         project_id: str | None,
         session_id: str,
@@ -84,7 +78,6 @@ class ClaudeToolSessionMixin:
             messages=messages,
             model=model,
             tools=tools,
-            permission_config=permission_config,
             working_dir=working_dir,
             max_turns=max_turns,
             agent_slug=agent_slug,
@@ -98,7 +91,6 @@ class ClaudeToolSessionMixin:
         model: str,
         tools: list[dict[str, Any]],
         working_dir: str | None,
-        permission_config: dict[str, Any] | None,
         max_turns: int,
         project_id: str | None,
         session_id: str,
@@ -112,7 +104,6 @@ class ClaudeToolSessionMixin:
                 model=model,
                 tools=tools,
                 working_dir=working_dir,
-                permission_config=permission_config,
                 max_turns=max_turns,
                 project_id=project_id,
                 session_id=session_id,
@@ -123,16 +114,12 @@ class ClaudeToolSessionMixin:
         from app.adapters.claude_tools_helpers import (
             build_tool_runtime_session as _build_tool_runtime_session,
         )
-        from app.adapters.claude_utils import build_permission_checker
 
-        checker, yolo_mode = build_permission_checker(permission_config)
         assert self._cli_path is not None  # type: ignore[attr-defined]
         return await _build_tool_runtime_session(
             messages=messages,
             model=model,
             tools=tools,
-            yolo_mode=yolo_mode,
-            permission_checker=checker,
             working_dir=working_dir,
             resume_session_id=None,
             cli_path=self._cli_path,  # type: ignore[attr-defined]

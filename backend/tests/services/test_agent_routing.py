@@ -50,7 +50,6 @@ def mock_agent() -> AgentDTO:
         verbosity_level=None,
         is_active=True,
         is_coding_agent=True,
-        tool_permissions={},
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -82,7 +81,6 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         verbosity_level=None,
         is_active=True,
         is_coding_agent=False,
-        tool_permissions=None,
         memory_config=None,
         max_concurrency=None,
         max_subagent_concurrency=None,
@@ -201,7 +199,6 @@ class TestInjectAgentMandates:
             verbosity_level=None,
             is_active=True,
             is_coding_agent=False,
-            tool_permissions=None,
             memory_config=None,
             max_concurrency=None,
             max_subagent_concurrency=None,
@@ -268,7 +265,6 @@ class TestInjectAgentMandates:
             verbosity_level=None,
             is_active=True,
             is_coding_agent=True,
-            tool_permissions=None,
             memory_config=None,
             max_concurrency=None,
             max_subagent_concurrency=None,
@@ -335,7 +331,6 @@ class TestInjectAgentMandates:
             verbosity_level=None,
             is_active=True,
             is_coding_agent=False,
-            tool_permissions=None,
             memory_config=None,
             max_concurrency=None,
             max_subagent_concurrency=None,
@@ -366,8 +361,10 @@ class TestInjectAgentMandates:
             )
 
         assert result.system_content == "<agent_persona>note-titler</agent_persona>"
-        assert collect_runtime_prompt_sections.await_args.kwargs["include_mandates"] is False
-        assert collect_runtime_prompt_sections.await_args.kwargs["include_guardrails"] is False
+        collect_args = collect_runtime_prompt_sections.await_args
+        assert collect_args is not None
+        assert collect_args.kwargs["include_mandates"] is False
+        assert collect_args.kwargs["include_guardrails"] is False
 
 
 class TestCompleteWithFallback:
@@ -417,7 +414,6 @@ class TestCompleteWithFallback:
             verbosity_level="high",
             is_active=True,
             is_coding_agent=True,
-            tool_permissions=None,
             memory_config=None,
             max_concurrency=None,
             max_subagent_concurrency=None,
@@ -597,7 +593,7 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None,
+            memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
             timeout_seconds=None,
@@ -643,7 +639,7 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,  # same as fallback
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None,
+            memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
             timeout_seconds=None,
@@ -683,7 +679,7 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None, verbosity_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None,
+            memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
             timeout_seconds=None,

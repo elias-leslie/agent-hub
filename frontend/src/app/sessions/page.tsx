@@ -18,6 +18,7 @@ export default function SessionsPage() {
   const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pageSize = 25;
 
@@ -28,8 +29,20 @@ export default function SessionsPage() {
   const { data, allSessions, total, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSessionsData({ statusFilter, projectFilter: "", pageSize });
 
-  const { modelFilter, setModelFilter, searchQuery, setSearchQuery, filteredAndSorted, pageStats } =
-    useSessionFilters({ sessions: allSessions, sortField, sortDirection });
+  const {
+    modelFilter,
+    setModelFilter,
+    searchQuery,
+    setSearchQuery,
+    hiddenBenchmarkCount,
+    filteredAndSorted,
+    pageStats,
+  } = useSessionFilters({
+    sessions: allSessions,
+    sortField,
+    sortDirection,
+    hideBenchmarkTraffic,
+  });
 
   const { expandedSessionId, expandedSessionData, expandedEventsData, isLoadingDetails, handleToggleExpand, clearExpansion } =
     useSessionExpansion();
@@ -66,9 +79,12 @@ export default function SessionsPage() {
         pageStats={pageStats}
         searchQuery={searchQuery}
         statusFilter={statusFilter}
+        hideBenchmarkTraffic={hideBenchmarkTraffic}
+        hiddenBenchmarkCount={hiddenBenchmarkCount}
         isRefreshing={isRefreshing}
         onSearchChange={setSearchQuery}
         onStatusFilterChange={setStatusFilter}
+        onHideBenchmarkTrafficChange={setHideBenchmarkTraffic}
         onRefresh={handleRefresh}
       />
 

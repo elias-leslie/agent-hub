@@ -146,8 +146,8 @@ class GeminiAdapter(ProviderAdapter):
             max_tokens,
             max_turns,
             self.provider_name,
-            project_id,
-            kwargs,
+            project_id=project_id,
+            **kwargs,
         ):
             yield event
 
@@ -157,7 +157,6 @@ class GeminiAdapter(ProviderAdapter):
         model: str,
         tools: list[dict[str, Any]],
         working_dir: str | None,
-        permission_config: dict[str, Any] | None,
         max_turns: int,
         project_id: str | None,
         session_id: str,
@@ -171,7 +170,6 @@ class GeminiAdapter(ProviderAdapter):
             model=model,
             tools=tools,
             working_dir=working_dir,
-            permission_config=permission_config,
             max_turns=max_turns,
             project_id=project_id,
             agent_slug=agent_slug,

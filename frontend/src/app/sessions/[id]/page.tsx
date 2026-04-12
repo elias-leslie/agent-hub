@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { fetchSession, fetchSessionEvents } from "@/lib/api";
+import { fetchAllSessionEvents, fetchSession } from "@/lib/api";
 import { summarizeSessionMemoryObservability } from "@/lib/session-memory-observability";
 import { EventTimeline } from "@/components/timeline";
 import { SessionHeader } from "./components/SessionHeader";
@@ -47,7 +47,7 @@ export default function SessionDetailPage({
     error: eventsError,
   } = useQuery({
     queryKey: ["session-events", id],
-    queryFn: () => fetchSessionEvents(id, { page_size: 500 }),
+    queryFn: () => fetchAllSessionEvents(id, { page_size: 1000 }),
   });
 
   const isLoading = sessionLoading || eventsLoading;

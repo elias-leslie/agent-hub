@@ -90,16 +90,14 @@ def _normalize_tool_name(name: str) -> str:
 
 
 def _build_can_use_tool(
-    checker: Any | None = None,
     project_id: str | None = None,
     agent_slug: str | None = None,
 ) -> Any:
-    """Build a can_use_tool callback with non-boundary permission layers.
+    """Build a can_use_tool callback with real runtime permission layers.
 
     Composes hooks in order:
       1. Project permission tier (off/read/write/yolo)
       2. Cross-project path enforcement
-      3. Per-request PermissionConfig (granular allow/deny via checker)
 
     Worktree boundary enforcement is handled separately via settings-based
     enforcement in ``_claude_settings.py`` (evaluated inside the subprocess).
@@ -108,7 +106,7 @@ def _build_can_use_tool(
     prepends 'mcp__<server>__' but hooks expect bare tool names.
     """
     return _make_can_use_tool_callback(
-        _compose_permission_hooks(checker, project_id),
+        _compose_permission_hooks(project_id),
         agent_slug=agent_slug,
     )
 
@@ -131,18 +129,13 @@ def _build_mcp_server(
 
 
 def _resolve_can_use_tool(
-    yolo_mode: bool,
-    permission_checker: Any | None,
     project_id: str | None,
     agent_slug: str | None,
 ) -> Any | None:
     """Return can_use_tool callback when permission hooks are needed, else None."""
-    if yolo_mode and agent_slug != "persona":
-        return None
-    if not (permission_checker or project_id or agent_slug == "persona"):
+    if project_id is None and agent_slug != "persona":
         return None
     return _build_can_use_tool(
-        checker=permission_checker,
         project_id=project_id,
         agent_slug=agent_slug,
     )
@@ -154,16 +147,14 @@ def _build_tool_infra(
     project_id: str | None,
     agent_slug: str | None,
     tool_catalog: list[dict[str, Any]] | None,
-    yolo_mode: bool,
-    permission_checker: Any | None,
 ) -> tuple[Any | None, dict[str, Any] | None, list[str] | None]:
     """Build can_use_tool callback, MCP servers dict, and allowed_tools list."""
     # Boundary enforcement for Claude SDK is handled via settings-based
     # enforcement (settings + PreToolUse hook) — see _claude_settings.py.
     # The can_use_tool callback here is only for non-boundary permission
-    # hooks (project tier, per-request checker) since the SDK subprocess
+    # hooks (project tier, cross-project, persona workflow policy) since the SDK subprocess
     # does not invoke can_use_tool for built-in tools.
-    can_use_tool_cb = _resolve_can_use_tool(yolo_mode, permission_checker, project_id, agent_slug)
+    can_use_tool_cb = _resolve_can_use_tool(project_id, agent_slug)
     mcp_server = _build_mcp_server(tools, working_dir, project_id, agent_slug, tool_catalog) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
@@ -177,8 +168,6 @@ async def _build_tool_message_session(
     messages: list[Message],
     model: str,
     tools: list[dict[str, Any]],
-    yolo_mode: bool,
-    permission_checker: Any | None,
     working_dir: str | None,
     resume_session_id: str | None,
     cli_path: str,
@@ -194,7 +183,7 @@ async def _build_tool_message_session(
     tool_catalog = kwargs.get("tool_catalog")
 
     can_use_tool_cb, mcp_servers, allowed_tools = _build_tool_infra(
-        tools, working_dir, project_id, agent_slug, tool_catalog, yolo_mode, permission_checker,
+        tools, working_dir, project_id, agent_slug, tool_catalog,
     )
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
     options, use_streaming_prompt = build_sdk_options(
@@ -203,7 +192,7 @@ async def _build_tool_message_session(
         model_map=model_map,
         working_dir=working_dir,
         session_id=session_id if isinstance(session_id, str) else None,
-        yolo_mode=yolo_mode,
+        yolo_mode=can_use_tool_cb is None,
         can_use_tool=can_use_tool_cb,
         mcp_servers=mcp_servers,
         resume_session_id=resume_session_id,
@@ -225,8 +214,6 @@ async def build_tool_runtime_session(
     messages: list[Message],
     model: str,
     tools: list[dict[str, Any]],
-    yolo_mode: bool,
-    permission_checker: Any | None,
     working_dir: str | None,
     resume_session_id: str | None,
     cli_path: str,
@@ -242,8 +229,6 @@ async def build_tool_runtime_session(
         messages=messages,
         model=model,
         tools=tools,
-        yolo_mode=yolo_mode,
-        permission_checker=permission_checker,
         working_dir=working_dir,
         resume_session_id=resume_session_id,
         cli_path=cli_path,
@@ -265,8 +250,6 @@ async def complete_with_tools(
     messages: list[Message],
     model: str,
     tools: list[dict[str, Any]],
-    yolo_mode: bool,
-    permission_checker: Any | None,
     working_dir: str | None,
     resume_session_id: str | None,
     cli_path: str,
@@ -280,8 +263,6 @@ async def complete_with_tools(
         messages=messages,
         model=model,
         tools=tools,
-        yolo_mode=yolo_mode,
-        permission_checker=permission_checker,
         working_dir=working_dir,
         resume_session_id=resume_session_id,
         cli_path=cli_path,
