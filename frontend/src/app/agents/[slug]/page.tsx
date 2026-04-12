@@ -208,15 +208,15 @@ export default function AgentEditorPage() {
                 <div className="border-b border-slate-800/80 px-5 py-5 lg:px-6">
                   <div className="section-header gap-4">
                     <div>
-                      <p className="section-kicker">Editing Surface</p>
+                      <p className="section-kicker">Runtime Profile</p>
                       <h2 className="section-heading mt-2">{activeTabLabel}</h2>
                       <p className="section-copy mt-2 max-w-3xl">
                         {activeTabDescription}
                       </p>
                     </div>
                     <div className="page-meta">
-                      <span className="page-pill">Agent config</span>
-                      <span className="page-pill">Live preview available</span>
+                      <span className="page-pill">Agent runtime</span>
+                      <span className="page-pill">Prompt preview</span>
                     </div>
                   </div>
                 </div>
