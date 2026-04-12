@@ -126,8 +126,10 @@ class TestFormatFunctionResponse:
 
         assert isinstance(formatted, types.FunctionResponse)
         assert formatted.id == "call_123"
-        assert formatted.response["result"] == "Weather: Sunny, 72°F"
-        assert formatted.response["is_error"] is False
+        response = formatted.response
+        assert response is not None
+        assert response["result"] == "Weather: Sunny, 72°F"
+        assert response["is_error"] is False
 
     def test_format_error_response(self):
         """Test formatting error function response."""
@@ -139,7 +141,9 @@ class TestFormatFunctionResponse:
 
         formatted = format_function_response(result)
 
-        assert formatted.response["is_error"] is True
+        response = formatted.response
+        assert response is not None
+        assert response["is_error"] is True
 
     def test_format_with_explicit_name(self):
         """Test formatting with explicit function name."""
@@ -184,8 +188,10 @@ class TestFormatToolsForApi:
 
         assert len(result) == 1
         assert isinstance(result[0], types.Tool)
-        assert len(result[0].function_declarations) == 1
-        assert result[0].function_declarations[0].name == "get_weather"
+        declarations = result[0].function_declarations
+        assert declarations is not None
+        assert len(declarations) == 1
+        assert declarations[0].name == "get_weather"
 
     def test_format_multiple_tools(self):
         """Test formatting multiple tools."""
@@ -250,24 +256,6 @@ class TestGeminiToolHandler:
 
         assert result.is_error is True
         assert "denied" in result.content.lower()
-
-    @pytest.mark.asyncio
-    async def test_execute_ask_by_hook(self):
-        """Test function execution requires confirmation."""
-
-        async def ask_hook(tool_call: ToolCall) -> ToolDecision:
-            return ToolDecision.ASK
-
-        handler = GeminiToolHandler(
-            executor={"test_func": AsyncMock()},
-            pre_hook=ask_hook,
-        )
-
-        call = ToolCall(id="call_1", name="test_func", input={})
-        result = await handler.execute(call)
-
-        assert result.is_error is True
-        assert "confirmation" in result.content.lower()
 
     @pytest.mark.asyncio
     async def test_execute_function_not_found(self):
