@@ -143,6 +143,7 @@ async def execute_completion(
         result, model_used, fallback_used = await execute_with_fallback(
             _to_messages(messages_dict), resolved_agent, tools, thinking,
             resolved_model=resolved_model,
+            prompt_cache_key=session_id,
         )
         return (
             result,
@@ -162,8 +163,18 @@ async def execute_completion(
                 thinking,
                 tools,
                 fmt,
+                session_id=session_id,
             )
             return (result, model_used, False, [], session_id, None)
         return await _dispatch_db(request, resolved_model, provider, resolved_agent, messages_dict, db, is_agentic, session_id, client_id, request_source, thinking, tools, fmt, skip_cache)
-    result, model_used = await execute_without_db(_to_messages(messages_dict), resolved_model, provider, request, thinking, tools, fmt)
+    result, model_used = await execute_without_db(
+        _to_messages(messages_dict),
+        resolved_model,
+        provider,
+        request,
+        thinking,
+        tools,
+        fmt,
+        session_id=session_id,
+    )
     return (result, model_used, False, [], session_id, None)

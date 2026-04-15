@@ -65,7 +65,7 @@ class ProviderCapabilities:
 _factories: dict[str, AdapterFactory] = {}
 _capabilities: dict[str, ProviderCapabilities] = {}
 _cache: dict[str, ProviderAdapter] = {}
-_initialized = False
+_initialized: bool = False
 
 
 def _ensure_registered() -> None:

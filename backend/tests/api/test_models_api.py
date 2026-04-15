@@ -1,8 +1,12 @@
 """Tests for model catalog API helpers."""
 
-from app.api.models import _build_model_info
+from datetime import UTC, datetime
+from types import SimpleNamespace
+
+from app.api.models import _build_catalog_health, _build_model_info
 from app.constants.catalog import get_model_entry
 from app.constants.catalog_types import ModelCapabilities, ModelCost, ModelEntry, ModelScores
+from app.models.model_enrichment import ModelEnrichment
 
 
 def test_build_model_info_includes_extended_capabilities() -> None:
@@ -58,3 +62,95 @@ def test_build_model_info_partial_capabilities() -> None:
     assert info.capabilities.supports_verbosity is False
     assert info.capabilities.supports_xhigh is False
     assert info.capabilities.supports_session_cache is False
+
+
+def test_build_model_info_prefers_enrichment_cost_and_speed() -> None:
+    entry = ModelEntry(
+        id="test/enriched-cost",
+        alias="enriched-cost",
+        name="Enriched Cost Model",
+        hint="test model with price overlay",
+        provider="test",
+        scores=ModelScores(coding=50, reasoning=50, planning=50, tool_use=50, instruction=50, design=50),
+        cost=ModelCost(input_per_m=3.0, output_per_m=15.0),
+        context_window=8192,
+        speed_tier="slow",
+        capabilities=ModelCapabilities(),
+    )
+    enrichment = ModelEnrichment(
+        model_id=entry.id,
+        ext_speed_tier="fast",
+        ext_input_per_m=2.0,
+        ext_output_per_m=6.0,
+        synced_at=datetime.now(UTC),
+    )
+
+    info = _build_model_info(entry, enrichment)
+
+    assert info.cost.input_per_m == 2.0
+    assert info.cost.output_per_m == 6.0
+    assert info.cost.source == "enrichment"
+    assert info.speed_tier == "fast"
+
+
+def test_build_model_info_preserves_per_image_pricing() -> None:
+    entry = ModelEntry(
+        id="test/per-image",
+        alias="per-image",
+        name="Per Image Model",
+        hint="image unit pricing",
+        provider="test",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=50, design=80),
+        cost=ModelCost(input_per_m=0.0, output_per_m=0.0, pricing_unit="per_image", unit_price=0.07),
+        context_window=0,
+        speed_tier="fast",
+        capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
+    )
+
+    info = _build_model_info(entry)
+
+    assert info.cost.pricing_unit == "per_image"
+    assert info.cost.unit_price == 0.07
+    assert info.cost.source == "catalog"
+
+
+def test_build_catalog_health_reads_sync_state_discovery() -> None:
+    entry = get_model_entry("xai/grok-4.20-reasoning")
+    assert entry is not None
+
+    enrichment = ModelEnrichment(
+        model_id=entry.id,
+        ext_input_per_m=2.0,
+        ext_output_per_m=6.0,
+        synced_at=datetime.now(UTC),
+    )
+    sync_state = SimpleNamespace(
+        status="success",
+        error=None,
+        source_counts={"models_dev": 10, "benchmarks": 5, "bfcl": 2, "livebench": 3},
+        discovery_summary={
+            "unmatched_model_count": 4,
+            "unmatched_provider_count": 1,
+            "top_providers": [
+                {
+                    "provider_id": "x-ai",
+                    "provider_name": "xAI",
+                    "unmatched_count": 4,
+                    "sample_model_ids": ["grok-4.1", "grok-4.2"],
+                }
+            ],
+            "sample_model_ids": ["grok-4.1", "grok-4.2"],
+        },
+    )
+
+    health = _build_catalog_health(
+        enrichments={entry.id: enrichment},
+        sync_state=sync_state,
+        last_sync=datetime.now(UTC),
+    )
+
+    assert health.sync_status == "success"
+    assert health.models_with_live_pricing >= 1
+    assert health.discovery is not None
+    assert health.discovery.unmatched_model_count == 4
+    assert health.discovery.top_providers[0].provider_name == "xAI"

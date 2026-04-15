@@ -27,15 +27,18 @@ async def fetch_models_dev() -> list[dict[str, Any]]:
         return data
 
     flat: list[dict[str, Any]] = []
-    for provider_data in data.values():
+    for provider_id, provider_data in data.items():
         if not isinstance(provider_data, dict):
             continue
+        provider_name = provider_data.get("name", provider_id)
         models = provider_data.get("models", {})
         if not isinstance(models, dict):
             continue
         for model_id, model_data in models.items():
             if isinstance(model_data, dict):
                 model_data.setdefault("id", model_id)
+                model_data.setdefault("provider_id", provider_id)
+                model_data.setdefault("provider_name", provider_name)
                 flat.append(model_data)
     return flat
 

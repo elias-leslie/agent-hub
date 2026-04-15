@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchApi } from "@/lib/api-config";
-import type { ModelCapabilities, ModelCost, ModelEnrichment } from "@/lib/models";
+import type {
+  CatalogHealth,
+  ModelCapabilities,
+  ModelCost,
+  ModelEnrichment,
+} from "@/lib/models";
 
 export type { ModelCapabilities, ModelCost, ModelEnrichment };
 
@@ -36,6 +41,7 @@ export interface ModelsApiResponse {
   providers: Record<string, string>;
   last_sync: string | null;
   last_model_review: string | null;
+  catalog_health: CatalogHealth | null;
 }
 
 export const MODELS_CATALOG_QUERY_KEY = ["models", "catalog"] as const;
@@ -71,6 +77,7 @@ export function useModelsWithSync() {
     providers: query.data?.providers ?? {},
     lastSync: query.data?.last_sync ?? null,
     lastModelReview: query.data?.last_model_review ?? null,
+    catalogHealth: query.data?.catalog_health ?? null,
     refetch: query.refetch,
     isLoading: query.isLoading,
     isError: query.isError,

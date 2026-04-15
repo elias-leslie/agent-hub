@@ -1,11 +1,13 @@
 import { RefreshCw, MessageSquare } from "lucide-react";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
+import type { ModelCost } from "@/lib/models";
 import { SortField, SortDirection } from "../types";
 import { SortableHeader } from "@/components/ui/SortableHeader";
 import { SessionTableRow } from "./SessionTableRow";
 
 export function SessionTable({
   sessions,
+  modelCosts,
   sortField,
   sortDirection,
   modelFilter,
@@ -24,6 +26,7 @@ export function SessionTable({
   onModelFilterClick,
 }: {
   sessions: SessionListItem[];
+  modelCosts: Map<string, ModelCost>;
   sortField: SortField;
   sortDirection: SortDirection;
   modelFilter: string;
@@ -120,6 +123,7 @@ export function SessionTable({
           <SessionTableRow
             key={session.id}
             session={session}
+            modelCosts={modelCosts}
             isExpanded={expandedSessionId === session.id}
             isLive={liveSessionIds.has(session.id)}
             isFocused={focusedRowIndex === index}

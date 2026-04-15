@@ -41,6 +41,8 @@ from app.constants.models import (
     OPENAI_GPT_5_2,
     OPENAI_GPT_NANO,
     XAI_GROK_4_1_FAST,
+    XAI_GROK_4_20,
+    XAI_GROK_4_20_MULTI_AGENT,
     XAI_GROK_CODE_FAST,
     ZHIPU_GLM_4_7,
     ZHIPU_GLM_5,
@@ -179,6 +181,8 @@ CODEX_TO_CLAUDE_MAP: dict[str, str] = {
 XAI_TO_CLAUDE_MAP: dict[str, str] = {
     XAI_GROK_CODE_FAST: CLAUDE_SONNET,
     XAI_GROK_4_1_FAST: CLAUDE_OPUS,
+    XAI_GROK_4_20: CLAUDE_OPUS,
+    XAI_GROK_4_20_MULTI_AGENT: CLAUDE_OPUS,
 }
 
 ZHIPU_TO_CLAUDE_MAP: dict[str, str] = {

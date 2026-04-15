@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session, stream_completion
+from app.api.complete.execution import get_thinking_level
 from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
@@ -155,6 +156,7 @@ def _build_sse_response(
     provider: str,
     request: CompletionRequest,
     session_id: str,
+    thinking_level: str | None,
     agent_used: str | None,
     model_used: str | None,
     fallback_used: bool,
@@ -173,6 +175,7 @@ def _build_sse_response(
             provider=provider,
             temperature=request.temperature,
             session_id=session_id,
+            thinking_level=thinking_level,
             agent_used=agent_used,
             model_used=model_used,
             fallback_used=fallback_used,
@@ -219,8 +222,9 @@ async def handle_streaming_request(
     )
     messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
     messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent)
+    thinking_level = get_thinking_level(request, messages, resolved_agent)
 
     return _build_sse_response(
-        messages, resolved_model, provider, request, session_id,
+        messages, resolved_model, provider, request, session_id, thinking_level,
         agent_used, model_used, fallback_used, db, is_new_session,
     )

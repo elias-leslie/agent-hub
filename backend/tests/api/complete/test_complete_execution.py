@@ -311,6 +311,49 @@ async def test_execute_without_db_records_provider_success() -> None:
 
 
 @pytest.mark.asyncio
+async def test_execute_without_db_passes_session_cache_key_for_xai_multi_agent() -> None:
+    from app.api.complete.execution import execute_without_db
+
+    request = SimpleNamespace(
+        temperature=0.0,
+        enable_caching=False,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+    )
+    adapter_result = CompletionResult(
+        content="ok",
+        model="xai/grok-4.20-multi-agent",
+        provider="xai",
+        input_tokens=1,
+        output_tokens=1,
+    )
+    adapter = SimpleNamespace(complete=AsyncMock(return_value=adapter_result))
+
+    with (
+        patch("app.api.complete.execution.get_adapter", return_value=adapter),
+        patch("app.api.complete.execution.record_provider_success"),
+        patch("app.api.complete.execution.record_provider_failure"),
+    ):
+        result, model_used = await execute_without_db(
+            messages_for_adapter=[Message(role="user", content="hi")],
+            resolved_model="xai/grok-4.20-multi-agent",
+            provider="xai",
+            request=request,
+            thinking_level="high",
+            tools_api=None,
+            response_format_dict=None,
+            session_id="sess-99",
+        )
+
+    assert result is adapter_result
+    assert model_used == "xai/grok-4.20-multi-agent"
+    assert adapter.complete.await_args.kwargs["prompt_cache_key"] == "sess-99"
+    assert "thinking_level" not in adapter.complete.await_args.kwargs
+    assert "reasoning_effort" not in adapter.complete.await_args.kwargs
+
+
+@pytest.mark.asyncio
 async def test_execute_without_db_records_provider_failure() -> None:
     from app.api.complete.execution import execute_without_db
 

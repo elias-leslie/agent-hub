@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,6 +12,17 @@ from app.api.complete.context_compaction import maybe_compact_context
 # Patch targets at the source modules (imports are inside the function body)
 _TOKEN_COUNTER = "app.services.token_counter"
 _ADAPTER_REGISTRY = "app.adapters.registry"
+_AGENT_SERVICE = "app.services.agent_service"
+
+
+def _make_compactor_agent() -> SimpleNamespace:
+    """Build a minimal agent DTO-like object for compaction tests."""
+    return SimpleNamespace(
+        primary_model_id="claude-haiku-4-5",
+        temperature=0.2,
+        thinking_level=None,
+        system_prompt="Summarize earlier conversation concisely.",
+    )
 
 
 def _make_messages(count: int, system: bool = True) -> list[dict[str, str]]:
@@ -59,11 +71,17 @@ class TestMaybeCompactContext:
     async def test_compacts_when_over_threshold(self):
         """Compaction triggers when usage exceeds threshold."""
         messages = _make_messages(20)
+        mock_db = AsyncMock()
 
         mock_adapter_result = MagicMock()
         mock_adapter_result.content = "Summary of earlier conversation."
+        mock_adapter_result.model = "claude-haiku-4-5"
+        mock_adapter_result.input_tokens = 100
+        mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
+        mock_agent_service = MagicMock()
+        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
 
         with (
             patch(
@@ -78,9 +96,21 @@ class TestMaybeCompactContext:
                 f"{_ADAPTER_REGISTRY}.get_adapter",
                 return_value=mock_adapter,
             ),
+            patch(
+                f"{_AGENT_SERVICE}.get_agent_service",
+                return_value=mock_agent_service,
+            ),
+            patch(
+                "app.services.context_tracker.log_token_usage",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.token_counter.estimate_cost",
+                return_value=SimpleNamespace(total_cost_usd=0.01),
+            ),
         ):
             result, compacted = await maybe_compact_context(
-                messages, "claude-sonnet-4-6", keep_recent=4
+                messages, "claude-sonnet-4-6", keep_recent=4, session_id="sess-123", db=mock_db
             )
 
         assert compacted is True
@@ -100,11 +130,17 @@ class TestMaybeCompactContext:
             {"role": "system", "content": "Memory injection here."},
             *_make_messages(20, system=False),
         ]
+        mock_db = AsyncMock()
 
         mock_adapter_result = MagicMock()
         mock_adapter_result.content = "Summarized conversation."
+        mock_adapter_result.model = "claude-haiku-4-5"
+        mock_adapter_result.input_tokens = 100
+        mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
+        mock_agent_service = MagicMock()
+        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
 
         with (
             patch(
@@ -119,8 +155,22 @@ class TestMaybeCompactContext:
                 f"{_ADAPTER_REGISTRY}.get_adapter",
                 return_value=mock_adapter,
             ),
+            patch(
+                f"{_AGENT_SERVICE}.get_agent_service",
+                return_value=mock_agent_service,
+            ),
+            patch(
+                "app.services.context_tracker.log_token_usage",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.token_counter.estimate_cost",
+                return_value=SimpleNamespace(total_cost_usd=0.01),
+            ),
         ):
-            result, compacted = await maybe_compact_context(messages, "claude-sonnet-4-6")
+            result, compacted = await maybe_compact_context(
+                messages, "claude-sonnet-4-6", session_id="sess-123", db=mock_db
+            )
 
         assert compacted is True
         assert result[0]["content"] == "System prompt here."
@@ -131,9 +181,12 @@ class TestMaybeCompactContext:
     async def test_summary_failure_returns_unchanged(self):
         """If summarization fails, return original messages."""
         messages = _make_messages(20)
+        mock_db = AsyncMock()
 
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(side_effect=Exception("Adapter error"))
+        mock_agent_service = MagicMock()
+        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
 
         with (
             patch(
@@ -148,8 +201,14 @@ class TestMaybeCompactContext:
                 f"{_ADAPTER_REGISTRY}.get_adapter",
                 return_value=mock_adapter,
             ),
+            patch(
+                f"{_AGENT_SERVICE}.get_agent_service",
+                return_value=mock_agent_service,
+            ),
         ):
-            result, compacted = await maybe_compact_context(messages, "claude-sonnet-4-6")
+            result, compacted = await maybe_compact_context(
+                messages, "claude-sonnet-4-6", session_id="sess-123", db=mock_db
+            )
 
         assert compacted is False
         assert result is messages
@@ -158,11 +217,17 @@ class TestMaybeCompactContext:
     async def test_custom_threshold_and_keep_recent(self):
         """Custom threshold_pct and keep_recent values work."""
         messages = _make_messages(30)
+        mock_db = AsyncMock()
 
         mock_adapter_result = MagicMock()
         mock_adapter_result.content = "Short summary."
+        mock_adapter_result.model = "claude-haiku-4-5"
+        mock_adapter_result.input_tokens = 100
+        mock_adapter_result.output_tokens = 25
         mock_adapter = AsyncMock()
         mock_adapter.complete = AsyncMock(return_value=mock_adapter_result)
+        mock_agent_service = MagicMock()
+        mock_agent_service.get_by_slug = AsyncMock(return_value=_make_compactor_agent())
 
         with (
             patch(
@@ -177,10 +242,23 @@ class TestMaybeCompactContext:
                 f"{_ADAPTER_REGISTRY}.get_adapter",
                 return_value=mock_adapter,
             ),
+            patch(
+                f"{_AGENT_SERVICE}.get_agent_service",
+                return_value=mock_agent_service,
+            ),
+            patch(
+                "app.services.context_tracker.log_token_usage",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.token_counter.estimate_cost",
+                return_value=SimpleNamespace(total_cost_usd=0.01),
+            ),
         ):
             _result, compacted = await maybe_compact_context(
                 messages, "claude-sonnet-4-6",
                 keep_recent=3, threshold_pct=0.5,
+                session_id="sess-123", db=mock_db,
             )
 
         assert compacted is True

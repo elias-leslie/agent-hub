@@ -1,10 +1,12 @@
 import { useState, useMemo } from "react";
 import { type SessionListItem } from "@/lib/api";
+import type { ModelCost } from "@/lib/models";
 import { estimateCost } from "../utils";
 import { type SortField, type SortDirection } from "../types";
 
 interface UseSessionFiltersProps {
   sessions: SessionListItem[];
+  modelCosts: Map<string, ModelCost>;
   sortField: SortField;
   sortDirection: SortDirection;
   hideBenchmarkTraffic: boolean;
@@ -12,6 +14,7 @@ interface UseSessionFiltersProps {
 
 export function useSessionFilters({
   sessions,
+  modelCosts,
   sortField,
   sortDirection,
   hideBenchmarkTraffic,
@@ -67,8 +70,8 @@ export function useSessionFilters({
           cmp = (a.total_input_tokens + a.total_output_tokens) - (b.total_input_tokens + b.total_output_tokens);
           break;
         case "cost": {
-          const costA = estimateCost(a.model, a.total_input_tokens, a.total_output_tokens);
-          const costB = estimateCost(b.model, b.total_input_tokens, b.total_output_tokens);
+          const costA = estimateCost(a.model, a.total_input_tokens, a.total_output_tokens, modelCosts);
+          const costB = estimateCost(b.model, b.total_input_tokens, b.total_output_tokens, modelCosts);
           cmp = costA - costB;
           break;
         }
@@ -80,7 +83,7 @@ export function useSessionFilters({
     });
 
     return sorted;
-  }, [sessions, modelFilter, searchQuery, sortField, sortDirection, hideBenchmarkTraffic]);
+  }, [sessions, modelCosts, modelFilter, searchQuery, sortField, sortDirection, hideBenchmarkTraffic]);
 
   const pageStats = useMemo(() => {
     if (!filteredAndSorted.length) return null;
@@ -89,11 +92,11 @@ export function useSessionFilters({
       0
     );
     const totalCost = filteredAndSorted.reduce(
-      (sum, s) => sum + estimateCost(s.model, s.total_input_tokens, s.total_output_tokens),
+      (sum, s) => sum + estimateCost(s.model, s.total_input_tokens, s.total_output_tokens, modelCosts),
       0
     );
     return { totalTokens, totalCost };
-  }, [filteredAndSorted]);
+  }, [filteredAndSorted, modelCosts]);
 
   return {
     modelFilter,

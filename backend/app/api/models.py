@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 # Re-export schemas so existing importers keep working
 from app.api.models_catalog_schemas import (
+    CatalogDiscoveryInfo,
+    CatalogHealthInfo,
     ModelCapabilitiesInfo,
     ModelCostInfo,
     ModelEnrichmentInfo,
@@ -28,6 +31,7 @@ if TYPE_CHECKING:
     from app.models.model_enrichment import ModelEnrichment
 
 __all__ = [
+    "CatalogHealthInfo",
     "LatencyStatsResponse",
     "ModelCapabilitiesInfo",
     "ModelCostInfo",
@@ -41,6 +45,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+_CATALOG_STALE_AFTER_HOURS = 24
 
 
 def _build_enrichment_info(enrichment: ModelEnrichment) -> ModelEnrichmentInfo:
@@ -101,6 +106,12 @@ def _build_model_info(
     """
     enr = _build_enrichment_info(enrichment) if enrichment else None
     scores = _merge_scores(e, enrichment)
+    input_per_m = enrichment.ext_input_per_m if enrichment and enrichment.ext_input_per_m is not None else e.cost.input_per_m
+    output_per_m = enrichment.ext_output_per_m if enrichment and enrichment.ext_output_per_m is not None else e.cost.output_per_m
+    speed_tier = enrichment.ext_speed_tier if enrichment and enrichment.ext_speed_tier is not None else e.speed_tier
+    cost_source = "enrichment" if enrichment and (
+        enrichment.ext_input_per_m is not None or enrichment.ext_output_per_m is not None
+    ) else "catalog"
 
     return ModelInfo(
         id=e.id,
@@ -109,9 +120,15 @@ def _build_model_info(
         hint=e.hint,
         provider=e.provider,
         scores=scores,
-        cost=ModelCostInfo(input_per_m=e.cost.input_per_m, output_per_m=e.cost.output_per_m),
+        cost=ModelCostInfo(
+            input_per_m=input_per_m,
+            output_per_m=output_per_m,
+            pricing_unit=e.cost.pricing_unit,
+            unit_price=e.cost.unit_price,
+            source=cost_source,
+        ),
         context_window=e.context_window,
-        speed_tier=e.speed_tier,
+        speed_tier=speed_tier,
         capabilities=ModelCapabilitiesInfo(
             can_generate_images=e.capabilities.can_generate_images,
             has_vision=e.capabilities.has_vision,
@@ -132,6 +149,44 @@ def _build_model_info(
     )
 
 
+def _build_catalog_health(
+    *,
+    enrichments: dict[str, ModelEnrichment],
+    sync_state: ModelEnrichment | object | None,
+    last_sync: datetime | None,
+) -> CatalogHealthInfo:
+    enriched_models = sum(1 for entry in MODEL_CATALOG if entry.id in enrichments)
+    live_priced_models = sum(
+        1
+        for entry in MODEL_CATALOG
+        if (
+            (enrichment := enrichments.get(entry.id)) is not None
+            and (enrichment.ext_input_per_m is not None or enrichment.ext_output_per_m is not None)
+        )
+    )
+    is_stale = (
+        last_sync is None
+        or datetime.now(UTC) - last_sync > timedelta(hours=_CATALOG_STALE_AFTER_HOURS)
+    )
+    source_counts = getattr(sync_state, "source_counts", None)
+    discovery_raw = getattr(sync_state, "discovery_summary", None)
+    discovery = CatalogDiscoveryInfo.model_validate(discovery_raw or {}) if discovery_raw else None
+
+    return CatalogHealthInfo(
+        total_models=len(MODEL_CATALOG),
+        enriched_models=enriched_models,
+        unenriched_models=len(MODEL_CATALOG) - enriched_models,
+        models_with_live_pricing=live_priced_models,
+        models_missing_live_pricing=len(MODEL_CATALOG) - live_priced_models,
+        is_stale=is_stale,
+        stale_after_hours=_CATALOG_STALE_AFTER_HOURS,
+        sync_status=getattr(sync_state, "status", None),
+        sync_error=getattr(sync_state, "error", None),
+        source_counts=source_counts if isinstance(source_counts, dict) else None,
+        discovery=discovery,
+    )
+
+
 @router.get("/models", response_model=ModelsResponse)
 async def list_models() -> ModelsResponse:
     """List available models with catalog data + enrichment overlay."""
@@ -139,11 +194,13 @@ async def list_models() -> ModelsResponse:
 
     from app.db import async_session
     from app.models.agent_performance_log import AgentPerformanceLog
-    from app.services.model_enrichment_service import get_all_enrichments
+    from app.services.model_enrichment_service import get_all_enrichments, get_catalog_sync_state
 
+    sync_state = None
     try:
         async with async_session() as db:
             enrichments = await get_all_enrichments(db)
+            sync_state = await get_catalog_sync_state(db)
     except Exception:
         logger.warning("Failed to load model enrichments", exc_info=True)
         enrichments = {}
@@ -151,7 +208,9 @@ async def list_models() -> ModelsResponse:
     models = [_build_model_info(e, enrichments.get(e.id)) for e in MODEL_CATALOG]
 
     last_sync = None
-    if enrichments:
+    if sync_state and getattr(sync_state, "synced_at", None):
+        last_sync = sync_state.synced_at
+    elif enrichments:
         synced_times = [e.synced_at for e in enrichments.values() if e.synced_at]
         if synced_times:
             last_sync = max(synced_times)
@@ -177,6 +236,11 @@ async def list_models() -> ModelsResponse:
         providers=providers,
         last_sync=last_sync,
         last_model_review=last_model_review,
+        catalog_health=_build_catalog_health(
+            enrichments=enrichments,
+            sync_state=sync_state,
+            last_sync=last_sync,
+        ),
     )
 
 

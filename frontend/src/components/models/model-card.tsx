@@ -3,6 +3,7 @@
 import { Brain, Camera, Eye, FileText, Headphones, Pencil, Zap, Clock, Gauge, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
+import { formatModelPricing } from "@/lib/model-pricing";
 import { ModelRadar } from "./model-radar";
 import type { ModelOption } from "@agent-hub/chat-ui";
 
@@ -11,13 +12,6 @@ interface ModelCardProps {
   isSelected?: boolean;
   onSelect?: (model: ModelOption) => void;
   onExpand?: (model: ModelOption) => void;
-}
-
-function getCostTier(inputCostPerM: number): string {
-  if (inputCostPerM === 0) return "Free";
-  if (inputCostPerM < 0.5) return "$";
-  if (inputCostPerM < 3) return "$$";
-  return "$$$";
 }
 
 function getSpeedBadgeColor(tier: string): string {
@@ -33,10 +27,21 @@ function getSpeedBadgeColor(tier: string): string {
   }
 }
 
+function formatSyncMoment(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardProps) {
-  const costTier = getCostTier(model.cost.input_per_m);
   const providerColor = PROVIDER_COLORS[model.provider];
   const hasEnrichment = !!model.enrichment;
+  const pricing = formatModelPricing(model.cost);
+  const syncedAt = formatSyncMoment(model.enrichment?.synced_at);
 
   return (
     <div
@@ -61,15 +66,21 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h3 className="text-base font-semibold text-slate-100 truncate">
+            <div className="flex items-start gap-1.5">
+              <h3
+                className="text-base font-semibold leading-tight text-slate-100"
+                title={model.name}
+              >
                 {model.name}
               </h3>
               {hasEnrichment && (
-                <Database className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+                <Database className="mt-1 h-3 w-3 text-emerald-500 flex-shrink-0" />
               )}
             </div>
-            <p className="text-xs text-slate-400 truncate mt-0.5">
+            <p
+              className="mt-0.5 line-clamp-2 text-xs leading-tight text-slate-400"
+              title={model.alias}
+            >
               {model.alias}
               {model.family && (
                 <span className="ml-1 text-slate-400">({model.family})</span>
@@ -94,7 +105,7 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
             <div className="text-xs text-slate-400 mb-1">
               Composite Score
             </div>
-            <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1">
               <span className="text-2xl font-bold text-slate-100">
                 {model.scores.composite}
               </span>
@@ -103,16 +114,17 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           </div>
 
           {/* Cost & Speed */}
-          <div className="flex flex-col gap-1.5">
-            <div
-              className={cn(
-                "px-2 py-1 rounded text-xs font-semibold text-center border",
-                costTier === "Free"
-                  ? "bg-green-500/10 text-green-400 border-green-500/20"
-                  : "bg-slate-800 text-slate-300 border-slate-700",
-              )}
-            >
-              {costTier}
+          <div className="flex min-w-[150px] flex-col gap-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-950/80 px-3 py-2 text-right">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Pricing
+              </div>
+              <div className="mt-1 text-sm font-semibold text-slate-100">
+                {pricing.primary}
+              </div>
+              <div className="text-[11px] text-slate-400">
+                {pricing.secondary}
+              </div>
             </div>
             <div
               className={cn(
@@ -199,6 +211,25 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
               {(model.context_window / 1000).toFixed(0)}K
             </span>
           </div>
+          <div className="flex justify-between gap-3">
+            <span>Price Source</span>
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                model.cost.source === "enrichment"
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                  : "border-slate-700 bg-slate-800 text-slate-300",
+              )}
+            >
+              {pricing.source}
+            </span>
+          </div>
+          {syncedAt && (
+            <div className="flex justify-between">
+              <span>Last Refresh</span>
+              <span className="text-slate-300">{syncedAt}</span>
+            </div>
+          )}
         </div>
 
         {/* Compare button */}

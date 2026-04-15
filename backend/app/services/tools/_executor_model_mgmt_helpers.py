@@ -74,6 +74,24 @@ def _format_agent_details(agent: Any) -> str:
     )
 
 
+def _format_catalog_cost(cost: Any) -> str:
+    """Return a human-readable cost summary for catalog entries."""
+    pricing_unit = getattr(cost, "pricing_unit", "per_million_tokens")
+    if pricing_unit != "per_million_tokens":
+        unit_price = getattr(cost, "unit_price", None)
+        unit_labels = {
+            "per_image": "image",
+            "per_second": "second",
+            "per_minute": "minute",
+            "per_million_characters": "1M chars",
+        }
+        unit_label = unit_labels.get(pricing_unit, pricing_unit.replace("per_", ""))
+        if unit_price in (None, 0):
+            return f"free per {unit_label}"
+        return f"${unit_price}/{unit_label}"
+    return f"${cost.input_per_m}/M in, ${cost.output_per_m}/M out"
+
+
 def _compute_model_line(m: Any, enrichments: dict) -> str:
     """Build the formatted listing line for a single catalog model."""
     from app.constants.catalog import SCORE_WEIGHTS
@@ -115,7 +133,7 @@ def _compute_model_line(m: Any, enrichments: dict) -> str:
         f"planning={planning} tool_use={tool_use} "
         f"instruction={instruction} design={design} "
         f"composite={composite}\n"
-        f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
+        f"  Cost: {_format_catalog_cost(m.cost)}\n"
         f"  Capabilities: {', '.join(cap_flags) or 'none'}"
     )
 

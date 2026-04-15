@@ -68,6 +68,7 @@ async def _try_model(
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
     verbosity_level: str | None = None,
+    prompt_cache_key: str | None = None,
 ) -> tuple[object | None, BaseException | None]:
     """Attempt completion with a single model; return result and captured error."""
     provider = get_provider_for_model(model)
@@ -89,11 +90,13 @@ async def _try_model(
             thinking_config = get_thinking_config(model, thinking_level, provider)
             if thinking_config:
                 extra_kwargs.update(thinking_config)
-            elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax"}:
+            elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
                 extra_kwargs["thinking_level"] = thinking_level
         capabilities = get_model_capabilities(model)
         if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
             extra_kwargs["verbosity_level"] = verbosity_level
+        if prompt_cache_key:
+            extra_kwargs["prompt_cache_key"] = prompt_cache_key
         result = await adapter.complete(
             messages=messages,
             model=model,
@@ -125,10 +128,11 @@ async def _try_primary(
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
     verbosity_level: str | None = None,
+    prompt_cache_key: str | None = None,
 ) -> CompletionResult | None:
     """Try the primary model; return CompletionResult or None on failure."""
     result, error = await _try_model(
-        messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level
+        messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
     if result is None:
         logger.warning("Primary model %s failed for agent %s", agent.primary_model_id, agent.slug)
@@ -150,6 +154,7 @@ async def _try_fallbacks(
     thinking_level: str | None,
     verbosity_level: str | None = None,
     blocked_providers: set[str] | None = None,
+    prompt_cache_key: str | None = None,
 ) -> CompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     blocked_providers = blocked_providers or set()
@@ -163,7 +168,7 @@ async def _try_fallbacks(
             )
             continue
         result, _error = await _try_model(
-            messages, fallback_model, temperature, max_tokens, tools, thinking_level, verbosity_level
+            messages, fallback_model, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
         )
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
@@ -183,6 +188,7 @@ async def _try_escalation(
     verbosity_level: str | None = None,
     tried_models: set[str] | None = None,
     blocked_providers: set[str] | None = None,
+    prompt_cache_key: str | None = None,
 ) -> CompletionResult | None:
     """Try the escalation model if configured and not already tried."""
     tried_models = tried_models or set()
@@ -199,7 +205,7 @@ async def _try_escalation(
         )
         return None
     result, _error = await _try_model(
-        messages, escalation, temperature, max_tokens, tools, thinking_level, verbosity_level
+        messages, escalation, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
     if result is None:
         if isinstance(_error, RateLimitError):
@@ -229,6 +235,7 @@ async def complete_with_fallback(
     tools: list[dict[str, object]] | None = None,
     thinking_level: str | None = None,
     primary_model_override: str | None = None,
+    prompt_cache_key: str | None = None,
 ) -> CompletionResult:
     """Attempt completion using primary → fallbacks → escalation model chain.
 
@@ -244,7 +251,7 @@ async def complete_with_fallback(
     blocked_providers: set[str] = set()
 
     result, primary_error = await _try_model(
-        messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level
+        messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
     if result is not None:
         return CompletionResult(
@@ -266,6 +273,7 @@ async def complete_with_fallback(
         thinking_level,
         verbosity_level,
         blocked_providers,
+        prompt_cache_key,
     )
     if fallback_result is not None:
         fallback_result.fallback_reason = primary_reason
@@ -282,6 +290,7 @@ async def complete_with_fallback(
         verbosity_level,
         tried_models=tried_models,
         blocked_providers=blocked_providers,
+        prompt_cache_key=prompt_cache_key,
     )
     if escalation_result is not None:
         escalation_result.fallback_reason = primary_reason

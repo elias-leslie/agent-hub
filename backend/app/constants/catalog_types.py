@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 # Scoring category weights for composite calculation
 SCORE_WEIGHTS: dict[str, float] = {
@@ -13,6 +14,15 @@ SCORE_WEIGHTS: dict[str, float] = {
     "instruction": 0.15,
     "design": 0.10,
 }
+
+ModelPricingUnit = Literal[
+    "per_million_tokens",
+    "per_image",
+    "per_second",
+    "per_minute",
+    "per_million_characters",
+]
+
 
 @dataclass(frozen=True)
 class ModelScores:
@@ -41,10 +51,12 @@ class ModelScores:
 
 @dataclass(frozen=True)
 class ModelCost:
-    """Pricing in USD per million tokens."""
+    """Pricing in USD. Token models use per-million-token fields; other modalities use unit_price."""
 
     input_per_m: float
     output_per_m: float
+    pricing_unit: ModelPricingUnit = "per_million_tokens"
+    unit_price: float | None = None
     # Service tier cost multipliers (e.g. OpenAI flex/priority tiers)
     service_tiers: dict[str, float] = field(default_factory=lambda: {"default": 1.0})
     # Prompt caching pricing (Anthropic)

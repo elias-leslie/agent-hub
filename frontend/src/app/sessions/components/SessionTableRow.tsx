@@ -1,8 +1,9 @@
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
+import type { ModelCost } from "@/lib/models";
 import { estimateCost, formatCost, formatTokenPair, formatTokens, formatRelativeTime } from "../utils";
-import { getModelCost } from "@/lib/models";
+import { resolveModelCost } from "@/lib/model-pricing";
 import { StatusCell } from "./StatusCell";
 import { ModelPill } from "./ModelPill";
 import { Tooltip } from "@/components/memory/Tooltip";
@@ -28,6 +29,7 @@ function attributionTone(kind?: string | null): string {
 
 export function SessionTableRow({
   session,
+  modelCosts,
   isExpanded,
   isLive,
   isFocused,
@@ -40,6 +42,7 @@ export function SessionTableRow({
   onModelFilterClick,
 }: {
   session: SessionListItem;
+  modelCosts: Map<string, ModelCost>;
   isExpanded: boolean;
   isLive: boolean;
   isFocused: boolean;
@@ -54,11 +57,12 @@ export function SessionTableRow({
   const cost = estimateCost(
     session.model,
     session.total_input_tokens,
-    session.total_output_tokens
+    session.total_output_tokens,
+    modelCosts,
   );
 
   // Cost breakdown for tooltip
-  const modelCost = getModelCost(session.model);
+  const modelCost = resolveModelCost(session.model, modelCosts);
   const inputCost = (session.total_input_tokens * modelCost.input_per_m) / 1_000_000;
   const outputCost = (session.total_output_tokens * modelCost.output_per_m) / 1_000_000;
 
@@ -173,6 +177,7 @@ export function SessionTableRow({
           <div className="border-t border-slate-700 bg-slate-900/80">
             <ExpandedRowContent
               session={session}
+              modelCosts={modelCosts}
               expandedData={isExpanded ? expandedSessionData : null}
               eventsData={isExpanded ? expandedEventsData : null}
               isLoading={isExpanded && isLoadingDetails}

@@ -1,6 +1,7 @@
 import { X, Check, Minus, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
+import { formatModelPricing } from "@/lib/model-pricing";
 import type { ModelOption, ModelScores } from "@agent-hub/chat-ui";
 
 const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
@@ -11,13 +12,6 @@ const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
   "instruction",
   "design",
 ];
-
-function getCostTier(inputCostPerM: number): string {
-  if (inputCostPerM === 0) return "Free";
-  if (inputCostPerM < 0.5) return "$";
-  if (inputCostPerM < 3) return "$$";
-  return "$$$";
-}
 
 interface SectionProps {
   models: ModelOption[];
@@ -110,7 +104,7 @@ export function CostComparison({ models }: SectionProps) {
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
           const providerColor = PROVIDER_COLORS[model.provider];
-          const costTier = getCostTier(model.cost.input_per_m);
+          const pricing = formatModelPricing(model.cost);
           return (
             <div
               key={model.id}
@@ -124,26 +118,23 @@ export function CostComparison({ models }: SectionProps) {
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">
-                  <div className="text-xs text-slate-400">Input</div>
+                  <div className="text-xs uppercase tracking-[0.16em] text-slate-500">Pricing</div>
                   <div className="text-sm font-mono font-semibold text-slate-100">
-                    ${model.cost.input_per_m.toFixed(2)}/M
+                    {pricing.primary}
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-400">Output</div>
-                  <div className="text-sm font-mono font-semibold text-slate-100">
-                    ${model.cost.output_per_m.toFixed(2)}/M
+                  <div className="text-[11px] text-slate-400">
+                    {pricing.secondary}
                   </div>
                 </div>
                 <div
                   className={cn(
-                    "px-3 py-1 rounded text-sm font-semibold border",
-                    costTier === "Free"
-                      ? "bg-green-500/10 text-green-400 border-green-500/20"
-                      : "bg-slate-800 text-slate-300 border-slate-700",
+                    "rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                    model.cost.source === "enrichment"
+                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
+                      : "border-slate-700 bg-slate-800 text-slate-300",
                   )}
                 >
-                  {costTier}
+                  {pricing.source}
                 </div>
               </div>
             </div>

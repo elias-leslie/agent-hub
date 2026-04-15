@@ -6,7 +6,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters._openai_compat_helpers import convert_messages, handle_provider_error
+from app.adapters._openai_compat_helpers import (
+    convert_messages,
+    handle_provider_error,
+    normalize_responses_content,
+)
 from app.adapters.base import CompletionResult, Message
 from app.adapters.openai_compat import OpenAICompatibleAdapter
 
@@ -80,6 +84,57 @@ class TestOpenAICompatibleAdapter:
         assert result == [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Hello"},
+        ]
+
+    def test_convert_messages_normalizes_multimodal_for_chat(self) -> None:
+        messages = [
+            Message(
+                role="user",
+                content=[
+                    {"type": "text", "text": "Look"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "abc123",
+                        },
+                    },
+                ],
+            ),
+        ]
+
+        result = convert_messages(messages)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Look"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
+                ],
+            }
+        ]
+
+    def test_normalize_responses_content_maps_text_and_image_blocks(self) -> None:
+        content = normalize_responses_content(
+            "user",
+            [
+                {"type": "text", "text": "Look"},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": "abc123",
+                    },
+                },
+            ],
+        )
+
+        assert content == [
+            {"type": "input_text", "text": "Look"},
+            {"type": "input_image", "image_url": "data:image/png;base64,abc123"},
         ]
 
     @pytest.mark.asyncio

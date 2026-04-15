@@ -2,8 +2,9 @@
 
 Operates purely in-memory on the messages_dict list. Session events
 (the immutable log) are never modified. Compaction summarizes older
-messages using Haiku and reassembles the context with system/memory
-messages preserved and recent turns protected.
+messages using the configured ``context-compactor`` agent and
+reassembles the context with system/memory messages preserved and
+recent turns protected.
 """
 
 from __future__ import annotations
@@ -17,11 +18,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_THRESHOLD_PCT = 0.75
 _DEFAULT_KEEP_RECENT = 6
 _SUMMARY_MAX_TOKENS = 2000
-
-_SUMMARY_PROMPT = (
-    "Summarize this conversation concisely. Preserve: key decisions, user preferences, "
-    "tool results, and action items. Omit: greetings, filler, repeated information."
-)
+_COMPACTOR_AGENT_SLUG = "context-compactor"
 
 
 async def maybe_compact_context(
@@ -82,7 +79,7 @@ async def maybe_compact_context(
     if not compactable:
         return messages_dict, False
 
-    # Summarize compactable messages using Haiku directly
+    # Summarize compactable messages using the configured compaction agent.
     summary = await _summarize_messages(compactable, session_id=session_id, db=db)
     if not summary:
         return messages_dict, False
@@ -113,14 +110,20 @@ async def _summarize_messages(
     session_id: str | None = None,
     db: Any = None,
 ) -> str | None:
-    """Summarize a list of messages using Haiku adapter directly.
+    """Summarize a list of messages using the configured compaction agent.
 
     Uses a direct adapter call (not complete_internal) to avoid
-    recursive session creation and memory injection. Tokens are
-    logged to CostLog against the parent session for cost visibility.
+    recursive session creation and memory injection. Tokens are logged
+    to CostLog against the parent session for cost visibility.
     """
+    if db is None:
+        logger.warning("Context compaction skipped: database session unavailable")
+        return None
+
+    from app.adapters.base import Message
     from app.adapters.registry import get_adapter
-    from app.constants import CLAUDE_HAIKU
+    from app.services.agent_routing import get_provider_for_model
+    from app.services.agent_service import get_agent_service
 
     conversation_text = "\n".join(
         f"{m.get('role', 'unknown').upper()}: {m.get('content', '')}"
@@ -128,16 +131,27 @@ async def _summarize_messages(
     )
 
     try:
-        adapter = get_adapter("claude")
-        from app.adapters.base import Message
+        agent_service = get_agent_service()
+        agent = await agent_service.get_by_slug(db, _COMPACTOR_AGENT_SLUG)
+        if not agent:
+            logger.warning("Context compactor agent not found")
+            return None
+
+        system_content = (agent.system_prompt or "").strip()
+        if not system_content:
+            logger.warning("Context compactor agent has no system prompt")
+            return None
+
+        adapter = get_adapter(get_provider_for_model(agent.primary_model_id))
+        request_messages = [Message(role="system", content=system_content)]
+        request_messages.append(Message(role="user", content=conversation_text))
 
         result = await adapter.complete(
-            messages=[
-                Message(role="user", content=f"{_SUMMARY_PROMPT}\n\n{conversation_text}"),
-            ],
-            model=CLAUDE_HAIKU,
+            messages=request_messages,
+            model=agent.primary_model_id,
             max_tokens=_SUMMARY_MAX_TOKENS,
-            temperature=0.2,
+            temperature=agent.temperature,
+            thinking_level=agent.thinking_level,
         )
 
         # Log compaction tokens to the parent session's CostLog
@@ -146,9 +160,10 @@ async def _summarize_messages(
                 from app.services.context_tracker import log_token_usage
                 from app.services.token_counter import estimate_cost
 
-                cost = estimate_cost(result.input_tokens, result.output_tokens, CLAUDE_HAIKU)
+                billed_model = result.model or agent.primary_model_id
+                cost = estimate_cost(result.input_tokens, result.output_tokens, billed_model)
                 await log_token_usage(
-                    db, session_id, CLAUDE_HAIKU,
+                    db, session_id, billed_model,
                     result.input_tokens, result.output_tokens, cost.total_cost_usd,
                 )
                 logger.info(

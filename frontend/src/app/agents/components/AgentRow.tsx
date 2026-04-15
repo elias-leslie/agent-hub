@@ -31,7 +31,7 @@ export function AgentRow({
     >
       {/* Agent Name & Slug */}
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="grid min-w-0 grid-cols-[auto_1fr_auto] items-start gap-1.5">
           <span
             className={cn(
               "h-1.5 w-1.5 rounded-full shrink-0",
@@ -42,7 +42,7 @@ export function AgentRow({
           <a
             href={`/agents/${agent.slug}`}
             className={cn(
-              "block truncate text-sm font-semibold transition-colors hover:text-amber-300",
+              "block min-w-0 line-clamp-2 text-sm font-semibold leading-tight transition-colors hover:text-amber-300",
               agent.is_active
                 ? "text-slate-100"
                 : "text-slate-400"
@@ -51,7 +51,10 @@ export function AgentRow({
             {agent.name}
           </a>
           {agent.is_coding_agent && (
-            <span title="Coding specialist">
+            <span
+              title="Coding specialist"
+              className="mt-0.5"
+            >
               <Code2
                 className="h-3.5 w-3.5 text-cyan-400 shrink-0"
               />

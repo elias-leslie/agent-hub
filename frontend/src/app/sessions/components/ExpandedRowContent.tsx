@@ -1,17 +1,20 @@
 import { RefreshCw, Gauge, Zap, TrendingUp, Maximize2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
+import type { ModelCost } from "@/lib/models";
 import { EventTimeline } from "@/components/timeline";
 import { estimateCost, formatCost, formatTokens, formatDuration } from "../utils";
 import { CopyIdButton } from "./CopyIdButton";
 
 export function ExpandedRowContent({
   session,
+  modelCosts,
   expandedData,
   eventsData,
   isLoading,
 }: {
   session: SessionListItem;
+  modelCosts: Map<string, ModelCost>;
   expandedData: Session | null;
   eventsData: SessionEventsResponse | null;
   isLoading: boolean;
@@ -36,7 +39,8 @@ export function ExpandedRowContent({
   const cost = estimateCost(
     session.model,
     expandedData.total_input_tokens || 0,
-    expandedData.total_output_tokens || 0
+    expandedData.total_output_tokens || 0,
+    modelCosts,
   );
   const live = expandedData.live_activity;
 
