@@ -13,6 +13,14 @@ export interface ModelScores {
 export interface ModelCost {
   input_per_m: number;
   output_per_m: number;
+  pricing_unit:
+    | "per_million_tokens"
+    | "per_image"
+    | "per_second"
+    | "per_minute"
+    | "per_million_characters";
+  unit_price: number | null;
+  source: "catalog" | "enrichment";
 }
 
 export interface ModelCapabilities {

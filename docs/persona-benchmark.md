@@ -12,6 +12,8 @@ This benchmark profiles the persona against a fixed seven-model roster:
 
 Direct `openai/*` models are excluded from the default roster in this environment because no OpenAI API key is configured; `codex/gpt-5.2` fills that comparison slot instead.
 
+`xai/*` models stay out of the default roster on purpose. They are useful candidate cohorts, but they spend real API dollars and should be run as opt-in Arena comparisons instead of every baseline pass.
+
 ## Goal
 
 Measure the persona on real governance-style work instead of static catalog scores alone.
@@ -46,6 +48,18 @@ Defaults:
 - attempt order: shuffled with seed `42`
 - temp workspaces: `backend/.tmp/persona-model-benchmark`
 - client id: auto-resolved from `AGENT_HUB_CLIENT_ID` or the first active local client with access to the target project
+
+Cheap xAI comparison example:
+
+```bash
+python backend/scripts/run_persona_model_benchmark.py \
+  --models codex/gpt-5.4,claude-sonnet-4-6,xai/grok-4.20-reasoning \
+  --runs-per-case 1 \
+  --cases dispatch-ready,wait-healthy-session \
+  --no-persist
+```
+
+Use `xai/grok-4.20-multi-agent` only for narrow research/profile experiments, not routine governance baselines. It is responses-only, more latent, and can consume meaningfully more tokens than the single-agent roster.
 
 The live Precision Code Search benchmark case requires an indexed real project context. It is included in the default battery, so the default benchmark project is now `agent-hub` rather than `persona-sandbox`.
 

@@ -59,7 +59,10 @@ def test_capabilities_reflect_supported_stack() -> None:
     assert registry.supports_tools("claude") is True
     assert registry.supports_tools("gemini") is True
     assert registry.supports_tools("codex") is True
+    assert registry.supports_tools("xai", "xai/grok-4.20-reasoning") is True
+    assert registry.supports_tools("xai", "xai/grok-4.20-multi-agent") is False
     assert registry.supports_thinking("gemini") is True
+    assert registry.supports_thinking("xai", "xai/grok-4.20-multi-agent") is True
     assert registry.supports_thinking("openai") is False
     assert registry.supports_cache_retention("claude") is True
     assert registry.supports_cache_retention("gemini") is False

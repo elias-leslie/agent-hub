@@ -130,9 +130,11 @@ export default function AgentsPage() {
   }, [archiveCandidate, refetch]);
 
   const hasSearch = searchQuery.trim().length > 0;
+  const catalogAgents = data?.agents?.filter((agent) => agent.slug !== "persona") ?? [];
   const visibleCount = filteredAgents.length;
-  const totalCount = data?.total ?? 0;
-  const activeCount = data?.agents?.filter((agent) => agent.is_active).length ?? 0;
+  const totalCount = catalogAgents.length;
+  const activeCount = catalogAgents.filter((agent) => agent.is_active).length;
+  const listedCount = showInactive ? totalCount : activeCount;
 
   return (
     <div className="page-shell">
@@ -147,9 +149,9 @@ export default function AgentsPage() {
               <div className="page-title-stack">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="page-title">Agents</h1>
-                  <span className="page-pill">{visibleCount} visible</span>
+                  <span className="page-pill">{visibleCount} shown</span>
                   <span className="text-xs text-slate-500">
-                    {showInactive ? `${totalCount} total` : `${activeCount} active`}
+                    of {listedCount} {showInactive ? "cataloged" : "active"}
                   </span>
                 </div>
                 <div className="page-meta">

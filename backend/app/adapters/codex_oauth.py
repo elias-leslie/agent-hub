@@ -16,6 +16,7 @@ from typing import Any
 
 import httpx
 
+from app.adapters._openai_compat_helpers import normalize_responses_content
 from app.adapters.base import (
     AuthenticationError,
     CompletionResult,
@@ -100,7 +101,7 @@ def _convert_messages_to_input(messages: list[Message]) -> tuple[list[dict[str, 
             text = msg.content if isinstance(msg.content, str) else str(msg.content)
             instructions = f"{instructions}\n{text}" if instructions else text
             continue
-        input_items.append({"role": msg.role, "content": msg.content})
+        input_items.append({"role": msg.role, "content": normalize_responses_content(msg.role, msg.content)})
     return input_items, instructions
 
 

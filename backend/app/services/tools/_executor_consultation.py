@@ -10,8 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.constants.models import FAST_CLAUDE_MODEL
-
 from ._executor_consultation_helpers import (
     _build_consultation_messages,
     _consultation_max_turns,
@@ -150,15 +148,32 @@ async def steer_consultation(project_id: str | None, session_id: str, message: s
     try:
         from app.api.complete.core import complete_internal
         from app.db import async_session
+        from app.models import Session as DBSession
+        from app.services.agent_routing_utils import resolve_agent
 
         async with async_session() as db:
-            consultation_tools = _consultation_tools()
+            session = await db.get(DBSession, session_id)
+            if not session:
+                return f"Error: Session '{session_id}' not found."
+            if session.request_source != "consultation":
+                return f"Error: Session '{session_id}' is not a consultation."
+            if not session.agent_slug:
+                return f"Error: Consultation session '{session_id}' has no agent slug."
+
+            resolved = await resolve_agent(session.agent_slug, db)
+            consultation_tools = _consultation_tools(session.agent_slug)
             consultation_max_turns = await _consultation_max_turns(db)
             result = await complete_internal(
                 messages=[{"role": "user", "content": message}],
-                model=FAST_CLAUDE_MODEL, provider="claude", temperature=0.3,
+                model=resolved.model,
+                provider=resolved.provider,
+                temperature=resolved.agent.temperature,
                 project_id=project_id, db=db, session_id=session_id,
+                agent_slug=session.agent_slug,
                 request_source="consultation",
+                use_memory=True,
+                memory_group_id=f"project-{project_id}",
+                thinking_level=resolved.agent.thinking_level,
                 max_turns=consultation_max_turns,
                 execute_tools=bool(consultation_tools),
                 tools=consultation_tools,

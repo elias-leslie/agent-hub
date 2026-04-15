@@ -1,5 +1,6 @@
-import { getModelCost } from "@/lib/models";
+import type { ModelCost } from "@/lib/models";
 import { formatRelativeTime, formatTokens } from "@/lib/formatters";
+import { estimateTokenCost } from "@/lib/model-pricing";
 
 // Re-exported from canonical location
 export { formatRelativeTime, formatTokens };
@@ -10,9 +11,13 @@ export function formatTokenPair(input: number, output: number): string {
   return `${formatTokens(input)} / ${formatTokens(output)}`;
 }
 
-export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  const cost = getModelCost(model);
-  return (inputTokens * cost.input_per_m + outputTokens * cost.output_per_m) / 1_000_000;
+export function estimateCost(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  modelCosts: Map<string, ModelCost>,
+): number {
+  return estimateTokenCost(model, inputTokens, outputTokens, modelCosts);
 }
 
 export function formatCost(cost: number): string {

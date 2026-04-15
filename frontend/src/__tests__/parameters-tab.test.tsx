@@ -22,7 +22,22 @@ const codexModel: ModelInfo = {
   provider: "codex",
   alias: "codex-5.4",
   hint: "Frontier",
-  cost: { input_per_m: 2.5, output_per_m: 15 },
+  cost: {
+    input_per_m: 2.5,
+    output_per_m: 15,
+    pricing_unit: "per_million_tokens",
+    unit_price: null,
+    source: "catalog",
+  },
+  scores: {
+    coding: 82,
+    reasoning: 84,
+    planning: 80,
+    tool_use: 88,
+    instruction: 85,
+    design: 74,
+    composite: 82.6,
+  },
   context_window: 1_050_000,
   speed_tier: "medium",
   capabilities: {

@@ -126,3 +126,5 @@ class CompletionResult:
     # Extended thinking fields
     thinking_content: str | None = None
     thinking_tokens: int | None = None
+    # Why the primary model was abandoned, when fallback routing succeeded.
+    fallback_reason: str | None = None

@@ -28,6 +28,7 @@ from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory, MemoryRevision
+from .model_catalog_sync_state import ModelCatalogSyncState
 from .model_enrichment import ModelEnrichment
 from .narration_tag import NarrationTag
 from .persona import Persona
@@ -67,6 +68,7 @@ __all__ = [
     "MemoryInjectionMetric",
     "MemoryRevision",
     "MemorySettings",
+    "ModelCatalogSyncState",
     "ModelEnrichment",
     "NarrationTag",
     "Persona",

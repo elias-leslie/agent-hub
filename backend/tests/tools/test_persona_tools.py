@@ -913,6 +913,13 @@ class TestSteerConsultation:
         mock_result = MagicMock()
         mock_result.content = "Here's my follow-up advice."
         mock_result.session_id = "sess-123"
+        mock_session = MagicMock()
+        mock_session.request_source = "consultation"
+        mock_session.agent_slug = "analyst"
+        mock_resolved = MagicMock()
+        mock_resolved.model = "codex/gpt-5.4"
+        mock_resolved.provider = "codex"
+        mock_resolved.agent = MagicMock(temperature=0.1, thinking_level="low")
 
         mock_redis = AsyncMock()
         mock_redis.incr = AsyncMock(return_value=1)
@@ -924,6 +931,7 @@ class TestSteerConsultation:
         mock_persona_result = MagicMock()
         mock_persona_result.scalar_one_or_none.return_value = mock_persona
         mock_db.execute.return_value = mock_persona_result
+        mock_db.get = AsyncMock(return_value=mock_session)
 
         @asynccontextmanager
         async def _session():
@@ -936,6 +944,11 @@ class TestSteerConsultation:
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ) as mock_complete,
+            patch(
+                "app.services.agent_routing_utils.resolve_agent",
+                new_callable=AsyncMock,
+                return_value=mock_resolved,
+            ),
             patch("redis.asyncio.from_url", return_value=mock_redis),
         ):
             result = await steer_consultation("test-project", "sess-123", "Follow up question")
@@ -948,6 +961,12 @@ class TestSteerConsultation:
         tool_names = {tool["name"] for tool in kwargs["tools"]}
         assert kwargs["execute_tools"] is True
         assert kwargs["max_turns"] == 500
+        assert kwargs["model"] == "codex/gpt-5.4"
+        assert kwargs["provider"] == "codex"
+        assert kwargs["agent_slug"] == "analyst"
+        assert kwargs["thinking_level"] == "low"
+        assert kwargs["use_memory"] is True
+        assert kwargs["memory_group_id"] == "project-test-project"
         assert tool_names == {
             "fetch_web_page",
             "precision_code_search",

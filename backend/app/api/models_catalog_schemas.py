@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -20,10 +21,47 @@ class ModelScoresInfo(BaseModel):
 
 
 class ModelCostInfo(BaseModel):
-    """Pricing in USD per million tokens."""
+    """Pricing in USD across token and non-token modalities."""
 
     input_per_m: float
     output_per_m: float
+    pricing_unit: Literal[
+        "per_million_tokens",
+        "per_image",
+        "per_second",
+        "per_minute",
+        "per_million_characters",
+    ] = "per_million_tokens"
+    unit_price: float | None = None
+    source: str = "catalog"
+
+
+class CatalogDiscoveryProviderInfo(BaseModel):
+    provider_id: str
+    provider_name: str
+    unmatched_count: int
+    sample_model_ids: list[str] = Field(default_factory=list)
+
+
+class CatalogDiscoveryInfo(BaseModel):
+    unmatched_model_count: int = 0
+    unmatched_provider_count: int = 0
+    top_providers: list[CatalogDiscoveryProviderInfo] = Field(default_factory=list)
+    sample_model_ids: list[str] = Field(default_factory=list)
+
+
+class CatalogHealthInfo(BaseModel):
+    total_models: int
+    enriched_models: int
+    unenriched_models: int
+    models_with_live_pricing: int
+    models_missing_live_pricing: int
+    is_stale: bool
+    stale_after_hours: int = 24
+    sync_status: str | None = None
+    sync_error: str | None = None
+    source_counts: dict[str, int] | None = None
+    discovery: CatalogDiscoveryInfo | None = None
 
 
 class ModelCapabilitiesInfo(BaseModel):
@@ -86,3 +124,4 @@ class ModelsResponse(BaseModel):
     )
     last_sync: datetime | None = None
     last_model_review: datetime | None = None
+    catalog_health: CatalogHealthInfo | None = None

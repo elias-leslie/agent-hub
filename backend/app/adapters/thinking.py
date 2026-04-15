@@ -27,7 +27,7 @@ def _normalize_level(level: ThinkingLevel | str | None) -> str | None:
         return level.value
     # Raw string path
     level_lower = level.strip().lower()
-    if level_lower == "off" or level_lower == "":
+    if level_lower in {"off", "none", ""}:
         return None
     return level_lower
 
@@ -65,6 +65,9 @@ def get_thinking_config(
 
     if provider_lower == "gemini":
         return {"thinking_level": level_str}
+
+    if provider_lower == "xai":
+        return None
 
     if provider_lower in ("openai", "openrouter", "zhipu", "codex", "minimax"):
         effort = _OPENAI_REASONING_MAP.get(level_str, "medium")

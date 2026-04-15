@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message
 from app.adapters.registry import get_adapter
+from app.adapters.thinking import get_thinking_config
 
 from .schemas import MessageInput, StreamingChunk
 from .streaming_context import StreamContext
@@ -115,6 +116,7 @@ async def stream_completion(
     provider: str,
     temperature: float,
     session_id: str,
+    thinking_level: str | None = None,
     agent_used: str | None = None,
     model_used: str | None = None,
     fallback_used: bool = False,
@@ -137,6 +139,14 @@ async def stream_completion(
     adapter = get_adapter(provider)
     content_buf: list[str] = [""]
     stream_kwargs: dict[str, object] = {"tools": tools} if tools else {}
+    if session_id:
+        stream_kwargs["prompt_cache_key"] = session_id
+    if thinking_level:
+        thinking_config = get_thinking_config(model, thinking_level, provider)
+        if thinking_config:
+            stream_kwargs.update(thinking_config)
+        elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
+            stream_kwargs["thinking_level"] = thinking_level
     ctx = StreamContext.open(
         session_id=session_id,
         model=model,

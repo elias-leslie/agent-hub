@@ -1,5 +1,22 @@
 import { cn } from "@/lib/utils";
 
+function formatModelLabel(model: string): string {
+  return model
+    .replace(/^codex\/(gpt-[0-9.]+)-codex-spark$/i, "codex/$1-spark")
+    .replace(/^codex\/(gpt-[0-9.]+)-codex$/i, "codex/$1")
+    .replace(/^claude-/, "claude/")
+    .replace(/^gemini-/, "gemini/")
+    .replace(/-preview(?:-[a-z0-9-]+)?/gi, "")
+    .replace(/-latest\b/gi, "")
+    .replace(/-exp(?:-[a-z0-9-]+)?/gi, "")
+    .replace(/-\d{4}(?:-\d{2}){1,2}\b/g, "")
+    .replace(/-(\d)-(\d)\b/g, "-$1.$2")
+    .replace(/-image\b/gi, "")
+    .replace(/--+/g, "-")
+    .replace(/\/+/g, "/")
+    .replace(/[-/]\s*$/g, "");
+}
+
 export function ModelPill({
   model,
   provider,
@@ -12,15 +29,7 @@ export function ModelPill({
   isActive?: boolean;
 }) {
   const isClaude = provider ? provider === "claude" : model.toLowerCase().includes("claude");
-
-  // Extract meaningful model name
-  const shortName = model
-    .replace("claude-", "")
-    .replace("gemini-", "")
-    .replace("-preview", "")
-    .replace("-20250514", "")
-    .replace("-image", "")
-    .slice(0, 12);
+  const label = formatModelLabel(model);
 
   return (
     <span
@@ -44,7 +53,7 @@ export function ModelPill({
               isActive && "ring-emerald-400"
             )
       )}
-      title={onClick ? "Click to filter by model" : undefined}
+      title={onClick ? `${model} · click to filter` : model}
     >
       <span
         className={cn(
@@ -52,7 +61,9 @@ export function ModelPill({
           isClaude ? "bg-purple-500" : "bg-emerald-500"
         )}
       />
-      {shortName}
+      <span className="max-w-[20ch] truncate sm:max-w-[24ch]">
+        {label}
+      </span>
     </span>
   );
 }

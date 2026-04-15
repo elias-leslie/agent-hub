@@ -20,6 +20,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _image_data_uri(source: object) -> str | None:
+    """Return a data URI for an internal image block source."""
+    if not isinstance(source, dict):
+        return None
+    media_type = source.get("media_type")
+    data = source.get("data")
+    if not isinstance(media_type, str) or not isinstance(data, str) or not data:
+        return None
+    return f"data:{media_type};base64,{data}"
+
+
+def _chat_content_block(block: object) -> dict[str, Any] | None:
+    """Convert one internal content block to OpenAI chat-completions format."""
+    if not isinstance(block, dict):
+        return None
+    block_type = block.get("type")
+    if block_type == "text":
+        text = block.get("text")
+        return {"type": "text", "text": str(text) if text is not None else ""}
+    if block_type == "image":
+        data_uri = _image_data_uri(block.get("source"))
+        if data_uri is None:
+            return None
+        return {"type": "image_url", "image_url": {"url": data_uri}}
+    return None
+
+
+def _responses_content_block(role: str, block: object) -> dict[str, Any] | None:
+    """Convert one internal content block to Responses API format."""
+    if not isinstance(block, dict):
+        return None
+    block_type = block.get("type")
+    if block_type == "text":
+        text = block.get("text")
+        return {
+            "type": "output_text" if role == "assistant" else "input_text",
+            "text": str(text) if text is not None else "",
+        }
+    if block_type == "image":
+        data_uri = _image_data_uri(block.get("source"))
+        if data_uri is None:
+            return None
+        return {"type": "input_image", "image_url": data_uri}
+    return None
+
+
+def normalize_chat_content(content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
+    """Convert internal content to OpenAI chat-completions content."""
+    if isinstance(content, str):
+        return content
+    normalized = [
+        converted
+        for block in content
+        if (converted := _chat_content_block(block)) is not None
+    ]
+    return normalized
+
+
+def normalize_responses_content(
+    role: str,
+    content: str | list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Convert internal content to Responses API content items."""
+    if isinstance(content, str):
+        block_type = "output_text" if role == "assistant" else "input_text"
+        return [{"type": block_type, "text": content}]
+    return [
+        converted
+        for block in content
+        if (converted := _responses_content_block(role, block)) is not None
+    ]
+
+
 def is_auth_error(error: Exception) -> bool:
     """Return True when the provider error looks like authentication."""
     message = str(error).lower()
@@ -119,6 +192,8 @@ def _apply_optional_params(params: dict[str, Any], kwargs: dict[str, Any]) -> No
         params["response_format"] = kwargs["response_format"]
     if kwargs.get("reasoning_effort"):
         params["reasoning_effort"] = kwargs["reasoning_effort"]
+    if kwargs.get("extra_headers"):
+        params["extra_headers"] = kwargs["extra_headers"]
 
 
 def build_completion_params(
@@ -263,7 +338,7 @@ def build_client_kwargs(
 
 def convert_messages(messages: list[Message]) -> list[dict[str, Any]]:
     """Convert internal Message objects to OpenAI-format dicts."""
-    return [{"role": msg.role, "content": msg.content} for msg in messages]
+    return [{"role": msg.role, "content": normalize_chat_content(msg.content)} for msg in messages]
 
 
 def handle_provider_error(error: Exception, provider_name: str) -> None:

@@ -15,18 +15,51 @@ import pytest
 
 from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
 from app.adapters.codex_auth import CodexCredentials
-from app.adapters.codex_oauth import CodexOAuthAdapter
+from app.adapters.codex_oauth import CodexOAuthAdapter, _convert_messages_to_input
 
 
 def _build_codex_jwt(*, account_id: str = "acct", expires_at: float | None = None) -> str:
     header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').rstrip(b"=").decode()
-    payload = {
+    payload: dict[str, Any] = {
         "https://api.openai.com/auth": {"chatgpt_account_id": account_id},
     }
     if expires_at is not None:
         payload["exp"] = int(expires_at)
     payload_part = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=").decode()
     return f"{header}.{payload_part}.sig"
+
+
+def test_convert_messages_to_input_normalizes_image_blocks() -> None:
+    input_items, instructions = _convert_messages_to_input(
+        [
+            Message(role="system", content="System rules"),
+            Message(
+                role="user",
+                content=[
+                    {"type": "text", "text": "Check this"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "abc123",
+                        },
+                    },
+                ],
+            ),
+        ]
+    )
+
+    assert instructions == "System rules"
+    assert input_items == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": "Check this"},
+                {"type": "input_image", "image_url": "data:image/png;base64,abc123"},
+            ],
+        }
+    ]
 
 
 class _FakeCredentialManager:

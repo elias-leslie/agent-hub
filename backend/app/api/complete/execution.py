@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import CompletionResult, Message
 from app.adapters.registry import get_adapter
+from app.adapters.thinking import get_thinking_config
 from app.api.complete.helpers import should_enable_thinking
 from app.api.complete.schemas import (
     CompletionResponse,
@@ -104,6 +105,7 @@ async def execute_with_fallback(
     tools_api: list[dict[str, Any]] | None,
     thinking_level: str | None = None,
     resolved_model: str | None = None,
+    prompt_cache_key: str | None = None,
 ) -> tuple[CompletionResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -130,6 +132,7 @@ async def execute_with_fallback(
         tools=tools_api,
         thinking_level=thinking_level,
         primary_model_override=primary_override,
+        prompt_cache_key=prompt_cache_key,
     )
     fallback_used = fallback_result.used_fallback and fallback_result.model_used != requested_model
     if fallback_used and fallback_result.fallback_reason:
@@ -149,6 +152,7 @@ async def execute_without_db(
     thinking_level: str | None,
     tools_api: list[dict[str, Any]] | None,
     response_format_dict: dict[str, Any] | None,
+    session_id: str | None = None,
 ) -> tuple[CompletionResult, str]:
     """Execute completion without database.
 
@@ -167,6 +171,22 @@ async def execute_without_db(
     from app.core.debug import debug, debug_async_timer
 
     adapter = get_adapter(provider)
+    extra_kwargs: dict[str, Any] = {
+        "enable_caching": request.enable_caching,
+        "cache_ttl": request.cache_ttl,
+        "tools": tools_api,
+        "enable_programmatic_tools": request.enable_programmatic_tools,
+        "container_id": request.container_id,
+        "response_format": response_format_dict,
+    }
+    if session_id:
+        extra_kwargs["prompt_cache_key"] = session_id
+    if thinking_level:
+        thinking_config = get_thinking_config(resolved_model, thinking_level, provider)
+        if thinking_config:
+            extra_kwargs.update(thinking_config)
+        elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
+            extra_kwargs["thinking_level"] = thinking_level
 
     debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
     async with debug_async_timer(f"adapter.complete ({resolved_model})"):
@@ -177,13 +197,7 @@ async def execute_without_db(
                 model=resolved_model,
                 max_tokens=None,
                 temperature=request.temperature,
-                enable_caching=request.enable_caching,
-                cache_ttl=request.cache_ttl,
-                thinking_level=thinking_level,
-                tools=tools_api,
-                enable_programmatic_tools=request.enable_programmatic_tools,
-                container_id=request.container_id,
-                response_format=response_format_dict,
+                **extra_kwargs,
             )
         except Exception as exc:
             record_provider_failure(provider, str(exc), (time.monotonic() - start) * 1000)

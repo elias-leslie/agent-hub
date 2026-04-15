@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useModels } from "@/components/chat/use-models";
+import { buildModelCostMap } from "@/lib/model-pricing";
 import { SessionTable } from "./components/SessionTable";
 import { SessionsHeader } from "./components/SessionsHeader";
 import { ModelFilterBadge } from "./components/ModelFilterBadge";
@@ -21,6 +23,8 @@ export default function SessionsPage() {
   const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pageSize = 25;
+  const models = useModels();
+  const modelCosts = useMemo(() => buildModelCostMap(models), [models]);
 
   // Custom hooks for state management
   const { sortField, sortDirection, handleSort } =
@@ -39,6 +43,7 @@ export default function SessionsPage() {
     pageStats,
   } = useSessionFilters({
     sessions: allSessions,
+    modelCosts,
     sortField,
     sortDirection,
     hideBenchmarkTraffic,
@@ -98,6 +103,7 @@ export default function SessionsPage() {
           <>
             <SessionTable
               sessions={filteredAndSorted}
+              modelCosts={modelCosts}
               sortField={sortField}
               sortDirection={sortDirection}
               modelFilter={modelFilter}
