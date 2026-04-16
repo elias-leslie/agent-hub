@@ -82,6 +82,7 @@ async def setup_session(
             agent_slug=request.agent_slug,
             current_branch=request.current_branch,
             working_dir=request.working_dir,
+            parent_session_id=request.parent_session_id,
             trace_id=request.trace_id,
             requested_provider=provider,
             requested_model=resolved_model,
@@ -90,6 +91,7 @@ async def setup_session(
         mark_session_execution_start(session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
+        await db.commit()
 
     return session_id, session, context_messages, is_new_session
 

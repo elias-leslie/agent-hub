@@ -25,6 +25,7 @@ from app.services.persona_instruction_service import set_persona_heartbeat_instr
 from app.services.persona_service import get_or_create_persona
 
 from .activity import router as _activity_router
+from .automations import router as _automations_router
 from .helpers import commit_and_refresh, persona_to_response
 from .schemas import (
     PersonaImprovementDashboardResponse,
@@ -218,6 +219,7 @@ async def update_personality(
 
 
 router.include_router(_activity_router)
+router.include_router(_automations_router)
 router.include_router(_stream_router)
 
 __all__ = ["router"]

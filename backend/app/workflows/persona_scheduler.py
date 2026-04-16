@@ -62,6 +62,11 @@ class SchedulerResult(BaseModel):
     errors: list[str] | None = None
 
 
+class JobExecutionResult(BaseModel):
+    output: str
+    session_id: str | None = None
+
+
 def compute_next_run(
     schedule_type: str,
     schedule_value: str,
@@ -123,7 +128,7 @@ async def _check_project_permission() -> str | None:
     return None
 
 
-async def _execute_agent_turn(job: Any) -> str:
+async def _execute_agent_turn(job: Any) -> JobExecutionResult:
     """Execute a scheduled job as an agent turn via complete_internal."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
@@ -135,12 +140,12 @@ async def _execute_agent_turn(job: Any) -> str:
 
     skip = await _check_project_permission()
     if skip:
-        return skip
+        return JobExecutionResult(output=skip)
 
     async with async_session() as db:
         agent = await get_agent_service().get_by_slug(db, "persona")
         if not agent:
-            return "Error: persona agent not found"
+            return JobExecutionResult(output="Error: persona agent not found")
 
         provider = get_provider_for_model(agent.primary_model_id)
         mandate = await inject_agent_mandates(
@@ -172,10 +177,13 @@ async def _execute_agent_turn(job: Any) -> str:
             task_type="scheduled_job",
             thinking_level=agent.thinking_level,
         )
-        return result.content[:500] if result.content else "(no output)"
+        return JobExecutionResult(
+            output=result.content[:500] if result.content else "(no output)",
+            session_id=result.session_id,
+        )
 
 
-async def _execute_push(job: Any) -> str:
+async def _execute_push(job: Any) -> JobExecutionResult:
     """Execute a scheduled job as a push notification."""
     from app.db import async_session
     from app.services.push_service import send_push
@@ -186,7 +194,7 @@ async def _execute_push(job: Any) -> str:
     }
     async with async_session() as db:
         sent = await send_push(db, payload=payload)
-    return f"Push sent to {sent} device(s)"
+    return JobExecutionResult(output=f"Push sent to {sent} device(s)")
 
 
 def _scheduled_self_honing_paths(now: datetime | None = None) -> tuple[Path, Path, Path]:
@@ -218,7 +226,7 @@ async def _active_self_honing_conflicts() -> list[dict[str, Any]]:
     return [s for s in sessions if str(s.get("agent_slug") or "") in _SELF_HONING_AGENT_SLUGS]
 
 
-async def _execute_self_honing(job: Any) -> str:
+async def _execute_self_honing(job: Any) -> JobExecutionResult:
     from app.services.persona_improvement import PERSONA_IMPROVEMENT_SUITE_ID
     from scripts.completion_review_benchmark_cases import get_default_completion_review_case_ids
     from scripts.persona_benchmark_cases import get_persona_improvement_case_ids
@@ -229,7 +237,7 @@ async def _execute_self_honing(job: Any) -> str:
             f"{item.get('agent_slug')}:{str(item.get('session_id') or '')[:8]}"
             for item in conflicts
         )
-        return f"Skipped: active self-edit conflict sessions present ({active})"
+        return JobExecutionResult(output=f"Skipped: active self-edit conflict sessions present ({active})")
 
     models, reviewer_models = await _resolve_self_honing_models()
     working_root, output_dir, output_json_path = _scheduled_self_honing_paths()
@@ -264,17 +272,19 @@ async def _execute_self_honing(job: Any) -> str:
     iterations = result.get("iterations") or []
     latest_benchmark_id = iterations[-1].get("benchmark_id") if iterations else "n/a"
     latest_decision = iterations[-1].get("final_decision") if iterations else "n/a"
-    return (
-        "Self-honing completed: "
-        f"honed={result.get('honed')} "
-        f"iterations={result.get('completed_iterations')} "
-        f"decision={latest_decision} "
-        f"benchmark_id={latest_benchmark_id} "
-        f"output={output_json_path}"
+    return JobExecutionResult(
+        output=(
+            "Self-honing completed: "
+            f"honed={result.get('honed')} "
+            f"iterations={result.get('completed_iterations')} "
+            f"decision={latest_decision} "
+            f"benchmark_id={latest_benchmark_id} "
+            f"output={output_json_path}"
+        )
     )
 
 
-async def _execute_job(job: Any) -> str:
+async def execute_job(job: Any) -> JobExecutionResult:
     """Dispatch to the correct executor based on payload type."""
     if job.payload_type == PAYLOAD_TYPE_PUSH:
         return await _execute_push(job)
@@ -354,8 +364,8 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
 
         for job in jobs:
             try:
-                output = await _execute_job(job)
-                await _maybe_send_delivery_push(job, output)
+                result = await execute_job(job)
+                await _maybe_send_delivery_push(job, result.output)
                 _update_job_state(job, now)
                 executed += 1
                 logger.info("Scheduled job %s (%s) executed", job.name, job.id)

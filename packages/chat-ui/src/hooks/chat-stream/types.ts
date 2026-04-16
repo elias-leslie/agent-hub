@@ -29,6 +29,7 @@ export interface SessionToolExecution {
 
 export interface SessionData {
   id: string;
+  project_id?: string;
   provider?: string;
   messages?: Array<{
     id: number;

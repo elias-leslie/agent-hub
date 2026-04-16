@@ -285,6 +285,10 @@ class WorkflowRequest(BaseModel):
     """Explicit clarify -> plan -> execute -> review -> qa workflow request."""
 
     project_id: str = Field(..., description="Project ID for all stages in the workflow")
+    parent_session_id: str | None = Field(
+        default=None,
+        description="Optional persona or operator session ID that should own workflow stages as child lanes.",
+    )
     shared_context: str | None = Field(
         default=None,
         description="Optional shared context prepended to every stage prompt",

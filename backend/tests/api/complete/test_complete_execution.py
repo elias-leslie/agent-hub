@@ -97,7 +97,7 @@ async def test_execute_with_fallback_does_not_mark_explicit_override_as_fallback
     assert result is adapter_result
     assert model_used == "claude-sonnet-4-6"
     assert fallback_used is False
-    assert not hasattr(result, "fallback_reason")
+    assert result.fallback_reason is None
 
 
 @pytest.mark.asyncio
@@ -267,6 +267,68 @@ async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() ->
     assert result == (adapter_result, "claude-sonnet-4-6", False, [], "sess-1", None)
     execute_without_db.assert_awaited_once()
     dispatch_db.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_run_internal_passes_parent_session_id_to_complete_internal() -> None:
+    from app.api.complete.complete_execution import _run_internal
+
+    request = SimpleNamespace(
+        temperature=0.0,
+        project_id="agent-hub",
+        external_id=None,
+        parent_session_id="persona-root",
+        agent_slug="planner",
+        messages=[{"role": "user", "content": "plan"}],
+        memory_group_id=None,
+        enable_caching=False,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+        max_turns=2,
+        execute_tools=True,
+        working_dir=None,
+        trace_id=None,
+        task_type=None,
+        phase="planning",
+    )
+    internal_result = CompletionInternalResult(
+        content="plan",
+        model="codex/gpt-5.4",
+        provider="codex",
+        input_tokens=3,
+        output_tokens=2,
+        finish_reason="stop",
+        session_id="sess-plan",
+        memory_uuids=[],
+        cited_uuids=[],
+    )
+
+    with patch(
+        "app.api.complete.complete_execution.complete_internal",
+        new=AsyncMock(return_value=internal_result),
+    ) as complete_internal:
+        result = await _run_internal(
+            req=request,
+            model="codex/gpt-5.4",
+            provider="codex",
+            agent=None,
+            msgs=[{"role": "user", "content": "plan"}],
+            db=AsyncMock(),
+            sid="sess-parent",
+            client_id=None,
+            source="agent-hub-dashboard",
+            thinking=None,
+            tools=None,
+            fmt=None,
+            skip_cache=False,
+            is_agentic=True,
+        )
+
+    assert result is internal_result
+    complete_internal.assert_awaited_once()
+    assert complete_internal.await_args is not None
+    assert complete_internal.await_args.kwargs["parent_session_id"] == "persona-root"
 
 
 @pytest.mark.asyncio

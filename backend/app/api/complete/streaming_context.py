@@ -15,8 +15,9 @@ class StreamContext:
 
     __slots__ = (
         "_seq", "agent_used", "cancel_event", "fallback_used", "is_new_session",
-        "is_one_shot", "model", "model_used", "project_id", "provider", "session_id",
-        "stream_start", "user_messages",
+        "is_one_shot", "last_progress_at", "last_progress_chars", "model",
+        "model_used", "project_id", "provider", "session_id", "stream_start",
+        "user_messages",
     )
 
     def __init__(
@@ -47,6 +48,8 @@ class StreamContext:
         self.is_one_shot = is_one_shot
         self.cancel_event = cancel_event
         self.project_id = project_id
+        self.last_progress_at = 0.0
+        self.last_progress_chars = 0
 
     @classmethod
     def open(
@@ -99,3 +102,8 @@ class StreamContext:
         """Return the next monotonic sequence number."""
         self._seq += 1
         return self._seq
+
+    def reset_progress_cursor(self) -> None:
+        """Reset live-progress throttling at the start of a model turn."""
+        self.last_progress_at = 0.0
+        self.last_progress_chars = 0

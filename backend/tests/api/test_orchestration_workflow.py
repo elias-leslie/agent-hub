@@ -36,7 +36,7 @@ def test_workflow_endpoint_runs_stages_with_defaults_and_prior_outputs(
     captured_requests = []
     stage_order = ["clarify", "plan", "execute", "review", "qa"]
 
-    async def fake_orchestrate(request, http_request, skip_cache, db):  # type: ignore[no-untyped-def]
+    async def fake_orchestrate(request, http_request, skip_cache, db):
         del http_request, skip_cache, db
         captured_requests.append(request)
         stage = stage_order[len(captured_requests) - 1]
@@ -52,6 +52,7 @@ def test_workflow_endpoint_runs_stages_with_defaults_and_prior_outputs(
             "/api/orchestration/workflow",
             json={
                 "project_id": "agent-hub",
+                "parent_session_id": "persona-root",
                 "clarify": {"task": "Ask the missing questions."},
                 "plan": {"task": "Create an execution-ready plan."},
                 "execute": {
@@ -93,6 +94,7 @@ def test_workflow_endpoint_runs_stages_with_defaults_and_prior_outputs(
         "review",
         "review",
     ]
+    assert all(request.parent_session_id == "persona-root" for request in captured_requests)
     assert "Workflow stage: clarify" in captured_requests[0].messages[0].content
     assert "clarify output" in captured_requests[1].messages[0].content
     assert "clarify output" in captured_requests[2].messages[0].content
@@ -106,7 +108,7 @@ def test_workflow_endpoint_runs_stages_with_defaults_and_prior_outputs(
 def test_workflow_endpoint_honors_stage_overrides(api_client: APITestClient) -> None:
     captured_requests = []
 
-    async def fake_orchestrate(request, http_request, skip_cache, db):  # type: ignore[no-untyped-def]
+    async def fake_orchestrate(request, http_request, skip_cache, db):
         del http_request, skip_cache, db
         captured_requests.append(request)
         return _completion("execute", index=1, agent_slug=request.agent_slug)

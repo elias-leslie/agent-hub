@@ -11,7 +11,13 @@ from app.adapters.base import Message
 
 from .schemas import StreamingChunk
 from .streaming_context import StreamContext
-from .streaming_persistence import log_tool_audit
+from .streaming_persistence import (
+    log_tool_audit,
+    mirror_stream_tool_result,
+    mirror_stream_tool_use,
+    publish_stream_progress,
+    should_publish_stream_progress,
+)
 from .streaming_tool_messages import (
     build_assistant_content_blocks,
     build_tool_result_blocks,
@@ -52,6 +58,7 @@ async def _iter_tool_execution(
     tool_name = tc_event.tool_name or ""
     tool_call = ToolCall(id=tc_event.tool_id or "", name=tool_name, input=tc_event.tool_input or {})
 
+    await mirror_stream_tool_use(ctx, tool_name, tc_event.tool_input or {})
     yield f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
 
     exec_task = asyncio.create_task(handler.execute(tool_call))
@@ -73,6 +80,13 @@ async def _iter_tool_execution(
         )
 
     status = "error" if result.is_error else "complete"
+    await mirror_stream_tool_result(
+        ctx,
+        tool_call.name,
+        result.content,
+        duration_ms=result.duration_ms,
+        is_error=result.is_error,
+    )
     yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status=status).model_dump_json()}\n\n"
     result_out.append((result.tool_use_id, tool_call.name, result.content, result.is_error))
 
@@ -88,6 +102,7 @@ async def collect_turn_events(
     ctx: StreamContext,
 ) -> tuple[list[str], list[StreamEvent], set[str], str, object | None]:
     """Stream one turn and collect: sse_parts, tool_calls, resolved_ids, turn_text, done_event."""
+    ctx.reset_progress_cursor()
     sse_parts: list[str] = []
     pending_tool_calls: list[StreamEvent] = []
     resolved_tool_ids: set[str] = set()
@@ -111,6 +126,8 @@ async def collect_turn_events(
         sse = sse_for_simple_event(event, content_buf, ctx)
         if sse is not None:
             sse_parts.append(sse)
+        if event_type == "content" and should_publish_stream_progress(ctx, turn_text):
+            await publish_stream_progress(ctx, turn_text)
 
     return sse_parts, pending_tool_calls, resolved_tool_ids, turn_text, done_event
 

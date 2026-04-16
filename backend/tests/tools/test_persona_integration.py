@@ -473,7 +473,7 @@ class TestPersonaBashWorkflowGuards:
         )
 
         assert "blocked for workflow policy" in result.lower()
-        assert "smart_sync" in result
+        assert "commit.sh" in result
 
     @pytest.mark.asyncio
     async def test_persona_bash_blocks_raw_git_push(self, tmp_path: Path):

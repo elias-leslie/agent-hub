@@ -121,6 +121,60 @@ async def test_finalize_response_recovery_success_bypasses_deterministic_fallbac
 
 
 @pytest.mark.asyncio
+async def test_finalize_response_recovers_narration_only_tool_closeout(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    tracker = _tracker()
+    adapter = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(
+                content="Published summitflow commit ddd08c64c after focused tests passed; full repo type gate still fails from unrelated pre-existing errors.",
+                thinking_content=None,
+                tool_calls=[],
+            )
+        )
+    )
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="persona"),
+        session_id="sess-narration",
+        is_new_session=True,
+        model="codex/gpt-5.4",
+        provider="codex",
+        content_parts=[
+            "[[P:started]] Inspect repo state. Pick small ready task."
+            "[[P:tested]] Focused pytest pass."
+            "[[P:decision]] commit.sh allowed with skip-checks only path past unrelated gate break."
+        ],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=2,
+        tool_calls_count=3,
+        finish_reason="end_turn",
+        tracker=tracker,
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Take one summitflow task to completion or report blocker only.")],
+        temperature=0.0,
+        working_dir="/srv/workspaces/projects/summitflow",
+        tool_result_summaries=["Bash: commit.sh --current --skip-checks --msg ... -> SUCCESS"],
+    )
+
+    stored_content = mock_store.await_args.args[2]
+    assert stored_content.startswith("Published summitflow commit ddd08c64c")
+    assert tracker.report_status.await_count == 1
+    assert mock_finalize.await_args.kwargs["fallback_used"] is False
+
+
+@pytest.mark.asyncio
 async def test_finalize_response_falls_back_when_closeout_recovery_fails(mocker) -> None:
     mock_store = mocker.patch(
         "app.api.complete.tool_event_storage.store_assistant_response",

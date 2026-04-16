@@ -71,6 +71,7 @@ async def _setup_streaming_session(
         mark_session_execution_start(stream_session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
+        await db.commit()
 
     return session_id, context_messages, is_new_session
 
@@ -162,12 +163,9 @@ def _build_sse_response(
     fallback_used: bool,
     db: AsyncSession | None,
     is_new_session: bool,
+    tools: list[dict[str, object]] | None,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
-    provisioned_tools = provision_standard_tools(
-        request.execute_tools, None, agent_slug=agent_used, project_id=request.project_id,
-    )
-    tools = provisioned_tools.loaded_tools or None
     return StreamingResponse(
         stream_completion(
             messages=messages,
@@ -223,8 +221,21 @@ async def handle_streaming_request(
     messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
     messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent)
     thinking_level = get_thinking_level(request, messages, resolved_agent)
+    visible_tool_names = None
+    if db and request.project_id:
+        from app.services.project_permission_service import get_visible_tools_for_project
+
+        visible_tool_names = await get_visible_tools_for_project(request.project_id, db)
+    provisioned_tools = provision_standard_tools(
+        request.execute_tools,
+        None,
+        agent_slug=agent_used,
+        project_id=request.project_id,
+        visible_tool_names=visible_tool_names,
+    )
+    tools = provisioned_tools.loaded_tools or None
 
     return _build_sse_response(
         messages, resolved_model, provider, request, session_id, thinking_level,
-        agent_used, model_used, fallback_used, db, is_new_session,
+        agent_used, model_used, fallback_used, db, is_new_session, tools,
     )

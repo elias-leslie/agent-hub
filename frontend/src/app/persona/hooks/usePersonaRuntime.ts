@@ -6,12 +6,69 @@ import { useSessionEvents } from "@/hooks/use-session-events";
 import type { SessionEvent } from "@/types/events";
 import {
   cancelSessionStream,
+  fetchSession,
+  type Session,
   fetchSessions,
   type SessionListItem,
 } from "@/lib/api/sessions";
 
 const IDLE_POLL_MS = 15_000;
 const ACTIVE_POLL_MS = 5_000;
+
+function sortSessionsByUpdatedAt(sessions: SessionListItem[]): SessionListItem[] {
+  return [...sessions].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
+}
+
+function isRuntimeActive(session: Pick<SessionListItem, "status" | "live_activity">): boolean {
+  return (
+    session.status === "active"
+    || session.live_activity?.status === "active"
+    || session.live_activity?.phase === "waiting_for_model"
+    || session.live_activity?.phase === "running_tool"
+    || session.live_activity?.phase === "finalizing"
+  );
+}
+
+function upsertSessionListItem(sessions: SessionListItem[], session: SessionListItem): SessionListItem[] {
+  return sortSessionsByUpdatedAt([session, ...sessions.filter((entry) => entry.id !== session.id)]);
+}
+
+export function toSessionListItem(session: Session): SessionListItem {
+  const sessionRecord = session as Session & Partial<Pick<SessionListItem, "parent_session_id" | "external_id" | "current_branch">>;
+  return {
+    id: session.id,
+    project_id: session.project_id,
+    provider: session.provider,
+    model: session.model,
+    requested_provider: session.requested_provider ?? null,
+    requested_model: session.requested_model ?? null,
+    effective_provider: session.effective_provider ?? null,
+    effective_model: session.effective_model ?? null,
+    requested_model_display_name: session.requested_model_display_name ?? null,
+    effective_model_display_name: session.effective_model_display_name ?? null,
+    fallback_used: session.fallback_used ?? false,
+    fallback_reason: session.fallback_reason ?? null,
+    status: session.status,
+    agent_slug: session.agent_slug ?? null,
+    session_type: session.session_type,
+    parent_session_id: sessionRecord.parent_session_id ?? null,
+    external_id: sessionRecord.external_id ?? null,
+    client_id: session.client_id ?? null,
+    request_source: session.request_source ?? null,
+    source_client: session.source_client ?? null,
+    source_path: session.source_path ?? null,
+    attribution_kind: session.attribution_kind ?? null,
+    attribution_label: session.attribution_label ?? null,
+    attribution_detail: session.attribution_detail ?? null,
+    current_branch: sessionRecord.current_branch ?? null,
+    live_activity: session.live_activity ?? null,
+    message_count: session.messages?.length ?? 0,
+    total_input_tokens: session.total_input_tokens ?? 0,
+    total_output_tokens: session.total_output_tokens ?? 0,
+    created_at: session.created_at,
+    updated_at: session.updated_at,
+  };
+}
 
 function truncateText(value: string, maxLength = 96): string {
   if (value.length <= maxLength) {
@@ -126,13 +183,12 @@ function patchSessionList(sessions: SessionListItem[], event: SessionEvent): Ses
     changed = true;
     return patchSessionWithLiveEvent(session, event);
   });
-  return changed
-    ? [...patched].sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at))
-    : sessions;
+  return changed ? sortSessionsByUpdatedAt(patched) : sessions;
 }
 
 export interface PersonaRuntimeState {
   primarySession: SessionListItem | null;
+  primarySessionDetails: Session | null;
   activePersonaSessions: SessionListItem[];
   activeChildSessions: SessionListItem[];
   loading: boolean;
@@ -140,6 +196,7 @@ export interface PersonaRuntimeState {
   stoppingSessionId: string | null;
   runtimeSyncKey: string;
   refresh: () => Promise<void>;
+  stopSession: (sessionId: string) => Promise<boolean>;
   stopCurrentStream: () => Promise<boolean>;
   stopActiveWork: () => Promise<{ cancelled: number; attempted: number }>;
 }
@@ -147,10 +204,14 @@ export interface PersonaRuntimeState {
 export function usePersonaRuntime(preferredSessionId: string | null = null): PersonaRuntimeState {
   const [activePersonaSessions, setActivePersonaSessions] = useState<SessionListItem[]>([]);
   const [activeChildSessions, setActiveChildSessions] = useState<SessionListItem[]>([]);
+  const [primarySessionDetails, setPrimarySessionDetails] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
   const [stoppingSessionId, setStoppingSessionId] = useState<string | null>(null);
+  const trackedParentSessionId =
+    (primarySessionDetails as Session & Partial<Pick<SessionListItem, "parent_session_id">> | null)?.parent_session_id
+    ?? preferredSessionId;
 
   const refresh = useCallback(async () => {
     try {
@@ -159,6 +220,9 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
         .filter((session) => session.agent_slug === "persona")
         .sort((a, b) => +new Date(b.updated_at) - +new Date(a.updated_at));
       const personaIds = new Set(personaSessions.map((session) => session.id));
+      if (trackedParentSessionId) {
+        personaIds.add(trackedParentSessionId);
+      }
       const childSessions = data.sessions
         .filter(
           (session) =>
@@ -176,11 +240,17 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [trackedParentSessionId]);
 
   const watchedSessionIds = useMemo(
-    () => [...activePersonaSessions, ...activeChildSessions].map((session) => session.id),
-    [activePersonaSessions, activeChildSessions],
+    () => Array.from(
+      new Set([
+        ...activePersonaSessions.map((session) => session.id),
+        ...activeChildSessions.map((session) => session.id),
+        ...(preferredSessionId ? [preferredSessionId] : []),
+      ]),
+    ),
+    [activePersonaSessions, activeChildSessions, preferredSessionId],
   );
 
   const { status: liveEventsStatus } = useSessionEvents({
@@ -217,9 +287,6 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
 
   useEffect(() => {
     const hasActiveWork = activePersonaSessions.length > 0 || activeChildSessions.length > 0;
-    if (hasActiveWork && liveEventsStatus === "connected") {
-      return;
-    }
     const interval = window.setInterval(
       () => setRefreshTick((value) => value + 1),
       hasActiveWork ? ACTIVE_POLL_MS : IDLE_POLL_MS,
@@ -253,20 +320,75 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
     return `${personaKey}::${childKey}`;
   }, [activeChildSessions, activePersonaSessions]);
 
-  const stopCurrentStream = useCallback(async () => {
-    if (!primarySession) {
-      return false;
-    }
+  const preferredRuntimeSession = useMemo(
+    () =>
+      preferredSessionId
+        ? [...activePersonaSessions, ...activeChildSessions].find((session) => session.id === preferredSessionId) ?? null
+        : null,
+    [activeChildSessions, activePersonaSessions, preferredSessionId],
+  );
 
-    setStoppingSessionId(primarySession.id);
+  const detailSessionId = preferredSessionId ?? primarySession?.id ?? null;
+  const detailSessionUpdatedAt =
+    preferredSessionId
+      ? preferredRuntimeSession?.updated_at ?? null
+      : primarySession?.updated_at ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!detailSessionId) {
+      setPrimarySessionDetails(null);
+      return;
+    }
+    fetchSession(detailSessionId)
+      .then((session) => {
+        if (cancelled) {
+          return;
+        }
+        const sessionRecord = session as Session & Partial<Pick<SessionListItem, "parent_session_id">>;
+        setPrimarySessionDetails((current) =>
+          current?.id === session.id && current.updated_at === session.updated_at ? current : session,
+        );
+        if (preferredSessionId && session.agent_slug === "persona" && !sessionRecord.parent_session_id && !isRuntimeActive(session)) {
+          setRefreshTick((value) => value + 1);
+        }
+        if (!isRuntimeActive(session)) {
+          return;
+        }
+        const sessionListItem = toSessionListItem(session);
+        if (sessionListItem.parent_session_id && sessionListItem.agent_slug !== "persona") {
+          setActiveChildSessions((current) => upsertSessionListItem(current, sessionListItem));
+          return;
+        }
+        setActivePersonaSessions((current) => upsertSessionListItem(current, sessionListItem));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPrimarySessionDetails((current) => (current?.id === detailSessionId ? null : current));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [detailSessionId, detailSessionUpdatedAt]);
+
+  const stopSession = useCallback(async (sessionId: string) => {
+    setStoppingSessionId(sessionId);
     try {
-      const result = await cancelSessionStream(primarySession.id);
+      const result = await cancelSessionStream(sessionId);
       setRefreshTick((value) => value + 1);
       return result.cancelled;
     } finally {
       setStoppingSessionId(null);
     }
-  }, [primarySession]);
+  }, []);
+
+  const stopCurrentStream = useCallback(async () => {
+    if (!primarySession) {
+      return false;
+    }
+    return stopSession(primarySession.id);
+  }, [primarySession, stopSession]);
 
   const stopActiveWork = useCallback(async () => {
     const activeSessions = [...activePersonaSessions, ...activeChildSessions].filter(
@@ -304,6 +426,7 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
 
   return {
     primarySession,
+    primarySessionDetails,
     activePersonaSessions,
     activeChildSessions,
     loading,
@@ -311,6 +434,7 @@ export function usePersonaRuntime(preferredSessionId: string | null = null): Per
     stoppingSessionId,
     runtimeSyncKey,
     refresh,
+    stopSession,
     stopCurrentStream,
     stopActiveWork,
   };

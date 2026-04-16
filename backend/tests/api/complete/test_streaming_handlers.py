@@ -38,11 +38,13 @@ def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> N
             provider="codex",
             request=request,
             session_id="sess-1",
+            thinking_level=None,
             agent_used="persona",
             model_used="codex/gpt-5.4",
             fallback_used=False,
             db=None,
             is_new_session=True,
+            tools=loaded_tools,
         )
 
     assert isinstance(response, StreamingResponse)

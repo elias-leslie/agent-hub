@@ -35,6 +35,7 @@ interface UseChatStreamReturn {
   sendMessage: (content: string, targetAgents?: string[]) => void;
   cancelStream: () => void;
   clearMessages: () => void;
+  resetSession: () => void;
   editMessage: (messageId: string, newContent: string) => void;
   regenerateMessage: (messageId: string) => void;
 }
@@ -69,6 +70,7 @@ export function useChatStream(
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [loadedSessionProjectId, setLoadedSessionProjectId] = useState<string | null>(null);
 
   const abortControllersRef = useRef<AbortController[]>([]);
   const streamStatesRef = useRef<Map<string, StreamState>>(new Map());
@@ -80,11 +82,13 @@ export function useChatStream(
     if (!sessionId) {
       setMessages([]);
       setCurrentSessionId(null);
+      setLoadedSessionProjectId(null);
       return;
     }
 
     if (!loadInitialSession) {
       setCurrentSessionId(sessionId);
+      setLoadedSessionProjectId(null);
       return;
     }
 
@@ -99,9 +103,10 @@ export function useChatStream(
     const load = async () => {
       try {
         setStatus("connecting");
-        const loadedMessages = await loadSession(sessionId, fetchFn, sessionsEndpoint);
+        const loadedSession = await loadSession(sessionId, fetchFn, sessionsEndpoint);
         setCurrentSessionId(sessionId);
-        setMessages(loadedMessages);
+        setMessages(loadedSession.messages);
+        setLoadedSessionProjectId(loadedSession.projectId);
         setStatus("idle");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load session");
@@ -172,11 +177,11 @@ export function useChatStream(
         fetchHeaders,
         completeEndpoint,
         preferencesEndpoint,
-        projectId,
+        projectId: loadedSessionProjectId ?? projectId,
         memoryGroupPrefix,
       });
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
   );
 
   const cancelStream = useCallback(() => {
@@ -186,6 +191,18 @@ export function useChatStream(
   }, [status]);
 
   const clearMessages = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    setStatus("idle");
+  }, []);
+
+  const resetSession = useCallback(() => {
+    abortControllersRef.current.forEach((controller) => controller.abort());
+    abortControllersRef.current = [];
+    streamStatesRef.current.clear();
+    streamEstablishedSessionRef.current = null;
+    setCurrentSessionId(null);
+    setLoadedSessionProjectId(null);
     setMessages([]);
     setError(null);
     setStatus("idle");
@@ -241,6 +258,7 @@ export function useChatStream(
     sendMessage,
     cancelStream,
     clearMessages,
+    resetSession,
     editMessage,
     regenerateMessage,
   };

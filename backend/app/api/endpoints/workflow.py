@@ -96,6 +96,7 @@ def _build_completion_request(
             )
         ],
         project_id=request.project_id,
+        parent_session_id=request.parent_session_id,
         external_id=_stage_identifier(request.external_id, stage_name),
         trace_id=_stage_identifier(request.trace_id, stage_name),
         agent_slug=stage.agent_slug or _DEFAULT_STAGE_AGENTS[stage_name],

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -93,6 +94,63 @@ class PersonaImprovementScheduleResponse(BaseModel):
     last_run_at: str | None = None
     next_run_at: str | None = None
     run_count: int = 0
+
+
+class PersonaAutomationResponse(BaseModel):
+    """Persona-owned scheduled automation summary."""
+
+    id: str
+    name: str
+    schedule_type: str
+    schedule_value: str
+    schedule_timezone: str = "UTC"
+    payload_type: str = "agent_turn"
+    payload_message: str
+    payload_title: str | None = None
+    delivery: str = "none"
+    enabled: bool = True
+    last_run_at: str | None = None
+    next_run_at: str | None = None
+    run_count: int = 0
+    max_runs: int | None = None
+    created_at: str | None = None
+
+
+class PersonaAutomationCreate(BaseModel):
+    """Create one persona-owned scheduled automation."""
+
+    name: str = Field(min_length=1, max_length=200)
+    schedule_type: Literal["at", "every", "cron"]
+    schedule_value: str = Field(min_length=1, max_length=100)
+    schedule_timezone: str = Field(default="UTC", max_length=50)
+    payload_type: Literal["agent_turn", "push", "self_honing"] = "agent_turn"
+    payload_message: str = Field(min_length=1, max_length=10000)
+    payload_title: str | None = Field(default=None, max_length=200)
+    delivery: Literal["none", "push"] = "none"
+    enabled: bool = True
+
+
+class PersonaAutomationUpdate(BaseModel):
+    """Patch one persona-owned scheduled automation."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    schedule_type: Literal["at", "every", "cron"] | None = None
+    schedule_value: str | None = Field(default=None, min_length=1, max_length=100)
+    schedule_timezone: str | None = Field(default=None, max_length=50)
+    payload_type: Literal["agent_turn", "push", "self_honing"] | None = None
+    payload_message: str | None = Field(default=None, min_length=1, max_length=10000)
+    payload_title: str | None = Field(default=None, max_length=200)
+    delivery: Literal["none", "push"] | None = None
+    enabled: bool | None = None
+
+
+class PersonaAutomationTriggerResponse(BaseModel):
+    """Manual trigger result for one persona-owned automation."""
+
+    job: PersonaAutomationResponse
+    output: str
+    session_id: str | None = None
+    triggered_at: str
 
 
 class PersonaImprovementScheduleUpdate(BaseModel):

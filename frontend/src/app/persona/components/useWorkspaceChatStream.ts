@@ -3,18 +3,19 @@
 import { useMemo } from "react";
 import { useChatStream } from "@agent-hub/chat-ui";
 import { INTERNAL_HEADERS, fetchApi, getApiBaseUrl, getCompleteApiUrl } from "@/lib/api-config";
-import { PROJECT_ID } from "./workspace-types";
 
 export interface WorkspaceChatStreamOptions {
   agentSlug: string;
   personaDisplayName: string;
   activeSessionId: string | null;
+  projectId: string;
 }
 
 export function useWorkspaceChatStream({
   agentSlug,
   personaDisplayName,
   activeSessionId,
+  projectId,
 }: WorkspaceChatStreamOptions) {
   const apiConfig = useMemo(
     () => ({
@@ -23,13 +24,13 @@ export function useWorkspaceChatStream({
       sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
       preferencesEndpoint: "/api/preferences",
       fetchFn: fetchApi,
-      projectId: PROJECT_ID,
+      projectId,
       memoryGroupPrefix: "agent:",
     }),
-    [],
+    [projectId],
   );
 
-  const { messages, status, error: chatError, currentSessionId, sendMessage, cancelStream } = useChatStream({
+  const { messages, status, error: chatError, currentSessionId, sendMessage, cancelStream, resetSession } = useChatStream({
     agentSlug,
     sessionId: activeSessionId || undefined,
     toolsEnabled: true,
@@ -54,6 +55,7 @@ export function useWorkspaceChatStream({
     currentSessionId,
     sendMessage,
     cancelStream,
+    resetSession,
     responseStatusLabel,
   };
 }
