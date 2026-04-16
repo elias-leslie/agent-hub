@@ -7,6 +7,7 @@ import type { PersonaIssueMarker, PersonaStreamEntry } from "@/lib/api/persona-s
 import type { TimelineEvent } from "@/types/events";
 import { cn } from "@/lib/utils";
 import { pulseTagLabel } from "./pulse-helpers";
+import { buildSessionDetailBlocks } from "./workspace-event-details";
 import {
   isGenericStatusText,
   isPromptLikeText,
@@ -14,6 +15,7 @@ import {
   prettifyDisplayText,
 } from "./workspace-utils";
 import { describeValue } from "./workspace-event-details";
+import type { DetailField } from "./workspace-types";
 import type { NarrationTag } from "../hooks/useNarrationTags";
 import { getPersonaDisplayName } from "../utils/displayName";
 
@@ -133,6 +135,7 @@ interface TranscriptItem {
   toolParam?: string;
   toolResult?: string;
   toolResultFull?: string;
+  toolFields?: DetailField[];
   isError?: boolean;
   tagType?: string;
   tagContent?: string;
@@ -150,6 +153,7 @@ function buildTranscriptItems(events: TimelineEvent[], narrationTags?: Narration
       processedIds.add(event.id);
       const param = extractToolCallSummary(event.tool_input);
       let result = "", resultFull = "", hasError = false;
+      let toolFields: DetailField[] = [];
       const next = events[i + 1];
       if (next?.event_type === "tool_result" && next.turn === event.turn && next.tool_name === event.tool_name) {
         processedIds.add(next.id);
@@ -161,20 +165,24 @@ function buildTranscriptItems(events: TimelineEvent[], narrationTags?: Narration
           || outputRecord?.exit_code === 1
           || (outputRecord?.status as string)?.toLowerCase() === "failed"
           || raw.toLowerCase().startsWith("error");
+        toolFields = buildSessionDetailBlocks([event, next])[0]?.fields.slice(0, 6) ?? [];
         i++;
+      } else {
+        toolFields = buildSessionDetailBlocks([event])[0]?.fields.slice(0, 6) ?? [];
       }
       items.push({ id: event.id, timestamp: event.created_at, kind: "tool_call",
         toolName: event.tool_name || "tool", toolParam: param, toolResult: result,
-        toolResultFull: resultFull.length > result.length ? resultFull : undefined, isError: hasError });
+        toolResultFull: resultFull.length > result.length ? resultFull : undefined, toolFields, isError: hasError });
       continue;
     }
 
     if (event.event_type === "tool_result") {
       processedIds.add(event.id);
       const raw = extractToolResult(event.tool_output);
+      const toolFields = buildSessionDetailBlocks([event])[0]?.fields.slice(0, 6) ?? [];
       items.push({ id: event.id, timestamp: event.created_at, kind: "tool_call",
         toolName: event.tool_name || "tool", toolResult: truncate(raw, 150),
-        toolResultFull: raw.length > 150 ? raw : undefined });
+        toolResultFull: raw.length > 150 ? raw : undefined, toolFields });
       continue;
     }
 
@@ -297,6 +305,25 @@ export function SessionTranscript({
                   ) : item.toolResultFull && isExpanded ? (
                     <><span className="whitespace-pre-wrap break-words font-sans">{item.toolResultFull}</span><button onClick={(e) => { e.stopPropagation(); toggleExpand(item.id); }} className="ml-1.5 text-slate-600 hover:text-slate-400 font-sans text-[10px]">less</button></>
                   ) : item.toolResult}
+                </div>
+              )}
+              {item.toolFields && item.toolFields.length > 0 && (
+                <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                  {item.toolFields.map((field) => (
+                    <div key={`${item.id}-${field.label}-${field.value}`} className="rounded-md border border-slate-800/60 bg-slate-950/60 px-2 py-1.5 font-sans">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{field.label}</div>
+                      <div className={cn(
+                        "mt-1 break-words text-[11px]",
+                        field.tone === "danger" ? "text-rose-300" :
+                        field.tone === "warning" ? "text-amber-300" :
+                        field.tone === "success" ? "text-emerald-300" :
+                        field.tone === "info" ? "text-sky-300" :
+                        "text-slate-300",
+                      )}>
+                        {field.value}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

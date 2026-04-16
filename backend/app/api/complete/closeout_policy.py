@@ -40,6 +40,8 @@ def detect_closeout_issue(
     text = (content or "").strip()
     if not text:
         return "empty"
+    if tool_calls_count > 0 and "[[P:" in text and "[[S:" not in text:
+        return "empty"
     cleaned = clean_display_summary_text(text)
     if not cleaned:
         return "empty"

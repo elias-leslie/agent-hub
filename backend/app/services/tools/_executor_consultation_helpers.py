@@ -111,10 +111,10 @@ def _consultation_tools(agent_slug: str | None = None) -> list[dict[str, Any]]:
         RESEARCH_WEB_TOOL,
         SEARCH_WEB_TOOL,
     )
-    from app.services.tools.tool_definitions import get_agent_tool_specs
 
-    tool_specs = get_agent_tool_specs(agent_slug) if agent_slug else None
-    source_tools = tool_specs or [
+    del agent_slug
+
+    source_tools = [
         READ_FILE_TOOL,
         PRECISION_CODE_SEARCH_TOOL,
         RESEARCH_WEB_TOOL,

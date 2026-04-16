@@ -47,6 +47,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     onCancel,
     status,
     disabled = false,
+    compact = false,
     voiceWsUrl,
     ttsBaseUrl,
     preferencesEndpoint,
@@ -58,7 +59,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
   } = props;
 
   return (
-    <div className="border-t border-gray-700 p-4">
+    <div className={cn("border-t border-gray-700", compact ? "p-2.5" : "p-4")}>
       {editingMessage && (
         <div className="flex items-center justify-between mb-2 px-1">
           <span className="text-xs font-medium text-gray-400">
@@ -119,10 +120,11 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
             rows={1}
             className={cn(
               "w-full resize-none rounded-xl border border-gray-600",
-              "bg-gray-800 text-gray-100 placeholder:text-gray-500 px-4 py-2.5",
+              "bg-gray-800 text-gray-100 placeholder:text-gray-500 px-4",
+              compact ? "py-2 text-sm" : "py-2.5",
               "focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500",
               "disabled:opacity-50 disabled:cursor-not-allowed",
-              "min-h-[44px] max-h-[120px]",
+              compact ? "min-h-[40px] max-h-[108px]" : "min-h-[44px] max-h-[120px]",
               "transition-all duration-200",
               selectedModels.length > 0 && (selectedModels.length === 1 ? "pl-[140px]" : "pl-[280px]")
             )}

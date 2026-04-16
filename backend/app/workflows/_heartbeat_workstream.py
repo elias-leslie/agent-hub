@@ -26,20 +26,24 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.adapters._claude_constants import build_mcp_tool_name
 from app.services.ownership_lanes import idle_minutes_from_timestamps, infer_task_id
 from app.workflows._heartbeat_state import _STALE_ACTIVE_MINUTES
 
 
-def _tool_call(
-    tool_name: str,
-    arguments: str = "",
-    *,
-    provider: str | None = None,
-) -> str:
-    """Render a callable tool invocation string for heartbeat guidance."""
-    rendered = build_mcp_tool_name(tool_name) if provider == "claude" else tool_name
-    return f"{rendered}({arguments})" if arguments else f"{rendered}()"
+def _build_verify_then_close_action(task_id: str) -> str:
+    """Return shell-first closeout guidance for a completed lane."""
+    return (
+        f'bash: st context {task_id} then st done {task_id} --admin --message '
+        '"Completed work verified; task closed."'
+    )
+
+
+def _build_verify_then_inspect_action(task_id: str, *, reason: str) -> str:
+    """Return shell-first evidence gathering guidance for a task lane."""
+    return (
+        f"bash: st context {task_id} then st session-events -T {task_id} --page-size 100; "
+        f"{reason}"
+    )
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
@@ -75,15 +79,13 @@ def _build_stale_active_action(
     provider: str | None,
 ) -> str:
     """Build next-action string for a stale_active lane."""
-    query_active = _tool_call("query_sessions", 'status="active"', provider=provider)
+    del project_id, provider
     if not task_id:
-        return f"{query_active} then verify or retire the stale lane"
-    retire_lane = _tool_call(
-        "manage_tasks",
-        f'action="retire_lane", task_id="{task_id}", project_id="{project_id}"',
-        provider=provider,
+        return "inspect active session evidence; retire stale lane only after verification"
+    return _build_verify_then_inspect_action(
+        task_id,
+        reason="retire stale lane only after verification",
     )
-    return f"{query_active} then {retire_lane} if truly stale"
 
 
 def _build_workstream_next_action(
@@ -95,11 +97,8 @@ def _build_workstream_next_action(
 ) -> str:
     """Return a concrete next action for a classified workstream lane."""
     if state == "completed_ready_for_closure" and task_id:
-        return _tool_call(
-            "manage_tasks",
-            f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-            provider=provider,
-        )
+        del project_id, provider
+        return _build_verify_then_close_action(task_id)
     if state == "completed_ready_for_closure" and not task_id:
         return "completed_no_task_id"
     if state == "stale_active":
@@ -275,10 +274,9 @@ def _build_workstream_lines(
         task_id = _infer_lane_task_id(lane_rows)
         lane_state = _classify_workstream_lane(lane_rows)
         if task_id and (project_id, task_id) in stale_keys:
-            next_a = _tool_call(
-                "manage_tasks",
-                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                provider=provider,
+            next_a = _build_verify_then_inspect_action(
+                task_id,
+                reason="reconcile stale task state only after verification",
             )
             lines.append(
                 f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"
@@ -296,10 +294,9 @@ def _build_workstream_lines(
         lines.append(_build_lane_line(project_id, lane_key, task_id, lane_state, lane_rows, provider))
     for project_id, task_id in sorted(stale_keys):
         if (project_id, task_id) not in grouped:
-            next_a = _tool_call(
-                "manage_tasks",
-                f'action="reconcile", task_id="{task_id}", project_id="{project_id}"',
-                provider=provider,
+            next_a = _build_verify_then_inspect_action(
+                task_id,
+                reason="reconcile stale task state only after verification",
             )
             lines.append(
                 f"- {project_id} | {task_id} | state=stale_running_task | active=0 | next={next_a}"

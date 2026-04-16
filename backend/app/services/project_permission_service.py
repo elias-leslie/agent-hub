@@ -6,11 +6,12 @@ auto-dispatch check flows through this service.
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -197,6 +198,17 @@ def get_visible_tools_for_tier(tier: str) -> frozenset[str]:
     return get_tools_for_tier(tier) | _VISIBLE_PERSONA_TOOLS_BY_TIER.get(tier, frozenset())
 
 
+async def get_visible_tools_for_project(
+    project_id: str,
+    db: AsyncSession | None = None,
+) -> frozenset[str]:
+    """Return the visible tool set for a project, failing closed on missing tier."""
+    tier = await _resolve_project_tier(project_id, db)
+    if tier is None:
+        return frozenset()
+    return get_visible_tools_for_tier(str(tier))
+
+
 # ---------------------------------------------------------------------------
 # Redis cache helpers
 # ---------------------------------------------------------------------------
@@ -261,7 +273,10 @@ async def get_project_permission(
     result = await db.execute(
         select(ProjectPermission).where(ProjectPermission.project_id == project_id)
     )
-    return result.scalar_one_or_none()
+    permission = result.scalar_one_or_none()
+    if inspect.isawaitable(permission):
+        permission = await permission
+    return cast(ProjectPermission | None, permission)
 
 
 async def list_project_permissions(db: AsyncSession) -> list[ProjectPermission]:

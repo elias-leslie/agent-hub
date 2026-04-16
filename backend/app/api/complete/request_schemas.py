@@ -70,6 +70,11 @@ class CompletionRequest(BaseModel):
     messages: list[MessageInput] = Field(..., description="Conversation messages")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, max_length=100, description="Existing session ID to continue")
+    parent_session_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Optional parent session ID used to attach spawned work as a child lane.",
+    )
     project_id: str = Field(..., description="Project ID for session tracking (required)")
     external_id: str | None = Field(
         default=None,

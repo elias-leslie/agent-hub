@@ -15,6 +15,7 @@ from app.api.persona.schemas import PersonaUpdate
 from app.db import get_db
 from app.main import app
 from app.models.persona import Persona
+from app.models.persona_scheduled_job import PersonaScheduledJob
 from app.models.session import Session, SessionEvent, SessionEventType
 from tests.conftest import APITestClient
 
@@ -1461,3 +1462,186 @@ class TestPersonaStreamHelpers:
         assert parsed.status_terms == ["failed"]
         assert parsed.task_terms == ["task-123"]
         assert parsed.general_terms == ["verify", "bug"]
+
+
+class TestPersonaAutomationEndpoints:
+    """Tests for persona automation CRUD."""
+
+    def test_lists_persona_automations(self, api_client, mock_db_session):
+        persona = _make_persona(id=7)
+        job = PersonaScheduledJob(
+            id="job-1",
+            persona_id=7,
+            name="Nightly review",
+            schedule_type="cron",
+            schedule_value="0 9 * * *",
+            schedule_timezone="UTC",
+            payload_type="agent_turn",
+            payload_message="Run nightly review and report back in persona workspace.",
+            delivery="none",
+            enabled=True,
+            last_run_at=datetime(2026, 4, 14, 9, 0, tzinfo=UTC),
+            next_run_at=datetime(2026, 4, 15, 9, 0, tzinfo=UTC),
+            run_count=3,
+            max_runs=None,
+            created_at=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [job]
+        mock_db_session.execute.return_value = mock_result
+
+        with patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)):
+            response = api_client.get("/api/persona/automations")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == "job-1"
+        assert data[0]["name"] == "Nightly review"
+        assert data[0]["payload_message"] == "Run nightly review and report back in persona workspace."
+
+    def test_creates_persona_automation(self, api_client, mock_db_session):
+        persona = _make_persona(id=7)
+        next_run = datetime(2026, 4, 16, 14, 0, tzinfo=UTC)
+
+        async def _refresh(job: PersonaScheduledJob) -> None:
+            job.id = "job-created"
+            if job.created_at is None:
+                job.created_at = datetime(2026, 4, 15, 14, 0, tzinfo=UTC)
+
+        mock_db_session.refresh = _refresh
+
+        with (
+            patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)),
+            patch("app.api.persona.automations.compute_next_run", return_value=next_run),
+        ):
+            response = api_client.post(
+                "/api/persona/automations",
+                json={
+                    "name": "Morning status",
+                    "schedule_type": "every",
+                    "schedule_value": "3600000",
+                    "schedule_timezone": "UTC",
+                    "payload_type": "agent_turn",
+                    "payload_message": "Check active work and post concise status back into persona workspace.",
+                    "delivery": "none",
+                },
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["id"] == "job-created"
+        assert data["next_run_at"] == next_run.isoformat()
+        assert data["max_runs"] is None
+        added_job = mock_db_session.add.call_args.args[0]
+        assert added_job.persona_id == 7
+        assert added_job.name == "Morning status"
+        mock_db_session.commit.assert_awaited_once()
+
+    def test_updates_persona_automation_and_disables_next_run(self, api_client, mock_db_session):
+        persona = _make_persona(id=7)
+        job = PersonaScheduledJob(
+            id="job-2",
+            persona_id=7,
+            name="Daily sync",
+            schedule_type="every",
+            schedule_value="86400000",
+            schedule_timezone="UTC",
+            payload_type="agent_turn",
+            payload_message="Daily sync",
+            delivery="none",
+            enabled=True,
+            last_run_at=datetime(2026, 4, 14, 9, 0, tzinfo=UTC),
+            next_run_at=datetime(2026, 4, 15, 9, 0, tzinfo=UTC),
+            run_count=4,
+            max_runs=None,
+            created_at=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = job
+        mock_db_session.execute.return_value = mock_result
+
+        with (
+            patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)),
+            patch("app.api.persona.automations.compute_next_run", return_value=datetime(2026, 4, 16, 9, 0, tzinfo=UTC)),
+        ):
+            response = api_client.patch(
+                "/api/persona/automations/job-2",
+                json={
+                    "name": "Daily sync report",
+                    "enabled": False,
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["name"] == "Daily sync report"
+        assert data["enabled"] is False
+        assert data["next_run_at"] is None
+
+    def test_deletes_persona_automation(self, api_client, mock_db_session):
+        persona = _make_persona(id=7)
+        job = PersonaScheduledJob(
+            id="job-3",
+            persona_id=7,
+            name="Cleanup report",
+            schedule_type="cron",
+            schedule_value="0 2 * * *",
+            schedule_timezone="UTC",
+            payload_type="agent_turn",
+            payload_message="Cleanup report",
+            delivery="none",
+            enabled=True,
+            created_at=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = job
+        mock_db_session.execute.return_value = mock_result
+
+        with patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)):
+            response = api_client.delete("/api/persona/automations/job-3")
+
+        assert response.status_code == 204
+        mock_db_session.delete.assert_awaited_once_with(job)
+        mock_db_session.commit.assert_awaited_once()
+
+    def test_triggers_persona_automation_and_returns_session_id(self, api_client, mock_db_session):
+        persona = _make_persona(id=7)
+        job = PersonaScheduledJob(
+            id="job-4",
+            persona_id=7,
+            name="Immediate status",
+            schedule_type="every",
+            schedule_value="3600000",
+            schedule_timezone="UTC",
+            payload_type="agent_turn",
+            payload_message="Post status back into persona workspace.",
+            delivery="none",
+            enabled=True,
+            run_count=2,
+            created_at=datetime(2026, 4, 10, 9, 0, tzinfo=UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = job
+        mock_db_session.execute.return_value = mock_result
+
+        with (
+            patch("app.api.persona.automations.get_or_create_persona", new=AsyncMock(return_value=persona)),
+            patch(
+                "app.api.persona.automations.execute_job",
+                new=AsyncMock(return_value=MagicMock(output="Triggered", session_id="sess-123")),
+            ),
+            patch(
+                "app.api.persona.automations.compute_next_run",
+                return_value=datetime(2026, 4, 16, 9, 0, tzinfo=UTC),
+            ),
+        ):
+            response = api_client.post("/api/persona/automations/job-4/trigger")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["output"] == "Triggered"
+        assert data["session_id"] == "sess-123"
+        assert data["job"]["run_count"] == 3
+        assert data["job"]["next_run_at"] == "2026-04-16T09:00:00+00:00"
+        mock_db_session.commit.assert_awaited_once()

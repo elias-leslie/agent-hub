@@ -57,6 +57,8 @@ interface WorkspaceTimelineProps {
   onToggleRoutineGroup: (groupId: string) => void;
   onLoadOlder: () => void;
   onJumpToLatest: () => void;
+  showPulseOverview?: boolean;
+  compactViewport?: boolean;
 }
 
 export function WorkspaceTimeline({
@@ -93,6 +95,8 @@ export function WorkspaceTimeline({
   onToggleRoutineGroup,
   onLoadOlder,
   onJumpToLatest,
+  showPulseOverview = true,
+  compactViewport = false,
 }: WorkspaceTimelineProps) {
   const renderVirtualRows = false;
   const virtualRows = virtualizer.getVirtualItems();
@@ -113,15 +117,24 @@ export function WorkspaceTimeline({
 
   return (
     <>
-      <div ref={scrollRef} data-testid="stream-scroll-container" className="flex-1 overflow-y-auto px-5 py-5 bg-slate-950">
-        <div className="mx-auto max-w-3xl">
-          <PulseOverviewPanels
-            visiblePulseMetrics={visiblePulseMetrics}
-            pulse={pulse}
-            applyPulseFilter={applyPulseFilter}
-            inspectAgentPulse={inspectAgentPulse}
-          />
-        </div>
+      <div
+        ref={scrollRef}
+        data-testid="stream-scroll-container"
+        className={cn(
+          "flex-1 overflow-y-auto bg-slate-950",
+          compactViewport ? "px-4 py-3 pb-40 sm:pb-44" : "px-5 py-5 pb-16 lg:pb-20",
+        )}
+      >
+        {showPulseOverview ? (
+          <div className="mx-auto max-w-4xl">
+            <PulseOverviewPanels
+              visiblePulseMetrics={visiblePulseMetrics}
+              pulse={pulse}
+              applyPulseFilter={applyPulseFilter}
+              inspectAgentPulse={inspectAgentPulse}
+            />
+          </div>
+        ) : null}
 
         {(error || chatError) && (
           <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-rose-500/20 bg-rose-950/20 px-4 py-2.5 text-sm text-rose-300/90">
@@ -146,7 +159,7 @@ export function WorkspaceTimeline({
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-4xl">
             {total > (entries as unknown[]).length && !deferredSearch.trim() && (
               <div className="flex justify-center pt-2 pb-8">
                 <button
@@ -193,7 +206,7 @@ export function WorkspaceTimeline({
       </div>
 
       {latestItemId && (!isAtBottom || !autoFollow || newActivityCount > 0) && (
-        <div className="pointer-events-none absolute bottom-24 right-6 z-20">
+        <div className={cn("pointer-events-none absolute right-6 z-20", compactViewport ? "bottom-36" : "bottom-24")}>
           <button
             type="button"
             onClick={onJumpToLatest}

@@ -23,13 +23,8 @@ def _resolve_tools(
     tools: list[dict[str, Any]] | None,
     agent_slug: str | None,
 ) -> list[dict[str, Any]]:
-    """Resolve agent-specific or standard tools when none are provided."""
-    if agent_slug:
-        from app.services.tools.tool_definitions import get_agent_tool_specs
-
-        agent_tool_specs = get_agent_tool_specs(agent_slug)
-        if agent_tool_specs:
-            return build_tool_catalog(agent_tool_specs)
+    """Resolve the default core tool surface when none are provided."""
+    del tools, agent_slug
 
     from app.services.tools.direct_executor import get_standard_tools
 
@@ -39,8 +34,22 @@ def _resolve_tools(
 def _filter_tools_by_tier(
     result: list[dict[str, Any]],
     project_id: str,
+    visible_tool_names: set[str] | frozenset[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Filter tools by project permission tier using Redis cache (best-effort)."""
+    if visible_tool_names is not None:
+        before = len(result)
+        allowed = set(visible_tool_names)
+        filtered = [t for t in result if t.get("name") in allowed]
+        if len(filtered) < before:
+            logger.info(
+                "Filtered tools by explicit visible set for project '%s': %d -> %d",
+                project_id,
+                before,
+                len(filtered),
+            )
+        return filtered
+
     from app.services.project_permission_service import (
         get_visible_tools_for_tier,
     )
@@ -83,6 +92,7 @@ def provision_standard_tools(
     agent_slug: str | None = None,
     project_id: str | None = None,
     defer_tool_loading: bool = False,
+    visible_tool_names: set[str] | frozenset[str] | None = None,
 ) -> ToolProvisioningResult:
     """Auto-provision tools if execute_tools is enabled and no tools provided.
 
@@ -109,7 +119,11 @@ def provision_standard_tools(
 
     # Filter tools by project permission tier (soft enforcement at provisioning)
     if result and project_id:
-        result = _filter_tools_by_tier(result, project_id)
+        result = _filter_tools_by_tier(
+            result,
+            project_id,
+            visible_tool_names=visible_tool_names,
+        )
 
     catalog_tools = build_tool_catalog(result)
     if defer_tool_loading:

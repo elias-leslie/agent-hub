@@ -61,7 +61,8 @@ async def _run_internal(
     internal = await complete_internal(
         messages=msgs, model=model, provider=provider, temperature=req.temperature,
         project_id=req.project_id, db=db, session_id=sid, external_id=req.external_id,
-        client_id=client_id, request_source=source, agent_slug=req.agent_slug,
+        client_id=client_id, request_source=source, parent_session_id=req.parent_session_id,
+        agent_slug=req.agent_slug,
         use_memory=False, memory_group_id=req.memory_group_id, enable_caching=req.enable_caching,
         cache_ttl=req.cache_ttl, thinking_level=thinking, tools=tools,
         enable_programmatic_tools=req.enable_programmatic_tools, container_id=req.container_id,

@@ -76,12 +76,19 @@ async def execute_and_build_result(
     agent_slug: str | None, task_type: str | None,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
+    visible_tool_names = None
+    if project_id:
+        from app.services.project_permission_service import get_visible_tools_for_project
+
+        visible_tool_names = await get_visible_tools_for_project(project_id, db)
+
     provisioned = provision_standard_tools(
         execute_tools,
         tools,
         agent_slug=agent_slug,
         project_id=project_id,
         defer_tool_loading=defer_tool_loading,
+        visible_tool_names=visible_tool_names,
     )
     from .tool_router import supports_tools
 

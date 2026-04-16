@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from app.models import Session
-from app.services.session_transforms import build_session_list_items, build_session_response
+from app.models.session import SessionEventType
+from app.services.session_transforms import (
+    build_session_list_items,
+    build_session_response,
+    convert_messages_to_response,
+)
 
 
 def _session(**overrides: object) -> Session:
-    payload = {
+    payload: dict[str, object] = {
         "id": "sess-1",
         "project_id": "agent-hub",
         "provider": "codex",
@@ -92,3 +98,135 @@ def test_build_session_response_classifies_autonomous_attribution() -> None:
     assert response.attribution_kind == "autonomous"
     assert response.attribution_label == "Autonomous"
     assert response.attribution_detail == "summitflow"
+
+
+def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None:
+    now = datetime.now(UTC)
+    events = [
+        SimpleNamespace(
+            id="evt-tool-1",
+            turn=8,
+            sequence=1,
+            event_type=SessionEventType.TOOL_USE,
+            role=None,
+            content=None,
+            tool_name="bash",
+            tool_input={"command": "st claim task-29753d4e"},
+            tool_output=None,
+            tokens=None,
+            duration_ms=None,
+            model_used="codex/gpt-5.4",
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+        SimpleNamespace(
+            id="evt-tool-2",
+            turn=8,
+            sequence=2,
+            event_type=SessionEventType.TOOL_RESULT,
+            role=None,
+            content="Created worktree",
+            tool_name="bash",
+            tool_input=None,
+            tool_output={"content": "Created worktree", "is_error": False},
+            tokens=None,
+            duration_ms=25,
+            model_used="codex/gpt-5.4",
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+    ]
+
+    messages = convert_messages_to_response(events, agent_display_names={"persona": "Jenny"})
+
+    assert len(messages) == 1
+    assert messages[0].role == "assistant"
+    assert messages[0].agent_display_name == "Jenny"
+    assert messages[0].content == "Tool activity recorded without a final assistant summary. Tools: bash."
+    assert messages[0].tool_executions is not None
+    assert len(messages[0].tool_executions) == 1
+    assert messages[0].tool_executions[0].name == "bash"
+    assert messages[0].tool_executions[0].result == "{'content': 'Created worktree', 'is_error': False}"
+
+
+def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_duplicate() -> None:
+    now = datetime.now(UTC)
+    events = [
+        SimpleNamespace(
+            id="evt-user",
+            turn=8,
+            sequence=1,
+            event_type=SessionEventType.USER_MESSAGE,
+            role="user",
+            content="continue",
+            tool_name=None,
+            tool_input=None,
+            tool_output=None,
+            tokens=None,
+            duration_ms=None,
+            model_used=None,
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+        SimpleNamespace(
+            id="evt-tool-1",
+            turn=8,
+            sequence=2,
+            event_type=SessionEventType.TOOL_USE,
+            role=None,
+            content=None,
+            tool_name="bash",
+            tool_input={"command": "pwd"},
+            tool_output=None,
+            tokens=None,
+            duration_ms=None,
+            model_used="codex/gpt-5.4",
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+        SimpleNamespace(
+            id="evt-tool-2",
+            turn=8,
+            sequence=3,
+            event_type=SessionEventType.TOOL_RESULT,
+            role=None,
+            content="ok",
+            tool_name="bash",
+            tool_input=None,
+            tool_output={"content": "ok", "is_error": False},
+            tokens=None,
+            duration_ms=10,
+            model_used="codex/gpt-5.4",
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+        SimpleNamespace(
+            id="evt-assistant",
+            turn=8,
+            sequence=4,
+            event_type=SessionEventType.ASSISTANT_MESSAGE,
+            role="assistant",
+            content="done",
+            tool_name=None,
+            tool_input=None,
+            tool_output=None,
+            tokens=12,
+            duration_ms=None,
+            model_used="codex/gpt-5.4",
+            agent_id="persona",
+            agent_name="persona",
+            created_at=now,
+        ),
+    ]
+
+    messages = convert_messages_to_response(events, agent_display_names={"persona": "Jenny"})
+
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert messages[1].content == "done"
+    assert messages[1].tool_executions is not None
+    assert len(messages[1].tool_executions) == 1

@@ -8,6 +8,7 @@ import time
 from datetime import UTC, datetime
 
 from app.models import Session as DBSession
+from app.services.events import publish_message, publish_tool_result, publish_tool_use
 from app.services.session_live_activity import mark_session_completed
 
 from .event_helpers import save_events
@@ -15,6 +16,9 @@ from .schemas import MessageInput, StreamingChunk
 from .streaming_context import StreamContext
 
 logger = logging.getLogger(__name__)
+
+_STREAM_PROGRESS_MIN_CHARS = 120
+_STREAM_PROGRESS_MIN_INTERVAL_S = 3.0
 
 
 async def save_messages_to_db(
@@ -49,6 +53,126 @@ async def save_messages_to_db(
             logger.info("Streaming: saved messages for session %s", session_id)
     except Exception as save_err:
         logger.error("Failed to save streaming messages: %s", save_err)
+
+
+async def _with_fresh_session(
+    session_id: str,
+    callback,
+) -> None:
+    """Load a fresh session row, run callback(session, db), and commit if present."""
+    try:
+        from app.db import async_session
+
+        async with async_session() as fresh_db:
+            session = await fresh_db.get(DBSession, session_id)
+            if session is None:
+                return
+            await callback(session, fresh_db)
+            await fresh_db.commit()
+    except Exception as exc:
+        logger.warning("Streaming live update failed for %s: %s", session_id, exc)
+
+
+def should_publish_stream_progress(ctx: StreamContext, content: str) -> bool:
+    """Throttle live assistant-progress updates during streaming."""
+    stripped = content.strip()
+    if not stripped:
+        return False
+
+    content_len = len(stripped)
+    now = time.monotonic()
+    if content_len < ctx.last_progress_chars:
+        ctx.reset_progress_cursor()
+
+    should_publish = (
+        ctx.last_progress_chars == 0
+        or content_len - ctx.last_progress_chars >= _STREAM_PROGRESS_MIN_CHARS
+        or now - ctx.last_progress_at >= _STREAM_PROGRESS_MIN_INTERVAL_S
+    )
+    if not should_publish:
+        return False
+
+    ctx.last_progress_chars = content_len
+    ctx.last_progress_at = now
+    return True
+
+
+async def publish_stream_progress(ctx: StreamContext, content: str) -> None:
+    """Mirror partial assistant progress into live session truth + WS subscribers."""
+    stripped = content.strip()
+    if not stripped:
+        return
+
+    await publish_message(ctx.session_id, "assistant", stripped)
+
+    async def _update(session: DBSession, _db) -> None:
+        from app.services.session_live_activity import update_live_activity_for_event
+
+        update_live_activity_for_event(
+            session,
+            event_type="assistant_message",
+            content=stripped,
+            model_used=ctx.model_used or ctx.model,
+        )
+
+    await _with_fresh_session(ctx.session_id, _update)
+
+
+async def mirror_stream_tool_use(
+    ctx: StreamContext,
+    tool_name: str,
+    tool_input: dict[str, object],
+) -> None:
+    """Publish and persist a live tool-use breadcrumb for streaming sessions."""
+    await publish_tool_use(ctx.session_id, tool_name, tool_input)
+
+    async def _update(_session: DBSession, db) -> None:
+        from app.services.event_storage import store_tool_use_event
+
+        await store_tool_use_event(
+            db,
+            ctx.session_id,
+            tool_name,
+            tool_input,
+            model_used=ctx.model_used or ctx.model,
+            agent_id=ctx.agent_used,
+        )
+
+    await _with_fresh_session(ctx.session_id, _update)
+
+
+async def mirror_stream_tool_result(
+    ctx: StreamContext,
+    tool_name: str,
+    result_content: str,
+    *,
+    duration_ms: int | None,
+    is_error: bool,
+) -> None:
+    """Publish and persist a live tool-result breadcrumb for streaming sessions."""
+    tool_output = {"content": result_content, "is_error": is_error}
+    await publish_tool_result(
+        ctx.session_id,
+        tool_name,
+        tool_output,
+        duration_ms=duration_ms,
+        is_error=is_error,
+    )
+
+    async def _update(_session: DBSession, db) -> None:
+        from app.services.event_storage import store_tool_result_event
+
+        await store_tool_result_event(
+            db,
+            ctx.session_id,
+            tool_name,
+            tool_output,
+            duration_ms=duration_ms,
+            model_used=ctx.model_used or ctx.model,
+            agent_id=ctx.agent_used,
+        )
+
+    await _with_fresh_session(ctx.session_id, _update)
 
 
 async def close_one_shot_session(session_id: str) -> None:

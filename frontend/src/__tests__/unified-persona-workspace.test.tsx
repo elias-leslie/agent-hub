@@ -343,6 +343,14 @@ vi.mock("@/hooks/use-session-events", () => ({
   }),
 }));
 
+vi.mock("@/components/error/toast", () => ({
+  useToastActions: () => ({
+    success: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
+
 vi.mock("@agent-hub/chat-ui", () => ({
   MessageBubble: ({ message }: { message: { content: string } }) => <div>{message.content}</div>,
   MessageInput: () => <div data-testid="message-input">composer</div>,
@@ -373,6 +381,7 @@ describe("UnifiedPersonaWorkspace", () => {
       currentSessionId: "chat-1",
       sendMessage: vi.fn(),
       cancelStream: vi.fn(),
+      resetSession: vi.fn(),
     });
     mockFetchPersonaStream.mockResolvedValue(buildStreamResponse());
     mockFetchSessionEvents.mockImplementation(async (sessionId: string) => {
@@ -535,6 +544,190 @@ describe("UnifiedPersonaWorkspace", () => {
     expect(screen.getByText("dt -q -d kept failing or wasting turns")).toBeInTheDocument();
     const timelineTimes = document.querySelectorAll("time[datetime]");
     expect(timelineTimes).toHaveLength(2);
+  });
+
+  it("locks chat runtime to the active session project", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        persona={{
+          id: 1,
+          name: "Avery",
+          personality: null,
+          user_profile: null,
+          heartbeat_instructions: null,
+          user_context: null,
+          voice_id: "voice",
+          voice_enabled: false,
+          heartbeat_interval_minutes: 30,
+          execution_state: "active",
+          avatar_url: null,
+          greeting: null,
+          onboarding_complete: true,
+          onboarding_phase: "complete",
+          onboarding_attempts: 0,
+          session_reset_mode: "off",
+          session_reset_hour: 9,
+          session_reset_idle_minutes: 120,
+          limits: null,
+          agent_slug: "persona",
+          version: 1,
+          updated_at: null,
+        }}
+        runtime={{
+          primarySession: {
+            id: "sess-1",
+            project_id: "summitflow",
+            provider: "claude",
+            model: "claude-sonnet",
+            status: "active",
+            agent_slug: "persona",
+            session_type: "completion",
+            parent_session_id: null,
+            external_id: null,
+            current_branch: "main",
+            live_activity: {
+              phase: "waiting_for_model",
+              status: "active",
+              summary: "Working summitflow task",
+              health: "ok",
+              stalled: false,
+              current_tool_name: null,
+              outstanding_tool_calls: 0,
+              tool_calls_count: 1,
+              files_touched: [],
+            },
+            message_count: 0,
+            total_input_tokens: 400,
+            total_output_tokens: 200,
+            created_at: "2026-04-15T14:00:00Z",
+            updated_at: "2026-04-15T14:01:00Z",
+          },
+          primarySessionDetails: null,
+          activePersonaSessions: [{ id: "sess-1" }] as never[],
+          activeChildSessions: [] as never[],
+          loading: false,
+          error: null,
+          stoppingSessionId: null,
+          runtimeSyncKey: "sync-1",
+          refresh: vi.fn().mockResolvedValue(undefined),
+          stopSession: vi.fn().mockResolvedValue(true),
+          stopCurrentStream: vi.fn().mockResolvedValue(true),
+          stopActiveWork: vi.fn().mockResolvedValue({ cancelled: 1, attempted: 1 }),
+        }}
+        agentSlug="persona"
+        activeSessionId="sess-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey="sync-1"
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockUseChatStream).toHaveBeenCalled();
+    });
+
+    expect(mockUseChatStream.mock.calls.at(-1)?.[0]).toMatchObject({
+      sessionId: "sess-1",
+      apiConfig: {
+        projectId: "summitflow",
+      },
+    });
+    expect(screen.getByText("Thread: summitflow")).toBeInTheDocument();
+  });
+
+  it("does not let background runtime hijack a fresh thread target", async () => {
+    render(
+      <UnifiedPersonaWorkspace
+        persona={{
+          id: 1,
+          name: "Avery",
+          personality: null,
+          user_profile: null,
+          heartbeat_instructions: null,
+          user_context: null,
+          voice_id: "voice",
+          voice_enabled: false,
+          heartbeat_interval_minutes: 30,
+          execution_state: "active",
+          avatar_url: null,
+          greeting: null,
+          onboarding_complete: true,
+          onboarding_phase: "complete",
+          onboarding_attempts: 0,
+          session_reset_mode: "off",
+          session_reset_hour: 9,
+          session_reset_idle_minutes: 120,
+          limits: null,
+          agent_slug: "persona",
+          version: 1,
+          updated_at: null,
+        }}
+        runtime={{
+          primarySession: {
+            id: "sess-1",
+            project_id: "summitflow",
+            provider: "claude",
+            model: "claude-sonnet",
+            status: "active",
+            agent_slug: "persona",
+            session_type: "completion",
+            parent_session_id: null,
+            external_id: null,
+            current_branch: "main",
+            live_activity: {
+              phase: "waiting_for_model",
+              status: "active",
+              summary: "Background summitflow work still running",
+              health: "ok",
+              stalled: false,
+              current_tool_name: null,
+              outstanding_tool_calls: 0,
+              tool_calls_count: 1,
+              files_touched: [],
+            },
+            message_count: 0,
+            total_input_tokens: 400,
+            total_output_tokens: 200,
+            created_at: "2026-04-15T14:00:00Z",
+            updated_at: "2026-04-15T14:01:00Z",
+          },
+          primarySessionDetails: null,
+          activePersonaSessions: [{ id: "sess-1" }] as never[],
+          activeChildSessions: [] as never[],
+          loading: false,
+          error: null,
+          stoppingSessionId: null,
+          runtimeSyncKey: "sync-1",
+          refresh: vi.fn().mockResolvedValue(undefined),
+          stopSession: vi.fn().mockResolvedValue(true),
+          stopCurrentStream: vi.fn().mockResolvedValue(true),
+          stopActiveWork: vi.fn().mockResolvedValue({ cancelled: 1, attempted: 1 }),
+        }}
+        agentSlug="persona"
+        activeSessionId={null}
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey="sync-1"
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockUseChatStream).toHaveBeenCalled();
+    });
+
+    expect(mockUseChatStream.mock.calls.at(-1)?.[0]).toMatchObject({
+      sessionId: undefined,
+      apiConfig: {
+        projectId: "agent-hub",
+      },
+    });
+    expect(screen.queryByText("Thread: summitflow")).not.toBeInTheDocument();
+    expect(screen.getByText("Thread: agent-hub")).toBeInTheDocument();
+    expect(screen.getByText("Primary thread")).toBeInTheDocument();
   });
 
   it("filters the timeline from the pulse controls", async () => {

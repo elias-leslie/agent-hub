@@ -12,20 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_persona_tool_summary(provider: str | None = None) -> tuple[int, str]:
-    """Return (count, comma-separated list) of persona-specific tool names."""
-    from app.adapters._claude_constants import build_mcp_tool_name
-
-    try:
-        from app.services.tools._persona_tools import PERSONA_EXTRA_TOOLS
-
-        names = [
-            build_mcp_tool_name(t.name) if provider == "claude" else t.name
-            for t in PERSONA_EXTRA_TOOLS
-        ]
-        return len(names), ", ".join(names)
-    except Exception:
-        logger.exception("Failed to list persona tools")
-        return 0, "(unavailable)"
+    """Return the default non-core persona tool summary."""
+    del provider
+    return 0, "none; shell-first core tools only"
 
 
 async def _get_agent_roster_summary() -> str:

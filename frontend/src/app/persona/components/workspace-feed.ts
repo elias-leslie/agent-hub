@@ -1,21 +1,7 @@
 import type { ChatMessage } from "@agent-hub/chat-ui";
 import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
 import type { FeedItem, FeedChildRun, FeedAnchor, FeedMessage, FeedHeartbeat } from "./workspace-types";
-
-const NARRATION_TAG_RE = /\[\[P:[a-z_]+(?::[^\]]*?)?\]?\]?/g;
-const APPLIED_CITATION_RE = /\s*(?:Applied:\s*)?\[(?:M|G|R):[a-f0-9]{3,8}[^\]]*\]?/g;
-const FEEDBACK_RE = /\[\[F:[^\]]*\]?\]?/g;
-const SUMMARY_RE = /\[\[S:[^\]]*\]?\]?/g;
-
-function stripObservabilityTags(text: string): string {
-  return text
-    .replace(NARRATION_TAG_RE, "")
-    .replace(APPLIED_CITATION_RE, "")
-    .replace(FEEDBACK_RE, "")
-    .replace(SUMMARY_RE, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
+import { prettifyDisplayText } from "./workspace-format";
 
 export function isChildRunItem(item: FeedItem): item is FeedChildRun {
   return item.kind === "child_run";
@@ -26,10 +12,11 @@ export function canAnchorChildRuns(item: FeedAnchor): item is FeedMessage | Feed
 }
 
 export function buildChatMessage(entry: PersonaStreamEntry, personaDisplayName?: string): ChatMessage {
+  const content = entry.content ? prettifyDisplayText(entry.content) || entry.content : "";
   return {
     id: entry.id,
     role: (entry.role as ChatMessage["role"]) || "assistant",
-    content: entry.content ? stripObservabilityTags(entry.content) : "",
+    content,
     timestamp: new Date(entry.timestamp),
     agentName: personaDisplayName || entry.agent_slug || undefined,
     agentModel: entry.model || undefined,
@@ -43,8 +30,12 @@ export function buildLocalFeedMessages(messages: ChatMessage[], currentSessionId
     id: message.id,
     sessionId: currentSessionId,
     timestamp: message.timestamp,
-    message: message.role === "assistant" && personaDisplayName
-      ? { ...message, agentName: message.agentName || personaDisplayName }
+    message: message.role === "assistant"
+      ? {
+          ...message,
+          content: message.content ? prettifyDisplayText(message.content) || message.content : message.content,
+          agentName: message.agentName || personaDisplayName,
+        }
       : message,
   }));
 }

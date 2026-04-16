@@ -67,6 +67,7 @@ async def _init_session(
     mark_session_execution_start(session)
     if is_new:
         await publish_session_start(session.id, model, project_id)
+    await db.commit()
     return session, ctx, is_new
 
 

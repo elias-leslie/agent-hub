@@ -23,6 +23,7 @@ import { usePersonaRuntime } from "./hooks/usePersonaRuntime";
 import { UnifiedPersonaWorkspace } from "./components/UnifiedPersonaWorkspace";
 import { useToastActions } from "@/components/error/toast";
 import { getPersonaDisplayName } from "./utils/displayName";
+import { prettifyDisplayText, shortenText } from "./components/workspace-format";
 
 type RuntimeLabel = "Paused" | "Blocked" | "Waiting" | "Finalizing" | "Working" | "Auto-run off" | "Idle";
 
@@ -96,6 +97,9 @@ function PersonaContent() {
     || (heartbeatStatus?.last_run
       ? `Last heartbeat ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
       : "Ready");
+  const renderedLiveSummary = liveSummary
+    ? shortenText(prettifyDisplayText(liveSummary) || liveSummary, 180)
+    : "Ready";
 
   const handlePersonaPauseResume = async () => {
     if (personaPaused) {
@@ -146,7 +150,7 @@ function PersonaContent() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-slate-950">
+    <div className="h-full flex flex-col overflow-hidden bg-slate-950">
       {/* ── Status bar ── */}
       <header className="flex-shrink-0 border-b border-slate-800/60 bg-gradient-to-r from-slate-900/95 via-slate-900/90 to-slate-950/95 backdrop-blur-xl z-20 relative">
         <div className="flex items-center gap-3.5 px-5 py-3">
@@ -156,7 +160,7 @@ function PersonaContent() {
               <span className={cn("block h-2.5 w-2.5 rounded-full transition-all", STATUS_DOT[runtimeLabel])} />
             </div>
             <h1 className="text-sm font-semibold tracking-wide text-slate-50 flex-shrink-0">
-              {persona?.name || "Persona"}
+              {personaName}
             </h1>
             <span className={cn(
               "rounded-md px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase flex-shrink-0",
@@ -169,7 +173,7 @@ function PersonaContent() {
             </span>
             <span className="mx-0.5 text-slate-800 flex-shrink-0">·</span>
             <p className="text-sm text-slate-400 truncate min-w-0">
-              {liveSummary}
+              {renderedLiveSummary}
             </p>
           </div>
 
@@ -252,8 +256,10 @@ function PersonaContent() {
       <main className="min-h-0 flex-1">
         {persona ? (
           <UnifiedPersonaWorkspace
+            persona={persona}
             agentSlug={persona.agent_slug}
             personaName={personaName}
+            runtime={runtime}
             activeSessionId={activeSessionId}
             sidebarRefreshTrigger={sidebarRefreshTrigger}
             runtimeSyncKey={runtime.runtimeSyncKey}

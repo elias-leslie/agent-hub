@@ -321,12 +321,18 @@ class TestCollectAgentHubHeartbeatState:
         mock_active_sessions.assert_awaited_once()
         mock_specialists.assert_awaited_once()
         mock_workstreams.assert_awaited_once()
-        assert mock_active_sessions.await_args.args == ("agent-hub",)
-        assert mock_specialists.await_args.args == ("agent-hub",)
-        assert mock_workstreams.await_args.args == ("agent-hub",)
-        assert mock_active_sessions.await_args.kwargs["now"] == state.collected_at
-        assert mock_specialists.await_args.kwargs["now"] == state.collected_at
-        assert mock_workstreams.await_args.kwargs["now"] == state.collected_at
+        active_await = mock_active_sessions.await_args
+        specialists_await = mock_specialists.await_args
+        workstreams_await = mock_workstreams.await_args
+        assert active_await is not None
+        assert specialists_await is not None
+        assert workstreams_await is not None
+        assert active_await.args == ("agent-hub",)
+        assert specialists_await.args == ("agent-hub",)
+        assert workstreams_await.args == ("agent-hub",)
+        assert active_await.kwargs["now"] == state.collected_at
+        assert specialists_await.kwargs["now"] == state.collected_at
+        assert workstreams_await.kwargs["now"] == state.collected_at
 
     @pytest.mark.asyncio
     @patch(
@@ -522,7 +528,8 @@ class TestRecentHeartbeatDigest:
         from app.models import Session
         from app.workflows._heartbeat_data import _HEARTBEAT_DIGEST_STATUSES
 
-        assert set(_HEARTBEAT_DIGEST_STATUSES) <= set(Session.__table__.c.status.type.enums)
+        status_enum_values = getattr(Session.__table__.c.status.type, "enums", [])
+        assert set(_HEARTBEAT_DIGEST_STATUSES) <= set(status_enum_values)
 
     @pytest.mark.asyncio
     async def test_formats_recent_heartbeat_digest_with_cleaned_display_summaries(self) -> None:
@@ -571,7 +578,9 @@ class TestRecentHeartbeatDigest:
         assert "completed | agent-hub | Patched cleanup truth and passed targeted tests." in result
         assert "failed | agent-hub | Heartbeat failed after guessing an invalid dt pytest path." in result
         assert "sessions.request_source = :request_source_1" in executed_query
-        candidates = mock_fetch_summaries.await_args.args[1]
+        fetch_await = mock_fetch_summaries.await_args
+        assert fetch_await is not None
+        candidates = fetch_await.args[1]
         assert [candidate.session_id for candidate in candidates] == ["hb-1", "hb-2"]
 
     @pytest.mark.asyncio
@@ -855,11 +864,11 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch("app.workflows._heartbeat_prompt._get_active_work_summary", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt._get_persona_tool_summary",
-        return_value=(2, "mcp__agent-hub__manage_tasks, mcp__agent-hub__query_sessions"),
+        return_value=(0, "none; shell-first core tools only"),
     )
     @patch("app.workflows._heartbeat_prompt.get_project_access_summary", new_callable=AsyncMock, return_value="test")
     @patch("app.workflows._heartbeat_prompt._get_persona_timezone", new_callable=AsyncMock, return_value="UTC")
-    async def test_claude_prompt_uses_provider_specific_tool_names(self, *mocks: MagicMock) -> None:
+    async def test_claude_prompt_reports_shell_first_core_tool_summary(self, *mocks: MagicMock) -> None:
         from app.workflows._heartbeat_prompt import build_heartbeat_prompt
 
         prompt = await build_heartbeat_prompt(
@@ -868,8 +877,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
             provider="claude",
         )
 
-        assert "mcp__agent-hub__manage_tasks" in prompt
-        assert "mcp__agent-hub__query_sessions" in prompt
+        assert "none; shell-first core tools only" in prompt
 
 
 class TestProtectionStatusSummary:
@@ -1730,10 +1738,14 @@ class TestGetWorkstreamInventory:
         assert "<workstream_inventory>" in result
         assert "task-123" in result
         assert "state=completed_ready_for_closure" in result
-        assert 'manage_tasks(action="reconcile"' in result
+        assert (
+            'bash: st context task-123 then st done task-123 --admin --message '
+            '"Completed work verified; task closed."'
+            in result
+        )
 
     @pytest.mark.asyncio
-    async def test_reports_claude_callable_names_for_workstream_actions(self) -> None:
+    async def test_reports_shell_first_workstream_actions_for_claude(self) -> None:
         fake_rows = [
             {
                 "session_id": "sess-1",
@@ -1757,7 +1769,11 @@ class TestGetWorkstreamInventory:
         ):
             result = await _get_workstream_inventory(provider="claude")
 
-        assert 'mcp__agent-hub__manage_tasks(action="reconcile"' in result
+        assert (
+            'bash: st context task-123 then st done task-123 --admin --message '
+            '"Completed work verified; task closed."'
+            in result
+        )
 
     @pytest.mark.asyncio
     async def test_branch_only_completed_lane_still_recovers_task_id(self) -> None:
@@ -1786,7 +1802,11 @@ class TestGetWorkstreamInventory:
 
         assert "task-a3903361" in result
         assert "state=completed_ready_for_closure" in result
-        assert 'manage_tasks(action="reconcile", task_id="task-a3903361", project_id="a-term")' in result
+        assert (
+            'bash: st context task-a3903361 then st done task-a3903361 --admin --message '
+            '"Completed work verified; task closed."'
+            in result
+        )
 
     @pytest.mark.asyncio
     async def test_reports_stale_active_lane(self) -> None:
@@ -1814,7 +1834,7 @@ class TestGetWorkstreamInventory:
 
         assert "task-999" in result
         assert "state=stale_active" in result
-        assert 'query_sessions(' in result
+        assert "st session-events -T task-999 --page-size 100" in result
 
     @pytest.mark.asyncio
     async def test_omits_completed_lane_when_task_is_not_in_current_queue_snapshot(self) -> None:
@@ -2070,7 +2090,8 @@ agent-hub (1 ready, 1 stale)
         assert "task-de53b498" in result
         assert "state=stale_running_task" in result
         assert (
-            'manage_tasks(action="reconcile", task_id="task-de53b498", project_id="agent-hub")'
+            "st session-events -T task-de53b498 --page-size 100; "
+            "reconcile stale task state only after verification"
             in result
         )
 
@@ -2252,7 +2273,7 @@ class TestWorkstreamLaneContract:
             == "superseded_lane_no_action"
         )
 
-    def test_build_next_action_uses_claude_mcp_names(self) -> None:
+    def test_build_next_action_uses_shell_first_guidance(self) -> None:
         assert (
             _build_workstream_next_action(
                 state="completed_ready_for_closure",
@@ -2260,5 +2281,5 @@ class TestWorkstreamLaneContract:
                 task_id="task-6",
                 provider="claude",
             )
-            == 'mcp__agent-hub__manage_tasks(action="reconcile", task_id="task-6", project_id="agent-hub")'
+            == 'bash: st context task-6 then st done task-6 --admin --message "Completed work verified; task closed."'
         )

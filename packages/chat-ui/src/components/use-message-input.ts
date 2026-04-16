@@ -22,6 +22,7 @@ export interface MessageInputProps {
   onEnabledChange?: (enabled: boolean) => void;
   editingMessage?: { id: string; content: string; model?: string } | null;
   onEditCancel?: () => void;
+  compact?: boolean;
   /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */
   initialPrompt?: string;
   fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;

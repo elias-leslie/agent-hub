@@ -21,6 +21,8 @@ export interface WorkspaceStateOptions {
   agentSlug: string;
   personaName?: string;
   activeSessionId: string | null;
+  targetProjectId: string;
+  sessionProjectId: string | null;
   sidebarRefreshTrigger: number;
   runtimeSyncKey: string;
   onSelectSession: (sessionId: string | null) => void;
@@ -47,6 +49,8 @@ export function useWorkspaceState({
   agentSlug,
   personaName,
   activeSessionId,
+  targetProjectId,
+  sessionProjectId,
   sidebarRefreshTrigger,
   runtimeSyncKey,
   onSelectSession,
@@ -68,9 +72,20 @@ export function useWorkspaceState({
   const personaPossessive = getPersonaPossessive(personaName);
   const deferredSearch = useDeferredValue(search);
   const { narrationCache, fetchNarrationTags } = useNarrationTags();
+  const chatProjectId = sessionProjectId ?? targetProjectId;
 
-  const { apiConfig, messages, status, chatError, currentSessionId, sendMessage, cancelStream, responseStatusLabel } =
-    useWorkspaceChatStream({ agentSlug, personaDisplayName, activeSessionId });
+  const {
+    apiConfig,
+    messages,
+    status,
+    chatError,
+    currentSessionId,
+    sendMessage,
+    cancelStream,
+    resetSession,
+    responseStatusLabel,
+  } =
+    useWorkspaceChatStream({ agentSlug, personaDisplayName, activeSessionId, projectId: chatProjectId });
 
   const { sessionEventDetails, loadSessionEventDetails } = useSessionEventDetails();
 
@@ -271,7 +286,7 @@ export function useWorkspaceState({
     scrollRef, autoFollow, isAtBottom, newActivityCount, latestItemId,
     expandedEntryIds, expandedRoutineGroupIds, hasExpandedTimelineContent,
     virtualizer,
-    messages, status, chatError, currentSessionId, sendMessage, cancelStream, responseStatusLabel, apiConfig,
+    messages, status, chatError, currentSessionId, sendMessage, cancelStream, resetSession, responseStatusLabel, apiConfig,
     activeIssueTag: filterMode === "friction" ? ("friction" as const) : filterModeToPulseTag(filterMode),
     handleSessionJump, toggleExpanded, toggleRoutineGroup, applyPulseFilter,
     inspectAgentPulse, handleLoadOlder, handleJumpToLatest, markLatestAsRead,

@@ -99,8 +99,8 @@ async def test_execute_self_honing_skips_when_persona_or_supervisor_is_active():
     ):
         result = await _execute_self_honing(job)
 
-    assert "Skipped" in result
-    assert "persona" in result
+    assert "Skipped" in result.output
+    assert "persona" in result.output
     mock_honing.assert_not_awaited()
 
 
@@ -143,9 +143,11 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
     ):
         result = await _execute_self_honing(job)
 
-    assert "Self-honing completed" in result
-    assert "honed=True" in result
-    assert "persona-benchmark-1234abcd" in result
+    assert "Self-honing completed" in result.output
+    assert "honed=True" in result.output
+    assert "persona-benchmark-1234abcd" in result.output
     mock_honing.assert_awaited_once()
-    assert mock_honing.await_args.kwargs["case_ids"] == get_persona_improvement_case_ids()
-    assert mock_honing.await_args.kwargs["suite_id"] == PERSONA_IMPROVEMENT_SUITE_ID
+    await_args = mock_honing.await_args
+    assert await_args is not None
+    assert await_args.kwargs["case_ids"] == get_persona_improvement_case_ids()
+    assert await_args.kwargs["suite_id"] == PERSONA_IMPROVEMENT_SUITE_ID

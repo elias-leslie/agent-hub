@@ -5,6 +5,11 @@
 import type { ChatMessage, ToolExecution } from "../../types/chat";
 import type { SessionData, SessionToolExecution } from "./types";
 
+export interface LoadedSession {
+  messages: ChatMessage[];
+  projectId: string | null;
+}
+
 function mapToolExecutions(
   tools: SessionToolExecution[] | undefined,
 ): ToolExecution[] | undefined {
@@ -27,7 +32,7 @@ export async function loadSession(
   sessionId: string,
   fetchFn: (url: string, options?: RequestInit) => Promise<Response>,
   sessionsEndpoint: string,
-): Promise<ChatMessage[]> {
+): Promise<LoadedSession> {
   const res = await fetchFn(`${sessionsEndpoint}/${sessionId}`);
   if (!res.ok) {
     throw new Error(`Failed to load session: ${res.status}`);
@@ -36,7 +41,10 @@ export async function loadSession(
   const session = (await res.json()) as SessionData;
 
   if (!session.messages || session.messages.length === 0) {
-    return [];
+    return {
+      messages: [],
+      projectId: session.project_id ?? null,
+    };
   }
 
   const provider = session.provider as ChatMessage["agentProvider"];
@@ -51,18 +59,21 @@ export async function loadSession(
     return true;
   });
 
-  return deduped.map((m) => ({
-    id: `loaded-${m.id}`,
-    role: m.role as "user" | "assistant",
-    content: m.content,
-    timestamp: new Date(m.created_at),
-    agentName: m.agent_display_name || m.agent_name,
-    agentModel: m.model_display_name || m.model_used,
-    ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
-    ...(m.thinking ? { thinking: m.thinking } : {}),
-    ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
-    ...(m.tool_executions && m.tool_executions.length > 0
-      ? { toolExecutions: mapToolExecutions(m.tool_executions) }
-      : {}),
-  }));
+  return {
+    messages: deduped.map((m) => ({
+      id: `loaded-${m.id}`,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+      timestamp: new Date(m.created_at),
+      agentName: m.agent_display_name || m.agent_name,
+      agentModel: m.model_display_name || m.model_used,
+      ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
+      ...(m.thinking ? { thinking: m.thinking } : {}),
+      ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
+      ...(m.tool_executions && m.tool_executions.length > 0
+        ? { toolExecutions: mapToolExecutions(m.tool_executions) }
+        : {}),
+    })),
+    projectId: session.project_id ?? null,
+  };
 }

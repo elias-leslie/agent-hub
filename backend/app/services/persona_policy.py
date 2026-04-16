@@ -18,6 +18,6 @@ def get_persona_git_publish_block_reason() -> str:
     """Return the canonical persona git-publish policy message."""
     return (
         "The persona must not use raw git commit/push from Bash. "
-        "Use manage_tasks(action='smart_sync', project_id='...') for coherent publish debt, "
-        "or the canonical commit.sh flow only when direct code intervention is operationally required."
+        "Use the canonical commit.sh publish flow after validation when direct code "
+        "intervention is operationally required."
     )
