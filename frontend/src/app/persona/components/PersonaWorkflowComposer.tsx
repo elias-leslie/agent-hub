@@ -21,6 +21,7 @@ const MODE_LABELS: Array<{ value: WorkflowTaskMode; label: string; detail: strin
   { value: "research", label: "Research", detail: "Bounded evidence first" },
   { value: "release", label: "Release", detail: "Final pass and ship gates" },
 ];
+const WORKFLOW_STAGE_ORDER: WorkflowStageName[] = ["clarify", "plan", "execute", "review", "qa"];
 
 interface PersonaWorkflowComposerProps {
   projectOptions: PreviewProjectOption[];
@@ -110,6 +111,7 @@ export function PersonaWorkflowComposer({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [approvedStages, setApprovedStages] = useState<Record<string, boolean>>({});
+  const [staleStages, setStaleStages] = useState<Partial<Record<WorkflowStageName, WorkflowStageName>>>({});
   const selectedProject = useMemo(
     () => projectOptions.find((option) => option.id === selectedProjectId) ?? null,
     [projectOptions, selectedProjectId],
@@ -126,23 +128,42 @@ export function PersonaWorkflowComposer({
       if (!stageName) {
         const result = await runPersonaWorkflow(buildWorkflowRequest(task, selectedProject, mode, parentSessionId));
         setWorkflow(result);
+        setApprovedStages({});
+        setStaleStages({});
         return;
       }
       const request = buildWorkflowRequest(task, selectedProject, mode, parentSessionId);
-      const singleStageRequest: WorkflowRequest = {
+      const selectedStageIndex = WORKFLOW_STAGE_ORDER.indexOf(stageName);
+      const staleIndices = WORKFLOW_STAGE_ORDER
+        .slice(0, selectedStageIndex + 1)
+        .map((workflowStage, index) => (staleStages[workflowStage] ? index : -1))
+        .filter((index) => index >= 0);
+      const startIndex = staleIndices.length > 0 ? Math.min(...staleIndices) : selectedStageIndex;
+      const rerunStageNames = WORKFLOW_STAGE_ORDER.slice(startIndex, selectedStageIndex + 1);
+      const priorOutputs = (workflow?.stages ?? [])
+        .filter((stage) => WORKFLOW_STAGE_ORDER.indexOf(stage.stage) < startIndex)
+        .map((stage) => `${stage.stage.toUpperCase()} OUTPUT:\n${stage.content}`);
+      const rerunStagePayload = Object.fromEntries(
+        rerunStageNames.map((workflowStage) => [workflowStage, request[workflowStage]]),
+      );
+      const singleStageRequest = {
         project_id: request.project_id,
         parent_session_id: request.parent_session_id,
-        shared_context: buildSharedContext(task, selectedProject, mode),
-        [stageName]: request[stageName],
-      };
+        shared_context: [
+          buildSharedContext(task, selectedProject, mode),
+          priorOutputs.length > 0 ? `Prior workflow outputs:\n\n${priorOutputs.join("\n\n")}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        ...rerunStagePayload,
+      } as WorkflowRequest;
       const result = await runPersonaWorkflow(singleStageRequest);
       setWorkflow((current) => {
         if (!current) {
           return result;
         }
-        const nextStages = current.stages.map((stage) =>
-          stage.stage === stageName ? result.stages[0] : stage,
-        );
+        const returnedStages = new Map(result.stages.map((stage) => [stage.stage, stage]));
+        const nextStages = current.stages.map((stage) => returnedStages.get(stage.stage) ?? stage);
         return {
           ...current,
           stages: nextStages,
@@ -153,6 +174,23 @@ export function PersonaWorkflowComposer({
           total_input_tokens: current.total_input_tokens + result.total_input_tokens,
           total_output_tokens: current.total_output_tokens + result.total_output_tokens,
         };
+      });
+      setApprovedStages((current) => {
+        const next = { ...current };
+        for (const workflowStage of WORKFLOW_STAGE_ORDER.slice(startIndex)) {
+          delete next[workflowStage];
+        }
+        return next;
+      });
+      setStaleStages((current) => {
+        const next = { ...current };
+        for (const workflowStage of WORKFLOW_STAGE_ORDER.slice(startIndex, selectedStageIndex + 1)) {
+          delete next[workflowStage];
+        }
+        for (const workflowStage of WORKFLOW_STAGE_ORDER.slice(selectedStageIndex + 1)) {
+          next[workflowStage] = stageName;
+        }
+        return next;
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Workflow failed");
@@ -251,55 +289,75 @@ export function PersonaWorkflowComposer({
       ) : null}
 
       <div className="mt-4 space-y-3">
-        {workflow?.stages.map((stage) => (
-          <div key={stage.stage} className="rounded-[24px] border border-slate-800/70 bg-slate-950/70 p-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  {stage.stage}
+        {workflow?.stages.map((stage) => {
+          const staleReason = staleStages[stage.stage];
+          const isStale = Boolean(staleReason);
+          return (
+            <div
+              key={stage.stage}
+              className={cn(
+                "rounded-[24px] border bg-slate-950/70 p-3",
+                isStale ? "border-amber-500/30" : "border-slate-800/70",
+              )}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <span>{stage.stage}</span>
+                    {isStale ? (
+                      <span className="rounded-full border border-amber-500/20 bg-amber-950/20 px-2 py-0.5 text-[10px] text-amber-200">
+                        Stale after {staleReason} rerun
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-slate-100">
+                    {stage.agent_used || stage.provider}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {stage.provider}/{stage.model} · {stage.usage.total_tokens} tokens
+                  </div>
+                  {isStale ? (
+                    <div className="mt-2 text-xs text-amber-200">
+                      Re-run this stage to refresh it.
+                    </div>
+                  ) : null}
                 </div>
-                <div className="mt-1 text-sm font-medium text-slate-100">
-                  {stage.agent_used || stage.provider}
-                </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {stage.provider}/{stage.model} · {stage.usage.total_tokens} tokens
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setApprovedStages((current) => ({
+                        ...current,
+                        [stage.stage]: !current[stage.stage],
+                      }))
+                    }
+                    className={cn(
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                      approvedStages[stage.stage]
+                        ? "border-emerald-500/20 bg-emerald-950/20 text-emerald-200"
+                        : "border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-600 hover:bg-slate-800",
+                    )}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {approvedStages[stage.stage] ? "Advisory approved" : "Advisory approve"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void runWorkflow(stage.stage)}
+                    disabled={running}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Rerun
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setApprovedStages((current) => ({
-                      ...current,
-                      [stage.stage]: !current[stage.stage],
-                    }))
-                  }
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition",
-                    approvedStages[stage.stage]
-                      ? "border-emerald-500/20 bg-emerald-950/20 text-emerald-200"
-                      : "border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-600 hover:bg-slate-800",
-                  )}
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  {approvedStages[stage.stage] ? "Approved" : "Approve"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void runWorkflow(stage.stage)}
-                  disabled={running}
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800 disabled:opacity-60"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Rerun
-                </button>
-              </div>
+              <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800/70 bg-slate-950 px-3 py-3 text-sm leading-6 text-slate-200">
+                {stage.content}
+              </pre>
             </div>
-            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800/70 bg-slate-950 px-3 py-3 text-sm leading-6 text-slate-200">
-              {stage.content}
-            </pre>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

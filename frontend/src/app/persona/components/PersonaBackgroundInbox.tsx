@@ -110,6 +110,9 @@ export function PersonaBackgroundInbox({
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
             Resume, inspect, and redirect side work without losing the main thread.
           </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+            Actions reuse current session primitives. Redirect, promote, and handoff stay advisory until the backend exposes stronger lane-specific actions.
+          </p>
         </div>
         <div className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300">
           {activeCount}/{lanes.length} active
@@ -157,7 +160,7 @@ export function PersonaBackgroundInbox({
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
                   >
                     <PlayCircle className="h-4 w-4" />
-                    Resume
+                    Inspect
                   </button>
                   <button
                     type="button"
@@ -165,21 +168,21 @@ export function PersonaBackgroundInbox({
                     className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30"
                   >
                     <ArrowRightCircle className="h-4 w-4" />
-                    Redirect
+                    Send redirect
                   </button>
                   <button
                     type="button"
                     onClick={() => onPromoteSession(entry.sessionId, entry.summary)}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
                   >
-                    Promote
+                    Promote summary
                   </button>
                   <button
                     type="button"
                     onClick={() => onHandoffSession(entry.sessionId, entry.summary)}
                     className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
                   >
-                    Handoff
+                    Draft handoff
                   </button>
                   {isActive ? (
                     <button

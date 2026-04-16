@@ -251,6 +251,12 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
     props.onNewSession();
   };
 
+  const footerThreadSessionId =
+    state.selectedSessionId
+    ?? state.currentSessionId
+    ?? props.activeSessionId
+    ?? (state.messages.length > 0 ? "__draft__" : null);
+
   return (
     <div
       data-testid="persona-workspace-root"
@@ -409,6 +415,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           status={state.status}
           targetProjectId={selectedProjectId}
           sessionProjectId={sessionProjectId}
+          threadSessionId={footerThreadSessionId}
           isTerminalThread={isTerminalThread}
           sendMessage={state.sendMessage}
           cancelStream={state.cancelStream}

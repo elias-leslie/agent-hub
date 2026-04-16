@@ -307,6 +307,8 @@ describe("PersonaOperatorDeck", () => {
     fireEvent.click(screen.getByRole("button", { name: /Handoff/i }));
     expect(sendMessage).toHaveBeenCalledWith(
       "Write a concise handoff for session child-1: owner, current state, blockers, next move. Summary: Investigating UI state in background lane.",
+      undefined,
+      "child-1",
     );
   });
 
