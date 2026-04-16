@@ -57,7 +57,7 @@ interface PersonaOperatorDeckProps {
   selectedProjectId: string;
   onProjectChange: (projectId: string) => void;
   onSelectSession: (sessionId: string | null) => void;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
   applyPulseFilter: (mode: FilterMode, anchorEntryId?: string | null) => void;
   inspectAgentPulse: (agentSlug: string) => void;
   activeTab: PersonaOperatorTab;
@@ -415,6 +415,18 @@ export function PersonaOperatorDeck({
 
           {activeTab === "insights" ? (
             <>
+              <PersonaBlockerPanel
+                executionState={persona.execution_state}
+                heartbeatIntervalMinutes={persona.heartbeat_interval_minutes}
+                selectedProject={selectedProjectPermission}
+                executionPermission={executionPermission}
+                runtime={runtime}
+                pulse={pulse}
+                preview={preview}
+                previewLoading={previewLoading}
+                onAskStatus={askStatus}
+                onRefresh={() => void refreshEverything()}
+              />
               <section className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4">
                 <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                   <Activity className="h-3.5 w-3.5 text-sky-300" />
@@ -429,18 +441,6 @@ export function PersonaOperatorDeck({
                   />
                 </div>
               </section>
-              <PersonaBlockerPanel
-                executionState={persona.execution_state}
-                heartbeatIntervalMinutes={persona.heartbeat_interval_minutes}
-                selectedProject={selectedProjectPermission}
-                executionPermission={executionPermission}
-                runtime={runtime}
-                pulse={pulse}
-                preview={preview}
-                previewLoading={previewLoading}
-                onAskStatus={askStatus}
-                onRefresh={() => void refreshEverything()}
-              />
               <PersonaPromptBudgetPanel
                 preview={preview}
                 loading={previewLoading}
@@ -461,15 +461,15 @@ export function PersonaOperatorDeck({
               }}
               onRedirectSession={(sessionId, summary) => {
                 onSelectSession(sessionId);
-                sendMessage(`Resume session ${sessionId}. Redirect from this summary: ${summary}`);
+                sendMessage(`Resume session ${sessionId}. Redirect from this summary: ${summary}`, undefined, sessionId);
               }}
               onPromoteSession={(sessionId, summary) => {
                 onSelectSession(sessionId);
-                sendMessage(`Promote session ${sessionId} into the main thread. Preserve useful work. Summary: ${summary}`);
+                sendMessage(`Summarize what from session ${sessionId} should be brought into the main thread. Do not imply the lane merged automatically. Summary: ${summary}`, undefined, sessionId);
               }}
               onHandoffSession={(sessionId, summary) => {
                 onSelectSession(sessionId);
-                sendMessage(`Write a concise handoff for session ${sessionId}: owner, current state, blockers, next move. Summary: ${summary}`);
+                sendMessage(`Write a concise handoff for session ${sessionId}: owner, current state, blockers, next move. Summary: ${summary}`, undefined, sessionId);
               }}
             />
           ) : null}

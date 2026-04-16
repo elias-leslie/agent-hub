@@ -71,6 +71,13 @@ export function PersonaBlockerPanel({
     typeof promptTokens === "number" && promptTokens >= 14000
       ? "warning"
       : "neutral";
+  const permissionBlocker = executionPermission && !executionPermission.allowed
+    ? executionPermission.reason
+    : null;
+  const hardBlocker = liveActivity?.stall_reason || runtime.error || permissionBlocker || "None surfaced";
+  const advisoryWarning = topIssue?.summary || (typeof promptTokens === "number" && promptTokens >= 14000
+    ? "Preview budget is heavy; trim prompt sections before relying on long runs."
+    : "None surfaced");
 
   return (
     <section
@@ -86,6 +93,9 @@ export function PersonaBlockerPanel({
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
             Call out real blockers, not vibes.
           </h3>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+            Hard blockers appear first. Preview budget stays advisory until runtime publishes authoritative prompt totals.
+          </p>
         </div>
         <button
           type="button"
@@ -99,17 +109,12 @@ export function PersonaBlockerPanel({
 
       <div className="mt-4 space-y-2">
         <Row
-          label="Execution"
-          value={executionState === "paused" ? "Paused by operator" : "Live"}
-          tone={executionState === "paused" ? "warning" : "success"}
+          label="Hard blocker"
+          value={hardBlocker}
+          tone={hardBlocker === "None surfaced" ? "success" : "danger"}
         />
         <Row
-          label="Auto-run"
-          value={heartbeatIntervalMinutes > 0 ? `Every ${heartbeatIntervalMinutes}m` : "Disabled"}
-          tone={heartbeatIntervalMinutes > 0 ? "success" : "warning"}
-        />
-        <Row
-          label="Project gate"
+          label="Permission gate"
           value={
             executionPermission
               ? executionPermission.allowed
@@ -120,18 +125,29 @@ export function PersonaBlockerPanel({
           tone={executionPermission?.allowed ? "success" : executionPermission ? "danger" : "neutral"}
         />
         <Row
-          label="Tool surface"
+          label="Capability gate"
           value="Core only: read, write, edit, bash"
+          tone={executionPermission?.allowed === false ? "warning" : "neutral"}
         />
         <Row
-          label="Prompt budget"
+          label="Execution"
+          value={executionState === "paused" ? "Paused by operator" : "Live"}
+          tone={executionState === "paused" ? "warning" : "success"}
+        />
+        <Row
+          label="Auto-run"
+          value={heartbeatIntervalMinutes > 0 ? `Every ${heartbeatIntervalMinutes}m` : "Disabled"}
+          tone={heartbeatIntervalMinutes > 0 ? "success" : "warning"}
+        />
+        <Row
+          label="Preview budget"
           value={typeof promptTokens === "number" ? `${promptTokens.toLocaleString()} tokens` : "Loading"}
           tone={promptTone}
         />
         <Row
-          label="Recent friction"
-          value={liveActivity?.stall_reason || runtime.error || topIssue?.summary || "None surfaced"}
-          tone={liveActivity?.stall_reason || runtime.error || topIssue ? "warning" : "success"}
+          label="Advisory warning"
+          value={advisoryWarning}
+          tone={advisoryWarning === "None surfaced" ? "success" : "warning"}
         />
       </div>
 

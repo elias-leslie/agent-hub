@@ -82,6 +82,8 @@ export function PersonaRunHud({
   const liveSummary = liveActivity?.summary
     ? shortenText(prettifyDisplayText(liveActivity.summary) || liveActivity.summary, compact ? 120 : 180)
     : null;
+  const blockerSummary = liveActivity?.stall_reason || runtime.error || "None surfaced";
+  const hasBlocker = blockerSummary !== "None surfaced";
 
   return (
     <section
@@ -153,6 +155,12 @@ export function PersonaRunHud({
           <span className="rounded-full border border-emerald-500/20 bg-emerald-950/20 px-2.5 py-1 text-emerald-200">
             Status · {primary?.status || "idle"}
           </span>
+          <span className={cn(
+            "rounded-full border px-2.5 py-1",
+            hasBlocker ? "border-amber-500/20 bg-amber-950/20 text-amber-200" : "border-slate-700 bg-slate-950/70 text-slate-300",
+          )}>
+            Blocker · {blockerSummary}
+          </span>
           <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-slate-300">
             Elapsed · {elapsed}
           </span>
@@ -175,8 +183,14 @@ export function PersonaRunHud({
           </span>
         </div>
       ) : (
-        <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-7">
           <StatChip icon={<Activity className="h-3.5 w-3.5" />} label="Status" value={primary?.status || "idle"} tone={primary ? "success" : "default"} />
+          <StatChip
+            icon={<Activity className="h-3.5 w-3.5" />}
+            label="Blocker"
+            value={blockerSummary}
+            tone={hasBlocker ? "warning" : "default"}
+          />
           <StatChip icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={elapsed} />
           <StatChip icon={<Layers3 className="h-3.5 w-3.5" />} label="Lanes" value={String(activeLanes)} tone={activeLanes > 1 ? "warning" : "default"} />
           <StatChip icon={<BrainCircuit className="h-3.5 w-3.5" />} label="Model" value={primary ? `${primary.provider}/${primary.model}` : "none"} />
