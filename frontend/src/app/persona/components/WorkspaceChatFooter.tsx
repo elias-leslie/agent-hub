@@ -20,8 +20,9 @@ interface WorkspaceChatFooterProps {
   status: string;
   targetProjectId: string;
   sessionProjectId: string | null;
+  threadSessionId?: string | null;
   isTerminalThread?: boolean;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
   cancelStream: () => void;
   preferencesEndpoint: string;
   onNewSession: () => void;
@@ -34,6 +35,7 @@ export function WorkspaceChatFooter({
   status,
   targetProjectId,
   sessionProjectId,
+  threadSessionId = null,
   isTerminalThread = false,
   sendMessage,
   cancelStream,
@@ -43,13 +45,14 @@ export function WorkspaceChatFooter({
 }: WorkspaceChatFooterProps) {
   const [redirectText, setRedirectText] = useState("");
   const [steerOpen, setSteerOpen] = useState(false);
-  const redirectLabel = status === "idle" ? `Steer ${personaDisplayName}` : `Redirect ${personaDisplayName}`;
-  const sessionLocked = Boolean(sessionProjectId);
+  const sessionLocked = Boolean(threadSessionId);
+  const redirectLabel = sessionLocked ? `Redirect ${personaDisplayName}` : `Steer ${personaDisplayName}`;
+  const lockedProjectId = sessionProjectId ?? targetProjectId;
   const projectLabel = sessionLocked
-    ? `${isTerminalThread ? "Reply thread" : "Thread project"}: ${sessionProjectId}`
+    ? `${isTerminalThread ? "Reply thread" : "Thread project"}: ${lockedProjectId}`
     : `New thread target: ${targetProjectId}`;
   const nextThreadLabel =
-    sessionLocked && sessionProjectId !== targetProjectId ? `Next thread target: ${targetProjectId}` : null;
+    sessionLocked && lockedProjectId !== targetProjectId ? `Next thread target: ${targetProjectId}` : null;
 
   return (
     <div
@@ -112,33 +115,44 @@ export function WorkspaceChatFooter({
             </button>
             <button
               type="button"
-              onClick={() => sendMessage("Split off any safe background lane you need, then report owners and expected outputs.")}
+              onClick={() => sendMessage("Request a safe background lane split if needed. Report the owner, scope, and expected outputs explicitly.")}
               className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
             >
               <SplitSquareVertical className="h-3.5 w-3.5" />
-              Lane
+              Request lane
             </button>
           </div>
           {steerOpen ? (
-            <div className={cn("flex gap-2", compactViewport ? "mt-1.5" : "mt-2")}>
-              <input
-                value={redirectText}
-                onChange={(event) => setRedirectText(event.target.value)}
-                placeholder={`${redirectLabel}: change direction, tighten scope, or ask for a checkpoint.`}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!redirectText.trim()) return;
-                  sendMessage(`Redirect current work: ${redirectText.trim()}`);
-                  setRedirectText("");
-                }}
-                disabled={!redirectText.trim()}
-                className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
-              >
-                Redirect
-              </button>
+            <div className={cn(compactViewport ? "mt-1.5 space-y-2" : "mt-2 space-y-2")}>
+              <p className="text-xs leading-5 text-slate-400">
+                {sessionLocked
+                  ? "Sends a redirect instruction into the current thread. It does not rewrite prior messages or silently fork a new lane."
+                  : "Sends a steering instruction with the next message. It does not rewrite prior messages or silently fork a new lane."}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={redirectText}
+                  onChange={(event) => setRedirectText(event.target.value)}
+                  placeholder={`${redirectLabel}: change direction, tighten scope, or ask for a checkpoint.`}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!redirectText.trim()) return;
+                    sendMessage(
+                      sessionLocked
+                        ? `Redirect current work: ${redirectText.trim()}`
+                        : `Steering instruction for next thread: ${redirectText.trim()}`,
+                    );
+                    setRedirectText("");
+                  }}
+                  disabled={!redirectText.trim()}
+                  className="rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
+                >
+                  {sessionLocked ? "Send redirect instruction" : "Send steering instruction"}
+                </button>
+              </div>
             </div>
           ) : null}
         </div>

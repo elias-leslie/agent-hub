@@ -41,9 +41,17 @@ export function PersonaPromptBudgetPanel({
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
             Keep runtime context lean enough to stay sharp.
           </h3>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Preview-derived estimate from prompt assembly. Treat as guidance until runtime publishes authoritative totals.
+          </p>
         </div>
-        <div className={`text-right text-sm font-semibold ${toneForTokens(totalTokens)}`}>
-          {typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} tokens` : "Loading"}
+        <div className="text-right">
+          <div className={`text-sm font-semibold ${toneForTokens(totalTokens)}`}>
+            {typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} tokens` : "Loading"}
+          </div>
+          <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+            Preview-derived estimate
+          </div>
         </div>
       </div>
 

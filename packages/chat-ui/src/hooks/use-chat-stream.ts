@@ -32,7 +32,7 @@ interface UseChatStreamReturn {
   status: StreamStatus;
   error: string | null;
   currentSessionId: string | null;
-  sendMessage: (content: string, targetAgents?: string[]) => void;
+  sendMessage: (content: string, targetAgents?: string[], sessionIdOverride?: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
   resetSession: () => void;
@@ -71,11 +71,15 @@ export function useChatStream(
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [loadedSessionProjectId, setLoadedSessionProjectId] = useState<string | null>(null);
+  const [sessionLoadEpoch, setSessionLoadEpoch] = useState(0);
 
   const abortControllersRef = useRef<AbortController[]>([]);
   const streamStatesRef = useRef<Map<string, StreamState>>(new Map());
   // Track session IDs established by the current stream to avoid reloading
   const streamEstablishedSessionRef = useRef<string | null>(null);
+  // Track externally selected sessions that were already preloaded in sendMessage
+  // so the session-loading effect does not immediately overwrite optimistic state.
+  const preloadedSessionOverrideRef = useRef<string | null>(null);
 
   // Load existing messages when sessionId is provided externally
   useEffect(() => {
@@ -89,6 +93,13 @@ export function useChatStream(
     if (!loadInitialSession) {
       setCurrentSessionId(sessionId);
       setLoadedSessionProjectId(null);
+      return;
+    }
+
+    // Skip loading if this session was already preloaded for an explicit
+    // session override send; we already have the correct baseline in state.
+    if (preloadedSessionOverrideRef.current === sessionId) {
+      preloadedSessionOverrideRef.current = null;
       return;
     }
 
@@ -115,7 +126,7 @@ export function useChatStream(
     };
 
     load();
-  }, [sessionId, loadInitialSession]);
+  }, [sessionId, loadInitialSession, sessionLoadEpoch]);
 
   // Wrap setCurrentSessionId to track stream-established sessions
   const setCurrentSessionIdWithTracking = useCallback(
@@ -129,7 +140,7 @@ export function useChatStream(
   );
 
   const sendMessage = useCallback(
-    async (content: string, targetAgents?: string[]) => {
+    async (content: string, targetAgents?: string[], sessionIdOverride?: string) => {
       // If a stream is active, interrupt it first (steering / user interruption)
       if (status !== "idle" && status !== "error") {
         // Abort frontend connections
@@ -159,13 +170,39 @@ export function useChatStream(
         });
       }
 
+      let effectiveMessages = messages;
+      let effectiveProjectId = loadedSessionProjectId ?? projectId;
+      let effectiveSessionId = sessionIdOverride ?? currentSessionId ?? sessionId;
+      const requestedSessionId = sessionIdOverride ?? sessionId;
+
+      if (requestedSessionId && requestedSessionId !== currentSessionId) {
+        try {
+          preloadedSessionOverrideRef.current = requestedSessionId;
+          const loadedSession = await loadSession(requestedSessionId, fetchFn, sessionsEndpoint);
+          effectiveMessages = loadedSession.messages;
+          effectiveProjectId = loadedSession.projectId ?? projectId;
+          effectiveSessionId = requestedSessionId;
+          setCurrentSessionId(requestedSessionId);
+          setLoadedSessionProjectId(loadedSession.projectId);
+          setMessages(loadedSession.messages);
+        } catch (err) {
+          preloadedSessionOverrideRef.current = null;
+          setError(err instanceof Error ? err.message : "Failed to load session");
+          setStatus("error");
+          if (requestedSessionId === sessionIdOverride) {
+            setSessionLoadEpoch((value) => value + 1);
+          }
+          return;
+        }
+      }
+
       await sendMessageImpl({
         content,
         targetAgents,
         agentSlug,
-        messages,
+        messages: effectiveMessages,
         temperature,
-        sessionId: currentSessionId || sessionId,
+        sessionId: effectiveSessionId,
         workingDir,
         toolsEnabled,
         setMessages,
@@ -177,11 +214,11 @@ export function useChatStream(
         fetchHeaders,
         completeEndpoint,
         preferencesEndpoint,
-        projectId: loadedSessionProjectId ?? projectId,
+        projectId: effectiveProjectId,
         memoryGroupPrefix,
       });
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
   );
 
   const cancelStream = useCallback(() => {
@@ -201,6 +238,7 @@ export function useChatStream(
     abortControllersRef.current = [];
     streamStatesRef.current.clear();
     streamEstablishedSessionRef.current = null;
+    preloadedSessionOverrideRef.current = null;
     setCurrentSessionId(null);
     setLoadedSessionProjectId(null);
     setMessages([]);
