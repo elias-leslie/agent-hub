@@ -219,6 +219,70 @@ async def test_dispatch_db_bypasses_agentic_fallback_chain_when_disabled() -> No
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("use_memory", [True, False])
+async def test_run_internal_forwards_use_memory_to_complete_internal(use_memory: bool) -> None:
+    from app.api.complete.complete_execution import _run_internal
+
+    req = SimpleNamespace(
+        temperature=0.0,
+        project_id="agent-hub",
+        external_id=None,
+        parent_session_id=None,
+        agent_slug="persona",
+        use_memory=use_memory,
+        memory_group_id="project:agent-hub",
+        enable_caching=False,
+        cache_ttl=None,
+        enable_programmatic_tools=False,
+        container_id=None,
+        messages=[],
+        max_turns=3,
+        execute_tools=True,
+        working_dir="/tmp/agent-hub",
+        trace_id=None,
+        task_type=None,
+        phase=None,
+    )
+    internal_result = CompletionInternalResult(
+        content="done",
+        model="claude-sonnet-4-6",
+        provider="claude",
+        input_tokens=1,
+        output_tokens=1,
+        finish_reason="stop",
+        session_id="sess-1",
+        memory_uuids=[],
+        cited_uuids=[],
+    )
+
+    with patch(
+        "app.api.complete.complete_execution.complete_internal",
+        new=AsyncMock(return_value=internal_result),
+    ) as mock_complete_internal:
+        result = await _run_internal(
+            req=req,
+            model="claude-sonnet-4-6",
+            provider="claude",
+            agent=None,
+            msgs=[{"role": "user", "content": "hi"}],
+            db=AsyncMock(),
+            sid="sess-1",
+            client_id=None,
+            source=None,
+            thinking=None,
+            tools=None,
+            fmt=None,
+            skip_cache=False,
+            is_agentic=True,
+        )
+
+    assert result is internal_result
+    await_args = mock_complete_internal.await_args
+    assert await_args is not None
+    assert await_args.kwargs["use_memory"] is use_memory
+
+
+@pytest.mark.asyncio
 async def test_execute_completion_with_db_non_agentic_uses_single_turn_path() -> None:
     from app.api.complete.complete_execution import execute_completion
 
@@ -279,6 +343,7 @@ async def test_run_internal_passes_parent_session_id_to_complete_internal() -> N
         external_id=None,
         parent_session_id="persona-root",
         agent_slug="planner",
+        use_memory=True,
         messages=[{"role": "user", "content": "plan"}],
         memory_group_id=None,
         enable_caching=False,
