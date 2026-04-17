@@ -31,7 +31,7 @@ def test_default_model_roster_includes_seven_configured_candidates() -> None:
         "codex/gpt-5.4",
         "codex/gpt-5.3-codex",
         "codex/gpt-5.3-codex-spark",
-        "codex/gpt-5.2",
+        "codex/gpt-5.2-codex",
         "claude-opus-4-6",
         "claude-sonnet-4-6",
         "claude-haiku-4-5",

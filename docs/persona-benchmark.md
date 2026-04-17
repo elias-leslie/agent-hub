@@ -5,7 +5,7 @@ This benchmark profiles the persona against a fixed seven-model roster:
 - `codex/gpt-5.4`
 - `codex/gpt-5.3-codex`
 - `codex/gpt-5.3-codex-spark`
-- `codex/gpt-5.2`
+- `codex/gpt-5.2-codex`
 - `claude-opus-4-6`
 - `claude-sonnet-4-6`
 - `claude-haiku-4-5`

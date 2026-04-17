@@ -15,6 +15,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.constants import resolve_model
 from app.services.agent_cache import AgentCache
 from app.services.agent_crud import (
     apply_agent_updates,
@@ -55,6 +56,24 @@ async def _apply_display_name_overrides(db: AsyncSession, dto: AgentDTO) -> Agen
     if display_name == dto.name:
         return dto
     return replace(dto, name=display_name)
+
+
+def _canonicalize_model_id(model_id: str | None) -> str | None:
+    if not model_id:
+        return None
+    return resolve_model(model_id)
+
+
+def _canonicalize_model_chain(models: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for model in models or []:
+        resolved = _canonicalize_model_id(model)
+        if not resolved or resolved in seen:
+            continue
+        seen.add(resolved)
+        canonical.append(resolved)
+    return canonical
 
 
 class AgentService:
@@ -155,9 +174,9 @@ class AgentService:
             name=name,
             description=description,
             system_prompt=system_prompt,
-            primary_model_id=primary_model_id,
-            fallback_models=fallback_models,
-            escalation_model_id=escalation_model_id,
+            primary_model_id=_canonicalize_model_id(primary_model_id) or primary_model_id,
+            fallback_models=_canonicalize_model_chain(fallback_models),
+            escalation_model_id=_canonicalize_model_id(escalation_model_id),
             strategies=strategies,
             temperature=temperature,
             thinking_level=thinking_level,
@@ -226,9 +245,9 @@ class AgentService:
             name=name,
             description=description,
             system_prompt=system_prompt,
-            primary_model_id=primary_model_id,
-            fallback_models=fallback_models,
-            escalation_model_id=escalation_model_id,
+            primary_model_id=_canonicalize_model_id(primary_model_id),
+            fallback_models=_canonicalize_model_chain(fallback_models) if fallback_models is not None else None,
+            escalation_model_id=_canonicalize_model_id(escalation_model_id),
             strategies=strategies,
             temperature=temperature,
             thinking_level=thinking_level,
