@@ -101,6 +101,10 @@ MODEL_ALIASES.update({
     "claude": CLAUDE_SONNET,
     "gemini": GEMINI_FLASH,
     "openai": OPENAI_GPT_5_2,
+    # Legacy Codex aliases without the explicit -codex suffix
+    "codex/gpt-5.1": CODEX_GPT_5_1,
+    "codex/gpt-5.2": CODEX_GPT_5_2,
+    "codex/gpt-5.3": CODEX_GPT_5_3,
     # CloudCode aliases
     "cc/sonnet": CLAUDE_SONNET,
     "cc/opus": CLAUDE_OPUS,
