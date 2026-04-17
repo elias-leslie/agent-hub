@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import settings
+from app.constants import resolve_model
 from app.models import Agent
 from app.services.owned_prompt_service import sync_agent_system_prompt
 
@@ -30,6 +31,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SEED_FILE = Path(__file__).parent / "seed_agents_data" / "seed_data.json"
+
+
+def _canonicalize_model_chain(models: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    canonical: list[str] = []
+    for model in models or []:
+        resolved = resolve_model(model)
+        if not resolved or resolved in seen:
+            continue
+        seen.add(resolved)
+        canonical.append(resolved)
+    return canonical
 
 
 def _load_seed_data() -> tuple[list[dict], list[str]]:
@@ -75,9 +88,9 @@ async def seed_agents(db: AsyncSession) -> int:
             name=agent_data["name"],
             description=agent_data.get("description"),
             system_prompt=agent_data["system_prompt"],
-            primary_model_id=agent_data["primary_model_id"],
-            fallback_models=agent_data.get("fallback_models", []),
-            escalation_model_id=agent_data.get("escalation_model_id"),
+            primary_model_id=resolve_model(agent_data["primary_model_id"]),
+            fallback_models=_canonicalize_model_chain(agent_data.get("fallback_models", [])),
+            escalation_model_id=resolve_model(agent_data["escalation_model_id"]) if agent_data.get("escalation_model_id") else None,
             strategies=agent_data.get("strategies", {}),
             temperature=agent_data.get("temperature", 0.7),
             thinking_level=agent_data.get("thinking_level"),

@@ -9,7 +9,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.registry import get_provider_for_model
 from app.config import settings
-from app.constants import OR_FREE_GLM, resolve_model
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CODEX_GPT_5_1,
+    CODEX_GPT_5_1_MINI,
+    CODEX_GPT_5_2,
+    CODEX_GPT_5_3,
+    CODEX_GPT_5_3_SPARK,
+    CODEX_GPT_5_4,
+    GEMINI_3_1_PRO,
+    GEMINI_FLASH,
+    OR_FREE_GLM,
+    resolve_model,
+)
 from app.models import Agent
 from app.services.agent_cache import AgentCache
 from app.services.credential_manager import get_credential_manager
@@ -18,7 +32,39 @@ from app.services.model_mapping import map_model_to_provider
 logger = logging.getLogger(__name__)
 
 TEXT_PROVIDER_PRIORITY = ("codex", "claude", "openai", "gemini", "openrouter")
-SKIP_AGENT_SLUGS = {"image-gen"}
+SKIP_AGENT_SLUGS = {"designer", "ux-polisher", "image-gen", "market-pulse-scout"}
+FAST_UTILITY_SLUGS = {
+    "context-compactor",
+    "explorer",
+    "git-agent",
+    "learning-extractor",
+    "memory-rater",
+    "note-formatter",
+    "note-titler",
+    "summarizer",
+}
+GENERAL_CHAT_SLUGS = {"chat", "ideator", "ideator-public", "voice-responder"}
+FAST_VALIDATION_SLUGS = {"tester", "triager", "validator"}
+VISUAL_SLUGS = {"site-checker"}
+REVIEW_HEAVY_SLUGS = {
+    "analyst",
+    "critic",
+    "equity-analyst",
+    "financial-document-reviewer",
+    "governance-auditor",
+    "investment-committee",
+    "market-pulse-analyst",
+    "memory-curator",
+    "persona",
+    "planner",
+    "prompt-builder",
+    "reasoner",
+    "reviewer",
+    "risk-manager",
+    "specifier",
+    "supervisor",
+    "trade-manager",
+}
 
 
 def _unique_models(models: list[str]) -> list[str]:
@@ -69,8 +115,40 @@ def _source_chain(agent: Agent) -> list[str]:
     return _unique_models([resolve_model(model) for model in models if model])
 
 
-def _target_chain(agent: Agent, available_providers: list[str]) -> list[str]:
-    original_chain = _source_chain(agent)
+def _prefers_fast_codex(agent: Agent) -> bool:
+    return agent.slug in FAST_UTILITY_SLUGS | GENERAL_CHAT_SLUGS | FAST_VALIDATION_SLUGS
+
+
+def _preferred_codex_fallback(agent: Agent, primary_model_id: str) -> str | None:
+    prefer_fast = _prefers_fast_codex(agent)
+    if primary_model_id == CODEX_GPT_5_4:
+        return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_3
+    if primary_model_id == CODEX_GPT_5_3_SPARK:
+        return CODEX_GPT_5_3
+    if primary_model_id == CODEX_GPT_5_3:
+        return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_4
+    if primary_model_id in {CODEX_GPT_5_2, CODEX_GPT_5_1}:
+        return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_3
+    if primary_model_id == CODEX_GPT_5_1_MINI:
+        return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_3
+    return None
+
+
+def _preferred_non_codex_candidates(agent: Agent) -> list[str]:
+    if agent.slug in VISUAL_SLUGS:
+        return [CLAUDE_SONNET, GEMINI_FLASH, GEMINI_3_1_PRO]
+    if agent.is_coding_agent:
+        return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_OPUS]
+    if agent.slug in REVIEW_HEAVY_SLUGS:
+        return [CLAUDE_OPUS, GEMINI_3_1_PRO, CLAUDE_SONNET]
+    if agent.slug in GENERAL_CHAT_SLUGS:
+        return [CLAUDE_SONNET, GEMINI_FLASH, CLAUDE_HAIKU]
+    if agent.slug in FAST_UTILITY_SLUGS | FAST_VALIDATION_SLUGS:
+        return [GEMINI_FLASH, CLAUDE_HAIKU, CLAUDE_SONNET]
+    return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_HAIKU]
+
+
+def _available_chain_from_source_chain(original_chain: list[str], available_providers: list[str]) -> list[str]:
     available_chain = [
         model
         for model in original_chain
@@ -83,11 +161,35 @@ def _target_chain(agent: Agent, available_providers: list[str]) -> list[str]:
         for provider in available_providers:
             available_chain.append(_map_model(model, provider))
 
+    return _unique_models(available_chain)
+
+
+def _target_chain(agent: Agent, available_providers: list[str]) -> list[str]:
+    original_chain = _source_chain(agent)
+    available_chain = _available_chain_from_source_chain(original_chain, available_providers)
+
     if not available_chain:
         for provider in available_providers:
             available_chain.append(_map_model(agent.primary_model_id, provider))
+        available_chain = _unique_models(available_chain)
+    if not available_chain:
+        return []
 
-    return _unique_models(available_chain)
+    target_primary = available_chain[0]
+    if "codex" not in available_providers or get_provider_for_model(target_primary) != "codex":
+        return available_chain
+
+    preferred_chain = [target_primary]
+    codex_fallback = _preferred_codex_fallback(agent, target_primary)
+    if codex_fallback and get_provider_for_model(codex_fallback) in available_providers:
+        preferred_chain.append(codex_fallback)
+
+    for model in _preferred_non_codex_candidates(agent):
+        if get_provider_for_model(model) in available_providers:
+            preferred_chain.append(model)
+
+    preferred_chain.extend(available_chain[1:])
+    return _unique_models(preferred_chain)
 
 
 async def _invalidate_agent_cache(slugs: list[str]) -> None:
@@ -143,10 +245,12 @@ async def reconcile_agent_models_to_available_providers(
         target_fallbacks = target_chain[1:4]
         target_escalation = None
         if agent.escalation_model_id:
-            target_escalation = next(
-                (model for model in target_chain if model != target_primary),
-                target_primary,
-            )
+            target_escalation = current_escalation
+            if target_escalation in {CODEX_GPT_5_1, CODEX_GPT_5_2}:
+                target_escalation = next(
+                    (model for model in target_fallbacks if model != target_primary),
+                    target_primary,
+                )
 
         if (
             target_primary == current_primary
