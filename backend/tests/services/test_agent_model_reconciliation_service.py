@@ -111,16 +111,46 @@ class TestReconcileAgentModelsToAvailableProviders:
         mock_cache.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_skips_image_generation_agent(self) -> None:
+    async def test_codex_primary_agents_gain_codex_and_non_codex_fallbacks(self) -> None:
         credential_manager = CredentialManager.get_instance()
-        credential_manager.set("openai", "api_key", "openai-key")
-        image_agent = _agent(
-            slug="image-gen",
-            primary_model_id="nvidia/flux.1-dev",
-            fallback_models=["minimax/image-01"],
+        credential_manager.set("codex", "oauth_token", "codex-token")
+        credential_manager.set("claude", "api_key", "anthropic-key")
+        credential_manager.set("gemini", "api_key", "gemini-key")
+        agent = _agent(
+            slug="chat",
+            primary_model_id="codex/gpt-5.4",
+            fallback_models=["claude-haiku-4-5", "gemini-3-flash-preview"],
         )
         mock_db = AsyncMock()
-        mock_db.execute.return_value = _db_result_for([image_agent])
+        mock_db.execute.return_value = _db_result_for([agent])
+
+        with patch(
+            "app.services.agent_model_reconciliation_service.AgentCache"
+        ) as mock_cache_class:
+            mock_cache = AsyncMock()
+            mock_cache_class.return_value = mock_cache
+            changed = await reconcile_agent_models_to_available_providers(mock_db)
+
+        assert changed == ["chat"]
+        assert agent.primary_model_id == "codex/gpt-5.4"
+        assert agent.fallback_models[0] == "codex/gpt-5.3-codex-spark"
+        assert any(model.startswith("codex/") for model in agent.fallback_models)
+        assert any(not model.startswith("codex/") for model in agent.fallback_models)
+        mock_db.commit.assert_awaited_once()
+        mock_cache.invalidate.assert_awaited_once_with("chat")
+        mock_cache.close.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_ignored_design_and_image_agents(self) -> None:
+        credential_manager = CredentialManager.get_instance()
+        credential_manager.set("codex", "oauth_token", "codex-token")
+        ignored_agents = [
+            _agent(slug="designer", primary_model_id="claude-opus-4-6"),
+            _agent(slug="ux-polisher", primary_model_id="claude-opus-4-6"),
+            _agent(slug="image-gen", primary_model_id="nvidia/flux.1-dev", fallback_models=["minimax/image-01"]),
+        ]
+        mock_db = AsyncMock()
+        mock_db.execute.return_value = _db_result_for(ignored_agents)
 
         with patch(
             "app.services.agent_model_reconciliation_service.AgentCache"
@@ -130,7 +160,9 @@ class TestReconcileAgentModelsToAvailableProviders:
             changed = await reconcile_agent_models_to_available_providers(mock_db)
 
         assert changed == []
-        assert image_agent.primary_model_id == "nvidia/flux.1-dev"
+        assert ignored_agents[0].primary_model_id == "claude-opus-4-6"
+        assert ignored_agents[1].primary_model_id == "claude-opus-4-6"
+        assert ignored_agents[2].primary_model_id == "nvidia/flux.1-dev"
         mock_db.commit.assert_not_awaited()
         mock_cache.invalidate.assert_not_called()
         mock_cache.close.assert_not_awaited()

@@ -78,7 +78,7 @@ async def test_update_agent_model_normalizes_explicit_alias_inputs() -> None:
 
 
 @pytest.mark.anyio
-async def test_update_agent_model_preserves_distinct_prefixed_model_ids() -> None:
+async def test_update_agent_model_normalizes_legacy_prefixed_codex_model_ids() -> None:
     mock_db = AsyncMock()
     updated = SimpleNamespace(version=8)
 
@@ -99,14 +99,14 @@ async def test_update_agent_model_preserves_distinct_prefixed_model_ids() -> Non
             escalation_model_id=None,
             temperature=None,
             thinking_level=None,
-            change_reason="preserve distinct ids",
+            change_reason="normalize legacy codex ids",
         )
 
-    assert "primary_model=codex/gpt-5.2" in result
+    assert "primary_model=codex/gpt-5.2-codex" in result
     await_args = service.update.await_args
     assert await_args is not None
     kwargs = await_args.kwargs
-    assert kwargs["primary_model_id"] == "codex/gpt-5.2"
+    assert kwargs["primary_model_id"] == "codex/gpt-5.2-codex"
 
 
 @pytest.mark.anyio
