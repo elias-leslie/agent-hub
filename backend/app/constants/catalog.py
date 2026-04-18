@@ -22,6 +22,7 @@ from app.constants.models import (
     CF_QWQ_32B,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
+    CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
     CODEX_GPT_5_1,
     CODEX_GPT_5_1_MINI,
@@ -108,8 +109,10 @@ MODEL_ALIASES.update({
     # CloudCode aliases
     "cc/sonnet": CLAUDE_SONNET,
     "cc/opus": CLAUDE_OPUS,
+    "cc/opus-4.7": CLAUDE_OPUS_4_7,
     "cloudcode/claude-sonnet-4-6": CLAUDE_SONNET,
     "cloudcode/claude-opus-4-6-thinking": CLAUDE_OPUS,
+    "cloudcode/claude-opus-4-7": CLAUDE_OPUS_4_7,
 })
 
 
@@ -158,6 +161,7 @@ CLAUDE_TO_GEMINI_MAP: dict[str, str] = {
     CLAUDE_HAIKU: GEMINI_FLASH,
     CLAUDE_SONNET: GEMINI_FLASH,
     CLAUDE_OPUS: GEMINI_3_1_PRO,
+    CLAUDE_OPUS_4_7: GEMINI_3_1_PRO,
 }
 
 GEMINI_TO_CLAUDE_MAP: dict[str, str] = {

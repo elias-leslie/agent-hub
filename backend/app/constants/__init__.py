@@ -40,6 +40,7 @@ from app.constants.catalog import (
 from app.constants.models import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
+    CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
     CODEX_GPT_5_1,
     CODEX_GPT_5_1_MINI,
@@ -98,6 +99,7 @@ DEFAULT_RATE_LIMIT_TPM = 100_000
 __all__ = [
     "CLAUDE_HAIKU",
     "CLAUDE_OPUS",
+    "CLAUDE_OPUS_4_7",
     "CLAUDE_SONNET",
     "CLAUDE_TO_GEMINI_MAP",
     "CODEX_GPT_5_1",

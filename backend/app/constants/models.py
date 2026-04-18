@@ -11,6 +11,7 @@ from __future__ import annotations
 # Claude models (Anthropic)
 CLAUDE_SONNET = "claude-sonnet-4-6"
 CLAUDE_OPUS = "claude-opus-4-6"
+CLAUDE_OPUS_4_7 = "claude-opus-4-7"
 CLAUDE_HAIKU = "claude-haiku-4-5"
 
 # Gemini 3 models (Google)
@@ -101,7 +102,7 @@ DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
 DEFAULT_GEMINI_MODEL = GEMINI_FLASH
 
 # Model for complex reasoning (code review, architecture decisions)
-REASONING_CLAUDE_MODEL = CLAUDE_OPUS
+REASONING_CLAUDE_MODEL = CLAUDE_OPUS_4_7
 REASONING_GEMINI_MODEL = GEMINI_3_1_PRO
 
 # Model for fast/cheap operations (extraction, validation, summarization)

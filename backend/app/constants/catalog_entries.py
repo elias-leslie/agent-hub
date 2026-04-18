@@ -21,6 +21,7 @@ from app.constants.models import (
     CF_SD_XL_LIGHTNING,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
+    CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
     CODEX_GPT_5_1,
     CODEX_GPT_5_1_MINI,
@@ -61,7 +62,7 @@ from app.constants.models import (
 # Single place to register UI-visible models. Everything else derives from this.
 # Scores sourced from SWE-Bench, GPQA Diamond, BFCL, IFEval, MMMU-Pro, etc.
 MODEL_CATALOG: list[ModelEntry] = [
-    # --- Claude (3) ---
+    # --- Claude (4) ---
     ModelEntry(
         id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 4.6",
         hint="Balanced", provider="claude",
@@ -91,6 +92,21 @@ MODEL_CATALOG: list[ModelEntry] = [
             max_output_tokens=32768,
         ),
         release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-opus",
+    ),
+    ModelEntry(
+        id=CLAUDE_OPUS_4_7, alias="opus-4.7", name="Claude Opus 4.7",
+        hint="Most capable", provider="claude",
+        scores=ModelScores(coding=85, reasoning=93, planning=74, tool_use=78, instruction=86, design=72),
+        cost=ModelCost(5.00, 25.00, cache_read_per_million=0.50, cache_write_per_million=6.25),
+        context_window=1_000_000, speed_tier="medium",
+        capabilities=ModelCapabilities(
+            has_vision=True,
+            has_thinking=True,
+            supports_pdf=True,
+            supports_tool_execution=True,
+            max_output_tokens=131072,
+        ),
+        knowledge_cutoff="2026-01-01", family="claude-opus",
     ),
     ModelEntry(
         id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 4.5",
