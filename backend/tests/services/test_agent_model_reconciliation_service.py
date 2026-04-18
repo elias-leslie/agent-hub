@@ -78,7 +78,7 @@ class TestReconcileAgentModelsToAvailableProviders:
 
         assert changed == ["persona"]
         assert agent.primary_model_id == "claude-sonnet-4-6"
-        assert agent.fallback_models == []
+        assert agent.fallback_models == ["claude-opus-4-7"]
         assert agent.escalation_model_id == "claude-sonnet-4-6"
         mock_db.commit.assert_awaited_once()
         mock_cache.invalidate.assert_awaited_once_with("persona")

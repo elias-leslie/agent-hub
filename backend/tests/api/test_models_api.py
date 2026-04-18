@@ -22,6 +22,21 @@ def test_build_model_info_includes_extended_capabilities() -> None:
     assert info.capabilities.supports_session_cache is True
 
 
+def test_get_model_entry_resolves_new_claude_opus_4_7_alias() -> None:
+    entry = get_model_entry("opus-4.7")
+    assert entry is not None
+
+    info = _build_model_info(entry)
+
+    assert info.id == "claude-opus-4-7"
+    assert info.name == "Claude Opus 4.7"
+    assert info.capabilities.has_vision is True
+    assert info.capabilities.supports_tool_execution is True
+    assert info.capabilities.max_output_tokens == 131072
+    assert info.cost.input_per_m == 5.0
+    assert info.cost.output_per_m == 25.0
+
+
 def test_get_model_entry_returns_none_for_unknown_model() -> None:
     # Arrange
     unknown_id = "unknown/does-not-exist"

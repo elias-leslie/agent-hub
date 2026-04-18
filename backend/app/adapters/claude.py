@@ -19,7 +19,7 @@ from app.adapters.claude_direct import (
 )
 from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_streaming import stream_oauth
-from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_OPUS_4_7, CLAUDE_SONNET
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
     # Model name mapping: full ID -> SDK short name (for CLI mode)
     MODEL_MAP: ClassVar[dict[str, str]] = {
         CLAUDE_OPUS: "opus",
+        CLAUDE_OPUS_4_7: "opus",
         CLAUDE_SONNET: "sonnet",
         CLAUDE_HAIKU: "haiku",
         "opus": "opus",
@@ -48,6 +49,7 @@ class ClaudeAdapter(ClaudeToolSessionMixin, ProviderAdapter):
         "sonnet": f"{CLAUDE_SONNET}-20250514",
         "haiku": f"{CLAUDE_HAIKU}-20251001",
         CLAUDE_OPUS: f"{CLAUDE_OPUS}-20250219",
+        CLAUDE_OPUS_4_7: CLAUDE_OPUS_4_7,
         CLAUDE_SONNET: f"{CLAUDE_SONNET}-20250514",
         CLAUDE_HAIKU: f"{CLAUDE_HAIKU}-20251001",
     }

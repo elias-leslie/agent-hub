@@ -11,7 +11,7 @@ from app.adapters.registry import get_provider_for_model
 from app.config import settings
 from app.constants import (
     CLAUDE_HAIKU,
-    CLAUDE_OPUS,
+    CLAUDE_OPUS_4_7,
     CLAUDE_SONNET,
     CODEX_GPT_5_1,
     CODEX_GPT_5_1_MINI,
@@ -138,9 +138,9 @@ def _preferred_non_codex_candidates(agent: Agent) -> list[str]:
     if agent.slug in VISUAL_SLUGS:
         return [CLAUDE_SONNET, GEMINI_FLASH, GEMINI_3_1_PRO]
     if agent.is_coding_agent:
-        return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_OPUS]
+        return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_OPUS_4_7]
     if agent.slug in REVIEW_HEAVY_SLUGS:
-        return [CLAUDE_OPUS, GEMINI_3_1_PRO, CLAUDE_SONNET]
+        return [CLAUDE_OPUS_4_7, GEMINI_3_1_PRO, CLAUDE_SONNET]
     if agent.slug in GENERAL_CHAT_SLUGS:
         return [CLAUDE_SONNET, GEMINI_FLASH, CLAUDE_HAIKU]
     if agent.slug in FAST_UTILITY_SLUGS | FAST_VALIDATION_SLUGS:
