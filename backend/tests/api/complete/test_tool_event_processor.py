@@ -12,7 +12,7 @@ from app.api.complete.tool_event_processor import _process_assistant_event
 async def test_process_assistant_event_marks_task_session_missing_progress_tags() -> None:
     event = SimpleNamespace(
         message=SimpleNamespace(
-            content=[SimpleNamespace(type="text", text="Investigating the task lane.")]
+            content=[SimpleNamespace(type="text", text="Investigating the task checkpoint.")]
         )
     )
     db = AsyncMock()
@@ -97,7 +97,7 @@ async def test_process_assistant_event_marks_task_session_progress_present() -> 
 async def test_process_assistant_event_skips_progress_tag_health_for_non_task_sessions() -> None:
     event = SimpleNamespace(
         message=SimpleNamespace(
-            content=[SimpleNamespace(type="text", text="Investigating the task lane.")]
+            content=[SimpleNamespace(type="text", text="Investigating the task checkpoint.")]
         )
     )
     db = AsyncMock()

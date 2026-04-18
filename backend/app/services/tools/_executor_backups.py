@@ -146,7 +146,7 @@ async def manage_backups(
     if action == "restore" and not dry_run and "QUEUED" in result:
         return (
             f"{result}\n"
-            "Reminder: confirm the queued restore against cleanup status and current task lanes "
+            "Reminder: confirm the queued restore against cleanup status and current task sessions "
             "before assuming the environment is safe to resume."
         )
     return result

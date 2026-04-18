@@ -97,11 +97,11 @@ def _check_duplicate_campaign(
     )
     if duplicate is None:
         return None
-    return (
-        f"Dispatch blocked for {project_id}: {agent_slug} already has an active "
-        "campaign session in this project. Query or inspect the existing campaign "
-        "instead of creating a duplicate lane."
-    )
+        return (
+            f"Dispatch blocked for {project_id}: {agent_slug} already has an active "
+            "campaign session in this project. Query or inspect the existing campaign "
+            "instead of creating a duplicate task session."
+        )
 
 
 def _check_owner_overlap(
@@ -116,7 +116,7 @@ def _check_owner_overlap(
         shared = [p for p in scope_paths if _is_shared_plumbing_path(p)]
         if shared:
             return (
-                f"Dispatch blocked for {project_id}: live lane touches shared-plumbing paths "
+                f"Dispatch blocked for {project_id}: live task session touches shared-plumbing paths "
                 f"({shared[0]}). Treat migrations, schemas, contracts, routing, build/config, "
                 "shared exports, and cross-cutting utilities as blockers to blind parallel coding."
             )
@@ -132,7 +132,7 @@ async def project_dispatch_overlap_block_reason(
     owners: list[object],
     specialists: list[object],
 ) -> str | None:
-    """Return a blocking reason when live project state makes a new specialist lane unsafe."""
+    """Return a blocking reason when live project state makes a new specialist session unsafe."""
     if mode == "campaign":
         reason = _check_duplicate_campaign(project_id, agent_slug, specialists)
         if reason:
@@ -171,7 +171,7 @@ async def _run_project_command(project_id: str, command: str) -> str:
 async def _ensure_task_lane_context(
     project_id: str, task_id: str,
 ) -> tuple[str | None, str | None, str | None]:
-    """Return (branch, working_dir, error) for a claimed task lane, claiming if needed."""
+    """Return (branch, working_dir, error) for a claimed task checkpoint, claiming if needed."""
     from app.constants.projects import get_known_roots
 
     details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")

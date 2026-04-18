@@ -16,7 +16,7 @@ from app.services.ownership_inventory import (
 
 @pytest.mark.asyncio
 async def test_query_project_ownership_includes_claimed_task_with_external_id_only() -> None:
-    """A claimed task lane should appear even before any Agent Hub session events exist."""
+    """A claimed task checkpoint should appear even before any Agent Hub session events exist."""
     now = datetime.now(UTC)
     session = SimpleNamespace(
         id="sess-claim",
@@ -118,7 +118,7 @@ async def test_query_project_ownership_includes_repo_root_only_claude_lane() -> 
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence=None,
-        provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-b5008fb6"},
+        provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub/task-b5008fb6"},
     )
 
     db = AsyncMock()
@@ -137,7 +137,7 @@ async def test_query_project_ownership_includes_repo_root_only_claude_lane() -> 
 
     assert len(owners) == 1
     assert owners[0].task_id == "task-b5008fb6"
-    assert owners[0].working_dir == "/srv/workspaces/lanes/agent-hub/task-b5008fb6"
+    assert owners[0].working_dir == "/srv/workspaces/projects/agent-hub/task-b5008fb6"
 
 
 @pytest.mark.asyncio

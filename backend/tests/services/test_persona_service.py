@@ -266,7 +266,7 @@ class TestGetPersonaContextForAgent:
             return (
                 "## Focus Harness\n\n"
                 "- quiet + active session => wait\n"
-                "- same-task lane with recent progress => monitor; do not redispatch\n"
+                "- same-task session with recent progress => monitor; do not redispatch\n"
                 "- active session with recent progress => wait; do not redispatch\n"
                 "- cleanup/workspace gate unresolved => primary_action=block and should_dispatch=false\n"
                 "- explicit stalled/failed/terminated session => reconcile and should_dispatch=false until inspection proves a new dispatch is needed\n"
@@ -321,6 +321,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<personality>" in result
         assert "I love coding." in result
 
@@ -334,6 +335,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<personality>" not in result
 
     @pytest.mark.asyncio
@@ -351,6 +353,7 @@ class TestGetPersonaContextForAgent:
         ):
             result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
+        assert result is not None
         assert "<heartbeat_instructions>" in result
         assert "Check task queue." in result
 
@@ -369,9 +372,10 @@ class TestGetPersonaContextForAgent:
         ):
             result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
+        assert result is not None
         assert "<focus_harness>" in result
         assert "quiet + active session => wait" in result
-        assert "same-task lane with recent progress => monitor" in result
+        assert "same-task session with recent progress => monitor" in result
         assert "active session with recent progress => wait" in result
         assert "cleanup/workspace gate unresolved => primary_action=block and should_dispatch=false" in result
         assert "explicit stalled/failed/terminated session => reconcile" in result
@@ -386,6 +390,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<heartbeat_instructions>" not in result
 
     @pytest.mark.asyncio
@@ -398,6 +403,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<user_context_notes>" in result
         assert "Prefers dark mode." in result
 
@@ -416,6 +422,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<user_profile>" in result
         assert "Timezone: America/New_York" in result
         assert "Communication Style: Concise and direct." in result
@@ -434,6 +441,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<evolution_guidelines>" in result
         assert "Self-Evolution Guidelines" in result
 
@@ -456,6 +464,7 @@ class TestGetPersonaContextForAgent:
         ):
             result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
+        assert result is not None
         assert "<heartbeat_instructions>" in result
         assert "<evolution_guidelines>" not in result
 
@@ -473,6 +482,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<onboarding>" in result
         assert "Structured Onboarding" in result
         assert persona.onboarding_phase == "in_progress"
@@ -491,6 +501,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<onboarding>" in result
         assert "Continuation" in result
 
@@ -508,6 +519,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<onboarding>" in result
         assert "Under Review" in result
 
@@ -525,6 +537,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "<onboarding>" not in result
 
     @pytest.mark.asyncio
@@ -542,6 +555,7 @@ class TestGetPersonaContextForAgent:
 
         result = await get_persona_context_for_agent(db, agent_id=10)
 
+        assert result is not None
         assert "Previous user context exists" in result
 
     @pytest.mark.asyncio

@@ -1789,8 +1789,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 '{"status":"merged"}',
-                "Cleanup preview for task-42 --confirm abcdef12",
-                "Deleted lane task-42",
+                "Deleted 1 checkpoint residue",
             ]
         )
         result = await manage_tasks(
@@ -1801,12 +1800,9 @@ class TestManageTasks:
         )
 
         assert '"status":"merged"' in result
-        assert "Lane cleanup: Deleted lane task-42" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-42"
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
-        )
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_finalize_merge_not_found_adds_review_hint(self):
@@ -1865,13 +1861,7 @@ class TestManageTasks:
                     "ERROR Diff gate blocked completion: No files changed vs base branch — "
                     "task has no code changes\n"
                 ),
-                (
-                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-42 [checkpoint]\n"
-                    "To confirm, run:\n"
-                    "  st cleanup lanes task-42 --confirm deadbeef\n"
-                ),
-                "Deleted 1 target(s), 0 error(s)",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -1897,13 +1887,10 @@ class TestManageTasks:
                 mock_bash, action="done", task_id="task-42", project_id="summitflow"
             )
 
-        assert "Fallback: Retired 1 session-backed lane(s) for task-42" in result
-        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert "Fallback: Retired 1 session-backed checkpoint record(s) for task-42" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow done task-42"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-42"
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow cleanup lanes task-42 --confirm deadbeef"
-        )
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_abandon(self):
@@ -2102,13 +2089,7 @@ class TestManageTasks:
                     "task has no code changes\n"
                     "  Use --skip-diff-gate for non-code tasks (docs, config).\n"
                 ),
-                (
-                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-42 [checkpoint]\n"
-                    "To confirm, run:\n"
-                    "  st cleanup lanes task-42 --confirm deadbeef\n"
-                ),
-                "Deleted 1 target(s), 0 error(s)",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2137,23 +2118,20 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Reconcile retired no-op lane for task-42" in result
+        assert "Reconcile retired no-op task residue for task-42" in result
         assert "task was left open" in result
-        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert completed_session.workstream_status == "retired"
         assert "diff gate reported no code changes" in completed_session.workstream_note
-        assert mock_bash.await_count == 4
+        assert mock_bash.await_count == 3
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: No-op completion candidate'"
         )
-        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup lanes task-42"
-        assert mock_bash.await_args_list[3].args[0] == (
-            "st -P summitflow cleanup lanes task-42 --confirm deadbeef"
-        )
+        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
-    async def test_reconcile_reports_cleanup_preview_failure_when_confirm_token_missing(self):
+    async def test_reconcile_reports_cleanup_empty_output(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
@@ -2164,7 +2142,7 @@ class TestManageTasks:
                     "ERROR Diff gate blocked completion: No files changed vs base branch — "
                     "task has no code changes\n"
                 ),
-                "DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):",
+                "",
             ]
         )
         mock_db = AsyncMock()
@@ -2193,9 +2171,9 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Lane cleanup preview for task-42 did not return a confirm token." in result
+        assert "Checkpoint cleanup returned no output for task-42." in result
         assert mock_bash.await_count == 3
-        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup lanes task-42"
+        assert mock_bash.await_args_list[2].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_stops_when_recent_execution_activity_is_present(self):
@@ -2245,8 +2223,7 @@ class TestManageTasks:
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
-                "Cleanup preview for task-42 --confirm abcdef12",
-                "Deleted lane task-42",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2272,7 +2249,7 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
-        assert "Lane cleanup: Deleted lane task-42" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
@@ -2283,10 +2260,7 @@ class TestManageTasks:
         )
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[4].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[5].args[0] == "st -P summitflow cleanup lanes task-42"
-        assert mock_bash.await_args_list[6].args[0] == (
-            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
-        )
+        assert mock_bash.await_args_list[5].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_admin_closes_after_status_update_failure_recovery_hint(self):
@@ -2349,8 +2323,7 @@ class TestManageTasks:
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
-                "Cleanup preview for task-42 --confirm abcdef12",
-                "Deleted lane task-42",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2376,7 +2349,7 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
-        assert "Lane cleanup: Deleted lane task-42" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
     @pytest.mark.asyncio
@@ -2389,8 +2362,7 @@ class TestManageTasks:
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
                 '{"task_id":"task-42","status":"merged"}',
-                "Cleanup preview for task-42 --confirm abcdef12",
-                "Deleted lane task-42",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2416,17 +2388,14 @@ class TestManageTasks:
             )
 
         assert '"status":"merged"' in result
-        assert "Lane cleanup: Deleted lane task-42" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup lanes task-42"
-        assert mock_bash.await_args_list[5].args[0] == (
-            "st -P summitflow cleanup lanes task-42 --confirm abcdef12"
-        )
+        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_treats_no_checkout_finalize_as_already_closed(self):
@@ -2765,13 +2734,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                (
-                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [checkpoint]\n"
-                    "To confirm, run:\n"
-                    "  st cleanup lanes task-77 --confirm deadbeef\n"
-                ),
-                "Deleted 1 target(s), 0 error(s)",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2800,14 +2763,11 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed lane(s) for task-77" in result
-        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert completed.workstream_status == "retired"
         assert "Retired via manage_tasks(action=\"retire_lane\")" in completed.workstream_note
-        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow cleanup lanes task-77"
-        assert mock_bash.await_args_list[1].args[0] == (
-            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
-        )
+        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_retire_lane_refuses_when_active_sessions_exist(self):
@@ -2842,13 +2802,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 "TASK:task-77|completed|P2|task|SIMPLE",
-                (
-                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [checkpoint]\n"
-                    "To confirm, run:\n"
-                    "  st cleanup lanes task-77 --confirm deadbeef\n"
-                ),
-                "Deleted 1 target(s), 0 error(s)",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2877,16 +2831,13 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed lane(s) for task-77" in result
-        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
         assert "stale active" in active.workstream_note
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow context task-77 --compact"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-77"
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
-        )
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_retire_lane_allows_stale_active_by_inactivity_while_task_is_running(self):
@@ -2895,13 +2846,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 "TASK:task-77|running|P2|task|SIMPLE",
-                (
-                    "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [checkpoint]\n"
-                    "To confirm, run:\n"
-                    "  st cleanup lanes task-77 --confirm deadbeef\n"
-                ),
-                "Deleted 1 target(s), 0 error(s)",
+                "Deleted 1 checkpoint residue",
             ]
         )
         mock_db = AsyncMock()
@@ -2931,16 +2876,13 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Retired 1 session-backed lane(s) for task-77" in result
-        assert "Lane cleanup: Deleted 1 target(s), 0 error(s)" in result
+        assert "Retired 1 session-backed checkpoint record(s) for task-77" in result
+        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert active.status == "completed"
         assert active.workstream_status == "retired"
-        assert "Retired stale active lane during retire_lane after" in active.workstream_note
+        assert "Retired stale active session during retire_lane after" in active.workstream_note
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow context task-77 --compact"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup lanes task-77"
-        assert mock_bash.await_args_list[2].args[0] == (
-            "st -P summitflow cleanup lanes task-77 --confirm deadbeef"
-        )
+        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_unknown_action(self):

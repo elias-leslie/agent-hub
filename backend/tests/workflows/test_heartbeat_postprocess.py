@@ -189,7 +189,7 @@ class TestDetectFollowupReason:
 
     def test_skips_followup_when_heartbeat_already_reported_action(self) -> None:
         reason = _detect_followup_reason(
-            "HEARTBEAT_ACTION — Reconciled stale lane.",
+            "HEARTBEAT_ACTION — Reconciled stale session.",
             "\n<cleanup_status>\nACTIONABLE-CLEANUP[1]\n</cleanup_status>",
             "",
         )
