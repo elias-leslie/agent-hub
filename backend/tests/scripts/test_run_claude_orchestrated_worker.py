@@ -428,7 +428,7 @@ def test_build_prompt_from_task_context_generates_task_contract():
         feedback_text="Second pass must reduce file size and remove banner comments.",
     )
 
-    assert "You are working in the `agent-hub` task lane." in prompt
+    assert "You are working in the `agent-hub` shared project checkout." in prompt
     assert "Use exactly one Agent subagent named `task-analyst`" in prompt
     assert "`backend/cli/lib/autosnapshot.py`" in prompt
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt

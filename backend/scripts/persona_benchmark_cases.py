@@ -154,7 +154,7 @@ _DISPATCH_READINESS_CASES: list[PersonaBenchmarkCase] = [
         case_id="scope_conflict_shared_plumbing",
         family="dispatch-readiness",
         name="Scope Conflict Shared Plumbing",
-        description="Block dispatch when a live lane is actively touching shared infrastructure paths.",
+        description="Block dispatch when a live task session is actively touching shared infrastructure paths.",
         scenario=(
             "TASK: task-1010\n"
             "status=pending\n"
@@ -180,7 +180,7 @@ _DISPATCH_READINESS_CASES: list[PersonaBenchmarkCase] = [
         case_id="same_task_overlap",
         family="dispatch-readiness",
         name="Same Task Overlap",
-        description="Do not redispatch when an active same-task lane already exists.",
+        description="Do not redispatch when an active same-task session already exists.",
         scenario=(
             "TASK: task-2222\n"
             "status=pending\n"

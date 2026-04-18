@@ -606,14 +606,14 @@ class TestFindSessionsForTask:
                 external_id=None,
                 current_branch=None,
                 session_type="claude_code",
-                provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-abc"},
+                provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub/task-abc"},
             ),
             SimpleNamespace(
                 id="session-4",
                 external_id=None,
                 current_branch=None,
                 session_type="agent",
-                provider_metadata={"cwd": "/srv/workspaces/lanes/agent-hub/task-abc-follow-up"},
+                provider_metadata={"cwd": "/srv/workspaces/projects/agent-hub/task-abc-follow-up"},
             ),
         ]
         fallback_result.scalars.return_value = fallback_scalars

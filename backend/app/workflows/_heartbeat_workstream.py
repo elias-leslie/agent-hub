@@ -1,4 +1,4 @@
-"""Workstream lane classification and pure formatting helpers for heartbeat prompts.
+"""Workstream session classification and pure formatting helpers for heartbeat prompts.
 
 All IO-bound functions (_query_recent_workstream_sessions, _get_workstream_inventory)
 live in _heartbeat_data to keep test patch paths valid. This module provides
@@ -7,13 +7,13 @@ the pure classification and formatting helpers.
 Contract: workstream inventory states are derived in precedence order.
 Highest precedence first:
 1. retired - all observed lifecycle markers are retired
-2. reconciled - authoritative + superseded evidence exists for the same lane
+2. reconciled - authoritative + superseded evidence exists for the same task session
 3. superseded - all observed lifecycle markers are superseded
-4. mixed - multiple active branches for the same task/lane
-5. stale_active - active lane exists but exceeds the stale age threshold
-6. active - live non-stale lane exists
-7. completed_ready_for_closure - no active lane remains and completed evidence exists
-8. orphaned - lane facts exist but do not yet justify automation
+4. mixed - multiple active branches for the same task session
+5. stale_active - active session exists but exceeds the stale age threshold
+6. active - live non-stale session exists
+7. completed_ready_for_closure - no active session remains and completed evidence exists
+8. orphaned - session facts exist but do not yet justify automation
 
 Automation boundary:
 - completed_ready_for_closure: safe to reconcile/close
@@ -31,7 +31,7 @@ from app.workflows._heartbeat_state import _STALE_ACTIVE_MINUTES
 
 
 def _build_verify_then_close_action(task_id: str) -> str:
-    """Return shell-first closeout guidance for a completed lane."""
+    """Return shell-first closeout guidance for a completed task checkpoint."""
     return (
         f'bash: st context {task_id} then st done {task_id} --admin --message '
         '"Completed work verified; task closed."'
@@ -39,7 +39,7 @@ def _build_verify_then_close_action(task_id: str) -> str:
 
 
 def _build_verify_then_inspect_action(task_id: str, *, reason: str) -> str:
-    """Return shell-first evidence gathering guidance for a task lane."""
+    """Return shell-first evidence gathering guidance for a task session."""
     return (
         f"bash: st context {task_id} then st session-events -T {task_id} --page-size 100; "
         f"{reason}"
@@ -47,7 +47,7 @@ def _build_verify_then_inspect_action(task_id: str, *, reason: str) -> str:
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
-    """Classify a grouped task lane into an actionable lifecycle state."""
+    """Classify a grouped task session into an actionable lifecycle state."""
     statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
     active_rows = [row for row in rows if row.get("status") == "active"]
     completed_rows = [row for row in rows if row.get("status") == "completed"]
@@ -78,13 +78,13 @@ def _build_stale_active_action(
     task_id: str | None,
     provider: str | None,
 ) -> str:
-    """Build next-action string for a stale_active lane."""
+    """Build next-action string for a stale active session."""
     del project_id, provider
     if not task_id:
-        return "inspect active session evidence; retire stale lane only after verification"
+        return "inspect active session evidence; retire stale session only after verification"
     return _build_verify_then_inspect_action(
         task_id,
-        reason="retire stale lane only after verification",
+        reason="retire stale session only after verification",
     )
 
 
@@ -95,7 +95,7 @@ def _build_workstream_next_action(
     task_id: str | None,
     provider: str | None = None,
 ) -> str:
-    """Return a concrete next action for a classified workstream lane."""
+    """Return a concrete next action for a classified workstream session."""
     if state == "completed_ready_for_closure" and task_id:
         del project_id, provider
         return _build_verify_then_close_action(task_id)
@@ -104,13 +104,13 @@ def _build_workstream_next_action(
     if state == "stale_active":
         return _build_stale_active_action(project_id=project_id, task_id=task_id, provider=provider)
     if state == "mixed":
-        return "split/promotion cleanup; do not dispatch more implementation onto this lane"
+        return "split/promotion cleanup; do not dispatch more implementation onto this task checkpoint"
     if state == "reconciled":
-        return "authoritative lane recorded; avoid redispatch unless new facts contradict it"
+        return "authoritative checkpoint recorded; avoid redispatch unless new facts contradict it"
     if state == "retired":
-        return "retired_lane_no_action"
+        return "retired_session_no_action"
     if state == "superseded":
-        return "superseded_lane_no_action"
+        return "superseded_session_no_action"
     return "monitor"
 
 
@@ -181,7 +181,7 @@ def _parse_stale_running_tasks(task_overview: str) -> list[dict[str, str]]:
 def _group_rows_by_lane(
     rows: list[dict[str, object]],
 ) -> dict[tuple[str, str], list[dict[str, object]]]:
-    """Group workstream rows by (project_id, lane_key)."""
+    """Group workstream rows by (project_id, session_key)."""
     grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
     for row in rows:
         ei = row.get("external_id") if isinstance(row.get("external_id"), str) else None
@@ -194,7 +194,7 @@ def _group_rows_by_lane(
 
 
 def _infer_lane_task_id(lane_rows: list[dict[str, object]]) -> str | None:
-    """Return the first resolvable task_id from a set of lane rows."""
+    """Return the first resolvable task_id from a set of session rows."""
     for lr in lane_rows:
         ei = lr.get("external_id") if isinstance(lr.get("external_id"), str) else None
         br = lr.get("current_branch") if isinstance(lr.get("current_branch"), str) else None
@@ -212,7 +212,7 @@ def _should_skip_lane(
     *,
     queue_truth_available: bool,
 ) -> bool:
-    """Return True if a lane should be excluded from the workstream inventory."""
+    """Return True if a grouped task session should be excluded from the workstream inventory."""
     if lane_state == "retired" and task_id and task_id in visible_task_ids:
         return True
     if lane_state == "completed_ready_for_closure" and task_id and queue_truth_available:

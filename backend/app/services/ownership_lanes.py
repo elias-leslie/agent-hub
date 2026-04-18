@@ -1,4 +1,4 @@
-"""Shared lane normalization helpers for live ownership/workstream views."""
+"""Shared ownership normalization helpers for live ownership/workstream views."""
 
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ class OwnershipOwner:
 
 @dataclass(frozen=True)
 class LaneFingerprint:
-    """Identity for a concrete task lane."""
+    """Identity for a concrete task checkpoint/session."""
 
     task_id: str | None
     branch: str | None
@@ -83,7 +83,7 @@ def lane_fingerprint(
     branch: str | None,
     working_dir: str | None,
 ) -> LaneFingerprint | None:
-    """Build a concrete lane identity, or None when no lane evidence exists."""
+    """Build a concrete task-session identity, or None when no session evidence exists."""
     if not task_id and not branch and not working_dir:
         return None
     return LaneFingerprint(
@@ -107,7 +107,7 @@ def idle_minutes_from_timestamps(
     workstream_updated_at: datetime | None = None,
     now: datetime | None = None,
 ) -> int:
-    """Return idle minutes from the freshest known lane activity timestamp."""
+    """Return idle minutes from the freshest known task-session activity timestamp."""
     latest = workstream_updated_at or updated_at or created_at
     baseline = now or datetime.now(UTC)
     latest = latest.replace(tzinfo=UTC) if latest.tzinfo is None else latest.astimezone(UTC)

@@ -321,15 +321,27 @@ def test_build_persistence_payload_captures_run_and_snapshot_metadata() -> None:
     assert payload["passed_attempt_count"] == 1
     assert payload["avg_score"] == 100.0
     assert payload["pass_rate"] == 100.0
-    assert payload["config_snapshot"]["thinking_level"] == "medium"
-    assert payload["config_snapshot"]["benchmark_task_type"] == "heartbeat"
-    assert payload["experiment"]["experiment_key"] == "persona-patience-ab"
-    assert payload["experiment"]["cohort"] == "candidate"
-    assert payload["metadata"]["efficiency"]["avg_total_tokens"] == 120.0
-    assert payload["metadata"]["efficiency"]["avg_turns"] == 2.0
-    assert payload["metadata"]["efficiency"]["avg_tool_calls"] == 1.0
-    assert payload["attempts"][0]["case_id"] == "session_patience_quiet"
-    assert payload["attempts"][0]["primary_action"] == "wait"
+    config_snapshot = payload["config_snapshot"]
+    experiment = payload["experiment"]
+    metadata = payload["metadata"]
+    attempts = payload["attempts"]
+    assert isinstance(config_snapshot, dict)
+    assert isinstance(experiment, dict)
+    assert isinstance(metadata, dict)
+    assert isinstance(attempts, list)
+    efficiency = metadata["efficiency"]
+    assert isinstance(efficiency, dict)
+    first_attempt = attempts[0]
+    assert isinstance(first_attempt, dict)
+    assert config_snapshot["thinking_level"] == "medium"
+    assert config_snapshot["benchmark_task_type"] == "heartbeat"
+    assert experiment["experiment_key"] == "persona-patience-ab"
+    assert experiment["cohort"] == "candidate"
+    assert efficiency["avg_total_tokens"] == 120.0
+    assert efficiency["avg_turns"] == 2.0
+    assert efficiency["avg_tool_calls"] == 1.0
+    assert first_attempt["case_id"] == "session_patience_quiet"
+    assert first_attempt["primary_action"] == "wait"
 
 
 def test_derive_suite_id_prefers_family_name_for_related_cases() -> None:
@@ -902,7 +914,9 @@ async def test_run_one_attempt_disables_response_cache(tmp_path: Path) -> None:
     assert captured_kwargs["memory_variant_override"] == "MINIMAL"
     assert captured_kwargs["task_type"] == "heartbeat"
     assert captured_kwargs["disable_agent_fallbacks"] is True
-    assert captured_kwargs["response_format"]["type"] == "json_object"
+    response_format = captured_kwargs["response_format"]
+    assert isinstance(response_format, dict)
+    assert response_format["type"] == "json_object"
 
 
 @pytest.mark.asyncio
@@ -1289,7 +1303,7 @@ def test_same_task_recent_progress_accepts_supervise_language() -> None:
         content=(
             '{"case_id":"same_task_recent_progress","primary_action":"monitor",'
             '"should_dispatch":false,"should_close":false,'
-            '"confidence":"high","summary":"The same-task lane shows recent progress, so I would supervise the existing work rather than redispatch it."}'
+            '"confidence":"high","summary":"The same-task session shows recent progress, so I would supervise the existing work rather than redispatch it."}'
         ),
         session_id="sess-progress-supervise",
         provider="openai",

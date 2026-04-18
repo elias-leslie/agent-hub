@@ -324,7 +324,7 @@ def _build_prompt_from_task_context(
     task_type = task_context.get("task_type", "")
 
     lines = [
-        f"You are working in the `{project_id}` task lane.",
+        f"You are working in the `{project_id}` shared project checkout.",
         "",
         "Task:",
         f"- ID: `{task_id}`",

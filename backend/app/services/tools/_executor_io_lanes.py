@@ -1,7 +1,7 @@
-"""Session lane management helpers for DirectToolExecutor.
+"""Session task-state helpers for DirectToolExecutor.
 
-Handles stale-lane detection, reconciliation, and retirement
-of Agent Hub sessions linked to SummitFlow task lanes.
+Handles stale-session detection, reconciliation, and retirement
+of Agent Hub sessions linked to SummitFlow task checkpoints.
 """
 
 from __future__ import annotations
@@ -32,10 +32,8 @@ _NO_CHECKPOINT_MERGE_PHRASE = "completed without checkpoint merge"
 _NO_CODE_CHANGES_PHRASE = "no files changed vs base branch"
 _STATUS_UPDATE_FAILED_PHRASE = "code merged but status update failed"
 _ADMIN_RECOVERY_PHRASE = "recovery: st done"
-_CLEANUP_NO_MATCHING_LANE_PHRASE = "No matching lane, orphaned snapshots, or stale checkpoints found to clean up."
 _EXEC_LOG_RECENT_MINUTES = 5
 _TASK_SESSION_LOOKBACK_HOURS = 48
-_CONFIRM_TOKEN_RE = re.compile(r"--confirm (?P<token>[0-9a-f]{8})\b")
 _EXEC_LOG_ACTIVE_MARKERS = (
     "Verification failed",
     "Self-heal attempt",
@@ -53,7 +51,7 @@ def _session_matches_task_lane(session: Session, task_id: str) -> bool:
 
 
 async def _load_task_lane_sessions(task_id: str) -> list[Session]:
-    """Load recent Agent Hub sessions linked to a task lane."""
+    """Load recent Agent Hub sessions linked to a task checkpoint."""
     from sqlalchemy import or_, select
 
     from app.db import async_session
@@ -136,7 +134,7 @@ async def _get_task_status(
     try:
         output = await bash_fn(_st_cmd(f"context {shlex.quote(task_id)} --compact", project_id))
     except Exception:
-        logger.exception("Failed to load task context for stale-lane check", extra={"task_id": task_id})
+        logger.exception("Failed to load task context for stale-session check", extra={"task_id": task_id})
         return None
     return _extract_task_status(output)
 
@@ -150,7 +148,7 @@ async def _task_has_checkpoint(
     try:
         output = await bash_fn(_st_cmd(f"checkpoints --details {shlex.quote(task_id)}", project_id))
     except Exception:
-        logger.exception("Failed to inspect checkpoints for stale-lane recovery", extra={"task_id": task_id})
+        logger.exception("Failed to inspect checkpoints for stale-session recovery", extra={"task_id": task_id})
         return None
     return _MISSING_CHECKPOINT_PHRASE not in output
 
@@ -192,7 +190,7 @@ async def _recover_orphan_running_task(
     project_id: str | None,
     task_status: str | None,
 ) -> str | None:
-    """Recover a task stuck in running with no session-backed lane evidence."""
+    """Recover a task stuck in running with no session-backed checkpoint evidence."""
     if task_status != "running":
         return None
     has_checkpoint = await _task_has_checkpoint(bash_fn, task_id, project_id)
@@ -213,28 +211,12 @@ async def _cleanup_explicit_lane(
     task_id: str,
     project_id: str | None,
 ) -> str:
-    """Delete a single lane through the canonical two-pass cleanup command."""
-    preview_cmd = _st_cmd(f"cleanup lanes {shlex.quote(task_id)}", project_id)
-    preview = await bash_fn(preview_cmd)
-    preview_text = preview.strip()
-    if not preview_text:
-        return f"Lane cleanup preview returned no output for {task_id}."
-    if _CLEANUP_NO_MATCHING_LANE_PHRASE in preview_text:
-        return preview_text
-
-    token_match = _CONFIRM_TOKEN_RE.search(preview_text)
-    if not token_match:
-        return (
-            f"Lane cleanup preview for {task_id} did not return a confirm token.\n"
-            f"Preview output: {preview_text}"
-        )
-
-    token = token_match.group("token")
-    confirm_cmd = _st_cmd(
-        f"cleanup lanes {shlex.quote(task_id)} --confirm {token}",
-        project_id,
-    )
-    return (await bash_fn(confirm_cmd)).strip()
+    """Run safe checkpoint cleanup after session-driven task retirement/finalize."""
+    result = await bash_fn(_st_cmd("cleanup checkpoints --auto", project_id))
+    cleaned = result.strip()
+    if cleaned:
+        return cleaned
+    return f"Checkpoint cleanup returned no output for {task_id}."
 
 
 async def _mark_stale_active_sessions(
@@ -290,7 +272,7 @@ async def _persist_workstream_resolution(
     sessions: list[Session],
     authoritative_session: Session,
 ) -> None:
-    """Persist authoritative/superseded markers for a reconciled task lane."""
+    """Persist authoritative/superseded markers for a reconciled task checkpoint."""
     from app.db import async_session
 
     now = datetime.now(UTC)
@@ -317,7 +299,7 @@ async def _mark_lane_residue(
     workstream_status: str,
     note: str,
 ) -> None:
-    """Persist a uniform residue marker across all lane sessions."""
+    """Persist a uniform residue marker across all linked sessions."""
     from app.db import async_session
 
     now = datetime.now(UTC)
@@ -415,7 +397,7 @@ async def _retire_noop_lane(
     sessions: list[Session],
     result: str,
 ) -> str:
-    """Retire a lane whose diff gate found no code changes vs the base branch."""
+    """Retire task residue whose diff gate found no code changes vs the base branch."""
     note = (
         "Retired during reconcile after diff gate reported no code changes; "
         "task remains open for a real implementation or explicit closure."
@@ -423,11 +405,11 @@ async def _retire_noop_lane(
     await _mark_lane_residue(sessions, workstream_status="retired", note=note)
     cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
     return (
-        f"Reconcile retired no-op lane for {task_id}: diff gate reported no files changed "
-        "vs base branch, so the completed session lane was closed as residue and the task "
+        f"Reconcile retired no-op task residue for {task_id}: diff gate reported no files changed "
+        "vs base branch, so the completed session residue was closed and the task "
         "was left open.\n"
         f"Original result: {result.strip()}\n"
-        f"Lane cleanup: {cleanup_result}"
+        f"Checkpoint cleanup: {cleanup_result}"
     )
 
 
@@ -458,14 +440,14 @@ async def _dispatch_done(
     message: str,
     sessions: list[Session],
 ) -> str:
-    """Run `st done` and handle result, including admin-close and noop-lane paths."""
+    """Run `st done` and handle result, including admin-close and no-op residue paths."""
     cmd = _st_cmd(f"done {shlex.quote(task_id)} --message {shlex.quote(message)}", project_id)
     result = await bash_fn(cmd)
     if "Task not ready to complete:" in result:
         return (
             f"Reconcile stopped for {task_id}: SummitFlow reported the task is not ready to "
             "complete. Do not admin-close it from session evidence. "
-            "Inspect task context/verification and keep the lane open.\n"
+            "Inspect task context/verification and keep the task open.\n"
             f"Original result: {result.strip()}"
         )
     if _NO_CODE_CHANGES_PHRASE in result.lower():
@@ -481,7 +463,7 @@ async def _dispatch_done(
 
 
 # ---------------------------------------------------------------------------
-# Lane lifecycle: retire and reconcile
+# Session-backed task lifecycle: retire and reconcile
 # ---------------------------------------------------------------------------
 
 
@@ -490,7 +472,7 @@ async def _retire_task_lane(
     task_id: str,
     project_id: str | None,
 ) -> str:
-    """Persist a retired marker for a task lane when no live sessions remain."""
+    """Persist a retired marker for task residue when no live sessions remain."""
     from app.db import async_session
 
     sessions = await _load_task_lane_sessions(task_id)
@@ -500,8 +482,8 @@ async def _retire_task_lane(
     sessions, active_sessions, task_status = await _retire_stale_active_sessions(
         bash_fn, task_id, project_id, sessions,
         workstream_status="retired",
-        stale_prefix="Retired stale active lane during retire_lane",
-        terminal_prefix="Retired stale active lane",
+        stale_prefix="Retired stale active session during retire_lane",
+        terminal_prefix="Retired stale active session",
     )
     if active_sessions:
         task_detail = f" (task={task_status})" if task_status else ""
@@ -521,8 +503,8 @@ async def _retire_task_lane(
         await db.commit()
     cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
     return (
-        f"Retired {len(sessions)} session-backed lane(s) for {task_id}\n"
-        f"Lane cleanup: {cleanup_result}"
+        f"Retired {len(sessions)} session-backed checkpoint record(s) for {task_id}\n"
+        f"Checkpoint cleanup: {cleanup_result}"
     )
 
 
@@ -531,7 +513,7 @@ async def _reconcile_task_lane(
     task_id: str,
     project_id: str | None,
 ) -> str:
-    """Reconcile a task lane using Agent Hub session evidence."""
+    """Reconcile a task using Agent Hub session evidence."""
     sessions = await _load_task_lane_sessions(task_id)
     if not sessions:
         task_status = await _get_task_status(bash_fn, task_id, project_id)
@@ -551,7 +533,7 @@ async def _reconcile_task_lane(
         task_detail = f" (task={task_status})" if task_status else ""
         return (
             f"Reconcile blocked for {task_id}: still has {len(active_sessions)} active "
-            f"session(s){task_detail}. Verify whether the lane is truly stale before closing it."
+            f"session(s){task_detail}. Verify whether the session is truly stale before closing it."
         )
 
     completed_sessions = [

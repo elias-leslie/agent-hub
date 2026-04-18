@@ -577,7 +577,7 @@ async def _handle_cleanup_checkpoints(
 async def _handle_cleanup_salvage_orphan(
     bash_fn: Callable[..., Awaitable[str]], task_id: str | None, project_id: str | None,
 ) -> str:
-    """Recover a missing-task salvage candidate into a normal task lane."""
+    """Recover a missing-task salvage candidate into a normal task checkpoint."""
     if not task_id:
         return "Error: task_id required for salvage_orphan"
     if not project_id:
@@ -614,7 +614,7 @@ async def _handle_finalize_merge(
     task_id: str | None,
     project_id: str | None,
 ) -> str:
-    """Finalize merge/cleanup for a residue task lane."""
+    """Finalize merge/cleanup for a residue task checkpoint."""
     if not task_id:
         return "Error: task_id required for finalize_merge"
     result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
@@ -629,7 +629,7 @@ async def _handle_finalize_merge(
         return (
             f"{result}\n"
             "Task already appears closed: no checkpoint remains to finalize. "
-            "Treat this as closure evidence unless other task context still shows a live lane."
+            "Treat this as closure evidence unless other task context still shows a live session."
         )
     if "task not found" in result.lower():
         return (
@@ -641,7 +641,7 @@ async def _handle_finalize_merge(
         from ._executor_io_lanes import _cleanup_explicit_lane
 
         cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
-        return f"{result}\nLane cleanup: {cleanup_result}"
+        return f"{result}\nCheckpoint cleanup: {cleanup_result}"
     return result
 
 

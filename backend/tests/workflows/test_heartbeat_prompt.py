@@ -375,7 +375,7 @@ class TestQueryRecentWorkstreamSessions:
                     project_id="a-term",
                     external_id="task-2c2abc80",
                     current_branch="task-2c2abc80/main",
-                    provider_metadata={"cwd": "/srv/workspaces/lanes/a-term/task-2c2abc80"},
+                    provider_metadata={"cwd": "/srv/workspaces/projects/a-term/task-2c2abc80"},
                     status="completed",
                     workstream_status="authoritative",
                     workstream_note="Selected as authoritative during reconcile",
@@ -1541,7 +1541,7 @@ class TestRecentlyCompletedSessionsSection:
                     agent_slug="debugger",
                     project_id="summitflow",
                     external_id="task-d2754718",
-                    summary_oneliner="Reconciled the stale lane and verified runtime truth.",
+                    summary_oneliner="Reconciled the stale session and verified runtime truth.",
                     created_at=now,
                 ),
             ]
@@ -1560,7 +1560,7 @@ class TestRecentlyCompletedSessionsSection:
                         has_unresolved_blocker=False,
                     ),
                     "sess-real": MagicMock(
-                        summary="Reconciled the stale lane and verified runtime truth.",
+                        summary="Reconciled the stale session and verified runtime truth.",
                         has_summary_tag=True,
                         summary_outcome="completed",
                         has_unresolved_blocker=False,
@@ -1573,7 +1573,7 @@ class TestRecentlyCompletedSessionsSection:
         assert "Recently completed sessions: 1" in result
         assert "Printed BRANCH_OK" not in result
         assert "debugger on summitflow" in result
-        assert "Reconciled the stale lane and verified runtime truth." in result
+        assert "Reconciled the stale session and verified runtime truth." in result
 
 
 class TestActiveWorkSummary:

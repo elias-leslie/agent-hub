@@ -36,7 +36,7 @@ async def test_search_persona_history_returns_compact_matches_with_topic() -> No
     match = SimpleNamespace(
         entry_id="session-sess-1",
         session_id="sess-1",
-        snippet="Closed the task lane after validation.",
+        snippet="Closed the task checkpoint after validation.",
     )
 
     with (

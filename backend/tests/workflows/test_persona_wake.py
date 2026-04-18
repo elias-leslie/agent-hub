@@ -525,7 +525,7 @@ async def test_agent_wake_skips_tag_gap_log_when_both_tags_present() -> None:
         content=(
             "[[P:started:reading task context]]"
             "[[P:tested:dt -q -d passes clean]]"
-            "[[S:completed:Validated the task lane and finished the requested fix.]]"
+            "[[S:completed:Validated the task checkpoint and finished the requested fix.]]"
         ),
     )
     mock_perm = SimpleNamespace(permission_tier="yolo")

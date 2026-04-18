@@ -1,4 +1,4 @@
-"""Focused tests for task lane loading helpers."""
+"""Focused tests for task checkpoint loading helpers."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ async def test_load_task_lane_sessions_falls_back_to_metadata_task_path() -> Non
             agent_slug=None,
             session_type="claude_code",
             created_at=datetime.now(UTC),
-            provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-42"},
+            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub/task-42"},
         ),
         SimpleNamespace(
             id="sess-other",
@@ -60,7 +60,7 @@ async def test_load_task_lane_sessions_falls_back_to_metadata_task_path() -> Non
             agent_slug=None,
             session_type="claude_code",
             created_at=datetime.now(UTC),
-            provider_metadata={"repo_root": "/srv/workspaces/lanes/agent-hub/task-99"},
+            provider_metadata={"repo_root": "/srv/workspaces/projects/agent-hub/task-99"},
         ),
     ]
 
