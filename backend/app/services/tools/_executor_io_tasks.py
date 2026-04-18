@@ -356,7 +356,7 @@ async def _build_dispatch_warning(
             if " finalize:" in cleanup_status:
                 warnings.append(
                     "WARNING: merge-ready residue detected in cleanup status. "
-                    "Prefer finalize_merge, reconcile, or cleanup_worktrees when convenient."
+                    "Prefer finalize_merge, reconcile, or cleanup_checkpoints when convenient."
                 )
         return "\n\n".join(warnings) + ("\n\n" if warnings else "")
     except Exception:
@@ -389,7 +389,7 @@ async def _cleanup_dispatch_block_reason(
         if filtered_items:
             return (
                 "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
-                "Use finalize_merge, reconcile, or cleanup_worktrees before dispatching more work."
+                "Use finalize_merge, reconcile, or cleanup_checkpoints before dispatching more work."
                 f"\n\n{actionable}"
             ), cleanup_status
     return None, cleanup_status
@@ -557,20 +557,20 @@ async def _handle_cleanup_status(
     return f"{cleanup_status}\n\n{filtered_actionable}" if filtered_actionable else cleanup_status
 
 
-async def _handle_cleanup_worktrees(
+async def _handle_cleanup_checkpoints(
     bash_fn: Callable[..., Awaitable[str]], project_id: str | None,
 ) -> str:
-    """Safely clean worktrees for a concrete project."""
+    """Safely clean checkpoint residue for a concrete project."""
     if not project_id:
-        return 'Error: project_id required for cleanup_worktrees'
+        return 'Error: project_id required for cleanup_checkpoints'
     cleanup_status = await bash_fn(_st_cmd("cleanup status", project_id))
     actionable = build_actionable_cleanup_summary(cleanup_status)
     header = cleanup_status.splitlines()[0] if cleanup_status else ""
-    has_active_worktrees = "worktrees=0" not in header
+    has_active_checkpoints = "checkpoints=0" not in header
     has_branch_residue = "orphan=0" not in header or "prunable=0" not in header
-    if not has_active_worktrees and not has_branch_residue:
+    if not has_active_checkpoints and not has_branch_residue:
         return f"{cleanup_status}\n\nCleanup complete for {project_id}."
-    result = await bash_fn(_st_cmd("cleanup worktrees --auto", project_id))
+    result = await bash_fn(_st_cmd("cleanup checkpoints --auto", project_id))
     return f"{result}\n\n{actionable}" if actionable else result
 
 
@@ -590,7 +590,7 @@ async def _handle_cleanup_all_safe(
 ) -> str:
     """Exhaust safe cleanup across all managed projects in one canonical call."""
     before = await bash_fn("st cleanup status --all")
-    cleanup_result = await bash_fn("st cleanup worktrees --auto --all")
+    cleanup_result = await bash_fn("st cleanup checkpoints --auto --all")
     after = await bash_fn("st cleanup status --all")
     actionable = build_actionable_cleanup_summary(after)
     parts = [before, cleanup_result, after]
@@ -625,17 +625,17 @@ async def _handle_finalize_merge(
             parsed = maybe_json
     except json.JSONDecodeError:
         parsed = None
-    if "no_worktree" in result:
+    if "no_checkpoint" in result:
         return (
             f"{result}\n"
-            "Task already appears closed: no worktree remains to finalize. "
+            "Task already appears closed: no checkpoint remains to finalize. "
             "Treat this as closure evidence unless other task context still shows a live lane."
         )
     if "task not found" in result.lower():
         return (
             f"{result}\n"
             "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
-            "Use cleanup_worktrees, get_context, query_sessions, or reconcile first."
+            "Use cleanup_checkpoints, get_context, query_sessions, or reconcile first."
         )
     if parsed and parsed.get("status") == "merged":
         from ._executor_io_lanes import _cleanup_explicit_lane
@@ -668,9 +668,9 @@ async def _handle_done(
 
 __all__ = [
     "_handle_cleanup_all_safe",
+    "_handle_cleanup_checkpoints",
     "_handle_cleanup_salvage_orphan",
     "_handle_cleanup_status",
-    "_handle_cleanup_worktrees",
     "_handle_create",
     "_handle_dispatch",
     "_handle_done",

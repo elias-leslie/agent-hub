@@ -131,7 +131,6 @@ async def finalize_session(
         summary_tags=payload.summary_tags,
         git_context=payload.git_context,
         branch=payload.branch,
-        is_worktree=payload.is_worktree,
         transcript_path=payload.transcript_path,
     )
     return FinalizeSessionResult(

@@ -1234,8 +1234,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\n"
-                "agent-hub worktrees:2 dirty:0 orphan:1 prunable:0 finalize:task-old conflicts:task-conflict",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=2 dirty=0 orphan=1 prunable=0\n"
+                "agent-hub checkpoints:2 dirty:0 orphan:1 prunable:0 finalize:task-old conflicts:task-conflict",
             ]
         )
 
@@ -1266,7 +1266,7 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=1 prunable=0\nagent-hub worktrees:2 dirty:0 orphan:1 prunable:0 tasks:task-1",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=2 dirty=0 orphan=1 prunable=0\nagent-hub checkpoints:2 dirty:0 orphan:1 prunable:0 tasks:task-1",
                 '[{"id":"task-running"}]',
                 '{"task_id":"42","status":"queued"}',
             ]
@@ -1290,8 +1290,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:2 dirty:0 orphan:0 prunable:0 tasks:task-old finalize:task-old",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=2 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:2 dirty:0 orphan:0 prunable:0 tasks:task-old finalize:task-old",
                 "[]",
                 '{"task_id":"42","status":"queued"}',
             ]
@@ -1315,8 +1315,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
                 "TASK:task-42|running|P2|task|SIMPLE",
             ]
         )
@@ -1361,8 +1361,8 @@ class TestManageTasks:
         )
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
                 "TASK:task-42|running|P2|task|SIMPLE",
                 f"{recent_line}\n",
             ]
@@ -1398,8 +1398,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             side_effect=[
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:0 orphan:0 prunable:0 tasks:task-42",
                 "TASK:task-42|running|P2|task|SIMPLE",
                 "",
             ]
@@ -1446,8 +1446,8 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 (
-                    "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=3 prunable=0\n"
-                    "agent-hub worktrees:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
+                    "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=3 prunable=0\n"
+                    "agent-hub checkpoints:1 dirty:0 orphan:3 prunable:0 tasks:task-aa44180c finalize:task-aa44180c"
                 ),
             ]
         )
@@ -1474,8 +1474,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             return_value=(
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807,task-live1234"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=3 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:3 dirty:0 orphan:0 prunable:0 review:task-ff895807,task-live1234"
             )
         )
 
@@ -1517,8 +1517,8 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(
             return_value=(
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=3 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
             )
         )
 
@@ -1559,8 +1559,8 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 (
-                    "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=0 orphan=0 prunable=0\n"
-                    "agent-hub worktrees:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
+                    "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=3 dirty=0 orphan=0 prunable=0\n"
+                    "agent-hub checkpoints:3 dirty:0 orphan:0 prunable:0 review:task-ff895807"
                 ),
                 '{"task_id":"task-42","status":"queued"}',
             ]
@@ -1609,50 +1609,50 @@ class TestManageTasks:
         assert "Dispatch blocked" not in result
 
     @pytest.mark.asyncio
-    async def test_cleanup_worktrees_requires_project_id(self):
+    async def test_cleanup_checkouts_requires_project_id(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock()
-        result = await manage_tasks(mock_bash, action="cleanup_worktrees")
+        result = await manage_tasks(mock_bash, action="cleanup_checkpoints")
 
         assert "project_id required" in result
         mock_bash.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_cleanup_worktrees(self):
+    async def test_cleanup_checkouts(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(side_effect=[
-            "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-            "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-1",
+            "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+            "agent-hub checkpoints:1 dirty:0 orphan:0 prunable:0 tasks:task-1",
             "Cleaned 2, skipped 1, errors 0\n  Pruned closed orphan task branches: 0",
         ])
         result = await manage_tasks(
             mock_bash,
-            action="cleanup_worktrees",
+            action="cleanup_checkpoints",
             project_id="agent-hub",
         )
 
         assert "Cleaned 2" in result
         assert mock_bash.await_args_list == [
             call("st -P agent-hub cleanup status"),
-            call("st -P agent-hub cleanup worktrees --auto"),
+            call("st -P agent-hub cleanup checkpoints --auto"),
         ]
 
     @pytest.mark.asyncio
-    async def test_cleanup_worktrees_with_orphan_branches_still_runs_auto_cleanup(self):
+    async def test_cleanup_checkouts_with_orphan_branches_still_runs_auto_cleanup(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(side_effect=[
             (
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=0 dirty=0 orphan=1 prunable=0\n"
-                "agent-hub worktrees:0 dirty:0 orphan:1 prunable:0 orphan_branches:task-aa44180c/main"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=0 dirty=0 orphan=1 prunable=0\n"
+                "agent-hub checkpoints:0 dirty:0 orphan:1 prunable:0 orphan_branches:task-aa44180c/main"
             ),
-            "No worktrees found\n  Pruned git worktree registrations in 1 repo(s)\n  Pruned merged orphan task branches: 0\n  Pruned closed orphan task branches: 1",
+            "No checkpoints found\n  Pruned git checkpoint registrations in 1 repo(s)\n  Pruned merged orphan task branches: 0\n  Pruned closed orphan task branches: 1",
         ])
         result = await manage_tasks(
             mock_bash,
-            action="cleanup_worktrees",
+            action="cleanup_checkpoints",
             project_id="agent-hub",
         )
 
@@ -1661,22 +1661,22 @@ class TestManageTasks:
         assert "agent-hub | orphan_branch | task-aa44180c" in result
         assert mock_bash.await_args_list == [
             call("st -P agent-hub cleanup status"),
-            call("st -P agent-hub cleanup worktrees --auto"),
+            call("st -P agent-hub cleanup checkpoints --auto"),
         ]
 
     @pytest.mark.asyncio
-    async def test_cleanup_worktrees_with_no_residue_returns_complete_noop(self):
+    async def test_cleanup_checkouts_with_no_residue_returns_complete_noop(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             return_value=(
-                "CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0\n"
+                "CLEANUP[current]:repos=1 needs_cleanup=0 checkpoints=0 dirty=0 orphan=0 prunable=0\n"
                 "agent-hub clean"
             )
         )
         result = await manage_tasks(
             mock_bash,
-            action="cleanup_worktrees",
+            action="cleanup_checkpoints",
             project_id="agent-hub",
         )
 
@@ -1732,27 +1732,27 @@ class TestManageTasks:
 
         mock_bash = AsyncMock(side_effect=[
             (
-                "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4\n"
-                "agent-hub worktrees:1 dirty:0 orphan:7 prunable:3\n"
-                "a-term worktrees:1 dirty:0 orphan:3 prunable:1"
+                "CLEANUP[all]:repos=5 needs_cleanup=5 checkpoints=6 dirty=0 orphan=18 prunable=4\n"
+                "agent-hub checkpoints:1 dirty:0 orphan:7 prunable:3\n"
+                "a-term checkpoints:1 dirty:0 orphan:3 prunable:1"
             ),
-            "Cleaned 0, skipped 0, errors 0\n  Pruned git worktree registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4\n  Pruned closed orphan task branches: 10",
+            "Cleaned 0, skipped 0, errors 0\n  Pruned git checkpoint registrations in 5 repo(s)\n  Pruned merged orphan task branches: 4\n  Pruned closed orphan task branches: 10",
             (
-                "CLEANUP[all]:repos=5 needs_cleanup=2 worktrees=4 dirty=1 orphan=4 prunable=0\n"
-                "agent-hub worktrees:0 dirty:0 orphan:0 prunable:0\n"
-                "portfolio-ai worktrees:3 dirty:0 orphan:3 prunable:0\n"
-                "monkey-fight worktrees:1 dirty:1 orphan:1 prunable:0"
+                "CLEANUP[all]:repos=5 needs_cleanup=2 checkpoints=4 dirty=1 orphan=4 prunable=0\n"
+                "agent-hub checkpoints:0 dirty:0 orphan:0 prunable:0\n"
+                "portfolio-ai checkpoints:3 dirty:0 orphan:3 prunable:0\n"
+                "monkey-fight checkpoints:1 dirty:1 orphan:1 prunable:0"
             ),
         ])
         result = await manage_tasks(mock_bash, action="cleanup_all_safe")
 
-        assert "CLEANUP[all]:repos=5 needs_cleanup=5 worktrees=6 dirty=0 orphan=18 prunable=4" in result
+        assert "CLEANUP[all]:repos=5 needs_cleanup=5 checkpoints=6 dirty=0 orphan=18 prunable=4" in result
         assert "Pruned merged orphan task branches: 4" in result
         assert "Pruned closed orphan task branches: 10" in result
-        assert "CLEANUP[all]:repos=5 needs_cleanup=2 worktrees=4 dirty=1 orphan=4 prunable=0" in result
+        assert "CLEANUP[all]:repos=5 needs_cleanup=2 checkpoints=4 dirty=1 orphan=4 prunable=0" in result
         mock_bash.assert_has_awaits([
             call("st cleanup status --all"),
-            call("st cleanup worktrees --auto --all"),
+            call("st cleanup checkpoints --auto --all"),
             call("st cleanup status --all"),
         ])
 
@@ -1867,7 +1867,7 @@ class TestManageTasks:
                 ),
                 (
                     "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-42 [git-worktree]\n"
+                    "  LANE summitflow/task-42 [checkpoint]\n"
                     "To confirm, run:\n"
                     "  st cleanup lanes task-42 --confirm deadbeef\n"
                 ),
@@ -2002,13 +2002,13 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_falls_back_to_admin_close_when_worktree_is_dirty(self):
+    async def test_reconcile_falls_back_to_admin_close_when_checkout_is_dirty(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
             side_effect=[
                 "",
-                "Claimed worktree has uncommitted changes.\n  Path: /tmp/worktree/task-42\nCommit or stash there before running st done.",
+                "Claimed checkout has uncommitted changes.\n  Path: /tmp/checkout/task-42\nCommit or stash there before running st done.",
                 "Completed task task-42",
             ]
         )
@@ -2104,7 +2104,7 @@ class TestManageTasks:
                 ),
                 (
                     "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-42 [git-worktree]\n"
+                    "  LANE summitflow/task-42 [checkpoint]\n"
                     "To confirm, run:\n"
                     "  st cleanup lanes task-42 --confirm deadbeef\n"
                 ),
@@ -2429,7 +2429,7 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_treats_no_worktree_finalize_as_already_closed(self):
+    async def test_reconcile_treats_no_checkout_finalize_as_already_closed(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
@@ -2437,7 +2437,7 @@ class TestManageTasks:
                 "",
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
-                '{"task_id":"task-42","status":"skipped","reason":"no_worktree"}',
+                '{"task_id":"task-42","status":"skipped","reason":"no_checkpoint"}',
             ]
         )
         mock_db = AsyncMock()
@@ -2463,7 +2463,7 @@ class TestManageTasks:
             )
 
         assert "Task already appears closed" in result
-        assert '"reason":"no_worktree"' in result
+        assert '"reason":"no_checkpoint"' in result
         assert mock_bash.await_args_list[0].args[0] == (
             "st -P summitflow exec-log task-42 -n 40 --debug"
         )
@@ -2516,7 +2516,7 @@ class TestManageTasks:
         mock_bash = AsyncMock(
             side_effect=[
                 "TASK:task-42|running|P1|task|SIMPLE",
-                "CHECKPOINT:task-42|main|/tmp/worktree/task-42",
+                "CHECKPOINT:task-42|main|/tmp/checkout/task-42",
             ]
         )
         mock_db = AsyncMock()
@@ -2573,7 +2573,7 @@ class TestManageTasks:
             )
 
         assert "Reconcile skipped for task-42: no completed sessions to justify closure" in result
-        assert "Treat this as queue/worktree state, not closure residue." in result
+        assert "Treat this as queue/checkpoint state, not closure residue." in result
         assert 'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.' in result
         mock_bash.assert_awaited_once_with("st -P summitflow context task-42 --compact")
 
@@ -2767,7 +2767,7 @@ class TestManageTasks:
             side_effect=[
                 (
                     "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "  LANE summitflow/task-77 [checkpoint]\n"
                     "To confirm, run:\n"
                     "  st cleanup lanes task-77 --confirm deadbeef\n"
                 ),
@@ -2844,7 +2844,7 @@ class TestManageTasks:
                 "TASK:task-77|completed|P2|task|SIMPLE",
                 (
                     "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "  LANE summitflow/task-77 [checkpoint]\n"
                     "To confirm, run:\n"
                     "  st cleanup lanes task-77 --confirm deadbeef\n"
                 ),
@@ -2897,7 +2897,7 @@ class TestManageTasks:
                 "TASK:task-77|running|P2|task|SIMPLE",
                 (
                     "  DELETE explicit lane target(s): 1 target(s), 2 subvolume(s):\n"
-                    "  LANE summitflow/task-77 [git-worktree]\n"
+                    "  LANE summitflow/task-77 [checkpoint]\n"
                     "To confirm, run:\n"
                     "  st cleanup lanes task-77 --confirm deadbeef\n"
                 ),

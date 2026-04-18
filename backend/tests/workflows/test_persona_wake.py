@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -29,6 +30,12 @@ def assert_prompt_contains_all(prompt: str, substrings: list[str]) -> None:
         assert substring in prompt, f"Expected prompt to contain: {substring!r}"
 
 
+def _await_kwargs(mock: AsyncMock) -> dict[str, Any]:
+    await_args = mock.await_args
+    assert await_args is not None
+    return dict(await_args.kwargs)
+
+
 @pytest.mark.asyncio
 async def test_build_wake_prompt_includes_current_st_guidance():
     guidance = "\n".join(
@@ -43,8 +50,8 @@ async def test_build_wake_prompt_includes_current_st_guidance():
             "Never pass `st sessions list` output `session_id` values to `st session-events`",
             "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
             "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
-            "do not inspect `/home/testuser/.local/share/st/worktrees/...`",
-            "If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only",
+            "do not inspect `/home/testuser//.local/share/st/checkpoints/...`",
+            "If a snapshot metadata file includes a `working_dir` outside the current repo root, treat it as metadata only",
             "Treat task ids as opaque",
             "do not strip the `task-` prefix",
             "Example: `st done <task-id>` has no `--note` flag",
@@ -55,8 +62,8 @@ async def test_build_wake_prompt_includes_current_st_guidance():
             "For `read_file`, use repo-relative paths or fully expanded absolute paths",
             "Do not use shell shortcuts like `~` inside `read_file` paths",
             "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
-            "If `git branch` or snapshot metadata shows a task branch already attached to another worktree",
-            "Do not `git checkout` that branch in the current worktree just to inspect it",
+            "If `git branch` or snapshot metadata shows a task branch already attached to another checkout",
+            "Do not `git checkout` that branch in the current checkout just to inspect it",
             "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
             'When completing a task with a note, use `st done <task-id> --message "..."`',
             "Avoid exploratory `--help` calls unless a known-good command above still fails.",
@@ -81,8 +88,8 @@ async def test_build_wake_prompt_includes_current_st_guidance():
             "Never pass `st sessions list` output `session_id` values to `st session-events`",
             "Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID",
             "If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on",
-            "do not inspect `/home/testuser/.local/share/st/worktrees/...`",
-            "If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only",
+            "do not inspect `/home/testuser//.local/share/st/checkpoints/...`",
+            "If a snapshot metadata file includes a `working_dir` outside the current repo root, treat it as metadata only",
             "Treat task ids as opaque",
             "do not strip the `task-` prefix",
             "Example: `st done <task-id>` has no `--note` flag",
@@ -93,8 +100,8 @@ async def test_build_wake_prompt_includes_current_st_guidance():
             "For `read_file`, use repo-relative paths or fully expanded absolute paths",
             "Do not use shell shortcuts like `~` inside `read_file` paths",
             "If a direct path inspection is denied by tool policy, treat that denial as a real boundary",
-            "If `git branch` or snapshot metadata shows a task branch already attached to another worktree",
-            "Do not `git checkout` that branch in the current worktree just to inspect it",
+            "If `git branch` or snapshot metadata shows a task branch already attached to another checkout",
+            "Do not `git checkout` that branch in the current checkout just to inspect it",
             "Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead",
             'When completing a task with a note, use `st done <task-id> --message "..."`',
             "Avoid exploratory `--help` calls unless a known-good command above still fails.",
@@ -113,7 +120,7 @@ async def test_agent_wake_stores_summary_for_completed_session():
         tool_calls_count=3,
         error=None,
         session_id="sess-wake-1",
-        content="Investigated worktree and found valid in-progress work.",
+        content="Investigated checkout and found valid in-progress work.",
     )
     mock_perm = SimpleNamespace(permission_tier="yolo")
     mock_persona = SimpleNamespace(limits=None)
@@ -158,7 +165,7 @@ async def test_agent_wake_stores_summary_for_completed_session():
                 agent_slug="debugger",
                 model="codex/gpt-5.4",
                 provider="codex",
-                prompt="Inspect the dirty worktree and decide if it is valid progress.",
+                prompt="Inspect the dirty checkout and decide if it is valid progress.",
                 project_id="a-term",
                 event_type="dispatch",
                 thinking_level="medium",
@@ -168,18 +175,20 @@ async def test_agent_wake_stores_summary_for_completed_session():
 
     assert result["summary_stored"] is True
     mock_perf.assert_awaited_once()
-    assert "missing inline [[S:...]] summary tag" in mock_perf.await_args.kwargs["content"]
+    perf_kwargs = _await_kwargs(mock_perf)
+    assert "missing inline [[S:...]] summary tag" in str(perf_kwargs["content"])
     mock_summary.assert_awaited_once_with(
         "sess-wake-1",
-        "Investigated worktree and found valid in-progress work.",
+        "Investigated checkout and found valid in-progress work.",
         agent_id="debugger",
     )
-    messages = mock_complete.await_args.kwargs["messages"]
+    complete_kwargs = _await_kwargs(mock_complete)
+    messages = cast(list[dict[str, Any]], complete_kwargs["messages"])
     assert len(messages) == 1
     assert "st ready-all" in messages[0]["content"]
-    assert "Task:\nInspect the dirty worktree" in messages[0]["content"]
-    assert mock_complete.await_args.kwargs["external_id"] == "wake-step:mock-step-run-id"
-    assert mock_complete.await_args.kwargs["request_source"] == "persona_wake:dispatch"
+    assert "Task:\nInspect the dirty checkout" in messages[0]["content"]
+    assert complete_kwargs["external_id"] == "wake-step:mock-step-run-id"
+    assert complete_kwargs["request_source"] == "persona_wake:dispatch"
 
 
 @pytest.mark.asyncio
@@ -228,8 +237,8 @@ async def test_agent_wake_forwards_parent_session_id():
             "app.workflows.persona_wake.log_agent_performance",
             new_callable=AsyncMock,
         ),
-    ):
-        await agent_wake_task.aio_mock_run(
+        ):
+            await agent_wake_task.aio_mock_run(
             WakeInput(
                 agent_slug="debugger",
                 model="codex/gpt-5.4",
@@ -241,7 +250,8 @@ async def test_agent_wake_forwards_parent_session_id():
             )
         )
 
-    assert mock_complete.await_args.kwargs["parent_session_id"] == "parent-session-456"
+    complete_kwargs = _await_kwargs(mock_complete)
+    assert complete_kwargs["parent_session_id"] == "parent-session-456"
 
 
 @pytest.mark.asyncio
@@ -290,8 +300,8 @@ async def test_agent_wake_forwards_lane_metadata():
             "app.workflows.persona_wake.log_agent_performance",
             new_callable=AsyncMock,
         ),
-    ):
-        await agent_wake_task.aio_mock_run(
+        ):
+            await agent_wake_task.aio_mock_run(
             WakeInput(
                 agent_slug="refactor",
                 model="codex/gpt-5.4",
@@ -300,14 +310,15 @@ async def test_agent_wake_forwards_lane_metadata():
                 project_id="agent-hub",
                 event_type="dispatch_task",
                 current_branch="task-12345678/main",
-                working_dir="/tmp/worktrees/task-12345678",
+                working_dir="/tmp/lanes/task-12345678",
             )
         )
 
-    assert mock_complete.await_args.kwargs["external_id"] == "wake-step:mock-step-run-id"
-    assert mock_complete.await_args.kwargs["current_branch"] == "task-12345678/main"
-    assert mock_complete.await_args.kwargs["working_dir"] == "/tmp/worktrees/task-12345678"
-    assert mock_complete.await_args.kwargs["request_source"] == "persona_wake:dispatch_task"
+    complete_kwargs = _await_kwargs(mock_complete)
+    assert complete_kwargs["external_id"] == "wake-step:mock-step-run-id"
+    assert complete_kwargs["current_branch"] == "task-12345678/main"
+    assert complete_kwargs["working_dir"] == "/tmp/lanes/task-12345678"
+    assert complete_kwargs["request_source"] == "persona_wake:dispatch_task"
 
 
 @pytest.mark.asyncio
@@ -374,7 +385,8 @@ async def test_agent_wake_falls_back_to_project_root_when_working_dir_missing():
         )
 
     mock_resolve.assert_called_once_with("agent-hub", None)
-    assert mock_complete.await_args.kwargs["working_dir"] == "/srv/workspaces/projects/agent-hub"
+    complete_kwargs = _await_kwargs(mock_complete)
+    assert complete_kwargs["working_dir"] == "/srv/workspaces/projects/agent-hub"
 
 
 @pytest.mark.asyncio
@@ -494,7 +506,8 @@ async def test_agent_wake_logs_missing_progress_tags_for_task_session() -> None:
         )
 
     assert mock_perf.await_count == 1
-    content = mock_perf.await_args.kwargs["content"]
+    perf_kwargs = _await_kwargs(mock_perf)
+    content = str(perf_kwargs["content"])
     assert "missing inline [[S:...]] summary tag" in content
     assert "missing [[P:...]] progress tags on task session" in content
 

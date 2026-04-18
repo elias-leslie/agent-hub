@@ -45,7 +45,7 @@ def _build_mcp_server_with_handler(
 
     This is the key difference from production: instead of DirectToolExecutor
     (no permissions), we use create_direct_handler which composes 3 permission
-    layers: project tier plus cross-project/worktree boundaries.
+    layers: project tier plus cross-project/checkout boundaries.
     """
     from app.services.tools.tool_handler import create_direct_handler
 

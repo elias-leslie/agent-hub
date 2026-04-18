@@ -66,7 +66,6 @@ class _SummaryContext:
     transcript_path: str | None
     git_context: str | None
     branch: str | None
-    is_worktree: bool
 
 
 async def _load_summary_context(session_id: str) -> _SummaryContext | None:
@@ -87,7 +86,6 @@ async def _load_summary_context(session_id: str) -> _SummaryContext | None:
         transcript_path=summary_context.get("transcript_path"),
         git_context=summary_context.get("git_context"),
         branch=summary_context.get("branch"),
-        is_worktree=bool(summary_context.get("is_worktree")),
     )
 
 
@@ -161,7 +159,6 @@ async def _process_summary_tags(
     summary_tags: list[str] | None = None,
     git_context: str | None = None,
     branch: str | None = None,
-    is_worktree: bool = False,
 ) -> bool:
     """Process summary tags from CC transcript. Returns True if a summary was stored."""
     if not summary_tags:
@@ -178,7 +175,6 @@ async def _process_summary_tags(
         outcome=tag.outcome,
         files_touched=[],
         branch=branch,
-        is_worktree=is_worktree,
         git_digest=build_git_digest(git_context),
     )
     logger.info("Stored inline summary for session %s: outcome=%s", session_id, tag.outcome)
@@ -190,14 +186,12 @@ def _apply_summary_context(
     transcript_path: str | None,
     git_context: str | None,
     branch: str | None,
-    is_worktree: bool,
-) -> tuple[str | None, str | None, str | None, bool]:
+) -> tuple[str | None, str | None, str | None]:
     """Override analysis params with stored context values where unset."""
     return (
         transcript_path if transcript_path is not None else ctx.transcript_path,
         git_context if git_context is not None else ctx.git_context,
         branch if branch is not None else ctx.branch,
-        is_worktree or ctx.is_worktree,
     )
 
 
@@ -208,7 +202,6 @@ async def _process_session_tags(
     summary_tags: list[str] | None,
     git_context: str | None,
     branch: str | None,
-    is_worktree: bool,
 ) -> tuple[int, bool]:
     """Run feedback and summary tag processing; return (feedback_created, summary_stored)."""
     effective_feedback = feedback_tags if feedback_tags is not None else (
@@ -218,7 +211,7 @@ async def _process_session_tags(
         artifacts.summary_tags if artifacts is not None else await extract_summary_tags_from_events(session_id)
     )
     feedback_created = await _process_feedback_tags(session_id, effective_feedback)
-    summary_stored = await _process_summary_tags(session_id, effective_summary, git_context, branch, is_worktree)
+    summary_stored = await _process_summary_tags(session_id, effective_summary, git_context, branch)
     return feedback_created, summary_stored
 
 
@@ -229,20 +222,19 @@ async def analyze_session(
     summary_tags: list[str] | None = None,
     git_context: str | None = None,
     branch: str | None = None,
-    is_worktree: bool = False,
     transcript_path: str | None = None,
 ) -> AnalysisResult:
     """Analyze a session for memory citations and credit them."""
     ctx = await _load_summary_context(session_id)
     if ctx is not None:
-        transcript_path, git_context, branch, is_worktree = _apply_summary_context(
-            ctx, transcript_path, git_context, branch, is_worktree
+        transcript_path, git_context, branch = _apply_summary_context(
+            ctx, transcript_path, git_context, branch
         )
 
     artifacts = _load_transcript_artifacts(transcript_path)
     prefixes = await _resolve_prefixes(session_id, citation_prefixes, artifacts)
     feedback_created, summary_stored = await _process_session_tags(
-        session_id, artifacts, feedback_tags, summary_tags, git_context, branch, is_worktree,
+        session_id, artifacts, feedback_tags, summary_tags, git_context, branch,
     )
 
     if not prefixes:

@@ -95,9 +95,9 @@ def _is_path_allowed(
 ) -> bool:
     """Check if a resolved path is within the allowed root or extra roots.
 
-    Extra roots support worktree paths: when an agent executes in a worktree
-    (e.g. ~/.local/share/st/worktrees/<project>/<task>/), the working_dir
-    is outside the project root but should still be allowed.
+    Extra roots support alternate checkout paths: when an agent executes from a
+    task-specific checkout root, the working_dir may sit outside allowed_root
+    but should still be allowed.
     """
     if not allowed_root:
         return True

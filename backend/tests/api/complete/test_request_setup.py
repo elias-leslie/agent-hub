@@ -265,7 +265,7 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
     request = _request()
     request.project_id = "summitflow"
     request.current_branch = "task-123/main"
-    request.working_dir = "/tmp/worktrees/task-123"
+    request.working_dir = "/tmp/lanes/task-123"
     request.parent_session_id = "persona-root"
 
     session = SimpleNamespace(id="sess-1")
@@ -293,7 +293,7 @@ async def test_setup_session_forwards_working_dir_to_session_creation() -> None:
     mock_get_or_create.assert_awaited_once()
     get_args = mock_get_or_create.await_args
     assert get_args is not None
-    assert get_args.kwargs["working_dir"] == "/tmp/worktrees/task-123"
+    assert get_args.kwargs["working_dir"] == "/tmp/lanes/task-123"
     assert get_args.kwargs["current_branch"] == "task-123/main"
     assert get_args.kwargs["parent_session_id"] == "persona-root"
     mock_publish.assert_awaited_once_with("sess-1", "claude-sonnet-4-6", "summitflow")

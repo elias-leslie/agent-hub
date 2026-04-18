@@ -5,7 +5,6 @@ from typing import Any
 from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
 from app.services.agent_routing import get_provider_for_model
-from app.services.tools.project_env import is_worktree_path
 
 
 def resolve_model_display_name(model_id: str | None) -> str | None:
@@ -26,7 +25,7 @@ def metadata_paths(metadata: dict[str, Any] | None) -> list[str]:
         return []
     paths: list[str] = []
     seen: set[str] = set()
-    for key in ("worktree_path", "cwd", "repo_root"):
+    for key in ("cwd", "repo_root"):
         value = metadata.get(key)
         if isinstance(value, str) and value and value not in seen:
             paths.append(value)
@@ -64,15 +63,11 @@ def scope_list(value: object) -> list[str]:
 
 
 def working_dir(session: Session) -> str | None:
-    return metadata_value(session, "worktree_path") or metadata_value(session, "cwd")
+    return metadata_value(session, "cwd")
 
 
 def repo_root(session: Session) -> str | None:
     return metadata_value(session, "repo_root")
-
-
-def worktree_path(session: Session) -> str | None:
-    return metadata_value(session, "worktree_path") or metadata_value(session, "cwd")
 
 
 def source_client(session: Session) -> str | None:
@@ -172,6 +167,3 @@ def session_model_info(session: Session) -> dict[str, str | bool | None]:
         "fallback_used": fallback_used(session, req_model, eff_model),
         "fallback_reason": metadata_value(session, "fallback_reason"),
     }
-
-
-is_worktree = is_worktree_path

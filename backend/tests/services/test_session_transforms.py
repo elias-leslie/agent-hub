@@ -126,10 +126,10 @@ def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None
             sequence=2,
             event_type=SessionEventType.TOOL_RESULT,
             role=None,
-            content="Created worktree",
+            content="Created checkout",
             tool_name="bash",
             tool_input=None,
-            tool_output={"content": "Created worktree", "is_error": False},
+            tool_output={"content": "Created checkout", "is_error": False},
             tokens=None,
             duration_ms=25,
             model_used="codex/gpt-5.4",
@@ -148,7 +148,7 @@ def test_convert_messages_to_response_synthesizes_incomplete_tool_turn() -> None
     assert messages[0].tool_executions is not None
     assert len(messages[0].tool_executions) == 1
     assert messages[0].tool_executions[0].name == "bash"
-    assert messages[0].tool_executions[0].result == "{'content': 'Created worktree', 'is_error': False}"
+    assert messages[0].tool_executions[0].result == "{'content': 'Created checkout', 'is_error': False}"
 
 
 def test_convert_messages_to_response_keeps_real_assistant_without_synthetic_duplicate() -> None:

@@ -59,14 +59,14 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
 
 ## Git Hygiene
-If <cleanup_status> is present, treat it as the canonical branch/worktree hygiene summary:
+If <cleanup_status> is present, treat it as the canonical branch/checkpoint hygiene summary:
 - `orphan` and `prunable` counts are cleanup debt; prefer reducing them before spawning low-confidence new maintenance work in that same project.
-- `dirty` worktrees mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
-- Active worktrees alone are not cleanup debt, but mixed active worktrees plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
+- `dirty` checkpoints mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
+- Active checkpoints alone are not cleanup debt, but mixed active checkpoints plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
 - When cleanup debt is nonzero and no higher-priority production issue is active, favor reconciliation, closure, or a cleanup task over another speculative scan.
 - If you need a current cleanup read on one project, use `manage_tasks(action="cleanup_status", project_id="...")` instead of ad hoc shell inspection.
-- If cleanup debt is present and the project has no more urgent live execution problem, use `manage_tasks(action="cleanup_worktrees", project_id="...")` to clear safe worktree cleanup cases before dispatching additional low-confidence maintenance work.
-- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, or review-needed worktrees, stop there and reconcile the underlying task/workstream instead of forcing deletion.
+- If cleanup debt is present and the project has no more urgent live execution problem, use `manage_tasks(action="cleanup_checkpoints", project_id="...")` to clear safe checkpoint cleanup cases before dispatching additional low-confidence maintenance work.
+- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, or review-needed checkpoints, stop there and reconcile the underlying task/workstream instead of forcing deletion.
 
 ## Specialist Hygiene
 If <active_specialist_inventory> is present, treat it as an in-flight advisory queue:
@@ -82,7 +82,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - Your heartbeat working directory is persona-sandbox, not every project root.
 - Do not use `bash` or `read_file` to inspect another project's filesystem unless that project is already your active working root and the action is clearly allowed.
 - For task triage, feedback, memory, session inspection, dispatch bookkeeping, and cleanup status, stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools) instead of shelling out to `st`.
-- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/worktree instead of a freeform project session.
+- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/checkpoint instead of a freeform project session.
 - Use `dispatch_agent` for freeform specialist help only when there is no concrete task lane yet or when the work is intentionally non-task-scoped.
 - If you need code-health, dirty-tree, or implementation validation on another project before a task exists, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
 - For code-heavy investigation, prefer coding-capable agents like `reviewer`, `debugger`, or `coder`, not non-coding validation agents.
@@ -95,9 +95,9 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")` for that same task in the same heartbeat.
 - If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
 - Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
-- Treat follow-up branches and worktrees as single workstreams, not shared scratchpads.
+- Treat follow-up branches and checkpoints as single workstreams, not shared scratchpads.
 - Reuse an existing follow-up branch only when the new work is the same task lane or a direct fixup of the same validated diff.
-- If the new work is a different concern, subsystem, or task lane, create a new task/worktree instead of piling onto the old branch.
+- If the new work is a different concern, subsystem, or task lane, create a new task/checkpoint instead of piling onto the old branch.
 - If a branch already mixes multiple concerns, your next action is split/promotion/cleanup, not another implementation dispatch onto that same branch.
 - If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.

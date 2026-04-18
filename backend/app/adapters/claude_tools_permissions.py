@@ -29,9 +29,9 @@ def normalize_tool_name(name: str) -> str:
 def compose_permission_hooks(project_id: str | None) -> Any | None:
     """Build a composed PreToolUseHook from real runtime permission layers.
 
-    Note: worktree boundary enforcement for the Claude SDK path is handled
+    Note: checkout boundary enforcement for the Claude SDK path is handled
     by settings-based enforcement (see ``_claude_settings.py``), not via
-    ``can_use_tool``.  The DirectToolHandler path still uses the worktree
+    ``can_use_tool``.  The DirectToolHandler path still uses the checkout
     boundary hook in ``tool_handler.py``.
     """
     from app.services.tools.base import PreToolUseHook

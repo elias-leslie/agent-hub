@@ -245,7 +245,7 @@ Notes:
   - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE/CREATE)
   - db ddl allows safe DDL: CREATE INDEX, CREATE INDEX IF NOT EXISTS, ALTER TABLE ADD
   - Auto-detects project from repo-local .index.yaml when available
-  - When invoked inside a claimed worktree, migration commands prefer that worktree root for the matching project
+  - When invoked inside a claimed checkout, migration commands prefer that checkout root for the matching project
   - Auxiliary projects use <PROJECT>_DB_URL (example: test2 -> TEST2_DB_URL)
   - Migration commands require alembic in <root>/backend/ or <root>/
 EOF

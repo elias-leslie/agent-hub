@@ -354,7 +354,7 @@ class TestEnsureSessionSummary:
             patch(
                 "app.services.memory.summary_generator.generate_session_summary",
                 new_callable=AsyncMock,
-                return_value=MagicMock(skipped=False, summary="Investigated dirty worktree and found coherent in-progress frontend fixes."),
+                return_value=MagicMock(skipped=False, summary="Investigated dirty checkout and found coherent in-progress frontend fixes."),
             ) as mock_generate,
             patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
@@ -661,7 +661,9 @@ class TestPostprocessHeartbeat:
             await postprocess_heartbeat(result, 60)
 
         mock_log.assert_awaited_once()
-        _, kwargs = mock_log.await_args
+        await_args = mock_log.await_args
+        assert await_args is not None
+        kwargs = await_args.kwargs
         assert kwargs["agent_slug"] == "persona"
         assert kwargs["feedback_type"] == "friction"
         assert kwargs["logged_by"] == "system"

@@ -40,10 +40,6 @@ class AnalyzeRequest(BaseModel):
         default=None,
         description="Git branch name",
     )
-    is_worktree: bool = Field(
-        default=False,
-        description="Whether session ran in a worktree",
-    )
     transcript_path: str | None = Field(
         default=None,
         description="Path to a Claude Code or Codex JSONL transcript for transcript-aware parsing",
@@ -121,7 +117,6 @@ async def analyze_session(
                 summary_tags=request.summary_tags if request else None,
                 git_context=request.git_context if request else None,
                 branch=request.branch if request else None,
-                is_worktree=request.is_worktree if request else False,
                 transcript_path=request.transcript_path if request else None,
             ) if request else None,
         )

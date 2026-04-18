@@ -28,7 +28,6 @@ def upgrade() -> None:
         sa.Column('summary_outcome', sa.String(length=20), nullable=True),
         sa.Column('summary_git_digest', sa.Text(), nullable=True),
         sa.Column('summary_branch', sa.String(length=200), nullable=True),
-        sa.Column('summary_is_worktree', sa.Boolean(), server_default='false', nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['session_id'], ['sessions.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id'),

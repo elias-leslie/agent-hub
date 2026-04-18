@@ -44,7 +44,6 @@ async def query_from_segments(
             or_(
                 seg.summary_branch.is_(None),
                 seg.summary_branch.in_(["main", "master", current_branch]),
-                seg.summary_is_worktree == False,  # noqa: E712
             )
         )
 
@@ -60,7 +59,6 @@ async def query_from_segments(
             seg.summary_oneliner,
             seg.summary_outcome,
             seg.summary_branch,
-            seg.summary_is_worktree,
             seg.summary_git_digest,
             seg.created_at,
         )
@@ -82,7 +80,6 @@ async def query_from_segments(
             "summary": row.summary_oneliner,
             "outcome": row.summary_outcome,
             "branch": row.summary_branch,
-            "is_worktree": row.summary_is_worktree,
             "git_digest": row.summary_git_digest,
             "created_at": row.created_at,
         }
@@ -117,7 +114,6 @@ async def query_from_session_columns(
             or_(
                 Session.summary_branch.is_(None),
                 Session.summary_branch.in_(["main", "master", current_branch]),
-                Session.summary_is_worktree == False,  # noqa: E712
             )
         )
 
@@ -131,7 +127,6 @@ async def query_from_session_columns(
             Session.summary_oneliner,
             Session.summary_outcome,
             Session.summary_branch,
-            Session.summary_is_worktree,
             Session.summary_git_digest,
             Session.created_at,
         )
@@ -150,7 +145,6 @@ async def query_from_session_columns(
             "summary": row.summary_oneliner,
             "outcome": row.summary_outcome,
             "branch": row.summary_branch,
-            "is_worktree": row.summary_is_worktree,
             "git_digest": row.summary_git_digest,
             "created_at": row.created_at,
         }

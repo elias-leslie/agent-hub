@@ -1,26 +1,9 @@
-"""Project environment resolution for tool execution.
-
-Detects the correct Python virtual environment for a working directory,
-handling git worktrees transparently. Worktrees share the main repo's
-.venv — this module finds it regardless of whether we're in the main
-repo or a worktree.
-
-Detection approach (from claude-mem reference):
-  - .git is a directory → main repo
-  - .git is a file containing "gitdir: ..." → worktree, parse to find parent
-
-Venv search order:
-  1. working_dir/backend/.venv
-  2. working_dir/.venv
-  3. (if worktree) main_repo/backend/.venv
-  4. (if worktree) main_repo/.venv
-"""
+"""Project environment resolution for tool execution."""
 
 from __future__ import annotations
 
 import logging
 import os
-import re
 from pathlib import Path
 
 from app.services.tools.command_guard import build_command_guard_env_overlay
@@ -28,64 +11,30 @@ from app.services.tools.command_guard import build_command_guard_env_overlay
 logger = logging.getLogger(__name__)
 
 
-def detect_main_repo(working_dir: Path) -> Path | None:
-    """If working_dir is a git worktree, return the main repo path.
-
-    Git worktrees have a .git FILE (not directory) containing:
-        gitdir: /path/to/parent/.git/worktrees/<name>
-
-    Returns None if working_dir is the main repo or not a git repo.
-    """
-    git_path = working_dir / ".git"
-    if not git_path.exists():
-        return None
-    if git_path.is_dir():
-        return None
-
-    try:
-        content = git_path.read_text().strip()
-    except OSError:
-        return None
-
-    match = re.match(r"^gitdir:\s*(.+)$", content)
-    if not match:
-        return None
-
-    gitdir = match.group(1)
-    worktree_match = re.match(r"^(.+)[/\\]\.git[/\\]worktrees[/\\][^/\\]+$", gitdir)
-    if not worktree_match:
-        return None
-
-    parent = Path(worktree_match.group(1))
-    if parent.exists():
-        return parent
+def detect_repo_root(working_dir: Path) -> Path | None:
+    """Return the nearest git checkout root for a working directory."""
+    current = working_dir.resolve()
+    for candidate in (current, *current.parents):
+        git_path = candidate / ".git"
+        if git_path.exists():
+            return candidate
     return None
 
 
-def is_worktree_path(path: str | None) -> bool:
-    """Return True if the given path is inside a git worktree."""
-    if not path:
-        return False
-    try:
-        return detect_main_repo(Path(path).resolve()) is not None
-    except OSError:
-        return False
-
-
-def find_venv(working_dir: Path, main_repo: Path | None = None) -> Path | None:
+def find_venv(working_dir: Path, repo_root: Path | None = None) -> Path | None:
     """Find the Python venv for a project directory.
 
-    Checks working_dir first, then main_repo (for worktrees).
+    Checks working_dir first, then repo_root when different.
     Returns the venv directory (not the bin/python path).
     """
     candidates = [
         working_dir / "backend" / ".venv",
         working_dir / ".venv",
     ]
-    if main_repo and main_repo != working_dir:
+    if repo_root and repo_root != working_dir:
         candidates.extend([
-            main_repo / "backend" / ".venv",
-            main_repo / ".venv",
+            repo_root / "backend" / ".venv",
+            repo_root / ".venv",
         ])
 
     for venv_path in candidates:
@@ -100,10 +49,7 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
     """Build an environment dict with the correct project venv on PATH.
 
     This is the single source of truth for "what environment should
-    subprocess commands use in this directory." Handles:
-    - Main repos (finds local .venv)
-    - Worktrees (finds main repo's .venv)
-    - Non-Python projects (returns base env unchanged)
+    subprocess commands use in this directory."
 
     Returns a copy of os.environ with VIRTUAL_ENV, PATH, and PYTHONHOME
     adjusted for the project's venv. If no venv found, returns os.environ
@@ -112,16 +58,12 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
     working_dir = Path(working_dir).resolve()
     env = os.environ.copy()
 
-    main_repo = detect_main_repo(working_dir)
-    venv_path = find_venv(working_dir, main_repo)
+    repo_root = detect_repo_root(working_dir)
+    venv_path = find_venv(working_dir, repo_root)
 
     if not venv_path:
-        if main_repo:
-            logger.debug(
-                "No venv found for worktree %s (main repo: %s)",
-                working_dir,
-                main_repo,
-            )
+        if repo_root:
+            logger.debug("No venv found for %s (repo root: %s)", working_dir, repo_root)
         env.update(build_command_guard_env_overlay())
         return env
 
@@ -132,10 +74,10 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
     env.update(build_command_guard_env_overlay())
 
     logger.debug(
-        "Resolved project venv: %s (working_dir=%s, worktree=%s)",
+        "Resolved project venv: %s (working_dir=%s, repo_root=%s)",
         venv_path,
         working_dir,
-        main_repo is not None,
+        repo_root,
     )
     return env
 
@@ -151,8 +93,8 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
     Returns empty dict if no venv found.
     """
     working_dir = Path(working_dir).resolve()
-    main_repo = detect_main_repo(working_dir)
-    venv_path = find_venv(working_dir, main_repo)
+    repo_root = detect_repo_root(working_dir)
+    venv_path = find_venv(working_dir, repo_root)
 
     if not venv_path:
         return build_command_guard_env_overlay()
@@ -166,9 +108,9 @@ def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
     overlay.update(build_command_guard_env_overlay())
 
     logger.info(
-        "Venv env overlay: %s (working_dir=%s, worktree=%s)",
+        "Venv env overlay: %s (working_dir=%s, repo_root=%s)",
         venv_path,
         working_dir,
-        main_repo is not None,
+        repo_root,
     )
     return overlay

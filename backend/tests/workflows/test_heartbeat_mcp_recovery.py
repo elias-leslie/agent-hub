@@ -384,7 +384,7 @@ class TestDispatchAgentFireAndForget:
         fake_plan = MagicMock()
         fake_plan.event_type = "dispatch_task"
         fake_plan.current_branch = "task-12345678/main"
-        fake_plan.working_dir = "/tmp/worktrees/task-12345678"
+        fake_plan.working_dir = "/tmp/lanes/task-12345678"
 
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
@@ -421,7 +421,7 @@ class TestDispatchAgentFireAndForget:
             max_turns=None,
             parent_session_id="parent-session-123",
             current_branch="task-12345678/main",
-            working_dir="/tmp/worktrees/task-12345678",
+            working_dir="/tmp/lanes/task-12345678",
             task_id="task-12345678",
         )
 
@@ -437,7 +437,7 @@ class TestDispatchAgentFireAndForget:
         fake_plan = MagicMock()
         fake_plan.event_type = "dispatch_task"
         fake_plan.current_branch = "task-87654321/main"
-        fake_plan.working_dir = "/tmp/worktrees/task-87654321"
+        fake_plan.working_dir = "/tmp/lanes/task-87654321"
 
         with (
             patch("app.db.async_session", _mock_async_session(mock_db)),
@@ -474,7 +474,7 @@ class TestDispatchAgentFireAndForget:
             max_turns=None,
             parent_session_id=None,
             current_branch="task-87654321/main",
-            working_dir="/tmp/worktrees/task-87654321",
+            working_dir="/tmp/lanes/task-87654321",
             task_id="task-87654321",
         )
 

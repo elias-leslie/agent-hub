@@ -28,12 +28,11 @@ _background_tasks: set[Any] = set()
 async def _store_summary_request_context(
     session_id: str,
     branch: str | None,
-    is_worktree: bool,
     transcript_path: str | None,
     git_context: str | None,
 ) -> None:
     """Persist summary request context for future transcript-aware reanalysis."""
-    if not any((branch, is_worktree, transcript_path, git_context)):
+    if not any((branch, transcript_path, git_context)):
         return
 
     try:
@@ -48,7 +47,6 @@ async def _store_summary_request_context(
 
             if branch is not None:
                 summary_context["branch"] = branch
-            summary_context["is_worktree"] = is_worktree
             if transcript_path is not None:
                 summary_context["transcript_path"] = transcript_path
             if git_context is not None:
@@ -198,21 +196,19 @@ async def summarize_session(
             )
 
     branch = request.branch if request else None
-    is_worktree = request.is_worktree if request else False
     transcript_path = request.transcript_path if request else None
     git_context = request.git_context if request else None
     async_dispatch = request.async_dispatch if request else False
     await _store_summary_request_context(
         session_id,
         branch=branch,
-        is_worktree=is_worktree,
         transcript_path=transcript_path,
         git_context=git_context,
     )
 
     if async_dispatch:
         dispatched = await dispatch_to_hatchet(
-            _background_tasks, session_id, branch, is_worktree, transcript_path, git_context
+            _background_tasks, session_id, branch, transcript_path, git_context
         )
         if dispatched:
             return JSONResponse(
@@ -225,7 +221,6 @@ async def summarize_session(
         session_id,
         project_id=request.project_id if request else None,
         branch=branch,
-        is_worktree=is_worktree,
         transcript_path=transcript_path,
         git_context=git_context,
     )

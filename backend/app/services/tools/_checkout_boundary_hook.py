@@ -1,6 +1,6 @@
-"""Worktree write-boundary permission hook for the tool handler.
+"""Checkout write-boundary permission hook for the tool handler.
 
-Enforces that sessions operating in a worktree cannot write files outside
+Enforces that sessions operating in a checkout cannot write files outside
 their assigned working directory. Reads are unrestricted — the boundary
 only applies to write operations.
 
@@ -20,7 +20,7 @@ from app.services.tools.base import PreToolUseHook, ToolCall, ToolDecision
 
 logger = logging.getLogger(__name__)
 
-# Directories where writes are always allowed regardless of worktree boundary.
+# Directories where writes are always allowed regardless of checkout boundary.
 _WRITE_ALLOWLIST: tuple[Path, ...] = (
     Path("/tmp"),
     Path.home() / ".claude",
@@ -28,22 +28,22 @@ _WRITE_ALLOWLIST: tuple[Path, ...] = (
 
 
 def _is_write_allowed(resolved: Path, boundary: Path) -> bool:
-    """Check if a write to *resolved* is allowed given the worktree *boundary*."""
+    """Check if a write to *resolved* is allowed given the checkout *boundary*."""
     if resolved.is_relative_to(boundary):
         return True
     return any(resolved.is_relative_to(allowed) for allowed in _WRITE_ALLOWLIST)
 
 
 def _resolve_target_path(path: str, boundary: Path) -> Path:
-    """Resolve a write target relative to the worktree boundary when needed."""
+    """Resolve a write target relative to the checkout boundary when needed."""
     target = Path(path)
     if target.is_absolute():
         return target.resolve()
     return (boundary / target).resolve()
 
 
-def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
-    """Return a pre-hook that blocks writes outside the worktree boundary.
+def create_checkout_boundary_hook(working_dir: str) -> PreToolUseHook:
+    """Return a pre-hook that blocks writes outside the checkout boundary.
 
     Only write_file operations are gated. read_file and bash are always
     allowed — bash is impractical to parse reliably (same limitation as
@@ -65,7 +65,7 @@ def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
                 resolved = _resolve_target_path(str(path), boundary)
                 if not _is_write_allowed(resolved, boundary):
                     logger.info(
-                        "Worktree boundary DENY: write_file on %s (boundary=%s)",
+                        "Checkout boundary DENY: write_file on %s (boundary=%s)",
                         path, boundary,
                     )
                     return ToolDecision.DENY
@@ -75,7 +75,7 @@ def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
             return ToolDecision.ALLOW
         except Exception as e:
             logger.error(
-                "Worktree boundary hook error for %s: %s — denying",
+                "Checkout boundary hook error for %s: %s — denying",
                 tool_call.name, e,
             )
             return ToolDecision.DENY

@@ -16,7 +16,6 @@ from app.services._session_message_helpers import (
 )
 from app.services._session_metadata_helpers import (
     effective_model,
-    is_worktree,
     metadata_value,
     optional_str,
     repo_root,
@@ -27,7 +26,6 @@ from app.services._session_metadata_helpers import (
     source_client,
     source_path,
     working_dir,
-    worktree_path,
 )
 from app.services.session_live_activity import build_live_activity_response
 from app.services.session_scope import resolve_scope_confidence
@@ -39,12 +37,10 @@ _optional_str = optional_str
 _scope_list = scope_list
 _working_dir = working_dir
 _repo_root = repo_root
-_worktree_path = worktree_path
 _source_client = source_client
 _source_path = source_path
 _session_attribution = session_attribution
 _session_model_info = session_model_info
-_is_worktree = is_worktree
 _effective_model = effective_model
 
 
@@ -116,11 +112,9 @@ def _session_list_item(
         current_branch=optional_str(session.current_branch),
         working_dir=wd,
         repo_root=repo_root(session),
-        worktree_path=worktree_path(session),
         host=metadata_value(session, "host"),
         tmux_session_name=metadata_value(session, "tmux_session_name"),
         tmux_pane_id=metadata_value(session, "tmux_pane_id"),
-        is_worktree=is_worktree(wd),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
         batch_task_ids=batch_task_ids,
@@ -206,11 +200,9 @@ def build_session_response(
         current_branch=optional_str(session.current_branch),
         working_dir=working_dir(session),
         repo_root=repo_root(session),
-        worktree_path=worktree_path(session),
         host=metadata_value(session, "host"),
         tmux_session_name=metadata_value(session, "tmux_session_name"),
         tmux_pane_id=metadata_value(session, "tmux_pane_id"),
-        is_worktree=is_worktree(working_dir(session)),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
         batch_task_ids=batch_task_ids,

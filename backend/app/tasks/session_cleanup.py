@@ -26,11 +26,8 @@ def _owner_lane_blocks_reap(owner: object) -> bool:
     if isinstance(branch, str) and branch.strip():
         return True
 
-    if bool(getattr(owner, "is_worktree", False)):
-        return True
-
-    worktree_path = getattr(owner, "worktree_path", None)
-    return isinstance(worktree_path, str) and bool(worktree_path) and Path(worktree_path).exists()
+    working_dir = getattr(owner, "working_dir", None)
+    return isinstance(working_dir, str) and bool(working_dir) and Path(working_dir).exists()
 
 
 def _blocking_owner_session_ids(owners: list[object]) -> set[str]:

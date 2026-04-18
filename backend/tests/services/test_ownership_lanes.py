@@ -20,8 +20,7 @@ def _owner(**overrides: object) -> OwnershipOwner:
         "session_id": "sess-1",
         "agent_slug": "refactor",
         "branch": "task-a961e3b9/main",
-        "worktree_path": "/tmp/worktrees/task-a961e3b9",
-        "is_worktree": True,
+        "working_dir": "/tmp/lanes/task-a961e3b9",
         "session_status": "active",
         "workstream_status": None,
         "workstream_note": None,
@@ -37,7 +36,7 @@ def _owner(**overrides: object) -> OwnershipOwner:
 
 
 class TestCollapseOwnershipOwners:
-    def test_collapses_multiple_sessions_on_same_task_branch_and_worktree(self) -> None:
+    def test_collapses_multiple_sessions_on_same_task_branch_and_checkout(self) -> None:
         owners = [
             _owner(session_id="sess-new", scope_paths=["backend/app/a.py"], age_minutes=2),
             _owner(
@@ -79,13 +78,13 @@ class TestCollapseOwnershipOwners:
         assert collapsed[0].session_id == "sess-scoped"
         assert collapsed[0].scope_paths == ["backend/app/live.py"]
 
-    def test_preserves_distinct_lanes_when_branch_or_worktree_differs(self) -> None:
+    def test_preserves_distinct_lanes_when_branch_or_checkout_differs(self) -> None:
         owners = [
             _owner(session_id="sess-main", branch="task-a961e3b9/main"),
             _owner(
                 session_id="sess-follow-up",
                 branch="task-a961e3b9/follow-up",
-                worktree_path="/tmp/worktrees/task-a961e3b9-follow-up",
+                working_dir="/tmp/lanes/task-a961e3b9-follow-up",
             ),
         ]
 
@@ -99,7 +98,7 @@ class TestCollapseOwnershipOwners:
 
 
 def test_infer_task_id_recovers_from_lane_path_suffix() -> None:
-    assert infer_task_id(None, None, "/tmp/worktrees/task-a961e3b9-follow-up") == "task-a961e3b9"
+    assert infer_task_id(None, None, "/tmp/lanes/task-a961e3b9-follow-up") == "task-a961e3b9"
 
 
 def test_prioritize_scope_paths_prefers_declared_and_writes_before_reads() -> None:
@@ -123,7 +122,7 @@ class TestCollapseActiveWorkstreamRows:
                 "project_id": "agent-hub",
                 "external_id": "task-a961e3b9",
                 "current_branch": "task-a961e3b9/main",
-                "working_dir": "/tmp/worktrees/task-a961e3b9",
+                "working_dir": "/tmp/lanes/task-a961e3b9",
                 "status": "active",
                 "updated_at": datetime(2026, 3, 7, 20, 28, tzinfo=UTC),
                 "age_minutes": 2,
@@ -134,7 +133,7 @@ class TestCollapseActiveWorkstreamRows:
                 "project_id": "agent-hub",
                 "external_id": "task-a961e3b9",
                 "current_branch": "task-a961e3b9/main",
-                "working_dir": "/tmp/worktrees/task-a961e3b9",
+                "working_dir": "/tmp/lanes/task-a961e3b9",
                 "status": "active",
                 "updated_at": datetime(2026, 3, 7, 20, 20, tzinfo=UTC),
                 "age_minutes": 10,
@@ -155,7 +154,7 @@ class TestCollapseActiveWorkstreamRows:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/main",
-                "working_dir": "/tmp/worktrees/task-777-main",
+                "working_dir": "/tmp/lanes/task-777-main",
                 "status": "active",
                 "updated_at": datetime(2026, 3, 7, 20, 28, tzinfo=UTC),
                 "age_minutes": 2,
@@ -166,7 +165,7 @@ class TestCollapseActiveWorkstreamRows:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/follow-up",
-                "working_dir": "/tmp/worktrees/task-777-follow-up",
+                "working_dir": "/tmp/lanes/task-777-follow-up",
                 "status": "active",
                 "updated_at": datetime(2026, 3, 7, 20, 27, tzinfo=UTC),
                 "age_minutes": 3,
@@ -185,7 +184,7 @@ class TestCollapseActiveWorkstreamRows:
                 "project_id": "agent-hub",
                 "external_id": None,
                 "current_branch": None,
-                "working_dir": "/tmp/worktrees/task-a961e3b9-follow-up",
+                "working_dir": "/tmp/lanes/task-a961e3b9-follow-up",
                 "status": "active",
                 "updated_at": datetime(2026, 3, 7, 20, 28, tzinfo=UTC),
                 "age_minutes": 2,

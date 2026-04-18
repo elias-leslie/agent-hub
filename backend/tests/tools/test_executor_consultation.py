@@ -53,7 +53,7 @@ async def test_query_sessions_includes_external_id_when_present() -> None:
         external_id="task-123",
         current_branch="task-123/main",
         workstream_status="authoritative",
-        provider_metadata={"cwd": "/tmp/worktrees/task-123"},
+        provider_metadata={"cwd": "/tmp/lanes/task-123"},
         status="completed",
         created_at=datetime.now(UTC) - timedelta(minutes=2),
         summary_oneliner="Closed the loop",
@@ -72,7 +72,7 @@ async def test_query_sessions_includes_external_id_when_present() -> None:
     assert "task=task-123" in result
     assert "branch=task-123/main" in result
     assert "lane=authoritative" in result
-    assert "cwd=/tmp/worktrees/task-123" in result
+    assert "cwd=/tmp/lanes/task-123" in result
     assert "Closed the loop" in result
     assert "codex/gpt-5.4" in result
     assert "codex/codex/gpt-5.4" not in result
@@ -325,8 +325,7 @@ async def test_project_dispatch_overlap_block_reason_blocks_shared_plumbing_owne
                 session_id="sess-owner",
                 agent_slug="coder",
                 branch="task-deadbeef/main",
-                worktree_path="/tmp/worktrees/task-deadbeef",
-                is_worktree=True,
+                working_dir="/tmp/lanes/task-deadbeef",
                 session_status="active",
                 workstream_status=None,
                 workstream_note=None,
@@ -341,6 +340,7 @@ async def test_project_dispatch_overlap_block_reason_blocks_shared_plumbing_owne
         specialists=[],
     )
 
+    assert block is not None
     assert "shared-plumbing" in block
     assert "backend/alembic/versions/123_add_mode.py" in block
 
@@ -358,8 +358,7 @@ async def test_project_dispatch_overlap_block_reason_allows_owner_without_scope_
                 session_id="sess-owner",
                 agent_slug="coder",
                 branch="task-deadbeef/main",
-                worktree_path="/tmp/worktrees/task-deadbeef",
-                is_worktree=True,
+                working_dir="/tmp/lanes/task-deadbeef",
                 session_status="active",
                 workstream_status=None,
                 workstream_note=None,

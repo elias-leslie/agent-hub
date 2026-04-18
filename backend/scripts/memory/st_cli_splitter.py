@@ -50,7 +50,7 @@ def extract_st_cli_clusters(filename: str, content: str, meta: dict) -> list[dic
         "system_commands": {
             "title": "st CLI: System Commands",
             "description": "Project management, backup, git, and session commands",
-            "keywords": ["projects", "backup", "git", "sessions", "exec", "worktree", "autocode"],
+            "keywords": ["projects", "backup", "git", "sessions", "exec", "checkpoint", "autocode"],
             "category": "operational_context",
             "is_golden": False,
         },

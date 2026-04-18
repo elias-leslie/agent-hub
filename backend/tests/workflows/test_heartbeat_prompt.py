@@ -793,7 +793,7 @@ class TestBuildHeartbeatPromptIncludesGitState:
     @patch(
         "app.workflows._heartbeat_prompt._get_cleanup_status_summary",
         new_callable=AsyncMock,
-        return_value="\n<cleanup_status>\nCLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 orphan=1 prunable=0\n</cleanup_status>",
+        return_value="\n<cleanup_status>\nCLEANUP[all]:repos=2 needs_cleanup=1 checkpoints=1 dirty=0 orphan=1 prunable=0\n</cleanup_status>",
     )
     @patch(
         "app.workflows._heartbeat_prompt._get_git_status_summary",
@@ -924,7 +924,7 @@ class TestCleanupStatusSummary:
         "app.workflows._heartbeat_data._fetch_cleanup_status_response",
         new_callable=AsyncMock,
         return_value={
-            "compact": "CLEANUP[all]:repos=3 needs_cleanup=1 worktrees=2 dirty=1 orphan=1 prunable=0",
+            "compact": "CLEANUP[all]:repos=3 needs_cleanup=1 checkpoints=2 dirty=1 orphan=1 prunable=0",
             "payload": {"repositories": []},
         },
     )
@@ -944,8 +944,8 @@ class TestCleanupStatusSummary:
     async def test_filters_to_target_project(self, mock_fetch: AsyncMock) -> None:
         mock_fetch.return_value = {
             "compact": (
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=1 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=1 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:1 orphan:0 prunable:0 tasks:task-2\n"
             ),
             "payload": {"repositories": []},
         }
@@ -953,7 +953,7 @@ class TestCleanupStatusSummary:
         result = await _get_cleanup_status_summary("agent-hub")
 
         mock_fetch.assert_called_once_with("agent-hub")
-        assert "agent-hub worktrees:1 dirty:1" in result
+        assert "agent-hub checkpoints:1 dirty:1" in result
         assert "summitflow" not in result
 
     @pytest.mark.asyncio
@@ -964,8 +964,8 @@ class TestCleanupStatusSummary:
     ) -> None:
         mock_fetch_response.return_value = {
             "compact": (
-                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
-                "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-aa44180c"
+                "CLEANUP[all]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+                "summitflow checkpoints:1 dirty:0 orphan:1 prunable:0 tasks:task-aa44180c"
             ),
             "payload": {
                 "repositories": [
@@ -996,8 +996,8 @@ class TestCleanupStatusSummary:
     ) -> None:
         mock_fetch_response.return_value = {
             "compact": (
-                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
-                "summitflow worktrees:2 dirty:0 orphan:0 prunable:0 tasks:task-aa44180c,task-bb22cc33 "
+                "CLEANUP[all]:repos=1 needs_cleanup=1 checkpoints=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
+                "summitflow checkpoints:2 dirty:0 orphan:0 prunable:0 tasks:task-aa44180c,task-bb22cc33 "
                 "finalize:task-aa44180c review:task-bb22cc33"
             ),
             "payload": {
@@ -1046,8 +1046,8 @@ class TestCleanupStatusSummary:
     ) -> None:
         mock_fetch_response.return_value = {
             "compact": (
-                "CLEANUP[all]:repos=1 needs_cleanup=1 worktrees=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
-                "summitflow worktrees:2 dirty:0 orphan:0 prunable:0 review:task-aa44180c"
+                "CLEANUP[all]:repos=1 needs_cleanup=1 checkpoints=2 dirty=0 stale_cp=0 snap=0 orphan=0 prunable=0\n"
+                "summitflow checkpoints:2 dirty:0 orphan:0 prunable:0 review:task-aa44180c"
             ),
             "payload": {
                 "repositories": [
@@ -1101,8 +1101,8 @@ class TestFetchCleanupStatus:
             _FakeGitStatusResponse(
                 {
                     "compact": (
-                        "CLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
-                        "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
+                        "CLEANUP[all]:repos=2 needs_cleanup=1 checkpoints=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+                        "summitflow checkpoints:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
                     )
                 }
             )
@@ -1112,8 +1112,8 @@ class TestFetchCleanupStatus:
         result = await _fetch_cleanup_status()
 
         assert result == (
-            "CLEANUP[all]:repos=2 needs_cleanup=1 worktrees=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
-            "summitflow worktrees:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
+            "CLEANUP[all]:repos=2 needs_cleanup=1 checkpoints=1 dirty=0 stale_cp=0 snap=0 orphan=1 prunable=0\n"
+            "summitflow checkpoints:1 dirty:0 orphan:1 prunable:0 tasks:task-1"
         )
         assert fake_client.requested_urls == ["http://localhost:8001/api/git/cleanup-status"]
 
@@ -1972,7 +1972,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/main",
-                "working_dir": "/tmp/worktrees/task-777-main",
+                "working_dir": "/tmp/lanes/task-777-main",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -1984,7 +1984,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "summitflow",
                 "external_id": "task-777",
                 "current_branch": "task-777/follow-up",
-                "working_dir": "/tmp/worktrees/task-777-follow-up",
+                "working_dir": "/tmp/lanes/task-777-follow-up",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -2002,10 +2002,10 @@ class TestGetWorkstreamInventory:
         assert "task-777" in result
         assert "state=mixed" in result
         assert "branches=2" in result
-        assert "worktree=/tmp/worktrees/task-777-follow-up" in result or "worktree=/tmp/worktrees/task-777-main" in result
+        assert "checkout=/tmp/lanes/task-777-follow-up" in result or "checkout=/tmp/lanes/task-777-main" in result
 
     @pytest.mark.asyncio
-    async def test_reports_worktree_path_when_lane_has_working_dir(self) -> None:
+    async def test_reports_working_dir_when_lane_has_working_dir(self) -> None:
         fake_rows = [
             {
                 "session_id": "sess-7",
@@ -2013,7 +2013,7 @@ class TestGetWorkstreamInventory:
                 "project_id": "a-term",
                 "external_id": "task-999",
                 "current_branch": "task-999/main",
-                "working_dir": "/home/testuser/.local/share/st/worktrees/a-term/task-999",
+                "working_dir": "/home/testuser//.local/share/st/checkpoints/a-term/task-999",
                 "status": "active",
                 "created_at": "ignored",
                 "updated_at": "ignored",
@@ -2029,7 +2029,7 @@ class TestGetWorkstreamInventory:
             result = await _get_workstream_inventory()
 
         assert "task-999" in result
-        assert "worktree=/home/testuser/.local/share/st/worktrees/a-term/task-999" in result
+        assert "checkout=/home/testuser//.local/share/st/checkpoints/a-term/task-999" in result
 
     @pytest.mark.asyncio
     async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:

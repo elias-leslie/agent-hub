@@ -410,23 +410,22 @@ class TestListSessions:
         assert data["sessions"][0]["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
         assert data["sessions"][0]["current_branch"] == "task-123/main"
         assert data["sessions"][0]["working_dir"] == str(tmp_path)
-        assert data["sessions"][0]["is_worktree"] is False
         assert data["sessions"][0]["workstream_status"] == "authoritative"
         assert data["total"] == 1
 
-    def test_list_sessions_marks_worktree_from_cwd(
+    def test_list_sessions_marks_checkout_from_cwd(
         self,
         client: APITestClient,
         mock_session: AsyncMock,
         tmp_path: Path,
     ) -> None:
-        """Test session list derives worktree identity from cwd metadata."""
+        """Test session list derives checkout identity from cwd metadata."""
         main_repo = tmp_path / "repo"
-        worktree = tmp_path / "worktrees" / "task-123"
-        gitdir = main_repo / ".git" / "worktrees" / "task-123"
+        checkout = tmp_path / "checkouts" / "task-123"
+        gitdir = main_repo / ".git" / "checkouts" / "task-123"
         gitdir.mkdir(parents=True)
-        worktree.mkdir(parents=True)
-        (worktree / ".git").write_text(f"gitdir: {gitdir}\n")
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {gitdir}\n")
 
         mock_db_session = MagicMock()
         mock_db_session.id = "session-1"
@@ -445,7 +444,7 @@ class TestListSessions:
         mock_db_session.external_id = "task-123"
         mock_db_session.current_branch = "task-123/main"
         mock_db_session.workstream_status = "authoritative"
-        mock_db_session.provider_metadata = {"cwd": str(worktree)}
+        mock_db_session.provider_metadata = {"cwd": str(checkout)}
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -484,8 +483,7 @@ class TestListSessions:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["sessions"][0]["working_dir"] == str(worktree)
-        assert data["sessions"][0]["is_worktree"] is True
+        assert data["sessions"][0]["working_dir"] == str(checkout)
 
     def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by project_id."""
@@ -533,7 +531,9 @@ class TestListSessions:
 
         assert response.status_code == 200
         mock_list_sessions.assert_awaited_once()
-        assert mock_list_sessions.await_args.kwargs["external_id"] == "task-12345678"
+        await_args = mock_list_sessions.await_args
+        assert await_args is not None
+        assert await_args.kwargs["external_id"] == "task-12345678"
 
     def test_list_sessions_pagination(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test pagination parameters."""

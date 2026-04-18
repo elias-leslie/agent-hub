@@ -1064,16 +1064,16 @@ class TestCrossProjectPathEnforcement:
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
-    async def test_cross_project_read_worktree_denied_at_off_tier(self, tmp_path: Path):
-        """Reading a file from another project's worktree should honor that project's tier."""
+    async def test_cross_project_read_checkout_denied_at_off_tier(self, tmp_path: Path):
+        """Reading a file from another project's checkout should honor that project's tier."""
         main_repo = tmp_path / "summitflow"
         main_repo.mkdir()
-        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+        (main_repo / ".git" / "checkouts" / "task-123").mkdir(parents=True)
 
-        worktree = tmp_path / "worktrees" / "task-123"
-        worktree.mkdir(parents=True)
-        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
-        target_file = worktree / "backend" / "app.py"
+        checkout = tmp_path / "checkouts" / "task-123"
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {main_repo / '.git' / 'checkouts' / 'task-123'}\n")
+        target_file = checkout / "backend" / "app.py"
         target_file.parent.mkdir(parents=True)
         target_file.write_text("x = 1\n")
 
@@ -1093,15 +1093,15 @@ class TestCrossProjectPathEnforcement:
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
-    async def test_bash_same_project_worktree_allowed(self, tmp_path: Path):
-        """Bash should allow a session project to operate inside its own worktree."""
+    async def test_bash_same_project_checkout_allowed(self, tmp_path: Path):
+        """Bash should allow a session project to operate inside its own checkout."""
         main_repo = tmp_path / "summitflow"
         main_repo.mkdir()
-        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+        (main_repo / ".git" / "checkouts" / "task-123").mkdir(parents=True)
 
-        worktree = tmp_path / "worktrees" / "task-123"
-        worktree.mkdir(parents=True)
-        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
+        checkout = tmp_path / "checkouts" / "task-123"
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {main_repo / '.git' / 'checkouts' / 'task-123'}\n")
 
         with patch(
             "app.services.tools.direct_executor_core.KNOWN_ROOTS",
@@ -1111,22 +1111,22 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x6c",
                 name="bash",
-                input={"command": f"cd {worktree} && git status --short"},
+                input={"command": f"cd {checkout} && git status --short"},
             )
             decision = await hook(call)
 
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
-    async def test_bash_same_project_worktree_allowed_with_broader_root_present(self, tmp_path: Path):
+    async def test_bash_same_project_checkout_allowed_with_broader_root_present(self, tmp_path: Path):
         """More-specific project roots should win over broader parent roots."""
         main_repo = tmp_path / "summitflow"
         main_repo.mkdir()
-        (main_repo / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+        (main_repo / ".git" / "checkouts" / "task-123").mkdir(parents=True)
 
-        worktree = tmp_path / "worktrees" / "task-123"
-        worktree.mkdir(parents=True)
-        (worktree / ".git").write_text(f"gitdir: {main_repo / '.git' / 'worktrees' / 'task-123'}\n")
+        checkout = tmp_path / "checkouts" / "task-123"
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {main_repo / '.git' / 'checkouts' / 'task-123'}\n")
 
         with patch(
             "app.services.tools.direct_executor_core.KNOWN_ROOTS",
@@ -1136,22 +1136,22 @@ class TestCrossProjectPathEnforcement:
             call = ToolCall(
                 id="x6c2",
                 name="bash",
-                input={"command": f"cd {worktree} && git status --short"},
+                input={"command": f"cd {checkout} && git status --short"},
             )
             decision = await hook(call)
 
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
-    async def test_bash_cross_project_worktree_denied_at_read_tier(self, tmp_path: Path):
-        """Bash should deny another project's worktree when that target is read-only."""
+    async def test_bash_cross_project_checkout_denied_at_read_tier(self, tmp_path: Path):
+        """Bash should deny another project's checkout when that target is read-only."""
         summitflow = tmp_path / "summitflow"
         summitflow.mkdir()
-        (summitflow / ".git" / "worktrees" / "task-123").mkdir(parents=True)
+        (summitflow / ".git" / "checkouts" / "task-123").mkdir(parents=True)
 
-        worktree = tmp_path / "worktrees" / "task-123"
-        worktree.mkdir(parents=True)
-        (worktree / ".git").write_text(f"gitdir: {summitflow / '.git' / 'worktrees' / 'task-123'}\n")
+        checkout = tmp_path / "checkouts" / "task-123"
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {summitflow / '.git' / 'checkouts' / 'task-123'}\n")
 
         with patch(
             "app.services.tools.direct_executor_core.KNOWN_ROOTS",
@@ -1166,7 +1166,7 @@ class TestCrossProjectPathEnforcement:
                 call = ToolCall(
                     id="x6d",
                     name="bash",
-                    input={"command": f"cd {worktree} && git status --short"},
+                    input={"command": f"cd {checkout} && git status --short"},
                 )
                 decision = await hook(call)
 

@@ -3,7 +3,7 @@ Cross-session continuity injection ("Recent Activity") for Agent Hub.
 
 Generates a token-efficient markdown block summarizing recent session activity
 from PostgreSQL session summaries. Includes context poisoning protection:
-- Branch scoping: worktree summaries only visible to same branch + main
+- Branch scoping: summaries only visible to same branch + main
 - Outcome filtering: abandoned sessions excluded, failed sessions prefixed
 - Staleness check: only summaries < 7 days old
 

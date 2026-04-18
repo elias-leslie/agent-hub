@@ -80,7 +80,6 @@ async def _store_summary_on_session(
     outcome: str,
     files_touched: list[str],
     branch: str | None = None,
-    is_worktree: bool = False,
     git_digest: str = "",
     db: AsyncSession | None = None,
 ) -> None:
@@ -101,18 +100,17 @@ async def _store_summary_on_session(
         session.summary_files_touched = files_touched if files_touched else None
         session.summary_generated_at = datetime.now(UTC)
         session.summary_branch = branch
-        session.summary_is_worktree = is_worktree
         session.summary_git_digest = git_digest or None
         session_db.add(SessionSummarySegment(
             session_id=session_id, summary_oneliner=summary_oneliner,
             summary_outcome=outcome, summary_git_digest=git_digest or None,
-            summary_branch=branch, summary_is_worktree=is_worktree,
+            summary_branch=branch,
         ))
         if owns_session:
             await session_db.commit()
     logger.info(
-        "Stored summary + segment on session %s: outcome=%s branch=%s worktree=%s files=%d git_digest=%s",
-        session_id, outcome, branch, is_worktree, len(files_touched), bool(git_digest),
+        "Stored summary + segment on session %s: outcome=%s branch=%s files=%d git_digest=%s",
+        session_id, outcome, branch, len(files_touched), bool(git_digest),
     )
 
 
@@ -143,7 +141,6 @@ async def _analyse_and_store(
     agent_slug: str | None,
     transcript: str,
     branch: str | None,
-    is_worktree: bool,
     git_context: str | None,
     memory_contents: dict[str, str] | None,
 ) -> SessionSummary:
@@ -161,7 +158,7 @@ async def _analyse_and_store(
     git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
     await _store_summary_on_session(
         session_id=session_id, summary_oneliner=analysis.summary, outcome=analysis.outcome,
-        files_touched=analysis.files, branch=branch, is_worktree=is_worktree, git_digest=git_digest,
+        files_touched=analysis.files, branch=branch, git_digest=git_digest,
     )
     return SessionSummary(
         session_id=session_id, summary=analysis.summary, outcome=analysis.outcome,
@@ -177,7 +174,6 @@ async def store_summary_on_session(
     outcome: str,
     files_touched: list[str],
     branch: str | None = None,
-    is_worktree: bool = False,
     git_digest: str = "",
     db: AsyncSession | None = None,
 ) -> None:
@@ -188,7 +184,6 @@ async def store_summary_on_session(
         outcome=outcome,
         files_touched=files_touched,
         branch=branch,
-        is_worktree=is_worktree,
         git_digest=git_digest,
         db=db,
     )
@@ -211,7 +206,6 @@ async def generate_session_summary(
     session_id: str,
     project_id: str | None = None,
     branch: str | None = None,
-    is_worktree: bool = False,
     transcript_path: str | None = None,
     *,
     git_context: str | None = None,
@@ -233,7 +227,6 @@ async def generate_session_summary(
         agent_slug=session.agent_slug,
         transcript=transcript,
         branch=branch,
-        is_worktree=is_worktree,
         git_context=git_context,
         memory_contents=memory_contents,
     )

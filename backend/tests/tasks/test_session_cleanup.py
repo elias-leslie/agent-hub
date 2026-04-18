@@ -217,8 +217,7 @@ async def test_cleanup_stale_sessions_reaps_ghost_owner_lane_sessions(tmp_path) 
                     SimpleNamespace(
                         session_id="sess-1",
                         branch=None,
-                        worktree_path=str(ghost_path),
-                        is_worktree=False,
+                        working_dir=str(ghost_path),
                     )
                 ]
             ),
@@ -259,8 +258,7 @@ async def test_get_stale_session_stats_ignores_ghost_owner_lane_blockers(tmp_pat
                     SimpleNamespace(
                         session_id="sess-1",
                         branch=None,
-                        worktree_path=str(ghost_path),
-                        is_worktree=False,
+                        working_dir=str(ghost_path),
                     )
                 ]
             ),

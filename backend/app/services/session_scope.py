@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from app.models import Session
-from app.services.tools.project_env import detect_main_repo
+from app.services.tools.project_env import detect_repo_root
 
 _SCOPE_CONFIDENCE_RANK = {
     "unknown": 0,
@@ -54,16 +54,16 @@ def _build_base_candidates(base_path: str) -> list[Path]:
     if cwd is None:
         return []
     candidates: list[Path] = [cwd]
-    main_repo = detect_main_repo(cwd)
-    if main_repo and main_repo != cwd:
-        resolved = _safe_resolve(main_repo)
+    repo_root = detect_repo_root(cwd)
+    if repo_root and repo_root != cwd:
+        resolved = _safe_resolve(repo_root)
         if resolved is not None:
             candidates.append(resolved)
     return candidates
 
 
 def normalize_scope_path(raw_path: Any, base_path: str | None) -> str | None:
-    """Normalize a raw path into repo/worktree-relative POSIX form."""
+    """Normalize a raw path into repo-relative POSIX form."""
     if not isinstance(raw_path, str):
         return None
     path = raw_path.strip()
@@ -259,9 +259,9 @@ def extract_tool_scope_paths(
 
 
 def resolve_scope_base_path(metadata: dict[str, Any] | None, cwd: str | None) -> str | None:
-    """Resolve the best repo/worktree base path for scope normalization."""
+    """Resolve the best repo base path for scope normalization."""
     payload = metadata if isinstance(metadata, dict) else {}
-    for key in ("worktree_path", "repo_root", "cwd"):
+    for key in ("repo_root", "cwd"):
         v = payload.get(key)
         if isinstance(v, str) and v:
             return v

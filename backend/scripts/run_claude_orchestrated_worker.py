@@ -58,13 +58,13 @@ def _parse_args() -> argparse.Namespace:
         dest="claim_if_needed",
         action="store_true",
         default=None,
-        help="Claim the task automatically when --task-id is used and no worktree exists yet",
+        help="Claim the task automatically when --task-id is used and no checkpoint exists yet",
     )
     parser.add_argument(
         "--no-claim-if-needed",
         dest="claim_if_needed",
         action="store_false",
-        help="Do not auto-claim when --task-id is used and the task has no worktree yet",
+        help="Do not auto-claim when --task-id is used and the task has no checkpoint yet",
     )
     parser.add_argument("--project-id", default="agent-hub", help="Agent Hub project id")
     parser.add_argument(
@@ -220,8 +220,8 @@ def _parse_task_context(raw: str) -> dict[str, Any]:
                     "path": path.strip(),
                 }
             )
-        elif line.startswith("WORKTREE_PATH:"):
-            context["worktree_path"] = line.removeprefix("WORKTREE_PATH:").strip()
+        elif line.startswith("PROJECT_ROOT:"):
+            context["project_root"] = line.removeprefix("PROJECT_ROOT:").strip()
         elif line.startswith("TASK_BRANCH:"):
             context["task_branch"] = line.removeprefix("TASK_BRANCH:").strip()
     return context
@@ -385,8 +385,8 @@ def _build_prompt_from_task_context(
         [
             "- Preserve existing behavior unless the task explicitly requires behavior change.",
             "- No stubs, placeholders, TODOs, compatibility shims, or unrelated cleanup.",
-            f"- Stay inside this claimed worktree: `{workdir}`.",
-            "- Do not read, edit, commit, or run commands in sibling repos or any path outside this worktree. If the task appears mis-scoped, stop and report the mismatch instead of switching repos.",
+            f"- Stay inside this claimed checkout: `{workdir}`.",
+            "- Do not read, edit, commit, or run commands in sibling repos or any path outside this checkout. If the task appears mis-scoped, stop and report the mismatch instead of switching repos.",
         ]
     )
     if task_type == "refactor":
@@ -422,20 +422,18 @@ def _load_task_contract(
 ) -> tuple[str, dict[str, Any], Path, dict[str, Any], str]:
     raw_context = _run_text_command(command=["st", "context", task_id], cwd=task_root)
     task_context = _parse_task_context(raw_context)
-    worktree_path = task_context.get("worktree_path")
+    project_root = task_context.get("project_root")
 
-    if (not isinstance(worktree_path, str) or not worktree_path) and claim_if_needed:
+    if (not isinstance(project_root, str) or not project_root) and claim_if_needed:
         _run_text_command(command=["st", "claim", task_id], cwd=task_root)
         raw_context = _run_text_command(command=["st", "context", task_id], cwd=task_root)
         task_context = _parse_task_context(raw_context)
-        worktree_path = task_context.get("worktree_path")
+        project_root = task_context.get("project_root")
 
-    if not isinstance(worktree_path, str) or not worktree_path:
-        raise ValueError(
-            f"task {task_id} has no worktree path and auto-claim is disabled"
-        )
+    if not isinstance(project_root, str) or not project_root:
+        raise ValueError(f"task {task_id} has no project root and auto-claim is disabled")
 
-    workdir = Path(worktree_path).resolve()
+    workdir = Path(project_root).resolve()
     target_paths = _find_target_paths(task_context, workdir=workdir)
     related_tests = _discover_related_tests(workdir=workdir, target_paths=target_paths)
     prompt = _build_prompt_from_task_context(
@@ -1148,7 +1146,7 @@ async def _ensure_session_metadata(
             await db.execute(select(Session).where(Session.id == session_id).limit(1))
         ).scalar_one_or_none()
         if existing is None:
-            provider_metadata = {
+            provider_metadata: dict[str, Any] = {
                 "repo_root": str(workdir.resolve()),
             }
             if batch_task_ids:

@@ -2,7 +2,7 @@
 
 Provides DirectToolHandler which routes tool calls to DirectToolExecutor
 methods and handles real runtime boundaries: project policy, cross-project
-checks, and worktree scope.
+checks, and checkout scope.
 """
 
 from __future__ import annotations
@@ -213,7 +213,7 @@ def _collect_hooks(
 ) -> list[PreToolUseHook]:
     """Build the ordered list of pre-hooks for a new DirectToolHandler.
 
-    Order: project permission → cross-project boundary → worktree boundary.
+    Order: project permission → cross-project boundary → checkout boundary.
     First DENY wins during execution.
     """
     hooks: list[PreToolUseHook] = []
@@ -223,9 +223,9 @@ def _collect_hooks(
         hooks.append(_create_cross_project_permission_hook(project_id))
 
     if working_dir:
-        from app.services.tools._worktree_boundary_hook import create_worktree_boundary_hook
+        from app.services.tools._checkout_boundary_hook import create_checkout_boundary_hook
 
-        hooks.append(create_worktree_boundary_hook(working_dir))
+        hooks.append(create_checkout_boundary_hook(working_dir))
 
     return hooks
 
@@ -237,10 +237,10 @@ def create_direct_handler(
     agent_slug: str | None = None,
     tool_catalog: list[dict[str, object]] | None = None,
 ) -> DirectToolHandler:
-    """Create a direct tool handler with project/worktree enforcement.
+    """Create a direct tool handler with project/checkout enforcement.
 
     Composes hooks in order: project permission first, then cross-project
-    path enforcement, then worktree boundary. First DENY wins.
+    path enforcement, then checkout boundary. First DENY wins.
 
     Args:
         working_dir: Base directory for tool operations

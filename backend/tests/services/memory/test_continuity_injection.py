@@ -22,7 +22,6 @@ def _make_summary(
     summary: str = "Fixed auth bug",
     outcome: str = "completed",
     branch: str | None = "main",
-    is_worktree: bool = False,
     git_digest: str | None = None,
     hours_ago: float = 2.0,
 ) -> dict[str, Any]:
@@ -33,7 +32,6 @@ def _make_summary(
         "summary": summary,
         "outcome": outcome,
         "branch": branch,
-        "is_worktree": is_worktree,
         "git_digest": git_digest,
         "created_at": datetime.now(UTC) - timedelta(hours=hours_ago),
     }
@@ -491,7 +489,6 @@ def _mock_segment_row(
     summary: str,
     outcome: str,
     branch: str | None,
-    is_worktree: bool,
     git_digest: str | None = None,
     hours_ago: float = 2.0,
 ) -> MagicMock:
@@ -502,7 +499,6 @@ def _mock_segment_row(
     row.summary_oneliner = summary
     row.summary_outcome = outcome
     row.summary_branch = branch
-    row.summary_is_worktree = is_worktree
     row.summary_git_digest = git_digest
     row.created_at = datetime.now(UTC) - timedelta(hours=hours_ago)
     return row
@@ -514,7 +510,6 @@ def _mock_session_row(
     summary: str,
     outcome: str,
     branch: str | None,
-    is_worktree: bool,
     git_digest: str | None = None,
     hours_ago: float = 2.0,
 ) -> MagicMock:
@@ -525,7 +520,6 @@ def _mock_session_row(
     row.summary_oneliner = summary
     row.summary_outcome = outcome
     row.summary_branch = branch
-    row.summary_is_worktree = is_worktree
     row.summary_git_digest = git_digest
     row.created_at = datetime.now(UTC) - timedelta(hours=hours_ago)
     return row

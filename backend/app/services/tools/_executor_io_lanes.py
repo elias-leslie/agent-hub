@@ -42,7 +42,7 @@ _EXEC_LOG_ACTIVE_MARKERS = (
     "Calling agent for fix attempt",
     "Starting autonomous execution",
     "Running pristine check",
-    "Worktree ready:",
+    "Task branch ready in shared checkout:",
 )
 _EXEC_LOG_LINE_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\|")
 
@@ -377,7 +377,7 @@ def _needs_admin_close(result: str) -> bool:
     lowered = result.lower()
     return (
         (_MISSING_CHECKPOINT_PHRASE.lower() in lowered and "was it claimed?" in lowered)
-        or "claimed worktree has uncommitted changes." in lowered
+        or "claimed checkout has uncommitted changes." in lowered
         or (
             _STATUS_UPDATE_FAILED_PHRASE in lowered
             and _ADMIN_RECOVERY_PHRASE in lowered
@@ -440,7 +440,7 @@ def _no_completed_sessions_message(
     statuses = ", ".join(sorted({str(s.status) for s in sessions if s.status}))
     task_detail = f" (task={task_status})" if task_status else ""
     next_step = (
-        ' Treat this as queue/worktree state, not closure residue. '
+        ' Treat this as queue/checkpoint state, not closure residue. '
         'Use manage_tasks(action="get_context") and cleanup_status/dispatch to keep the project moving.'
         if task_status == "blocked"
         else ""

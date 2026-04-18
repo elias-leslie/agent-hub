@@ -47,11 +47,11 @@ COMPONENTS: dict[str, ComponentInfo] = {
         project="summitflow",
         description="run_execution_quality_check, intent checks, auto-pass steps",
     ),
-    "sf.worktree": ComponentInfo(
-        id="sf.worktree",
-        name="Worktree Isolation",
+    "sf.checkpoints": ComponentInfo(
+        id="sf.checkpoints",
+        name="Checkpoints",
         project="summitflow",
-        description="Git worktree create, cleanup, branch management",
+        description="Checkpoint creation, cleanup, and task-branch management",
     ),
     "sf.api": ComponentInfo(
         id="sf.api",

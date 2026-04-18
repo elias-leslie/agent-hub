@@ -19,8 +19,7 @@ class OwnershipOwner:
     session_id: str
     agent_slug: str | None
     branch: str | None
-    worktree_path: str | None
-    is_worktree: bool
+    working_dir: str | None
     session_status: str
     workstream_status: str | None
     workstream_note: str | None
@@ -38,11 +37,11 @@ class OwnershipOwner:
 
 @dataclass(frozen=True)
 class LaneFingerprint:
-    """Identity for a concrete task/worktree lane."""
+    """Identity for a concrete task lane."""
 
     task_id: str | None
     branch: str | None
-    worktree_path: str | None
+    working_dir: str | None
 
 
 _WORKSTREAM_STATUS_RANK = {
@@ -82,15 +81,15 @@ def lane_fingerprint(
     *,
     task_id: str | None,
     branch: str | None,
-    worktree_path: str | None,
+    working_dir: str | None,
 ) -> LaneFingerprint | None:
     """Build a concrete lane identity, or None when no lane evidence exists."""
-    if not task_id and not branch and not worktree_path:
+    if not task_id and not branch and not working_dir:
         return None
     return LaneFingerprint(
         task_id=task_id,
         branch=branch,
-        worktree_path=worktree_path,
+        working_dir=working_dir,
     )
 
 
@@ -148,7 +147,7 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
         fingerprint = lane_fingerprint(
             task_id=owner.task_id,
             branch=owner.branch,
-            worktree_path=owner.worktree_path,
+            working_dir=owner.working_dir,
         )
         if fingerprint is None:
             passthrough.append(owner)
@@ -179,8 +178,7 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
                 session_id=representative.session_id,
                 agent_slug=representative.agent_slug,
                 branch=fingerprint.branch,
-                worktree_path=fingerprint.worktree_path,
-                is_worktree=any(owner.is_worktree for owner in group),
+                working_dir=fingerprint.working_dir,
                 session_status=representative.session_status,
                 workstream_status=representative.workstream_status,
                 workstream_note=representative.workstream_note,
@@ -202,7 +200,7 @@ def collapse_ownership_owners(owners: list[OwnershipOwner]) -> list[OwnershipOwn
         key=lambda owner: (
             owner.task_id or "",
             owner.branch or "",
-            owner.worktree_path or "",
+            owner.working_dir or "",
             owner.session_id,
         ),
     )
@@ -226,7 +224,7 @@ def collapse_active_workstream_rows(
                 row.get("working_dir") if isinstance(row.get("working_dir"), str) else None,
             ),
             branch=row.get("current_branch") if isinstance(row.get("current_branch"), str) else None,
-            worktree_path=row.get("working_dir") if isinstance(row.get("working_dir"), str) else None,
+            working_dir=row.get("working_dir") if isinstance(row.get("working_dir"), str) else None,
         )
         if fingerprint is None:
             passthrough.append(row)
@@ -247,7 +245,7 @@ def collapse_active_workstream_rows(
         merged = dict(representative)
         merged["external_id"] = fingerprint.task_id or merged.get("external_id")
         merged["current_branch"] = fingerprint.branch
-        merged["working_dir"] = fingerprint.worktree_path
+        merged["working_dir"] = fingerprint.working_dir
         merged["age_minutes"] = min(int(row.get("age_minutes", 0)) for row in group)
         collapsed.append(merged)
 

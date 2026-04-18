@@ -85,7 +85,6 @@ class TestGenerateSessionSummary:
             outcome="completed",
             files_touched=["auth.py"],
             branch=None,
-            is_worktree=False,
             git_digest="",
         )
 
@@ -223,7 +222,6 @@ class TestGenerateSessionSummary:
 
     @pytest.mark.asyncio
     async def test_passes_branch_to_store(self) -> None:
-        """Branch and is_worktree are forwarded to _store_summary_on_session."""
         mock_session = MagicMock()
         mock_session.project_id = "test-project"
         mock_session.agent_slug = "coder"
@@ -236,7 +234,7 @@ class TestGenerateSessionSummary:
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
                 return_value=_llm_result(
-                    summary="Worktree work", files=["feature.py"]
+                    summary="Checkout work", files=["feature.py"]
                 ),
             ),
             patch(
@@ -245,16 +243,16 @@ class TestGenerateSessionSummary:
             ) as mock_store,
         ):
             await generate_session_summary(
-                "test-id", branch="feature/auth", is_worktree=True
+                session_id="test-id",
+                branch="feature/auth",
             )
 
         mock_store.assert_called_once_with(
             session_id="test-id",
-            summary_oneliner="Worktree work",
+            summary_oneliner="Checkout work",
             outcome="completed",
             files_touched=["feature.py"],
             branch="feature/auth",
-            is_worktree=True,
             git_digest="",
         )
 
@@ -358,8 +356,7 @@ class TestStoreSummaryOnSession:
         assert mock_session.summary_generated_at is not None
 
     @pytest.mark.asyncio
-    async def test_stores_branch_and_worktree(self) -> None:
-        """Stores branch and is_worktree on the session row."""
+    async def test_stores_branch_and_checkout(self) -> None:
         mock_session = MagicMock()
 
         with _mock_db_for_store(mock_session):
@@ -369,11 +366,9 @@ class TestStoreSummaryOnSession:
                 outcome="completed",
                 files_touched=["feature.py"],
                 branch="feature/auth",
-                is_worktree=True,
             )
 
         assert mock_session.summary_branch == "feature/auth"
-        assert mock_session.summary_is_worktree is True
 
     @pytest.mark.asyncio
     async def test_stores_git_digest(self) -> None:
@@ -464,7 +459,6 @@ class TestStoreSummaryOnSession:
                 outcome="completed",
                 files_touched=["auth.py"],
                 branch="main",
-                is_worktree=False,
                 git_digest="feat: add auth",
             )
 
@@ -479,7 +473,6 @@ class TestStoreSummaryOnSession:
         assert segment.summary_outcome == "completed"
         assert segment.summary_git_digest == "feat: add auth"
         assert segment.summary_branch == "main"
-        assert segment.summary_is_worktree is False
 
     @pytest.mark.asyncio
     async def test_segment_not_created_when_session_missing(self) -> None:
