@@ -151,8 +151,7 @@ class TestProcessSummaryTags:
             assert "fix: typo" in call_kwargs["git_digest"]
 
     @pytest.mark.asyncio
-    async def test_passes_branch_and_worktree(self) -> None:
-        """_process_summary_tags forwards branch and is_worktree."""
+    async def test_passes_branch_and_checkout(self) -> None:
         with (
             patch(_STORE_PATCH, new_callable=AsyncMock) as mock_store,
             patch(_ENFORCE_PATCH, side_effect=lambda x: x),
@@ -161,12 +160,10 @@ class TestProcessSummaryTags:
                 "session-123",
                 summary_tags=["[[S:partial:In progress]]"],
                 branch="feature/auth",
-                is_worktree=True,
             )
 
             call_kwargs = mock_store.call_args[1]
             assert call_kwargs["branch"] == "feature/auth"
-            assert call_kwargs["is_worktree"] is True
 
     @pytest.mark.asyncio
     async def test_no_tags_returns_false(self) -> None:
@@ -206,7 +203,6 @@ class TestAnalyzeSessionSummaryIntegration:
                 summary_tags=["[[S:completed:Did the thing]]"],
                 git_context="abc1234 feat: thing",
                 branch="main",
-                is_worktree=False,
             )
 
             assert result.summary_stored is True

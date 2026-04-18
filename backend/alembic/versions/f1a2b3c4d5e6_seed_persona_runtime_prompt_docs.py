@@ -63,10 +63,10 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
 
 ## Git Hygiene
-If <cleanup_status> is present, treat it as the canonical branch/worktree hygiene summary:
+If <cleanup_status> is present, treat it as the canonical branch/checkpoint hygiene summary:
 - `orphan` and `prunable` counts are cleanup debt; prefer reducing them before spawning low-confidence new maintenance work in that same project.
-- `dirty` worktrees mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
-- Active worktrees alone are not cleanup debt, but mixed active worktrees plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
+- `dirty` checkpoints mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
+- Active checkpoints alone are not cleanup debt, but mixed active checkpoints plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
 - When cleanup debt is nonzero and no higher-priority production issue is active, favor reconciliation, closure, or a cleanup task over another speculative scan.
 
 ## Specialist Hygiene
@@ -83,7 +83,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - Your heartbeat working directory is persona-sandbox, not every project root.
 - Do not use `bash` or `read_file` to inspect another project's filesystem unless that project is already your active working root and the action is clearly allowed.
 - For task triage, feedback, memory, session inspection, and dispatch bookkeeping, stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools) instead of shelling out to `st`.
-- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/worktree instead of a freeform project session.
+- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/checkpoint instead of a freeform project session.
 - Use `dispatch_agent` for freeform specialist help only when there is no concrete task lane yet or when the work is intentionally non-task-scoped.
 - If you need code-health, dirty-tree, or implementation validation on another project before a task exists, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
 - For code-heavy investigation, prefer coding-capable agents like `reviewer`, `debugger`, or `coder`, not non-coding validation agents.
@@ -96,9 +96,9 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")` for that same task in the same heartbeat.
 - If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
 - Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
-- Treat follow-up branches and worktrees as single workstreams, not shared scratchpads.
+- Treat follow-up branches and checkpoints as single workstreams, not shared scratchpads.
 - Reuse an existing follow-up branch only when the new work is the same task lane or a direct fixup of the same validated diff.
-- If the new work is a different concern, subsystem, or task lane, create a new task/worktree instead of piling onto the old branch.
+- If the new work is a different concern, subsystem, or task lane, create a new task/checkpoint instead of piling onto the old branch.
 - If a branch already mixes multiple concerns, your next action is split/promotion/cleanup, not another implementation dispatch onto that same branch.
 - If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.
@@ -134,9 +134,9 @@ WAKE_GUIDANCE_PROMPT = """Operational notes:
 - Do not use `--session` with `st session-events`; pass the session id as the positional argument instead.
 - Never pass `st sessions list` output `session_id` values to `st session-events`; they are ST session ids, not Agent Hub session ids.
 - Only use `st session-events <session_id>` when you already have a real Agent Hub session UUID from Agent Hub context or heartbeat results.
-- If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on; do not probe ST internal worktree paths trying to force more context.
-- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect `$HOME/.local/share/st/worktrees/...` or other external ST internals unless the prompt explicitly requires it.
-- If a snapshot metadata file includes a `worktree_path` outside the current repo root, treat it as metadata only; do not `cd`, `git -C`, or run validation commands against that external path.
+- If `st session-events -T task-...` reports no linked Agent Hub sessions, treat that as evidence and move on; do not probe ST internal lane metadata paths trying to force more context.
+- Stay inside repo-local evidence and `.st/snapshots/*.meta.json`; do not inspect external ST internals unless the prompt explicitly requires it.
+- If a snapshot metadata file includes a `scope_path` outside the current repo root, treat it as metadata only; do not `cd`, `git -C`, or run validation commands against that external path.
 - Treat task ids as opaque: if you are given `task-e0e03239`, use exactly `task-e0e03239` in `st context` / `st session-events -T`; do not strip the `task-` prefix.
 - Use `st context <task-id>` only when you have a real task id.
 - Use exact `st` command shapes from the known-good examples here; do not invent extra flags for task-closing commands. Example: `st done <task-id>` has no `--note` flag.
@@ -145,7 +145,7 @@ WAKE_GUIDANCE_PROMPT = """Operational notes:
 - Prefer the smallest proof path that can unblock the task: confirm the specific failure, patch the likely file, then validate.
 - For `read_file`, use repo-relative paths or fully expanded absolute paths rooted under the current project. Do not use shell shortcuts like `~` inside `read_file` paths because they are not expanded there.
 - If a direct path inspection is denied by tool policy, treat that denial as a real boundary and pick an in-bounds source of evidence instead of retrying the same path shape.
-- If `git branch` or snapshot metadata shows a task branch already attached to another worktree, treat that as an inspection-only branch from the current repo. Do not `git checkout` that branch in the current worktree just to inspect it.
+- If `git branch` or snapshot metadata shows a task branch already associated with another active lane, treat that as an inspection-only branch from the current repo. Do not `git checkout` that branch in the current repo just to inspect it.
 - Use `git show`, `git log`, and `git diff` against the branch name from the current repo instead of trying to switch to an already-attached task branch.
 - When completing a task with a note, use `st done <task-id> --message "..."`; do not guess alternate flag names like `--note`.
 - Prefer the known-good commands above over probing multiple invalid `st` variants.
@@ -403,10 +403,10 @@ If <workstream_inventory> is present, treat it as your retirement queue:
 - `state=retired` or `state=superseded` means the lane is no longer authoritative
 
 ## Git Hygiene
-If <cleanup_status> is present, treat it as the canonical branch/worktree hygiene summary:
+If <cleanup_status> is present, treat it as the canonical branch/checkpoint hygiene summary:
 - `orphan` and `prunable` counts are cleanup debt; prefer reducing them before spawning low-confidence new maintenance work in that same project.
-- `dirty` worktrees mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
-- Active worktrees alone are not cleanup debt, but mixed active worktrees plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
+- `dirty` checkpoints mean in-progress edits exist outside a clean merged lane; verify whether they are valid progress, stale residue, or need reconciliation.
+- Active checkpoints alone are not cleanup debt, but mixed active checkpoints plus orphan/prunable counts usually indicate a project that needs tidying before more branch fan-out.
 - When cleanup debt is nonzero and no higher-priority production issue is active, favor reconciliation, closure, or a cleanup task over another speculative scan.
 
 ## Specialist Hygiene
@@ -423,7 +423,7 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - Your heartbeat working directory is persona-sandbox, not every project root.
 - Do not use `bash` or `read_file` to inspect another project's filesystem unless that project is already your active working root and the action is clearly allowed.
 - For task triage, feedback, memory, session inspection, and dispatch bookkeeping, stay inside persona tools (`manage_tasks`, `manage_feedback`, `query_sessions`, memory tools) instead of shelling out to `st`.
-- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/worktree instead of a freeform project session.
+- If you have a concrete SummitFlow task id, prefer `manage_tasks(action="dispatch", task_id=...)` so execution runs in the task lane/checkpoint instead of a freeform project session.
 - Use `dispatch_agent` for freeform specialist help only when there is no concrete task lane yet or when the work is intentionally non-task-scoped.
 - If you need code-health, dirty-tree, or implementation validation on another project before a task exists, prefer `dispatch_agent` to a coding-capable specialist instead of direct shell/file inspection.
 - For code-heavy investigation, prefer coding-capable agents like `reviewer`, `debugger`, or `coder`, not non-coding validation agents.
@@ -436,9 +436,9 @@ Beyond bash/read_file/write_file, you have: {persona_tool_list}
 - If `manage_tasks(action="get_context")` shows `status=running`, do not call `manage_tasks(action="dispatch")` for that same task in the same heartbeat.
 - If the right agent type is already active on the same project/task lane, prefer monitoring, waiting, or dispatching a complementary role instead of sending a duplicate agent of the same type.
 - Only redispatch the same specialist lane when you have concrete evidence the active session is stuck, mis-scoped, failed, or contradicted by newer facts.
-- Treat follow-up branches and worktrees as single workstreams, not shared scratchpads.
+- Treat follow-up branches and checkpoints as single workstreams, not shared scratchpads.
 - Reuse an existing follow-up branch only when the new work is the same task lane or a direct fixup of the same validated diff.
-- If the new work is a different concern, subsystem, or task lane, create a new task/worktree instead of piling onto the old branch.
+- If the new work is a different concern, subsystem, or task lane, create a new task/checkpoint instead of piling onto the old branch.
 - If a branch already mixes multiple concerns, your next action is split/promotion/cleanup, not another implementation dispatch onto that same branch.
 - If a recently completed session already established the same blocker or stale-state finding, do not redispatch the same investigation unless new contradictory evidence appeared.
 - When the same stale condition is already confirmed, create or advance the recovery task instead of re-opening another review loop.

@@ -47,7 +47,7 @@ def _build_verify_then_inspect_action(task_id: str, *, reason: str) -> str:
 
 
 def _classify_workstream_lane(rows: list[dict[str, object]]) -> str:
-    """Classify a grouped task/worktree lane into an actionable lifecycle state."""
+    """Classify a grouped task lane into an actionable lifecycle state."""
     statuses = {str(row["workstream_status"]) for row in rows if row.get("workstream_status")}
     active_rows = [row for row in rows if row.get("status") == "active"]
     completed_rows = [row for row in rows if row.get("status") == "completed"]
@@ -253,7 +253,7 @@ def _build_lane_line(
     if branches:
         parts.append(f"branches={len(branches)}")
     if working_dirs:
-        parts.append(f"worktree={next(iter(sorted(working_dirs)))}")
+        parts.append(f"cwd={next(iter(sorted(working_dirs)))}")
     if agents:
         parts.append(f"agents={','.join(sorted(agents))}")
     parts.append(f"next={next_action}")

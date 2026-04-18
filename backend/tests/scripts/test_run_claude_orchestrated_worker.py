@@ -342,7 +342,7 @@ def test_parse_task_context_extracts_core_fields():
                 "DESCRIPTION:Simplify the file without regressions.",
                 "DONE_WHEN[2]:Tests pass | Nesting reduced",
                 "CONTEXT:modify:backend/cli/lib/autosnapshot.py",
-                "WORKTREE_PATH:/tmp/task-123",
+                "PROJECT_ROOT:/tmp/task-123",
                 "TASK_BRANCH:task-123/main",
             ]
         )
@@ -356,7 +356,7 @@ def test_parse_task_context_extracts_core_fields():
         "task_type": "refactor",
         "title": "Refactor: backend/cli/lib/autosnapshot.py",
         "description": "Simplify the file without regressions.",
-        "worktree_path": "/tmp/task-123",
+        "project_root": "/tmp/task-123",
         "task_branch": "task-123/main",
     }
 
@@ -434,11 +434,11 @@ def test_build_prompt_from_task_context_generates_task_contract():
     assert "`dt pytest backend/tests/cli/test_autosnapshot.py`" in prompt
     assert "Prefer helper extraction, reduced nesting, and removal of duplicate logic" in prompt
     assert "Second pass must reduce file size and remove banner comments." in prompt
-    assert "Stay inside this claimed worktree: `/tmp/task-123`." in prompt
+    assert "Stay inside this claimed checkout: `/tmp/task-123`." in prompt
     assert "If the task appears mis-scoped, stop and report the mismatch" in prompt
 
 
-def test_load_task_contract_claims_pending_task_when_worktree_missing(tmp_path):
+def test_load_task_contract_claims_pending_task_when_checkout_missing(tmp_path):
     module = _load_module()
     calls: list[tuple[str, ...]] = []
     target_file = tmp_path / "backend" / "scripts" / "run_claude_orchestrated_worker.py"
@@ -462,7 +462,7 @@ def test_load_task_contract_claims_pending_task_when_worktree_missing(tmp_path):
                     "DESCRIPTION:Simplify the worker wrapper.",
                     "DONE_WHEN[1]:Tests pass",
                     "CONTEXT:modify:backend/scripts/run_claude_orchestrated_worker.py",
-                    f"WORKTREE_PATH:{tmp_path}",
+                    f"PROJECT_ROOT:{tmp_path}",
                 ]
             ),
         ]
@@ -518,7 +518,7 @@ def test_load_task_contract_errors_when_auto_claim_disabled(tmp_path):
                 claim_if_needed=False,
             )
         except ValueError as exc:
-            assert str(exc) == "task task-123 has no worktree path and auto-claim is disabled"
+            assert str(exc) == "task task-123 has no project root and auto-claim is disabled"
         else:
             raise AssertionError("expected ValueError")
 

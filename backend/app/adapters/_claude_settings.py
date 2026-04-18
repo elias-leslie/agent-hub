@@ -5,7 +5,7 @@ built-in tools (Write, Edit, Bash, Read).  Instead, we use two
 complementary mechanisms that are evaluated **inside** the subprocess:
 
 1. **``settings`` parameter** — a JSON dict with ``permissions.allow``
-   patterns restricting Write/Edit to the worktree path.  This is the
+   patterns restricting Write/Edit to the checkout path.  This is the
    primary enforcement.
 
 2. **``PreToolUse`` hook** — a Python callback registered via the SDK
@@ -29,7 +29,7 @@ from app.services.tools._sensitive_content import scan_runtime_sensitive_content
 
 logger = logging.getLogger(__name__)
 
-# Directories where writes are always allowed regardless of worktree boundary.
+# Directories where writes are always allowed regardless of checkout boundary.
 _WRITE_ALLOWLIST: tuple[Path, ...] = (
     Path("/tmp"),
     Path.home() / ".claude",
@@ -51,7 +51,7 @@ def build_boundary_settings(working_dir: str) -> dict[str, Any]:
             "allow": [
                 # Read: unrestricted
                 "Read(*)",
-                # Write / Edit: scoped to worktree + allowlist
+                # Write / Edit: scoped to checkout + allowlist
                 "Write(./**)",
                 "Edit(./**)",
                 f"Write({resolved}/**)",
@@ -125,7 +125,7 @@ def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict
 
     Returns a hooks dict suitable for ``ClaudeAgentOptions(hooks=...)``.
     The hook blocks Write/Edit/MultiEdit calls that target paths outside
-    the worktree boundary (with an allowlist for /tmp and ~/.claude).
+    the checkout boundary (with an allowlist for /tmp and ~/.claude).
     """
     from claude_agent_sdk.types import HookContext, HookInput, HookJSONOutput, HookMatcher
 
@@ -159,7 +159,7 @@ def build_boundary_hook(working_dir: str, agent_slug: str | None = None) -> dict
             logger.info(
                 "Boundary hook DENY: %s on %s (boundary=%s)", tool_name, path, boundary,
             )
-            return _deny_output(f"Write blocked: {path} is outside worktree boundary {boundary}")
+            return _deny_output(f"Write blocked: {path} is outside checkout boundary {boundary}")
 
         content = _extract_runtime_content(tool_name, tool_input)
         block_reason = await scan_runtime_sensitive_content(

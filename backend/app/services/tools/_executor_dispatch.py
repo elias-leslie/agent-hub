@@ -21,7 +21,6 @@ _CODING_TASK_KEYWORDS = (
 )
 _TASK_ID_RE = re.compile(r"(?im)^\s*Task(?:[- ]ID)?:\s*(task-[a-z0-9]+)\s*$")
 _MODE_RE = re.compile(r"(?im)^\s*Mode:\s*(task|campaign)\s*$")
-_WORKTREE_RE = re.compile(r"(?im)^\s*Worktree:\s*(.+?)\s*$")
 _BRANCH_RE = re.compile(r"(?im)^\s*\+\s+([^\s]+)\s+\[task\]\s*$")
 _SHARED_PLUMBING_MARKERS = (
     "/alembic/", "/migrations/", "/schema", "/schemas/", "/contract",
@@ -172,7 +171,9 @@ async def _run_project_command(project_id: str, command: str) -> str:
 async def _ensure_task_lane_context(
     project_id: str, task_id: str,
 ) -> tuple[str | None, str | None, str | None]:
-    """Return (branch, worktree, error) for a claimed task lane, claiming if needed."""
+    """Return (branch, working_dir, error) for a claimed task lane, claiming if needed."""
+    from app.constants.projects import get_known_roots
+
     details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
     if "No checkpoint found" in details:
         claim = await _run_project_st_command(project_id, f"claim {shlex.quote(task_id)}")
@@ -181,15 +182,14 @@ async def _ensure_task_lane_context(
         details = await _run_project_st_command(project_id, f"checkpoints --details {shlex.quote(task_id)}")
 
     branch_match = _BRANCH_RE.search(details)
-    worktree_match = _WORKTREE_RE.search(details)
     branch = branch_match.group(1).strip() if branch_match else None
-    worktree = worktree_match.group(1).strip() if worktree_match else None
-    if not branch or not worktree:
+    working_dir = get_known_roots().get(project_id)
+    if not branch or not working_dir:
         return (
             None, None,
-            f"Dispatch blocked for {task_id}: unable to resolve claimed branch/worktree from checkpoint details.",
+            f"Dispatch blocked for {task_id}: unable to resolve claimed branch/checkout from checkpoint details.",
         )
-    return branch, worktree, None
+    return branch, working_dir, None
 
 
 async def prepare_specialist_dispatch(
@@ -241,10 +241,10 @@ async def prepare_specialist_dispatch(
     if live_block:
         raise ValueError(live_block)
 
-    branch, worktree, lane_error = await _ensure_task_lane_context(project_id, request.task_id)
+    branch, working_dir, lane_error = await _ensure_task_lane_context(project_id, request.task_id)
     if lane_error:
         raise ValueError(lane_error)
 
     return SpecialistDispatchPlan(
-        event_type="dispatch_task", current_branch=branch, working_dir=worktree,
+        event_type="dispatch_task", current_branch=branch, working_dir=working_dir,
     )

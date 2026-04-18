@@ -21,7 +21,7 @@ This path:
 
 - runs `st context <task-id>`
 - claims the task automatically if you pass `--claim-if-needed`
-- switches to the claimed worktree
+- switches to the claimed checkout
 - builds a write-capable Claude contract from the task description, done-when gates, context target paths, and discovered related tests
 - injects a single read-only analysis subagent before the main edit pass
 

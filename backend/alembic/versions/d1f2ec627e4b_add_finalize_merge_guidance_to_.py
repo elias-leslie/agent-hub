@@ -23,15 +23,15 @@ depends_on: str | Sequence[str] | None = None
 HEARTBEAT_PROMPT = "persona-heartbeat-orchestrator"
 OLD_TEXT = (
     "- If cleanup debt is present and the project has no more urgent live execution problem, "
-    "use `manage_tasks(action=\"cleanup_worktrees\", project_id=\"...\")` to clear safe worktree "
+    "use `manage_tasks(action=\"cleanup_checkpoints\", project_id=\"...\")` to clear safe checkpoint "
     "cleanup cases before dispatching additional low-confidence maintenance work.\n"
     "- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, "
-    "or review-needed worktrees, stop there and reconcile the underlying task/workstream instead "
+    "or review-needed checkpoints, stop there and reconcile the underlying task/workstream instead "
     "of forcing deletion.\n"
 )
 NEW_TEXT = (
     "- If cleanup debt is present and the project has no more urgent live execution problem, "
-    "use `manage_tasks(action=\"cleanup_worktrees\", project_id=\"...\")` to clear safe worktree "
+    "use `manage_tasks(action=\"cleanup_checkpoints\", project_id=\"...\")` to clear safe checkpoint "
     "cleanup cases before dispatching additional low-confidence maintenance work.\n"
     "- If cleanup output shows `NEEDS_MERGE` or `CONFLICT` for a completed, failed, blocked, or "
     "conflicted task residue, use `manage_tasks(action=\"finalize_merge\", task_id=\"...\", "
@@ -39,7 +39,7 @@ NEW_TEXT = (
     "- Do not treat a task as fully closed just because it says `completed` if cleanup still shows "
     "`NEEDS_MERGE` or `CONFLICT`; finalize it or reconcile why it cannot merge.\n"
     "- Safe cleanup means merged/retired residue only. If cleanup output shows dirty, conflicting, "
-    "or review-needed worktrees, stop there and reconcile the underlying task/workstream instead "
+    "or review-needed checkpoints, stop there and reconcile the underlying task/workstream instead "
     "of forcing deletion.\n"
 )
 

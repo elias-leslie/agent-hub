@@ -15,8 +15,8 @@ async def test_cleanup_dispatch_block_reason_ignores_reconciled_review_residue()
     mock_bash = AsyncMock(
         side_effect=[
             (
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=3 dirty=3 orphan=0 prunable=0\n"
-                "agent-hub worktrees:3 dirty:3 orphan:0 prunable:0 "
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=3 dirty=3 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:3 dirty:3 orphan:0 prunable:0 "
                 "tasks:task-ff895807,task-40ec1a3d review:task-ff895807,task-40ec1a3d,task-2caf5811"
             ),
             (
@@ -43,8 +43,8 @@ async def test_cleanup_dispatch_block_reason_blocks_live_review_residue() -> Non
     mock_bash = AsyncMock(
         side_effect=[
             (
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=1 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:1 orphan:0 prunable:0 review:task-live1234"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=1 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:1 orphan:0 prunable:0 review:task-live1234"
             ),
             (
                 "OWNERSHIP[1]\n"

@@ -28,15 +28,6 @@ def upgrade() -> None:
     op.add_column("sessions", sa.Column("summary_branch", sa.String(200), nullable=True))
     op.add_column(
         "sessions",
-        sa.Column(
-            "summary_is_worktree",
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.text("false"),
-        ),
-    )
-    op.add_column(
-        "sessions",
         sa.Column("summary_generated_at", sa.DateTime(timezone=True), nullable=True),
     )
     # Index for continuity injection query: recent summaries by project + branch
@@ -52,7 +43,6 @@ def downgrade() -> None:
     """Remove session summary columns."""
     op.drop_index("ix_sessions_summary_lookup", table_name="sessions")
     op.drop_column("sessions", "summary_generated_at")
-    op.drop_column("sessions", "summary_is_worktree")
     op.drop_column("sessions", "summary_branch")
     op.drop_column("sessions", "summary_files_touched")
     op.drop_column("sessions", "summary_outcome")

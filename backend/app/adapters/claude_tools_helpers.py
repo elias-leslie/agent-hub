@@ -99,7 +99,7 @@ def _build_can_use_tool(
       1. Project permission tier (off/read/write/yolo)
       2. Cross-project path enforcement
 
-    Worktree boundary enforcement is handled separately via settings-based
+    Checkout boundary enforcement is handled separately via settings-based
     enforcement in ``_claude_settings.py`` (evaluated inside the subprocess).
 
     MCP tool names are normalized before passing to hooks since the SDK

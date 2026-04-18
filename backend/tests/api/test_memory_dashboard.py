@@ -192,7 +192,9 @@ async def test_memory_analytics_forwards_lookback_and_sort(
 
     assert response.status_code == 200
     mock_dashboard.assert_awaited_once()
-    kwargs = mock_dashboard.await_args.kwargs
+    await_args = mock_dashboard.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
     assert kwargs["lookback_label"] == "1h"
     assert kwargs["lookback_delta"] == timedelta(hours=1)
     assert kwargs["top_memories_sort_by"] == "lifecycle_score"
@@ -215,7 +217,6 @@ async def test_store_summary_request_context_persists_transcript_provenance() ->
         await _store_summary_request_context(
             "session-123",
             branch="main",
-            is_worktree=True,
             transcript_path="/tmp/codex-session.jsonl",
             git_context="abc1234 feat: persist transcript context",
         )
@@ -224,7 +225,6 @@ async def test_store_summary_request_context_persists_transcript_provenance() ->
         "cache": {"total_cache_read_tokens": 42},
         "summary_context": {
             "branch": "main",
-            "is_worktree": True,
             "transcript_path": "/tmp/codex-session.jsonl",
             "git_context": "abc1234 feat: persist transcript context",
         },

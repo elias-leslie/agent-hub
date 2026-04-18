@@ -33,7 +33,7 @@ async def test_query_project_ownership_includes_claimed_task_with_external_id_on
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence=None,
-        provider_metadata={"cwd": "/repo/.worktrees/task-96cf4007"},
+        provider_metadata={"cwd": "/repo/.checkpoints/task-96cf4007"},
     )
 
     db = AsyncMock()
@@ -47,7 +47,6 @@ async def test_query_project_ownership_includes_claimed_task_with_external_id_on
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=True),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -55,7 +54,6 @@ async def test_query_project_ownership_includes_claimed_task_with_external_id_on
     owner = owners[0]
     assert owner.task_id == "task-96cf4007"
     assert owner.session_id == "sess-claim"
-    assert owner.is_worktree is True
     assert owner.ownership_kind == "unscoped"
     assert owner.scope_confidence == "unknown"
 
@@ -93,7 +91,6 @@ async def test_query_project_ownership_marks_external_id_only_task_lanes_as_unsc
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=False),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -135,14 +132,12 @@ async def test_query_project_ownership_includes_repo_root_only_claude_lane() -> 
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=True),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
     assert len(owners) == 1
     assert owners[0].task_id == "task-b5008fb6"
-    assert owners[0].worktree_path == "/srv/workspaces/lanes/agent-hub/task-b5008fb6"
-    assert owners[0].is_worktree is True
+    assert owners[0].working_dir == "/srv/workspaces/lanes/agent-hub/task-b5008fb6"
 
 
 @pytest.mark.asyncio
@@ -190,7 +185,6 @@ async def test_query_project_ownership_skips_stale_unscoped_repo_root_session() 
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=False),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -241,7 +235,6 @@ async def test_query_project_ownership_keeps_active_unscoped_repo_root_session()
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=False),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -313,7 +306,6 @@ async def test_query_project_ownership_derives_scope_from_exec_command_and_apply
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={session.id: [exec_event, patch_event]}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=False),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -359,7 +351,7 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
         observed_read_paths=["backend/app/services/session_live_activity.py"],
         observed_write_paths=["backend/app/services/ownership_inventory.py"],
         scope_confidence="declared",
-        provider_metadata={"cwd": "/repo/.worktrees/task-a2178df4"},
+        provider_metadata={"cwd": "/repo/.checkpoints/task-a2178df4"},
     )
 
     db = AsyncMock()
@@ -373,7 +365,6 @@ async def test_query_project_ownership_marks_idle_completion_lane_stale_after_30
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=True),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -405,7 +396,7 @@ async def test_query_project_ownership_skips_unscoped_persona_heartbeat_even_wit
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence=None,
-        provider_metadata={"cwd": "/repo/.worktrees/task-269134f1"},
+        provider_metadata={"cwd": "/repo/.checkpoints/task-269134f1"},
     )
 
     db = AsyncMock()
@@ -419,7 +410,6 @@ async def test_query_project_ownership_skips_unscoped_persona_heartbeat_even_wit
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=False),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -444,7 +434,7 @@ async def test_query_project_ownership_upgrades_unknown_scope_confidence_from_de
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence="unknown",
-        provider_metadata={"cwd": "/repo/.worktrees/task-1a2b3c4d"},
+        provider_metadata={"cwd": "/repo/.checkpoints/task-1a2b3c4d"},
     )
 
     db = AsyncMock()
@@ -458,7 +448,6 @@ async def test_query_project_ownership_upgrades_unknown_scope_confidence_from_de
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=True),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 
@@ -485,7 +474,7 @@ async def test_query_project_ownership_keeps_scoped_persona_heartbeat_lane() -> 
         observed_read_paths=[],
         observed_write_paths=[],
         scope_confidence="declared",
-        provider_metadata={"cwd": "/repo/.worktrees/task-269134f1"},
+        provider_metadata={"cwd": "/repo/.checkpoints/task-269134f1"},
     )
 
     db = AsyncMock()
@@ -499,7 +488,6 @@ async def test_query_project_ownership_keeps_scoped_persona_heartbeat_lane() -> 
             "app.services.ownership_inventory._fetch_scope_events",
             new=AsyncMock(return_value={}),
         ),
-        patch("app.services.ownership_inventory._is_worktree", return_value=True),
     ):
         owners = await query_project_ownership(db, "agent-hub")
 

@@ -19,9 +19,9 @@ from ._executor_io_lanes import (
 )
 from ._executor_io_tasks import (
     _handle_cleanup_all_safe,
+    _handle_cleanup_checkpoints,
     _handle_cleanup_salvage_orphan,
     _handle_cleanup_status,
-    _handle_cleanup_worktrees,
     _handle_create,
     _handle_dispatch,
     _handle_finalize_merge,
@@ -98,8 +98,8 @@ async def manage_tasks(
                 else await _handle_dispatch(bash_fn, task_id, project_id))
     if action == "cleanup_status":
         return await _handle_cleanup_status(bash_fn, project_id)
-    if action == "cleanup_worktrees":
-        return await _handle_cleanup_worktrees(bash_fn, project_id)
+    if action == "cleanup_checkpoints":
+        return await _handle_cleanup_checkpoints(bash_fn, project_id)
     if action == "salvage_orphan":
         return await _handle_cleanup_salvage_orphan(bash_fn, task_id, project_id)
     if action == "cleanup_all_safe":
@@ -116,7 +116,7 @@ async def manage_tasks(
         return await _handle_simple_task_action(bash_fn, action, task_id, project_id)
     return (
         f"Error: Unknown action '{action}'. "
-        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_worktrees/salvage_orphan/cleanup_all_safe/"
+        "Use overview/get_context/create/dispatch/cleanup_status/cleanup_checkpoints/salvage_orphan/cleanup_all_safe/"
         "smart_sync/finalize_merge/resolve_conflict/reconcile/retire_lane/done/abandon/cancel."
     )
 

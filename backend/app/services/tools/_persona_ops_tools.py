@@ -23,7 +23,7 @@ MANAGE_TASKS_TOOL = Tool(
                     "create",
                     "dispatch",
                     "cleanup_status",
-                    "cleanup_worktrees",
+                    "cleanup_checkpoints",
                     "salvage_orphan",
                     "cleanup_all_safe",
                     "smart_sync",
@@ -65,7 +65,7 @@ MANAGE_TASKS_TOOL = Tool(
             },
             "project_id": {
                 "type": "string",
-                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status, cleanup_worktrees, salvage_orphan, and smart_sync, not used by cleanup_all_safe, and recommended for finalize_merge",
+                "description": "Project ID for routing (e.g., summitflow, agent-hub); required for cleanup_status, cleanup_checkpoints, salvage_orphan, and smart_sync, not used by cleanup_all_safe, and recommended for finalize_merge",
             },
             "done_when": {
                 "type": "array",

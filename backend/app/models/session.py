@@ -5,7 +5,6 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     DateTime,
     Enum,
     Float,
@@ -140,9 +139,6 @@ class Session(Base):
     )  # completed | failed | abandoned | partial
     summary_files_touched: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     summary_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    summary_is_worktree: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
     summary_git_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -275,9 +271,6 @@ class SessionSummarySegment(Base):
     summary_outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     summary_git_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    summary_is_worktree: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="false"
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

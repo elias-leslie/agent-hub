@@ -71,7 +71,7 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
             name="Recent Progress Patience",
             description="Reviewer should tell the persona to continue when a quiet active session still has recent progress.",
             heartbeat_output="HEARTBEAT_OK — No follow-up required.",
-            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0",
+            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 checkpoints=0 dirty=0 orphan=0 prunable=0",
             workstream_inventory=(
                 "- task-abc | state=active_running_task | recent_progress=yes | "
                 "health=active | quiet_for_seconds=180 | next=inspect_existing_lane"
@@ -84,7 +84,7 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
             name="Quiet Healthy True Complete",
             description="Reviewer should not force a follow-up when the remaining session state is quiet but healthy.",
             heartbeat_output="HEARTBEAT_OK — Monitoring confirms the remaining lane is healthy and needs no further action.",
-            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0",
+            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 checkpoints=0 dirty=0 orphan=0 prunable=0",
             workstream_inventory=(
                 "- task-quiet | state=waiting_external | recent_progress=no | "
                 "health=healthy | quiet_for_seconds=960 | next=await_external_signal"
@@ -97,7 +97,7 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
             name="True Complete Clean",
             description="Reviewer should accept a HEARTBEAT_OK when no residue remains.",
             heartbeat_output="HEARTBEAT_OK — Finished cleanup and left all projects in known-good state.",
-            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0",
+            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 checkpoints=0 dirty=0 orphan=0 prunable=0",
             workstream_inventory="",
             expected_decision="complete",
             expected_focus_terms=("clean",),
@@ -107,7 +107,7 @@ def get_completion_review_benchmark_cases() -> list[CompletionReviewBenchmarkCas
             name="Completed Ready For Closure",
             description="Reviewer should continue when closeout residue remains.",
             heartbeat_output="HEARTBEAT_OK — Everything has been wrapped up.",
-            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 worktrees=0 dirty=0 orphan=0 prunable=0",
+            cleanup_status="CLEANUP[current]:repos=1 needs_cleanup=0 checkpoints=0 dirty=0 orphan=0 prunable=0",
             workstream_inventory='- task-def | state=completed_ready_for_closure | next=manage_tasks(action="done")',
             expected_decision="continue",
             expected_focus_terms=("closure", "done"),

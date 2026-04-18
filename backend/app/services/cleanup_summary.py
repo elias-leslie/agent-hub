@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 
 _REPO_LINE_RE = re.compile(
-    r"^(?P<project>[a-z0-9-]+) worktrees:(?P<worktrees>\d+) dirty:(?P<dirty>\d+) "
+    r"^(?P<project>[a-z0-9-]+) checkpoints:(?P<checkpoints>\d+) dirty:(?P<dirty>\d+) "
     r"orphan:(?P<orphan>\d+) prunable:(?P<prunable>\d+)(?P<rest>.*)$"
 )
 _TOKEN_RE = re.compile(

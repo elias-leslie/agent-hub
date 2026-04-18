@@ -254,8 +254,8 @@ _FOLLOWTHROUGH_CASES: list[PersonaBenchmarkCase] = [
             "TASK: task-3333\n"
             "status=completed\n"
             "quality_gates=passed\n"
-            "cleanup_status=CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-            "cleanup_note=task-3333 review worktree still exists and must be cleaned first.\n"
+            "cleanup_status=CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+            "cleanup_note=task-3333 review checkpoint still exists and must be cleaned first.\n"
             "question=Should the persona close out the task now?\n"
         ),
         action="block",
@@ -367,8 +367,8 @@ _TOOLING_CASES: list[PersonaBenchmarkCase] = [
                 "done_when=UI merged and checks passed.\n"
             ),
             "cleanup.txt": (
-                "CLEANUP[current]:repos=1 needs_cleanup=1 worktrees=1 dirty=0 orphan=0 prunable=0\n"
-                "agent-hub worktrees:1 dirty:0 orphan:0 prunable:0 tasks:task-6666 review:task-6666\n"
+                "CLEANUP[current]:repos=1 needs_cleanup=1 checkpoints=1 dirty=0 orphan=0 prunable=0\n"
+                "agent-hub checkpoints:1 dirty:0 orphan:0 prunable:0 tasks:task-6666 review:task-6666\n"
             ),
             "sessions.txt": (
                 "active_persona_sessions=0\n"
@@ -627,7 +627,7 @@ _LIVE_HEARTBEAT_ACCEPTANCE_CASES: list[PersonaBenchmarkCase] = [
             "GLOBAL_READY_TASKS=0\n"
             "ownership_truth=OWN a-term lane=lane-a-term-1 status=owner_lane branch=main\n"
             "raw_active_sessions=0 for project a-term\n"
-            "lane_truth=worktree exists, dirty=no, session_missing=yes\n"
+            "lane_truth=checkpoint exists, dirty=no, session_missing=yes\n"
             "cleanup_status=no_actionable_cleanup\n"
             "question=Should the persona treat this as clean idle?\n"
         ),

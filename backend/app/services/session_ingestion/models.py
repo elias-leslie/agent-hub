@@ -132,7 +132,6 @@ class FinalizeSessionRequest(BaseModel):
     summary_tags: list[str] | None = None
     git_context: str | None = None
     branch: str | None = None
-    is_worktree: bool = False
     transcript_path: str | None = None
 
 

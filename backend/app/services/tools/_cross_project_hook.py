@@ -18,7 +18,6 @@ import shlex
 from pathlib import Path
 
 from app.services.tools.base import PreToolUseHook, ToolCall, ToolDecision
-from app.services.tools.project_env import detect_main_repo
 
 logger = logging.getLogger(__name__)
 
@@ -63,25 +62,10 @@ def _find_target_project(resolved_path: str, known_roots: dict[str, str]) -> str
     return None
 
 
-def _resolve_worktree_project(path: Path, known_roots: dict[str, str]) -> str | None:
-    """Map a git worktree path back to its owning project when possible."""
-    for candidate in (path, *path.parents):
-        try:
-            main_repo = detect_main_repo(candidate)
-        except OSError:
-            continue
-        if main_repo is None:
-            continue
-        target_project = _find_target_project(str(main_repo.resolve()), known_roots)
-        if target_project:
-            return target_project
-    return None
-
-
 def _infer_target_project(path: Path, known_roots: dict[str, str]) -> str | None:
-    """Infer the owning project for a resolved path, including git worktrees."""
+    """Infer the owning project for a resolved path."""
     resolved_path = str(path.resolve(strict=False))
-    return _resolve_worktree_project(path, known_roots) or _find_target_project(resolved_path, known_roots)
+    return _find_target_project(resolved_path, known_roots)
 
 
 def _extract_absolute_paths(command: str) -> list[Path]:

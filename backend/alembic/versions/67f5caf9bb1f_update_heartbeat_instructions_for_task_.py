@@ -42,7 +42,7 @@ Every heartbeat is a work session, not a status check.
 | Persona-only (journal, memory, user_context) | SELF | Do it yourself |
 
 ### Code Lane — Task System
-Code-producing work goes through the task system for worktree isolation, agent routing, \
+Code-producing work goes through the task system for checkpoint coordination, agent routing, \
 and tracking:
 1. `manage_tasks(action="create", title="...", objective="...", subtasks=[...], project_id="...")`
 2. `manage_tasks(action="dispatch", task_id="...")`
@@ -60,7 +60,7 @@ Each subtask gets a `subtask_type` that routes to the right specialist agent aut
 - `exploration` → explorer
 
 You do NOT manually chain agents. The task system handles subtask orchestration, \
-worktree isolation, and agent routing. Create the task with typed subtasks and dispatch it.
+checkpoint coordination, and agent routing. Create the task with typed subtasks and dispatch it.
 
 Example — multi-phase feature:
 ```json
@@ -76,7 +76,7 @@ manage_tasks(action="create", title="Add leaderboard to monkey-fight", project_i
 ```
 
 ### Non-Code Lane — dispatch_agent
-Fire-and-forget for ephemeral read-only operations. No worktree, no tracking needed:
+Fire-and-forget for ephemeral read-only operations. No checkpoint, no tracking needed:
 - site-checker: health checks, visual verification
 - explorer: codebase investigation, context gathering
 - reviewer/critic/qa: code review of existing work
@@ -101,7 +101,7 @@ Synchronous advice, no tools. For strategic decisions, architecture questions, c
 
 Check `<git_state>` in your prompt for:
 - **Uncommitted changes**: If commits are by "SummitFlow Dev", it's agent work — check which task produced it.
-- **Task branches**: `task-*` branches indicate active worktrees. Check task status before creating new work.
+- **Task branches**: `task-*` branches indicate active checkpoints. Check task status before creating new work.
 - **Recent commits**: Understand what landed recently to avoid conflicts and duplicate work.
 
 If you see uncommitted changes on a project, investigate before creating new tasks there.

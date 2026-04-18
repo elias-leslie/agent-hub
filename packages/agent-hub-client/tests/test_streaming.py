@@ -140,7 +140,7 @@ class TestStreamSSE:
                 project_id="test-project",
                 execute_tools=True,
                 max_turns=2,
-                working_dir="/tmp/worktree",
+                working_dir="/tmp/checkout",
                 skip_cache=True,
             ):
                 chunks.append(chunk)
@@ -148,7 +148,7 @@ class TestStreamSSE:
         assert captured_payload["stream"] is True
         assert captured_payload["execute_tools"] is True
         assert captured_payload["max_turns"] == 2
-        assert captured_payload["working_dir"] == "/tmp/worktree"
+        assert captured_payload["working_dir"] == "/tmp/checkout"
         assert captured_headers["x-skip-cache"] == "true"
         assert [chunk.type for chunk in chunks] == ["thinking", "tool_use", "tool_result", "done"]
         assert chunks[1].tool_call is not None

@@ -112,7 +112,6 @@ class TestSummarySegmentE2E:
             result = await generate_session_summary(
                 "test-session-1",
                 branch="main",
-                is_worktree=False,
             )
 
         # Verify the result
@@ -221,7 +220,6 @@ class TestSummarySegmentE2E:
         seg1.summary_oneliner = "Morning: auth scaffolding"
         seg1.summary_outcome = "completed"
         seg1.summary_branch = "main"
-        seg1.summary_is_worktree = False
         seg1.summary_git_digest = "feat: auth scaffold"
         seg1.created_at = now - timedelta(hours=5)
 
@@ -231,7 +229,6 @@ class TestSummarySegmentE2E:
         seg2.summary_oneliner = "Afternoon: auth tests"
         seg2.summary_outcome = "completed"
         seg2.summary_branch = "main"
-        seg2.summary_is_worktree = False
         seg2.summary_git_digest = "test: auth tests"
         seg2.created_at = now - timedelta(hours=1)
 
@@ -286,7 +283,6 @@ class TestSummarySegmentE2E:
         legacy_row.summary_oneliner = "Pre-migration refactoring work"
         legacy_row.summary_outcome = "completed"
         legacy_row.summary_branch = "main"
-        legacy_row.summary_is_worktree = False
         legacy_row.summary_git_digest = None
         legacy_row.created_at = now - timedelta(hours=3)
 

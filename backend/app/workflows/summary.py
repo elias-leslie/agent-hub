@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class SummaryInput(BaseModel):
     session_id: str
     branch: str | None = None
-    is_worktree: bool = False
     transcript_path: str | None = None
     git_context: str | None = None
 
@@ -64,7 +63,6 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
         transcript_path=input.transcript_path,
         git_context=input.git_context,
         branch=input.branch,
-        is_worktree=input.is_worktree,
     )
     ctx.log(
         f"Session analysis for {input.session_id}: "
@@ -92,7 +90,6 @@ async def _generate_summary(
         result = await generate_fn(
             input.session_id,
             branch=input.branch,
-            is_worktree=input.is_worktree,
             transcript_path=input.transcript_path,
             git_context=input.git_context,
             memory_contents=memory_contents,

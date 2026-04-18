@@ -1,4 +1,4 @@
-"""Ownership inventory for live project lanes and worktrees."""
+"""Ownership inventory for live project workstreams."""
 
 from __future__ import annotations
 
@@ -23,14 +23,11 @@ from app.services.session_scope import (
     merge_scope_paths,
     normalize_scope_paths,
 )
-from app.services.tools.project_env import is_worktree_path
 
 _LOOKBACK_HOURS = 24
 _STALE_ACTIVE_MINUTES = 30
 _GHOST_SESSION_MINUTES = 15
 _ACTIVE_SPECIALIST_LOOKBACK_HOURS = 6
-
-_is_worktree = is_worktree_path
 
 
 @dataclass(frozen=True)
@@ -90,7 +87,7 @@ def _should_skip_owner_session(
     session: Session,
     *,
     task_id: str | None,
-    is_worktree: bool,
+    has_working_dir: bool,
     declared_scope_paths: list[str],
     observed_write_paths: list[str],
     observed_read_paths: list[str],
@@ -98,7 +95,7 @@ def _should_skip_owner_session(
     if session.agent_slug != PERSONA_SLUG:
         return (
             not task_id
-            and not is_worktree
+            and not has_working_dir
             and bool(session.current_branch)
             and not (declared_scope_paths or observed_write_paths or observed_read_paths)
             and not is_session_actionably_active(session, has_owner_lane=True)
@@ -108,14 +105,14 @@ def _should_skip_owner_session(
     return not (declared_scope_paths or observed_write_paths or observed_read_paths)
 
 
-def _extract_scope_paths(events: list[SessionEvent], worktree_path: str | None) -> tuple[list[str], list[str]]:
+def _extract_scope_paths(events: list[SessionEvent], working_dir: str | None) -> tuple[list[str], list[str]]:
     observed_reads: list[str] = []
     observed_writes: list[str] = []
     for event in events:
         tool_reads, tool_writes = extract_tool_scope_paths(
             event.tool_name,
             event.tool_input if isinstance(event.tool_input, dict) else None,
-            base_path=worktree_path,
+            base_path=working_dir,
         )
         observed_reads = merge_scope_paths(observed_reads, tool_reads)
         observed_writes = merge_scope_paths(observed_writes, tool_writes)
@@ -215,22 +212,22 @@ async def _fetch_active_specialists(db: AsyncSession, project_id: str) -> list[A
     return specialists
 
 
-def _worktree_path_from_metadata(metadata: dict) -> str | None:
+def _working_dir_from_metadata(metadata: dict) -> str | None:
     paths = metadata_paths(metadata)
     return paths[0] if paths else None
 
 
-def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_path: str | None) -> tuple[
+def _build_scope_paths(session: Session, events: list[SessionEvent], working_dir: str | None) -> tuple[
     list[str], list[str], list[str], list[str]
 ]:
-    write_event_paths, read_event_paths = _extract_scope_paths(events, worktree_path)
-    declared = normalize_scope_paths(getattr(session, "declared_scope_paths", None), worktree_path)
+    write_event_paths, read_event_paths = _extract_scope_paths(events, working_dir)
+    declared = normalize_scope_paths(getattr(session, "declared_scope_paths", None), working_dir)
     observed_write = merge_scope_paths(
-        normalize_scope_paths(getattr(session, "observed_write_paths", None), worktree_path),
+        normalize_scope_paths(getattr(session, "observed_write_paths", None), working_dir),
         write_event_paths,
     )
     observed_read = merge_scope_paths(
-        normalize_scope_paths(getattr(session, "observed_read_paths", None), worktree_path),
+        normalize_scope_paths(getattr(session, "observed_read_paths", None), working_dir),
         read_event_paths,
     )
     scope = prioritize_scope_paths(declared, observed_write, observed_read)
@@ -240,19 +237,19 @@ def _build_scope_paths(session: Session, events: list[SessionEvent], worktree_pa
 def _build_owner(
     session: Session,
     events: list[SessionEvent],
-    worktree_path: str | None,
+    working_dir: str | None,
     lane_paths: list[str],
 ) -> OwnershipOwner | None:
     """Build an OwnershipOwner for a session, or return None if it should be skipped."""
-    is_worktree = _is_worktree(worktree_path)
-    declared, observed_write, observed_read, scope = _build_scope_paths(session, events, worktree_path)
+    has_working_dir = isinstance(working_dir, str) and bool(working_dir)
+    declared, observed_write, observed_read, scope = _build_scope_paths(session, events, working_dir)
     task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
-    if not (task_id or session.current_branch or is_worktree):
+    if not (task_id or session.current_branch or has_working_dir):
         return None
     if _should_skip_owner_session(
         session,
         task_id=task_id,
-        is_worktree=is_worktree,
+        has_working_dir=has_working_dir,
         declared_scope_paths=declared,
         observed_write_paths=observed_write,
         observed_read_paths=observed_read,
@@ -265,8 +262,7 @@ def _build_owner(
         session_id=session.id,
         agent_slug=session.agent_slug,
         branch=session.current_branch,
-        worktree_path=worktree_path,
-        is_worktree=is_worktree,
+        working_dir=working_dir,
         session_status=session.status,
         workstream_status=session.workstream_status,
         workstream_note=session.workstream_note,
@@ -298,7 +294,7 @@ async def query_project_ownership(db: AsyncSession, project_id: str) -> list[Own
         owner = _build_owner(
             session,
             scope_events.get(session.id, []),
-            _worktree_path_from_metadata(metadata),
+            _working_dir_from_metadata(metadata),
             metadata_paths(metadata),
         )
         if owner is not None:

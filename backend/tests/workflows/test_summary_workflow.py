@@ -38,7 +38,6 @@ async def test_run_sync_summarize_passes_transcript_path_to_background_analysis(
             session_id="session-123",
             project_id="agent-hub",
             branch="main",
-            is_worktree=False,
             transcript_path="/tmp/codex-session.jsonl",
             git_context="abc1234 feat: test",
         )
@@ -91,7 +90,6 @@ async def test_session_summary_task_runs_transcript_aware_analysis() -> None:
             SummaryInput(
                 session_id="session-123",
                 branch="main",
-                is_worktree=True,
                 transcript_path="/tmp/codex-session.jsonl",
                 git_context="abc1234 feat: wire transcript analysis",
             ),
@@ -102,7 +100,6 @@ async def test_session_summary_task_runs_transcript_aware_analysis() -> None:
         transcript_path="/tmp/codex-session.jsonl",
         git_context="abc1234 feat: wire transcript analysis",
         branch="main",
-        is_worktree=True,
     )
     assert result["citations_credited"] == 3
     assert result["feedback_created"] == 2

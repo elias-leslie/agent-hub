@@ -422,7 +422,6 @@ class TestAnalyzeSession:
                 "transcript_path": str(transcript),
                 "git_context": "abc1234 feat: replay",
                 "branch": "main",
-                "is_worktree": True,
             }
         }
         mock_session = AsyncMock()

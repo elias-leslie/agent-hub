@@ -51,7 +51,7 @@ class TestSessionIngestionAPI:
         session.provider_metadata = {
             "cwd": "/repo",
             "repo_root": "/repo",
-            "worktree_path": "/repo/.worktrees/task-123",
+            "working_dir": "/repo/.checkpoints/task-123",
             "host": "devbox",
             "tmux_session_name": "codex-agent-hub",
             "tmux_pane_id": "%11",
@@ -90,7 +90,7 @@ class TestSessionIngestionAPI:
                     "scope_confidence": "declared",
                     "provider_metadata": {
                         "repo_root": "/repo",
-                        "worktree_path": "/repo/.worktrees/task-123",
+                        "working_dir": "/repo/.checkpoints/task-123",
                         "host": "devbox",
                         "tmux_session_name": "codex-agent-hub",
                         "tmux_pane_id": "%11",
@@ -121,9 +121,11 @@ class TestSessionIngestionAPI:
         assert data["session"]["observed_write_paths"] == ["backend/app/services/session_scope.py"]
         assert data["session"]["scope_confidence"] == "declared"
         assert data["session"]["repo_root"] == "/repo"
-        assert data["session"]["worktree_path"] == "/repo/.worktrees/task-123"
+        assert data["session"]["working_dir"] == "/repo/.checkpoints/task-123"
         assert data["session"]["tmux_session_name"] == "codex-agent-hub"
-        request_payload = mock_upsert.await_args.args[1]
+        await_args = mock_upsert.await_args
+        assert await_args is not None
+        request_payload = await_args.args[1]
         assert request_payload.client_id == "client-123"
         assert request_payload.request_source == "codex-transcript-sync"
         assert request_payload.provider_metadata["source_client"] == "summitflow/codex-session-sync"
@@ -193,7 +195,7 @@ class TestSessionIngestionAPI:
         session.provider_metadata = {
             "cwd": "/repo",
             "repo_root": "/repo",
-            "worktree_path": "/repo/.worktrees/task-123",
+            "working_dir": "/repo/.checkpoints/task-123",
             "host": "devbox",
             "tmux_session_name": "claude-agent-hub",
             "tmux_pane_id": "%12",
@@ -235,7 +237,7 @@ class TestSessionIngestionAPI:
                     "active_write_paths": ["backend/app/services/ownership_inventory.py"],
                     "provider_metadata": {
                         "repo_root": "/repo",
-                        "worktree_path": "/repo/.worktrees/task-123",
+                        "working_dir": "/repo/.checkpoints/task-123",
                         "host": "devbox",
                         "tmux_session_name": "claude-agent-hub",
                         "tmux_pane_id": "%12",
@@ -266,7 +268,9 @@ class TestSessionIngestionAPI:
         assert data["session"]["observed_write_paths"] == [
             "backend/app/services/ownership_inventory.py"
         ]
-        heartbeat_payload = mock_heartbeat.await_args.args[2]
+        await_args = mock_heartbeat.await_args
+        assert await_args is not None
+        heartbeat_payload = await_args.args[2]
         assert heartbeat_payload.client_id == "client-234"
         assert heartbeat_payload.request_source == "claude-tool-loop"
         assert heartbeat_payload.provider_metadata["source_client"] == "agent-hub/claude-tools"

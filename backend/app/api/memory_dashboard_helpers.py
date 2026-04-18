@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 class SummarizeRequest(BaseModel):
     project_id: str | None = Field(default=None, max_length=100, description="Project ID (fallback if session lacks it)")
     branch: str | None = Field(default=None, max_length=200, description="Git branch name for continuity scoping")
-    is_worktree: bool = Field(default=False, description="Whether session was in a git worktree")
     transcript_path: str | None = Field(
         default=None,
         max_length=500,
@@ -35,7 +34,6 @@ async def dispatch_to_hatchet(
     background_tasks: set[Any],
     session_id: str,
     branch: str | None,
-    is_worktree: bool,
     transcript_path: str | None,
     git_context: str | None,
 ) -> bool:
@@ -47,7 +45,6 @@ async def dispatch_to_hatchet(
             input=SummaryInput(
                 session_id=session_id,
                 branch=branch,
-                is_worktree=is_worktree,
                 transcript_path=transcript_path,
                 git_context=git_context,
             ),
@@ -81,7 +78,6 @@ async def run_sync_summarize(
     session_id: str,
     project_id: str | None,
     branch: str | None,
-    is_worktree: bool,
     transcript_path: str | None,
     git_context: str | None,
 ) -> Any:
@@ -96,7 +92,6 @@ async def run_sync_summarize(
             session_id,
             project_id=project_id,
             branch=branch,
-            is_worktree=is_worktree,
             transcript_path=transcript_path,
             git_context=git_context,
         )
