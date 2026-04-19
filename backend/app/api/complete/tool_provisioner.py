@@ -23,8 +23,15 @@ def _resolve_tools(
     tools: list[dict[str, Any]] | None,
     agent_slug: str | None,
 ) -> list[dict[str, Any]]:
-    """Resolve the default core tool surface when none are provided."""
-    del tools, agent_slug
+    """Resolve agent-specific tools when available, else fall back to core tools."""
+    del tools
+
+    if agent_slug:
+        from app.services.tools.tool_definitions import get_agent_tool_specs
+
+        agent_tool_specs = get_agent_tool_specs(agent_slug)
+        if agent_tool_specs:
+            return build_tool_catalog(agent_tool_specs)
 
     from app.services.tools.direct_executor import get_standard_tools
 

@@ -1,8 +1,8 @@
 """Tests for agent routing service."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -179,6 +179,39 @@ class TestInjectAgentMandates:
         expected = "<agent_persona>\nSimple prompt.\n</agent_persona>"
         assert result.system_content == expected
         assert result.injected_uuids == []
+
+    @pytest.mark.asyncio
+    async def test_project_permissions_block_lists_visible_persona_tools(
+        self,
+        mock_agent: AgentDTO,
+    ) -> None:
+        perm = SimpleNamespace(project_id="agent-hub", permission_tier="read")
+
+        with (
+            patch(
+                "app.services.agent_routing_utils._fetch_permissions",
+                new=AsyncMock(return_value=(perm, [perm])),
+            ),
+            patch(
+                "app.services.project_permission_service.get_visible_tools_for_project",
+                new=AsyncMock(
+                    return_value=frozenset(
+                        {
+                            "read_file",
+                            "inspect_session",
+                            "query_sessions",
+                            "review_improvement_signals",
+                        }
+                    )
+                ),
+            ),
+        ):
+            result = await inject_agent_mandates(mock_agent, project_id="agent-hub")
+
+        assert (
+            "Allowed tools: inspect_session, query_sessions, read_file, review_improvement_signals"
+            in result.system_content
+        )
 
     @pytest.mark.asyncio
     async def test_persona_runtime_uses_shared_runtime_prompt_stack(self) -> None:
