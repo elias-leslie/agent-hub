@@ -121,15 +121,13 @@ def _build_cross_project_lines(all_perms, project_id: str) -> list[str]:
 async def _build_project_permissions_block(project_id: str, db: AsyncSession | None) -> str | None:
     try:
         from app.services.project_permission_service import get_visible_tools_for_project
-        from app.services.tools.direct_executor import get_standard_tools
 
         perm, all_perms = await _fetch_permissions(project_id, db)
         if perm is None:
             return None
         tier = perm.permission_tier
-        core_tool_names = {tool.name for tool in get_standard_tools()}
         visible_tool_names = await get_visible_tools_for_project(project_id, db)
-        tools_list = ", ".join(sorted(core_tool_names & set(visible_tool_names))) or "none"
+        tools_list = ", ".join(sorted(visible_tool_names)) or "none"
         lines = [
             "<project_permissions>",
             f"Current project: {project_id}",
