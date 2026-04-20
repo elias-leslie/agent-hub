@@ -12,6 +12,12 @@ router = APIRouter()
 _subagent_manager: SubagentManager | None = None
 
 
+SUBAGENT_ENDPOINT_NOTE = (
+    "Low-level single-agent primitive. For explicit clarify -> plan -> execute -> "
+    "review -> qa flows, use /api/orchestration/workflow."
+)
+
+
 def get_subagent_manager() -> SubagentManager:
     """Get or create subagent manager singleton."""
     global _subagent_manager
@@ -20,12 +26,17 @@ def get_subagent_manager() -> SubagentManager:
     return _subagent_manager
 
 
-@router.post("/subagent", response_model=SubagentResponse)
+@router.post(
+    "/subagent",
+    response_model=SubagentResponse,
+    summary="Spawn one low-level subagent",
+    description=SUBAGENT_ENDPOINT_NOTE,
+)
 async def spawn_subagent(request: SubagentRequest) -> SubagentResponse:
     """
     Spawn a subagent to handle a task.
 
-    Creates an isolated context for the subagent with optional system prompt.
+    Creates isolated context for subagent with optional system prompt.
     """
     manager = get_subagent_manager()
     trace_id = get_current_trace_id()
