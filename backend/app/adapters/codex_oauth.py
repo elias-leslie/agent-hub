@@ -9,9 +9,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack, suppress
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -53,6 +55,49 @@ _EMPTY_FINAL_RESPONSE_MSG = (
 )
 
 ToolHandler = Callable[[str, dict[str, Any]], Awaitable[str]]
+_DEFAULT_CODEX_AUTH_PATH = Path("~/.codex/auth.json").expanduser()
+
+
+def load_local_codex_auth_credentials(path: str | Path | None = None) -> CodexCredentials | None:
+    """Return Codex credentials from the local Codex auth file when available."""
+    raw_path = path or os.environ.get("AGENT_HUB_CODEX_AUTH_FILE")
+    auth_path = Path(raw_path).expanduser() if raw_path else _DEFAULT_CODEX_AUTH_PATH
+
+    try:
+        payload = json.loads(auth_path.read_text())
+    except FileNotFoundError:
+        return None
+    except Exception:
+        logger.warning("Failed to read local Codex auth file", exc_info=True)
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    tokens = payload.get("tokens")
+    if not isinstance(tokens, dict):
+        return None
+
+    raw_access_token = tokens.get("access_token")
+    if not isinstance(raw_access_token, str) or not raw_access_token:
+        return None
+
+    access_token, expires_at = parse_stored_oauth_token(raw_access_token)
+    if not access_token:
+        return None
+
+    try:
+        account_id = extract_account_id(access_token)
+    except ValueError:
+        logger.warning("Failed to parse local Codex access token", exc_info=True)
+        return None
+
+    refresh_token = tokens.get("refresh_token")
+    return CodexCredentials(
+        access_token=access_token,
+        refresh_token=refresh_token if isinstance(refresh_token, str) and refresh_token else None,
+        account_id=account_id,
+        expires_at=expires_at,
+    )
 
 
 def _cancelled_done_event(total_content: str) -> StreamEvent:
@@ -332,6 +377,15 @@ class CodexOAuthAdapter(ProviderAdapter):
                     if reloaded_pair != current_pair or not reloaded.is_expired:
                         logger.info("Recovered Codex credentials from DB after refresh failure")
                         return reloaded
+                local_creds = load_local_codex_auth_credentials()
+                if local_creds is not None:
+                    current_pair = (creds.access_token, creds.refresh_token)
+                    local_pair = (local_creds.access_token, local_creds.refresh_token)
+                    if local_pair != current_pair or not local_creds.is_expired:
+                        logger.info("Recovered Codex credentials from local auth file after refresh failure")
+                        await self._persist_credentials(local_creds)
+                        self._credentials = local_creds
+                        return local_creds
                 raise AuthenticationError(provider="codex") from exc
 
     async def complete(
