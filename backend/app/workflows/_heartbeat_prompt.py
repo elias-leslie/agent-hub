@@ -32,6 +32,17 @@ from app.workflows._heartbeat_recall import (
 
 logger = logging.getLogger(__name__)
 
+
+def _append_unique_sections(prompt: str, *sections: str) -> str:
+    seen: set[str] = set()
+    for section in sections:
+        normalized = " ".join(section.split())
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        prompt += section
+    return prompt
+
 _DEFAULT_TIMEZONE = "America/New_York"
 _IANA_TZ_PATTERN = re.compile(r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b")
 _LEGACY_FETCH_SEAMS = (_fetch_task_overview,)
@@ -78,7 +89,6 @@ async def _get_persona_timezone() -> str:
     if profile_timezone and _validate_iana_timezone(profile_timezone):
         return profile_timezone
 
-    # 1. Check explicit timezone in limits
     if persona.limits and isinstance(persona.limits, dict):
         tz_value = persona.limits.get("timezone")
         if tz_value and isinstance(tz_value, str):
@@ -86,7 +96,6 @@ async def _get_persona_timezone() -> str:
                 return tz_value
             logger.warning("Invalid timezone in persona.limits: %s", tz_value)
 
-    # 2. Best-effort extraction from user_context (IANA format e.g. America/Chicago)
     user_context = await get_persona_user_context_document(db)
     if user_context:
         match = _IANA_TZ_PATTERN.search(user_context)
@@ -137,7 +146,7 @@ async def _append_dynamic_sections(
     target_project_id: str | None = None,
     provider: str | None = None,
 ) -> str:
-    """Append optional dynamic data sections to the heartbeat prompt."""
+    """Append optional dynamic data sections to heartbeat prompt."""
     heartbeat_state, agent_hub_state = await asyncio.gather(
         _collect_summitflow_heartbeat_state(target_project_id),
         _collect_agent_hub_heartbeat_state(target_project_id),
@@ -195,7 +204,8 @@ async def _append_dynamic_sections(
         _get_feedback_summary_section(),
     )
     recall_sections = await recall_sections_task
-    for section in (
+    return _append_unique_sections(
+        prompt,
         active_work,
         protection_status,
         cleanup_status,
@@ -208,10 +218,7 @@ async def _append_dynamic_sections(
         recall_sections.improvement_signal_digest,
         recall_sections.recent_heartbeat_digest,
         recall_sections.recent_idle_history,
-    ):
-        if section:
-            prompt += section
-    return prompt
+    )
 
 
 async def build_heartbeat_prompt(
@@ -220,7 +227,7 @@ async def build_heartbeat_prompt(
     target_project_id: str | None = None,
     provider: str | None = None,
 ) -> str:
-    """Build the heartbeat prompt with dynamic model review and project access."""
+    """Build heartbeat task prompt with dynamic model review and task state."""
     prompt = await _build_core_prompt(
         model_review_due,
         model_review_label,

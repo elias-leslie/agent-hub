@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_INTERVAL_MINUTES = 60
 
-# Re-export constants and helpers that tests or callers reference by this module path.
 __all__ = [
     "HEARTBEAT_MEMORY_GROUP",
     "HEARTBEAT_PROJECT",
@@ -93,7 +92,7 @@ class HeartbeatResult(BaseModel):
 
 
 def create_heartbeat_session_id() -> str:
-    """Return a stable UUID string for one heartbeat run."""
+    """Return stable UUID string for one heartbeat run."""
     return str(uuid4())
 
 

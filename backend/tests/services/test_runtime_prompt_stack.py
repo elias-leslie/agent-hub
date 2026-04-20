@@ -12,7 +12,11 @@ from app.services.owned_prompt_service import (
     GLOBAL_GUARDRAIL_PROMPT_TYPE,
     GLOBAL_MANDATE_PROMPT_TYPE,
 )
-from app.services.runtime_prompt_stack import collect_runtime_prompt_sections
+from app.services.runtime_prompt_stack import (
+    RuntimePromptSection,
+    collect_runtime_prompt_sections,
+    dedupe_runtime_prompt_sections,
+)
 
 
 def _agent(*, slug: str = "note-titler", system_prompt: str = "Title notes tersely.") -> AgentDTO:
@@ -162,3 +166,46 @@ async def test_collect_runtime_prompt_sections_filters_typed_global_prompts() ->
     assert "safety-directive" not in source_ids
     assert "platform-context" in source_ids
     assert "note-titler" in source_ids
+
+
+def test_dedupe_runtime_prompt_sections_drops_exact_duplicate_content() -> None:
+    original = RuntimePromptSection(
+        label="Platform Context",
+        source_kind="global_prompt",
+        source_id="platform-context",
+        content="same block",
+    )
+    duplicate = RuntimePromptSection(
+        label="Persona Context",
+        source_kind="persona_context",
+        source_id="persona",
+        content="same block",
+    )
+
+    kept, removed = dedupe_runtime_prompt_sections([original, duplicate])
+
+    assert kept == [original]
+    assert len(removed) == 1
+    assert removed[0].duplicate_of == "global_prompt:platform-context"
+    assert removed[0].source_kind == "persona_context"
+
+
+def test_dedupe_runtime_prompt_sections_drops_whitespace_only_duplicates() -> None:
+    original = RuntimePromptSection(
+        label="Platform Context",
+        source_kind="global_prompt",
+        source_id="platform-context",
+        content="same   block\n\nwith space",
+    )
+    duplicate = RuntimePromptSection(
+        label="Task Prompt",
+        source_kind="task_prompt",
+        source_id="heartbeat",
+        content=" same block with space ",
+    )
+
+    kept, removed = dedupe_runtime_prompt_sections([original, duplicate])
+
+    assert kept == [original]
+    assert len(removed) == 1
+    assert removed[0].duplicate_of == "global_prompt:platform-context"

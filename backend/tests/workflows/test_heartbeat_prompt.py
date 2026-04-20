@@ -844,6 +844,30 @@ class TestBuildHeartbeatPromptIncludesGitState:
         assert "Follow your <heartbeat_instructions> from your system context." in prompt
 
     @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_prompt.require_prompt_content", new_callable=AsyncMock, return_value="Base heartbeat prompt")
+    @patch("app.workflows._heartbeat_prompt._get_persona_timezone", new_callable=AsyncMock, return_value="UTC")
+    @patch("app.workflows._heartbeat_prompt.get_project_access_summary", new_callable=AsyncMock, return_value="test")
+    @patch("app.workflows._heartbeat_prompt._get_persona_tool_summary", return_value=(5, "tool1, tool2"))
+    async def test_targeted_core_prompt_restates_execution_scope(
+        self,
+        _mock_tool_summary: MagicMock,
+        _mock_project_access: AsyncMock,
+        _mock_timezone: AsyncMock,
+        _mock_template: AsyncMock,
+    ) -> None:
+        from app.workflows._heartbeat_prompt import _build_core_prompt
+
+        prompt = await _build_core_prompt(
+            model_review_due=False,
+            model_review_label="skip",
+            target_project_id="agent-hub",
+        )
+
+        assert "Execution target for this run: agent-hub" in prompt
+        assert "Only take execution actions for this target project in this run." in prompt
+        assert "Use persona-sandbox only for persona-internal state." in prompt
+
+    @pytest.mark.asyncio
     @patch("app.workflows._heartbeat_prompt._get_active_specialist_inventory", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_recent_failed_tasks_summary", new_callable=AsyncMock, return_value="")

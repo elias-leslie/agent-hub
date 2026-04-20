@@ -26,8 +26,16 @@ from app.services.memory.tool_capability_context import format_tool_capability_c
 from app.services.runtime_prompt_stack import (
     RuntimePromptSection,
     collect_runtime_prompt_sections,
+    dedupe_runtime_prompt_sections,
     join_runtime_prompt_sections,
 )
+from app.services.token_counter import count_tokens
+
+_PREVIEW_PROMPT_WARN_TOKENS = 3_200
+_PREVIEW_PROMPT_DANGER_TOKENS = 4_500
+_PREVIEW_LOW_YIELD_SOURCE_KINDS = {"persona_context", "memory_context", "task_prompt"}
+_PREVIEW_LOW_YIELD_SHARE_WARN = 0.45
+_PREVIEW_SECTION_SHARE_WARN = 0.2
 
 
 class _EmptyPreviewContext:
@@ -46,6 +54,137 @@ class _EmptyPreviewContext:
 
     def get_reference_index_uuids(self) -> list[str]:
         return []
+
+
+def _build_budget_telemetry(
+    sections: list[RuntimePromptSection],
+    dropped_sections: list[RuntimePromptSection],
+) -> dict[str, Any]:
+    total_tokens = sum(section.estimated_tokens for section in sections)
+    low_yield_sections = [
+        section for section in sections if section.source_kind in _PREVIEW_LOW_YIELD_SOURCE_KINDS
+    ]
+    low_yield_tokens = sum(section.estimated_tokens for section in low_yield_sections)
+    top_sections = sorted(sections, key=lambda section: section.estimated_tokens, reverse=True)[:5]
+
+    warnings: list[str] = []
+    severity = "ok"
+    if total_tokens >= _PREVIEW_PROMPT_DANGER_TOKENS:
+        severity = "danger"
+        warnings.append(
+            f"Prompt budget danger: {total_tokens} tokens total; low-yield sections carry {low_yield_tokens}."
+        )
+    elif total_tokens >= _PREVIEW_PROMPT_WARN_TOKENS:
+        severity = "warning"
+        warnings.append(
+            f"Prompt budget warning: {total_tokens} tokens total; low-yield sections carry {low_yield_tokens}."
+        )
+    if low_yield_tokens and total_tokens and low_yield_tokens / total_tokens >= _PREVIEW_LOW_YIELD_SHARE_WARN:
+        warnings.append(
+            f"Low-yield pressure high: persona/memory/task sections use {low_yield_tokens}/{total_tokens} tokens."
+        )
+    if dropped_sections:
+        warnings.append(
+            f"Dropped {len(dropped_sections)} exact-duplicate sections before preview assembly."
+        )
+
+    top_low_yield_sections = [
+        section for section in top_sections if section.source_kind in _PREVIEW_LOW_YIELD_SOURCE_KINDS
+    ]
+    section_breakdown = [
+        {
+            "label": section.label,
+            "source_kind": section.source_kind,
+            "source_id": section.source_id,
+            "estimated_tokens": section.estimated_tokens,
+            "chars": section.chars,
+            "share_of_total": round(section.estimated_tokens / total_tokens, 3) if total_tokens else 0.0,
+            "duplicate_of": section.duplicate_of,
+        }
+        for section in sorted(sections, key=lambda section: section.estimated_tokens, reverse=True)
+    ]
+    for section in top_low_yield_sections:
+        if total_tokens and section.estimated_tokens / total_tokens >= _PREVIEW_SECTION_SHARE_WARN:
+            warnings.append(
+                f"Low-yield hotspot: {section.label} uses {section.estimated_tokens}/{total_tokens} tokens."
+            )
+    return {
+        "severity": severity,
+        "total_estimated_tokens": total_tokens,
+        "warn_threshold_tokens": _PREVIEW_PROMPT_WARN_TOKENS,
+        "danger_threshold_tokens": _PREVIEW_PROMPT_DANGER_TOKENS,
+        "low_yield_estimated_tokens": low_yield_tokens,
+        "low_yield_section_count": len(low_yield_sections),
+        "low_yield_share_of_total": round(low_yield_tokens / total_tokens, 3) if total_tokens else 0.0,
+        "warning_count": len(warnings),
+        "warnings": warnings,
+        "top_sections": [
+            {
+                "label": section.label,
+                "source_kind": section.source_kind,
+                "source_id": section.source_id,
+                "estimated_tokens": section.estimated_tokens,
+                "chars": section.chars,
+                "share_of_total": round(section.estimated_tokens / total_tokens, 3) if total_tokens else 0.0,
+            }
+            for section in top_sections
+        ],
+        "top_low_yield_sections": [
+            {
+                "label": section.label,
+                "source_kind": section.source_kind,
+                "source_id": section.source_id,
+                "estimated_tokens": section.estimated_tokens,
+                "chars": section.chars,
+                "share_of_total": round(section.estimated_tokens / total_tokens, 3) if total_tokens else 0.0,
+            }
+            for section in top_low_yield_sections[:3]
+        ],
+        "section_breakdown": section_breakdown,
+        "dropped_duplicates": [section.to_snapshot_dict() for section in dropped_sections],
+    }
+
+
+def _render_budget_warning_section(telemetry: dict[str, Any]) -> str:
+    warnings = telemetry.get("warnings") or []
+    if not warnings:
+        return ""
+    top_sections = telemetry.get("top_sections") or []
+    lines = [
+        "<prompt_budget>",
+        f"Severity: {telemetry['severity']}",
+        f"Total estimated tokens: {telemetry['total_estimated_tokens']}",
+        (
+            "Thresholds: "
+            f"warn={telemetry['warn_threshold_tokens']}, "
+            f"danger={telemetry['danger_threshold_tokens']}"
+        ),
+        (
+            "Low-yield tokens: "
+            f"{telemetry['low_yield_estimated_tokens']} "
+            f"across {telemetry['low_yield_section_count']} sections "
+            f"({telemetry['low_yield_share_of_total']:.1%} of total)"
+        ),
+        "Warnings:",
+        *[f"- {warning}" for warning in warnings],
+    ]
+    if top_sections:
+        lines.append("Top sections:")
+        lines.extend(
+            f"- {section['label']} [{section['source_kind']}:{section['source_id']}] "
+            f"~{section['estimated_tokens']} tokens ({section.get('share_of_total', 0.0):.1%})"
+            for section in top_sections[:3]
+        )
+    hotspot_sections = telemetry.get("top_low_yield_sections") or []
+    if hotspot_sections:
+        lines.append("Low-yield hotspots:")
+        lines.extend(
+            f"- {section['label']} [{section['source_kind']}:{section['source_id']}] "
+            f"~{section['estimated_tokens']} tokens ({section.get('share_of_total', 0.0):.1%})"
+            for section in hotspot_sections
+        )
+    lines.append("</prompt_budget>")
+    return "\n".join(lines)
 
 
 async def _build_task_prompt_preview(
@@ -228,12 +367,24 @@ async def build_agent_preview(
                 content=formatted_memory,
             )
         )
+
+    runtime_sections, dropped_system_sections = dedupe_runtime_prompt_sections(runtime_sections)
+    preview_sections = list(runtime_sections)
     if task_prompt_section:
-        runtime_sections.append(task_prompt_section)
+        preview_sections.append(task_prompt_section)
+
+    _, duplicate_sections = dedupe_runtime_prompt_sections(preview_sections)
+    telemetry = _build_budget_telemetry(
+        preview_sections,
+        [*dropped_system_sections, *duplicate_sections],
+    )
 
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
-    full_context = "\n\n".join(section.content for section in runtime_sections if section.content)
+    combined = join_runtime_prompt_sections(
+        [section for section in preview_sections if section.placement != "user"]
+    )
+    full_context = join_runtime_prompt_sections(preview_sections)
     reference_index_uuids_getter = getattr(context, "get_reference_index_uuids", None)
     reference_index_uuids = (
         reference_index_uuids_getter()
@@ -261,5 +412,7 @@ async def build_agent_preview(
         "phase": phase,
         "project_id": project_id,
         "task_prompt": task_prompt,
-        "sections": [section.to_preview_dict() for section in runtime_sections],
+        "sections": [section.to_preview_dict() for section in preview_sections],
+        "prompt_budget": telemetry,
+        "full_context_estimated_tokens": count_tokens(full_context) if full_context else 0,
     }

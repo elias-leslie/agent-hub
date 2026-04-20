@@ -126,6 +126,7 @@ def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPr
             "memory_debug",
             "loaded_memory_uuids",
             "reference_uuids",
+            "reference_index_uuids",
             "mandate_count",
             "guardrail_count",
             "mandate_uuids",
@@ -135,6 +136,8 @@ def _build_preview_response(agent: AgentDTO, preview: dict[str, Any]) -> AgentPr
             "project_id",
             "task_prompt",
             "sections",
+            "prompt_budget",
+            "full_context_estimated_tokens",
         )},
     )
 
