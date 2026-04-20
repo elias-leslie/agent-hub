@@ -13,7 +13,13 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
+from app.adapters.base import (
+    AuthenticationError,
+    CompletionResult,
+    Message,
+    StreamEvent,
+    ToolCallResult,
+)
 from app.adapters.codex_auth import CodexCredentials
 from app.adapters.codex_oauth import CodexOAuthAdapter, _convert_messages_to_input
 
@@ -792,6 +798,60 @@ async def test_ensure_fresh_credentials_recovers_from_local_auth_file_after_refr
     }
     assert cm.values["codex:refresh_token"] == "local-refresh"
     assert ("codex", "refresh_token", "local-refresh") in upsert_calls
+
+
+@pytest.mark.asyncio
+async def test_ensure_fresh_credentials_rejects_expired_local_auth_file_after_refresh_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expired_at = time.time() - 300
+    stale_token = _build_codex_jwt(expires_at=expired_at)
+    expired_local = CodexCredentials(
+        access_token=_build_codex_jwt(expires_at=expired_at - 60),
+        refresh_token="expired-local-refresh",
+        account_id="acct",
+        expires_at=expired_at - 60,
+    )
+
+    class _StaleCredentialManager(_FakeCredentialManager):
+        async def load(self, _db: object) -> int:
+            return 2
+
+    cm = _StaleCredentialManager(stale_token, "stale-refresh")
+    upsert_calls: list[tuple[str, str, str]] = []
+
+    class _FakeAsyncSession:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    async def _fake_upsert(_db: object, provider: str, credential_type: str, value: str) -> None:
+        upsert_calls.append((provider, credential_type, value))
+
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+    monkeypatch.setattr("app.adapters.codex_oauth.read_cached_token", lambda _refresh: None)
+    monkeypatch.setattr("app.adapters.codex_oauth.write_cached_token", lambda _creds: None)
+    monkeypatch.setattr(
+        "app.adapters.codex_oauth.refresh_access_token",
+        AsyncMock(side_effect=RuntimeError("Codex token refresh failed (HTTP 401)")),
+    )
+    monkeypatch.setattr("app.db.async_session", lambda: _FakeAsyncSession())
+    monkeypatch.setattr("app.services.credential_upsert.upsert_credential", _fake_upsert)
+    monkeypatch.setattr(
+        "app.adapters.codex_oauth.load_local_codex_auth_credentials",
+        lambda: expired_local,
+        raising=False,
+    )
+
+    adapter = CodexOAuthAdapter()
+
+    with pytest.raises(AuthenticationError):
+        await adapter._ensure_fresh_credentials()
+
+    assert cm.values["codex:refresh_token"] == "stale-refresh"
+    assert upsert_calls == []
 
 
 @pytest.mark.asyncio
