@@ -5,10 +5,12 @@ import asyncio
 from agent_hub import AsyncAgentHubClient
 
 PROJECT_ID = "agent-hub"
+WORKING_DIR = "/srv/workspaces/projects/agent-hub"
+CURRENT_BRANCH = "task-df826c65/main"
 
 
 async def main() -> None:
-    """Run the canonical operator workflow through the SDK."""
+    """Run canonical operator workflow through SDK."""
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         workflow = await client.workflow(
             project_id=PROJECT_ID,
@@ -17,23 +19,26 @@ async def main() -> None:
                 "Goal: add one canonical operator workflow contract without duplicating routing logic."
             ),
             clarify={
-                "task": "List the ambiguities that must be resolved before coding and answer them directly when the codebase already provides the evidence.",
+                "task": (
+                    "List ambiguities that must be resolved before coding and answer them "
+                    "directly when repo already shows truth."
+                ),
             },
             plan={
-                "task": "Produce an execution-ready implementation plan using the clarified scope and prior workflow outputs.",
+                "task": "Produce execution-ready implementation plan using prior workflow outputs.",
             },
             execute={
-                "task": "Implement the approved plan in the repo, reusing existing orchestration and agent-routing primitives.",
+                "task": "Implement approved plan in repo using existing orchestration and agent-routing primitives.",
                 "execute_tools": True,
                 "max_turns": 6,
-                "working_dir": "/srv/workspaces/projects/agent-hub",
-                "current_branch": "main",
+                "working_dir": WORKING_DIR,
+                "current_branch": CURRENT_BRANCH,
             },
             review={
-                "task": "Review the implementation for concrete bugs, drift from the clarified request, and missing verification.",
+                "task": "Review implementation for concrete bugs, drift from request, and missing verification.",
             },
             qa={
-                "task": "Run final QA over the full workflow and call out any remaining blockers before closeout.",
+                "task": "Run final QA over full workflow and call out remaining blockers before closeout.",
             },
         )
 

@@ -28,7 +28,10 @@ class SubagentRequest(BaseModel):
     timeout_seconds: float | None = Field(default=None, ge=1, le=3600)
     agent_slug: str | None = Field(
         default=None,
-        description="Agent slug for agent-based execution (optional)",
+        description=(
+            "Low-level single-agent execution path. For explicit clarify/plan/execute/"
+            "review/qa flows, prefer /api/orchestration/workflow."
+        ),
     )
     max_spawn_depth: int = Field(
         default=3,
@@ -220,10 +223,31 @@ class ChainResponse(BaseModel):
 # ========== Canonical Workflow Models ==========
 
 WorkflowStageName = Literal["clarify", "plan", "execute", "review", "qa"]
+CANONICAL_WORKFLOW_STAGES: tuple[WorkflowStageName, ...] = (
+    "clarify",
+    "plan",
+    "execute",
+    "review",
+    "qa",
+)
+CANONICAL_WORKFLOW_DEFAULT_AGENTS: dict[WorkflowStageName, str] = {
+    "clarify": "chat",
+    "plan": "planner",
+    "execute": "coder",
+    "review": "reviewer",
+    "qa": "critic",
+}
+CANONICAL_WORKFLOW_DEFAULT_PHASES: dict[WorkflowStageName, str] = {
+    "clarify": "planning",
+    "plan": "planning",
+    "execute": "implementation",
+    "review": "review",
+    "qa": "review",
+}
 
 
 class WorkflowStageRequest(BaseModel):
-    """One explicit stage in the canonical operator workflow."""
+    """One explicit stage in canonical operator workflow."""
 
     task: str = Field(..., description="Stage-specific instructions for this workflow step")
     agent_slug: str | None = Field(
@@ -284,10 +308,13 @@ class WorkflowStageRequest(BaseModel):
 class WorkflowRequest(BaseModel):
     """Explicit clarify -> plan -> execute -> review -> qa workflow request."""
 
-    project_id: str = Field(..., description="Project ID for all stages in the workflow")
+    project_id: str = Field(..., description="Project ID for all stages in workflow")
     parent_session_id: str | None = Field(
         default=None,
-        description="Optional persona or operator session ID that should own workflow stages as child lanes.",
+        description=(
+            "Optional persona or operator session ID that should own workflow stages "
+            "as child lanes."
+        ),
     )
     shared_context: str | None = Field(
         default=None,
@@ -310,15 +337,14 @@ class WorkflowRequest(BaseModel):
     @model_validator(mode="after")
     def validate_has_stage(self) -> "WorkflowRequest":
         if not any(
-            getattr(self, stage_name) is not None
-            for stage_name in ("clarify", "plan", "execute", "review", "qa")
+            getattr(self, stage_name) is not None for stage_name in CANONICAL_WORKFLOW_STAGES
         ):
             raise ValueError("At least one workflow stage must be provided.")
         return self
 
 
 class WorkflowStageResponse(BaseModel):
-    """One completed stage in the canonical workflow."""
+    """One completed stage in canonical workflow."""
 
     stage: WorkflowStageName
     agent_used: str | None = None

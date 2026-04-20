@@ -20,6 +20,12 @@ router = APIRouter()
 _parallel_executor: ParallelExecutor | None = None
 
 
+PARALLEL_ENDPOINT_NOTE = (
+    "Low-level fan-out primitive. For explicit clarify -> plan -> execute -> review -> "
+    "qa flows, use /api/orchestration/workflow."
+)
+
+
 def get_parallel_executor() -> ParallelExecutor:
     """Get or create parallel executor singleton."""
     global _parallel_executor
@@ -28,7 +34,12 @@ def get_parallel_executor() -> ParallelExecutor:
     return _parallel_executor
 
 
-@router.post("/parallel", response_model=ParallelResponse)
+@router.post(
+    "/parallel",
+    response_model=ParallelResponse,
+    summary="Run low-level parallel subagents",
+    description=PARALLEL_ENDPOINT_NOTE,
+)
 async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
     """
     Execute multiple subagents in parallel.
