@@ -735,6 +735,66 @@ async def test_ensure_fresh_credentials_reloads_db_after_refresh_failure(
 
 
 @pytest.mark.asyncio
+async def test_ensure_fresh_credentials_recovers_from_local_auth_file_after_refresh_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expired_at = time.time() - 300
+    recovered_at = time.time() + 5400
+    stale_token = _build_codex_jwt(expires_at=expired_at)
+    recovered = CodexCredentials(
+        access_token=_build_codex_jwt(expires_at=recovered_at),
+        refresh_token="local-refresh",
+        account_id="acct",
+        expires_at=recovered_at,
+    )
+
+    class _StaleCredentialManager(_FakeCredentialManager):
+        async def load(self, _db: object) -> int:
+            return 2
+
+    cm = _StaleCredentialManager(stale_token, "stale-refresh")
+    upsert_calls: list[tuple[str, str, str]] = []
+
+    class _FakeAsyncSession:
+        async def __aenter__(self) -> object:
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    async def _fake_upsert(_db: object, provider: str, credential_type: str, value: str) -> None:
+        upsert_calls.append((provider, credential_type, value))
+
+    monkeypatch.setattr("app.services.credential_manager.get_credential_manager", lambda: cm)
+    monkeypatch.setattr("app.adapters.codex_oauth.read_cached_token", lambda _refresh: None)
+    monkeypatch.setattr("app.adapters.codex_oauth.write_cached_token", lambda _creds: None)
+    monkeypatch.setattr(
+        "app.adapters.codex_oauth.refresh_access_token",
+        AsyncMock(side_effect=RuntimeError("Codex token refresh failed (HTTP 401)")),
+    )
+    monkeypatch.setattr("app.db.async_session", lambda: _FakeAsyncSession())
+    monkeypatch.setattr("app.services.credential_upsert.upsert_credential", _fake_upsert)
+    monkeypatch.setattr(
+        "app.adapters.codex_oauth.load_local_codex_auth_credentials",
+        lambda: recovered,
+        raising=False,
+    )
+
+    adapter = CodexOAuthAdapter()
+
+    result = await adapter._ensure_fresh_credentials()
+
+    assert result.access_token == recovered.access_token
+    assert result.refresh_token == "local-refresh"
+    assert json.loads(cm.values["codex:oauth_token"]) == {
+        "access_token": recovered.access_token,
+        "expires_at": recovered.expires_at,
+    }
+    assert cm.values["codex:refresh_token"] == "local-refresh"
+    assert ("codex", "refresh_token", "local-refresh") in upsert_calls
+
+
+@pytest.mark.asyncio
 async def test_health_check_fails_for_expired_credential_without_refresh_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
