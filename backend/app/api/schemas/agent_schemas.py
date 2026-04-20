@@ -179,6 +179,7 @@ class AgentPreviewSection(BaseModel):
     content_hash: str
     chars: int
     estimated_tokens: int
+    duplicate_of: str | None = None
     content: str
 
 
@@ -193,6 +194,7 @@ class AgentPreviewResponse(BaseModel):
     memory_debug: dict[str, Any] = Field(default_factory=dict)
     loaded_memory_uuids: list[str] = Field(default_factory=list)
     reference_uuids: list[str] = Field(default_factory=list)
+    reference_index_uuids: list[str] = Field(default_factory=list)
     mandate_count: int
     guardrail_count: int
     mandate_uuids: list[str]
@@ -202,6 +204,8 @@ class AgentPreviewResponse(BaseModel):
     project_id: str | None = None
     task_prompt: str | None = None
     sections: list[AgentPreviewSection] = Field(default_factory=list)
+    prompt_budget: dict[str, Any] = Field(default_factory=dict)
+    full_context_estimated_tokens: int = 0
 
 
 class AgentMetrics(BaseModel):

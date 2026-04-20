@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -32,6 +33,11 @@ class RuntimePromptSection:
     role: str | None = None
     priority: int | None = None
     updated_at: datetime | None = None
+    duplicate_of: str | None = None
+
+    @property
+    def normalized_content(self) -> str:
+        return normalize_runtime_prompt_content(self.content)
 
     @property
     def content_hash(self) -> str:
@@ -57,6 +63,7 @@ class RuntimePromptSection:
             "content_hash": self.content_hash,
             "chars": self.chars,
             "estimated_tokens": self.estimated_tokens,
+            "duplicate_of": self.duplicate_of,
             "content": self.content,
         }
 
@@ -72,7 +79,54 @@ class RuntimePromptSection:
             "content_hash": self.content_hash,
             "chars": self.chars,
             "estimated_tokens": self.estimated_tokens,
+            "duplicate_of": self.duplicate_of,
         }
+
+
+_NORMALIZED_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def normalize_runtime_prompt_content(content: str) -> str:
+    stripped = content.strip()
+    if not stripped:
+        return ""
+    return _NORMALIZED_WHITESPACE_RE.sub(" ", stripped)
+
+
+def dedupe_runtime_prompt_sections(
+    sections: list[RuntimePromptSection],
+) -> tuple[list[RuntimePromptSection], list[RuntimePromptSection]]:
+    """Drop exact duplicate prompt content while preserving first occurrence order."""
+    deduped: list[RuntimePromptSection] = []
+    removed: list[RuntimePromptSection] = []
+    seen_hashes: dict[str, RuntimePromptSection] = {}
+
+    for section in sections:
+        content = section.content.strip()
+        if not content:
+            continue
+        normalized = normalize_runtime_prompt_content(content)
+        content_hash = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:8]
+        original = seen_hashes.get(content_hash)
+        if original and original.normalized_content == normalized:
+            removed.append(
+                RuntimePromptSection(
+                    label=section.label,
+                    source_kind=section.source_kind,
+                    source_id=section.source_id,
+                    content=section.content,
+                    placement=section.placement,
+                    role=section.role,
+                    priority=section.priority,
+                    updated_at=section.updated_at,
+                    duplicate_of=f"{original.source_kind}:{original.source_id}",
+                )
+            )
+            continue
+        seen_hashes[content_hash] = section
+        deduped.append(section)
+
+    return deduped, removed
 
 
 async def collect_runtime_prompt_sections(
@@ -188,7 +242,8 @@ async def collect_runtime_prompt_sections(
                 )
             )
 
-    return sections
+    deduped_sections, _ = dedupe_runtime_prompt_sections(sections)
+    return deduped_sections
 
 
 def join_runtime_prompt_sections(sections: list[RuntimePromptSection]) -> str:
@@ -198,5 +253,7 @@ def join_runtime_prompt_sections(sections: list[RuntimePromptSection]) -> str:
 __all__ = [
     "RuntimePromptSection",
     "collect_runtime_prompt_sections",
+    "dedupe_runtime_prompt_sections",
     "join_runtime_prompt_sections",
+    "normalize_runtime_prompt_content",
 ]

@@ -846,3 +846,11 @@ class TestHeartbeatCompletionRouting:
         assert kwargs["memory_group_id"] == HEARTBEAT_MEMORY_GROUP
         assert kwargs["working_dir"] == "/tmp/agent-hub"
         assert kwargs["session_id"] == "hb-session-3"
+
+
+def test_heartbeat_result_accepts_budget_fields() -> None:
+    from app.workflows.persona_heartbeat import HeartbeatResult
+
+    result = HeartbeatResult(status="ok", error=None)
+
+    assert result.status == "ok"
