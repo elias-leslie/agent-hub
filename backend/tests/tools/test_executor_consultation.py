@@ -12,6 +12,9 @@ import pytest
 from app.services.ownership_inventory import ActiveSpecialistSession, OwnershipOwner
 from app.services.tools._executor_consultation import inspect_session, query_sessions
 from app.services.tools._executor_dispatch import (
+    _ensure_task_lane_context,
+)
+from app.services.tools._executor_dispatch import (
     parse_specialist_dispatch_request as _parse_specialist_dispatch_request,
 )
 from app.services.tools._executor_dispatch import (
@@ -262,6 +265,37 @@ def test_parse_specialist_dispatch_request_reads_mode_and_task_id() -> None:
 
     assert parsed.mode == "task"
     assert parsed.task_id == "task-12345678"
+
+
+@pytest.mark.asyncio
+async def test_ensure_task_lane_context_parses_current_checkpoint_details_format() -> None:
+    details = (
+        "CHECKPOINT:task-42\n"
+        "  Project: summitflow\n"
+        "  Base branch: main\n"
+        "  Created: 2026-04-20T22:01:00.948638+00:00 (3m ago)\n"
+        "  Claimed by: Elias Leslie\n\n"
+        "BRANCHES[1]\n"
+        "  task-42/main [task]\n"
+    )
+
+    with (
+        patch(
+            "app.services.tools._executor_dispatch._run_project_st_command",
+            new_callable=AsyncMock,
+            return_value=details,
+        ) as mock_st,
+        patch(
+            "app.constants.projects.get_known_roots",
+            return_value={"summitflow": "/srv/workspaces/projects/summitflow"},
+        ),
+    ):
+        branch, working_dir, error = await _ensure_task_lane_context("summitflow", "task-42")
+
+    assert branch == "task-42/main"
+    assert working_dir == "/srv/workspaces/projects/summitflow"
+    assert error is None
+    mock_st.assert_awaited_once_with("summitflow", "checkpoints --details task-42")
 
 
 @pytest.mark.asyncio

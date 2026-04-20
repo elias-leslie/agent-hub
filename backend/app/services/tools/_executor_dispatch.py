@@ -21,7 +21,7 @@ _CODING_TASK_KEYWORDS = (
 )
 _TASK_ID_RE = re.compile(r"(?im)^\s*Task(?:[- ]ID)?:\s*(task-[a-z0-9]+)\s*$")
 _MODE_RE = re.compile(r"(?im)^\s*Mode:\s*(task|campaign)\s*$")
-_BRANCH_RE = re.compile(r"(?im)^\s*\+\s+([^\s]+)\s+\[task\]\s*$")
+_BRANCH_RE = re.compile(r"(?im)^\s*(?:\+\s+)?([^\s]+)\s+\[task\]\s*$")
 _SHARED_PLUMBING_MARKERS = (
     "/alembic/", "/migrations/", "/schema", "/schemas/", "/contract",
     "/contracts/", "/routing", "/routes/", "/config", "/build",
