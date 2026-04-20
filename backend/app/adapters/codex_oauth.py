@@ -378,14 +378,11 @@ class CodexOAuthAdapter(ProviderAdapter):
                         logger.info("Recovered Codex credentials from DB after refresh failure")
                         return reloaded
                 local_creds = load_local_codex_auth_credentials()
-                if local_creds is not None:
-                    current_pair = (creds.access_token, creds.refresh_token)
-                    local_pair = (local_creds.access_token, local_creds.refresh_token)
-                    if local_pair != current_pair or not local_creds.is_expired:
-                        logger.info("Recovered Codex credentials from local auth file after refresh failure")
-                        await self._persist_credentials(local_creds)
-                        self._credentials = local_creds
-                        return local_creds
+                if local_creds is not None and not local_creds.is_expired:
+                    logger.info("Recovered Codex credentials from local auth file after refresh failure")
+                    await self._persist_credentials(local_creds)
+                    self._credentials = local_creds
+                    return local_creds
                 raise AuthenticationError(provider="codex") from exc
 
     async def complete(
