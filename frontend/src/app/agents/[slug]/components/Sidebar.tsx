@@ -4,21 +4,28 @@ import {
   Sliders,
   ScrollText,
   Brain,
+  Network,
   X,
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TabId, Agent } from "../types";
 
-const TABS: { id: TabId; label: string; description: string; icon: React.ElementType }[] = [
+const ALL_TABS: { id: TabId; label: string; description: string; icon: React.ElementType }[] = [
   { id: "general", label: "General", description: "Name, state, and execution role.", icon: Settings2 },
   { id: "models", label: "Models", description: "Primary, fallback, and escalation routing.", icon: Cpu },
   { id: "parameters", label: "Parameters", description: "Reasoning depth, temperature, and limits.", icon: Sliders },
   { id: "prompts", label: "Prompts", description: "Prompt stack ordering, docs, and preview.", icon: ScrollText },
   { id: "memory", label: "Memory", description: "Memory inheritance, filters, and retrieval.", icon: Brain },
+  { id: "committee", label: "Committee", description: "Seat roster, model overrides, and validation run.", icon: Network },
 ];
 
-export { TABS as AGENT_EDITOR_TABS };
+export function getAgentEditorTabs(agentSlug: string): typeof ALL_TABS {
+  if (agentSlug === "investment-committee") return ALL_TABS;
+  return ALL_TABS.filter((tab) => tab.id !== "committee");
+}
+
+export { ALL_TABS as AGENT_EDITOR_TABS };
 
 interface SidebarProps {
   activeTab: TabId;
@@ -82,7 +89,7 @@ export function Sidebar({
         </div>
 
         <div className="space-y-2">
-          {TABS.map((tab) => (
+          {getAgentEditorTabs(agent.slug).map((tab) => (
             <button
               key={tab.id}
               type="button"
