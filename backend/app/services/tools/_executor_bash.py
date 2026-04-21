@@ -12,9 +12,7 @@ from pathlib import Path
 
 from app.services.persona_policy import (
     command_hits_persona_git_publish_policy,
-    command_hits_persona_workspace_git_policy,
     get_persona_git_publish_block_reason,
-    get_persona_workspace_git_block_reason,
 )
 from app.services.tools.command_guard import get_command_guard_block_reason
 
@@ -31,8 +29,6 @@ def get_persona_block_reason(command: str, agent_slug: str | None) -> str | None
 
     if command_hits_persona_git_publish_policy(command):
         return get_persona_git_publish_block_reason()
-    if command_hits_persona_workspace_git_policy(command):
-        return get_persona_workspace_git_block_reason()
     return None
 
 
