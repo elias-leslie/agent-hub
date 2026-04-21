@@ -25,7 +25,7 @@ def metadata_paths(metadata: dict[str, Any] | None) -> list[str]:
         return []
     paths: list[str] = []
     seen: set[str] = set()
-    for key in ("cwd", "repo_root"):
+    for key in ("working_dir", "cwd", "repo_root"):
         value = metadata.get(key)
         if isinstance(value, str) and value and value not in seen:
             paths.append(value)
@@ -63,7 +63,7 @@ def scope_list(value: object) -> list[str]:
 
 
 def working_dir(session: Session) -> str | None:
-    return metadata_value(session, "cwd")
+    return metadata_value(session, "working_dir") or metadata_value(session, "cwd")
 
 
 def repo_root(session: Session) -> str | None:

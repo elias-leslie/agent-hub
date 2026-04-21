@@ -89,3 +89,36 @@ async def get_project_access_summary() -> str:
         " Do not cd into project directories or use relative paths from persona-sandbox."
     )
     return "\n".join(lines)
+
+
+async def get_permitted_project_ids() -> set[str] | None:
+    """Return configured non-off project ids for heartbeat prompt filtering.
+
+    Returns None on query failure so callers can fail open instead of dropping
+    all git-state signal during a transient DB issue.
+    """
+    from sqlalchemy import text
+
+    from app.db import async_session
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                text(
+                    "SELECT project_id FROM project_permissions"
+                    " WHERE permission_tier != 'off' ORDER BY project_id"
+                )
+            )
+            rows = result.fetchall()
+    except Exception:
+        logger.exception("Failed to fetch permitted project ids for heartbeat prompt")
+        return None
+
+    if not rows:
+        return None
+
+    return {
+        str(row.project_id)
+        for row in rows
+        if isinstance(row.project_id, str) and row.project_id
+    }

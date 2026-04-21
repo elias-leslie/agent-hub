@@ -23,6 +23,7 @@ from app.services.memory.context_injector import (
 from app.services.memory.project_index_context import format_project_index_context
 from app.services.memory.service import MemoryScope
 from app.services.memory.tool_capability_context import format_tool_capability_context
+from app.services.project_permission_service import get_visible_tools_for_project
 from app.services.runtime_prompt_stack import (
     RuntimePromptSection,
     collect_runtime_prompt_sections,
@@ -295,10 +296,16 @@ async def build_agent_preview(
             )
     tool_capability_block = ""
     if resolve_tool_capabilities_enabled(agent_memory_config):
+        visible_tool_names = (
+            await get_visible_tools_for_project(project_id, db)
+            if project_id
+            else frozenset()
+        )
         tool_capability_block = format_tool_capability_context(
             consumer_profile=preview_consumer_profile,
             task_type=task_type,
             project_id=project_id,
+            bash_available=("bash" in visible_tool_names) if project_id else None,
         )
         if tool_capability_block:
             combined = f"{combined}\n\n{tool_capability_block}" if combined else tool_capability_block

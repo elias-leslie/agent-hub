@@ -385,6 +385,55 @@ async def test_build_agent_preview_includes_tool_capabilities_when_enabled() -> 
 
 
 @pytest.mark.asyncio
+async def test_build_agent_preview_passes_bash_availability_to_tool_capabilities() -> None:
+    with (
+        patch(
+            "app.api.helpers.agent_preview.collect_runtime_prompt_sections",
+            new_callable=AsyncMock,
+            return_value=[],
+        ),
+        patch(
+            "app.api.helpers.agent_preview.join_runtime_prompt_sections",
+            side_effect=_join_preview_sections,
+        ),
+        patch(
+            "app.api.helpers.agent_preview.get_visible_tools_for_project",
+            new=AsyncMock(return_value=frozenset({"read_file"})),
+            create=True,
+        ) as mock_visible_tools,
+        patch(
+            "app.api.helpers.agent_preview.format_tool_capability_context",
+            return_value="",
+        ) as mock_tool_capabilities,
+        patch(
+            "app.api.helpers.agent_preview.build_progressive_context",
+            new_callable=AsyncMock,
+            return_value=_context(),
+        ),
+        patch(
+            "app.api.helpers.agent_preview._build_task_prompt_preview",
+            new_callable=AsyncMock,
+            return_value="",
+        ),
+        patch(
+            "app.api.helpers.agent_preview.format_progressive_context",
+            return_value="",
+        ),
+    ):
+        preview = await build_agent_preview(
+            AsyncMock(),
+            _agent(slug="persona"),
+            project_id="monkey-fight",
+            task_type="wake",
+        )
+
+    assert "<tool-capabilities>" not in preview["combined_prompt"]
+    assert mock_visible_tools.await_count == 1
+    assert mock_tool_capabilities.call_args is not None
+    assert mock_tool_capabilities.call_args.kwargs["bash_available"] is False
+
+
+@pytest.mark.asyncio
 async def test_build_agent_preview_passes_agent_memory_config_to_context_builder() -> None:
     agent = AgentDTO(
         id=1,

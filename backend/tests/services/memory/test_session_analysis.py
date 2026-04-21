@@ -366,7 +366,6 @@ class TestAnalyzeSession:
             ["[[S:completed:wired codex transcript parsing]]"],
             None,
             None,
-            False,
         )
 
     @pytest.mark.asyncio
@@ -403,7 +402,6 @@ class TestAnalyzeSession:
             ["[[S:completed:normalized events finalized cleanly]]"],
             None,
             None,
-            False,
         )
 
     @pytest.mark.asyncio
@@ -483,7 +481,6 @@ class TestAnalyzeSession:
             ["[[S:completed:replayed analysis]]"],
             "abc1234 feat: replay",
             "main",
-            True,
         )
 
 

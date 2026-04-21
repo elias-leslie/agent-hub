@@ -211,7 +211,6 @@ class TestAnalyzeSessionSummaryIntegration:
                 ["[[S:completed:Did the thing]]"],
                 "abc1234 feat: thing",
                 "main",
-                False,
             )
 
     @pytest.mark.asyncio

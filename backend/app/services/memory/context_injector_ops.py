@@ -10,6 +10,8 @@ import logging
 import time
 from typing import Any
 
+from app.services.project_permission_service import get_visible_tools_for_project
+
 from .context_builder import ProgressiveContext, build_progressive_context
 from .context_builder_settings import (
     resolve_continuity_settings,
@@ -252,8 +254,17 @@ async def run_injection_operation(
             context.debug_info.update({"project_index_included": True, "project_index_chars": len(project_index_block)})
     tool_capability_block = ""
     if resolve_tool_capabilities_enabled(memory_config):
+        effective_project_id = project_id or scope_id
+        visible_tool_names = (
+            await get_visible_tools_for_project(effective_project_id)
+            if effective_project_id
+            else frozenset()
+        )
         tool_capability_block = format_tool_capability_context(
-            consumer_profile=consumer_profile, task_type=task_type, project_id=project_id or scope_id,
+            consumer_profile=consumer_profile,
+            task_type=task_type,
+            project_id=effective_project_id,
+            bash_available=("bash" in visible_tool_names) if effective_project_id else None,
         )
         if tool_capability_block:
             context.debug_info.update({"tool_capabilities_included": True, "tool_capabilities_chars": len(tool_capability_block)})

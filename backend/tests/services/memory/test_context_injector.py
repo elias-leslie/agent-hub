@@ -687,7 +687,7 @@ class TestInjectionMetrics:
 
 @pytest.mark.asyncio
 async def test_inject_progressive_context_assigns_variant_from_identifiers() -> None:
-    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.context_injector_ops import run_injection_operation
     from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
@@ -709,29 +709,51 @@ async def test_inject_progressive_context_assigns_variant_from_identifiers() -> 
 
     with (
         patch(
-            "app.services.memory.context_injector.get_memory_settings",
+            "app.services.memory.context_injector_ops.get_memory_settings",
             new=AsyncMock(return_value=settings),
         ),
         patch(
-            "app.services.memory.context_injector._build_context_and_format",
+            "app.services.memory.context_injector_ops.build_context_and_format",
             new=AsyncMock(return_value=(context, "formatted")),
         ),
         patch(
-            "app.services.memory.context_injector._apply_continuity_to_context",
+            "app.services.memory.context_injector_ops.apply_continuity_to_context",
             new=AsyncMock(return_value="<memory>formatted</memory>"),
         ),
         patch(
-            "app.services.memory.context_injector.assign_variant",
+            "app.services.memory.context_injector_ops.assign_variant",
             return_value=MemoryVariant.ENHANCED,
         ) as mock_assign,
         patch(
-            "app.services.memory.context_injector._record_injection_metrics",
+            "app.services.memory.context_injector_ops.resolve_project_index_enabled",
+            return_value=False,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_tool_capabilities_enabled",
+            return_value=False,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.record_injection_metrics_for_context",
         ) as mock_metrics,
     ):
-        _, injected = await inject_progressive_context(
+        _, injected = await run_injection_operation(
             messages=[{"role": "user", "content": "Need help"}],
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            query="Need help",
+            variant=None,
+            session_id=None,
             external_id="task-123",
             project_id="agent-hub",
+            collect_metrics=True,
+            task_type=None,
+            phase=None,
+            include_continuity=True,
+            memory_config=None,
+            current_branch=None,
+            consumer_profile=None,
+            consumer_agent_slug=None,
+            consumer_tags=None,
         )
 
     mock_assign.assert_called_once_with(
@@ -746,7 +768,7 @@ async def test_inject_progressive_context_assigns_variant_from_identifiers() -> 
 
 @pytest.mark.asyncio
 async def test_inject_progressive_context_uses_active_variant_before_hash_assignment() -> None:
-    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.context_injector_ops import run_injection_operation
     from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
@@ -773,29 +795,51 @@ async def test_inject_progressive_context_uses_active_variant_before_hash_assign
 
     with (
         patch(
-            "app.services.memory.context_injector.get_memory_settings",
+            "app.services.memory.context_injector_ops.get_memory_settings",
             new=AsyncMock(return_value=settings),
         ),
         patch(
-            "app.services.memory.context_injector._build_context_and_format",
+            "app.services.memory.context_injector_ops.build_context_and_format",
             new=AsyncMock(return_value=(context, "formatted")),
         ),
         patch(
-            "app.services.memory.context_injector._apply_continuity_to_context",
+            "app.services.memory.context_injector_ops.apply_continuity_to_context",
             new=AsyncMock(return_value="<memory>formatted</memory>"),
         ),
         patch(
-            "app.services.memory.context_injector.assign_variant",
+            "app.services.memory.context_injector_ops.assign_variant",
             return_value=MemoryVariant.AGGRESSIVE,
         ) as mock_assign,
         patch(
-            "app.services.memory.context_injector._record_injection_metrics",
+            "app.services.memory.context_injector_ops.resolve_project_index_enabled",
+            return_value=False,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_tool_capabilities_enabled",
+            return_value=False,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.record_injection_metrics_for_context",
         ) as mock_metrics,
     ):
-        _, injected = await inject_progressive_context(
+        _, injected = await run_injection_operation(
             messages=[{"role": "user", "content": "Need help"}],
+            scope=MemoryScope.GLOBAL,
+            scope_id=None,
+            query="Need help",
+            variant=None,
+            session_id=None,
             external_id="task-123",
             project_id="agent-hub",
+            collect_metrics=True,
+            task_type=None,
+            phase=None,
+            include_continuity=True,
+            memory_config=None,
+            current_branch=None,
+            consumer_profile=None,
+            consumer_agent_slug=None,
+            consumer_tags=None,
         )
 
     mock_assign.assert_called_once_with(
@@ -810,7 +854,7 @@ async def test_inject_progressive_context_uses_active_variant_before_hash_assign
 
 @pytest.mark.asyncio
 async def test_inject_progressive_context_adds_project_index_block_when_enabled() -> None:
-    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.context_injector_ops import run_injection_operation
     from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
@@ -818,27 +862,48 @@ async def test_inject_progressive_context_adds_project_index_block_when_enabled(
 
     with (
         patch(
-            "app.services.memory.context_injector.get_memory_settings",
+            "app.services.memory.context_injector_ops.get_memory_settings",
             new=AsyncMock(return_value=settings),
         ),
         patch(
-            "app.services.memory.context_injector._build_context_and_format",
+            "app.services.memory.context_injector_ops.build_context_and_format",
             new=AsyncMock(return_value=(ProgressiveContext(total_tokens=0), "")),
         ),
         patch(
-            "app.services.memory.context_injector.format_project_index_context",
+            "app.services.memory.context_injector_ops.format_project_index_context",
             return_value="<project-index>\nproject: agent-hub\n</project-index>",
         ),
         patch(
-            "app.services.memory.context_injector.assign_variant",
+            "app.services.memory.context_injector_ops.assign_variant",
             return_value=MemoryVariant.BASELINE,
         ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_project_index_enabled",
+            return_value=True,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_tool_capabilities_enabled",
+            return_value=False,
+        ),
     ):
-        injected_messages, _ = await inject_progressive_context(
+        injected_messages, _ = await run_injection_operation(
             messages=[{"role": "user", "content": "Need help"}],
-            project_id="agent-hub",
             scope=MemoryScope.PROJECT,
             scope_id="agent-hub",
+            query="Need help",
+            variant=None,
+            session_id=None,
+            external_id=None,
+            project_id="agent-hub",
+            collect_metrics=False,
+            task_type=None,
+            phase=None,
+            include_continuity=False,
+            memory_config=None,
+            current_branch=None,
+            consumer_profile=None,
+            consumer_agent_slug=None,
+            consumer_tags=None,
         )
 
     assert injected_messages[0]["role"] == "system"
@@ -847,7 +912,7 @@ async def test_inject_progressive_context_adds_project_index_block_when_enabled(
 
 @pytest.mark.asyncio
 async def test_inject_progressive_context_adds_tool_capability_block_when_enabled() -> None:
-    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.context_injector_ops import run_injection_operation
     from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
@@ -855,31 +920,56 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
 
     with (
         patch(
-            "app.services.memory.context_injector.get_memory_settings",
+            "app.services.memory.context_injector_ops.get_memory_settings",
             new=AsyncMock(return_value=settings),
         ),
         patch(
-            "app.services.memory.context_injector._build_context_and_format",
+            "app.services.memory.context_injector_ops.build_context_and_format",
             new=AsyncMock(return_value=(ProgressiveContext(total_tokens=0), "")),
         ),
         patch(
-            "app.services.memory.context_injector.format_project_index_context",
+            "app.services.memory.context_injector_ops.format_project_index_context",
             return_value="",
         ),
         patch(
-            "app.services.memory.context_injector.format_tool_capability_context",
+            "app.services.memory.context_injector_ops.format_tool_capability_context",
             return_value="<tool-capabilities>\ntools:\n  - tool: st\n</tool-capabilities>",
         ),
         patch(
-            "app.services.memory.context_injector.assign_variant",
+            "app.services.memory.context_injector_ops.assign_variant",
             return_value=MemoryVariant.BASELINE,
         ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_project_index_enabled",
+            return_value=False,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.resolve_tool_capabilities_enabled",
+            return_value=True,
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.get_visible_tools_for_project",
+            new=AsyncMock(return_value=frozenset({"bash"})),
+        ),
     ):
-        injected_messages, context = await inject_progressive_context(
+        injected_messages, context = await run_injection_operation(
             messages=[{"role": "user", "content": "Need help"}],
-            project_id="agent-hub",
             scope=MemoryScope.PROJECT,
             scope_id="agent-hub",
+            query="Need help",
+            variant=None,
+            session_id=None,
+            external_id=None,
+            project_id="agent-hub",
+            collect_metrics=False,
+            task_type=None,
+            phase=None,
+            include_continuity=False,
+            memory_config=None,
+            current_branch=None,
+            consumer_profile=None,
+            consumer_agent_slug=None,
+            consumer_tags=None,
         )
 
     assert "<tool-capabilities>" in injected_messages[0]["content"]
@@ -887,31 +977,91 @@ async def test_inject_progressive_context_adds_tool_capability_block_when_enable
 
 
 @pytest.mark.asyncio
-async def test_inject_progressive_context_fails_closed_after_repeated_errors() -> None:
-    from app.services.memory.context_injector import inject_progressive_context
+async def test_run_injection_operation_passes_bash_availability_to_tool_capabilities() -> None:
+    from app.services.memory.context_injector_ops import run_injection_operation
     from app.services.memory.settings import MemorySettingsDTO
     from app.services.memory.variants import MemoryVariant
 
     settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+    context = ProgressiveContext(total_tokens=0)
 
     with (
         patch(
-            "app.services.memory.context_injector.get_memory_settings",
+            "app.services.memory.context_injector_ops.get_memory_settings",
             new=AsyncMock(return_value=settings),
         ),
         patch(
-            "app.services.memory.context_injector.assign_variant",
+            "app.services.memory.context_injector_ops.assign_variant",
             return_value=MemoryVariant.BASELINE,
         ),
         patch(
-            "app.services.memory.context_injector._build_context_and_format",
-            new=AsyncMock(side_effect=RuntimeError("neo4j restart in progress")),
-        ) as mock_build,
+            "app.services.memory.context_injector_ops.build_context_and_format",
+            new=AsyncMock(return_value=(context, "")),
+        ),
         patch(
-            "app.services.memory.context_injector.report_memory_failure",
+            "app.services.memory.context_injector_ops.format_project_index_context",
+            return_value="",
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.get_visible_tools_for_project",
+            new=AsyncMock(return_value=frozenset({"read_file"})),
+        ) as mock_visible_tools,
+        patch(
+            "app.services.memory.context_injector_ops.format_tool_capability_context",
+            return_value="",
+        ) as mock_tool_capabilities,
+        patch(
+            "app.services.memory.context_injector_ops.finalize_injection",
+            new=AsyncMock(return_value=([], context)),
+        ),
+    ):
+        await run_injection_operation(
+            messages=[{"role": "user", "content": "Need help"}],
+            scope=MemoryScope.PROJECT,
+            scope_id="monkey-fight",
+            query="Need help",
+            variant=None,
+            session_id=None,
+            external_id=None,
+            project_id="monkey-fight",
+            collect_metrics=False,
+            task_type="wake",
+            phase=None,
+            include_continuity=False,
+            memory_config=None,
+            current_branch=None,
+            consumer_profile="agent_runtime",
+            consumer_agent_slug="persona",
+            consumer_tags=None,
+        )
+
+    assert mock_visible_tools.await_count == 1
+    assert mock_tool_capabilities.call_args is not None
+    assert mock_tool_capabilities.call_args.kwargs["bash_available"] is False
+
+
+@pytest.mark.asyncio
+async def test_inject_progressive_context_fails_closed_after_repeated_errors() -> None:
+    from app.services.memory.context_injector import inject_progressive_context
+    from app.services.memory.context_resilience import MemoryFailureDetails
+
+    failure = MemoryFailureDetails(
+        operation="inject-progressive-context",
+        attempts=3,
+        error_type="RuntimeError",
+        error_message="neo4j restart in progress",
+        latency_ms=123,
+    )
+
+    with (
+        patch(
+            "app.services.memory.context_injector._run_injection_with_retries",
+            new=AsyncMock(return_value=(None, failure, 3, 123)),
+        ),
+        patch(
+            "app.services.memory.context_injector_ops.report_memory_failure",
             new=AsyncMock(),
         ) as mock_report,
-        patch("app.services.memory.context_resilience.asyncio.sleep", new=AsyncMock()),
     ):
         injected_messages, context = await inject_progressive_context(
             messages=[{"role": "user", "content": "Need help"}],
@@ -921,7 +1071,6 @@ async def test_inject_progressive_context_fails_closed_after_repeated_errors() -
             consumer_profile="claude_session_start",
         )
 
-    assert mock_build.await_count == 3
     assert mock_report.await_count == 1
     assert injected_messages[0]["role"] == "system"
     assert "CRITICAL" in injected_messages[0]["content"]

@@ -29,6 +29,7 @@ from app.services.task_overview_summary import (
     parse_task_overview_stats,
     parse_task_overview_stats_from_payload,
 )
+from app.workflows._heartbeat_project import get_permitted_project_ids
 
 # Re-export helpers consumed by callers outside this module
 from app.workflows._heartbeat_state import (
@@ -361,6 +362,11 @@ async def _get_git_status_summary(
     from app.workflows._heartbeat_data import _fetch_git_status_rows
 
     rows = git_status_rows if git_status_rows is not None else await _fetch_git_status_rows(target_project_id)
+    if not rows:
+        return ""
+    allowed_project_ids = {target_project_id} if target_project_id else await get_permitted_project_ids()
+    if allowed_project_ids is not None:
+        rows = [row for row in rows if row.project_id in allowed_project_ids]
     if not rows:
         return ""
     git_status = build_compact_git_status(rows)
