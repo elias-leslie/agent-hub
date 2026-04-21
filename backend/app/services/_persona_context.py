@@ -73,6 +73,7 @@ def _build_persona_sections(
     *,
     personality_text: str | None,
     user_context_text: str | None,
+    include_user_context_notes: bool = True,
 ) -> list[str]:
     """Assemble the static persona XML sections."""
     sections: list[str] = [f'<identity name="{persona.name}" />']
@@ -83,7 +84,7 @@ def _build_persona_sections(
     rendered_profile = render_user_profile(persona.user_profile)
     if rendered_profile:
         sections.append(f"<user_profile>\n{rendered_profile}\n</user_profile>")
-    if user_context_text:
+    if include_user_context_notes and user_context_text:
         sections.append(f"<user_context_notes>\n{user_context_text}\n</user_context_notes>")
     return sections
 
@@ -140,6 +141,7 @@ async def get_persona_context_for_agent(
             persona,
             personality_text=personality_text,
             user_context_text=user_context_text,
+            include_user_context_notes=task_type not in {"heartbeat", "wake"},
         )
     )
     if task_type in {"heartbeat", "wake"}:
