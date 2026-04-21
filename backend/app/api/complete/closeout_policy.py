@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from app.services.memory.citation_parser import extract_summary_tag_strings
 from app.services.session_display_summary import clean_display_summary_text
 
 if TYPE_CHECKING:
@@ -14,9 +15,21 @@ if TYPE_CHECKING:
 
 _TOOL_PLACEHOLDER_CLOSEOUTS = frozenset({"Mode: task", "Mode: campaign"})
 _MAX_FALLBACK_SUMMARIES = 8
+_HEARTBEAT_CLOSEOUT_HEADERS = frozenset({"HEARTBEAT_ACTION", "HEARTBEAT_OK"})
 
 CloseoutAction = Literal["none", "recover", "fallback"]
 CloseoutIssue = Literal["empty", "tool_placeholder"]
+
+
+def _is_valid_heartbeat_summary_only_closeout(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+    if len(lines) != 2 or lines[0] not in _HEARTBEAT_CLOSEOUT_HEADERS:
+        return False
+    summary_tags = extract_summary_tag_strings(lines[1])
+    return len(summary_tags) == 1 and lines[1] == summary_tags[0]
 
 
 @dataclass(frozen=True)
@@ -42,6 +55,8 @@ def detect_closeout_issue(
         return "empty"
     if tool_calls_count > 0 and "[[P:" in text and "[[S:" not in text:
         return "empty"
+    if tool_calls_count > 0 and _is_valid_heartbeat_summary_only_closeout(text):
+        return None
     cleaned = clean_display_summary_text(text)
     if not cleaned:
         return "empty"
