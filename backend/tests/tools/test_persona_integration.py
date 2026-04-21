@@ -488,12 +488,35 @@ class TestPersonaBashWorkflowGuards:
         assert "commit.sh" in result
 
     @pytest.mark.asyncio
+    async def test_persona_bash_blocks_raw_workspace_git_status(self, tmp_path: Path):
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="persona")
+
+        result = await executor.dispatch(
+            "bash",
+            {"command": "git -C /srv/workspaces/projects/portfolio-ai status --short"},
+        )
+
+        assert "blocked for workflow policy" in result.lower()
+        assert "st pulse" in result
+
+    @pytest.mark.asyncio
     async def test_non_persona_bash_does_not_block_git_commit(self, tmp_path: Path):
         executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
 
         result = await executor.dispatch(
             "bash",
             {"command": "git commit -m 'test'"},
+        )
+
+        assert "blocked for workflow policy" not in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_non_persona_bash_does_not_block_workspace_git_status(self, tmp_path: Path):
+        executor = DirectToolExecutor(str(tmp_path), project_id="agent-hub", agent_slug="coder")
+
+        result = await executor.dispatch(
+            "bash",
+            {"command": "git -C /srv/workspaces/projects/portfolio-ai status --short"},
         )
 
         assert "blocked for workflow policy" not in result.lower()
