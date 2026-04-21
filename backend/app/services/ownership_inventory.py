@@ -213,8 +213,14 @@ async def _fetch_active_specialists(db: AsyncSession, project_id: str) -> list[A
 
 
 def _working_dir_from_metadata(metadata: dict) -> str | None:
-    paths = metadata_paths(metadata)
-    return paths[0] if paths else None
+    for key in ("working_dir", "cwd"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            return value
+    repo_root = metadata.get("repo_root")
+    if isinstance(repo_root, str) and repo_root and infer_task_id(None, None, repo_root):
+        return repo_root
+    return None
 
 
 def _build_scope_paths(session: Session, events: list[SessionEvent], working_dir: str | None) -> tuple[
@@ -242,8 +248,9 @@ def _build_owner(
 ) -> OwnershipOwner | None:
     """Build an OwnershipOwner for a session, or return None if it should be skipped."""
     has_working_dir = isinstance(working_dir, str) and bool(working_dir)
-    declared, observed_write, observed_read, scope = _build_scope_paths(session, events, working_dir)
     task_id = infer_task_id(session.external_id, session.current_branch, *lane_paths)
+    scope_base_path = working_dir or (lane_paths[0] if lane_paths else None)
+    declared, observed_write, observed_read, scope = _build_scope_paths(session, events, scope_base_path)
     if not (task_id or session.current_branch or has_working_dir):
         return None
     if _should_skip_owner_session(

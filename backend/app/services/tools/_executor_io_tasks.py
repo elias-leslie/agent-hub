@@ -79,7 +79,10 @@ def _normalize_references(value: object) -> list[dict[str, str]]:
 
 def _copy_nonempty_dict(value: object) -> dict[str, object] | None:
     """Return shallow dict copy when input is a non-empty dict."""
-    return dict(value) if isinstance(value, dict) and value else None
+    if not isinstance(value, dict) or not value:
+        return None
+    copied = {key: item for key, item in value.items() if isinstance(key, str)}
+    return copied or None
 
 
 def _ownership_rows_to_workstream_rows(
@@ -133,11 +136,10 @@ def _normalize_context(context: dict[str, object] | None) -> dict[str, object] |
     if not context:
         return None
 
-    normalized = {
-        field: values
-        for field in _PLAN_CONTEXT_LIST_FIELDS
-        if (values := _normalize_string_list(context.get(field)))
-    }
+    normalized: dict[str, object] = {}
+    for field in _PLAN_CONTEXT_LIST_FIELDS:
+        if values := _normalize_string_list(context.get(field)):
+            normalized[field] = values
     if references := _normalize_references(context.get("references")):
         normalized["references"] = references
     if second_opinion := _copy_nonempty_dict(context.get("second_opinion")):
@@ -647,7 +649,7 @@ async def _handle_dispatch(
         return cleanup_block
     if live_block := await _live_dispatch_block_reason(bash_fn, task_id, project_id):
         return live_block
-    warning = await _build_dispatch_warning(bash_fn, project_id, cleanup_status=cleanup_status[1])
+    warning = await _build_dispatch_warning(bash_fn, project_id, cleanup_status=cleanup_status)
     result = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
     return warning + result
 

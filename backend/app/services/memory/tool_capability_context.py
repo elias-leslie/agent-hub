@@ -317,7 +317,11 @@ def build_tool_capability_payload(
     consumer_profile: str | None,
     task_type: str | None = None,
     project_id: str | None = None,
+    bash_available: bool | None = None,
 ) -> dict[str, Any] | None:
+    if bash_available is False:
+        return None
+
     tools: list[dict[str, Any]] = []
     for spec in _TOOL_SPECS:
         if not _should_include_tool(
@@ -341,11 +345,13 @@ def format_tool_capability_context(
     consumer_profile: str | None,
     task_type: str | None = None,
     project_id: str | None = None,
+    bash_available: bool | None = None,
 ) -> str:
     payload = build_tool_capability_payload(
         consumer_profile=consumer_profile,
         task_type=task_type,
         project_id=project_id,
+        bash_available=bash_available,
     )
     if not payload:
         return ""

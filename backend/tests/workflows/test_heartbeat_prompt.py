@@ -176,6 +176,50 @@ class TestGetGitStatusSummary:
         assert "agent-hub       main            dirty   uncommitted:3 ahead:1 behind:0" in result
         assert "ACTIONABLE-GIT[1]" in result
 
+    @pytest.mark.asyncio
+    @patch("app.workflows._heartbeat_data._fetch_git_status_rows", new_callable=AsyncMock)
+    async def test_filters_git_state_to_permitted_projects(self, mock_fetch_rows: AsyncMock) -> None:
+        from app.services.git_status_summary import RepoGitStatus
+
+        mock_fetch_rows.return_value = [
+            RepoGitStatus(
+                project_id="agent-hub",
+                branch="main",
+                state="dirty",
+                uncommitted=3,
+                ahead=0,
+                behind=0,
+            ),
+            RepoGitStatus(
+                project_id="portfolio-ai",
+                branch="main",
+                state="clean",
+                uncommitted=0,
+                ahead=0,
+                behind=0,
+            ),
+            RepoGitStatus(
+                project_id=".claude",
+                branch="main",
+                state="dirty",
+                uncommitted=3,
+                ahead=0,
+                behind=0,
+            ),
+        ]
+
+        with patch(
+            "app.workflows._heartbeat_orchestrators.get_permitted_project_ids",
+            new=AsyncMock(return_value={"agent-hub", "portfolio-ai"}),
+            create=True,
+        ):
+            result = await _get_git_status_summary()
+
+        assert "agent-hub" in result
+        assert "portfolio-ai" in result
+        assert ".claude" not in result
+        assert "ACTIONABLE-GIT[1]" in result
+
 
 class TestFetchGitStatusCompact:
     @pytest.mark.asyncio
@@ -2026,7 +2070,7 @@ class TestGetWorkstreamInventory:
         assert "task-777" in result
         assert "state=mixed" in result
         assert "branches=2" in result
-        assert "checkout=/tmp/lanes/task-777-follow-up" in result or "checkout=/tmp/lanes/task-777-main" in result
+        assert "cwd=/tmp/lanes/task-777-follow-up" in result or "cwd=/tmp/lanes/task-777-main" in result
 
     @pytest.mark.asyncio
     async def test_reports_working_dir_when_lane_has_working_dir(self) -> None:
@@ -2053,7 +2097,7 @@ class TestGetWorkstreamInventory:
             result = await _get_workstream_inventory()
 
         assert "task-999" in result
-        assert "checkout=/home/testuser//.local/share/st/checkpoints/a-term/task-999" in result
+        assert "cwd=/home/testuser//.local/share/st/checkpoints/a-term/task-999" in result
 
     @pytest.mark.asyncio
     async def test_reports_reconciled_lane_from_persisted_lifecycle_markers(self) -> None:
@@ -2270,7 +2314,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "split/promotion cleanup; do not dispatch more implementation onto this lane"
+            == "split/promotion cleanup; do not dispatch more implementation onto this task checkpoint"
         )
         assert (
             _build_workstream_next_action(
@@ -2278,7 +2322,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "authoritative lane recorded; avoid redispatch unless new facts contradict it"
+            == "authoritative checkpoint recorded; avoid redispatch unless new facts contradict it"
         )
         assert (
             _build_workstream_next_action(
@@ -2286,7 +2330,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "retired_lane_no_action"
+            == "retired_session_no_action"
         )
         assert (
             _build_workstream_next_action(
@@ -2294,7 +2338,7 @@ class TestWorkstreamLaneContract:
                 project_id="summitflow",
                 task_id="task-6",
             )
-            == "superseded_lane_no_action"
+            == "superseded_session_no_action"
         )
 
     def test_build_next_action_uses_shell_first_guidance(self) -> None:

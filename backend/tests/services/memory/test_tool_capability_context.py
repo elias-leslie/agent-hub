@@ -85,6 +85,31 @@ def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> N
     assert "tool: rebuild.sh" in rendered
 
 
+def test_format_tool_capability_context_omits_cli_wrappers_without_bash() -> None:
+    from app.services.memory.tool_capability_context import format_tool_capability_context
+
+    help_outputs = {
+        ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n",
+        ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\n",
+        ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n",
+        ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n",
+        ("rebuild.sh", "--help"): "Usage: rebuild.sh [--detach] <project>\n",
+    }
+
+    with patch(
+        "app.services.memory.tool_capability_context._read_help_output",
+        side_effect=lambda command: help_outputs.get(command, ""),
+    ):
+        rendered = format_tool_capability_context(
+            consumer_profile="agent_runtime",
+            task_type="wake",
+            project_id="monkey-fight",
+            bash_available=False,
+        )
+
+    assert rendered == ""
+
+
 def test_read_help_output_sanitizes_python_env_for_external_clis() -> None:
     from app.services.memory.tool_capability_context import _read_help_output
 
