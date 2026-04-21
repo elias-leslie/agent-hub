@@ -512,6 +512,126 @@ async def test_iter_stream_sse_with_tools_runtime_session_keeps_streamed_closeou
 
 
 @pytest.mark.asyncio
+async def test_iter_stream_sse_with_tools_runtime_session_keeps_heartbeat_summary_only_closeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.api.complete import streaming_tool_loop as mod
+
+    heartbeat_closeout = (
+        "HEARTBEAT_ACTION\n"
+        "[[S:partial:no changes made; sha task still not closure-ready]]"
+    )
+
+    class FakeRuntimeSession:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def close(self) -> None:
+            self.closed = True
+
+        async def interrupt(self) -> None:
+            self.closed = True
+
+        async def respond_to_request(self, **_kwargs) -> None:
+            return None
+
+        async def respond_to_user_input(self, **_kwargs) -> None:
+            return None
+
+        async def _events(self):
+            yield ToolEvent(
+                type="assistant",
+                message=ToolMessage(
+                    content=[
+                        ToolContentBlock(
+                            type="tool_use",
+                            name="bash",
+                            input={"command": "st pulse"},
+                            id="tool-1",
+                        ),
+                    ]
+                ),
+            ), None
+            yield ToolEvent(
+                type="tool_result",
+                content="PULSE:sha|cleanup=yes",
+                tool_use_id="tool-1",
+                duration_ms=12,
+            ), None
+            yield ToolEvent(
+                type="result",
+                result=heartbeat_closeout,
+                finish_reason="end_turn",
+            ), None
+
+        def events(self):
+            return self._events()
+
+    fake_session = FakeRuntimeSession()
+
+    class FakeAdapter:
+        async def start_tool_session(self, **_kwargs):
+            return fake_session
+
+        async def complete(self, **_kwargs):
+            return SimpleNamespace(content="unexpected fallback", tool_calls=[], thinking_content=None)
+
+    captured_done: dict[str, object] = {}
+
+    async def _fake_build_done_sse(*, event, ctx, accumulated_content, seq):
+        captured_done["content"] = accumulated_content
+        captured_done["finish_reason"] = getattr(event, "finish_reason", None)
+        captured_done["seq"] = seq
+        return "data: done\n\n"
+
+    mock_tool_use = AsyncMock()
+    mock_tool_result = AsyncMock()
+    mock_progress = AsyncMock()
+    monkeypatch.setattr(mod, "build_done_sse", _fake_build_done_sse)
+    monkeypatch.setattr(mod, "mirror_stream_tool_use", mock_tool_use)
+    monkeypatch.setattr(mod, "mirror_stream_tool_result", mock_tool_result)
+    monkeypatch.setattr(mod, "publish_stream_progress", mock_progress)
+
+    ctx = StreamContext(
+        session_id="sess-heartbeat-summary-only",
+        model="codex/gpt-5.4",
+        provider="codex",
+        agent_used="persona",
+        model_used="codex/gpt-5.4",
+        fallback_used=False,
+        user_messages=[],
+        stream_start=time.monotonic(),
+        is_new_session=False,
+        is_one_shot=False,
+    )
+
+    content_buf = [""]
+    chunks = []
+    async for chunk in iter_stream_sse_with_tools(
+        adapter=FakeAdapter(),
+        messages=[Message(role="user", content="Run heartbeat now.")],
+        model="codex/gpt-5.4",
+        max_tokens=None,
+        temperature=0.2,
+        stream_kwargs={"tools": [{"name": "bash"}], "working_dir": "/srv/workspaces/projects/agent-hub"},
+        content_buf=content_buf,
+        ctx=ctx,
+        project_id="agent-hub",
+        max_tool_turns=4,
+    ):
+        chunks.append(chunk)
+
+    assert all("Tool execution completed, but the agent did not provide a usable final summary." not in chunk for chunk in chunks)
+    assert chunks[-1] == "data: done\n\n"
+    assert content_buf[0] == heartbeat_closeout
+    assert captured_done["content"] == heartbeat_closeout
+    assert fake_session.closed is True
+    mock_tool_use.assert_awaited_once()
+    mock_tool_result.assert_awaited_once()
+    mock_progress.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_iter_stream_sse_with_tools_runtime_session_recovers_missing_closeout_from_tool_summaries(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

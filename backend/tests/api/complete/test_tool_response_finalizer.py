@@ -219,6 +219,52 @@ async def test_finalize_response_falls_back_when_closeout_recovery_fails(mocker)
 
 
 @pytest.mark.asyncio
+async def test_finalize_response_keeps_heartbeat_summary_only_closeout(mocker) -> None:
+    mock_store = mocker.patch(
+        "app.api.complete.tool_event_storage.store_assistant_response",
+        new_callable=AsyncMock,
+    )
+    mock_finalize = mocker.patch(
+        "app.api.complete.tool_result_builder.finalize_result",
+        new_callable=AsyncMock,
+        return_value=sentinel.result,
+    )
+    adapter = SimpleNamespace(
+        complete=AsyncMock(
+            return_value=SimpleNamespace(content="unexpected fallback", thinking_content=None, tool_calls=[])
+        )
+    )
+    heartbeat_closeout = "HEARTBEAT_ACTION\n[[S:partial:no changes made; sha task still not closure-ready]]"
+
+    await finalize_response(
+        db=AsyncMock(),
+        session=SimpleNamespace(agent_slug="persona"),
+        session_id="sess-heartbeat-summary-only",
+        is_new_session=True,
+        model="codex/gpt-5.4",
+        provider="codex",
+        content_parts=[heartbeat_closeout],
+        thinking_parts=[],
+        loaded_memory_uuids=[],
+        memory_group_id=None,
+        turn=1,
+        tool_calls_count=2,
+        finish_reason="end_turn",
+        tracker=_tracker(),
+        adapter=adapter,
+        base_messages=[Message(role="user", content="Run heartbeat now.")],
+        temperature=0.0,
+        working_dir="/srv/workspaces/projects/agent-hub",
+        tool_result_summaries=["Bash: PULSE:sha|cleanup=yes"],
+    )
+
+    adapter.complete.assert_not_awaited()
+    assert mock_store.await_args.args[2] == heartbeat_closeout
+    assert mock_finalize.await_args.kwargs["content"] == heartbeat_closeout
+    assert mock_finalize.await_args.kwargs["fallback_used"] is False
+
+
+@pytest.mark.asyncio
 async def test_finalize_response_preserves_substantive_content(mocker) -> None:
     mock_store = mocker.patch(
         "app.api.complete.tool_event_storage.store_assistant_response",
