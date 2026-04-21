@@ -89,6 +89,18 @@ describe("agent editor shell", () => {
     expect(screen.getByRole("button", { name: "Back to agents" })).toBeInTheDocument();
   });
 
+  it("shows the committee editor entry for the investment committee agent", () => {
+    render(
+      <Sidebar
+        activeTab="general"
+        agent={{ ...agent, slug: "investment-committee", name: "Investment Committee" }}
+        onTabChange={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Committee" })).toBeInTheDocument();
+  });
+
   it("closes the mobile sidebar after selecting a tab", () => {
     const onTabChange = vi.fn();
     const onMobileClose = vi.fn();

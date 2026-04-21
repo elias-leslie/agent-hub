@@ -62,6 +62,35 @@ describe("agent form helpers", () => {
     expect(formData.timeout_seconds).toBe(90);
   });
 
+  it("preserves strategies in form state and update payloads", () => {
+    const strategies = {
+      committee: {
+        orchestrator: {
+          agent_slug: "investment-committee",
+          model_id: "codex/gpt-5.4",
+          instruction: "Synthesize committee output.",
+        },
+        seats: [
+          {
+            key: "macro",
+            label: "Macro",
+            enabled: true,
+            agent_slug: "market-pulse-analyst",
+            model_id: "codex/gpt-5.4",
+            instruction: "Focus on macro regime.",
+            weight: 1,
+          },
+        ],
+      },
+    };
+
+    const formData = createAgentFormData(makeAgent({ strategies }));
+    expect(formData.strategies).toEqual(strategies);
+
+    const payload = buildAgentUpdatePayload({ strategies });
+    expect(payload.strategies).toEqual(strategies);
+  });
+
   it("strips empty required fields from update payloads", () => {
     const payload = buildAgentUpdatePayload({
       name: "",

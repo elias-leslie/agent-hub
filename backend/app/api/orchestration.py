@@ -18,6 +18,7 @@ from fastapi import APIRouter
 
 # Import endpoint routers
 from app.api.endpoints.chain import router as chain_router
+from app.api.endpoints.committee import router as committee_router
 from app.api.endpoints.maker_checker import router as maker_checker_router
 from app.api.endpoints.parallel import router as parallel_router
 from app.api.endpoints.subagent import router as subagent_router
@@ -39,6 +40,7 @@ async def orchestration_health() -> dict[str, Any]:
             "parallel_executor": True,
             "chain_executor": True,
             "maker_checker": True,
+            "committee_roundtable": True,
         },
     }
 
@@ -51,3 +53,4 @@ router.include_router(subagent_router)
 router.include_router(parallel_router)
 router.include_router(chain_router)
 router.include_router(maker_checker_router)
+router.include_router(committee_router)

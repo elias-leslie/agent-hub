@@ -10,6 +10,27 @@ export type {
 } from "@/types/agent-preview";
 import type { MemoryConfig } from "./components/memory/types";
 
+export interface CommitteeSeatConfig {
+  key: string;
+  label: string;
+  enabled: boolean;
+  agent_slug: string;
+  model_id: string | null;
+  instruction: string | null;
+  weight: number;
+}
+
+export interface CommitteeOrchestratorConfig {
+  agent_slug: string;
+  model_id: string | null;
+  instruction: string | null;
+}
+
+export interface CommitteeConfig {
+  orchestrator: CommitteeOrchestratorConfig;
+  seats: CommitteeSeatConfig[];
+}
+
 export interface Agent {
   id: number;
   slug: string;
@@ -19,7 +40,7 @@ export interface Agent {
   primary_model_id: string;
   fallback_models: string[];
   escalation_model_id: string | null;
-  strategies: Record<string, unknown>;
+  strategies: Record<string, unknown> & { committee?: CommitteeConfig };
   temperature: number;
   thinking_level: string | null;
   verbosity_level: string | null;
@@ -44,4 +65,5 @@ export type TabId =
   | "models"
   | "parameters"
   | "prompts"
-  | "memory";
+  | "memory"
+  | "committee";

@@ -7,7 +7,8 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Agent, PreviewScenario, PreviewTaskType, TabId } from "./types";
 import { fetchAgent, updateAgent, fetchModels } from "@/lib/api";
 import { AgentEditorHeader } from "./components/AgentEditorHeader";
-import { AGENT_EDITOR_TABS, Sidebar } from "./components/Sidebar";
+import { getAgentEditorTabs, Sidebar } from "./components/Sidebar";
+import { CommitteeTab } from "./components/CommitteeTab";
 import { GeneralTab } from "./components/GeneralTab";
 import { ModelsTab } from "./components/ModelsTab";
 import { ParametersTab } from "./components/ParametersTab";
@@ -17,8 +18,8 @@ import { buildAgentUpdatePayload, createAgentFormData } from "./agent-form";
 import { useAgentPreview } from "./hooks/useAgentPreview";
 import { DEFAULT_PREVIEW_SCENARIO } from "@/types/agent-preview";
 
-function isAgentTab(value: string | null): value is TabId {
-  return AGENT_EDITOR_TABS.some((tab) => tab.id === value);
+function isAgentTab(value: string | null, slug: string): value is TabId {
+  return getAgentEditorTabs(slug).some((tab) => tab.id === value);
 }
 
 export default function AgentEditorPage() {
@@ -131,7 +132,7 @@ export default function AgentEditorPage() {
         ? "Failed to load preview"
         : null;
   const tabParam = searchParams.get("tab");
-  const activeTab: TabId = isAgentTab(tabParam) ? tabParam : "general";
+  const activeTab: TabId = isAgentTab(tabParam, slug) ? tabParam : "general";
 
   if (isLoading) {
     return (
@@ -161,9 +162,9 @@ export default function AgentEditorPage() {
   }
 
   const activeTabLabel =
-    AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.label ?? "Editor";
+    getAgentEditorTabs(slug).find((tab) => tab.id === activeTab)?.label ?? "Editor";
   const activeTabDescription =
-    AGENT_EDITOR_TABS.find((tab) => tab.id === activeTab)?.description ??
+    getAgentEditorTabs(slug).find((tab) => tab.id === activeTab)?.description ??
     "Adjust this slice of the agent runtime profile.";
 
   return (
@@ -256,6 +257,13 @@ export default function AgentEditorPage() {
                     )}
                     {activeTab === "memory" && (
                       <MemoryTab formData={formData} updateField={updateField} />
+                    )}
+                    {activeTab === "committee" && (
+                      <CommitteeTab
+                        formData={formData}
+                        updateField={updateField}
+                        availableModels={availableModels}
+                      />
                     )}
                   </div>
                 </div>

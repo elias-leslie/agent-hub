@@ -1,6 +1,10 @@
 import type { Agent } from "./types"
 import { cloneConfig, parseConfig } from "./components/memory/utils"
 
+function cloneStrategies(strategies: Agent["strategies"]): Agent["strategies"] {
+  return JSON.parse(JSON.stringify(strategies ?? {})) as Agent["strategies"]
+}
+
 export function createAgentFormData(agent: Agent): Partial<Agent> {
   const effectiveMemoryConfig = cloneConfig(agent.effective_memory_config)
 
@@ -10,6 +14,7 @@ export function createAgentFormData(agent: Agent): Partial<Agent> {
     primary_model_id: agent.primary_model_id,
     fallback_models: agent.fallback_models,
     escalation_model_id: agent.escalation_model_id,
+    strategies: cloneStrategies(agent.strategies),
     temperature: agent.temperature,
     thinking_level: agent.thinking_level,
     verbosity_level: agent.verbosity_level,
@@ -38,6 +43,9 @@ export function buildAgentUpdatePayload(formData: Partial<Agent>): Partial<Agent
     payload.memory_config = cloneConfig(
       payload.memory_config as NonNullable<Agent["memory_config"]>
     )
+  }
+  if (payload.strategies) {
+    payload.strategies = cloneStrategies(payload.strategies as Agent["strategies"])
   }
 
   return payload
