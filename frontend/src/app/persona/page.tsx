@@ -94,18 +94,12 @@ function buildLiveSummaryDescriptor(args: {
   return { text: "Idle cockpit ready", source: "session" };
 }
 
-function isWorkActive(
-  session: { status?: string; live_activity?: { status?: string; phase?: string } | null } | null | undefined,
+function isChildLaneActive(
+  session: { status?: string; live_activity?: { status?: string } | null } | null | undefined,
 ): boolean {
   return Boolean(
     session
-    && (
-      session.status === "active"
-      || session.live_activity?.status === "active"
-      || session.live_activity?.phase === "running_tool"
-      || session.live_activity?.phase === "waiting_for_model"
-      || session.live_activity?.phase === "finalizing"
-    ),
+    && (session.status === "active" || session.live_activity?.status === "active"),
   );
 }
 
@@ -142,14 +136,11 @@ function PersonaContent() {
   const autoRunDisabled = (persona?.heartbeat_interval_minutes ?? 0) === 0;
   const runtimeLabel = formatRuntimeLabel(runtime.primarySession?.live_activity?.phase, executionState, autoRunDisabled);
   const isActive = runtimeLabel === "Working" || runtimeLabel === "Waiting" || runtimeLabel === "Finalizing";
-  const activeWorkCount = [...runtime.activePersonaSessions, ...runtime.activeChildSessions].reduce(
-    (count, session) => count + (isWorkActive(session) ? 1 : 0),
-    0,
-  );
   const activeChildLaneCount = runtime.activeChildSessions.reduce(
-    (count, session) => count + (isWorkActive(session) ? 1 : 0),
+    (count, session) => count + (isChildLaneActive(session) ? 1 : 0),
     0,
   );
+  const stopScopeAvailable = Boolean(runtime.primarySession);
   const liveSummary = buildLiveSummaryDescriptor({
     runtimeSummary: runtime.primarySession?.live_activity?.summary,
     heartbeatStatus,
@@ -166,13 +157,16 @@ function PersonaContent() {
   };
 
   const handleStopCurrentStream = async () => {
-    const result = await runtime.stopActiveWork();
-    if (result.cancelled > 0) {
-      toast.success(
-        result.cancelled > 1
-          ? `Stopped ${result.cancelled} live sessions for ${personaName}`
-          : `Stopped live work for ${personaName}`,
+    if (!runtime.primarySession) {
+      toast.warning(
+        "No active session to stop",
+        `${personaName} has no focused persisted session running right now.`,
       );
+      return;
+    }
+    const cancelled = await runtime.stopCurrentStream();
+    if (cancelled) {
+      toast.success(`Stopped live work for ${personaName}`);
       return;
     }
     toast.warning(
@@ -229,7 +223,6 @@ function PersonaContent() {
             </div>
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
               <ScopeChip tone={activeChildLaneCount > 0 ? "warning" : "default"}>Active child lanes {activeChildLaneCount}</ScopeChip>
-              <ScopeChip tone={activeWorkCount > 1 ? "warning" : "default"}>{activeWorkCount} live sessions</ScopeChip>
             </div>
           </div>
         </div>
