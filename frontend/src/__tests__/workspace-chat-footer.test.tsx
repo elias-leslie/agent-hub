@@ -92,7 +92,7 @@ describe("WorkspaceChatFooter", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /Steer/i }));
-    expect(screen.getByText(/advisory steering draft for the next thread/i)).toBeInTheDocument();
+    expect(screen.getByText(/Shapes next thread without pretending persisted session already exists/i)).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Steer next thread/i), {
       target: { value: "Start with blocker review." },
     });

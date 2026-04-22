@@ -49,7 +49,7 @@ describe("PersonaBackgroundInbox", () => {
       />,
     );
 
-    expect(screen.getByText(/actions stay advisory until the backend exposes stronger lane controls/i)).toBeInTheDocument();
+    expect(screen.getByText(/redirect, promote, and handoff open drafts first/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Open handoff draft/i }));
 

@@ -38,8 +38,12 @@ describe("PersonaPromptBudgetPanel", () => {
       />,
     );
 
-    expect(screen.getByText("Runtime")).toBeInTheDocument();
-    expect(screen.getByText(/30% of live context/i)).toBeInTheDocument();
-    expect(screen.getByText(/Treat preview totals as guidance until runtime publishes authoritative prompt totals/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Runtime").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/30% live used/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Preview totals stay labeled Preview until live runtime publishes its own metric/i,
+      ),
+    ).toBeInTheDocument();
   });
 });
