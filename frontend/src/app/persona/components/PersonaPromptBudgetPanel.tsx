@@ -4,7 +4,7 @@ import { AlertTriangle, FileStack, Radar } from "lucide-react";
 
 import type { AgentPreview, AgentPreviewSection } from "@/types/agent-preview";
 import type { ContextUsage } from "@/lib/api/sessions";
-import { ProvenanceBadge, SectionEyebrow } from "./persona-operator-chrome";
+import { EvidencePanel, MetricCard, MetricStrip, ProvenanceBadge, SectionEyebrow } from "./persona-operator-chrome";
 
 interface PersonaPromptBudgetPanelProps {
   preview: AgentPreview | null;
@@ -13,11 +13,11 @@ interface PersonaPromptBudgetPanelProps {
   runtimeContext?: ContextUsage | null;
 }
 
-function toneForTokens(totalTokens: number | null | undefined) {
-  if (typeof totalTokens !== "number") return "text-slate-300";
-  if (totalTokens >= 14000) return "text-rose-300";
-  if (totalTokens >= 8000) return "text-amber-300";
-  return "text-emerald-300";
+function toneForTokens(totalTokens: number | null | undefined): "default" | "success" | "warning" | "danger" {
+  if (typeof totalTokens !== "number") return "default";
+  if (totalTokens >= 14000) return "danger";
+  if (totalTokens >= 8000) return "warning";
+  return "success";
 }
 
 export function PersonaPromptBudgetPanel({
@@ -32,40 +32,49 @@ export function PersonaPromptBudgetPanel({
     .slice(0, 5);
 
   return (
-    <section
-      data-testid="persona-prompt-budget-panel"
-      className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4"
-    >
+    <EvidencePanel data-testid="persona-prompt-budget-panel" className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <SectionEyebrow icon={<FileStack className="h-3.5 w-3.5 text-sky-300" />} label="Prompt budget" source="preview" />
+          <SectionEyebrow icon={<FileStack className="h-3.5 w-3.5 text-sky-300" />} label="Prompt budget" source={runtimeContext ? "runtime" : "preview"} />
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
-            Keep runtime context lean enough to stay sharp.
+            Keep context truth separate from preview estimates.
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Treat preview totals as guidance until runtime publishes authoritative prompt totals.
+            Runtime context wins when present. Preview totals stay labeled Preview until live runtime publishes its own metric.
           </p>
         </div>
         <div className="text-right">
-          <div className={`text-sm font-semibold ${toneForTokens(totalTokens)}`}>
-            {typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} tokens` : "Loading"}
+          <div className="text-sm font-semibold text-slate-100">
+            {runtimeContext ? `${Math.round(runtimeContext.percent_used)}% live used` : typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} preview tokens` : "Loading"}
           </div>
           <div className="mt-1 flex justify-end">
-            <ProvenanceBadge source="preview" />
+            <ProvenanceBadge source={runtimeContext ? "runtime" : "preview"} />
           </div>
         </div>
       </div>
 
-      {runtimeContext ? (
-        <div className="mt-4 rounded-[24px] border border-emerald-500/20 bg-emerald-950/15 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <SectionEyebrow icon={<Radar className="h-3.5 w-3.5 text-emerald-300" />} label="Live context pressure" source="runtime" />
-          </div>
-          <p className="mt-2 text-sm text-emerald-100">
-            {Math.round(runtimeContext.percent_used)}% of live context used · {runtimeContext.remaining_tokens.toLocaleString()} tokens remaining
-          </p>
-        </div>
-      ) : null}
+      <MetricStrip className="mt-4 xl:grid-cols-3">
+        <MetricCard
+          label="Runtime context"
+          value={runtimeContext ? `${Math.round(runtimeContext.percent_used)}%` : "Unavailable"}
+          detail={runtimeContext ? `${runtimeContext.remaining_tokens.toLocaleString()} tokens left` : "No runtime metric on focused session"}
+          tone={runtimeContext && runtimeContext.percent_used >= 80 ? "warning" : runtimeContext ? "success" : "default"}
+          icon={<Radar className="h-3.5 w-3.5" />}
+        />
+        <MetricCard
+          label="Preview total"
+          value={typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} tok` : loading ? "Loading" : "Unavailable"}
+          detail="Preview only. Not live runtime fact."
+          tone={toneForTokens(totalTokens)}
+          icon={<FileStack className="h-3.5 w-3.5" />}
+        />
+        <MetricCard
+          label="Top sections"
+          value={sections.length > 0 ? String(sections.length) : "0"}
+          detail={sections[0] ? `${sections[0].label} is heaviest` : "No preview sections loaded"}
+          icon={<FileStack className="h-3.5 w-3.5" />}
+        />
+      </MetricStrip>
 
       {error ? (
         <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
@@ -76,7 +85,7 @@ export function PersonaPromptBudgetPanel({
       {!error && typeof totalTokens === "number" && totalTokens >= 14000 ? (
         <div className="mt-4 flex items-start gap-2 rounded-2xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm text-amber-200">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          High prompt load. Trim runtime sections before this turns into slow, vague work.
+          Preview load is heavy. Trim prompt sections before treating long runs as stable.
         </div>
       ) : null}
 
@@ -94,8 +103,9 @@ export function PersonaPromptBudgetPanel({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-slate-100">{section.label}</div>
-                <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                  {section.source_kind}
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                  <span>{section.source_kind}</span>
+                  <ProvenanceBadge source="preview" />
                 </div>
               </div>
               <div className="text-right text-sm text-slate-300">
@@ -108,9 +118,9 @@ export function PersonaPromptBudgetPanel({
 
       {preview?.memory_query ? (
         <div className="mt-3 rounded-2xl border border-slate-800/70 bg-slate-950/70 px-3 py-2 text-xs text-slate-400">
-          Query: {preview.memory_query}
+          Preview query · {preview.memory_query}
         </div>
       ) : null}
-    </section>
+    </EvidencePanel>
   );
 }
