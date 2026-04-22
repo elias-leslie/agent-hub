@@ -90,6 +90,9 @@ async def build_full_session_response(
     Returns:
         Complete SessionResponse with all metadata
     """
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import ContextUsageResponse
+
     ctx_usage = await calculate_context_usage(db, session.id, _effective_model(session))
     context_usage_response = ContextUsageResponse(
         used_tokens=ctx_usage.used_tokens,
@@ -132,6 +135,9 @@ def build_event_responses(events: list[SessionEvent]) -> list[SessionEventRespon
     Returns:
         List of SessionEventResponse objects
     """
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import SessionEventResponse
+
     return [
         SessionEventResponse(
             id=str(e.id),

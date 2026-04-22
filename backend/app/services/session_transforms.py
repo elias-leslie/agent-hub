@@ -1,14 +1,17 @@
 """Session data transformations."""
 
-from typing import Any
+from __future__ import annotations
 
-from app.api.schemas.sessions import (
-    AgentTokenBreakdown,
-    ContextUsageResponse,
-    MessageResponse,
-    SessionListItem,
-    SessionResponse,
-)
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.api.schemas.sessions import (
+        AgentTokenBreakdown,
+        ContextUsageResponse,
+        MessageResponse,
+        SessionListItem,
+        SessionResponse,
+    )
 from app.models import Session, SessionEventType
 from app.services._session_message_helpers import (
     group_events_by_turn,
@@ -86,6 +89,9 @@ def _session_list_item(
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionListItem:
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import SessionListItem
+
     model_info = session_model_info(session)
     attribution = session_attribution(session)
     wd = working_dir(session)
@@ -181,6 +187,9 @@ def build_session_response(
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import SessionResponse
+
     model_info = session_model_info(session)
     attribution = session_attribution(session)
     provider_metadata = session.provider_metadata if isinstance(session.provider_metadata, dict) else {}
