@@ -169,8 +169,10 @@ def build_live_activity_response(
 ) -> LiveActivity | None:
     """Build API-ready live activity payload with dynamic quiet/stall classification."""
     _, raw = get_live_activity_ctx(session)
+    source = "runtime"
     if not raw:
         raw = build_fallback_raw(session)
+        source = "fallback"
         if raw is None:
             return None
 
@@ -182,6 +184,7 @@ def build_live_activity_response(
         health, stalled, stall_reason = "error", False, None
     else:
         health, stalled, stall_reason = _apply_terminal_overrides(response, session, phase, status), False, None
+    response["source"] = source
     response["health"] = health
     response["stalled"] = stalled
     response["stall_reason"] = stall_reason or response.get("stall_reason")

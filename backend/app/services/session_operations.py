@@ -287,7 +287,7 @@ async def list_sessions_with_stats(
     page_size: int = 20,
     parent_session_id: str | None = None,
     external_id: str | None = None,
-) -> tuple[list[Session], int, dict[str, int], dict[str, int], dict[str, dict[str, int]]]:
+) -> tuple[list[Session], int, dict[str, int], dict[str, int], dict[str, dict[str, int]], dict[str, int], dict[str, int]]:
     """List sessions with pagination, filtering, and statistics.
 
     Args:
@@ -300,7 +300,7 @@ async def list_sessions_with_stats(
         page_size: Items per page
 
     Returns:
-        Tuple of (sessions, total_count, message_counts, event_counts, token_stats)
+        Tuple of (sessions, total_count, message_counts, event_counts, token_stats, child_counts, active_child_counts)
     """
     from app.services.session_queries import fetch_session_statistics
 
@@ -317,9 +317,9 @@ async def list_sessions_with_stats(
     )
 
     session_ids = [s.id for s in sessions]
-    msg_counts, event_counts, token_stats = await fetch_session_statistics(db, session_ids)
+    msg_counts, event_counts, token_stats, child_counts, active_child_counts = await fetch_session_statistics(db, session_ids)
 
-    return sessions, total, msg_counts, event_counts, token_stats
+    return sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts
 
 
 async def fork_session_at_turn(
