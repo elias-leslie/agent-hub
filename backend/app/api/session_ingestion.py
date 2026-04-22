@@ -106,6 +106,8 @@ async def append_events_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AppendNormalizedEventsResult:
     """Append normalized events to an existing session."""
+    from app.services.session_helpers import get_session_or_404
+
     try:
         session = await get_session_or_404(db, session_id)
         return await append_normalized_events(db, session_id, request, session=session)
@@ -141,6 +143,8 @@ async def ingest_transcript_events_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TranscriptIngestResult:
     """Translate a provider transcript into normalized session events."""
+    from app.services.session_helpers import get_session_or_404
+
     try:
         await get_session_or_404(db, session_id)
         return await ingest_transcript_events(db, session_id, request)
