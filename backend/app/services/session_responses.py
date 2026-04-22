@@ -1,13 +1,19 @@
 """Session response building - construct API responses from domain models."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.sessions import (
-    ContextUsageResponse,
-    SessionEventResponse,
-    SessionResponse,
-)
 from app.models import Session, SessionEvent
+
+if TYPE_CHECKING:
+    from app.api.schemas.sessions import (
+        ContextUsageResponse,
+        SessionEventResponse,
+        SessionResponse,
+    )
 from app.services.context_tracker import calculate_context_usage
 from app.services.ownership_inventory import (
     query_project_active_specialists,
