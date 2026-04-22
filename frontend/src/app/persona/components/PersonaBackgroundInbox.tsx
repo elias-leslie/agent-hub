@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
-import { ArrowRightCircle, PauseCircle, PlayCircle, SendHorizontal, X } from "lucide-react";
+import { PauseCircle, PlayCircle, SendHorizontal, X } from "lucide-react";
 
 import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
 import type { SessionListItem } from "@/lib/api/sessions";
 import { cn } from "@/lib/utils";
-import { EvidencePanel, ProvenanceBadge, ScopeChip, SectionEyebrow } from "./persona-operator-chrome";
+import { EvidencePanel, SectionEyebrow } from "./persona-operator-chrome";
 
 interface PersonaBackgroundInboxProps {
   entries: PersonaStreamEntry[];
@@ -51,20 +51,14 @@ function chooseTimestamp(left: string, right: string) {
   return +new Date(left) >= +new Date(right) ? left : right;
 }
 
-function buildDraft(action: LaneAction, sessionId: string, summary: string) {
+function buildDraft(action: LaneAction, summary: string) {
   if (action === "redirect") {
-    return `Advisory redirect for lane ${sessionId}: adjust the current work without rewriting history. Current lane summary: ${summary}`;
+    return `Adjust current work. ${summary}`;
   }
   if (action === "promote") {
-    return `Advisory promotion note for lane ${sessionId}: summarize what should be promoted into the main thread without implying an automatic merge. Current lane summary: ${summary}`;
+    return `Summarize what should move back to the main thread. ${summary}`;
   }
-  return `Advisory handoff for lane ${sessionId}: owner, current state, blockers, and next move. Current lane summary: ${summary}`;
-}
-
-function actionLabel(action: LaneAction) {
-  if (action === "redirect") return "redirect";
-  if (action === "promote") return "promotion";
-  return "handoff";
+  return `Summarize owner, blocker, and next move. ${summary}`;
 }
 
 export function PersonaBackgroundInbox({
@@ -142,51 +136,34 @@ export function PersonaBackgroundInbox({
   return (
     <EvidencePanel data-testid="persona-background-inbox" className="p-4">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <SectionEyebrow label="Background lanes" source="runtime" />
-          <h3 className="mt-2 text-lg font-semibold text-slate-50">
-            Persisted child lanes only. Advisory lane actions stay inspectable.
-          </h3>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Runtime and session truth merge here. Redirect, promote, and handoff open drafts first so operator intent never pretends to be an immediate backend mutation.
-          </p>
-        </div>
-        <ScopeChip tone={activeCount > 0 ? "warning" : "default"}>
-          Active child lanes · {activeCount}/{lanes.length}
-        </ScopeChip>
+        <SectionEyebrow label={`Lanes · ${activeCount}/${lanes.length}`} source="runtime" />
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2">
         {lanes.length === 0 ? (
-          <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 px-3 py-3 text-sm text-slate-400">
-            No child lanes loaded.
-          </div>
+          <div className="text-sm text-slate-500">No child lanes.</div>
         ) : null}
         {lanes.map((entry) => {
           const isActive = entry.status === "active" || entry.liveStatus === "active";
           const isDraftOpen = draftState?.laneId === entry.sessionId;
+          const statusLabel = isActive ? "active" : entry.status;
           return (
             <div
               key={entry.sessionId}
               className={cn(
-                "rounded-2xl border px-3 py-3",
+                "rounded-lg border px-3 py-3",
                 activeSessionId === entry.sessionId
-                  ? "border-sky-500/30 bg-sky-950/20"
+                  ? "border-amber-500/30 bg-amber-950/10"
                   : "border-slate-800/70 bg-slate-950/70",
               )}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-slate-100">{entry.agentSlug || "agent"}</span>
-                    <ProvenanceBadge source="session" />
-                    {isActive ? <ProvenanceBadge source="runtime" /> : null}
-                    <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">
-                      {entry.projectId}
-                    </span>
-                    <span className="rounded-full border border-slate-700 bg-slate-900/70 px-2 py-0.5 text-[11px] text-slate-300">
-                      {isActive ? "active" : entry.status}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span className={cn("h-2 w-2 rounded-full", isActive ? "bg-emerald-400" : "bg-slate-500")} />
+                    <span className="font-medium text-slate-200">{entry.agentSlug || "agent"}</span>
+                    <span>{statusLabel}</span>
+                    <span>{entry.projectId}</span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-slate-300">{entry.summary}</p>
                   <div className="mt-2 text-xs text-slate-500">
@@ -197,86 +174,71 @@ export function PersonaBackgroundInbox({
                   <button
                     type="button"
                     onClick={() => onSelectSession(entry.sessionId)}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-900"
                   >
                     <PlayCircle className="h-4 w-4" />
-                    Inspect lane
+                    Open
                   </button>
                   <button
                     type="button"
-                    onClick={() => setDraftState({ laneId: entry.sessionId, action: "redirect", text: buildDraft("redirect", entry.sessionId, entry.summary) })}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30"
+                    onClick={() => setDraftState({ laneId: entry.sessionId, action: "redirect", text: buildDraft("redirect", entry.summary) })}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-900"
                   >
-                    <ArrowRightCircle className="h-4 w-4" />
-                    Open redirect draft
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraftState({ laneId: entry.sessionId, action: "promote", text: buildDraft("promote", entry.sessionId, entry.summary) })}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
-                  >
-                    Open promote draft
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDraftState({ laneId: entry.sessionId, action: "handoff", text: buildDraft("handoff", entry.sessionId, entry.summary) })}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
-                  >
-                    Open handoff draft
+                    Draft
                   </button>
                   {isActive ? (
                     <button
                       type="button"
                       onClick={() => onStopSession(entry.sessionId)}
                       disabled={stoppingSessionId === entry.sessionId}
-                      className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm font-medium text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-950/30 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3 py-2 text-sm font-medium text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-950/25 disabled:opacity-60"
                     >
                       <PauseCircle className="h-4 w-4" />
-                      {stoppingSessionId === entry.sessionId ? "Stopping lane" : "Stop active work"}
+                      {stoppingSessionId === entry.sessionId ? "Stopping" : "Stop"}
                     </button>
                   ) : null}
                 </div>
               </div>
               {isDraftOpen ? (
-                <div className="mt-3 rounded-2xl border border-amber-500/20 bg-amber-950/15 p-3">
+                <div className="mt-3 rounded-lg border border-slate-800/70 bg-slate-950/70 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <ProvenanceBadge source="draft" />
-                    <ProvenanceBadge source="advisory" />
-                    <span className="text-xs text-slate-400">
-                      Inspect advisory {actionLabel(draftState.action)} draft before send.
-                    </span>
+                    <select
+                      value={draftState.action}
+                      onChange={(event) => setDraftState((current) => current
+                        ? { ...current, action: event.target.value as LaneAction, text: buildDraft(event.target.value as LaneAction, entry.summary) }
+                        : current)}
+                      className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      <option value="redirect">Redirect</option>
+                      <option value="promote">Promote</option>
+                      <option value="handoff">Handoff</option>
+                    </select>
+                    <span className="text-xs text-slate-500">Draft before send.</span>
                   </div>
-                  <label className="mt-3 block text-xs uppercase tracking-[0.18em] text-slate-500" htmlFor={`lane-draft-${entry.sessionId}`}>
-                    Inspect advisory {actionLabel(draftState.action)} draft
-                  </label>
                   <textarea
-                    id={`lane-draft-${entry.sessionId}`}
+                    aria-label="Lane draft"
                     value={draftState.text}
                     onChange={(event) => setDraftState((current) => current ? { ...current, text: event.target.value } : current)}
                     rows={4}
-                    className="mt-2 min-h-[120px] w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none"
+                    className="mt-3 min-h-[120px] w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none"
                   />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
                       onClick={submitDraft}
                       disabled={!draftState.text.trim()}
-                      className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
                     >
                       <SendHorizontal className="h-4 w-4" />
-                      {draftState.action === "redirect"
-                        ? "Send advisory redirect"
-                        : draftState.action === "promote"
-                          ? "Send advisory promotion"
-                          : "Send advisory handoff"}
+                      Send draft
                     </button>
                     <button
                       type="button"
                       onClick={() => setDraftState(null)}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
+                      className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-700 hover:bg-slate-900"
                     >
                       <X className="h-4 w-4" />
-                      Cancel draft
+                      Cancel
                     </button>
                   </div>
                 </div>

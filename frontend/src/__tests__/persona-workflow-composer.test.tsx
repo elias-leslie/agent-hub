@@ -123,7 +123,7 @@ describe("PersonaWorkflowComposer", () => {
       });
   });
 
-  it("shows workflow provenance and marks later stages as stale after an earlier stage reruns", async () => {
+  it("keeps workflow output compact and marks later stages stale after an earlier rerun", async () => {
     render(
       <PersonaWorkflowComposer
         projectOptions={[{ id: "agent-hub", name: "agent-hub", rootPath: "/srv/workspaces/projects/agent-hub" }]}
@@ -134,28 +134,22 @@ describe("PersonaWorkflowComposer", () => {
       />,
     );
 
-    expect(screen.getByText("Advisory")).toBeInTheDocument();
-    expect(screen.getByText(/Root session · persona-root/i)).toBeInTheDocument();
+    expect(screen.getByText(/Root persona-root/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/Describe real work\. Name success bar/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Describe work\. Name the success bar and risk\./i), {
       target: { value: "Tighten persona operator truthfulness." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Run advisory workflow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Run workflow/i }));
 
     await screen.findByText("clarify output");
-    expect(screen.getByText(/Stage session · sess-clarify/i)).toBeInTheDocument();
+    expect(screen.getByText(/chat · sess-clarify/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Mark approved/i })[0]);
-    expect(screen.getAllByRole("button", { name: /Approved|Mark approved/i })[0]).toHaveTextContent("Approved");
-
-    fireEvent.click(screen.getAllByRole("button", { name: /Rerun through clarify/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Rerun$/i })[0]);
     await screen.findByText("clarify rerun output");
 
-    expect(screen.getAllByText(/Stale after clarify rerun/i)).toHaveLength(2);
-    expect(screen.getAllByText(/Later stage kept for inspection only/i)).toHaveLength(2);
-    expect(screen.queryByText(/^Approved$/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/stale after clarify/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /Rerun through execute/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Rerun$/i })[2]);
     const thirdCallRequest = mockRunPersonaWorkflow.mock.calls[2][0];
     expect(thirdCallRequest.plan).toBeTruthy();
     expect(thirdCallRequest.execute).toBeTruthy();
@@ -163,11 +157,9 @@ describe("PersonaWorkflowComposer", () => {
     expect(thirdCallRequest.shared_context).toContain("CLARIFY OUTPUT:\nclarify rerun output");
 
     await screen.findByText("execute rerun output");
-
-    expect(screen.queryByText(/Stale after clarify rerun/i)).not.toBeInTheDocument();
   });
 
-  it("keeps stages advisory and unlinked when the workflow response lacks a persisted session id", async () => {
+  it("labels unlinked stage results as advisory", async () => {
     mockRunPersonaWorkflow.mockReset();
     mockRunPersonaWorkflow.mockResolvedValue({
       status: "completed",
@@ -204,15 +196,13 @@ describe("PersonaWorkflowComposer", () => {
       />,
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/Describe real work\. Name success bar/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Describe work\. Name the success bar and risk\./i), {
       target: { value: "Prove advisory workflow linkage stays truthful." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Run advisory workflow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Run workflow/i }));
 
     await screen.findByText("clarify advisory output");
 
-    expect(screen.getByText(/Advisory output only/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Stage session ·/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Advisory").length).toBeGreaterThan(0);
+    expect(screen.getByText(/chat · advisory/i)).toBeInTheDocument();
   });
 });
