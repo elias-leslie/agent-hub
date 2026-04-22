@@ -140,6 +140,7 @@ function PersonaContent() {
     (count, session) => count + (isChildLaneActive(session) ? 1 : 0),
     0,
   );
+  const activeWorkCount = Number(Boolean(runtime.primarySession)) + Number(runtime.activeChildSessions.some(isChildLaneActive));
   const stopScopeAvailable = Boolean(runtime.primarySession);
   const liveSummary = buildLiveSummaryDescriptor({
     runtimeSummary: runtime.primarySession?.live_activity?.summary,
@@ -150,7 +151,7 @@ function PersonaContent() {
   });
 
   const handlePersonaPauseResume = async () => {
-    updatePersona({ execution_state: personaPaused ? "active" : "paused" });
+    await updatePersona({ execution_state: personaPaused ? "active" : "paused" });
     if (!personaPaused && runtime.primarySession) {
       await runtime.stopCurrentStream();
     }

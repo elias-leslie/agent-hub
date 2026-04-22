@@ -33,7 +33,7 @@ async def _resolve_agent_display_names(
 ) -> dict[str, str]:
     """Build agent_id/slug → display name map from agents table.
 
-    Uses a single WHERE slug IN (...) query instead of one query per slug.
+    Uses single WHERE slug IN (...) query instead of one query per slug.
     """
     from sqlalchemy import select
 
@@ -47,7 +47,7 @@ async def _resolve_agent_display_names(
     result = await db.execute(
         select(Agent.slug, Agent.name).where(Agent.slug.in_(slugs))
     )
-    names = {row.slug: row.name for row in result.all()}
+    names = {row[0]: row[1] for row in result.all()}
     if PERSONA_SLUG in slugs:
         names[PERSONA_SLUG] = await get_persona_display_name(
             db,
@@ -60,7 +60,7 @@ async def build_project_lane_session_ids(
     db: AsyncSession,
     project_ids: set[str],
 ) -> tuple[set[str], set[str]]:
-    """Return (owner_session_ids, specialist_session_ids) for the given projects."""
+    """Return (owner_session_ids, specialist_session_ids) for given projects."""
     owner_session_ids: set[str] = set()
     specialist_session_ids: set[str] = set()
     for project_id in sorted(project_id for project_id in project_ids if project_id):
@@ -80,15 +80,7 @@ async def build_project_lane_session_ids(
 async def build_full_session_response(
     db: AsyncSession, session: Session
 ) -> SessionResponse:
-    """Build a complete session response with context usage and token breakdown.
-
-    Args:
-        db: Database session
-        session: Session object with events loaded
-
-    Returns:
-        Complete SessionResponse with all metadata
-    """
+    """Build complete session response with context usage and token breakdown."""
     # Deferred import to avoid circular import via app.api.__init__
     from app.api.schemas.sessions import ContextUsageResponse
 
@@ -126,14 +118,7 @@ async def build_full_session_response(
 
 
 def build_event_responses(events: list[SessionEvent]) -> list[SessionEventResponse]:
-    """Convert session events to API response models.
-
-    Args:
-        events: List of SessionEvent objects
-
-    Returns:
-        List of SessionEventResponse objects
-    """
+    """Convert session events to API response models."""
     # Deferred import to avoid circular import via app.api.__init__
     from app.api.schemas.sessions import SessionEventResponse
 
