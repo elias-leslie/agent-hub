@@ -63,8 +63,9 @@ describe("PersonaThreadHeader", () => {
       />,
     );
 
-    expect(screen.getByText("Session")).toBeInTheDocument();
-    expect(screen.getByText("Reply continues here")).toBeInTheDocument();
-    expect(screen.getByText("Project · summitflow")).toBeInTheDocument();
+    expect(screen.getByText("Operator thread surface")).toBeInTheDocument();
+    expect(screen.getByText("Persisted primary thread")).toBeInTheDocument();
+    expect(screen.getByText("Session project · summitflow")).toBeInTheDocument();
+    expect(screen.getByText(/Replies continue in this persisted thread/i)).toBeInTheDocument();
   });
 });

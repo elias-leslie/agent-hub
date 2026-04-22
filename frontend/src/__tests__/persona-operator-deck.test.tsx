@@ -617,7 +617,7 @@ describe("PersonaOperatorDeck", () => {
     );
 
     fireEvent.change(
-      screen.getByPlaceholderText(/Describe the real work/i),
+      screen.getByPlaceholderText(/Describe real work\. Name success bar/i),
       { target: { value: "Audit the operator workflow flow." } },
     );
     fireEvent.click(screen.getByRole("button", { name: /^Run advisory workflow$/i }));

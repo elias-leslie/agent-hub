@@ -176,21 +176,21 @@ describe("PersonaPage", () => {
     expect(screen.getByText("Active child lanes 1")).toBeInTheDocument();
   });
 
-  it("pauses the persona without claiming persistence succeeded immediately", async () => {
+  it("pauses the persona and stops focused live work when a runtime session exists", async () => {
     mockStopCurrentStream.mockResolvedValueOnce(true);
 
     render(<PersonaPage />);
 
     fireEvent.click(screen.getByRole("button", { name: /Pause operator/i }));
 
-    expect(mockUpdatePersona).toHaveBeenCalledWith({
-      execution_state: "paused",
-    });
-    expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
-
     await waitFor(() => {
-      expect(mockToastSuccess).not.toHaveBeenCalled();
+      expect(mockUpdatePersona).toHaveBeenCalledWith({
+        execution_state: "paused",
+      });
+      expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
     });
+
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 
   it("triggers a manual heartbeat and selects the dispatched session when idle", async () => {
@@ -209,16 +209,17 @@ describe("PersonaPage", () => {
     });
   });
 
-  it("stops all active work from the runtime command deck", async () => {
-    mockStopActiveWork.mockResolvedValueOnce({ cancelled: 2, attempted: 2 });
+  it("stops only focused live work from the runtime command deck and reports focused scope", async () => {
+    mockStopCurrentStream.mockResolvedValueOnce(true);
 
     render(<PersonaPage />);
 
     fireEvent.click(screen.getByRole("button", { name: /Stop active work/i }));
 
-    expect(mockStopActiveWork).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith("Stopped 2 live sessions for Avery");
+      expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
+      expect(mockToastSuccess).toHaveBeenCalledWith("Stopped live work for Avery");
     });
+    expect(mockStopActiveWork).not.toHaveBeenCalled();
   });
 });

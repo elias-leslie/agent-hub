@@ -135,9 +135,9 @@ describe("PersonaWorkflowComposer", () => {
     );
 
     expect(screen.getByText("Advisory")).toBeInTheDocument();
-    expect(screen.getByText(/Session root · persona-root/i)).toBeInTheDocument();
+    expect(screen.getByText(/Root session · persona-root/i)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByPlaceholderText(/Describe the real work/i), {
+    fireEvent.change(screen.getByPlaceholderText(/Describe real work\. Name success bar/i), {
       target: { value: "Tighten persona operator truthfulness." },
     });
     fireEvent.click(screen.getByRole("button", { name: /Run advisory workflow/i }));
@@ -145,17 +145,17 @@ describe("PersonaWorkflowComposer", () => {
     await screen.findByText("clarify output");
     expect(screen.getByText(/Stage session · sess-clarify/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Advisory approve/i })[0]);
-    expect(screen.getByRole("button", { name: /Advisory approved/i })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /Mark approved/i })[0]);
+    expect(screen.getAllByRole("button", { name: /Approved|Mark approved/i })[0]).toHaveTextContent("Approved");
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Rerun/i })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Rerun through clarify/i })[0]);
     await screen.findByText("clarify rerun output");
 
-    expect(screen.getAllByText(/stale after clarify rerun/i)).toHaveLength(2);
-    expect(screen.getAllByText(/Re-run this stage to refresh it/i)).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: /Advisory approved/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Stale after clarify rerun/i)).toHaveLength(2);
+    expect(screen.getAllByText(/Later stage kept for inspection only/i)).toHaveLength(2);
+    expect(screen.queryByText(/^Approved$/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Rerun/i })[2]);
+    fireEvent.click(screen.getByRole("button", { name: /Rerun through execute/i }));
     const thirdCallRequest = mockRunPersonaWorkflow.mock.calls[2][0];
     expect(thirdCallRequest.plan).toBeTruthy();
     expect(thirdCallRequest.execute).toBeTruthy();
@@ -164,6 +164,6 @@ describe("PersonaWorkflowComposer", () => {
 
     await screen.findByText("execute rerun output");
 
-    expect(screen.queryByText(/stale after clarify rerun/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Stale after clarify rerun/i)).not.toBeInTheDocument();
   });
 });
