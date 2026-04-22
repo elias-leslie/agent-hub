@@ -1,7 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
-import { AlertCircle, ArrowDown, CircleDot, HeartPulse, Loader2 } from "lucide-react";
+import { AlertCircle, CircleDot, HeartPulse, Loader2 } from "lucide-react";
 import { MessageBubble, type ChatMessage } from "@agent-hub/chat-ui";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { cn } from "@/lib/utils";
@@ -87,14 +87,9 @@ export function WorkspaceTimeline({
   entries,
   deferredSearch,
   status,
-  autoFollow,
-  isAtBottom,
-  newActivityCount,
-  latestItemId,
   onToggleEntry,
   onToggleRoutineGroup,
   onLoadOlder,
-  onJumpToLatest,
   showPulseOverview = true,
   compactViewport = false,
 }: WorkspaceTimelineProps) {
@@ -204,21 +199,6 @@ export function WorkspaceTimeline({
           </div>
         )}
       </div>
-
-      {latestItemId && (!isAtBottom || !autoFollow || newActivityCount > 0) && (
-        <div className={cn("pointer-events-none absolute right-6 z-20", compactViewport ? "bottom-36" : "bottom-24")}>
-          <button
-            type="button"
-            onClick={onJumpToLatest}
-            className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-slate-800 px-3.5 py-2 text-xs font-medium text-slate-200 shadow-lg shadow-black/30 ring-1 ring-slate-700 transition hover:bg-slate-700 hover:text-white"
-          >
-            <ArrowDown className="h-4 w-4" />
-            {newActivityCount > 0
-              ? `${newActivityCount} new ${newActivityCount === 1 ? "item" : "items"} · Jump to latest`
-              : "Jump to latest"}
-          </button>
-        </div>
-      )}
     </>
   );
 }

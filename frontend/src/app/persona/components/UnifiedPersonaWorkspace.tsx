@@ -270,6 +270,14 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
     ?? state.currentSessionId
     ?? props.activeSessionId
     ?? null;
+  const showJumpToLatest = Boolean(
+    state.latestItemId && (!state.isAtBottom || !state.autoFollow || state.newActivityCount > 0),
+  );
+  const jumpToLatestLabel = showJumpToLatest
+    ? state.newActivityCount > 0
+      ? `${state.newActivityCount} new ${state.newActivityCount === 1 ? "item" : "items"} · Jump to latest`
+      : "Jump to latest"
+    : null;
 
   return (
     <div
@@ -303,23 +311,22 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
 
       {props.persona && props.runtime ? (
         <PersonaThreadHeader
-          personaName={state.personaDisplayName}
           runtime={props.runtime}
           focusSession={displaySession}
           selectedSessionId={state.selectedSessionId}
           targetProjectId={selectedProjectId}
           threadSource={threadSource}
           onSelectSession={props.onSelectSession}
-          sendMessage={state.sendMessage}
           activeTab={activeOperatorTab}
           onOpenTab={(tab) => setActiveOperatorTab(tab)}
+          onNewThread={handleNewThread}
           deskOpen={deskOpen}
           onToggleDesk={() => setDeskOpen((current) => !current)}
           compactViewport={compactViewport}
         />
       ) : null}
 
-      <div data-testid="persona-workspace-main" className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_332px]">
+      <div data-testid="persona-workspace-main" className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <WorkspaceTimeline
             scrollRef={state.scrollRef}
@@ -361,7 +368,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
         </div>
 
         {props.persona && props.runtime ? (
-          <aside className="hidden min-h-0 overflow-hidden border-l border-slate-800/60 lg:flex lg:w-[332px] lg:min-w-[332px] lg:max-w-[332px]">
+          <aside className="hidden min-h-0 overflow-hidden border-l border-slate-800/60 lg:flex lg:w-[320px] lg:min-w-[320px] lg:max-w-[320px]">
             <PersonaOperatorDeck
               persona={props.persona}
               personaName={state.personaDisplayName}
@@ -438,6 +445,9 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           preferencesEndpoint={state.apiConfig.preferencesEndpoint}
           onNewSession={handleNewThread}
           compactViewport={compactViewport}
+          jumpToLatestLabel={jumpToLatestLabel}
+          onJumpToLatest={jumpToLatestLabel ? state.handleJumpToLatest : undefined}
+          showNewThread={!props.persona || !props.runtime}
         />
       </div>
     </div>

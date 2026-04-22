@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PersonaBackgroundInbox } from "@/app/persona/components/PersonaBackgroundInbox";
 
 describe("PersonaBackgroundInbox", () => {
-  it("opens inspectable advisory drafts before sending lane actions", () => {
+  it("opens a single lane draft surface and routes the selected action", () => {
     const onHandoffSession = vi.fn();
 
     render(
@@ -49,18 +49,15 @@ describe("PersonaBackgroundInbox", () => {
       />,
     );
 
-    expect(screen.getByText(/redirect, promote, and handoff open drafts first/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lanes · 1\/1/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Open handoff draft/i }));
-
-    expect(screen.getByText("Draft")).toBeInTheDocument();
-    expect(screen.getByText("Advisory")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText(/Inspect advisory handoff draft/i), {
-      target: { value: "Advisory handoff: keep verification scope narrow." },
+    fireEvent.click(screen.getByRole("button", { name: /^Draft$/i }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "handoff" } });
+    fireEvent.change(screen.getByLabelText(/Lane draft/i), {
+      target: { value: "Handoff: keep verification scope narrow." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Send advisory handoff/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Send draft/i }));
 
-    expect(onHandoffSession).toHaveBeenCalledWith("lane-1", "Advisory handoff: keep verification scope narrow.");
+    expect(onHandoffSession).toHaveBeenCalledWith("lane-1", "Handoff: keep verification scope narrow.");
   });
 });

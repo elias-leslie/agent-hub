@@ -1,14 +1,6 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  CalendarClock,
-  Command,
-  Layers3,
-  Sparkles,
-  Waypoints,
-} from "lucide-react";
 
 import { useToastActions } from "@/components/error/toast";
 import type { Persona } from "@/types/persona";
@@ -68,13 +60,12 @@ interface PersonaOperatorDeckProps {
 const TAB_META: Array<{
   id: PersonaOperatorTab;
   label: string;
-  icon: typeof Waypoints;
   detail: string;
 }> = [
-  { id: "workflow", label: "Workflow", icon: Waypoints, detail: "Run staged work in the open." },
-  { id: "insights", label: "Insights", icon: Sparkles, detail: "Blockers, prompt weight, and friction." },
-  { id: "lanes", label: "Lanes", icon: Layers3, detail: "Redirect and inspect side work." },
-  { id: "automations", label: "Automations", icon: CalendarClock, detail: "Recurring checks and run-now." },
+  { id: "workflow", label: "Workflow", detail: "Run staged work in the open." },
+  { id: "insights", label: "Insights", detail: "Blockers, prompt weight, and friction." },
+  { id: "lanes", label: "Lanes", detail: "Redirect and inspect side work." },
+  { id: "automations", label: "Automations", detail: "Recurring checks and run-now." },
 ];
 
 function toProjectOptions(permissions: ProjectPermission[]): PreviewProjectOption[] {
@@ -339,18 +330,18 @@ export function PersonaOperatorDeck({
   };
 
   const panelChrome = layout === "rail"
-    ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#07090d]"
-    : "rounded-[24px] border border-slate-800/70 bg-[#07090d] shadow-[0_16px_40px_-28px_rgba(15,23,42,0.95)]";
+    ? "flex h-full min-h-0 flex-col overflow-hidden bg-slate-950/90"
+    : "rounded-xl border border-slate-800/60 bg-slate-950/92";
 
   const bodyChrome = layout === "rail"
     ? "min-h-0 flex-1 overflow-y-auto px-3 pb-3"
     : "px-3 pb-3";
 
-  const showAllSections = layout === "rail";
+  const showAllSections = false;
 
   return (
     <div className={panelChrome} data-testid="persona-operator-deck">
-      <div className="border-b border-slate-800/60 px-3 py-3">
+      <div className="border-b border-slate-800/50 px-3 py-2.5">
         <PersonaRunHud
           personaName={personaName}
           runtime={runtime}
@@ -372,34 +363,22 @@ export function PersonaOperatorDeck({
           compact
         />
 
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-          {TAB_META.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onTabChange(tab.id)}
-                className={
-                  activeTab === tab.id
-                    ? "inline-flex shrink-0 items-center gap-2 rounded-full border border-sky-500/20 bg-sky-950/20 px-3 py-1.5 text-xs font-medium text-sky-100"
-                    : "inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-800/70 bg-slate-950/70 px-3 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-700 hover:bg-slate-900"
-                }
-                title={tab.detail}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => setCommandsOpen(true)}
-            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900"
-          >
-            <Command className="h-3.5 w-3.5" />
-            Commands
-          </button>
+        <div className="mt-2 flex items-center gap-3 overflow-x-auto text-[11px]">
+          {TAB_META.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onTabChange(tab.id)}
+              className={
+                activeTab === tab.id
+                  ? "shrink-0 border-b border-amber-400 pb-1 font-medium text-slate-100"
+                  : "shrink-0 border-b border-transparent pb-1 text-slate-500 transition hover:text-slate-300"
+              }
+              title={tab.detail}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -429,20 +408,12 @@ export function PersonaOperatorDeck({
                 onAskStatus={askStatus}
                 onRefresh={() => void refreshEverything()}
               />
-              <section className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  <Activity className="h-3.5 w-3.5 text-sky-300" />
-                  Feed health
-                </div>
-                <div className="mt-3">
-                  <PulseOverviewPanels
-                    visiblePulseMetrics={visiblePulseMetrics}
-                    pulse={pulse}
-                    applyPulseFilter={applyPulseFilter}
-                    inspectAgentPulse={inspectAgentPulse}
-                  />
-                </div>
-              </section>
+              <PulseOverviewPanels
+                visiblePulseMetrics={visiblePulseMetrics}
+                pulse={pulse}
+                applyPulseFilter={applyPulseFilter}
+                inspectAgentPulse={inspectAgentPulse}
+              />
               <PersonaPromptBudgetPanel
                 preview={preview}
                 loading={previewLoading}

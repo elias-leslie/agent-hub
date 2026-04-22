@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, PlayCircle, RotateCcw, Sparkles } from "lucide-react";
+import { PlayCircle, RotateCcw } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { PreviewProjectOption } from "@/types/agent-preview";
@@ -11,16 +11,15 @@ import {
   type WorkflowResult,
   type WorkflowStageName,
 } from "@/lib/api/persona-operator";
-import { EvidencePanel, ProvenanceBadge, SectionEyebrow, ScopeChip } from "./persona-operator-chrome";
 
 export type WorkflowTaskMode = "build" | "bug" | "review" | "research" | "release";
 
-const MODE_LABELS: Array<{ value: WorkflowTaskMode; label: string; detail: string }> = [
-  { value: "build", label: "Build", detail: "Feature or solid refactor" },
-  { value: "bug", label: "Bug", detail: "Tight fix and regression control" },
-  { value: "review", label: "Review", detail: "Audit before changing" },
-  { value: "research", label: "Research", detail: "Bounded evidence first" },
-  { value: "release", label: "Release", detail: "Final pass and ship gates" },
+const MODE_LABELS: Array<{ value: WorkflowTaskMode; label: string }> = [
+  { value: "build", label: "Build" },
+  { value: "bug", label: "Bug" },
+  { value: "review", label: "Review" },
+  { value: "research", label: "Research" },
+  { value: "release", label: "Release" },
 ];
 const WORKFLOW_STAGE_ORDER: WorkflowStageName[] = ["clarify", "plan", "execute", "review", "qa"];
 
@@ -111,7 +110,6 @@ export function PersonaWorkflowComposer({
   const [workflow, setWorkflow] = useState<WorkflowResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
-  const [approvedStages, setApprovedStages] = useState<Record<string, boolean>>({});
   const [staleStages, setStaleStages] = useState<Partial<Record<WorkflowStageName, WorkflowStageName>>>({});
   const selectedProject = useMemo(
     () => projectOptions.find((option) => option.id === selectedProjectId) ?? null,
@@ -129,7 +127,6 @@ export function PersonaWorkflowComposer({
       if (!stageName) {
         const result = await runPersonaWorkflow(buildWorkflowRequest(task, selectedProject, mode, parentSessionId));
         setWorkflow(result);
-        setApprovedStages({});
         setStaleStages({});
         return;
       }
@@ -176,13 +173,6 @@ export function PersonaWorkflowComposer({
           total_output_tokens: current.total_output_tokens + result.total_output_tokens,
         };
       });
-      setApprovedStages((current) => {
-        const next = { ...current };
-        for (const workflowStage of WORKFLOW_STAGE_ORDER.slice(startIndex)) {
-          delete next[workflowStage];
-        }
-        return next;
-      });
       setStaleStages((current) => {
         const next = { ...current };
         for (const workflowStage of WORKFLOW_STAGE_ORDER.slice(startIndex, selectedStageIndex + 1)) {
@@ -201,166 +191,105 @@ export function PersonaWorkflowComposer({
   };
 
   return (
-    <EvidencePanel data-testid="persona-workflow-composer" className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <SectionEyebrow icon={<Sparkles className="h-3.5 w-3.5 text-amber-300" />} label="Staged workflow" source="advisory" />
-          <h3 className="mt-2 text-lg font-semibold text-slate-50">
-            Advisory workflow over real stage sessions.
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Clarify, plan, execute, review, and QA stay inspectable. Stage cards show session linkage when backend returns a persisted stage session id.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-2 text-right">
-          <ScopeChip>{workflow?.stages.length ?? 0} stages</ScopeChip>
-          {parentSessionId ? <ScopeChip>Root session · {parentSessionId}</ScopeChip> : null}
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-2 md:grid-cols-2">
-        <select
-          value={selectedProjectId}
-          onChange={(event) => onProjectChange(event.target.value)}
-          className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none"
-        >
-          {projectOptions.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
-        <div className="flex flex-wrap gap-2">
-          {MODE_LABELS.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => setMode(option.value)}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition",
-                mode === option.value
-                  ? "border-amber-500/30 bg-amber-950/30 text-amber-200"
-                  : "border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600",
-              )}
-              title={option.detail}
-            >
-              {option.label}
-            </button>
-          ))}
+    <div data-testid="persona-workflow-composer" className="space-y-3">
+      <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+        <textarea
+          value={task}
+          onChange={(event) => {
+            setTask(event.target.value);
+            onPromptChange(event.target.value);
+          }}
+          rows={4}
+          className="min-h-[100px] w-full rounded-lg border border-slate-800/55 bg-slate-950/45 px-3 py-2 text-[13px] text-slate-100 outline-none placeholder:text-slate-500"
+          placeholder="Describe work. Name the success bar and risk."
+        />
+        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+          <select
+            value={selectedProjectId}
+            onChange={(event) => onProjectChange(event.target.value)}
+            className="rounded-lg border border-slate-800/55 bg-slate-950/45 px-3 py-2 text-[13px] text-slate-100 outline-none"
+          >
+            {projectOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.name}
+              </option>
+            ))}
+          </select>
+          <select
+            value={mode}
+            onChange={(event) => setMode(event.target.value as WorkflowTaskMode)}
+            className="rounded-lg border border-slate-800/55 bg-slate-950/45 px-3 py-2 text-[13px] text-slate-100 outline-none"
+          >
+            {MODE_LABELS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void runWorkflow()}
+            disabled={running || !task.trim()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700/70 bg-slate-900/60 px-3 py-1.5 text-[13px] font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-900/80 hover:text-slate-50 disabled:opacity-60"
+          >
+            <PlayCircle className="h-4 w-4" />
+            {running ? "Running…" : "Run workflow"}
+          </button>
         </div>
       </div>
 
-      <textarea
-        value={task}
-        onChange={(event) => {
-          setTask(event.target.value);
-          onPromptChange(event.target.value);
-        }}
-        rows={5}
-        className="mt-3 min-h-[128px] w-full rounded-[24px] border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none"
-        placeholder="Describe real work. Name success bar and where operator should be careful."
-      />
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => void runWorkflow()}
-          disabled={running || !task.trim()}
-          className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
-        >
-          <PlayCircle className="h-4 w-4" />
-          {running ? "Running advisory workflow…" : "Run advisory workflow"}
-        </button>
-        {workflow ? (
-          <div className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300">
-            Workflow tokens · {workflow.total_input_tokens + workflow.total_output_tokens}
-          </div>
-        ) : null}
-      </div>
-
-      {error ? (
-        <div className="mt-3 rounded-2xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">
-          {error}
+      {(parentSessionId || workflow) ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+          {parentSessionId ? <span>Root {parentSessionId}</span> : null}
+          {workflow ? <span>{workflow.total_input_tokens + workflow.total_output_tokens} tokens</span> : null}
         </div>
       ) : null}
+      {error ? <div className="text-sm text-rose-300">{error}</div> : null}
 
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         {workflow?.stages.map((stage) => {
           const staleReason = staleStages[stage.stage];
-          const isStale = Boolean(staleReason);
           return (
             <div
               key={stage.stage}
               className={cn(
-                "rounded-[24px] border bg-slate-950/70 p-3",
-                isStale ? "border-amber-500/30" : "border-slate-800/70",
+                "rounded-lg border px-3 py-3",
+                staleReason ? "border-amber-500/25 bg-amber-950/10" : "border-slate-800/60 bg-slate-950/55",
               )}
             >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    <span>{stage.stage}</span>
-                    <ProvenanceBadge source={stage.session_id ? "session" : "advisory"} />
-                    {isStale ? (
-                      <span className="rounded-full border border-amber-500/20 bg-amber-950/20 px-2 py-0.5 text-[10px] text-amber-200">
-                        Stale after {staleReason} rerun
-                      </span>
-                    ) : null}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {stage.stage}
+                    {staleReason ? ` · stale after ${staleReason}` : ""}
                   </div>
-                  <div className="mt-1 text-sm font-medium text-slate-100">
+                  <div className="mt-1 text-sm text-slate-100">
                     {stage.agent_used || stage.provider}
+                    {stage.session_id ? ` · ${stage.session_id}` : " · advisory"}
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                    <span>{stage.provider}/{stage.model} · {stage.usage.total_tokens} tokens</span>
-                    {stage.session_id ? <ScopeChip>Stage session · {stage.session_id}</ScopeChip> : <ScopeChip>Advisory output only</ScopeChip>}
-                  </div>
-                  {isStale ? (
-                    <p className="mt-2 text-xs text-amber-200">
-                      Later stage kept for inspection only. Rerun from {staleReason} changed upstream truth.
-                    </p>
-                  ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setApprovedStages((current) => ({ ...current, [stage.stage]: !current[stage.stage] }))}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition",
-                      approvedStages[stage.stage]
-                        ? "border-emerald-500/20 bg-emerald-950/20 text-emerald-200"
-                        : "border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-600 hover:bg-slate-800",
-                    )}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    {approvedStages[stage.stage] ? "Approved" : "Mark approved"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void runWorkflow(stage.stage)}
-                    disabled={running}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Rerun through {stage.stage}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void runWorkflow(stage.stage)}
+                  disabled={running}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800/70 bg-slate-950/70 px-2.5 py-1.5 text-[11px] font-medium text-slate-300 transition hover:border-slate-700 hover:bg-slate-900/80 hover:text-slate-100 disabled:opacity-60"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Rerun
+                </button>
               </div>
-              <div className="mt-3 rounded-2xl border border-slate-800/70 bg-slate-900/60 px-3 py-3 text-sm leading-6 text-slate-300 whitespace-pre-wrap">
-                {stage.content}
-              </div>
+              <div className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{stage.content}</div>
             </div>
           );
         })}
       </div>
 
       {workflow?.final_output ? (
-        <div className="mt-4 rounded-[24px] border border-emerald-500/20 bg-emerald-950/15 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <SectionEyebrow label="Final output" source="advisory" />
-          </div>
-          <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-emerald-100">{workflow.final_output}</div>
+        <div className="border-t border-slate-800 pt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Final output</div>
+          <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-200">{workflow.final_output}</div>
         </div>
       ) : null}
-    </EvidencePanel>
+    </div>
   );
 }

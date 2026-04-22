@@ -96,7 +96,7 @@ export function CommandSurface({
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[28px] border border-slate-800/70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.08),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.08),transparent_28%),rgba(2,6,23,0.96)] shadow-[0_20px_60px_-36px_rgba(15,23,42,0.9)]",
+        "overflow-hidden rounded-xl border border-slate-800/70 bg-slate-950/88",
         className,
       )}
     >
@@ -115,7 +115,7 @@ export function EvidencePanel({
   return (
     <section
       className={cn(
-        "rounded-[28px] border border-slate-800/70 bg-slate-900/80 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.95)]",
+        "rounded-xl border border-slate-800/70 bg-slate-950/72",
         className,
       )}
     >
