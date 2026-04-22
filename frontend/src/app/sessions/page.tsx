@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useModels } from "@/components/chat/use-models";
 import { buildModelCostMap } from "@/lib/model-pricing";
@@ -19,6 +19,7 @@ import { useSessionKeyboard } from "./hooks/useSessionKeyboard";
 export default function SessionsPage() {
   const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [hideBenchmarkTraffic, setHideBenchmarkTraffic] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -109,6 +110,18 @@ export default function SessionsPage() {
   const showNoMatch = Boolean(data && !error && !isLoading && total > 0 && visibleCount === 0);
   const showTable = Boolean(data && !error && !isLoading && visibleCount > 0);
 
+  useEffect(() => {
+    if (!expandedSessionId) {
+      return;
+    }
+    const expandedStillVisible = filteredAndSorted.some((session) => session.id === expandedSessionId);
+    if (expandedStillVisible) {
+      return;
+    }
+    clearExpansion();
+    searchInputRef.current?.focus();
+  }, [clearExpansion, expandedSessionId, filteredAndSorted]);
+
   return (
     <div className="page-shell bg-slate-950 text-slate-100">
       <div className="page-backdrop bg-slate-950/90" />
@@ -120,6 +133,7 @@ export default function SessionsPage() {
         hiddenBenchmarkCount={hiddenBenchmarkCount}
         isRefreshing={isRefreshing}
         modelFilter={modelFilter}
+        searchInputRef={searchInputRef}
         onSearchChange={setSearchQuery}
         onStatusFilterChange={setStatusFilter}
         onHideBenchmarkTrafficChange={setHideBenchmarkTraffic}
@@ -133,7 +147,17 @@ export default function SessionsPage() {
 
           {isLoading && <LoadingState />}
           {showEmptyData && <EmptyState kind="no-data" />}
-          {showNoMatch && <EmptyState kind="no-match" />}
+          {showNoMatch && (
+            <EmptyState
+              kind="no-match"
+              loadedCount={loadedCount}
+              totalCount={total}
+              canLoadMore={Boolean(hasNextPage)}
+              onLoadMore={() => {
+                void fetchNextPage();
+              }}
+            />
+          )}
 
           {showTable && (
             <>
