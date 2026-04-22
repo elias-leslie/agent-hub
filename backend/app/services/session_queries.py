@@ -54,23 +54,39 @@ def apply_session_filters(
 
 async def fetch_session_statistics(
     db: AsyncSession, session_ids: list[str]
-) -> tuple[dict[str, int], dict[str, dict[str, int]]]:
-    """Fetch event counts and token statistics for sessions.
+) -> tuple[dict[str, int], dict[str, int], dict[str, dict[str, int]]]:
+    """Fetch message counts, event counts, and token statistics for sessions.
 
     Args:
         db: Database session
         session_ids: List of session IDs
 
     Returns:
-        Tuple of (event_counts, token_stats)
+        Tuple of (message_counts, event_counts, token_stats)
     """
+    message_counts: dict[str, int] = {}
     event_counts: dict[str, int] = {}
     token_stats: dict[str, dict[str, int]] = {}
 
     if not session_ids:
-        return event_counts, token_stats
+        return message_counts, event_counts, token_stats
 
     from typing import cast
+
+    message_counts_result = await db.execute(
+        select(SessionEvent.session_id, func.count(SessionEvent.id))
+        .where(
+            SessionEvent.session_id.in_(session_ids),
+            SessionEvent.event_type.in_(
+                [
+                    SessionEventType.USER_MESSAGE,
+                    SessionEventType.ASSISTANT_MESSAGE,
+                ]
+            ),
+        )
+        .group_by(SessionEvent.session_id)
+    )
+    message_counts = dict(cast(list[tuple[str, int]], message_counts_result.all()))
 
     event_counts_result = await db.execute(
         select(SessionEvent.session_id, func.count(SessionEvent.id))
@@ -104,7 +120,7 @@ async def fetch_session_statistics(
         elif role == "assistant":
             token_stats[session_id]["output"] = tokens
 
-    return event_counts, token_stats
+    return message_counts, event_counts, token_stats
 
 
 async def get_session_or_404(db: AsyncSession, session_id: str) -> Session:

@@ -11,6 +11,7 @@ import {
   type WorkflowResult,
   type WorkflowStageName,
 } from "@/lib/api/persona-operator";
+import { ProvenanceBadge, SectionEyebrow, ScopeChip } from "./persona-operator-chrome";
 
 export type WorkflowTaskMode = "build" | "bug" | "review" | "research" | "release";
 
@@ -206,19 +207,17 @@ export function PersonaWorkflowComposer({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            <Sparkles className="h-3.5 w-3.5 text-amber-300" />
-            Staged workflow
-          </div>
+          <SectionEyebrow icon={<Sparkles className="h-3.5 w-3.5 text-amber-300" />} label="Staged workflow" source="advisory" />
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
             Clarify. Plan. Execute. Review. QA.
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Run the operator workflow in the open, approve stages, and rerun only the slice that needs correction.
+            Advisory orchestration over existing stage sessions. Run the workflow in the open, approve stages, and rerun only the slice that needs correction.
           </p>
         </div>
-        <div className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300">
-          {workflow?.stages.length ?? 0} stages
+        <div className="flex flex-col items-end gap-2 text-right">
+          <ScopeChip>{workflow?.stages.length ?? 0} stages</ScopeChip>
+          {parentSessionId ? <ScopeChip>Session root · {parentSessionId}</ScopeChip> : null}
         </div>
       </div>
 
@@ -273,7 +272,7 @@ export function PersonaWorkflowComposer({
           className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-950/20 px-3 py-2 text-sm font-medium text-amber-200 transition hover:border-amber-400/30 hover:bg-amber-950/30 disabled:opacity-60"
         >
           <PlayCircle className="h-4 w-4" />
-          {running ? "Running workflow…" : "Run workflow"}
+          {running ? "Running advisory workflow…" : "Run advisory workflow"}
         </button>
         {workflow ? (
           <div className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-xs text-slate-300">
@@ -304,6 +303,7 @@ export function PersonaWorkflowComposer({
                 <div>
                   <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                     <span>{stage.stage}</span>
+                    <ProvenanceBadge source={stage.session_id ? "session" : "advisory"} />
                     {isStale ? (
                       <span className="rounded-full border border-amber-500/20 bg-amber-950/20 px-2 py-0.5 text-[10px] text-amber-200">
                         Stale after {staleReason} rerun
@@ -313,8 +313,9 @@ export function PersonaWorkflowComposer({
                   <div className="mt-1 text-sm font-medium text-slate-100">
                     {stage.agent_used || stage.provider}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    {stage.provider}/{stage.model} · {stage.usage.total_tokens} tokens
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <span>{stage.provider}/{stage.model} · {stage.usage.total_tokens} tokens</span>
+                    {stage.session_id ? <ScopeChip>Stage session · {stage.session_id}</ScopeChip> : null}
                   </div>
                   {isStale ? (
                     <div className="mt-2 text-xs text-amber-200">

@@ -1,13 +1,16 @@
 "use client";
 
-import { AlertTriangle, FileStack } from "lucide-react";
+import { AlertTriangle, FileStack, Radar } from "lucide-react";
 
 import type { AgentPreview, AgentPreviewSection } from "@/types/agent-preview";
+import type { ContextUsage } from "@/lib/api/sessions";
+import { ProvenanceBadge, SectionEyebrow } from "./persona-operator-chrome";
 
 interface PersonaPromptBudgetPanelProps {
   preview: AgentPreview | null;
   loading: boolean;
   error: string | null;
+  runtimeContext?: ContextUsage | null;
 }
 
 function toneForTokens(totalTokens: number | null | undefined) {
@@ -21,6 +24,7 @@ export function PersonaPromptBudgetPanel({
   preview,
   loading,
   error,
+  runtimeContext = null,
 }: PersonaPromptBudgetPanelProps) {
   const totalTokens = preview?.memory_debug?.total_tokens;
   const sections = [...(preview?.sections ?? [])]
@@ -34,26 +38,34 @@ export function PersonaPromptBudgetPanel({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            <FileStack className="h-3.5 w-3.5 text-sky-300" />
-            Prompt budget
-          </div>
+          <SectionEyebrow icon={<FileStack className="h-3.5 w-3.5 text-sky-300" />} label="Prompt budget" source="preview" />
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
             Keep runtime context lean enough to stay sharp.
           </h3>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Preview-derived estimate from prompt assembly. Treat as guidance until runtime publishes authoritative totals.
+            Treat preview totals as guidance until runtime publishes authoritative prompt totals.
           </p>
         </div>
         <div className="text-right">
           <div className={`text-sm font-semibold ${toneForTokens(totalTokens)}`}>
             {typeof totalTokens === "number" ? `${totalTokens.toLocaleString()} tokens` : "Loading"}
           </div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
-            Preview-derived estimate
+          <div className="mt-1 flex justify-end">
+            <ProvenanceBadge source="preview" />
           </div>
         </div>
       </div>
+
+      {runtimeContext ? (
+        <div className="mt-4 rounded-[24px] border border-emerald-500/20 bg-emerald-950/15 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <SectionEyebrow icon={<Radar className="h-3.5 w-3.5 text-emerald-300" />} label="Live context pressure" source="runtime" />
+          </div>
+          <p className="mt-2 text-sm text-emerald-100">
+            {Math.round(runtimeContext.percent_used)}% of live context used · {runtimeContext.remaining_tokens.toLocaleString()} tokens remaining
+          </p>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm text-rose-200">

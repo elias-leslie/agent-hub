@@ -9,7 +9,7 @@ from app.api.schemas.sessions import (
     SessionListItem,
     SessionResponse,
 )
-from app.models import Session
+from app.models import Session, SessionEventType
 from app.services._session_message_helpers import (
     group_events_by_turn,
     turn_messages,
@@ -67,10 +67,22 @@ def _resolved_scope_confidence(session: Session) -> str | None:
     )
 
 
+def _message_count(events: list[Any]) -> int:
+    return sum(
+        1
+        for event in events
+        if getattr(event, "event_type", None) in {
+            SessionEventType.USER_MESSAGE,
+            SessionEventType.ASSISTANT_MESSAGE,
+        }
+    )
+
+
 def _session_list_item(
     session: Session,
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
+    event_counts: dict[str, int] | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionListItem:
@@ -128,6 +140,7 @@ def _session_list_item(
             has_specialist_lane=session.id in (specialist_session_ids or set()),
         ),
         message_count=msg_counts.get(session.id, 0),
+        event_count=(event_counts or {}).get(session.id, 0),
         total_input_tokens=session_tokens.get("input", 0),
         total_output_tokens=session_tokens.get("output", 0),
         created_at=session.created_at,
@@ -139,6 +152,7 @@ def build_session_list_items(
     sessions: list[Session],
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
+    event_counts: dict[str, int] | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> list[SessionListItem]:
@@ -147,6 +161,7 @@ def build_session_list_items(
             session,
             msg_counts,
             token_stats,
+            event_counts=event_counts,
             owner_session_ids=owner_session_ids,
             specialist_session_ids=specialist_session_ids,
         )
@@ -161,6 +176,8 @@ def build_session_response(
     agent_breakdown: list[AgentTokenBreakdown] | None = None,
     total_input: int = 0,
     total_output: int = 0,
+    message_count: int | None = None,
+    event_count: int | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
@@ -217,6 +234,8 @@ def build_session_response(
             has_owner_lane=session.id in (owner_session_ids or set()),
             has_specialist_lane=session.id in (specialist_session_ids or set()),
         ),
+        message_count=message_count,
+        event_count=event_count,
         messages=messages or [],
         context_usage=context_usage,
         agent_token_breakdown=agent_breakdown or [],

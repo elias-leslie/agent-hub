@@ -189,6 +189,14 @@ class SessionResponse(BaseModel):
     live_activity: LiveActivityResponse | None = Field(
         default=None, description="Current live execution state"
     )
+    message_count: int | None = Field(
+        default=None,
+        description="Count of persisted user and assistant messages",
+    )
+    event_count: int | None = Field(
+        default=None,
+        description="Count of persisted session events",
+    )
     messages: list[MessageResponse] = Field(default_factory=list)
     context_usage: ContextUsageResponse | None = Field(
         default=None, description="Context window usage"
@@ -244,6 +252,10 @@ class SessionListItem(BaseModel):
         default=None, description="Current live execution state"
     )
     message_count: int
+    event_count: int | None = Field(
+        default=None,
+        description="Count of persisted session events",
+    )
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")
     created_at: datetime

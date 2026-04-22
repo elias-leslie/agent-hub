@@ -68,6 +68,15 @@ def test_build_session_list_items_exposes_batch_task_ids() -> None:
     assert item.batch_task_ids == ["task-a", "task-b"]
 
 
+def test_build_session_list_items_exposes_message_and_event_counts_separately() -> None:
+    session = _session()
+
+    item = build_session_list_items([session], {"sess-1": 2}, {}, {"sess-1": 5})[0]
+
+    assert item.message_count == 2
+    assert item.event_count == 5
+
+
 def test_build_session_list_items_classifies_benchmark_attribution() -> None:
     session = _session(
         request_source="manual/caveman-mini-baseline",

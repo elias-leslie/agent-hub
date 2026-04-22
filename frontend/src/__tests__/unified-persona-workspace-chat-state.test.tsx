@@ -259,12 +259,12 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Primary thread")).toBeInTheDocument();
+      expect(screen.getByText("Draft primary thread")).toBeInTheDocument();
     });
 
     expect(screen.queryByText("Fresh thread")).not.toBeInTheDocument();
     expect(screen.getAllByText("Avery is responding").length).toBeGreaterThan(0);
-    expect(screen.getByText("Thread: agent-hub")).toBeInTheDocument();
+    expect(screen.getByText("Project · agent-hub")).toBeInTheDocument();
   });
 
   it("prefers persisted completed session truth over a stale draft shell", async () => {
@@ -376,8 +376,6 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Tool run complete. Highest-signal issue: stale session state.").length).toBeGreaterThan(0);
     });
-
-    fireEvent.click(screen.getAllByRole("button", { name: /show desk/i })[0]);
 
     expect(screen.queryByText("Waiting for model response")).not.toBeInTheDocument();
     expect(screen.getAllByText("Status · completed").length).toBeGreaterThan(0);
@@ -492,8 +490,6 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Running bash").length).toBeGreaterThan(0);
     });
-
-    fireEvent.click(screen.getAllByRole("button", { name: /show desk/i })[0]);
 
     expect(screen.getAllByText("Status · active").length).toBeGreaterThan(0);
     expect(screen.queryByText("Session completed")).not.toBeInTheDocument();

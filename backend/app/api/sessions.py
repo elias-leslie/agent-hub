@@ -221,7 +221,7 @@ async def list_sessions(
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
-    sessions, total, msg_counts, token_stats = await list_sessions_with_stats(
+    sessions, total, msg_counts, event_counts, token_stats = await list_sessions_with_stats(
         db,
         project_id=project_id,
         status=status,
@@ -241,6 +241,7 @@ async def list_sessions(
             sessions,
             msg_counts,
             token_stats,
+            event_counts=event_counts,
             owner_session_ids=owner_session_ids,
             specialist_session_ids=specialist_session_ids,
         ),

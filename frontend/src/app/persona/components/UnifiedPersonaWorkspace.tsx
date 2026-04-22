@@ -107,7 +107,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
   const sessionProjectId = focusedRuntimeSession?.project_id ?? persistedSessionProjectId ?? null;
   const [selectedProjectId, setSelectedProjectId] = useState(sessionProjectId ?? "agent-hub");
   const [activeOperatorTab, setActiveOperatorTab] = useState<PersonaOperatorTab>("workflow");
-  const [deskOpen, setDeskOpen] = useState(false);
+  const [deskOpen, setDeskOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 1024 : false));
   const [compactViewport, setCompactViewport] = useState(false);
   const state = useWorkspaceState({
     ...props,
@@ -209,6 +209,16 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
       && displaySession.live_activity?.status !== "active"
       && !["waiting_for_model", "running_tool", "finalizing"].includes(displaySession.live_activity?.phase ?? ""),
     );
+  const isDraftDisplaySession = Boolean(
+    displaySession
+    && (
+      displaySession.id === "__live_draft__"
+      || (optimisticDraftActive && state.currentSessionId && displaySession.id === state.currentSessionId)
+    ),
+  );
+  const threadSource = displaySession || state.messages.length > 0
+    ? (isDraftDisplaySession ? "draft" : "session")
+    : null;
   const handleStopDisplaySession = () => {
     if (!props.runtime) {
       return;
@@ -239,7 +249,11 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
       return;
     }
     const updateCompactViewport = () => {
-      setCompactViewport(window.innerHeight < 720);
+      const isCompact = window.innerHeight < 720;
+      setCompactViewport(isCompact);
+      if (window.innerWidth >= 1024) {
+        setDeskOpen(true);
+      }
     };
     updateCompactViewport();
     window.addEventListener("resize", updateCompactViewport);
@@ -255,7 +269,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
     state.selectedSessionId
     ?? state.currentSessionId
     ?? props.activeSessionId
-    ?? (state.messages.length > 0 ? "__draft__" : null);
+    ?? null;
 
   return (
     <div
@@ -294,6 +308,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           focusSession={displaySession}
           selectedSessionId={state.selectedSessionId}
           targetProjectId={selectedProjectId}
+          threadSource={threadSource}
           onSelectSession={props.onSelectSession}
           sendMessage={state.sendMessage}
           activeTab={activeOperatorTab}
@@ -304,7 +319,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
         />
       ) : null}
 
-      <div data-testid="persona-workspace-main" className="min-h-0 flex-1 overflow-hidden lg:flex">
+      <div data-testid="persona-workspace-main" className="min-h-0 flex-1 overflow-hidden lg:grid lg:grid-cols-[minmax(0,1fr)_332px]">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <WorkspaceTimeline
             scrollRef={state.scrollRef}
@@ -345,8 +360,8 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           />
         </div>
 
-        {props.persona && props.runtime && deskOpen ? (
-          <aside className="hidden min-h-0 overflow-hidden lg:flex lg:w-[332px] lg:min-w-[332px] lg:max-w-[332px]">
+        {props.persona && props.runtime ? (
+          <aside className="hidden min-h-0 overflow-hidden border-l border-slate-800/60 lg:flex lg:w-[332px] lg:min-w-[332px] lg:max-w-[332px]">
             <PersonaOperatorDeck
               persona={props.persona}
               personaName={state.personaDisplayName}
@@ -416,6 +431,7 @@ export function UnifiedPersonaWorkspace(props: UnifiedPersonaWorkspaceProps) {
           targetProjectId={selectedProjectId}
           sessionProjectId={sessionProjectId}
           threadSessionId={footerThreadSessionId}
+          threadSource={threadSource}
           isTerminalThread={isTerminalThread}
           sendMessage={state.sendMessage}
           cancelStream={state.cancelStream}

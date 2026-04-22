@@ -17,6 +17,7 @@ from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.session_tokens import calculate_agent_token_breakdown
 from app.services.session_transforms import (
     _effective_model,
+    _message_count,
     build_session_response,
     convert_messages_to_response,
 )
@@ -109,6 +110,8 @@ async def build_full_session_response(
         agent_breakdown,
         total_input,
         total_output,
+        message_count=_message_count(session.events),
+        event_count=len(session.events),
         owner_session_ids=owner_session_ids,
         specialist_session_ids=specialist_session_ids,
     )

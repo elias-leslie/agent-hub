@@ -159,7 +159,28 @@ class TestGetSession:
         mock_event.tokens = None
         mock_event.duration_ms = None
         mock_event.created_at = datetime(2026, 1, 6, 10, 0, 0)
-        mock_db_session.events = [mock_event]
+
+        mock_non_message_event = MagicMock()
+        mock_non_message_event.id = "2"
+        mock_non_message_event.event_type = "error"
+        mock_non_message_event.turn = 1
+        mock_non_message_event.sequence = 2
+        mock_non_message_event.role = None
+        mock_non_message_event.content = "Tool failed"
+        mock_non_message_event.input_tokens = 0
+        mock_non_message_event.output_tokens = 0
+        mock_non_message_event.model = CLAUDE_SONNET
+        mock_non_message_event.model_used = CLAUDE_SONNET
+        mock_non_message_event.agent_slug = None
+        mock_non_message_event.agent_id = None
+        mock_non_message_event.agent_name = None
+        mock_non_message_event.tool_name = None
+        mock_non_message_event.tool_input = None
+        mock_non_message_event.tool_output = None
+        mock_non_message_event.tokens = None
+        mock_non_message_event.duration_ms = None
+        mock_non_message_event.created_at = datetime(2026, 1, 6, 10, 0, 1)
+        mock_db_session.events = [mock_event, mock_non_message_event]
 
         # Session query result
         mock_session_result = MagicMock()
@@ -218,6 +239,8 @@ class TestGetSession:
         assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
         assert data["workstream_status"] == "completed_ready_for_closure"
         assert data["summary_oneliner"] == "Closed the loop on session detail observability"
+        assert data["message_count"] == 1
+        assert data["event_count"] == 2
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
         # Verify context_usage is included
@@ -358,7 +381,11 @@ class TestListSessions:
 
         # Mock message count query
         mock_msg_count_result = MagicMock()
-        mock_msg_count_result.all.return_value = [("session-1", 5)]
+        mock_msg_count_result.all.return_value = [("session-1", 2)]
+
+        # Mock total event count query
+        mock_event_count_result = MagicMock()
+        mock_event_count_result.all.return_value = [("session-1", 5)]
 
         # Mock token stats query
         mock_token_stats_result = MagicMock()
@@ -375,6 +402,7 @@ class TestListSessions:
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
+                mock_event_count_result,
                 mock_token_stats_result,
                 mock_lane_result,
                 mock_lane_result,
@@ -399,7 +427,8 @@ class TestListSessions:
         assert data["sessions"][0]["fallback_used"] is True
         assert data["sessions"][0]["live_activity"]["phase"] == "waiting_for_model"
         assert data["sessions"][0]["live_activity"]["tool_calls_count"] == 2
-        assert data["sessions"][0]["message_count"] == 5
+        assert data["sessions"][0]["message_count"] == 2
+        assert data["sessions"][0]["event_count"] == 5
         assert data["sessions"][0]["total_input_tokens"] == 100
         assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["sessions"][0]["parent_session_id"] == "parent-1"
@@ -457,6 +486,9 @@ class TestListSessions:
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 1)]
 
+        mock_event_count_result = MagicMock()
+        mock_event_count_result.all.return_value = [("session-1", 1)]
+
         mock_token_stats_result = MagicMock()
         mock_token_stats_result.all.return_value = []
 
@@ -468,6 +500,7 @@ class TestListSessions:
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
+                mock_event_count_result,
                 mock_token_stats_result,
                 mock_lane_result,
                 mock_lane_result,
@@ -484,6 +517,7 @@ class TestListSessions:
         assert response.status_code == 200
         data = response.json()
         assert data["sessions"][0]["working_dir"] == str(checkout)
+        assert data["sessions"][0]["event_count"] == 1
 
     def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by project_id."""
@@ -524,7 +558,7 @@ class TestListSessions:
         client: APITestClient,
     ) -> None:
         """Test filtering by linked external_id."""
-        mock_list_sessions.return_value = ([], 0, {}, {})
+        mock_list_sessions.return_value = ([], 0, {}, {}, {})
         mock_lane_session_ids.return_value = (set(), set())
 
         response = client.get("/api/sessions?external_id=task-12345678")
