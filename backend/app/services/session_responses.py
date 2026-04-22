@@ -10,7 +10,6 @@ from app.models import Session, SessionEvent
 
 if TYPE_CHECKING:
     from app.api.schemas.sessions import (
-        ContextUsageResponse,
         SessionEventResponse,
         SessionResponse,
     )
