@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,19 @@ from app.services.session_transforms import (
 )
 
 
+def _row_slug_and_name(row: Any) -> tuple[str | None, str | None]:
+    slug = getattr(row, "slug", None)
+    name = getattr(row, "name", None)
+    if slug is not None or name is not None:
+        return slug, name
+    if hasattr(row, "_mapping"):
+        mapping = row._mapping
+        return mapping.get("slug"), mapping.get("name")
+    if isinstance(row, tuple) and len(row) >= 2:
+        return row[0], row[1]
+    return None, None
+
+
 async def _resolve_agent_display_names(
     db: AsyncSession, events: list[SessionEvent],
 ) -> dict[str, str]:
@@ -47,7 +60,11 @@ async def _resolve_agent_display_names(
     result = await db.execute(
         select(Agent.slug, Agent.name).where(Agent.slug.in_(slugs))
     )
-    names = {row[0]: row[1] for row in result.all()}
+    names: dict[str, str] = {}
+    for row in result.all():
+        slug, name = _row_slug_and_name(row)
+        if slug and name:
+            names[slug] = name
     if PERSONA_SLUG in slugs:
         names[PERSONA_SLUG] = await get_persona_display_name(
             db,
