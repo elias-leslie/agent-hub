@@ -81,11 +81,23 @@ def _message_count(events: list[Any]) -> int:
     )
 
 
+def _status_provenance(session: Session, live_activity: Any | None) -> tuple[str, bool]:
+    live_status = getattr(live_activity, "status", None) if live_activity is not None else None
+    if live_status is None and isinstance(live_activity, dict):
+        live_status = live_activity.get("status")
+    if not live_status:
+        return "session", True
+    matches = str(live_status) == str(session.status)
+    return ("session" if matches or session.status != "active" else "runtime"), matches
+
+
 def _session_list_item(
     session: Session,
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
     event_counts: dict[str, int] | None = None,
+    child_counts: dict[str, int] | None = None,
+    active_child_counts: dict[str, int] | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionListItem:
@@ -102,6 +114,12 @@ def _session_list_item(
         for task_id in provider_metadata.get("batch_task_ids", [])
         if isinstance(task_id, str) and str(task_id).strip()
     ]
+    live_activity = build_live_activity_response(
+        session,
+        has_owner_lane=session.id in (owner_session_ids or set()),
+        has_specialist_lane=session.id in (specialist_session_ids or set()),
+    )
+    status_source, status_matches_live = _status_provenance(session, live_activity)
     return SessionListItem(
         id=session.id,
         project_id=session.project_id,
@@ -135,22 +153,22 @@ def _session_list_item(
         tmux_pane_id=metadata_value(session, "tmux_pane_id"),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
+        child_session_count=(child_counts or {}).get(session.id),
+        active_child_session_count=(active_child_counts or {}).get(session.id),
         batch_task_ids=batch_task_ids,
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
         observed_write_paths=scope_list(session.observed_write_paths),
         scope_confidence=_resolved_scope_confidence(session),
-        live_activity=build_live_activity_response(
-            session,
-            has_owner_lane=session.id in (owner_session_ids or set()),
-            has_specialist_lane=session.id in (specialist_session_ids or set()),
-        ),
+        live_activity=live_activity,
         message_count=msg_counts.get(session.id, 0),
         event_count=(event_counts or {}).get(session.id, 0),
         total_input_tokens=session_tokens.get("input", 0),
         total_output_tokens=session_tokens.get("output", 0),
         created_at=session.created_at,
         updated_at=session.updated_at,
+        status_source=status_source,
+        status_matches_live=status_matches_live,
     )
 
 
@@ -159,6 +177,8 @@ def build_session_list_items(
     msg_counts: dict[str, int],
     token_stats: dict[str, dict[str, int]],
     event_counts: dict[str, int] | None = None,
+    child_counts: dict[str, int] | None = None,
+    active_child_counts: dict[str, int] | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> list[SessionListItem]:
@@ -168,6 +188,8 @@ def build_session_list_items(
             msg_counts,
             token_stats,
             event_counts=event_counts,
+            child_counts=child_counts,
+            active_child_counts=active_child_counts,
             owner_session_ids=owner_session_ids,
             specialist_session_ids=specialist_session_ids,
         )
@@ -184,6 +206,8 @@ def build_session_response(
     total_output: int = 0,
     message_count: int | None = None,
     event_count: int | None = None,
+    child_session_count: int | None = None,
+    active_child_session_count: int | None = None,
     owner_session_ids: set[str] | None = None,
     specialist_session_ids: set[str] | None = None,
 ) -> SessionResponse:
@@ -198,6 +222,12 @@ def build_session_response(
         for task_id in provider_metadata.get("batch_task_ids", [])
         if isinstance(task_id, str) and str(task_id).strip()
     ]
+    live_activity = build_live_activity_response(
+        session,
+        has_owner_lane=session.id in (owner_session_ids or set()),
+        has_specialist_lane=session.id in (specialist_session_ids or set()),
+    )
+    status_source, status_matches_live = _status_provenance(session, live_activity)
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
@@ -231,6 +261,8 @@ def build_session_response(
         tmux_pane_id=metadata_value(session, "tmux_pane_id"),
         workstream_status=optional_str(session.workstream_status),
         summary_oneliner=optional_str(session.summary_oneliner),
+        child_session_count=child_session_count,
+        active_child_session_count=active_child_session_count,
         batch_task_ids=batch_task_ids,
         declared_scope_paths=scope_list(session.declared_scope_paths),
         observed_read_paths=scope_list(session.observed_read_paths),
@@ -238,11 +270,7 @@ def build_session_response(
         scope_confidence=_resolved_scope_confidence(session),
         created_at=session.created_at,
         updated_at=session.updated_at,
-        live_activity=build_live_activity_response(
-            session,
-            has_owner_lane=session.id in (owner_session_ids or set()),
-            has_specialist_lane=session.id in (specialist_session_ids or set()),
-        ),
+        live_activity=live_activity,
         message_count=message_count,
         event_count=event_count,
         messages=messages or [],
@@ -250,4 +278,6 @@ def build_session_response(
         agent_token_breakdown=agent_breakdown or [],
         total_input_tokens=total_input,
         total_output_tokens=total_output,
+        status_source=status_source,
+        status_matches_live=status_matches_live,
     )

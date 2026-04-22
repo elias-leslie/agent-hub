@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Session, SessionEvent
+from app.services.session_live_activity import is_session_actionably_active
 
 if TYPE_CHECKING:
     from app.api.schemas.sessions import (
@@ -119,6 +121,12 @@ async def build_full_session_response(
         db,
         {session.project_id},
     )
+    child_result = await db.execute(select(Session).where(Session.parent_session_id == session.id))
+    child_sessions = list(child_result.scalars().all())
+    child_session_count = len(child_sessions)
+    active_child_session_count = sum(
+        1 for child_session in child_sessions if is_session_actionably_active(child_session)
+    )
 
     return build_session_response(
         session,
@@ -129,6 +137,8 @@ async def build_full_session_response(
         total_output,
         message_count=_message_count(session.events),
         event_count=len(session.events),
+        child_session_count=child_session_count,
+        active_child_session_count=active_child_session_count,
         owner_session_ids=owner_session_ids,
         specialist_session_ids=specialist_session_ids,
     )
