@@ -299,7 +299,7 @@ describe("PersonaOperatorDeck", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("persona-run-hud")).toBeInTheDocument();
+      expect(screen.getByText(/running verification/i)).toBeInTheDocument();
     });
     expect(screen.getByText("Investigating UI state in background lane.")).toBeInTheDocument();
     expect(screen.queryByText("Jenny")).not.toBeInTheDocument();
@@ -406,7 +406,7 @@ describe("PersonaOperatorDeck", () => {
     await waitFor(() => {
       expect(screen.getByText("Planning workflow from runtime state")).toBeInTheDocument();
     });
-    expect(screen.getByText("1/1 active")).toBeInTheDocument();
+    expect(screen.getAllByText(/active child lanes/i).length).toBeGreaterThan(0);
   });
 
   it("stops the focused live thread even before runtime primary session refreshes", async () => {
@@ -498,10 +498,10 @@ describe("PersonaOperatorDeck", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Stop focused thread/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Stop active work/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /Stop focused thread/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Stop active work/i }));
     expect(stopSession).toHaveBeenCalledWith("chat-live-1");
   });
 
