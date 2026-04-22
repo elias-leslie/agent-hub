@@ -8,14 +8,16 @@ Agent Hub is not a consumer chat app. It is an operator cockpit for supervising 
 
 The redesign should feel like a dark command deck: high signal density, calm visual hierarchy, strong operational clarity, and explicit separation between authoritative truth, preview/advisory data, and operator intent.
 
-## Shared design direction
+## Product guardrail alignment
 
-- Aesthetic: dark command-center / midnight cockpit / precision editorial.
-- Tone: serious, trustworthy, technical, deliberate.
-- Primary goal: make live state, provenance, and action scope obvious.
-- Secondary goal: make dense session/persona information scanable without looking like a commodity admin dashboard.
-- Motion: restrained, purposeful, mostly micro-interactions and state transitions.
-- Emphasis: status beacons, source badges, grouped actions, evidence-first details.
+This document extends `docs/persona-operator-contract.md`; it does not replace it.
+
+Key inherited guardrails to preserve during this refactor:
+- `/persona` stays primary operator surface. `/sessions` supports it as forensic ledger, not peer chat shell.
+- Session truth stays grounded in `fetchSessions` / `fetchSession` plus `parent_session_id` and `live_activity`.
+- Workflow stages stay advisory orchestration over current backend primitives unless backend exposes a stronger primitive.
+- Prompt-budget truth stays runtime-first, preview-labeled when runtime totals are absent.
+- Redirect/stop/fork semantics must not over-promise backend scope.
 
 ## Authority and tie-break order
 
@@ -165,6 +167,34 @@ Every critical panel or datum that can be confused should declare its source usi
   - `GET /api/sessions/{id}` is the detail truth. It may extend the list payload with `messages`, `context_usage`, `agent_token_breakdown`, `working_dir`, `repo_root`, `host`, `tmux_*`, `workstream_status`, and other additive optional fields.
   - row rendering uses list data first; detail-only fields appear only after expansion fetch succeeds.
 
+## Current audit freeze: UX deficiencies and contract gaps
+
+This section freezes `1.1` audit findings that implementation must resolve.
+
+### `/persona` current deficiencies
+- Header and right-rail controls both act like command surfaces, so command ownership feels split instead of singular.
+- `page.tsx` computes command-bar live summary from runtime or heartbeat fallback, but stop enablement is still tied to `runtime.primarySession` only; this can under-represent focused persisted child-session scope when operator is inspecting a child lane.
+- `page.tsx` pause/resume path calls `updatePersona` without awaiting persistence, while header chips can still show autosave optimism; success semantics need to stay persistence-truthful.
+- `usePersonaRuntime.refresh()` builds lane inventory from `fetchSessions({ status: "active", page_size: 100 })`, so active child truth is available, but inactive persisted children drop out unless later resolved through focused detail; persona lane action enablement must respect that degraded window instead of implying broad lane authority.
+- Workflow preview/budget data lives beside runtime context signals, so preview fallback must stay explicitly preview-badged whenever runtime metrics are absent.
+- Advisory lane actions already open inspectable drafts in `PersonaBackgroundInbox`, but surrounding command copy and action grouping still need one shared vocabulary so advisory intent does not read like immediate mutation.
+- Draft thread semantics exist in `WorkspaceChatFooter`, but page hierarchy still mixes draft, persisted session, and runtime cues across multiple panels.
+
+### `/sessions` current deficiencies
+- `useSessionsData` fetches paginated rows from backend, but `useSessionFilters` applies search/model/benchmark filtering client-side over loaded rows only.
+- `SessionsHeader` already warns that filter scope is loaded subset, but page empty/no-match handling still treats `visibleCount === 0` as generic no-match without preserving a stronger keep-loading affordance when `loaded < total`.
+- `useSessionExpansion` already uses latest-request-wins via `requestSequenceRef`, but failed detail fetch clears data without preserving row-local error evidence; forensic context stays weak after expansion failure.
+- Session row/detail rendering uses both `message_count` and `event_count`, but operator semantics must stay frozen as message-only vs separately labeled event volume.
+- Live row emphasis currently mixes persisted `status` and `live_activity` hints; provenance needs to become explicit whenever they disagree rather than collapsing into a single implied state.
+- Execution identity fields exist in API types and schemas, but frontend hierarchy still underuses requested-vs-effective provenance and fallback semantics.
+
+### Backend/API audit freeze
+- `GET /api/sessions` already returns additive list truth with `message_count`, `event_count`, requested/effective identity fields, lineage fields, and `live_activity`; additive shaping should stay preferred over schema churn.
+- `GET /api/sessions/{id}` already returns detail payload with messages, context, token breakdown, and additive environment metadata.
+- Session schemas already separate `message_count` from optional `event_count`; implementation must preserve that meaning rather than reinterpreting existing fields.
+- Persona schemas expose execution state and automation metadata but do not themselves encode stronger redirect/promote/handoff primitives; persona UI must therefore stay advisory unless backend work adds narrow truthful support.
+- Default scope for backend work remains additive shaping or truth-preserving service fixes. No migration is justified by `1.1` audit yet because required core data already appears derivable from existing storage/contracts.
+
 ## Degraded-state contract
 
 ### `/persona`
@@ -258,94 +288,51 @@ Use the same visual vocabulary on both pages.
 2. Sessions board
    - rows/cards optimized for operator scan speed
    - requested vs effective model/provider identity
-   - live / stalled / reapable / done state badges
-   - summary-oneliner or display summary visible without expansion where feasible
+   - live beacon and provenance labels
+   - key metrics
+   - dedicated expand affordance
 
-3. Detail/evidence expansion
-   - expandable evidence drawer or side panel
-   - first paint should be lightweight; deeper event history loads on demand
-   - clearly separated overview / usage / evidence / lineage sections
+3. Expanded evidence drawer
+   - session summary
+   - runtime vs persisted state proof
+   - messages timeline
+   - event timeline
+   - lineage/fork metadata
+   - environment/workstream metadata
 
 ### Sessions-specific requirements
-- Empty state must distinguish:
-  - no sessions exist
-  - no loaded matches yet
-  - filters hide current results
-- Row interactions must be accessible and not rely on nested buttons.
-- Expanded detail must avoid stale-response races.
-- Live session affordances should be real, not placeholders.
+- Rows should read like ledger entries, not generic table rows.
+- The main list must preserve fast keyboard scan and explicit focus.
+- Expansion content should separate derived summary from raw evidence.
+- Visible/Loaded/Total semantics must remain visible whenever filtering is client-side.
 
-## Cohesion between pages
+## API / persistence scope decisions
 
-The pages should feel like adjacent parts of one control system.
+- Prefer additive shaping on existing session/persona/workflow endpoints.
+- Prefer service/query fixes over new persistence.
+- DB migration is not approved by default.
+- Introduce a migration only if implementation proves one required truthful datum cannot be derived safely from existing storage.
+- Any new field added for this refactor must remain optional or null-tolerant for older rows.
 
-Shared elements should align across both pages:
-- command bars
-- status beacons
-- evidence drawers
-- source badges
-- chips/filters
-- typography and spacing rhythm
-- hover/focus language
+## Task log
 
-`/persona` is the active operator cockpit.
-`/sessions` is the forensic ledger and timeline browser.
-They should differ in emphasis, not in design language.
+### 1.1 freeze record
+- Latest imported plan: `docs/tasks/agent-hub-sessions-persona-operator-refactor.plan.json`
+- Repo-local implementation reference: `docs/tasks/agent-hub-sessions-persona-operator-refactor-reference.md`
+- Authoritative package for implementation: latest imported plan + this reference doc, interpreted under `docs/persona-operator-contract.md` authority order.
+- Stale critique summaries, ad hoc notes, and pre-freeze observations do not outrank these documents.
 
-## Backend/data implications the UX may require
+### 1.1 setup map freeze
+- Preview-only budget proof source: natural idle `/persona` workspace or focused fixture; whichever implementation/test uses first must be logged as authoritative artifact.
+- Workflow-stage missing session-link proof source: focused workflow payload fixture or API/browser capture showing null/omitted/inaccessible `session_id`.
+- Stale expansion-race proof source: focused hook/component test with out-of-order detail/event responses.
+- Persisted-child advisory-draft proof source: active-child session inventory from `usePersonaRuntime.refresh()` plus draft-open UI proof before send.
+- Sessions no-match over partial-load proof source: paginated subset test/fixture where `Visible == 0` and `Loaded < Total`.
 
-The implementation may add or adjust backend fields/endpoints if needed to make the UI truthful, especially around:
-- requested vs effective execution identity
-- display summaries and workstream metadata
-- live activity freshness / last heartbeat / branch or lineage metadata
-- lane/workflow grouping
-- automation last-run history or session linkage
-- counts that currently misrepresent events as messages
+## Open implementation constraints carried forward from 1.1
 
-## API / persistence scope for this task
-
-Default expectation for this task:
-- prefer additive response-field shaping on existing session/persona/workflow endpoints;
-- prefer endpoint/service fixes over new tables;
-- do not add a DB migration unless a required truthful UI datum cannot be derived safely from existing storage.
-
-### Required session contract
-The refactor may rely on these session list/detail fields being present and accurately defined:
-- existing identity fields: `requested_provider`, `requested_model`, `effective_provider`, `effective_model`, `fallback_used`, `fallback_reason`
-- existing linkage fields: `parent_session_id`, `external_id`, `current_branch`, `workstream_status`, `summary_oneliner`, `live_activity`
-- additive fields allowed if needed: `display_summary`, `event_count`, `last_activity_at`, `last_heartbeat_at`, `branch_status`, `fork_point_turn`, `manual_outcome`
-
-Rules:
-- all additive fields must be nullable/optional for older rows;
-- older consumers must tolerate the additions unchanged;
-- `message_count` remains message-only; do not silently change it to event count.
-
-### Required sessions query behavior
-- Frontend may add `external_id` and `parent_session_id` query support if needed.
-- Server-side search/filtering is optional for this task.
-- If search/filter remains client-side over loaded pages, the UI must explicitly render `Visible / Loaded / Total` semantics instead of implying global server-filtered truth.
-
-### Required persona/workflow contract
-- No new approval/redirect/fork primitive is assumed.
-- Workflow stage truth is the returned stage `session_id` plus existing parent-session linkage.
-- Additive persona/automation fields are allowed if needed for truthful last-run linkage, but schema changes are deferred unless they are the only safe way to expose the datum.
-
-## Quality bar
-
-The final result should:
-- feel intentionally designed, not template-derived
-- improve operational clarity before adding ornament
-- make provenance explicit
-- reduce duplicated controls and contradictory signals
-- support high-density expert use without becoming visually noisy
-- pass focused frontend/backend tests plus project verification
-
-## Required review before closeout
-
-A design review/guidance pass from Claude Opus 4.7 is required before closeout. The review should judge:
-- cohesion between `/persona` and `/sessions`
-- truthfulness of action scope and state labels
-- runtime vs preview vs advisory clarity
-- evidence readability
-- interaction hierarchy and scanability
-- accessibility and degraded-state clarity
+- No backend/API guessing. Any stronger cancellation, promotion, or workflow mutation claim needs explicit backend proof first.
+- No count relabeling tricks. `message_count` stays message-only even if current UI wants fuller activity volume.
+- No fake effective model/provider identity when only partial fallback data exists.
+- No persona lane authority over draft-only state.
+- No migration unless a later phase logs one missing truthful datum absent from current storage/contracts.
