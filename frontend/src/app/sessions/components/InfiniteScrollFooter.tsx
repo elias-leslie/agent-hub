@@ -7,30 +7,38 @@ interface InfiniteScrollFooterProps {
   total: number;
 }
 
-export function InfiniteScrollFooter({ 
-  isFetchingNextPage, 
-  hasNextPage, 
-  allSessionsLength, 
-  total 
+export function InfiniteScrollFooter({
+  isFetchingNextPage,
+  hasNextPage,
+  allSessionsLength,
+  total,
 }: InfiniteScrollFooterProps) {
   if (isFetchingNextPage) {
     return (
-      <div className="flex items-center justify-center py-4 mt-3">
-        <div className="flex items-center gap-2 text-slate-400 text-sm">
-          <RefreshCw className="w-4 h-4 animate-spin" />
-          Loading more sessions...
+      <div className="mt-3 flex items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3">
+        <div className="flex items-center gap-2 text-sm text-slate-300">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          Loading more sessions into the ledger…
         </div>
       </div>
     );
   }
 
-  if (!hasNextPage && allSessionsLength > 0) {
+  if (allSessionsLength === 0) {
+    return null;
+  }
+
+  if (!hasNextPage) {
     return (
-      <div className="flex items-center justify-center py-3 mt-3 text-xs text-slate-500 bg-slate-900/50 rounded-lg">
-        Showing all {allSessionsLength} of {total} sessions
+      <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-center text-xs text-slate-400">
+        Loaded all {allSessionsLength} available rows of {total} total sessions.
       </div>
     );
   }
 
-  return null;
+  return (
+    <div className="mt-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-center text-xs text-slate-500">
+      Loaded {allSessionsLength} of {total} sessions so far. Search and filters still apply to the loaded subset.
+    </div>
+  );
 }

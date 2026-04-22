@@ -65,6 +65,15 @@ export interface LiveActivity {
   tool_calls_count: number;
   termination_reason?: string | null;
   files_touched: string[];
+  last_heartbeat_at?: string | null;
+  lifecycle_state?: string;
+  lifecycle_reason_codes?: string[];
+  dead_signals?: string[];
+  anti_reap_signals?: string[];
+  has_owner_lane?: boolean;
+  has_specialist_lane?: boolean;
+  reapable?: boolean;
+  reapable_reason?: string | null;
 }
 
 export interface Session {
@@ -96,6 +105,8 @@ export interface Session {
   messages?: SessionMessage[];
   context_usage?: ContextUsage | null;
   agent_token_breakdown?: AgentTokenBreakdown[];
+  message_count?: number | null;
+  event_count?: number | null;
   total_input_tokens?: number;
   total_output_tokens?: number;
 }
@@ -126,8 +137,10 @@ export interface SessionListItem {
   attribution_label?: string | null;
   attribution_detail?: string | null;
   current_branch?: string | null;
+  summary_oneliner?: string | null;
   live_activity?: LiveActivity | null;
   message_count: number;
+  event_count?: number | null;
   total_input_tokens: number;
   total_output_tokens: number;
   created_at: string;

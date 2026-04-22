@@ -10,6 +10,7 @@ import { ModelFilterBadge } from "./components/ModelFilterBadge";
 import { LoadingState } from "./components/LoadingState";
 import { InfiniteScrollFooter } from "./components/InfiniteScrollFooter";
 import { ErrorAlert } from "./components/ErrorAlert";
+import { EmptyState } from "./components/EmptyState";
 import { useSessionsData } from "./hooks/useSessionsData";
 import { useSessionFilters } from "./hooks/useSessionFilters";
 import { useSessionExpansion } from "./hooks/useSessionExpansion";
@@ -26,12 +27,19 @@ export default function SessionsPage() {
   const models = useModels();
   const modelCosts = useMemo(() => buildModelCostMap(models), [models]);
 
-  // Custom hooks for state management
-  const { sortField, sortDirection, handleSort } =
-    useSessionPreferences();
+  const { sortField, sortDirection, handleSort } = useSessionPreferences();
 
-  const { data, allSessions, total, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useSessionsData({ statusFilter, projectFilter: "", pageSize });
+  const {
+    data,
+    allSessions,
+    loadedCount,
+    total,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useSessionsData({ statusFilter, projectFilter: "", pageSize });
 
   const {
     modelFilter,
@@ -40,6 +48,7 @@ export default function SessionsPage() {
     setSearchQuery,
     hiddenBenchmarkCount,
     filteredAndSorted,
+    visibleCount,
     pageStats,
   } = useSessionFilters({
     sessions: allSessions,
@@ -49,13 +58,31 @@ export default function SessionsPage() {
     hideBenchmarkTraffic,
   });
 
-  const { expandedSessionId, expandedSessionData, expandedEventsData, isLoadingDetails, handleToggleExpand, clearExpansion } =
-    useSessionExpansion();
+  const {
+    expandedSessionId,
+    expandedSessionData,
+    expandedEventsData,
+    isLoadingDetails,
+    handleToggleExpand,
+    clearExpansion,
+  } = useSessionExpansion();
 
-  const { focusedRowIndex, handleKeyDown } =
-    useSessionKeyboard({ sessions: filteredAndSorted, onToggleExpand: handleToggleExpand, onClearExpansion: clearExpansion });
+  const { focusedRowIndex, handleKeyDown } = useSessionKeyboard({
+    sessions: filteredAndSorted,
+    onToggleExpand: handleToggleExpand,
+    onClearExpansion: clearExpansion,
+  });
 
-  // Manual refresh
+  const liveSessionIds = useMemo(
+    () =>
+      new Set(
+        allSessions
+          .filter((session) => session.status === "active" || session.live_activity?.lifecycle_state === "working")
+          .map((session) => session.id),
+      ),
+    [allSessions],
+  );
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     queryClient.invalidateQueries({ queryKey: ["sessions"] }).finally(() => {
@@ -63,7 +90,6 @@ export default function SessionsPage() {
     });
   }, [queryClient]);
 
-  // Scroll handler for infinite loading
   const handleScroll = useCallback(() => {
     if (!tableRef.current || isFetchingNextPage || !hasNextPage) return;
     const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
@@ -76,11 +102,20 @@ export default function SessionsPage() {
     setModelFilter(modelFilter === model ? "" : model);
   };
 
+  const counts = useMemo(
+    () => ({ visible: visibleCount, loaded: loadedCount, total }),
+    [loadedCount, total, visibleCount],
+  );
+
+  const showEmptyData = Boolean(data && !error && !isLoading && total === 0);
+  const showNoMatch = Boolean(data && !error && !isLoading && total > 0 && visibleCount === 0);
+  const showTable = Boolean(data && !error && !isLoading && visibleCount > 0);
+
   return (
-    <div className="page-shell">
-      <div className="page-backdrop bg-grid-pattern opacity-60" />
+    <div className="page-shell bg-slate-950 text-slate-100">
+      <div className="page-backdrop bg-slate-950/90" />
       <SessionsHeader
-        total={total}
+        counts={counts}
         pageStats={pageStats}
         searchQuery={searchQuery}
         statusFilter={statusFilter}
@@ -94,41 +129,45 @@ export default function SessionsPage() {
       />
 
       <main className="page-frame">
-        <div className="page-container">
-        {error && <ErrorAlert />}
-        <ModelFilterBadge modelFilter={modelFilter} onClear={() => setModelFilter("")} />
-        {isLoading && <LoadingState />}
+        <div className="page-container space-y-4">
+          {error && <ErrorAlert error={error} onRetry={handleRefresh} />}
 
-        {data && (
-          <>
-            <SessionTable
-              sessions={filteredAndSorted}
-              modelCosts={modelCosts}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              modelFilter={modelFilter}
-              expandedSessionId={expandedSessionId}
-              expandedSessionData={expandedSessionData}
-              expandedEventsData={expandedEventsData}
-              isLoadingDetails={isLoadingDetails}
-              liveSessionIds={new Set<string>()}
-              focusedRowIndex={focusedRowIndex}
-              flashingSessionIds={new Set<string>()}
-              tableRef={tableRef}
-              onSort={handleSort}
-              onKeyDown={handleKeyDown}
-              onScroll={handleScroll}
-              onToggleExpand={handleToggleExpand}
-              onModelFilterClick={handleModelFilterClick}
-            />
-            <InfiniteScrollFooter
-              isFetchingNextPage={isFetchingNextPage}
-              hasNextPage={hasNextPage}
-              allSessionsLength={allSessions.length}
-              total={total}
-            />
-          </>
-        )}
+          <ModelFilterBadge modelFilter={modelFilter} onClear={() => setModelFilter("")} />
+
+          {isLoading && <LoadingState />}
+          {showEmptyData && <EmptyState kind="no-data" />}
+          {showNoMatch && <EmptyState kind="no-match" />}
+
+          {showTable && (
+            <>
+              <SessionTable
+                sessions={filteredAndSorted}
+                modelCosts={modelCosts}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                modelFilter={modelFilter}
+                expandedSessionId={expandedSessionId}
+                expandedSessionData={expandedSessionData}
+                expandedEventsData={expandedEventsData}
+                isLoadingDetails={isLoadingDetails}
+                liveSessionIds={liveSessionIds}
+                focusedRowIndex={focusedRowIndex}
+                flashingSessionIds={new Set<string>()}
+                tableRef={tableRef}
+                onSort={handleSort}
+                onKeyDown={handleKeyDown}
+                onScroll={handleScroll}
+                onToggleExpand={handleToggleExpand}
+                onModelFilterClick={handleModelFilterClick}
+              />
+              <InfiniteScrollFooter
+                isFetchingNextPage={isFetchingNextPage}
+                hasNextPage={Boolean(hasNextPage)}
+                allSessionsLength={allSessions.length}
+                total={total}
+              />
+            </>
+          )}
         </div>
       </main>
     </div>

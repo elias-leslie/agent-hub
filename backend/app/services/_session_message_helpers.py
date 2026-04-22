@@ -1,11 +1,15 @@
 """Private helpers for transforming session events into message responses."""
 
-from collections import defaultdict
-from typing import Any
+from __future__ import annotations
 
-from app.api.schemas.sessions import MessageResponse, ToolExecutionResponse
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any
+
 from app.models.session import SessionEventType
 from app.services._session_metadata_helpers import resolve_model_display_name
+
+if TYPE_CHECKING:
+    from app.api.schemas.sessions import MessageResponse, ToolExecutionResponse
 
 _MESSAGE_TYPES = frozenset({
     SessionEventType.USER_MESSAGE,
@@ -15,6 +19,8 @@ _MESSAGE_TYPES = frozenset({
 
 
 def tool_execution_from_event(evt: Any) -> ToolExecutionResponse:
+    from app.api.schemas.sessions import ToolExecutionResponse
+
     return ToolExecutionResponse(
         id=str(evt.id),
         name=evt.tool_name or "unknown",
@@ -67,6 +73,8 @@ def build_message_response(
     thinking_tokens: int,
     tool_executions: list[ToolExecutionResponse],
 ) -> MessageResponse:
+    from app.api.schemas.sessions import MessageResponse
+
     msg = MessageResponse(
         id=str(evt.id),
         role=evt.role,
@@ -91,7 +99,7 @@ def build_message_response(
 
 
 def _build_incomplete_turn_content(tool_executions: list[ToolExecutionResponse]) -> str:
-    """Summarize a turn that emitted tool activity but never persisted a final assistant message."""
+    """Summarize turn that emitted tool activity but never persisted final assistant message."""
     if not tool_executions:
         return "No final assistant summary persisted for this turn."
     tool_names = [tool.name for tool in tool_executions if tool.name]
@@ -110,11 +118,17 @@ def build_incomplete_turn_response(
     thinking_tokens: int,
     tool_executions: list[ToolExecutionResponse],
 ) -> MessageResponse | None:
-    """Build a synthetic assistant message for turns missing a persisted assistant event."""
+    """Build synthetic assistant message for turns missing persisted assistant event."""
     if not turn_events or not (thinking_parts or tool_executions):
         return None
+    from app.api.schemas.sessions import MessageResponse
+
     source_evt = next(
-        (evt for evt in reversed(turn_events) if getattr(evt, "agent_id", None) or getattr(evt, "agent_name", None)),
+        (
+            evt
+            for evt in reversed(turn_events)
+            if getattr(evt, "agent_id", None) or getattr(evt, "agent_name", None)
+        ),
         turn_events[-1],
     )
     msg = MessageResponse(

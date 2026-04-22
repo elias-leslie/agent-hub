@@ -19,9 +19,10 @@ from app.constants import (
     CODEX_GPT_5_3,
     CODEX_GPT_5_3_SPARK,
     CODEX_GPT_5_4,
-    GEMINI_3_1_PRO,
-    GEMINI_FLASH,
     OR_FREE_GLM,
+    XAI_GROK_4_1_FAST,
+    XAI_GROK_4_20,
+    XAI_GROK_CODE_FAST,
     resolve_model,
 )
 from app.models import Agent
@@ -31,7 +32,7 @@ from app.services.model_mapping import map_model_to_provider
 
 logger = logging.getLogger(__name__)
 
-TEXT_PROVIDER_PRIORITY = ("codex", "claude", "openai", "gemini", "openrouter")
+TEXT_PROVIDER_PRIORITY = ("codex", "claude", "xai", "openai", "gemini", "openrouter")
 SKIP_AGENT_SLUGS = {"designer", "ux-polisher", "image-gen", "market-pulse-scout"}
 FAST_UTILITY_SLUGS = {
     "context-compactor",
@@ -136,16 +137,16 @@ def _preferred_codex_fallback(agent: Agent, primary_model_id: str) -> str | None
 
 def _preferred_non_codex_candidates(agent: Agent) -> list[str]:
     if agent.slug in VISUAL_SLUGS:
-        return [CLAUDE_SONNET, GEMINI_FLASH, GEMINI_3_1_PRO]
+        return [CLAUDE_SONNET, XAI_GROK_4_1_FAST, XAI_GROK_4_20]
     if agent.is_coding_agent:
-        return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_OPUS_4_7]
+        return [CLAUDE_SONNET, XAI_GROK_CODE_FAST, CLAUDE_OPUS_4_7]
     if agent.slug in REVIEW_HEAVY_SLUGS:
-        return [CLAUDE_OPUS_4_7, GEMINI_3_1_PRO, CLAUDE_SONNET]
+        return [CLAUDE_OPUS_4_7, XAI_GROK_4_20, CLAUDE_SONNET]
     if agent.slug in GENERAL_CHAT_SLUGS:
-        return [CLAUDE_SONNET, GEMINI_FLASH, CLAUDE_HAIKU]
+        return [CLAUDE_SONNET, XAI_GROK_4_1_FAST, CLAUDE_HAIKU]
     if agent.slug in FAST_UTILITY_SLUGS | FAST_VALIDATION_SLUGS:
-        return [GEMINI_FLASH, CLAUDE_HAIKU, CLAUDE_SONNET]
-    return [CLAUDE_SONNET, GEMINI_3_1_PRO, CLAUDE_HAIKU]
+        return [XAI_GROK_CODE_FAST, CLAUDE_HAIKU, CLAUDE_SONNET]
+    return [CLAUDE_SONNET, XAI_GROK_4_1_FAST, CLAUDE_HAIKU]
 
 
 def _available_chain_from_source_chain(original_chain: list[str], available_providers: list[str]) -> list[str]:

@@ -396,6 +396,13 @@ class ActivitySession(BaseModel):
     summary_oneliner: str | None = None
     status: str
     message_count: int
+    event_count: int | None = None
+    child_session_count: int | None = None
+    active_child_session_count: int | None = None
+    status_source: str = "session"
+    status_matches_live: bool = True
+    live_status: str | None = None
+    live_source: str | None = None
     created_at: datetime
     updated_at: datetime
     events_preview: list[ActivityEventPreview] = Field(default_factory=list)

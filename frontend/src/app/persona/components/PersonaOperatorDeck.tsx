@@ -339,12 +339,14 @@ export function PersonaOperatorDeck({
   };
 
   const panelChrome = layout === "rail"
-    ? "flex h-full min-h-0 flex-col overflow-hidden border-l border-slate-800/60 bg-[#07090d]"
+    ? "flex h-full min-h-0 flex-col overflow-hidden bg-[#07090d]"
     : "rounded-[24px] border border-slate-800/70 bg-[#07090d] shadow-[0_16px_40px_-28px_rgba(15,23,42,0.95)]";
 
   const bodyChrome = layout === "rail"
     ? "min-h-0 flex-1 overflow-y-auto px-3 pb-3"
     : "px-3 pb-3";
+
+  const showAllSections = layout === "rail";
 
   return (
     <div className={panelChrome} data-testid="persona-operator-deck">
@@ -403,7 +405,7 @@ export function PersonaOperatorDeck({
 
       <div className={bodyChrome}>
         <div className="space-y-3 pt-3">
-          {activeTab === "workflow" ? (
+          {showAllSections || activeTab === "workflow" ? (
             <PersonaWorkflowComposer
               projectOptions={projectOptions}
               selectedProjectId={selectedProjectId}
@@ -413,7 +415,7 @@ export function PersonaOperatorDeck({
             />
           ) : null}
 
-          {activeTab === "insights" ? (
+          {showAllSections || activeTab === "insights" ? (
             <>
               <PersonaBlockerPanel
                 executionState={persona.execution_state}
@@ -445,11 +447,12 @@ export function PersonaOperatorDeck({
                 preview={preview}
                 loading={previewLoading}
                 error={previewError}
+                runtimeContext={focusSessionDetails?.context_usage ?? null}
               />
             </>
           ) : null}
 
-          {activeTab === "lanes" ? (
+          {showAllSections || activeTab === "lanes" ? (
             <PersonaBackgroundInbox
               entries={entries}
               activeChildSessions={runtime.activeChildSessions}
@@ -459,22 +462,22 @@ export function PersonaOperatorDeck({
               onStopSession={(sessionId) => {
                 void runtime.stopSession(sessionId);
               }}
-              onRedirectSession={(sessionId, summary) => {
+              onRedirectSession={(sessionId, draft) => {
                 onSelectSession(sessionId);
-                sendMessage(`Resume session ${sessionId}. Redirect from this summary: ${summary}`, undefined, sessionId);
+                sendMessage(draft, undefined, sessionId);
               }}
-              onPromoteSession={(sessionId, summary) => {
+              onPromoteSession={(sessionId, draft) => {
                 onSelectSession(sessionId);
-                sendMessage(`Summarize what from session ${sessionId} should be brought into the main thread. Do not imply the lane merged automatically. Summary: ${summary}`, undefined, sessionId);
+                sendMessage(draft, undefined, sessionId);
               }}
-              onHandoffSession={(sessionId, summary) => {
+              onHandoffSession={(sessionId, draft) => {
                 onSelectSession(sessionId);
-                sendMessage(`Write a concise handoff for session ${sessionId}: owner, current state, blockers, next move. Summary: ${summary}`, undefined, sessionId);
+                sendMessage(draft, undefined, sessionId);
               }}
             />
           ) : null}
 
-          {activeTab === "automations" ? (
+          {showAllSections || activeTab === "automations" ? (
             <PersonaAutomationPanel
               selectedProject={selectedProject}
               jobs={jobs}

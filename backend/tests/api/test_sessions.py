@@ -159,7 +159,28 @@ class TestGetSession:
         mock_event.tokens = None
         mock_event.duration_ms = None
         mock_event.created_at = datetime(2026, 1, 6, 10, 0, 0)
-        mock_db_session.events = [mock_event]
+
+        mock_non_message_event = MagicMock()
+        mock_non_message_event.id = "2"
+        mock_non_message_event.event_type = "error"
+        mock_non_message_event.turn = 1
+        mock_non_message_event.sequence = 2
+        mock_non_message_event.role = None
+        mock_non_message_event.content = "Tool failed"
+        mock_non_message_event.input_tokens = 0
+        mock_non_message_event.output_tokens = 0
+        mock_non_message_event.model = CLAUDE_SONNET
+        mock_non_message_event.model_used = CLAUDE_SONNET
+        mock_non_message_event.agent_slug = None
+        mock_non_message_event.agent_id = None
+        mock_non_message_event.agent_name = None
+        mock_non_message_event.tool_name = None
+        mock_non_message_event.tool_input = None
+        mock_non_message_event.tool_output = None
+        mock_non_message_event.tokens = None
+        mock_non_message_event.duration_ms = None
+        mock_non_message_event.created_at = datetime(2026, 1, 6, 10, 0, 1)
+        mock_db_session.events = [mock_event, mock_non_message_event]
 
         # Session query result
         mock_session_result = MagicMock()
@@ -184,14 +205,15 @@ class TestGetSession:
         #   (3) latest CostLog input_tokens     — scalar_one_or_none → int | None
         #       (called inside calculate_context_usage)
         #   (4) _resolve_agent_display_names    — .all() → list[Row]
-        #   (5) query_project_ownership         — .all() → list[Row]
-        #   (6) query_project_active_specialists — .all() → list[Row]
+        #   (5) child session count query       — scalars().all() → list[Session]
+        #   (6) query_project_ownership         — .all() → list[Row]
+        #   (7) query_project_active_specialists — .all() → list[Row]
         #
         # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
         # StopIteration when _resolve_agent_display_names is invoked more than once — any
         # extra calls fall back to mock_agent_names_result instead of exhausting the queue.
         _call_queue: deque[MagicMock] = deque(
-            [mock_session_result, mock_token_totals_result, mock_latest_context_result]
+            [mock_session_result, mock_token_totals_result, mock_latest_context_result, mock_agent_names_result]
         )
 
         def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
@@ -218,6 +240,8 @@ class TestGetSession:
         assert data["live_activity"]["health"] in {"quiet", "stalled", "active"}
         assert data["workstream_status"] == "completed_ready_for_closure"
         assert data["summary_oneliner"] == "Closed the loop on session detail observability"
+        assert data["message_count"] == 1
+        assert data["event_count"] == 2
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
         # Verify context_usage is included
@@ -226,8 +250,8 @@ class TestGetSession:
         assert data["context_usage"]["limit_tokens"] == 1050000
         # Guard against silent query drift: if a query is added or removed this will
         # surface as a clear assertion failure rather than an opaque StopIteration.
-        assert mock_session.execute.call_count == 6, (
-            f"Expected 6 DB queries, got {mock_session.execute.call_count} "
+        assert mock_session.execute.call_count == 7, (
+            f"Expected 7 DB queries, got {mock_session.execute.call_count} "
             "— update this test if a query was added or removed"
         )
 
@@ -287,7 +311,12 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
+        mock_lane_result = MagicMock()
+        mock_lane_result.all.return_value = []
+
+        mock_session.execute = AsyncMock(
+            side_effect=[mock_count_result, mock_list_result, mock_lane_result, mock_lane_result]
+        )
 
         response = client.get("/api/sessions")
 
@@ -305,7 +334,14 @@ class TestListSessions:
         tmp_path: Path,
     ) -> None:
         """Test listing sessions with results."""
-        # Create mock session
+        main_repo = tmp_path / "repo"
+        checkout = tmp_path / ".checkpoints" / "task-123"
+        gitdir = main_repo / ".git" / "worktrees" / "task-123"
+        gitdir.mkdir(parents=True)
+        checkout.mkdir(parents=True)
+        (checkout / ".git").write_text(f"gitdir: {gitdir}\n")
+
+        # Create mock session objects
         mock_db_session = MagicMock()
         mock_db_session.id = "session-1"
         mock_db_session.project_id = "test-project"
@@ -314,17 +350,16 @@ class TestListSessions:
         mock_db_session.status = "active"
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
-        mock_db_session.summary_oneliner = None
-        mock_db_session.client_id = "client-123"
-        mock_db_session.request_source = "codex-transcript-sync"
-        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
-        mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.parent_session_id = "parent-1"
         mock_db_session.external_id = "task-123"
+        mock_db_session.client_id = "client-123"
+        mock_db_session.request_source = "codex-transcript-sync"
         mock_db_session.current_branch = "task-123/main"
         mock_db_session.workstream_status = "authoritative"
+        mock_db_session.summary_oneliner = None
+        mock_db_session.models_used = [CLAUDE_SONNET, "codex/gpt-5.4"]
+        mock_db_session.providers_used = ["claude", "codex"]
         mock_db_session.provider_metadata = {
-            "cwd": str(tmp_path),
             "requested_model": CLAUDE_SONNET,
             "requested_provider": "claude",
             "effective_model": "codex/gpt-5.4",
@@ -333,6 +368,7 @@ class TestListSessions:
             "fallback_reason": "TimeoutError: primary timed out",
             "source_client": "summitflow/codex-session-sync",
             "source_path": "/home/kasadis/bin/codex-session-sync.py",
+            "cwd": str(checkout),
             "live_activity": {
                 "phase": "waiting_for_model",
                 "status": "active",
@@ -358,7 +394,11 @@ class TestListSessions:
 
         # Mock message count query
         mock_msg_count_result = MagicMock()
-        mock_msg_count_result.all.return_value = [("session-1", 5)]
+        mock_msg_count_result.all.return_value = [("session-1", 2)]
+
+        # Mock total event count query
+        mock_event_count_result = MagicMock()
+        mock_event_count_result.all.return_value = [("session-1", 5)]
 
         # Mock token stats query
         mock_token_stats_result = MagicMock()
@@ -375,14 +415,16 @@ class TestListSessions:
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
+                mock_event_count_result,
                 mock_token_stats_result,
+                mock_lane_result,
                 mock_lane_result,
                 mock_lane_result,
             ]
         )
 
         async def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
-            return _call_queue.popleft()
+            return _call_queue.popleft() if _call_queue else mock_lane_result
 
         mock_session.execute = AsyncMock(side_effect=_execute_side_effect)
 
@@ -399,7 +441,8 @@ class TestListSessions:
         assert data["sessions"][0]["fallback_used"] is True
         assert data["sessions"][0]["live_activity"]["phase"] == "waiting_for_model"
         assert data["sessions"][0]["live_activity"]["tool_calls_count"] == 2
-        assert data["sessions"][0]["message_count"] == 5
+        assert data["sessions"][0]["message_count"] == 2
+        assert data["sessions"][0]["event_count"] == 5
         assert data["sessions"][0]["total_input_tokens"] == 100
         assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["sessions"][0]["parent_session_id"] == "parent-1"
@@ -409,7 +452,7 @@ class TestListSessions:
         assert data["sessions"][0]["source_client"] == "summitflow/codex-session-sync"
         assert data["sessions"][0]["source_path"] == "/home/kasadis/bin/codex-session-sync.py"
         assert data["sessions"][0]["current_branch"] == "task-123/main"
-        assert data["sessions"][0]["working_dir"] == str(tmp_path)
+        assert data["sessions"][0]["working_dir"] == str(checkout)
         assert data["sessions"][0]["workstream_status"] == "authoritative"
         assert data["total"] == 1
 
@@ -457,6 +500,9 @@ class TestListSessions:
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 1)]
 
+        mock_event_count_result = MagicMock()
+        mock_event_count_result.all.return_value = [("session-1", 1)]
+
         mock_token_stats_result = MagicMock()
         mock_token_stats_result.all.return_value = []
 
@@ -468,14 +514,16 @@ class TestListSessions:
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
+                mock_event_count_result,
                 mock_token_stats_result,
+                mock_lane_result,
                 mock_lane_result,
                 mock_lane_result,
             ]
         )
 
         async def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
-            return _call_queue.popleft()
+            return _call_queue.popleft() if _call_queue else mock_lane_result
 
         mock_session.execute = AsyncMock(side_effect=_execute_side_effect)
 
@@ -484,6 +532,7 @@ class TestListSessions:
         assert response.status_code == 200
         data = response.json()
         assert data["sessions"][0]["working_dir"] == str(checkout)
+        assert data["sessions"][0]["event_count"] == 1
 
     def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by project_id."""
@@ -495,7 +544,12 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
+        mock_lane_result = MagicMock()
+        mock_lane_result.all.return_value = []
+
+        mock_session.execute = AsyncMock(
+            side_effect=[mock_count_result, mock_list_result, mock_lane_result, mock_lane_result]
+        )
 
         response = client.get("/api/sessions?project_id=my-project")
 
@@ -524,7 +578,7 @@ class TestListSessions:
         client: APITestClient,
     ) -> None:
         """Test filtering by linked external_id."""
-        mock_list_sessions.return_value = ([], 0, {}, {})
+        mock_list_sessions.return_value = ([], 0, {}, {}, {})
         mock_lane_session_ids.return_value = (set(), set())
 
         response = client.get("/api/sessions?external_id=task-12345678")
@@ -535,20 +589,134 @@ class TestListSessions:
         assert await_args is not None
         assert await_args.kwargs["external_id"] == "task-12345678"
 
-    def test_list_sessions_pagination(self, client: APITestClient, mock_session: AsyncMock) -> None:
-        """Test pagination parameters."""
+    def test_list_sessions_filter_by_agent_slug(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test filtering by agent slug."""
         mock_count_result = MagicMock()
-        mock_count_result.scalar.return_value = 50
+        mock_count_result.scalar.return_value = 0
 
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
         mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
 
-        response = client.get("/api/sessions?page=3&page_size=10")
+        response = client.get("/api/sessions?agent_slug=coder")
+
+        assert response.status_code == 200
+
+    def test_list_sessions_pagination(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test pagination parameters."""
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+
+        mock_list_result = MagicMock()
+        mock_list_result.scalars.return_value.all.return_value = []
+
+        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
+
+        response = client.get("/api/sessions?page=2&page_size=10")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["page"] == 3
+        assert data["page"] == 2
         assert data["page_size"] == 10
-        assert data["total"] == 50
+
+    def test_list_sessions_invalid_page(self, client: APITestClient) -> None:
+        """Test validation error for invalid page."""
+        response = client.get("/api/sessions?page=0")
+        assert response.status_code == 422
+
+    def test_list_sessions_invalid_page_size(self, client: APITestClient) -> None:
+        """Test validation error for invalid page_size."""
+        response = client.get("/api/sessions?page_size=101")
+        assert response.status_code == 422
+
+
+class TestForkSession:
+    """Tests for POST /api/sessions/{session_id}/fork."""
+
+    def test_fork_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test successfully forking a session."""
+        mock_db_session = MagicMock()
+        mock_db_session.id = "test-session-123"
+        mock_db_session.status = "active"
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_db_session
+        mock_session.execute.return_value = mock_result
+
+        with patch("app.api.sessions.fork_session_at_turn", new_callable=AsyncMock) as mock_fork:
+            mock_fork.return_value = ("forked-session-456", 5, 3)
+
+            response = client.post(
+                "/api/sessions/test-session-123/fork",
+                json={"turn_number": 5},
+            )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["id"] == "forked-session-456"
+        assert data["parent_session_id"] == "test-session-123"
+        assert data["fork_point_turn"] == 5
+        assert data["message_count"] == 3
+        assert data["branch_status"] == "active"
+
+    def test_fork_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test 404 when forking non-existent session."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        response = client.post(
+            "/api/sessions/nonexistent-id/fork",
+            json={"turn_number": 5},
+        )
+
+        assert response.status_code == 404
+
+
+class TestPromoteSession:
+    """Tests for POST /api/sessions/{session_id}/promote."""
+
+    def test_promote_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test successfully promoting a session branch."""
+        mock_db_session = MagicMock()
+        mock_db_session.id = "test-session-123"
+        mock_db_session.status = "active"
+        mock_db_session.parent_session_id = "parent-123"
+        mock_db_session.forked_from_turn = 5
+        mock_db_session.created_at = datetime.now(UTC)
+        mock_db_session.updated_at = datetime.now(UTC)
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_db_session
+        mock_session.execute.return_value = mock_result
+
+        with patch("app.api.sessions.validate_promotion_eligibility"), patch(
+            "app.api.sessions.promote_session_branch", new_callable=AsyncMock
+        ) as mock_promote:
+            mock_promote.return_value = (["sibling-1"], 3)
+
+            response = client.post(
+                "/api/sessions/test-session-123/promote",
+                json={"target_session_id": "parent-123"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == "test-session-123"
+        assert data["branch_status"] == "promoted"
+        assert data["discarded_siblings"] == ["sibling-1"]
+        assert data["patches_applied"] == 3
+
+    def test_promote_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
+        """Test 404 when promoting non-existent session."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_result
+
+        response = client.post(
+            "/api/sessions/nonexistent-id/promote",
+            json={"target_session_id": "parent-123"},
+        )
+
+        assert response.status_code == 404

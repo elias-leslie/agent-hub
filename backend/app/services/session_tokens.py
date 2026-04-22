@@ -1,8 +1,11 @@
 """Session token calculations and breakdowns."""
 
-from typing import Any
+from __future__ import annotations
 
-from app.api.schemas.sessions import AgentTokenBreakdown
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.api.schemas.sessions import AgentTokenBreakdown
 
 
 def calculate_agent_token_breakdown(
@@ -16,6 +19,12 @@ def calculate_agent_token_breakdown(
     Returns:
         Tuple of (agent_breakdown, total_input, total_output)
     """
+    # Deferred import: importing app.api.schemas.sessions at module scope
+    # triggers app.api.__init__ which pulls in sessions_router → session_helpers
+    # → session_responses → session_tokens, causing a circular import when
+    # service modules are imported directly (e.g., smoke tests).
+    from app.api.schemas.sessions import AgentTokenBreakdown
+
     agent_stats: dict[str, dict[str, Any]] = {}
     total_input = 0
     total_output = 0

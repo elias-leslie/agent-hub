@@ -105,6 +105,7 @@ export function useSessionFilters({
     setSearchQuery,
     hiddenBenchmarkCount,
     filteredAndSorted,
+    visibleCount: filteredAndSorted.length,
     pageStats,
   };
 }
