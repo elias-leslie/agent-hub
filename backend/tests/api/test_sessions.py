@@ -691,14 +691,15 @@ class TestPromoteSession:
         mock_result.scalar_one_or_none.return_value = mock_db_session
         mock_session.execute.return_value = mock_result
 
-        with patch("app.api.sessions.validate_promotion_eligibility"):
-            with patch("app.api.sessions.promote_session_branch", new_callable=AsyncMock) as mock_promote:
-                mock_promote.return_value = (["sibling-1"], 3)
+        with patch("app.api.sessions.validate_promotion_eligibility"), patch(
+            "app.api.sessions.promote_session_branch", new_callable=AsyncMock
+        ) as mock_promote:
+            mock_promote.return_value = (["sibling-1"], 3)
 
-                response = client.post(
-                    "/api/sessions/test-session-123/promote",
-                    json={"target_session_id": "parent-123"},
-                )
+            response = client.post(
+                "/api/sessions/test-session-123/promote",
+                json={"target_session_id": "parent-123"},
+            )
 
         assert response.status_code == 200
         data = response.json()

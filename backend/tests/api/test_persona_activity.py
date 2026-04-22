@@ -63,7 +63,7 @@ async def test_get_activity_exposes_count_and_status_provenance() -> None:
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[count_result, sessions_result, previews_result, msg_counts_result, event_counts_result, child_result])
 
-    response = await get_activity(db=db)
+    response = await get_activity(db=db, time_range="24h", page=1, page_size=50)
 
     assert response.total == 1
     assert response.sessions[0].message_count == 2
