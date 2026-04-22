@@ -166,14 +166,13 @@ describe("PersonaPage", () => {
     mockRuntimeState.stoppingSessionId = null;
   });
 
-  it("renders a two-row command deck with runtime provenance and active-work scope", () => {
+  it("renders a compact operator header with the focused summary and core controls", () => {
     render(<PersonaPage />);
 
     expect(screen.getByTestId("unified-workspace")).toHaveTextContent("workspace:sess-123");
     expect(screen.getByText("Running validation")).toBeInTheDocument();
-    expect(screen.getByText("Runtime")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Stop active work/i })).toBeInTheDocument();
-    expect(screen.getByText("Active child lanes 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Stop$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Pause$/i })).toBeInTheDocument();
   });
 
   it("pauses the persona and stops focused live work when a runtime session exists", async () => {
@@ -181,7 +180,7 @@ describe("PersonaPage", () => {
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Pause operator/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Pause$/i }));
 
     await waitFor(() => {
       expect(mockUpdatePersona).toHaveBeenCalledWith({
@@ -193,7 +192,7 @@ describe("PersonaPage", () => {
     expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 
-  it("triggers a manual heartbeat and selects the dispatched session when idle", async () => {
+  it("triggers a manual check-in and selects the dispatched session when idle", async () => {
     mockRuntimeState.primarySession = null;
     mockRuntimeState.activePersonaSessions = [];
     mockRuntimeState.activeChildSessions = [];
@@ -201,7 +200,7 @@ describe("PersonaPage", () => {
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^Heartbeat$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Check now$/i }));
 
     expect(mockTriggerHeartbeat).toHaveBeenCalledTimes(1);
     await waitFor(() => {
@@ -209,12 +208,12 @@ describe("PersonaPage", () => {
     });
   });
 
-  it("stops only focused live work from the runtime command deck and reports focused scope", async () => {
+  it("stops only focused live work from the compact header", async () => {
     mockStopCurrentStream.mockResolvedValueOnce(true);
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: /Stop active work/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Stop$/i }));
 
     await waitFor(() => {
       expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);

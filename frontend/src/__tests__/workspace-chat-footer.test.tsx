@@ -8,53 +8,41 @@ vi.mock("@agent-hub/chat-ui", () => ({
 }));
 
 describe("WorkspaceChatFooter", () => {
-  it("keeps redirect drafts inspectable and labels persisted-thread provenance", () => {
-    const sendMessage = vi.fn();
+  it("shows stream status and jump-to-latest on one compact status row", () => {
+    const onJumpToLatest = vi.fn();
 
     render(
       <WorkspaceChatFooter
         personaDisplayName="Avery"
-        responseStatusLabel={null}
+        responseStatusLabel="Avery is responding"
         status="streaming"
         targetProjectId="summitflow"
         sessionProjectId="agent-hub"
         threadSessionId="sess-root"
         threadSource="session"
         isTerminalThread
-        sendMessage={sendMessage}
+        sendMessage={vi.fn()}
         cancelStream={vi.fn()}
         preferencesEndpoint="/api/preferences"
         onNewSession={vi.fn()}
+        jumpToLatestLabel="2 new items · Jump to latest"
+        onJumpToLatest={onJumpToLatest}
       />,
     );
 
-    expect(screen.getByText("Session")).toBeInTheDocument();
-    expect(screen.getByText("Reply thread project: agent-hub")).toBeInTheDocument();
-    expect(screen.getByText("Next thread target: summitflow")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/Redirect session/i)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /Steer/i }));
-
-    expect(screen.getByText(/advisory redirect draft/i)).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText(/Redirect session/i), {
-      target: { value: "Drop the polish pass and finish verification first." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Send advisory redirect/i }));
-
-    expect(sendMessage).toHaveBeenCalledWith(
-      "Advisory redirect for the persisted thread: Drop the polish pass and finish verification first.",
-      undefined,
-      "sess-root",
-    );
+    expect(screen.getByText("Avery is responding")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /2 new items · jump to latest/i }));
+    expect(onJumpToLatest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /new thread/i })).not.toBeInTheDocument();
+    expect(screen.getByTestId("message-input")).toBeInTheDocument();
   });
 
-  it("uses draft provenance for a locked draft thread", () => {
+  it("shows only the jump affordance when new activity arrives without a stream label", () => {
     render(
       <WorkspaceChatFooter
         personaDisplayName="Avery"
-        responseStatusLabel="Avery is responding"
-        status="streaming"
+        responseStatusLabel={null}
+        status="idle"
         targetProjectId="summitflow"
         sessionProjectId={null}
         threadSessionId="sess-draft"
@@ -63,20 +51,16 @@ describe("WorkspaceChatFooter", () => {
         cancelStream={vi.fn()}
         preferencesEndpoint="/api/preferences"
         onNewSession={vi.fn()}
+        jumpToLatestLabel="Jump to latest"
+        onJumpToLatest={vi.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Steer/i }));
-
-    expect(screen.getAllByText("Draft").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/current draft thread/i).length).toBeGreaterThan(0);
-    expect(screen.getByPlaceholderText(/Update draft thread/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Send draft update/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByText("draft · summitflow")).not.toBeInTheDocument();
   });
 
-  it("uses steering language for a fresh thread before any session is locked", () => {
-    const sendMessage = vi.fn();
-
+  it("stays focused on the composer when there is no status chrome to show", () => {
     render(
       <WorkspaceChatFooter
         personaDisplayName="Avery"
@@ -84,20 +68,14 @@ describe("WorkspaceChatFooter", () => {
         status="idle"
         targetProjectId="summitflow"
         sessionProjectId={null}
-        sendMessage={sendMessage}
+        sendMessage={vi.fn()}
         cancelStream={vi.fn()}
         preferencesEndpoint="/api/preferences"
         onNewSession={vi.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Steer/i }));
-    expect(screen.getByText(/Shapes next thread without pretending persisted session already exists/i)).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText(/Steer next thread/i), {
-      target: { value: "Start with blocker review." },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /Send steering draft/i }));
-
-    expect(sendMessage).toHaveBeenCalledWith("Advisory steering for the next thread: Start with blocker review.");
+    expect(screen.getByTestId("message-input")).toBeInTheDocument();
+    expect(screen.queryByText("summitflow")).not.toBeInTheDocument();
   });
 });

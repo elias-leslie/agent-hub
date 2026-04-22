@@ -162,7 +162,7 @@ describe("SessionsPage", () => {
     });
   });
 
-  it("shows explicit visible, loaded, and total counts with loaded-subset scope", async () => {
+  it("shows explicit visible, loaded, and total counts in the ledger header", async () => {
     renderPage();
 
     await waitFor(() => {
@@ -172,7 +172,7 @@ describe("SessionsPage", () => {
     });
 
     expect(screen.getByTestId("sessions-filter-scope")).toHaveTextContent(
-      /loaded subset/i,
+      /2\s+visible\s*·\s*2\s+loaded\s*·\s*2\s+total/i,
     );
   });
 
@@ -183,7 +183,7 @@ describe("SessionsPage", () => {
       expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText(/search loaded subset/i), {
+    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
       target: { value: "456" },
     });
 
@@ -194,15 +194,79 @@ describe("SessionsPage", () => {
     });
   });
 
-  it("surfaces requested-to-effective model identity, fallback reason, and separate message/event counts", async () => {
+  it("surfaces requested-to-effective model identity, fallback reason, and compact message/event counts", async () => {
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByText(/claude-opus-4-7/i)).toBeInTheDocument();
       expect(screen.getByText(/claude-sonnet-4-6/i)).toBeInTheDocument();
-      expect(screen.getByText(/fallback: rate_limit/i)).toBeInTheDocument();
-      expect(screen.getByText("u+a:5")).toBeInTheDocument();
-      expect(screen.getByText("events:12")).toBeInTheDocument();
+      expect(screen.getByText(/fallback\s*·\s*rate_limit/i)).toBeInTheDocument();
+      expect(screen.getByText(/5 msg/i)).toBeInTheDocument();
+      expect(screen.getByText(/12 evt/i)).toBeInTheDocument();
+    });
+  });
+
+  it("shows a live usage placeholder instead of blank dashes for active zero-token rows", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue({
+      ...mockSessions,
+      sessions: [
+        {
+          ...mockSessions.sessions[0],
+          total_input_tokens: 0,
+          total_output_tokens: 0,
+        },
+      ],
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^live · collecting$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^usage pending$/i)).toBeInTheDocument();
+    });
+  });
+
+  it("keeps active asymmetric token rows visibly live instead of rendering them as final accounting", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue({
+      ...mockSessions,
+      sessions: [
+        {
+          ...mockSessions.sessions[0],
+          total_input_tokens: 0,
+          total_output_tokens: 631,
+        },
+      ],
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^live · in 0 · out 631$/i)).toBeInTheDocument();
+      expect(screen.queryByText(/^usage pending$/i)).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows explicit zero usage for completed zero-token rows", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue({
+      ...mockSessions,
+      sessions: [
+        {
+          ...mockSessions.sessions[1],
+          agent_slug: "reviewer",
+          total_input_tokens: 0,
+          total_output_tokens: 0,
+        },
+      ],
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^in 0 · out 0$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^\$0(?:\.00)?$/i)).toBeInTheDocument();
     });
   });
 
@@ -217,22 +281,20 @@ describe("SessionsPage", () => {
     expect(screen.queryByRole("button", { name: /test-project/i })).not.toBeInTheDocument();
   });
 
-  it("shows a no-match state that tells operators filters only apply to the loaded subset", async () => {
+  it("shows a no-match state when the current filters remove every loaded row", async () => {
     renderPage();
 
     await waitFor(() => {
       expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByPlaceholderText(/search loaded subset/i), {
+    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
       target: { value: "no-match" },
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/no loaded sessions match the current filters/i)).toBeInTheDocument();
+      expect(screen.getByText(/no loaded rows match the current filters/i)).toBeInTheDocument();
     });
-
-    expect(screen.getByText(/search and filters apply to loaded sessions only/i)).toBeInTheDocument();
   });
 
   it("shows an empty-data state when the server returns no sessions", async () => {
@@ -246,7 +308,7 @@ describe("SessionsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/no sessions loaded yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/no sessions loaded\./i)).toBeInTheDocument();
     });
   });
 
@@ -284,7 +346,7 @@ describe("SessionsPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/evidence unavailable for this session/i)).toBeInTheDocument();
+      expect(screen.getByText(/session evidence unavailable/i)).toBeInTheDocument();
     });
 
     expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();

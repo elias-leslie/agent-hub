@@ -17,21 +17,12 @@ function formatModelLabel(model: string): string {
     .replace(/[-/]\s*$/g, "");
 }
 
-function pillClassName(isClaude: boolean, isActive: boolean, clickable: boolean) {
+function pillClassName(isActive: boolean, clickable: boolean) {
   return cn(
-    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-all",
+    "inline-flex items-center gap-1.5 rounded-full border border-slate-800/90 bg-slate-950/40 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400 transition-all",
     clickable &&
-      "cursor-pointer hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50",
-    isActive && "ring-2 ring-offset-1 ring-offset-slate-950",
-    isClaude
-      ? cn(
-          "border-purple-400/40 bg-purple-950/40 text-purple-300",
-          isActive && "ring-purple-400/60",
-        )
-      : cn(
-          "border-emerald-400/40 bg-emerald-950/40 text-emerald-300",
-          isActive && "ring-emerald-400/60",
-        ),
+      "cursor-pointer hover:border-slate-700 hover:bg-slate-950/70 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/40",
+    isActive && "border-amber-500/25 bg-amber-950/12 text-amber-200 ring-1 ring-amber-400/20",
   );
 }
 
@@ -40,26 +31,28 @@ export function ModelPill({
   provider,
   onClick,
   isActive,
+  fallbackUsed = false,
 }: {
   model: string;
   provider?: string;
   onClick?: () => void;
   isActive?: boolean;
+  fallbackUsed?: boolean;
 }) {
-  const isClaude = provider ? provider === "claude" : model.toLowerCase().includes("claude");
   const label = formatModelLabel(model);
-  const className = pillClassName(isClaude, Boolean(isActive), Boolean(onClick));
+  const className = pillClassName(Boolean(isActive), Boolean(onClick));
   const content = (
     <>
       <span
         className={cn(
           "h-1.5 w-1.5 rounded-full",
-          isClaude ? "bg-purple-400" : "bg-emerald-400",
+          isActive ? "bg-amber-300" : fallbackUsed ? "bg-amber-400/80" : "bg-slate-600",
         )}
       />
       <span className="max-w-[18ch] truncate sm:max-w-[24ch]">{label}</span>
     </>
   );
+  const title = [model, fallbackUsed ? "fallback used" : null, provider].filter(Boolean).join(" · ");
 
   if (onClick) {
     return (
@@ -68,7 +61,7 @@ export function ModelPill({
         aria-label={`Filter model ${model}`}
         onClick={onClick}
         className={className}
-        title={`${model} · click to filter`}
+        title={title}
       >
         {content}
       </button>
@@ -76,7 +69,7 @@ export function ModelPill({
   }
 
   return (
-    <span className={className} title={model}>
+    <span className={className} title={title}>
       {content}
     </span>
   );

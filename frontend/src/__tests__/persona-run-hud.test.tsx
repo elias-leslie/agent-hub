@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PersonaRunHud } from "@/app/persona/components/PersonaRunHud";
 
 describe("PersonaRunHud", () => {
-  it("surfaces runtime provenance and counts only active child lanes", () => {
+  it("surfaces the focused summary, compact meta, and stop control", () => {
     render(
       <PersonaRunHud
         personaName="Avery"
@@ -58,10 +58,9 @@ describe("PersonaRunHud", () => {
       />,
     );
 
-    expect(screen.getByText("Runtime")).toBeInTheDocument();
-    expect(screen.getByText(/Active child lanes/i)).toBeInTheDocument();
     expect(screen.getByText(/Running validation/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Execution permission denied/i)).toHaveLength(2);
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText(/2 lanes/i)).toBeInTheDocument();
+    expect(screen.getByText(/bash/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /stop active work/i })).toBeInTheDocument();
   });
 });

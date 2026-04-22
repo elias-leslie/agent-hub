@@ -1,7 +1,10 @@
 import { ChevronDown } from "lucide-react";
+
+import { Tooltip } from "@/components/memory/Tooltip";
 import { cn } from "@/lib/utils";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
 import type { ModelCost } from "@/lib/models";
+import { resolveModelCost } from "@/lib/model-pricing";
 import {
   estimateCost,
   formatCost,
@@ -10,28 +13,38 @@ import {
   formatTokens,
   getExecutionIdentity,
 } from "../utils";
-import { resolveModelCost } from "@/lib/model-pricing";
-import { StatusCell } from "./StatusCell";
-import { ModelPill } from "./ModelPill";
-import { Tooltip } from "@/components/memory/Tooltip";
 import { CopyIdButton } from "./CopyIdButton";
 import { ExpandedRowContent } from "./ExpandedRowContent";
+import { ModelPill } from "./ModelPill";
+import { StatusCell } from "./StatusCell";
 
-function attributionTone(kind?: string | null): string {
-  switch (kind) {
-    case "benchmark":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-200";
-    case "autonomous":
-      return "border-sky-500/30 bg-sky-500/10 text-sky-200";
-    case "verification":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
-    case "system":
-      return "border-violet-500/30 bg-violet-500/10 text-violet-200";
-    case "consultation":
-      return "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-200";
-    default:
-      return "border-slate-700 bg-slate-800/70 text-slate-300";
+function getSessionSecondaryLine(session: SessionListItem): string {
+  const summary = session.summary_oneliner?.trim();
+  if (summary) {
+    return summary;
   }
+  return `session ${session.id.slice(0, 8)}`;
+}
+
+function getUsageCopy(session: SessionListItem, cost: number) {
+  const isActive = session.status === "active" || session.live_activity?.status === "active";
+  if (isActive && session.total_input_tokens === 0 && session.total_output_tokens === 0) {
+    return {
+      primary: "live · collecting",
+      secondary: "usage pending",
+    };
+  }
+  const tokenPair = formatTokenPair(session.total_input_tokens, session.total_output_tokens);
+  if (isActive) {
+    return {
+      primary: `live · ${tokenPair}`,
+      secondary: formatCost(cost),
+    };
+  }
+  return {
+    primary: tokenPair,
+    secondary: formatCost(cost),
+  };
 }
 
 export function SessionTableRow({
@@ -61,6 +74,7 @@ export function SessionTableRow({
   onToggleExpand: (sessionId: string) => void;
   onModelFilterClick: (model: string) => void;
 }) {
+  const isActiveSession = session.status === "active" || session.live_activity?.status === "active";
   const cost = estimateCost(
     session.model,
     session.total_input_tokens,
@@ -71,51 +85,38 @@ export function SessionTableRow({
   const inputCost = (session.total_input_tokens * modelCost.input_per_m) / 1_000_000;
   const outputCost = (session.total_output_tokens * modelCost.output_per_m) / 1_000_000;
   const identity = getExecutionIdentity(session);
+  const usageCopy = getUsageCopy(session, cost);
+  const hasKnownZeroUsage = session.total_input_tokens === 0 && session.total_output_tokens === 0;
+  const hasSettledZeroUsage = hasKnownZeroUsage && !isActiveSession;
+  const sessionSecondaryLine = getSessionSecondaryLine(session);
   const expandLabel = `${isExpanded ? "Collapse" : "Expand"} session ${session.id}`;
 
   return (
     <div
       data-testid="session-row"
       className={cn(
-        "transition-all duration-200",
-        isLive && "bg-emerald-950/10",
-        isFocused && "ring-1 ring-inset ring-amber-800 bg-blue-950/20",
+        "transition-colors duration-200",
+        isLive && "border-l border-amber-400/60",
+        isFocused && "bg-slate-900/60 ring-1 ring-inset ring-amber-500/30",
         isFlashing && "animate-flash",
       )}
     >
-      <div className="grid grid-cols-[92px_minmax(220px,1.25fr)_minmax(170px,0.95fr)_minmax(240px,1.4fr)_110px_90px_90px_76px] items-start gap-3 px-5 py-4 transition-colors hover:bg-slate-900/40">
-        <StatusCell status={session.status} liveActivity={session.live_activity} />
-
+      <div className="grid grid-cols-[minmax(260px,1.6fr)_minmax(130px,0.8fr)_minmax(240px,1.2fr)_minmax(130px,0.8fr)_88px_76px] items-start gap-4 px-4 py-3 hover:bg-slate-900/30">
         <div className="min-w-0 space-y-1.5">
-          <span className="block truncate text-sm font-semibold text-slate-100">
-            {session.project_id}
-          </span>
-          {session.summary_oneliner ? (
-            <p className="truncate text-[11px] text-slate-400">{session.summary_oneliner}</p>
-          ) : (
-            <p className="truncate text-[11px] text-slate-500">{session.id}</p>
-          )}
-          {session.attribution_label && (
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em]",
-                attributionTone(session.attribution_kind),
-              )}
-            >
-              {session.attribution_label}
-            </span>
-          )}
+          <StatusCell status={session.status} liveActivity={session.live_activity} />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-100">{session.project_id}</div>
+            <div className="truncate text-[11px] text-slate-400" title={session.summary_oneliner || session.id}>
+              {sessionSecondaryLine}
+            </div>
+          </div>
         </div>
 
-        <div className="min-w-0 space-y-1.5">
-          <span className="block truncate text-xs font-medium text-slate-200">
-            {session.agent_slug || "—"}
-          </span>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-[0.12em] text-slate-500">
-            <span>u+a:{session.message_count}</span>
-            {session.event_count !== null && session.event_count !== undefined && (
-              <span>events:{session.event_count}</span>
-            )}
+        <div className="min-w-0 space-y-1">
+          <div className="truncate text-sm text-slate-200">{session.agent_slug || "—"}</div>
+          <div className="truncate text-[11px] text-slate-500">
+            {session.message_count} msg
+            {session.event_count !== null && session.event_count !== undefined ? ` · ${session.event_count} evt` : ""}
           </div>
         </div>
 
@@ -126,24 +127,23 @@ export function SessionTableRow({
               provider={identity.effectiveProvider ?? session.provider}
               onClick={() => onModelFilterClick(session.model)}
               isActive={modelFilter === session.model}
+              fallbackUsed={identity.fallbackUsed}
             />
-            {identity.fallbackUsed && (
-              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-mono uppercase tracking-[0.18em] text-amber-200">
-                Fallback{identity.fallbackReason ? `: ${identity.fallbackReason}` : ""}
-              </span>
-            )}
           </div>
           {identity.showRequested && identity.requestedModel ? (
-            <p className="truncate text-[11px] font-mono text-slate-400">
+            <div className="truncate text-[11px] font-mono text-slate-500">
               {identity.requestedModel}
-              <span className="px-1 text-slate-600">→</span>
+              <span className="px-1 text-slate-700">→</span>
               {identity.effectiveModel}
-            </p>
+            </div>
           ) : (
-            <p className="truncate text-[11px] font-mono text-slate-500">
-              {identity.effectiveProvider}
-            </p>
+            <div className="truncate text-[11px] font-mono text-slate-600">{identity.effectiveProvider}</div>
           )}
+          {identity.fallbackUsed && identity.fallbackReason ? (
+            <div className="truncate text-[10px] uppercase tracking-[0.14em] text-slate-600">
+              fallback · {identity.fallbackReason}
+            </div>
+          ) : null}
         </div>
 
         <Tooltip
@@ -155,30 +155,29 @@ export function SessionTableRow({
               <div>
                 Output: {formatTokens(session.total_output_tokens)} ({formatCost(outputCost)})
               </div>
+              {hasSettledZeroUsage ? <div className="text-slate-500">Recorded zero usage</div> : null}
             </div>
           }
           position="top"
         >
-          <span className="cursor-help text-right text-[11px] font-mono tabular-nums text-slate-300">
-            {formatTokenPair(session.total_input_tokens, session.total_output_tokens)}
-          </span>
+          <div className="cursor-help text-right">
+            <div className={cn(
+              "text-[11px] font-mono tabular-nums",
+              hasSettledZeroUsage ? "text-slate-500" : "text-slate-300",
+            )}>
+              {usageCopy.primary}
+            </div>
+            <div className={cn(
+              "text-[11px] font-mono tabular-nums",
+              hasSettledZeroUsage ? "text-slate-700" : "text-slate-600",
+            )}>
+              {usageCopy.secondary}
+            </div>
+          </div>
         </Tooltip>
 
-        <div className="text-right">
-          <span
-            className={cn(
-              "text-[11px] font-mono font-medium tabular-nums",
-              cost > 0.01 ? "text-amber-300" : "text-slate-400",
-            )}
-          >
-            {formatCost(cost)}
-          </span>
-        </div>
-
-        <div className="text-right">
-          <span className="text-[11px] font-mono tabular-nums text-slate-400">
-            {formatRelativeTime(session.updated_at)}
-          </span>
+        <div className="pt-0.5 text-right text-[11px] font-mono tabular-nums text-slate-400">
+          {formatRelativeTime(session.updated_at)}
         </div>
 
         <div className="flex items-center justify-end gap-1">
@@ -209,7 +208,7 @@ export function SessionTableRow({
         )}
       >
         <div className="overflow-hidden">
-          <div className="border-t border-slate-800 bg-slate-950/90">
+          <div className="border-t border-slate-800/70 bg-slate-950/80">
             <ExpandedRowContent
               session={session}
               modelCosts={modelCosts}

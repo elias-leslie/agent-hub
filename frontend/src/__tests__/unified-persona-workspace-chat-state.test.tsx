@@ -259,7 +259,7 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("Draft primary thread")).toBeInTheDocument();
+      expect(screen.getAllByText("draft · agent-hub").length).toBeGreaterThan(0);
     });
 
     expect(screen.queryByText("Fresh thread")).not.toBeInTheDocument();
@@ -378,7 +378,6 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     });
 
     expect(screen.queryByText("Waiting for model response")).not.toBeInTheDocument();
-    expect(screen.getByText(/Persisted primary thread/i)).toBeInTheDocument();
   });
 
   it("prefers live draft truth when a follow-up is streaming on a completed session", async () => {
@@ -491,7 +490,7 @@ describe("UnifiedPersonaWorkspace chat state", () => {
       expect(screen.getAllByText("Running bash").length).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByText(/Draft primary thread/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/draft · summitflow/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("Session completed")).not.toBeInTheDocument();
   });
 
