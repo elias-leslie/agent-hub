@@ -748,4 +748,121 @@ describe("UnifiedPersonaWorkspace chat state", () => {
     expect(screen.queryByText(/\[\[S:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Applied:/)).not.toBeInTheDocument();
   });
+
+  it("prefers persisted session stop over draft cancel when both exist", async () => {
+    const cancelStream = vi.fn();
+    const stopSession = vi.fn().mockResolvedValue(true);
+
+    mockUseChatStream.mockReturnValue({
+      messages: [
+        {
+          id: "user-stop-1",
+          role: "user",
+          content: "keep the command-center closeout sharp",
+          timestamp: new Date("2026-04-22T09:30:00Z"),
+        },
+        {
+          id: "assistant-stop-1",
+          role: "assistant",
+          content: "",
+          timestamp: new Date("2026-04-22T09:30:01Z"),
+          toolExecutions: [],
+        },
+      ],
+      status: "streaming",
+      error: null,
+      currentSessionId: "chat-live-stop-1",
+      sendMessage: vi.fn(),
+      cancelStream,
+      resetSession: vi.fn(),
+    });
+
+    render(
+      <UnifiedPersonaWorkspace
+        persona={{
+          id: 1,
+          name: "Avery",
+          personality: null,
+          user_profile: null,
+          heartbeat_instructions: null,
+          user_context: null,
+          voice_id: "voice",
+          voice_enabled: false,
+          heartbeat_interval_minutes: 30,
+          execution_state: "active",
+          avatar_url: null,
+          greeting: null,
+          onboarding_complete: true,
+          onboarding_phase: "complete",
+          onboarding_attempts: 0,
+          session_reset_mode: "off",
+          session_reset_hour: 9,
+          session_reset_idle_minutes: 120,
+          limits: null,
+          agent_slug: "persona",
+          version: 1,
+          updated_at: null,
+        }}
+        personaName="Avery"
+        runtime={{
+          primarySession: {
+            id: "chat-live-stop-1",
+            project_id: "agent-hub",
+            provider: "codex",
+            model: "gpt-5.4",
+            status: "active",
+            agent_slug: "persona",
+            session_type: "chat",
+            parent_session_id: null,
+            external_id: null,
+            current_branch: null,
+            live_activity: {
+              phase: "waiting_for_model",
+              status: "active",
+              summary: "Finishing operator closeout proof",
+              health: "ok",
+              stalled: false,
+              outstanding_tool_calls: 0,
+              tool_calls_count: 1,
+              files_touched: [],
+            },
+            message_count: 1,
+            total_input_tokens: 120,
+            total_output_tokens: 40,
+            created_at: "2026-04-22T09:29:00Z",
+            updated_at: "2026-04-22T09:30:01Z",
+          },
+          primarySessionDetails: null,
+          activePersonaSessions: [{ id: "chat-live-stop-1" }] as never[],
+          activeChildSessions: [] as never[],
+          loading: false,
+          error: null,
+          stoppingSessionId: null,
+          runtimeSyncKey: "sync-stop-precedence-1",
+          refresh: vi.fn().mockResolvedValue(undefined),
+          stopSession,
+          stopCurrentStream: vi.fn().mockResolvedValue(true),
+          stopActiveWork: vi.fn().mockResolvedValue({ cancelled: 1, attempted: 1 }),
+        }}
+        agentSlug="persona"
+        activeSessionId="chat-live-stop-1"
+        sidebarRefreshTrigger={0}
+        runtimeSyncKey="sync-stop-precedence-1"
+        onSelectSession={vi.fn()}
+        onSessionCreated={vi.fn()}
+        onNewSession={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Stop active work/i }).length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Stop active work/i })[0]);
+
+    await waitFor(() => {
+      expect(stopSession).toHaveBeenCalledWith("chat-live-stop-1");
+    });
+    expect(cancelStream).not.toHaveBeenCalled();
+  });
 });
