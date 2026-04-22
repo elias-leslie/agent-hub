@@ -14,7 +14,7 @@ Environment="AGENT_HUB_API_URL=http://localhost:8003"
 Environment="SUMMITFLOW_API_URL=http://localhost:8001"
 ExecStart=/bin/bash -lc "pnpm start --hostname 0.0.0.0 --port 3003"
 TimeoutStopSec=10
-KillMode=mixed
+KillMode=control-group
 Restart=always
 RestartSec=3
 StandardOutput=journal
