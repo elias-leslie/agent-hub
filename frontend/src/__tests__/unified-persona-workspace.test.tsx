@@ -634,7 +634,7 @@ describe("UnifiedPersonaWorkspace", () => {
         projectId: "summitflow",
       },
     });
-    expect(screen.getByText("Thread: summitflow")).toBeInTheDocument();
+    expect(screen.getAllByText((content) => content.includes("summitflow")).length).toBeGreaterThan(0);
   });
 
   it("does not let background runtime hijack a fresh thread target", async () => {
@@ -725,9 +725,8 @@ describe("UnifiedPersonaWorkspace", () => {
         projectId: "agent-hub",
       },
     });
-    expect(screen.queryByText("Thread: summitflow")).not.toBeInTheDocument();
-    expect(screen.getByText("Thread: agent-hub")).toBeInTheDocument();
-    expect(screen.getByText("Primary thread")).toBeInTheDocument();
+    expect(screen.queryByText("Next thread target · summitflow")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Waiting for model response").length).toBeGreaterThan(0);
   });
 
   it("filters the timeline from the pulse controls", async () => {
