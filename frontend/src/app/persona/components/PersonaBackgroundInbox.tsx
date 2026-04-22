@@ -7,7 +7,7 @@ import { ArrowRightCircle, PauseCircle, PlayCircle, SendHorizontal, X } from "lu
 import type { PersonaStreamEntry } from "@/lib/api/persona-stream";
 import type { SessionListItem } from "@/lib/api/sessions";
 import { cn } from "@/lib/utils";
-import { ProvenanceBadge, ScopeChip, SectionEyebrow } from "./persona-operator-chrome";
+import { EvidencePanel, ProvenanceBadge, ScopeChip, SectionEyebrow } from "./persona-operator-chrome";
 
 interface PersonaBackgroundInboxProps {
   entries: PersonaStreamEntry[];
@@ -140,29 +140,26 @@ export function PersonaBackgroundInbox({
   };
 
   return (
-    <section
-      data-testid="persona-background-inbox"
-      className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4"
-    >
+    <EvidencePanel data-testid="persona-background-inbox" className="p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <SectionEyebrow label="Background lanes" source="runtime" />
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
-            Resume, inspect, and redirect side work without losing the main thread.
+            Persisted child lanes only. Advisory lane actions stay inspectable.
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Lane actions stay advisory until the backend exposes stronger lane controls. Inspect the draft before you send redirect, promote, or handoff instructions.
+            Runtime and session truth merge here. Redirect, promote, and handoff open drafts first so operator intent never pretends to be an immediate backend mutation.
           </p>
         </div>
         <ScopeChip tone={activeCount > 0 ? "warning" : "default"}>
-          {activeCount}/{lanes.length} active
+          Active child lanes · {activeCount}/{lanes.length}
         </ScopeChip>
       </div>
 
       <div className="mt-4 space-y-2">
         {lanes.length === 0 ? (
           <div className="rounded-2xl border border-slate-800/70 bg-slate-950/70 px-3 py-3 text-sm text-slate-400">
-            No active child lanes yet.
+            No child lanes loaded.
           </div>
         ) : null}
         {lanes.map((entry) => {
@@ -235,7 +232,7 @@ export function PersonaBackgroundInbox({
                       className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-sm font-medium text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-950/30 disabled:opacity-60"
                     >
                       <PauseCircle className="h-4 w-4" />
-                      {stoppingSessionId === entry.sessionId ? "Stopping lane" : "Stop lane"}
+                      {stoppingSessionId === entry.sessionId ? "Stopping lane" : "Stop active work"}
                     </button>
                   ) : null}
                 </div>
@@ -288,6 +285,6 @@ export function PersonaBackgroundInbox({
           );
         })}
       </div>
-    </section>
+    </EvidencePanel>
   );
 }
