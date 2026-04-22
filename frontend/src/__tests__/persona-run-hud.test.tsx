@@ -40,7 +40,10 @@ describe("PersonaRunHud", () => {
           },
           primarySessionDetails: null,
           activePersonaSessions: [{ id: "persona-root" }],
-          activeChildSessions: [{ id: "child-1" }, { id: "child-2" }],
+          activeChildSessions: [
+            { id: "child-1", status: "active", live_activity: { status: "active" } },
+            { id: "child-2", status: "active", live_activity: { status: "active" } },
+          ],
           loading: false,
           error: "Background refresh failed",
           stoppingSessionId: null,
@@ -56,8 +59,9 @@ describe("PersonaRunHud", () => {
     );
 
     expect(screen.getByText("Runtime")).toBeInTheDocument();
-    expect(screen.getByText("Active child lanes")).toBeInTheDocument();
-    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText(/Active child lanes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Running validation/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Execution permission denied/i)).toHaveLength(2);
+    expect(screen.getByText("2")).toBeInTheDocument();
   });
 });

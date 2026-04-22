@@ -76,10 +76,11 @@ describe("PersonaBlockerPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Hard blockers appear first/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hard blocker first\. Advisory warning second/i)).toBeInTheDocument();
+    expect(screen.getByText(/Runtime or persisted session proof wins/i)).toBeInTheDocument();
     expect(screen.getAllByText("Runtime").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/^Execution permission denied$/i)).toHaveLength(2);
     expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Preview budget stays advisory/i)).toBeInTheDocument();
+    expect(screen.getByText(/9,100 tokens/i)).toBeInTheDocument();
   });
 });
