@@ -111,11 +111,11 @@ class TestReconcileAgentModelsToAvailableProviders:
         mock_cache.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_codex_primary_agents_gain_codex_and_non_codex_fallbacks(self) -> None:
+    async def test_codex_primary_agents_gain_codex_and_working_non_codex_fallbacks(self) -> None:
         credential_manager = CredentialManager.get_instance()
         credential_manager.set("codex", "oauth_token", "codex-token")
         credential_manager.set("claude", "api_key", "anthropic-key")
-        credential_manager.set("gemini", "api_key", "gemini-key")
+        credential_manager.set("xai", "api_key", "xai-key")
         agent = _agent(
             slug="chat",
             primary_model_id="codex/gpt-5.4",
@@ -135,7 +135,8 @@ class TestReconcileAgentModelsToAvailableProviders:
         assert agent.primary_model_id == "codex/gpt-5.4"
         assert agent.fallback_models[0] == "codex/gpt-5.3-codex-spark"
         assert any(model.startswith("codex/") for model in agent.fallback_models)
-        assert any(not model.startswith("codex/") for model in agent.fallback_models)
+        assert any(model.startswith("xai/") for model in agent.fallback_models)
+        assert any(model.startswith("claude-") for model in agent.fallback_models)
         mock_db.commit.assert_awaited_once()
         mock_cache.invalidate.assert_awaited_once_with("chat")
         mock_cache.close.assert_awaited_once()

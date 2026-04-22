@@ -17,6 +17,24 @@ function formatModelLabel(model: string): string {
     .replace(/[-/]\s*$/g, "");
 }
 
+function pillClassName(isClaude: boolean, isActive: boolean, clickable: boolean) {
+  return cn(
+    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-all",
+    clickable &&
+      "cursor-pointer hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50",
+    isActive && "ring-2 ring-offset-1 ring-offset-slate-950",
+    isClaude
+      ? cn(
+          "border-purple-400/40 bg-purple-950/40 text-purple-300",
+          isActive && "ring-purple-400/60",
+        )
+      : cn(
+          "border-emerald-400/40 bg-emerald-950/40 text-emerald-300",
+          isActive && "ring-emerald-400/60",
+        ),
+  );
+}
+
 export function ModelPill({
   model,
   provider,
@@ -30,40 +48,36 @@ export function ModelPill({
 }) {
   const isClaude = provider ? provider === "claude" : model.toLowerCase().includes("claude");
   const label = formatModelLabel(model);
-
-  return (
-    <span
-      onClick={(e) => {
-        if (onClick) {
-          e.stopPropagation();
-          onClick();
-        }
-      }}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-all",
-        onClick && "cursor-pointer hover:scale-105 active:scale-95",
-        isActive && "ring-2 ring-offset-1 ring-offset-slate-900",
-        isClaude
-          ? cn(
-              "border-purple-400/60 text-purple-400 bg-purple-950/40",
-              isActive && "ring-purple-400"
-            )
-          : cn(
-              "border-emerald-400/60 text-emerald-400 bg-emerald-950/40",
-              isActive && "ring-emerald-400"
-            )
-      )}
-      title={onClick ? `${model} · click to filter` : model}
-    >
+  const className = pillClassName(isClaude, Boolean(isActive), Boolean(onClick));
+  const content = (
+    <>
       <span
         className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          isClaude ? "bg-purple-500" : "bg-emerald-500"
+          "h-1.5 w-1.5 rounded-full",
+          isClaude ? "bg-purple-400" : "bg-emerald-400",
         )}
       />
-      <span className="max-w-[20ch] truncate sm:max-w-[24ch]">
-        {label}
-      </span>
+      <span className="max-w-[18ch] truncate sm:max-w-[24ch]">{label}</span>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        aria-label={`Filter model ${model}`}
+        onClick={onClick}
+        className={className}
+        title={`${model} · click to filter`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <span className={className} title={model}>
+      {content}
     </span>
   );
 }

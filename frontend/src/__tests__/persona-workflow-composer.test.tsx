@@ -123,7 +123,7 @@ describe("PersonaWorkflowComposer", () => {
       });
   });
 
-  it("marks later stages as stale after an earlier stage reruns", async () => {
+  it("shows workflow provenance and marks later stages as stale after an earlier stage reruns", async () => {
     render(
       <PersonaWorkflowComposer
         projectOptions={[{ id: "agent-hub", name: "agent-hub", rootPath: "/srv/workspaces/projects/agent-hub" }]}
@@ -134,12 +134,16 @@ describe("PersonaWorkflowComposer", () => {
       />,
     );
 
+    expect(screen.getByText("Advisory")).toBeInTheDocument();
+    expect(screen.getByText(/Session root · persona-root/i)).toBeInTheDocument();
+
     fireEvent.change(screen.getByPlaceholderText(/Describe the real work/i), {
       target: { value: "Tighten persona operator truthfulness." },
     });
-    fireEvent.click(screen.getByRole("button", { name: /Run workflow/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Run advisory workflow/i }));
 
     await screen.findByText("clarify output");
+    expect(screen.getByText(/Stage session · sess-clarify/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: /Advisory approve/i })[0]);
     expect(screen.getByRole("button", { name: /Advisory approved/i })).toBeInTheDocument();

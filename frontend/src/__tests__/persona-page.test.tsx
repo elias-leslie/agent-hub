@@ -37,8 +37,8 @@ type MockPrimarySession =
 
 const mockRuntimeState: {
   primarySession: MockPrimarySession;
-  activePersonaSessions: Array<{ id: string }>;
-  activeChildSessions: Array<{ id: string }>;
+  activePersonaSessions: Array<{ id: string; status?: string; live_activity?: { status?: string; phase?: string } }>;
+  activeChildSessions: Array<{ id: string; status?: string; live_activity?: { status?: string; phase?: string } }>;
   loading: boolean;
   error: string | null;
   stoppingSessionId: string | null;
@@ -57,8 +57,8 @@ const mockRuntimeState: {
       files_touched: ["frontend/src/app/persona/page.tsx"],
     },
   },
-  activePersonaSessions: [{ id: "hb-1" }],
-  activeChildSessions: [{ id: "child-1" }],
+  activePersonaSessions: [{ id: "hb-1", status: "active", live_activity: { status: "active", phase: "running_tool" } }],
+  activeChildSessions: [{ id: "child-1", status: "active", live_activity: { status: "active", phase: "waiting_for_model" } }],
   loading: false,
   error: null,
   stoppingSessionId: null,
@@ -113,6 +113,11 @@ vi.mock("@/app/persona/hooks/usePersona", () => ({
     loading: false,
     error: null,
     updatePersona: mockUpdatePersona,
+    autosave: {
+      status: "idle",
+      errorMessage: null,
+      savedAt: null,
+    },
   }),
 }));
 
@@ -156,32 +161,35 @@ describe("PersonaPage", () => {
         files_touched: ["frontend/src/app/persona/page.tsx"],
       },
     };
-    mockRuntimeState.activePersonaSessions = [{ id: "hb-1" }];
-    mockRuntimeState.activeChildSessions = [{ id: "child-1" }];
+    mockRuntimeState.activePersonaSessions = [{ id: "hb-1", status: "active", live_activity: { status: "active", phase: "running_tool" } }];
+    mockRuntimeState.activeChildSessions = [{ id: "child-1", status: "active", live_activity: { status: "active", phase: "waiting_for_model" } }];
     mockRuntimeState.stoppingSessionId = null;
   });
 
-  it("renders the unified workspace and active runtime summary", () => {
+  it("renders a two-row command deck with runtime provenance and active-work scope", () => {
     render(<PersonaPage />);
 
     expect(screen.getByTestId("unified-workspace")).toHaveTextContent("workspace:sess-123");
     expect(screen.getByText("Running validation")).toBeInTheDocument();
-    expect(screen.getByTitle("Stop Avery")).toBeInTheDocument();
+    expect(screen.getByText("Runtime")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Stop active work/i })).toBeInTheDocument();
+    expect(screen.getByText("Active child lanes 1")).toBeInTheDocument();
   });
 
-  it("pauses the persona from the main workspace header", async () => {
+  it("pauses the persona without claiming persistence succeeded immediately", async () => {
     mockStopCurrentStream.mockResolvedValueOnce(true);
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByTitle("Pause Avery"));
+    fireEvent.click(screen.getByRole("button", { name: /Pause operator/i }));
 
     expect(mockUpdatePersona).toHaveBeenCalledWith({
       execution_state: "paused",
     });
     expect(mockStopCurrentStream).toHaveBeenCalledTimes(1);
+
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith("Avery paused and live stream stopped");
+      expect(mockToastSuccess).not.toHaveBeenCalled();
     });
   });
 
@@ -193,7 +201,7 @@ describe("PersonaPage", () => {
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByText("Heartbeat"));
+    fireEvent.click(screen.getByRole("button", { name: /^Heartbeat$/i }));
 
     expect(mockTriggerHeartbeat).toHaveBeenCalledTimes(1);
     await waitFor(() => {
@@ -201,16 +209,16 @@ describe("PersonaPage", () => {
     });
   });
 
-  it("stops all active work from the runtime header", async () => {
+  it("stops all active work from the runtime command deck", async () => {
     mockStopActiveWork.mockResolvedValueOnce({ cancelled: 2, attempted: 2 });
 
     render(<PersonaPage />);
 
-    fireEvent.click(screen.getByTitle("Stop Avery"));
+    fireEvent.click(screen.getByRole("button", { name: /Stop active work/i }));
 
     expect(mockStopActiveWork).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      expect(mockToastSuccess).toHaveBeenCalledWith("Stopped 2 active Avery sessions");
+      expect(mockToastSuccess).toHaveBeenCalledWith("Stopped 2 live sessions for Avery");
     });
   });
 });

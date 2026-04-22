@@ -38,10 +38,12 @@ export function useSessionsData({ statusFilter, projectFilter, pageSize }: UseSe
   );
 
   const total = data?.pages[0]?.total ?? 0;
+  const loadedCount = allSessions.length;
 
   return {
     data,
     allSessions,
+    loadedCount,
     total,
     isLoading,
     error,

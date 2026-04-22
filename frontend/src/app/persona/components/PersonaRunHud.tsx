@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import type { Session, SessionListItem } from "@/lib/api/sessions";
 import type { PersonaRuntimeState } from "../hooks/usePersonaRuntime";
 import { prettifyDisplayText, shortenText } from "./workspace-format";
+import { ProvenanceBadge, ScopeChip } from "./persona-operator-chrome";
 
 interface PersonaRunHudProps {
   personaName: string;
@@ -60,6 +61,14 @@ function StatChip({
   );
 }
 
+function displayModelIdentity(provider: string | null | undefined, model: string | null | undefined): string {
+  if (!model) return "none";
+  if (provider && model.toLowerCase().startsWith(`${provider.toLowerCase()}/`)) {
+    return model;
+  }
+  return provider ? `${provider}/${model}` : model;
+}
+
 export function PersonaRunHud({
   personaName,
   runtime,
@@ -78,27 +87,29 @@ export function PersonaRunHud({
     ? formatDistanceToNowStrict(new Date(primary.created_at), { addSuffix: false })
     : "idle";
   const filesTouched = liveActivity?.files_touched?.length ?? 0;
-  const activeLanes = runtime.activePersonaSessions.length + runtime.activeChildSessions.length;
+  const activeChildLaneCount = runtime.activeChildSessions.length;
   const liveSummary = liveActivity?.summary
     ? shortenText(prettifyDisplayText(liveActivity.summary) || liveActivity.summary, compact ? 120 : 180)
     : null;
   const blockerSummary = liveActivity?.stall_reason || runtime.error || "None surfaced";
   const hasBlocker = blockerSummary !== "None surfaced";
+  const stopLabel = primary?.parent_session_id ? "Stop selected lane" : "Stop focused thread";
 
   return (
     <section
       data-testid="persona-run-hud"
       className={cn(
-        "overflow-hidden border border-slate-800/70 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.08),transparent_28%),rgba(2,6,23,0.96)] shadow-[0_20px_60px_-36px_rgba(15,23,42,0.9)]",
+        "overflow-hidden border border-slate-800/70 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.08),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.08),transparent_28%),rgba(2,6,23,0.96)] shadow-[0_20px_60px_-36px_rgba(15,23,42,0.9)]",
         compact ? "rounded-[22px] p-3" : "rounded-[28px] p-4",
       )}
     >
       <div className={cn("flex gap-3", compact ? "flex-col" : "flex-col gap-4 xl:flex-row xl:items-start xl:justify-between")}>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
-              Live operator run
-            </span>
+            <ProvenanceBadge source="runtime" />
+            <ScopeChip tone={activeChildLaneCount > 0 ? "warning" : "default"}>
+              Active child lanes {activeChildLaneCount}
+            </ScopeChip>
             <span className="rounded-full border border-slate-700/80 bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300">
               {primary ? `${personaName} active` : `${personaName} idle`}
             </span>
@@ -108,7 +119,7 @@ export function PersonaRunHud({
           </h2>
           {!compact ? (
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-              Current tool, context pressure, files touched, and lane count stay visible while you steer.
+              Runtime tool activity, context pressure, files touched, and live child-lane count stay visible while you steer.
             </p>
           ) : null}
         </div>
@@ -128,7 +139,7 @@ export function PersonaRunHud({
             className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-slate-600 hover:bg-slate-800"
           >
             <TerminalSquare className="h-3.5 w-3.5" />
-            Commands
+            Command deck
           </button>
           {primary ? (
             <button
@@ -144,7 +155,7 @@ export function PersonaRunHud({
               className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-2.5 py-1.5 text-xs font-medium text-rose-200 transition hover:border-rose-400/30 hover:bg-rose-950/30 disabled:opacity-60"
             >
               <Square className="h-3.5 w-3.5" />
-              {runtime.stoppingSessionId ? "Stopping" : "Stop"}
+              {runtime.stoppingSessionId ? "Stopping" : stopLabel}
             </button>
           ) : null}
         </div>
@@ -166,12 +177,12 @@ export function PersonaRunHud({
           </span>
           <span className={cn(
             "rounded-full border px-2.5 py-1",
-            activeLanes > 1 ? "border-amber-500/20 bg-amber-950/20 text-amber-200" : "border-slate-700 bg-slate-950/70 text-slate-300",
+            activeChildLaneCount > 0 ? "border-amber-500/20 bg-amber-950/20 text-amber-200" : "border-slate-700 bg-slate-950/70 text-slate-300",
           )}>
-            Lanes · {activeLanes}
+            Active child lanes · {activeChildLaneCount}
           </span>
           <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-slate-300">
-            Model · {primary ? `${primary.provider}/${primary.model}` : "none"}
+            Model · {displayModelIdentity(primary?.provider, primary?.model)}
           </span>
           <span className={cn(
             "rounded-full border px-2.5 py-1",
@@ -192,8 +203,8 @@ export function PersonaRunHud({
             tone={hasBlocker ? "warning" : "default"}
           />
           <StatChip icon={<Clock3 className="h-3.5 w-3.5" />} label="Elapsed" value={elapsed} />
-          <StatChip icon={<Layers3 className="h-3.5 w-3.5" />} label="Lanes" value={String(activeLanes)} tone={activeLanes > 1 ? "warning" : "default"} />
-          <StatChip icon={<BrainCircuit className="h-3.5 w-3.5" />} label="Model" value={primary ? `${primary.provider}/${primary.model}` : "none"} />
+          <StatChip icon={<Layers3 className="h-3.5 w-3.5" />} label="Active child lanes" value={String(activeChildLaneCount)} tone={activeChildLaneCount > 0 ? "warning" : "default"} />
+          <StatChip icon={<BrainCircuit className="h-3.5 w-3.5" />} label="Model" value={displayModelIdentity(primary?.provider, primary?.model)} />
           <StatChip
             icon={<FolderTree className="h-3.5 w-3.5" />}
             label="Files"

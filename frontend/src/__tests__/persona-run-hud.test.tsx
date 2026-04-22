@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PersonaRunHud } from "@/app/persona/components/PersonaRunHud";
 
 describe("PersonaRunHud", () => {
-  it("surfaces the current blocker alongside the main run stats", () => {
+  it("surfaces runtime provenance and counts only active child lanes", () => {
     render(
       <PersonaRunHud
         personaName="Avery"
@@ -39,8 +39,8 @@ describe("PersonaRunHud", () => {
             updated_at: "2026-04-16T15:01:00Z",
           },
           primarySessionDetails: null,
-          activePersonaSessions: [],
-          activeChildSessions: [],
+          activePersonaSessions: [{ id: "persona-root" }],
+          activeChildSessions: [{ id: "child-1" }, { id: "child-2" }],
           loading: false,
           error: "Background refresh failed",
           stoppingSessionId: null,
@@ -55,7 +55,9 @@ describe("PersonaRunHud", () => {
       />,
     );
 
-    expect(screen.getByText("Blocker")).toBeInTheDocument();
+    expect(screen.getByText("Runtime")).toBeInTheDocument();
+    expect(screen.getByText("Active child lanes")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.getAllByText(/Execution permission denied/i)).toHaveLength(2);
   });
 });
