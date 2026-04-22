@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import { RefreshCw, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -14,6 +15,7 @@ export function SessionsHeader({
   hiddenBenchmarkCount,
   isRefreshing,
   modelFilter,
+  searchInputRef,
   onSearchChange,
   onStatusFilterChange,
   onHideBenchmarkTrafficChange,
@@ -27,6 +29,7 @@ export function SessionsHeader({
   hiddenBenchmarkCount: number;
   isRefreshing: boolean;
   modelFilter: string;
+  searchInputRef?: RefObject<HTMLInputElement | null>;
   onSearchChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
   onHideBenchmarkTrafficChange: (value: boolean) => void;
@@ -67,6 +70,7 @@ export function SessionsHeader({
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-3 w-3 -translate-y-1/2 text-slate-500" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search loaded rows…"
                 value={searchQuery}

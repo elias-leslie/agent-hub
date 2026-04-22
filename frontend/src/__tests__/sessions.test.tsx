@@ -297,6 +297,73 @@ describe("SessionsPage", () => {
     });
   });
 
+  it("keeps a load-more cue available when filters hide all loaded rows but more pages remain", async () => {
+    vi.mocked(fetchSessions)
+      .mockResolvedValueOnce({
+        ...mockSessions,
+        total: 30,
+        page_size: 25,
+      })
+      .mockResolvedValueOnce({
+        sessions: [],
+        total: 30,
+        page: 2,
+        page_size: 25,
+      });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/search loaded rows/i), {
+      target: { value: "no-match" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/search only covers the 2 loaded rows/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /load more results/i }));
+
+    await waitFor(() => {
+      expect(fetchSessions).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("clears expanded row state and returns focus to search when filters hide the active row", async () => {
+    vi.mocked(fetchSessions).mockResolvedValue(mockSessions);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /expand session session-123-abc/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /collapse session session-123-abc/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /filter model gemini-3-flash/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("dispatch parser cleared branch drift")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByPlaceholderText(/search loaded rows/i)).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: /filter model gemini-3-flash/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /expand session session-123-abc/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: /collapse session session-123-abc/i })).not.toBeInTheDocument();
+  });
+
   it("shows an empty-data state when the server returns no sessions", async () => {
     vi.mocked(fetchSessions).mockResolvedValue({
       sessions: [],
