@@ -6,7 +6,6 @@ import { useModels } from "@/components/chat/use-models";
 import { buildModelCostMap } from "@/lib/model-pricing";
 import { SessionTable } from "./components/SessionTable";
 import { SessionsHeader } from "./components/SessionsHeader";
-import { ModelFilterBadge } from "./components/ModelFilterBadge";
 import { LoadingState } from "./components/LoadingState";
 import { InfiniteScrollFooter } from "./components/InfiniteScrollFooter";
 import { ErrorAlert } from "./components/ErrorAlert";
@@ -49,7 +48,6 @@ export default function SessionsPage() {
     hiddenBenchmarkCount,
     filteredAndSorted,
     visibleCount,
-    pageStats,
   } = useSessionFilters({
     sessions: allSessions,
     modelCosts,
@@ -116,23 +114,22 @@ export default function SessionsPage() {
       <div className="page-backdrop bg-slate-950/90" />
       <SessionsHeader
         counts={counts}
-        pageStats={pageStats}
         searchQuery={searchQuery}
         statusFilter={statusFilter}
         hideBenchmarkTraffic={hideBenchmarkTraffic}
         hiddenBenchmarkCount={hiddenBenchmarkCount}
         isRefreshing={isRefreshing}
+        modelFilter={modelFilter}
         onSearchChange={setSearchQuery}
         onStatusFilterChange={setStatusFilter}
         onHideBenchmarkTrafficChange={setHideBenchmarkTraffic}
+        onClearModelFilter={() => setModelFilter("")}
         onRefresh={handleRefresh}
       />
 
       <main className="page-frame">
         <div className="page-container space-y-4">
           {error && <ErrorAlert error={error} onRetry={handleRefresh} />}
-
-          <ModelFilterBadge modelFilter={modelFilter} onClear={() => setModelFilter("")} />
 
           {isLoading && <LoadingState />}
           {showEmptyData && <EmptyState kind="no-data" />}

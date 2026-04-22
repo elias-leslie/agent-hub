@@ -79,11 +79,13 @@ Every critical panel or datum that can be confused should declare its source usi
   - source: active child sessions only
   - exclude active root persona sessions from the count.
   - count a child lane as active only when `session.status == "active"` or `session.live_activity.status == "active"`.
+  - the current inventory query is intentionally capped at the first 100 active sessions returned by `fetchSessions({ status: "active", page_size: 100 })`; for this task, that capped set is the authoritative lane inventory and must never be presented as an unqualified whole-corpus total.
 - Workflow stage cards:
   - source: `/api/orchestration/workflow` stage result plus real `session_id`
   - each stage card must show whether it is advisory output only or linked to a real session.
   - if a stage payload omits `session_id`, points to an inaccessible session, or resolves to stale/nonexistent detail, render the stage as advisory/unlinked instead of fabricating navigation success.
   - `accessible session_id` means a non-empty stage `session_id` that is already present in the currently loaded operator session inventory or resolves via `fetchSession(session_id)` for the current operator/project scope without 403/404/null/mismatch; otherwise it remains advisory/unlinked.
+  - `currently loaded operator session inventory` is page-specific and fixed for this task: on `/persona` it means `primarySession`, `activePersonaSessions`, `activeChildSessions`, plus any focused `fetchSession(session_id)` detail; on `/sessions` it means the currently loaded ledger rows plus the currently fetched expanded detail for the selected row.
 - Budget/context panel:
   - runtime context/token metrics are authoritative when present on the active session
   - prompt preview metrics are fallback-only and must carry a Preview badge.
@@ -138,6 +140,7 @@ Every critical panel or datum that can be confused should declare its source usi
   - only valid for persisted target sessions/lane entries.
   - a persisted target means a concrete `session.id` that already exists in `fetchSessions` / `fetchSession` or the active-child-session lane set; draft-only composer state is never a valid target.
   - the active-child-session lane set is currently owned by `usePersonaRuntime.refresh()`: `fetchSessions({ status: "active", page_size: 100 })`, filtered to persona-root ids plus their non-persona children, until focused `fetchSession` detail resolves.
+  - if more than 100 active child sessions ever exist, lane counts and target enablement remain bounded to that fetched inventory for this task; the UI must not imply that an unfetched child session is selectable or counted.
   - authority order is fixed: focused `fetchSession` detail wins when it resolves; otherwise the active-child-session lane set governs enablement/selection.
   - if those sources disagree or the target session id is missing, stale, or not yet persisted, disable the action and keep only inspect/select behavior until refresh resolves the conflict.
   - inactive child sessions remain valid only while their persisted `session.id` is still fetchable/inspectable.
@@ -157,6 +160,7 @@ Every critical panel or datum that can be confused should declare its source usi
   - expand/collapse must be a dedicated control, not implicit nested-button behavior on the whole row.
   - detail fetches are latest-request-wins: if the operator collapses the row or expands a different row, stale responses must be discarded rather than painted into the newly selected row.
   - keyboard contract is explicit: row focus movement must remain predictable, Enter/Space toggles the focused row expansion, and Escape collapses the current expansion without dropping row context.
+  - focus outcome is fixed: Enter/Space keeps focus on the current row control after expand/collapse, Escape returns focus to the originating row toggle, and if filtering hides the expanded row then focus falls back to the search field when present, otherwise the next visible row control.
 - Copy/filter actions:
   - separate explicit controls with clear focus states.
 - Live evidence refresh:
@@ -216,11 +220,14 @@ This section freezes `1.1` audit findings that implementation must resolve.
 
 Before any `2.x` implementation work starts, `1.1` must freeze and log one reproducible setup path for each required degraded/browser proof. Accepted setup sources are: naturally occurring runtime/browser state, focused frontend/backend fixtures, or named seed/setup artifacts recorded in the task log.
 
+When the fixed host `http://192.168.8.244:3003` is unavailable or remote-browser first-load behavior is noisy, verification may substitute the canonical Agent Hub host from project identity/settings as long as the task log records the host substitution and the resulting browser artifact.
+
 Minimum required setup map:
 - preview-only budget: reproduce an idle/no-runtime persona state where preview budget data exists without runtime metrics, using either the natural idle workspace or a focused mocked fixture; the task log must name which source is authoritative.
 - workflow-stage missing session link: reproduce a stage payload whose `session_id` is null/omitted/inaccessible and prove the UI stays advisory/unlinked; the setup artifact must show whether the failure mode is null, 403/404, or fetch mismatch.
 - stale sessions expansion race: reproduce out-of-order detail/evidence responses with a focused test or mocked harness; browser proof may supplement it, but the race trigger must be named in a fixture/test artifact.
 - persisted-child advisory draft: reproduce a real persisted child session id from the active-child-session lane inventory, then open redirect/promote/handoff draft state before send to prove the UI distinguishes inspectable operator intent from backend mutation.
+  - if a natural persisted child session is not available in the live runtime without artificial orchestration, a focused fixture/test may stand in for the persisted-child target as long as a live browser capture still proves the advisory draft-before-send presentation language on `/persona`.
 - sessions no-match over partial load: reproduce a loaded subset where `Visible == 0` while `Loaded < Total`, and capture the load-more explanation rather than a false global-empty state.
 
 ## Shared surface vocabulary

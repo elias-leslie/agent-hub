@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PersonaBlockerPanel } from "@/app/persona/components/PersonaBlockerPanel";
 
 describe("PersonaBlockerPanel", () => {
-  it("orders hard blockers first and labels preview budget as preview-derived", () => {
+  it("keeps blocker, permission, and auto-run truth compact", () => {
     render(
       <PersonaBlockerPanel
         executionState="active"
@@ -76,11 +76,8 @@ describe("PersonaBlockerPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Hard blocker first\. Advisory warning second/i)).toBeInTheDocument();
-    expect(screen.getByText(/Runtime or persisted session proof wins/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Runtime").length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/^Execution permission denied$/i)).toHaveLength(2);
-    expect(screen.getAllByText("Preview").length).toBeGreaterThan(0);
-    expect(screen.getByText(/9,100 tokens/i)).toBeInTheDocument();
+    expect(screen.getByText(/Blockers/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Execution permission denied$/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Every 30m/i)).toBeInTheDocument();
   });
 });

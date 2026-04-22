@@ -8,8 +8,7 @@ export { formatRelativeTime, formatTokens };
 
 
 export function formatTokenPair(input: number, output: number): string {
-  if (input === 0 && output === 0) return "—";
-  return `${formatTokens(input)} / ${formatTokens(output)}`;
+  return `in ${formatTokens(input)} · out ${formatTokens(output)}`;
 }
 
 export function estimateCost(
@@ -22,7 +21,7 @@ export function estimateCost(
 }
 
 export function formatCost(cost: number): string {
-  if (cost === 0) return "—";
+  if (cost === 0) return "$0";
   if (cost < 0.0001) return "<$0.0001";
   if (cost < 0.01) return `$${cost.toFixed(4)}`;
   if (cost < 1) return `$${cost.toFixed(3)}`;

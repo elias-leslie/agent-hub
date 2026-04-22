@@ -2,7 +2,6 @@
 
 import { Suspense } from "react";
 import {
-  Activity,
   Loader2,
   Settings,
   AlertCircle,
@@ -24,9 +23,8 @@ import { UnifiedPersonaWorkspace } from "./components/UnifiedPersonaWorkspace";
 import { useToastActions } from "@/components/error/toast";
 import { getPersonaDisplayName } from "./utils/displayName";
 import { prettifyDisplayText, shortenText } from "./components/workspace-format";
-import { ProvenanceBadge, ScopeChip } from "./components/persona-operator-chrome";
 
-type RuntimeLabel = "Paused" | "Blocked" | "Waiting" | "Finalizing" | "Working" | "Auto-run off" | "Idle";
+type RuntimeLabel = "Paused" | "Blocked" | "Waiting" | "Finalizing" | "Working" | "Auto-run off" | "Ready";
 
 type SummaryDescriptor = {
   text: string;
@@ -40,7 +38,7 @@ function formatRuntimeLabel(
 ): RuntimeLabel {
   if (executionState === "paused") return "Paused";
   if (autoRunDisabled) return "Auto-run off";
-  if (!phase) return "Idle";
+  if (!phase) return "Ready";
   if (phase === "error") return "Blocked";
   if (phase === "waiting_for_model") return "Waiting";
   if (phase === "finalizing") return "Finalizing";
@@ -55,11 +53,11 @@ function formatHeartbeatFallbackSummary(status: HeartbeatStatusResponse | null |
   const trigger = status.running_trigger === "manual_api"
     ? " via manual trigger"
     : status.running_trigger === "cron"
-      ? " via scheduled trigger"
+      ? " via schedule"
       : status.running_trigger === "manual"
         ? " via manual run"
         : "";
-  return `Heartbeat running${scope}${trigger}`;
+  return `Check running${scope}${trigger}`;
 }
 
 function buildLiveSummaryDescriptor(args: {
@@ -80,18 +78,18 @@ function buildLiveSummaryDescriptor(args: {
     return { text: heartbeatFallback, source: "advisory" };
   }
   if (args.isHeartbeatRunning) {
-    return { text: `${args.personaName} is actively working`, source: "advisory" };
+    return { text: "Check running", source: "advisory" };
   }
   if (args.personaPaused) {
     return { text: `${args.personaName} is paused`, source: "session" };
   }
   if (args.heartbeatStatus?.last_run) {
     return {
-      text: `Last heartbeat ${formatDistanceToNow(new Date(args.heartbeatStatus.last_run), { addSuffix: true })}`,
+      text: `Last check-in ${formatDistanceToNow(new Date(args.heartbeatStatus.last_run), { addSuffix: true })}`,
       source: "advisory",
     };
   }
-  return { text: "Idle cockpit ready", source: "session" };
+  return { text: "", source: "session" };
 }
 
 function isChildLaneActive(
@@ -104,13 +102,13 @@ function isChildLaneActive(
 }
 
 const STATUS_DOT: Record<RuntimeLabel, string> = {
-  Working: "bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]",
-  Waiting: "bg-emerald-400 animate-pulse shadow-[0_0_6px_theme(colors.emerald.400)]",
-  Finalizing: "bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]",
-  Paused: "bg-amber-400 shadow-[0_0_6px_theme(colors.amber.400)]",
-  Blocked: "bg-rose-400 shadow-[0_0_6px_theme(colors.rose.400)]",
+  Working: "bg-emerald-400",
+  Waiting: "bg-emerald-400",
+  Finalizing: "bg-emerald-400",
+  Paused: "bg-amber-400",
+  Blocked: "bg-rose-400",
   "Auto-run off": "bg-slate-500",
-  Idle: "bg-slate-500",
+  Ready: "bg-slate-500",
 };
 
 function PersonaContent() {
@@ -128,20 +126,15 @@ function PersonaContent() {
 
   const isHeartbeatRunning = heartbeatStatus?.running || isTriggering;
   const heartbeatTooltip = heartbeatStatus?.last_run
-    ? `Last heartbeat ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
-    : "Never run";
+    ? `Last check-in ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
+    : "No check-ins yet";
   const executionState = persona?.execution_state ?? "active";
   const personaName = getPersonaDisplayName(persona?.name);
   const personaPaused = executionState === "paused";
   const autoRunDisabled = (persona?.heartbeat_interval_minutes ?? 0) === 0;
   const runtimeLabel = formatRuntimeLabel(runtime.primarySession?.live_activity?.phase, executionState, autoRunDisabled);
   const isActive = runtimeLabel === "Working" || runtimeLabel === "Waiting" || runtimeLabel === "Finalizing";
-  const activeChildLaneCount = runtime.activeChildSessions.reduce(
-    (count, session) => count + (isChildLaneActive(session) ? 1 : 0),
-    0,
-  );
   const activeWorkCount = Number(Boolean(runtime.primarySession)) + Number(runtime.activeChildSessions.some(isChildLaneActive));
-  const stopScopeAvailable = Boolean(runtime.primarySession);
   const liveSummary = buildLiveSummaryDescriptor({
     runtimeSummary: runtime.primarySession?.live_activity?.summary,
     heartbeatStatus,
@@ -193,95 +186,80 @@ function PersonaContent() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-slate-950">
-      <header className="sticky top-0 z-30 flex-shrink-0 border-b border-slate-800/60 bg-[linear-gradient(135deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] backdrop-blur-xl">
-        <div className="border-b border-slate-800/60 px-5 py-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative flex-shrink-0">
-                  <span className={cn("block h-2.5 w-2.5 rounded-full transition-all", STATUS_DOT[runtimeLabel])} />
-                </div>
-                <h1 className="text-sm font-semibold tracking-wide text-slate-50 flex-shrink-0">
-                  {personaName}
-                </h1>
-                <span className={cn(
-                  "rounded-md px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase flex-shrink-0",
-                  isActive ? "bg-emerald-500/15 text-emerald-400" :
-                  personaPaused ? "bg-amber-500/15 text-amber-400" :
-                  runtimeLabel === "Blocked" ? "bg-rose-500/15 text-rose-400" :
-                  "bg-slate-800 text-slate-500",
-                )}>
-                  {runtimeLabel}
-                </span>
-                <ProvenanceBadge source={liveSummary.source} />
-                {autosave.status === "saving" || autosave.status === "scheduled" ? <ScopeChip>Saving operator state…</ScopeChip> : null}
-                {autosave.status === "saved" ? <ScopeChip>Operator state saved</ScopeChip> : null}
-                {autosave.status === "error" ? <ScopeChip tone="danger">Save failed</ScopeChip> : null}
-              </div>
-              <p className="mt-2 text-sm text-slate-300 xl:max-w-4xl">
-                {liveSummary.text}
-              </p>
+      <header className="sticky top-0 z-30 flex-shrink-0 border-b border-slate-800/60 bg-slate-950/95 backdrop-blur-xl">
+        <div className="flex flex-col gap-3 px-5 py-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={cn("block h-2 w-2 rounded-full transition-all", STATUS_DOT[runtimeLabel])} />
+              <h1 className="text-sm font-semibold tracking-wide text-slate-50">{personaName}</h1>
+              <span className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em]",
+                isActive ? "bg-emerald-500/12 text-emerald-300" :
+                personaPaused ? "bg-amber-500/12 text-amber-300" :
+                runtimeLabel === "Blocked" ? "bg-rose-500/12 text-rose-300" :
+                "bg-slate-900 text-slate-500",
+              )}>
+                {runtimeLabel}
+              </span>
+              {autosave.status === "saving" || autosave.status === "scheduled" ? (
+                <span className="text-xs text-slate-500">saving…</span>
+              ) : null}
+              {autosave.status === "error" ? (
+                <span className="text-xs text-rose-300">save failed</span>
+              ) : null}
             </div>
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <ScopeChip tone={activeChildLaneCount > 0 ? "warning" : "default"}>Active child lanes {activeChildLaneCount}</ScopeChip>
-            </div>
+            {liveSummary.text ? (
+              <p className="mt-1 truncate text-sm text-slate-400">{liveSummary.text}</p>
+            ) : null}
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3">
-          <button
-            onClick={handleHeartbeatTrigger}
-            disabled={personaPaused || isHeartbeatRunning}
-            aria-busy={isHeartbeatRunning}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all",
-              personaPaused || isHeartbeatRunning
-                ? "cursor-not-allowed border border-slate-800 bg-slate-900/70 text-slate-500"
-                : "border border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-600 hover:bg-slate-800",
-            )}
-            title={heartbeatTooltip}
-          >
-            <HeartPulse className={cn("h-3.5 w-3.5", isHeartbeatRunning && "animate-pulse text-amber-400")} />
-            {isHeartbeatRunning ? "Heartbeat running" : "Heartbeat"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            <button
+              onClick={handleHeartbeatTrigger}
+              disabled={personaPaused || isHeartbeatRunning}
+              aria-busy={isHeartbeatRunning}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
+                personaPaused || isHeartbeatRunning
+                  ? "cursor-not-allowed border-slate-800 bg-slate-900/70 text-slate-500"
+                  : "border-slate-800 bg-slate-950/80 text-slate-200 hover:border-slate-700 hover:bg-slate-900",
+              )}
+              title={heartbeatTooltip}
+            >
+              <HeartPulse className={cn("h-3.5 w-3.5", isHeartbeatRunning && "animate-pulse text-amber-300")} />
+              {isHeartbeatRunning ? "Check running" : "Check now"}
+            </button>
 
-          <button
-            onClick={handleStopCurrentStream}
-            disabled={activeWorkCount === 0 || runtime.stoppingSessionId !== null}
-            className="inline-flex items-center gap-2 rounded-xl border border-rose-500/20 bg-rose-950/20 px-3 py-2 text-xs font-medium text-rose-200 transition-all hover:border-rose-500/40 hover:bg-rose-950/30 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Square className="h-3.5 w-3.5" />
-            {runtime.stoppingSessionId ? "Stopping active work…" : "Stop active work"}
-          </button>
+            <button
+              onClick={handleStopCurrentStream}
+              disabled={activeWorkCount === 0 || runtime.stoppingSessionId !== null}
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-500/20 bg-rose-950/15 px-3 py-2 text-xs font-medium text-rose-200 transition-all hover:border-rose-500/40 hover:bg-rose-950/25 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Square className="h-3.5 w-3.5" />
+              {runtime.stoppingSessionId ? "Stopping…" : "Stop"}
+            </button>
 
-          <button
-            onClick={handlePersonaPauseResume}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium transition-all",
-              personaPaused
-                ? "border-emerald-500/20 bg-emerald-950/20 text-emerald-200 hover:border-emerald-400/30 hover:bg-emerald-950/30"
-                : "border-slate-700 bg-slate-900/80 text-slate-200 hover:border-slate-600 hover:bg-slate-800",
-            )}
-          >
-            {personaPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
-            {personaPaused ? "Resume operator" : "Pause operator"}
-          </button>
+            <button
+              onClick={handlePersonaPauseResume}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-all",
+                personaPaused
+                  ? "border-emerald-500/20 bg-emerald-950/15 text-emerald-200 hover:border-emerald-400/30 hover:bg-emerald-950/25"
+                  : "border-slate-800 bg-slate-950/80 text-slate-200 hover:border-slate-700 hover:bg-slate-900",
+              )}
+            >
+              {personaPaused ? <PlayCircle className="h-3.5 w-3.5" /> : <PauseCircle className="h-3.5 w-3.5" />}
+              {personaPaused ? "Resume" : "Pause"}
+            </button>
 
-          <Link
-            href="/persona/analytics"
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-medium text-slate-200 transition-all hover:border-slate-600 hover:bg-slate-800"
-          >
-            <Activity className="h-3.5 w-3.5" />
-            Analytics
-          </Link>
-
-          <Link
-            href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-medium text-slate-200 transition-all hover:border-slate-600 hover:bg-slate-800"
-          >
-            <Settings className="h-3.5 w-3.5" />
-            Settings
-          </Link>
+            <Link
+              href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-950/80 px-3 py-2 text-xs font-medium text-slate-200 transition-all hover:border-slate-700 hover:bg-slate-900"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Settings
+            </Link>
+          </div>
         </div>
 
         {runtime.error ? (

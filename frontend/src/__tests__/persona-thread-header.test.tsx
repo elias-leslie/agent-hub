@@ -1,13 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PersonaThreadHeader } from "@/app/persona/components/PersonaThreadHeader";
 
 describe("PersonaThreadHeader", () => {
-  it("marks draft and persisted thread provenance explicitly", () => {
+  it("shows compact persisted-thread context and keeps new-thread control in the lane row", () => {
+    const onNewThread = vi.fn();
+
     render(
       <PersonaThreadHeader
-        personaName="Avery"
         runtime={{
           primarySession: null,
           primarySessionDetails: null,
@@ -55,17 +56,20 @@ describe("PersonaThreadHeader", () => {
         targetProjectId="agent-hub"
         threadSource="session"
         onSelectSession={vi.fn()}
-        sendMessage={vi.fn()}
         activeTab="workflow"
         onOpenTab={vi.fn()}
+        onNewThread={onNewThread}
         deskOpen
         onToggleDesk={vi.fn()}
       />,
     );
 
-    expect(screen.getByText("Operator thread surface")).toBeInTheDocument();
-    expect(screen.getByText("Persisted primary thread")).toBeInTheDocument();
-    expect(screen.getByText("Session project · summitflow")).toBeInTheDocument();
-    expect(screen.getByText(/Replies continue in this persisted thread/i)).toBeInTheDocument();
+    expect(screen.getByText("summitflow")).toBeInTheDocument();
+    expect(screen.getByText("Session closed")).toBeInTheDocument();
+    expect(screen.getByText("bash")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Status$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /new thread/i }));
+    expect(onNewThread).toHaveBeenCalledTimes(1);
   });
 });

@@ -73,7 +73,7 @@ export function WorkspaceToolbar({
   ];
 
   return (
-    <div className="border-b border-slate-800/50 bg-[#0d0e13]/95 backdrop-blur-lg px-5 py-2.5">
+    <div className="border-b border-slate-900/60 bg-slate-950/82 px-5 py-2">
       <div className="flex items-center gap-2.5">
         <div className="relative flex-1 min-w-0">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
@@ -82,7 +82,7 @@ export function WorkspaceToolbar({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search history, tasks, files, agents..."
-            className="w-full rounded-lg border border-slate-700/50 bg-slate-900/60 py-2 pl-9 pr-3 text-xs text-slate-200 outline-none transition-all placeholder:text-slate-600 focus:border-amber-500/30 focus:bg-slate-900/80 focus:ring-1 focus:ring-amber-500/20"
+            className="w-full rounded-lg border border-slate-800/55 bg-slate-900/45 py-2 pl-9 pr-3 text-xs text-slate-200 outline-none transition-all placeholder:text-slate-500 focus:border-amber-500/30 focus:bg-slate-900/65 focus:ring-1 focus:ring-amber-500/20"
           />
         </div>
         <TimeRangeDropdown value={timeRange} onChange={onTimeRangeChange} />

@@ -53,41 +53,30 @@ export function SessionTable({
       tabIndex={0}
       onKeyDown={onKeyDown}
       onScroll={onScroll}
-      className="table-surface max-h-[calc(100vh-280px)] overflow-auto rounded-2xl border border-slate-800 bg-slate-950/85 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+      className="max-h-[calc(100vh-220px)] overflow-auto border border-slate-800/70 bg-slate-950/70 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
     >
-      <div className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 backdrop-blur-sm">
-        <div className="grid grid-cols-[92px_minmax(220px,1.25fr)_minmax(170px,0.95fr)_minmax(240px,1.4fr)_110px_90px_90px_76px] items-center gap-3 px-5 py-3">
-          <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-slate-500">
-            State
-          </span>
+      <div className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-sm">
+        <div className="grid grid-cols-[minmax(260px,1.6fr)_minmax(130px,0.8fr)_minmax(240px,1.2fr)_minmax(130px,0.8fr)_88px_76px] items-center gap-4 px-4 py-3">
           <SortableHeader
-            label="Project"
+            label="Session"
             field="project"
             currentField={sortField}
             direction={sortDirection}
             onSort={onSort}
           />
           <span className="text-[10px] font-mono uppercase tracking-[0.22em] text-slate-500">
-            Agent / counts
+            Agent
           </span>
           <SortableHeader
-            label="Execution identity"
+            label="Model"
             field="model"
             currentField={sortField}
             direction={sortDirection}
             onSort={onSort}
           />
           <SortableHeader
-            label="Tokens"
+            label="Usage"
             field="tokens"
-            currentField={sortField}
-            direction={sortDirection}
-            onSort={onSort}
-            align="right"
-          />
-          <SortableHeader
-            label="Cost"
-            field="cost"
             currentField={sortField}
             direction={sortDirection}
             onSort={onSort}
@@ -102,7 +91,7 @@ export function SessionTable({
             align="right"
           />
           <div className="text-right text-[10px] font-mono uppercase tracking-[0.22em] text-slate-500">
-            Actions
+            Open
           </div>
         </div>
       </div>
