@@ -717,6 +717,11 @@ class TestActivityEndpointEmptySessionFilter:
             side_effect=[count_result, sessions_result]
         )
 
+        event_counts = {
+            session_id: len(previews)
+            for session_id, previews in preview_map.items()
+        }
+
         return (
             patch(
                 "app.api.persona.activity._fetch_event_previews",
@@ -724,9 +729,14 @@ class TestActivityEndpointEmptySessionFilter:
                 return_value=preview_map,
             ),
             patch(
-                "app.api.persona.activity._fetch_message_counts",
+                "app.api.persona.activity._fetch_session_counts",
                 new_callable=AsyncMock,
-                return_value=msg_counts,
+                return_value=(msg_counts, event_counts),
+            ),
+            patch(
+                "app.api.persona.activity._fetch_child_counts",
+                new_callable=AsyncMock,
+                return_value=({}, {}),
             ),
         )
 
@@ -743,14 +753,14 @@ class TestActivityEndpointEmptySessionFilter:
         session_with_events = _make_mock_session("sess-with-events")
         event = _make_mock_event("sess-with-events")
 
-        patch_previews, patch_counts = self._patch_activity(
+        patch_previews, patch_counts, patch_child_counts = self._patch_activity(
             sessions=[session_with_events],
             events_by_session={"sess-with-events": [event]},
             msg_counts={"sess-with-events": 1},
             activity_db=activity_db,
         )
 
-        with patch_previews, patch_counts:
+        with patch_previews, patch_counts, patch_child_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         # Assert
@@ -768,14 +778,14 @@ class TestActivityEndpointEmptySessionFilter:
         session = _make_mock_session("sess-active")
         event = _make_mock_event("sess-active", content="Working on something")
 
-        patch_previews, patch_counts = self._patch_activity(
+        patch_previews, patch_counts, patch_child_counts = self._patch_activity(
             sessions=[session],
             events_by_session={"sess-active": [event]},
             msg_counts={"sess-active": 1},
             activity_db=activity_db,
         )
 
-        with patch_previews, patch_counts:
+        with patch_previews, patch_counts, patch_child_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200
@@ -802,14 +812,14 @@ class TestActivityEndpointEmptySessionFilter:
             content=None,
         )
 
-        patch_previews, patch_counts = self._patch_activity(
+        patch_previews, patch_counts, patch_child_counts = self._patch_activity(
             sessions=[s1, s2],
             events_by_session={"sess-1": [e1], "sess-2": [e2]},
             msg_counts={"sess-1": 1},
             activity_db=activity_db,
         )
 
-        with patch_previews, patch_counts:
+        with patch_previews, patch_counts, patch_child_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200
@@ -834,14 +844,14 @@ class TestActivityEndpointEmptySessionFilter:
         )
         event = _make_mock_event("sess-heartbeat", content="Heartbeat event")
 
-        patch_previews, patch_counts = self._patch_activity(
+        patch_previews, patch_counts, patch_child_counts = self._patch_activity(
             sessions=[session],
             events_by_session={"sess-heartbeat": [event]},
             msg_counts={"sess-heartbeat": 1},
             activity_db=activity_db,
         )
 
-        with patch_previews, patch_counts:
+        with patch_previews, patch_counts, patch_child_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200
@@ -857,14 +867,14 @@ class TestActivityEndpointEmptySessionFilter:
         )
         event = _make_mock_event("sess-scheduled", content="Scheduled job")
 
-        patch_previews, patch_counts = self._patch_activity(
+        patch_previews, patch_counts, patch_child_counts = self._patch_activity(
             sessions=[session],
             events_by_session={"sess-scheduled": [event]},
             msg_counts={"sess-scheduled": 1},
             activity_db=activity_db,
         )
 
-        with patch_previews, patch_counts:
+        with patch_previews, patch_counts, patch_child_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200

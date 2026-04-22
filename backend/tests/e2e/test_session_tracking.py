@@ -69,12 +69,20 @@ class TestSessionsApiFiltering:
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 3)]
 
+        # Mock event count query
+        mock_event_count_result = MagicMock()
+        mock_event_count_result.all.return_value = [("session-1", 3)]
+
         # Mock token stats query
         mock_token_stats_result = MagicMock()
         mock_token_stats_result.all.return_value = [
             ("session-1", "user", 50),
             ("session-1", "assistant", 100),
         ]
+
+        # Mock child count query (no children)
+        mock_child_result = MagicMock()
+        mock_child_result.scalars.return_value.all.return_value = []
 
         # Mock ownership query (_fetch_candidate_sessions returns empty)
         mock_ownership_result = MagicMock()
@@ -89,7 +97,9 @@ class TestSessionsApiFiltering:
                 mock_count_result,
                 mock_list_result,
                 mock_msg_count_result,
+                mock_event_count_result,
                 mock_token_stats_result,
+                mock_child_result,
                 mock_ownership_result,      # _fetch_candidate_sessions
                 mock_specialists_result,    # _fetch_active_specialists
             ]
@@ -234,12 +244,17 @@ class TestGetSession:
         mock_specialists_result = MagicMock()
         mock_specialists_result.scalars.return_value.all.return_value = []
 
+        # Child session query (no children)
+        mock_child_result = MagicMock()
+        mock_child_result.scalars.return_value.all.return_value = []
+
         mock_session.execute.side_effect = [
             mock_session_result,
             mock_token_result,
             mock_context_result,
             mock_ownership_result,      # _fetch_candidate_sessions
             mock_specialists_result,    # _fetch_active_specialists
+            mock_child_result,
         ]
 
         response = client.get("/api/sessions/session-portfolio-123")
@@ -277,8 +292,14 @@ class TestMultiProjectScenario:
         mock_msg_count_1 = MagicMock()
         mock_msg_count_1.all.return_value = [("port-1", 5)]
 
+        mock_event_count_1 = MagicMock()
+        mock_event_count_1.all.return_value = [("port-1", 5)]
+
         mock_token_stats_1 = MagicMock()
         mock_token_stats_1.all.return_value = [("port-1", "user", 50), ("port-1", "assistant", 100)]
+
+        mock_child_result_1 = MagicMock()
+        mock_child_result_1.scalars.return_value.all.return_value = []
 
         # Mock ownership query (_fetch_candidate_sessions returns empty)
         mock_ownership_1 = MagicMock()
@@ -290,7 +311,12 @@ class TestMultiProjectScenario:
 
         mock_session.execute = AsyncMock(
             side_effect=[
-                mock_count_1, mock_list_1, mock_msg_count_1, mock_token_stats_1,
+                mock_count_1,
+                mock_list_1,
+                mock_msg_count_1,
+                mock_event_count_1,
+                mock_token_stats_1,
+                mock_child_result_1,
                 mock_ownership_1,       # _fetch_candidate_sessions
                 mock_specialists_1,     # _fetch_active_specialists
             ]
@@ -324,11 +350,17 @@ class TestMultiProjectScenario:
         mock_msg_count = MagicMock()
         mock_msg_count.all.return_value = [("session-purpose", 2)]
 
+        mock_event_count = MagicMock()
+        mock_event_count.all.return_value = [("session-purpose", 2)]
+
         mock_token_stats = MagicMock()
         mock_token_stats.all.return_value = [
             ("session-purpose", "user", 30),
             ("session-purpose", "assistant", 60),
         ]
+
+        mock_child_result = MagicMock()
+        mock_child_result.scalars.return_value.all.return_value = []
 
         # Mock ownership query (_fetch_candidate_sessions returns empty)
         mock_ownership = MagicMock()
@@ -340,7 +372,12 @@ class TestMultiProjectScenario:
 
         mock_session.execute = AsyncMock(
             side_effect=[
-                mock_count, mock_list, mock_msg_count, mock_token_stats,
+                mock_count,
+                mock_list,
+                mock_msg_count,
+                mock_event_count,
+                mock_token_stats,
+                mock_child_result,
                 mock_ownership,         # _fetch_candidate_sessions
                 mock_specialists,       # _fetch_active_specialists
             ]
