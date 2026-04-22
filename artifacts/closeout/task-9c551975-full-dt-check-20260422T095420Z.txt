@@ -1,0 +1,11 @@
+CHECK:agent-hub
+LINT:agent-hub
+OK:violations=0
+TYPES:agent-hub
+OK:errors=0
+TEST:agent-hub
+OK:=========== 3222 passed, 37 skipped, 39 warnings in 67.72s (0:01:07) ===========
+BIOME:OK:0
+TSC:OK:0
+VITEST:OK:0
+CHECK_RESULT:OK

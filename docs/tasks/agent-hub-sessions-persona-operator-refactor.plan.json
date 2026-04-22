@@ -1,0 +1,424 @@
+{
+  "_meta": {
+    "schema_version": "1.0.0",
+    "created_at": "2026-04-21T22:14:42Z",
+    "updated_at": "2026-04-21T23:20:30Z",
+    "source": "manual"
+  },
+  "title": "Refactor Agent Hub sessions and persona surfaces into a cohesive operator command center UX",
+  "description": "Why now: `/persona` and `/sessions` both expose critical operator truth for Agent Hub, but they currently feel like adjacent tools rather than a coherent control system. `/persona` mixes runtime, preview, draft, and feed truth across overlapping action bars and advisory controls, while `/sessions` underuses the backend's richer metadata and suffers from client-side filtering, stale expansion races, and weak live-state clarity. Refactor both surfaces together so `/persona` becomes the active operator cockpit and `/sessions` becomes the forensic ledger, using one shared visual system, truthful action semantics, and any necessary backend or DB support needed to expose the right data cleanly.",
+  "task_type": "feature",
+  "priority": 1,
+  "labels": [
+    "frontend",
+    "ui-ux",
+    "sessions",
+    "persona",
+    "backend",
+    "operator"
+  ],
+  "complexity": "COMPLEX",
+  "autonomous": true,
+  "done_when": [
+    "`/persona` and `/sessions` share a cohesive operator-grade design language with aligned command bars, state beacons, source badges, and evidence surfaces rather than feeling like separate mini-products.",
+    "`/persona` follows the exact truth/action semantics in the task package: draft vs persisted thread is explicit, active lane count means active child sessions only, preview budget stays labeled Preview when runtime metrics are absent, redirect/promote/handoff open inspectable advisory drafts, and stop language matches actual backend cancellation scope.",
+    "`/sessions` follows the exact count and evidence semantics in the task package: `message_count` stays message-only, any event volume is labeled separately as `event_count`, row/live status provenance is explicit, and the header clearly renders `Visible / Loaded / Total` semantics whenever filtering remains client-side over a paginated subset.",
+    "Any backend/API work needed for the redesign is limited by default to additive shaping on existing endpoints and truth-preserving service fixes; DB migration is only introduced if a required datum cannot be derived safely from existing storage, and any added fields remain optional/null-tolerant for older rows.",
+    "The plan package reference at `docs/tasks/agent-hub-sessions-persona-operator-refactor-reference.md` remains aligned with the implemented hierarchy, truth model, degraded states, shared UI vocabulary, and API/persistence scope decisions.",
+    "A Claude Opus 4.7 design review/guidance pass is completed before closeout, and the final implementation incorporates the accepted guidance or records why any recommendation was intentionally not applied.",
+    "Focused frontend/backend tests cover source badges, action disablement/scope, count semantics, stale expansion invalidation, and keyboard-safe dense interactions; `dt --check --changed-only` passes during iteration and full `dt --check` passes before closeout."
+  ],
+  "objective": "Turn Agent Hub's persona and sessions pages into one cohesive command-center experience that is visually excellent, operationally truthful, and backed by the right frontend/backend contracts for live supervision and forensic session review.",
+  "spirit_anti": "Do not treat this as a purely cosmetic reskin, add generic dashboard filler, or hide data-contract problems under prettier cards. Prefer fewer, clearer controls over duplicated affordances. Do not claim stronger redirect/fork/approve/close semantics than the backend actually provides. Do not hardcode persona naming.",
+  "constraints": [
+    "Authority order is fixed: `docs/persona-operator-contract.md` first, then `docs/tasks/agent-hub-sessions-persona-operator-refactor-reference.md`, then live backend/API truth, then Claude Opus 4.7 guidance where it does not contradict the first three. When current backend payloads are known to be misleading and are corrected in this task, the UI should target the corrected truthful semantics rather than preserving the misleading representation.",
+    "Use the `frontend-design` skill mindset: commit to a distinctive dark operator aesthetic with high scanability and clear hierarchy; avoid generic admin-dashboard aesthetics.",
+    "Treat `/persona` as the active operator cockpit and `/sessions` as the forensic ledger; make them feel like one system with different emphasis, not clones.",
+    "Sessions contract for this task is explicit: requested/effective execution identity comes from `requested_provider`, `requested_model`, `effective_provider`, `effective_model`, `fallback_used`, and `fallback_reason`; row/header render precedence is fixed — prefer effective provider/model display when present, else requested provider/model display when present, else legacy `provider`/`model`, and legacy fields remain compatibility fallback only. When requested and effective differ, effective renders as primary while requested renders as secondary requested context; if `fallback_reason` exists without effective identity, render degraded fallback copy instead of inventing a replacement. Lineage/live context comes from `parent_session_id`, `external_id`, `current_branch`, `workstream_status`, `summary_oneliner`, and `live_activity`; additive optional fields are limited to `display_summary`, `event_count`, `last_activity_at`, `last_heartbeat_at`, `branch_status`, `fork_point_turn`, and `manual_outcome`; numeric `0` means true zero only when a field is present as a number, while `null` or absent additive fields mean unknown, unavailable, not loaded, or not applicable and must not render as zero/empty proof.",
+    "Sessions data-flow choice is explicit: server-side global search/filtering is optional for this task. Truthfulness is satisfied by explicit `Visible / Loaded / Total` semantics if filters remain client-side over loaded pages; do not imply global server-filtered truth unless the backend actually supports it.",
+    "Persona action semantics are explicit: draft vs persisted thread must be visually distinct; active lane count means active child sessions only; redirect/promote/handoff require persisted targets and an inspectable draft before send; approve remains advisory; stop language must match actual backend cancellation scope.",
+    "Backend scope defaults to additive endpoint/service shaping on existing session/persona/workflow surfaces; do not add a DB migration unless a required truthful UI datum cannot be derived safely from existing storage. Evidence for browser verification must be recorded in the task log and final closeout summary.",
+    "Persisted-target contract is explicit for persona lane actions: redirect/promote/handoff only target a concrete `session.id` already present in `fetchSessions` / `fetchSession` or the active-child-session lane set. Authority order is fixed: the focused `fetchSession` detail wins when it resolves, otherwise the current active-child-session lane set governs enablement/selection, and stale disagreement between those sources degrades to inspect-only/disabled until refresh. Draft-only composer state is never a valid target; inactive child sessions remain valid only while their persisted `session.id` is still fetchable/inspectable, and when no persisted session id exists the UI must disable the action and keep only inspect/select behavior.",
+    "Requested/effective identity precedence is field-level, not atomic: provider slot uses `effective_provider -> requested_provider -> provider`, model slot uses `effective_model -> requested_model -> model`, and partial effective pairs must render as mixed-source truth rather than a synthesized fully-effective identity.",
+    "Accessible workflow linkage is explicit: a stage `session_id` is accessible only when it is non-empty and either already present in the loaded operator session inventory or `fetchSession(session_id)` resolves for the current operator/project scope without 403/404/null/mismatch; otherwise the card stays advisory/unlinked.",
+    "Persona active-child-session lane inventory source is explicit: the authoritative lane set comes from `usePersonaRuntime.refresh()` calling `fetchSessions({ status: \"active\", page_size: 100 })`, filtered to persona-root ids plus non-persona children, until focused `fetchSession` detail resolves.",
+    "Stop/cancel scope is explicit for this task: `/persona` may only invoke session-scoped cancel (`cancelSessionStream(sessionId)`) for the focused persisted session, or cancel the optimistic local draft stream before persistence. Do not imply workflow-root, persona-global, or multi-session cancellation.",
+    "Persona truth-source precedence must be rendered field-by-field, not inferred. Execution state comes from `persona.execution_state`; live summary comes from runtime session `live_activity.summary` with Advisory fallback copy only when runtime summary is absent; draft-thread state is local-only; lane count uses child sessions only and counts a lane as active only when `status == active` or `live_activity.status == active`.",
+    "List/detail nullability contract is explicit. `GET /api/sessions` rows always require the core list fields already defined in `SessionListItem`; identity/fallback/live/event summary fields are additive and may be null. `GET /api/sessions/{id}` may extend those rows with messages/context/lineage/runtime details, and the frontend must tolerate null or absent additive fields for older rows.",
+    "Freshness rule is explicit for sessions evidence: latest expansion request wins. If expansion target changes or collapses while detail/events fetches are in flight, stale responses must be discarded rather than painted into the newly selected row; row-level context stays visible while local evidence state reloads or errors.",
+    "Verification setup contract is explicit: before any `2.x` work, the task log must freeze reproducible setup paths for preview-only budget, workflow-stage missing session link, stale sessions expansion race, persisted-child advisory draft, and sessions no-match-over-partial-load proofs, using either live runtime state, focused fixtures/tests, or named seed/setup artifacts.",
+    "Review-gate contract is explicit: the required `specifier` task-shape critique is the implementation-readiness gate, Claude Opus guidance sharpens design but does not replace that gate, and `st critique <task> --stage pre_close` remains mandatory before closeout.",
+    "Phase/order rule is explicit: semantic freeze in `1.1` comes first, Claude Opus review in `1.2` may sharpen hierarchy/interaction wording only within that frozen semantic contract, and no `2.x` implementation starts until both `1.1` and `1.2` are complete. If accepted Opus guidance changes semantics, update the plan + reference doc together and rerun task-shape critique before implementation resumes.",
+    "Task-log artifact contract is explicit: required evidence lives in the SummitFlow task log via `st log <task>`. Each evidence entry should use a compact machine-scannable prefix like `EVIDENCE:<kind>|artifact:<path-or-url>|state:<what-it-proved>|notes:<optional>` so browser/API/test proof is inspectable during closeout.",
+    "`context.files_to_modify` is a starting inventory, not a mandatory fixed touch list. The `1.1` audit may shrink or expand the actual touched files as long as the semantic contract stays intact and the task log records the real implementation surface.",
+    "Inline list-field contract is explicit for `GET /api/sessions`: every row must include `id`, `project_id`, `provider`, `model`, `status`, `agent_slug`, `session_type`, `message_count`, `total_input_tokens`, `total_output_tokens`, `created_at`, and `updated_at`; additive fields such as `requested_*`, `effective_*`, `fallback_*`, `parent_session_id`, `external_id`, `current_branch`, `summary_oneliner`, `live_activity`, and `event_count` may be null or absent on older rows.",
+    "Count semantics are explicit: `Total` comes from `SessionListResponse.total` for the current server-side query scope, `Loaded` is the client-fetched subset so far, and `Visible` is the post-client-filter subset of loaded rows. When `Visible == 0` and `Loaded < Total`, the no-match state must still allow or invite loading more rows rather than implying global absence.",
+    "Workflow linkage contract is explicit: a stage card may deep-link only when the workflow response provides a concrete accessible `session_id`; otherwise it renders as advisory/unlinked state. Missing or stale stage-session links must degrade to proof-friendly copy instead of broken navigation claims.",
+    "Stop precedence is explicit when multiple stoppable states exist: a focused persisted session (`currentSessionId` or focused display session) wins over optimistic local draft cancel; draft-stream cancel is only available when no persisted session target exists.",
+    "DB migration threshold is explicit: no migration or durable schema change is allowed unless the `1.1` API audit proves a required truthful datum is absent from both existing list/detail/session/workflow payloads and cannot be derived additively. That proof and the chosen datum must be logged before any migration work begins.",
+    "Second-opinion source contract is explicit: `specifier` supplies the required task-shape readiness verdict and the required pre-close verdict; Claude Opus 4.7 is design guidance only and does not satisfy the task second-opinion gate."
+  ],
+  "testing_strategy": [
+    "Add or update focused frontend tests for persona workspace and sessions interactions, explicitly covering source badges, action disablement/scope, visible-loaded-total labeling, stale expansion invalidation, and keyboard-safe dense controls including row focus movement, Enter/Space expand-toggle, and Escape collapse behavior.",
+    "Add or update focused backend tests for any new or adjusted session/persona/workflow/API fields, especially message_count vs event_count semantics, requested-vs-effective identity, display summary or lineage fields, and any additive automation/workflow linkage.",
+    "Run targeted frontend/backend test commands for touched suites first, then `dt --check --changed-only` during iteration, then full `dt --check` before closeout.",
+    "Use browser/runtime verification against host-reachable Agent Hub URLs for `/persona` and `/sessions`, including degraded/no-match paths, to confirm the shipped UI hierarchy and state semantics.",
+    "Add contract tests that prove persona lane actions are disabled without a persisted target session id, and that advisory redirect/promote/handoff drafts never masquerade as immediate backend mutations.",
+    "Add focused tests that lock the stop/cancel scope, active-lane count matrix (`status == active` or `live_activity.status == active` only), mixed requested/effective model identity states, and latest-request-wins stale expansion handling.",
+    "Browser/runtime verification must explicitly capture preview-only budget labeling, advisory lane-draft before send, sessions no-match over a partially loaded subset, an expanded-detail race/error path, and accessibility proof for focus order plus Enter/Space row expansion and Escape collapse in addition to the main happy-path screens.",
+    "Before any `2.x` implementation work, record one `EVIDENCE:setup` task-log entry that maps each required degraded/browser proof to its reproducible setup path: preview-only budget, workflow-stage missing session link, stale expansion race, persisted-child advisory draft, and sessions no-match-over-partial-load.",
+    "Workflow-link verification must treat `session_id` as accessible only when the id already exists in the loaded operator session inventory or `fetchSession(session_id)` resolves in-scope; null, 403/404, or mismatch cases must be captured as advisory/unlinked proof rather than navigation success.",
+    "API verification must include explicit list-row payload assertions for the required `GET /api/sessions` fields, null-vs-absent additive fields, and degraded requested/effective identity states before frontend rendering work is considered grounded.",
+    "Closeout proof must include SummitFlow task-log evidence entries for browser captures, API payload examples, focused test runs, `dt --check --changed-only`, full `dt --check`, and the migration/no-migration decision."
+  ],
+  "execution_contract": {
+    "mode": "runtime_eval_plus_design",
+    "target_urls": [
+      "http://192.168.8.244:3003/persona",
+      "http://192.168.8.244:3003/sessions"
+    ],
+    "user_flows": [
+      {
+        "flow_id": "persona-operator-cockpit",
+        "title": "Inspect live persona state, open a thread, and verify operator truth labels",
+        "target_url": "http://192.168.8.244:3003/persona",
+        "actions": [
+          "Load the persona workspace and inspect the sticky command/header surface.",
+          "Verify runtime state, source badges, and lane/workflow surfaces read truthfully and consistently.",
+          "Open or switch threads and confirm draft vs persisted semantics remain explicit."
+        ],
+        "expected_outcomes": [
+          "The page reads like an operator cockpit rather than a generic chat shell.",
+          "Action labels match actual backend scope and do not over-promise.",
+          "Runtime vs preview vs advisory vs draft state is legible without reading code."
+        ]
+      },
+      {
+        "flow_id": "sessions-ledger-review",
+        "title": "Scan the sessions ledger, filter results, and inspect a detail view",
+        "target_url": "http://192.168.8.244:3003/sessions",
+        "actions": [
+          "Load the sessions page and inspect the command header, counts, and filter state.",
+          "Filter/search/sort the ledger and confirm visible-count feedback remains truthful.",
+          "Expand a session detail/evidence view and verify the hierarchy and data freshness are clear."
+        ],
+        "expected_outcomes": [
+          "The page reads like a forensic ledger aligned with the persona cockpit aesthetic.",
+          "Visible vs loaded vs total state is understandable.",
+          "Expanded details present evidence and lineage cleanly without confusing stale content."
+        ]
+      }
+    ],
+    "evidence_requirements": [
+      "Before/after browser evidence for `/persona` and `/sessions` captured from the same host-reachable URLs.",
+      "One explicit degraded-state capture for preview-only or no-match behavior.",
+      "Task-log note pointing to the authoritative plan/reference package used during implementation.",
+      "Explicit note of any new backend/API contract added for truthfulness and whether a DB migration was avoided or required.",
+      "Record of Claude Opus 4.7 design review guidance and what was adopted.",
+      "Capture one advisory lane-action draft on a persisted child session to prove the UI distinguishes inspectable operator intent from backend mutation.",
+      "Capture one sessions expanded-detail race/error path that proves stale responses are discarded and row context remains visible.",
+      "Record at least one `EVIDENCE:api` task-log entry showing the exact list-row required fields plus one degraded/null additive-field example.",
+      "Record one `EVIDENCE:setup` task-log entry naming the reproducible setup/fixture path for preview-only budget, missing workflow session link, stale expansion race, persisted-child advisory draft, and sessions no-match-over-partial-load states.",
+      "Record one `EVIDENCE:browser` entry for the sessions no-match-over-partial-load state and one for the advisory workflow/lane draft state before send."
+    ],
+    "design_criteria": {
+      "shared_language": "Both pages must share one command-center visual language while preserving different operational roles.",
+      "truthfulness": "Runtime/session/preview/advisory/draft provenance must be explicit in the UI.",
+      "hierarchy": "Primary actions and live state must dominate; secondary intelligence belongs in rails/drawers, not duplicated headers.",
+      "evidence": "The operator must be able to move from summary to proof without losing context.",
+      "accessibility": "Dense interactions still need clear focus, readable contrast, and non-brittle control semantics.",
+      "authority_order": "When aesthetic guidance conflicts with backend truth, truthful semantics win.",
+      "shared_rules": "Exactly one primary command bar and one primary evidence surface per page."
+    },
+    "risk_notes": [
+      "Sessions frontend currently filters client-side over a paginated subset, which can create false empty states unless data flow is adjusted.",
+      "Persona UI currently mixes runtime/feed/draft/preview truth layers; the redesign must not flatten these into misleading certainty.",
+      "Backend session/persona contracts may need additive expansion to support truthful requested-vs-effective model, automation lineage, and live-state presentation."
+    ],
+    "api_checks": [
+      {
+        "endpoint": "GET /api/sessions",
+        "must_prove": [
+          "message_count is message-only",
+          "requested/effective model identity fields remain truthful when present",
+          "Visible / Loaded / Total UI semantics are supportable by the returned payload",
+          "rows always keep list-level required fields while additive identity/live/event fields may be null without the UI inventing stronger truth",
+          "Total represents the current server-side query scope, while Loaded/Visible remain client-side semantics over fetched rows"
+        ]
+      },
+      {
+        "endpoint": "GET /api/sessions/{id}",
+        "must_prove": [
+          "detail view receives truthful summary/lineage/live metadata required by the redesign",
+          "older rows tolerate any additive optional fields",
+          "detail-only fields remain optional/additive and stale expansion responses are discarded when the selected row changes"
+        ]
+      },
+      {
+        "endpoint": "POST /api/orchestration/workflow",
+        "must_prove": [
+          "workflow stage cards can link to real session_id values without implying a stronger workflow primitive",
+          "stage cards degrade to advisory/unlinked state when a stage response lacks a concrete accessible session_id"
+        ]
+      },
+      {
+        "endpoint": "POST /api/complete/cancel",
+        "must_prove": [
+          "persona stop control is session-scoped and does not imply workflow-root cancellation",
+          "UI disablement/copy matches whether a focused persisted session or only an optimistic draft stream is stoppable"
+        ]
+      }
+    ],
+    "negative_cases": [
+      {
+        "case_id": "persona-preview-only-budget",
+        "expectation": "When only preview budget exists, the panel renders Preview semantics and does not imply live runtime certainty."
+      },
+      {
+        "case_id": "sessions-client-side-no-match",
+        "expectation": "When filters/search produce no visible rows over a loaded subset, the page explains Visible vs Loaded vs Total instead of implying global absence."
+      },
+      {
+        "case_id": "sessions-expanded-detail-error",
+        "expectation": "If detail/evidence fetch fails, the row context remains visible and only the local evidence panel enters an error state."
+      },
+      {
+        "case_id": "persona-active-lane-definition",
+        "expectation": "Lane count reflects active child sessions only; active root persona sessions do not inflate the lane badge."
+      },
+      {
+        "case_id": "persona-advisory-action-without-persisted-target",
+        "expectation": "Redirect/promote/handoff stay disabled or inspect-only when no concrete persisted session id exists; draft-only state must not appear actionable as a lane target."
+      },
+      {
+        "case_id": "sessions-stale-expansion-response",
+        "expectation": "If the operator collapses or switches rows while detail/events fetches are in flight, stale responses are dropped and do not overwrite the newly selected evidence panel."
+      },
+      {
+        "case_id": "sessions-visible-zero-loaded-partial",
+        "expectation": "When client-side filters hide all currently loaded rows but more pages remain, the UI explains Visible/Loaded/Total semantics and still invites loading more results."
+      },
+      {
+        "case_id": "workflow-stage-missing-session-link",
+        "expectation": "If a workflow stage lacks a concrete accessible session_id, the card remains advisory/unlinked and does not promise direct navigation."
+      },
+      {
+        "case_id": "persona-stop-with-both-session-and-draft",
+        "expectation": "When a focused persisted session and an optimistic draft stream both exist, stop targets the persisted session first; local draft cancel is only exposed when no persisted session target exists."
+      }
+    ]
+  },
+  "context": {
+    "files_to_modify": [
+      "frontend/src/app/persona/page.tsx",
+      "frontend/src/app/persona/components/UnifiedPersonaWorkspace.tsx",
+      "frontend/src/app/persona/components/PersonaOperatorDeck.tsx",
+      "frontend/src/app/persona/components/PersonaRunHud.tsx",
+      "frontend/src/app/persona/components/PersonaWorkflowComposer.tsx",
+      "frontend/src/app/persona/components/PersonaBackgroundInbox.tsx",
+      "frontend/src/app/persona/components/PersonaBlockerPanel.tsx",
+      "frontend/src/app/persona/components/PersonaPromptBudgetPanel.tsx",
+      "frontend/src/app/persona/components/WorkspaceChatFooter.tsx",
+      "frontend/src/app/persona/components/PersonaThreadHeader.tsx",
+      "frontend/src/app/persona/components/workspace-transcript.tsx",
+      "frontend/src/app/persona/hooks/usePersonaRuntime.ts",
+      "frontend/src/app/sessions/page.tsx",
+      "frontend/src/app/sessions/components/SessionsHeader.tsx",
+      "frontend/src/app/sessions/components/SessionTable.tsx",
+      "frontend/src/app/sessions/components/SessionTableRow.tsx",
+      "frontend/src/app/sessions/components/ExpandedRowContent.tsx",
+      "frontend/src/app/sessions/components/ErrorAlert.tsx",
+      "frontend/src/app/sessions/components/InfiniteScrollFooter.tsx",
+      "frontend/src/app/sessions/hooks/useSessionsData.ts",
+      "frontend/src/app/sessions/hooks/useSessionFilters.ts",
+      "frontend/src/app/sessions/hooks/useSessionExpansion.ts",
+      "frontend/src/lib/api/sessions.ts",
+      "backend/app/api/sessions.py",
+      "backend/app/api/schemas/sessions.py",
+      "backend/app/api/persona/stream_queries.py",
+      "backend/app/api/persona/activity.py",
+      "backend/app/api/persona/schemas.py",
+      "backend/app/api/endpoints/workflow.py",
+      "backend/app/services/session_queries.py",
+      "backend/app/services/session_responses.py",
+      "backend/app/services/session_transforms.py",
+      "backend/app/services/session_branching.py",
+      "backend/app/services/session_display_summary.py",
+      "backend/app/services/persona_service.py"
+    ],
+    "files_to_create": [],
+    "risks": [
+      "Frontend-only visual cleanup could leave the UI prettier but still misleading unless the data contracts are tightened too.",
+      "Changing shared session response shapes may require coordinated frontend and client/test updates.",
+      "Persona controls must remain truthful about advisory-only workflow and lane semantics while still feeling polished and decisive.",
+      "If the redesign truly needs durable automation/run lineage beyond existing fields, a narrowly scoped migration may still be necessary and should be justified explicitly."
+    ],
+    "references": [
+      {
+        "title": "Persona operator contract",
+        "url": "docs/persona-operator-contract.md"
+      },
+      {
+        "title": "Sessions + persona operator refactor reference",
+        "url": "docs/tasks/agent-hub-sessions-persona-operator-refactor-reference.md"
+      },
+      {
+        "title": "Implementation authority note",
+        "url": "Latest imported plan and reference doc are authoritative; record updates in task log after re-import."
+      }
+    ],
+    "second_opinion": {
+      "required": true,
+      "stage": "both",
+      "status": "pending",
+      "summary": "Specifier provides both required gates: task-shape critique before implementation and pre-close critique before closure. Claude Opus guidance sharpens design only; it does not replace either second-opinion gate."
+    }
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "research",
+      "subtask_type": "exploration",
+      "description": "Lock the shared truth model and current UX deficiencies across `/persona`, `/sessions`, and their backing APIs before implementation.",
+      "steps": [
+        {
+          "description": "Audit the current `/persona` and `/sessions` frontend surfaces, related hooks, and backing backend/session/persona APIs.",
+          "spec": {
+            "detail": "Use the current pages, contract docs, and browser/runtime evidence to identify where the UI over-promises, duplicates controls, or hides provenance."
+          }
+        },
+        {
+          "description": "Freeze the operator design package in the repo-local reference doc before major implementation begins.",
+          "spec": {
+            "detail": "The reference must freeze authority order, field-level truth sources, degraded states, action semantics, and shared surface rules before implementation begins."
+          }
+        },
+        {
+          "description": "Record in the task log that the latest imported plan plus repo-local reference doc are the authoritative package for implementation.",
+          "spec": {
+            "detail": "This prevents stale critique summaries from outranking the refreshed task package."
+          }
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "design",
+      "subtask_type": "design-review",
+      "description": "Run a Claude Opus 4.7 design review/guidance pass and fold the accepted guidance into the implementation package.",
+      "depends_on": [
+        "1.1"
+      ],
+      "steps": [
+        {
+          "description": "Provide Opus 4.7 with current page evidence, contract constraints, and the offline reference package.",
+          "spec": {
+            "detail": "The review must judge cohesion, truthfulness of state/action semantics, hierarchy, evidence readability, degraded states, and whether the aesthetic matches a serious operator cockpit; frontend implementation starts only after this guidance is recorded."
+          }
+        },
+        {
+          "description": "Record the accepted guidance and update the implementation package if the review materially sharpens the design direction or interaction model.",
+          "spec": {
+            "detail": "Do not treat the review as optional polish; integrate it into the final design decisions or explicitly document why a recommendation was rejected."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "description": "Expose or correct the session/persona/backend contracts needed for truthful operator UX.",
+      "depends_on": [
+        "1.1",
+        "1.2"
+      ],
+      "steps": [
+        {
+          "description": "Fix correctness gaps in session data used by the UI, such as misleading counts or missing display/lineage/live metadata.",
+          "spec": {
+            "detail": "Prefer exact fixes on existing session/persona/workflow contracts. If the UI needs total event volume, add event_count separately and keep message_count message-only. Preserve requested/effective execution identity truth."
+          }
+        },
+        {
+          "description": "Add only the narrowly named additive API or schema support needed for truthful persona/session rendering.",
+          "spec": {
+            "detail": "No DB migration by default. Limit scope to the named additive fields in this package (`requested_*`, `effective_*`, `display_summary`, `event_count`, `last_activity_at`, `last_heartbeat_at`, `branch_status`, `fork_point_turn`, `manual_outcome`) unless the `1.1` audit logs one specific missing truthful datum absent from existing list/detail/workflow payloads; only then may a narrow additive API/schema change target that datum, and the task log must record the proof before implementation continues."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "subtask_type": "ui-design",
+      "description": "Refactor `/persona` into a truthful, cohesive operator cockpit using the shared command-center design language.",
+      "depends_on": [
+        "1.2",
+        "2.1"
+      ],
+      "steps": [
+        {
+          "description": "Collapse duplicated command surfaces into one clear hierarchy and make action labels match real backend scope.",
+          "spec": {
+            "detail": "Draft vs persisted thread, stop scope, pause/resume semantics, advisory actions, lane count, and workflow-stage linkage must follow the exact action/truth matrix in the reference doc."
+          }
+        },
+        {
+          "description": "Rebuild the supporting rails/panels so blockers, budget, workflow stages, lane inbox, and transcript evidence all share the same provenance-first visual language.",
+          "spec": {
+            "detail": "Use explicit source badges and let the operator move from summary to proof without losing context."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "frontend",
+      "subtask_type": "ui-design",
+      "description": "Refactor `/sessions` into a forensic session ledger that shares the cockpit design language while optimizing scanability and evidence review.",
+      "depends_on": [
+        "1.2",
+        "2.1"
+      ],
+      "steps": [
+        {
+          "description": "Rework filtering, counts, row interactions, and live-state presentation so the sessions page remains truthful and accessible under pagination and live data.",
+          "spec": {
+            "detail": "Render Visible / Loaded / Total semantics honestly whenever filters remain client-side over loaded pages, and remove nested-button row semantics plus placeholder live indicators."
+          }
+        },
+        {
+          "description": "Redesign detail expansion/evidence presentation to show identity, lineage, summaries, and events cleanly without stale-response races or needlessly heavy first paint.",
+          "spec": {
+            "detail": "Expanded details must preserve row context on local fetch failure, ignore out-of-order responses for rows that are no longer expanded, collapse or reset when filters hide the expanded row, and make requested/effective identity plus evidence lineage legible."
+          }
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "verification",
+      "subtask_type": "test",
+      "description": "Lock the refactor with focused tests, runtime/browser verification, and final quality review.",
+      "depends_on": [
+        "2.2",
+        "2.3"
+      ],
+      "steps": [
+        {
+          "description": "Update and run focused frontend/backend tests for touched persona, sessions, workflow, and API contract areas.",
+          "spec": {
+            "detail": "Tests must assert source badges, action disablement/scope, count semantics, stale expansion invalidation, and keyboard-safe dense interactions rather than relying on snapshots alone."
+          }
+        },
+        {
+          "description": "Run runtime/browser verification on `/persona` and `/sessions`, then `dt --check --changed-only`, then full `dt --check` before closeout.",
+          "spec": {
+            "detail": "Use host-reachable URLs and capture both steady-state and degraded-state evidence in the task log/final closeout that the new hierarchy, provenance labels, and no-match/error behaviors are correct."
+          }
+        }
+      ]
+    }
+  ]
+}

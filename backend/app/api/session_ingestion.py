@@ -13,7 +13,6 @@ from app.api._session_request_identity import (
 )
 from app.api.schemas.sessions import SessionResponse
 from app.db import get_db
-from app.services.session_helpers import build_session_response, get_session_or_404
 from app.services.session_ingestion import (
     AppendNormalizedEventsRequest,
     AppendNormalizedEventsResult,
@@ -31,6 +30,7 @@ from app.services.session_ingestion import (
     ingest_transcript_events,
     upsert_session,
 )
+from app.services.session_queries import get_session_or_404
 
 router = APIRouter(prefix="/session-ingestion", tags=["session-ingestion"])
 
@@ -55,6 +55,8 @@ async def upsert_session_endpoint(
     include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionUpsertResponse:
     """Create or update a session using the canonical ingestion contract."""
+    from app.services.session_helpers import build_session_response
+
     enriched_request = enrich_session_upsert_request(request, http_request)
     try:
         session, result = await upsert_session(db, enriched_request)
@@ -80,6 +82,8 @@ async def heartbeat_session_endpoint(
     include_session: Annotated[bool, Query(description="Include full session snapshot")] = True,
 ) -> SessionHeartbeatResponse:
     """Apply a canonical heartbeat update to an existing session."""
+    from app.services.session_helpers import build_session_response
+
     enriched_request = enrich_session_heartbeat_request(request, http_request)
     try:
         session, result = await heartbeat_session(db, session_id, enriched_request)

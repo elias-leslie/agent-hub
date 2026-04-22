@@ -1,32 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderHook } from "@testing-library/react";
 import SessionsPage from "@/app/sessions/page";
+import { useSessionExpansion } from "@/app/sessions/hooks/useSessionExpansion";
 
-// Mock next/link
-vi.mock("next/link", () => ({
-  default: ({
-    href,
-    children,
-    ...props
-  }: {
-    href: string;
-    children: React.ReactNode;
-  }) => (
-    <a href={href} {...props}>
-      {children}
-    </a>
+vi.mock("@/components/chat/use-models", () => ({
+  useModels: () => [],
+}));
+
+vi.mock("@/components/timeline", () => ({
+  EventTimeline: ({ events }: { events: Array<unknown> }) => (
+    <div data-testid="event-timeline">{events.length} events</div>
   ),
 }));
 
-// Mock the API module
 vi.mock("@/lib/api", () => ({
   fetchSessions: vi.fn(),
   fetchSession: vi.fn(),
   fetchAllSessionEvents: vi.fn(),
 }));
 
-import { fetchAllSessionEvents, fetchSessions } from "@/lib/api";
+import {
+  fetchAllSessionEvents,
+  fetchSession,
+  fetchSessions,
+} from "@/lib/api";
 
 const mockSessions = {
   sessions: [
@@ -35,10 +34,34 @@ const mockSessions = {
       project_id: "test-project",
       provider: "claude",
       model: "claude-sonnet-4-6",
+      requested_provider: "claude",
+      requested_model: "claude-opus-4-7",
+      effective_provider: "claude",
+      effective_model: "claude-sonnet-4-6",
+      fallback_used: true,
+      fallback_reason: "rate_limit",
       status: "active",
       agent_slug: "code_generation",
       session_type: "completion",
+      summary_oneliner: "dispatch parser cleared branch drift",
+      live_activity: {
+        phase: "tool",
+        status: "running",
+        health: "healthy",
+        stalled: false,
+        outstanding_tool_calls: 0,
+        tool_calls_count: 3,
+        files_touched: [],
+        lifecycle_state: "working",
+        lifecycle_reason_codes: [],
+        dead_signals: [],
+        anti_reap_signals: [],
+        has_owner_lane: true,
+        has_specialist_lane: false,
+        reapable: false,
+      },
       message_count: 5,
+      event_count: 12,
       total_input_tokens: 1500,
       total_output_tokens: 800,
       created_at: "2026-01-01T00:00:00Z",
@@ -49,10 +72,18 @@ const mockSessions = {
       project_id: "test-project",
       provider: "gemini",
       model: "gemini-3-flash",
+      requested_provider: "gemini",
+      requested_model: "gemini-3-flash",
+      effective_provider: "gemini",
+      effective_model: "gemini-3-flash",
+      fallback_used: false,
+      fallback_reason: null,
       status: "completed",
       agent_slug: null,
       session_type: "chat",
+      summary_oneliner: "verification passed cleanly",
       message_count: 10,
+      event_count: 20,
       total_input_tokens: 3200,
       total_output_tokens: 1200,
       created_at: "2026-01-02T00:00:00Z",
@@ -72,6 +103,7 @@ function createWrapper() {
       },
     },
   });
+
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -79,142 +111,131 @@ function createWrapper() {
   };
 }
 
+function renderPage() {
+  return render(<SessionsPage />, { wrapper: createWrapper() });
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("SessionsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(fetchSessions).mockResolvedValue(mockSessions);
+    vi.mocked(fetchSession).mockResolvedValue({
+      id: "session-123-abc",
+      project_id: "test-project",
+      provider: "claude",
+      model: "claude-sonnet-4-6",
+      requested_provider: "claude",
+      requested_model: "claude-opus-4-7",
+      effective_provider: "claude",
+      effective_model: "claude-sonnet-4-6",
+      fallback_used: true,
+      fallback_reason: "rate_limit",
+      status: "active",
+      agent_slug: "code_generation",
+      session_type: "completion",
+      live_activity: null,
+      messages: [],
+      context_usage: null,
+      agent_token_breakdown: [],
+      message_count: 5,
+      event_count: 12,
+      total_input_tokens: 1500,
+      total_output_tokens: 800,
+      created_at: "2026-01-01T00:00:00Z",
+      updated_at: "2026-01-07T10:00:00Z",
+    });
     vi.mocked(fetchAllSessionEvents).mockResolvedValue({
       session_id: "session-123-abc",
       events: [],
-      total: 0,
-      max_turn: 0,
+      total: 12,
+      max_turn: 3,
     });
   });
 
-  it("renders sessions page header", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
-
-    expect(screen.getByText("Sessions")).toBeInTheDocument();
-  });
-
-  it("displays session count after loading", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("shows explicit visible, loaded, and total counts with loaded-subset scope", async () => {
+    renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("2 total")).toBeInTheDocument();
+      expect(screen.getByTestId("sessions-visible-count")).toHaveTextContent("2");
+      expect(screen.getByTestId("sessions-loaded-count")).toHaveTextContent("2");
+      expect(screen.getByTestId("sessions-total-count")).toHaveTextContent("2");
+    });
+
+    expect(screen.getByTestId("sessions-filter-scope")).toHaveTextContent(
+      /loaded subset/i,
+    );
+  });
+
+  it("updates visible count when search filters the loaded subset", async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText(/search loaded subset/i), {
+      target: { value: "456" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("sessions-visible-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("sessions-loaded-count")).toHaveTextContent("2");
+      expect(screen.getByTestId("sessions-total-count")).toHaveTextContent("2");
     });
   });
 
-  it("shows sessions after loading", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("surfaces requested-to-effective model identity, fallback reason, and separate message/event counts", async () => {
+    renderPage();
 
     await waitFor(() => {
-      // Sessions are displayed by project_id
-      const projectIds = screen.getAllByText("test-project");
-      expect(projectIds.length).toBe(2);
+      expect(screen.getByText(/claude-opus-4-7/i)).toBeInTheDocument();
+      expect(screen.getByText(/claude-sonnet-4-6/i)).toBeInTheDocument();
+      expect(screen.getByText(/fallback: rate_limit/i)).toBeInTheDocument();
+      expect(screen.getByText("u+a:5")).toBeInTheDocument();
+      expect(screen.getByText("events:12")).toBeInTheDocument();
     });
   });
 
-  it("shows status filter dropdown", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("uses explicit row controls instead of a whole-row button", async () => {
+    renderPage();
 
-    expect(screen.getByTestId("filter-status")).toBeInTheDocument();
-    expect(screen.getByText("All status")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Failed" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /expand session session-123-abc/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /filter model claude-sonnet-4-6/i })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: /test-project/i })).not.toBeInTheDocument();
   });
 
-  it("filters by status when selected", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("shows a no-match state that tells operators filters only apply to the loaded subset", async () => {
+    renderPage();
 
     await waitFor(() => {
-      expect(fetchSessions).toHaveBeenCalled();
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
     });
 
-    // Change status filter using data-testid
-    const select = screen.getByTestId("filter-status");
-    fireEvent.change(select, { target: { value: "active" } });
+    fireEvent.change(screen.getByPlaceholderText(/search loaded subset/i), {
+      target: { value: "no-match" },
+    });
 
     await waitFor(() => {
-      const calls = vi.mocked(fetchSessions).mock.calls;
-      const lastCall = calls[calls.length - 1];
-      expect(lastCall[0]).toEqual(
-        expect.objectContaining({
-          status: "active",
-        }),
-      );
+      expect(screen.getByText(/no loaded sessions match the current filters/i)).toBeInTheDocument();
     });
+
+    expect(screen.getByText(/search and filters apply to loaded sessions only/i)).toBeInTheDocument();
   });
 
-  it("shows search input", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
-
-    expect(
-      screen.getByPlaceholderText("Search..."),
-    ).toBeInTheDocument();
-  });
-
-  it("hides benchmark traffic by default and can show it again", async () => {
-    vi.mocked(fetchSessions).mockResolvedValue({
-      sessions: [
-        ...mockSessions.sessions,
-        {
-          id: "session-benchmark",
-          project_id: "agent-hub",
-          provider: "claude",
-          model: "claude-opus-4-6",
-          status: "failed",
-          agent_slug: "chat",
-          session_type: "completion",
-          request_source: "manual/caveman-opus-consult",
-          attribution_kind: "benchmark",
-          attribution_label: "Benchmark",
-          attribution_detail: "manual/caveman-opus-consult",
-          message_count: 2,
-          total_input_tokens: 0,
-          total_output_tokens: 0,
-          created_at: "2026-01-03T00:00:00Z",
-          updated_at: "2026-01-03T00:00:00Z",
-        },
-      ],
-      total: 3,
-      page: 1,
-      page_size: 20,
-    });
-
-    render(<SessionsPage />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      expect(screen.queryByText("agent-hub")).not.toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId("toggle-benchmark-traffic"));
-
-    await waitFor(() => {
-      expect(screen.getByText("agent-hub")).toBeInTheDocument();
-      expect(screen.getByText("Benchmark")).toBeInTheDocument();
-    });
-  });
-
-  it("filters sessions by search query", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
-
-    await waitFor(() => {
-      const sessionIds = screen.getAllByText("test-project");
-      expect(sessionIds.length).toBe(2);
-    });
-
-    // Search for something specific
-    const searchInput = screen.getByPlaceholderText("Search...");
-    fireEvent.change(searchInput, { target: { value: "456" } });
-
-    // Only second session should remain (contains "456" in its ID)
-    await waitFor(() => {
-      const sessionIds = screen.getAllByText("test-project");
-      expect(sessionIds.length).toBe(1);
-    });
-  });
-
-  it("shows empty state when no sessions", async () => {
+  it("shows an empty-data state when the server returns no sessions", async () => {
     vi.mocked(fetchSessions).mockResolvedValue({
       sessions: [],
       total: 0,
@@ -222,36 +243,160 @@ describe("SessionsPage", () => {
       page_size: 20,
     });
 
-    render(<SessionsPage />, { wrapper: createWrapper() });
+    renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("No sessions found")).toBeInTheDocument();
+      expect(screen.getByText(/no sessions loaded yet/i)).toBeInTheDocument();
     });
   });
 
-  it("shows token counts for each session", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("shows a retryable error state when the sessions query fails", async () => {
+    vi.mocked(fetchSessions)
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(mockSessions);
+
+    renderPage();
 
     await waitFor(() => {
-      // Token pairs are displayed as "input / output" format
-      // First session: 1500 / 800 -> "1.5K / 800"
-      // Second session: 3200 / 1200 -> "3.2K / 1.2K"
-      expect(screen.getByText("1.5K / 800")).toBeInTheDocument();
-      expect(screen.getByText("3.2K / 1.2K")).toBeInTheDocument();
+      expect(screen.getByText(/unable to load sessions ledger/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /retry sessions/i }));
+
+    await waitFor(() => {
+      expect(fetchSessions).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
     });
   });
 
-  it("has clickable session rows that can expand", async () => {
-    render(<SessionsPage />, { wrapper: createWrapper() });
+  it("keeps row context visible and shows a local evidence error when detail fetch fails", async () => {
+    vi.mocked(fetchSession).mockRejectedValueOnce(new Error("detail boom"));
+    vi.mocked(fetchAllSessionEvents).mockRejectedValueOnce(new Error("detail boom"));
+
+    renderPage();
 
     await waitFor(() => {
-      const sessionIds = screen.getAllByText("test-project");
-      expect(sessionIds.length).toBe(2);
+      expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
     });
 
-    // Rows are buttons, not links
-    const buttons = screen.getAllByRole("button");
-    // There should be multiple buttons (rows plus controls)
-    expect(buttons.length).toBeGreaterThan(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: /expand session session-123-abc/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/evidence unavailable for this session/i)).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("dispatch parser cleared branch drift")).toBeInTheDocument();
+    expect(screen.queryByText(/unable to load sessions ledger/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("useSessionExpansion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("drops stale expansion responses and preserves the most recently requested session", async () => {
+    const aSession = createDeferred<{ id: string }>();
+    const aEvents = createDeferred<{
+      session_id: string;
+      events: Array<unknown>;
+      total: number;
+      max_turn: number;
+    }>();
+    const bSession = createDeferred<{ id: string }>();
+    const bEvents = createDeferred<{
+      session_id: string;
+      events: Array<unknown>;
+      total: number;
+      max_turn: number;
+    }>();
+
+    vi.mocked(fetchSession).mockImplementation((sessionId: string) => {
+      if (sessionId === "session-a") {
+        return aSession.promise as never;
+      }
+      return bSession.promise as never;
+    });
+
+    vi.mocked(fetchAllSessionEvents).mockImplementation((sessionId: string) => {
+      if (sessionId === "session-a") {
+        return aEvents.promise as never;
+      }
+      return bEvents.promise as never;
+    });
+
+    const { result } = renderHook(() => useSessionExpansion());
+
+    await act(async () => {
+      void result.current.handleToggleExpand("session-a");
+      void result.current.handleToggleExpand("session-b");
+    });
+
+    await act(async () => {
+      bSession.resolve({ id: "session-b" });
+      bEvents.resolve({ session_id: "session-b", events: [], total: 0, max_turn: 0 });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(result.current.expandedSessionId).toBe("session-b");
+      expect(result.current.expandedSessionData).toEqual({ id: "session-b" });
+      expect(result.current.expandedEventsData).toEqual({
+        session_id: "session-b",
+        events: [],
+        total: 0,
+        max_turn: 0,
+      });
+      expect(result.current.isLoadingDetails).toBe(false);
+    });
+
+    await act(async () => {
+      aSession.resolve({ id: "session-a" });
+      aEvents.resolve({ session_id: "session-a", events: [], total: 0, max_turn: 0 });
+      await Promise.resolve();
+    });
+
+    expect(result.current.expandedSessionId).toBe("session-b");
+    expect(result.current.expandedSessionData).toEqual({ id: "session-b" });
+    expect(result.current.expandedEventsData).toEqual({
+      session_id: "session-b",
+      events: [],
+      total: 0,
+      max_turn: 0,
+    });
+  });
+
+  it("clears both session and evidence data when expansion is cleared", async () => {
+    vi.mocked(fetchSession).mockResolvedValue({ id: "session-a" } as never);
+    vi.mocked(fetchAllSessionEvents).mockResolvedValue({
+      session_id: "session-a",
+      events: [],
+      total: 0,
+      max_turn: 0,
+    } as never);
+
+    const { result } = renderHook(() => useSessionExpansion());
+
+    await act(async () => {
+      await result.current.handleToggleExpand("session-a");
+    });
+
+    expect(result.current.expandedSessionData).toEqual({ id: "session-a" });
+    expect(result.current.expandedEventsData).toEqual({
+      session_id: "session-a",
+      events: [],
+      total: 0,
+      max_turn: 0,
+    });
+
+    act(() => {
+      result.current.clearExpansion();
+    });
+
+    expect(result.current.expandedSessionId).toBeNull();
+    expect(result.current.expandedSessionData).toBeNull();
+    expect(result.current.expandedEventsData).toBeNull();
   });
 });

@@ -102,6 +102,7 @@ class LiveActivityResponse(BaseModel):
 
     phase: str
     status: str
+    source: str = Field(default="runtime", description="Origin of live activity payload: runtime or fallback")
     summary: str | None = None
     health: str
     stalled: bool = False
@@ -142,6 +143,14 @@ class LiveActivityResponse(BaseModel):
     has_specialist_lane: bool = Field(default=False, description="Whether a specialist lane still points at this session")
     reapable: bool = Field(default=False, description="Whether the session is safe for conservative auto-reaping")
     reapable_reason: str | None = Field(default=None, description="Compact reason string for reapable sessions")
+    status_source: str = Field(
+        default="session",
+        description="Authority for row status beacon: session when persisted status wins, runtime when live activity drives the beacon",
+    )
+    status_matches_session: bool = Field(
+        default=True,
+        description="Whether live runtime status matches the persisted session status",
+    )
 
 
 class SessionResponse(BaseModel):
@@ -179,6 +188,14 @@ class SessionResponse(BaseModel):
     tmux_pane_id: str | None = Field(default=None, description="tmux pane id when applicable")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
+    child_session_count: int | None = Field(
+        default=None,
+        description="Count of persisted child sessions linked by parent_session_id",
+    )
+    active_child_session_count: int | None = Field(
+        default=None,
+        description="Count of child sessions currently considered active from persisted status/live activity",
+    )
     batch_task_ids: list[str] = Field(default_factory=list, description="Task ids linked to a batch orchestrator session")
     declared_scope_paths: list[str] = Field(default_factory=list)
     observed_read_paths: list[str] = Field(default_factory=list)
@@ -186,8 +203,24 @@ class SessionResponse(BaseModel):
     scope_confidence: str | None = Field(default=None, description="declared | observed_write | observed_read | unknown")
     created_at: datetime
     updated_at: datetime
+    status_source: str = Field(
+        default="session",
+        description="Authority for row/detail status beacon: session or runtime",
+    )
+    status_matches_live: bool = Field(
+        default=True,
+        description="Whether persisted session status matches current runtime status",
+    )
     live_activity: LiveActivityResponse | None = Field(
         default=None, description="Current live execution state"
+    )
+    message_count: int | None = Field(
+        default=None,
+        description="Count of persisted user and assistant messages",
+    )
+    event_count: int | None = Field(
+        default=None,
+        description="Count of persisted session events",
     )
     messages: list[MessageResponse] = Field(default_factory=list)
     context_usage: ContextUsageResponse | None = Field(
@@ -235,6 +268,14 @@ class SessionListItem(BaseModel):
     tmux_pane_id: str | None = Field(default=None, description="tmux pane id when applicable")
     workstream_status: str | None = Field(default=None, description="Lane lifecycle status")
     summary_oneliner: str | None = Field(default=None, description="One-line session summary")
+    child_session_count: int | None = Field(
+        default=None,
+        description="Count of persisted child sessions linked by parent_session_id",
+    )
+    active_child_session_count: int | None = Field(
+        default=None,
+        description="Count of child sessions currently considered active from persisted status/live activity",
+    )
     batch_task_ids: list[str] = Field(default_factory=list, description="Task ids linked to a batch orchestrator session")
     declared_scope_paths: list[str] = Field(default_factory=list)
     observed_read_paths: list[str] = Field(default_factory=list)
@@ -244,10 +285,22 @@ class SessionListItem(BaseModel):
         default=None, description="Current live execution state"
     )
     message_count: int
+    event_count: int | None = Field(
+        default=None,
+        description="Count of persisted session events",
+    )
     total_input_tokens: int = Field(default=0, description="Total input tokens")
     total_output_tokens: int = Field(default=0, description="Total output tokens")
     created_at: datetime
     updated_at: datetime
+    status_source: str = Field(
+        default="session",
+        description="Authority for row status beacon: session or runtime",
+    )
+    status_matches_live: bool = Field(
+        default=True,
+        description="Whether persisted session status matches current runtime status",
+    )
 
 
 class SessionListResponse(BaseModel):

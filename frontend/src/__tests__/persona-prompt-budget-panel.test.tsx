@@ -4,11 +4,18 @@ import { describe, expect, it } from "vitest";
 import { PersonaPromptBudgetPanel } from "@/app/persona/components/PersonaPromptBudgetPanel";
 
 describe("PersonaPromptBudgetPanel", () => {
-  it("labels preview-derived prompt totals explicitly", () => {
+  it("labels preview-derived prompt totals explicitly and prefers runtime context when present", () => {
     render(
       <PersonaPromptBudgetPanel
         loading={false}
         error={null}
+        runtimeContext={{
+          used_tokens: 2400,
+          limit_tokens: 8000,
+          percent_used: 30,
+          remaining_tokens: 5600,
+          warning: null,
+        }}
         preview={{
           slug: "persona",
           name: "Avery",
@@ -31,8 +38,12 @@ describe("PersonaPromptBudgetPanel", () => {
       />,
     );
 
+    expect(screen.getAllByText("Runtime").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/30% live used/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Treat as guidance until runtime publishes authoritative totals/i),
+      screen.getByText(
+        /Preview totals stay labeled Preview until live runtime publishes its own metric/i,
+      ),
     ).toBeInTheDocument();
   });
 });

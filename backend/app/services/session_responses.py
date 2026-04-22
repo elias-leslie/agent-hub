@@ -1,13 +1,20 @@
 """Session response building - construct API responses from domain models."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.schemas.sessions import (
-    ContextUsageResponse,
-    SessionEventResponse,
-    SessionResponse,
-)
 from app.models import Session, SessionEvent
+from app.services.session_live_activity import is_session_actionably_active
+
+if TYPE_CHECKING:
+    from app.api.schemas.sessions import (
+        SessionEventResponse,
+        SessionResponse,
+    )
 from app.services.context_tracker import calculate_context_usage
 from app.services.ownership_inventory import (
     query_project_active_specialists,
@@ -17,9 +24,23 @@ from app.services.persona_identity import PERSONA_SLUG, get_persona_display_name
 from app.services.session_tokens import calculate_agent_token_breakdown
 from app.services.session_transforms import (
     _effective_model,
+    _message_count,
     build_session_response,
     convert_messages_to_response,
 )
+
+
+def _row_slug_and_name(row: Any) -> tuple[str | None, str | None]:
+    slug = getattr(row, "slug", None)
+    name = getattr(row, "name", None)
+    if slug is not None or name is not None:
+        return slug, name
+    if hasattr(row, "_mapping"):
+        mapping = row._mapping
+        return mapping.get("slug"), mapping.get("name")
+    if isinstance(row, tuple) and len(row) >= 2:
+        return row[0], row[1]
+    return None, None
 
 
 async def _resolve_agent_display_names(
@@ -27,7 +48,7 @@ async def _resolve_agent_display_names(
 ) -> dict[str, str]:
     """Build agent_id/slug → display name map from agents table.
 
-    Uses a single WHERE slug IN (...) query instead of one query per slug.
+    Uses single WHERE slug IN (...) query instead of one query per slug.
     """
     from sqlalchemy import select
 
@@ -41,7 +62,11 @@ async def _resolve_agent_display_names(
     result = await db.execute(
         select(Agent.slug, Agent.name).where(Agent.slug.in_(slugs))
     )
-    names = {row.slug: row.name for row in result.all()}
+    names: dict[str, str] = {}
+    for row in result.all():
+        slug, name = _row_slug_and_name(row)
+        if slug and name:
+            names[slug] = name
     if PERSONA_SLUG in slugs:
         names[PERSONA_SLUG] = await get_persona_display_name(
             db,
@@ -54,7 +79,7 @@ async def build_project_lane_session_ids(
     db: AsyncSession,
     project_ids: set[str],
 ) -> tuple[set[str], set[str]]:
-    """Return (owner_session_ids, specialist_session_ids) for the given projects."""
+    """Return (owner_session_ids, specialist_session_ids) for given projects."""
     owner_session_ids: set[str] = set()
     specialist_session_ids: set[str] = set()
     for project_id in sorted(project_id for project_id in project_ids if project_id):
@@ -74,15 +99,10 @@ async def build_project_lane_session_ids(
 async def build_full_session_response(
     db: AsyncSession, session: Session
 ) -> SessionResponse:
-    """Build a complete session response with context usage and token breakdown.
+    """Build complete session response with context usage and token breakdown."""
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import ContextUsageResponse
 
-    Args:
-        db: Database session
-        session: Session object with events loaded
-
-    Returns:
-        Complete SessionResponse with all metadata
-    """
     ctx_usage = await calculate_context_usage(db, session.id, _effective_model(session))
     context_usage_response = ContextUsageResponse(
         used_tokens=ctx_usage.used_tokens,
@@ -101,6 +121,12 @@ async def build_full_session_response(
         db,
         {session.project_id},
     )
+    child_result = await db.execute(select(Session).where(Session.parent_session_id == session.id))
+    child_sessions = list(child_result.scalars().all())
+    child_session_count = len(child_sessions)
+    active_child_session_count = sum(
+        1 for child_session in child_sessions if is_session_actionably_active(child_session)
+    )
 
     return build_session_response(
         session,
@@ -109,20 +135,20 @@ async def build_full_session_response(
         agent_breakdown,
         total_input,
         total_output,
+        message_count=_message_count(session.events),
+        event_count=len(session.events),
+        child_session_count=child_session_count,
+        active_child_session_count=active_child_session_count,
         owner_session_ids=owner_session_ids,
         specialist_session_ids=specialist_session_ids,
     )
 
 
 def build_event_responses(events: list[SessionEvent]) -> list[SessionEventResponse]:
-    """Convert session events to API response models.
+    """Convert session events to API response models."""
+    # Deferred import to avoid circular import via app.api.__init__
+    from app.api.schemas.sessions import SessionEventResponse
 
-    Args:
-        events: List of SessionEvent objects
-
-    Returns:
-        List of SessionEventResponse objects
-    """
     return [
         SessionEventResponse(
             id=str(e.id),

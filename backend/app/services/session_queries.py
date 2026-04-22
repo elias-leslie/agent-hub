@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import Session, SessionEvent, SessionEventType
+from app.services.session_live_activity import is_session_actionably_active
 
 
 def apply_session_filters(
@@ -52,32 +53,51 @@ def apply_session_filters(
     return query, count_query
 
 
+def _count_map(rows: list[tuple[object, ...]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        if len(row) < 2:
+            continue
+        session_id = str(row[0])
+        count = int(row[-1])
+        counts[session_id] = count
+    return counts
+
+
 async def fetch_session_statistics(
     db: AsyncSession, session_ids: list[str]
-) -> tuple[dict[str, int], dict[str, dict[str, int]]]:
-    """Fetch event counts and token statistics for sessions.
-
-    Args:
-        db: Database session
-        session_ids: List of session IDs
-
-    Returns:
-        Tuple of (event_counts, token_stats)
-    """
+) -> tuple[dict[str, int], dict[str, int], dict[str, dict[str, int]], dict[str, int], dict[str, int]]:
+    """Fetch message counts, event counts, token statistics, and child-lane counts for sessions."""
+    message_counts: dict[str, int] = {}
     event_counts: dict[str, int] = {}
     token_stats: dict[str, dict[str, int]] = {}
+    child_counts: dict[str, int] = {}
+    active_child_counts: dict[str, int] = {}
 
     if not session_ids:
-        return event_counts, token_stats
+        return message_counts, event_counts, token_stats, child_counts, active_child_counts
 
-    from typing import cast
+    message_counts_result = await db.execute(
+        select(SessionEvent.session_id, func.count(SessionEvent.id))
+        .where(
+            SessionEvent.session_id.in_(session_ids),
+            SessionEvent.event_type.in_(
+                [
+                    SessionEventType.USER_MESSAGE,
+                    SessionEventType.ASSISTANT_MESSAGE,
+                ]
+            ),
+        )
+        .group_by(SessionEvent.session_id)
+    )
+    message_counts = _count_map(message_counts_result.all())
 
     event_counts_result = await db.execute(
         select(SessionEvent.session_id, func.count(SessionEvent.id))
         .where(SessionEvent.session_id.in_(session_ids))
         .group_by(SessionEvent.session_id)
     )
-    event_counts = dict(cast(list[tuple[str, int]], event_counts_result.all()))
+    event_counts = _count_map(event_counts_result.all())
 
     token_result = await db.execute(
         select(
@@ -104,7 +124,18 @@ async def fetch_session_statistics(
         elif role == "assistant":
             token_stats[session_id]["output"] = tokens
 
-    return event_counts, token_stats
+    child_result = await db.execute(
+        select(Session).where(Session.parent_session_id.in_(session_ids))
+    )
+    for child_session in child_result.scalars().all():
+        parent_id = str(child_session.parent_session_id or "").strip()
+        if not parent_id:
+            continue
+        child_counts[parent_id] = child_counts.get(parent_id, 0) + 1
+        if is_session_actionably_active(child_session):
+            active_child_counts[parent_id] = active_child_counts.get(parent_id, 0) + 1
+
+    return message_counts, event_counts, token_stats, child_counts, active_child_counts
 
 
 async def get_session_or_404(db: AsyncSession, session_id: str) -> Session:
@@ -164,43 +195,35 @@ async def query_session_events(
         session_id: Session ID
         event_type: Optional event type filter
         turn: Optional turn number filter
-        page: Page number (1-indexed)
-        page_size: Items per page
+        page: Page number (1-based)
+        page_size: Results per page
 
     Returns:
-        Tuple of (events, total_count, max_turn)
+        Tuple of (events, total_count, total_pages)
     """
-    # Build query
     query = select(SessionEvent).where(SessionEvent.session_id == session_id)
+    count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
 
-    # Apply filters
     if event_type:
         query = query.where(SessionEvent.event_type == event_type)
-    if turn is not None:
-        query = query.where(SessionEvent.turn == turn)
-
-    # Count total
-    count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
-    if event_type:
         count_query = count_query.where(SessionEvent.event_type == event_type)
     if turn is not None:
+        query = query.where(SessionEvent.turn == turn)
         count_query = count_query.where(SessionEvent.turn == turn)
+
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
-    # Get max turn
-    max_turn_query = select(func.max(SessionEvent.turn)).where(
-        SessionEvent.session_id == session_id
-    )
-    max_turn_result = await db.execute(max_turn_query)
-    max_turn = max_turn_result.scalar() or 0
-
-    # Apply pagination and ordering
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
     offset = (page - 1) * page_size
-    query = query.order_by(SessionEvent.turn, SessionEvent.sequence).offset(offset).limit(page_size)
 
-    # Execute
-    events_result = await db.execute(query)
-    events: list[SessionEvent] = list(events_result.scalars().all())
+    query = (
+        query.order_by(SessionEvent.turn.asc(), SessionEvent.sequence.asc())
+        .offset(offset)
+        .limit(page_size)
+    )
 
-    return events, total, max_turn
+    result = await db.execute(query)
+    events = list(result.scalars().all())
+
+    return events, total, total_pages

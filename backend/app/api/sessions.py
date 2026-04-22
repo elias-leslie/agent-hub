@@ -1,6 +1,7 @@
 """Sessions API - CRUD operations for conversation sessions."""
 
-from typing import Annotated
+from collections.abc import Sequence
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,6 +55,39 @@ router = APIRouter()
 
 # Re-export schemas for backward compatibility
 __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
+
+
+def _normalize_list_sessions_stats(
+    result: Sequence[Any],
+) -> tuple[
+    list[Any],
+    int,
+    dict[str, int],
+    dict[str, int],
+    dict[str, dict[str, int]],
+    dict[str, int],
+    dict[str, int],
+]:
+    """Support additive session stats fields without breaking older mocks."""
+    if len(result) < 5:
+        raise ValueError("list_sessions_with_stats returned incomplete result")
+
+    sessions = list(result[0])
+    total = int(result[1])
+    msg_counts = dict(result[2])
+    event_counts = dict(result[3])
+    token_stats = dict(result[4])
+    child_counts = dict(result[5]) if len(result) > 5 else {}
+    active_child_counts = dict(result[6]) if len(result) > 6 else {}
+    return (
+        sessions,
+        total,
+        msg_counts,
+        event_counts,
+        token_stats,
+        child_counts,
+        active_child_counts,
+    )
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
@@ -221,7 +255,7 @@ async def list_sessions(
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
-    sessions, total, msg_counts, token_stats = await list_sessions_with_stats(
+    raw_stats = await list_sessions_with_stats(
         db,
         project_id=project_id,
         status=status,
@@ -232,6 +266,9 @@ async def list_sessions(
         parent_session_id=parent_session_id,
         external_id=external_id,
     )
+    sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
+        _normalize_list_sessions_stats(raw_stats)
+    )
     owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
         db,
         {session.project_id for session in sessions},
@@ -241,6 +278,9 @@ async def list_sessions(
             sessions,
             msg_counts,
             token_stats,
+            event_counts=event_counts,
+            child_counts=child_counts,
+            active_child_counts=active_child_counts,
             owner_session_ids=owner_session_ids,
             specialist_session_ids=specialist_session_ids,
         ),

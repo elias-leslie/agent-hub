@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PersonaThreadHeader } from "@/app/persona/components/PersonaThreadHeader";
 
 describe("PersonaThreadHeader", () => {
-  it("shows a follow-up hint for completed primary persona threads", () => {
+  it("marks draft and persisted thread provenance explicitly", () => {
     render(
       <PersonaThreadHeader
         personaName="Avery"
@@ -53,6 +53,7 @@ describe("PersonaThreadHeader", () => {
         }}
         selectedSessionId="sess-1"
         targetProjectId="agent-hub"
+        threadSource="session"
         onSelectSession={vi.fn()}
         sendMessage={vi.fn()}
         activeTab="workflow"
@@ -62,7 +63,9 @@ describe("PersonaThreadHeader", () => {
       />,
     );
 
-    expect(screen.getByText("Reply continues here")).toBeInTheDocument();
-    expect(screen.getByText("Thread: summitflow")).toBeInTheDocument();
+    expect(screen.getByText("Operator thread surface")).toBeInTheDocument();
+    expect(screen.getByText("Persisted primary thread")).toBeInTheDocument();
+    expect(screen.getByText("Session project · summitflow")).toBeInTheDocument();
+    expect(screen.getByText(/Replies continue in this persisted thread/i)).toBeInTheDocument();
   });
 });

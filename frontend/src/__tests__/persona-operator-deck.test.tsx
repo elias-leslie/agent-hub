@@ -299,14 +299,18 @@ describe("PersonaOperatorDeck", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("persona-run-hud")).toBeInTheDocument();
+      expect(screen.getByText(/running verification/i)).toBeInTheDocument();
     });
     expect(screen.getByText("Investigating UI state in background lane.")).toBeInTheDocument();
     expect(screen.queryByText("Jenny")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Handoff/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Open handoff draft/i }));
+    fireEvent.change(screen.getByLabelText(/Inspect advisory handoff draft/i), {
+      target: { value: "Advisory handoff for lane child-1." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Send advisory handoff/i }));
     expect(sendMessage).toHaveBeenCalledWith(
-      "Write a concise handoff for session child-1: owner, current state, blockers, next move. Summary: Investigating UI state in background lane.",
+      "Advisory handoff for lane child-1.",
       undefined,
       "child-1",
     );
@@ -402,7 +406,7 @@ describe("PersonaOperatorDeck", () => {
     await waitFor(() => {
       expect(screen.getByText("Planning workflow from runtime state")).toBeInTheDocument();
     });
-    expect(screen.getByText("1/1 active")).toBeInTheDocument();
+    expect(screen.getAllByText(/active child lanes/i).length).toBeGreaterThan(0);
   });
 
   it("stops the focused live thread even before runtime primary session refreshes", async () => {
@@ -494,10 +498,10 @@ describe("PersonaOperatorDeck", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /^Stop$/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Stop active work/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /^Stop$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Stop active work/i }));
     expect(stopSession).toHaveBeenCalledWith("chat-live-1");
   });
 
@@ -613,10 +617,10 @@ describe("PersonaOperatorDeck", () => {
     );
 
     fireEvent.change(
-      screen.getByPlaceholderText(/Describe the real work/i),
+      screen.getByPlaceholderText(/Describe real work\. Name success bar/i),
       { target: { value: "Audit the operator workflow flow." } },
     );
-    fireEvent.click(screen.getByRole("button", { name: /^Run workflow$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Run advisory workflow$/i }));
 
     await waitFor(() => {
       expect(mockRunPersonaWorkflow).toHaveBeenCalledWith(

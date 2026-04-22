@@ -68,6 +68,64 @@ def test_build_session_list_items_exposes_batch_task_ids() -> None:
     assert item.batch_task_ids == ["task-a", "task-b"]
 
 
+def test_build_session_list_items_exposes_message_and_event_counts_separately() -> None:
+    session = _session()
+
+    item = build_session_list_items([session], {"sess-1": 2}, {}, {"sess-1": 5})[0]
+
+    assert item.message_count == 2
+    assert item.event_count == 5
+
+
+def test_build_session_list_items_exposes_child_counts() -> None:
+    session = _session()
+
+    item = build_session_list_items(
+        [session],
+        {},
+        {},
+        child_counts={"sess-1": 3},
+        active_child_counts={"sess-1": 1},
+    )[0]
+
+    assert item.child_session_count == 3
+    assert item.active_child_session_count == 1
+
+
+def test_build_session_list_items_marks_runtime_status_when_live_disagrees() -> None:
+    session = _session(
+        status="active",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "live_activity": {"phase": "error", "status": "error"},
+        },
+    )
+
+    item = build_session_list_items([session], {}, {})[0]
+
+    assert item.status_source == "runtime"
+    assert item.status_matches_live is False
+    assert item.live_activity is not None
+    assert item.live_activity.source == "runtime"
+
+
+def test_build_session_response_marks_session_status_when_live_matches() -> None:
+    session = _session(
+        status="completed",
+        provider_metadata={
+            "repo_root": "/srv/workspaces/projects/agent-hub",
+            "live_activity": {"phase": "completed", "status": "completed"},
+        },
+    )
+
+    response = build_session_response(session, child_session_count=2, active_child_session_count=0)
+
+    assert response.child_session_count == 2
+    assert response.active_child_session_count == 0
+    assert response.status_source == "session"
+    assert response.status_matches_live is True
+
+
 def test_build_session_list_items_classifies_benchmark_attribution() -> None:
     session = _session(
         request_source="manual/caveman-mini-baseline",
