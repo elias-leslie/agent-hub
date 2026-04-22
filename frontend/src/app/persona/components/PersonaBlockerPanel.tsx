@@ -8,7 +8,7 @@ import type { PersonaPulseSummary } from "@/lib/api/persona-stream";
 import type { AgentPreview } from "@/types/agent-preview";
 import type { ExecutionPermission, ProjectPermission } from "@/lib/api/project-permissions";
 import type { PersonaRuntimeState } from "../hooks/usePersonaRuntime";
-import { ProvenanceBadge, SectionEyebrow } from "./persona-operator-chrome";
+import { EvidencePanel, ProvenanceBadge, SectionEyebrow } from "./persona-operator-chrome";
 
 interface PersonaBlockerPanelProps {
   executionState: "active" | "paused";
@@ -88,18 +88,15 @@ export function PersonaBlockerPanel({
     : "None surfaced");
 
   return (
-    <section
-      data-testid="persona-blocker-panel"
-      className="rounded-[28px] border border-slate-800/70 bg-slate-900/80 p-4"
-    >
+    <EvidencePanel data-testid="persona-blocker-panel" className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <SectionEyebrow icon={<ShieldCheck className="h-3.5 w-3.5 text-amber-300" />} label="Blockers and capability truth" source="runtime" />
           <h3 className="mt-2 text-lg font-semibold text-slate-50">
-            Call out real blockers, not vibes.
+            Hard blocker first. Advisory warning second.
           </h3>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Hard blockers appear first. Preview budget stays advisory until runtime publishes authoritative prompt totals.
+            Runtime or persisted session proof wins. Preview and operator advice stay labeled when they are not authoritative backend truth.
           </p>
         </div>
         <button
@@ -138,8 +135,8 @@ export function PersonaBlockerPanel({
           tone={executionPermission?.allowed === false ? "warning" : "neutral"}
         />
         <Row
-          label="Execution"
-          value={executionState === "paused" ? "Paused by operator" : "Live"}
+          label="Execution state"
+          value={executionState === "paused" ? "Paused by operator" : "Active"}
           source="session"
           tone={executionState === "paused" ? "warning" : "success"}
         />
@@ -180,6 +177,6 @@ export function PersonaBlockerPanel({
           Settings
         </Link>
       </div>
-    </section>
+    </EvidencePanel>
   );
 }
