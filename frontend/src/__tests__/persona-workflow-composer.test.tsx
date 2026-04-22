@@ -166,4 +166,53 @@ describe("PersonaWorkflowComposer", () => {
 
     expect(screen.queryByText(/Stale after clarify rerun/i)).not.toBeInTheDocument();
   });
+
+  it("keeps stages advisory and unlinked when the workflow response lacks a persisted session id", async () => {
+    mockRunPersonaWorkflow.mockReset();
+    mockRunPersonaWorkflow.mockResolvedValue({
+      status: "completed",
+      final_output: "advisory only",
+      total_input_tokens: 12,
+      total_output_tokens: 6,
+      stages: [
+        {
+          stage: "clarify",
+          agent_used: "chat",
+          content: "clarify advisory output",
+          model: "codex/gpt-5.4",
+          provider: "codex",
+          session_id: null,
+          usage: { input_tokens: 12, output_tokens: 6, total_tokens: 18 },
+          context_usage: null,
+          output_usage: null,
+          finish_reason: "stop",
+          memory_facts_injected: 0,
+          fallback_used: false,
+          fallback_reason: null,
+          cited_uuids: [],
+        },
+      ],
+    });
+
+    render(
+      <PersonaWorkflowComposer
+        projectOptions={[{ id: "agent-hub", name: "agent-hub", rootPath: "/srv/workspaces/projects/agent-hub" }]}
+        selectedProjectId="agent-hub"
+        parentSessionId="persona-root"
+        onProjectChange={vi.fn()}
+        onPromptChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe real work\. Name success bar/i), {
+      target: { value: "Prove advisory workflow linkage stays truthful." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Run advisory workflow/i }));
+
+    await screen.findByText("clarify advisory output");
+
+    expect(screen.getByText(/Advisory output only/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Stage session ·/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Advisory").length).toBeGreaterThan(0);
+  });
 });
