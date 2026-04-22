@@ -27,3 +27,8 @@ def test_ops_worker_template_points_to_ops_entrypoint_and_host_marker() -> None:
     assert 'Environment="AGENT_HUB_WORKER_ROLE=ops"' in text
     assert 'Environment="AGENT_HUB_HOST_SERVICE=agent-hub-hatchet-ops-worker.service"' in text
     assert "KillMode=control-group" in text
+
+
+def test_frontend_template_uses_control_group_shutdown() -> None:
+    text = (SYSTEMD_DIR / "agent-hub-frontend.service").read_text()
+    assert "KillMode=control-group" in text
