@@ -1,0 +1,134 @@
+# Agent Hub hard memory-governance cleanup evidence
+
+## Before snapshot
+- Command: `cd /srv/workspaces/projects/agent-hub && backend/.venv/bin/python docs/tasks/agent-hub-hard-memory-governance-snapshot.py`
+- helper_version: `1`
+- health_status before edits: `critical`
+- policy_with_targeting_count before edits: `40`
+- invalid_trigger_task_type_count before edits: `10`
+- startup_profile_agent_target_count before edits: `3`
+- working_set_count before edits: `50`
+
+## Working-set UUIDs
+- `3daeb5da-5c61-4568-9bd3-a4fe4f11a8e4` | classes: `policy_with_targeting` | loaded_count: `6597` | label: `test contracts`
+- `3545c228-f477-4a6f-9cff-854fa9f1927d` | classes: `policy_with_targeting` | loaded_count: `5706` | label: `code structure rules`
+- `d12c03bf-e1c6-4738-a579-c2eeffb36748` | classes: `invalid_trigger_task_type` | loaded_count: `5499` | label: `hybrid service port map`
+- `d8b4598e-c956-4dfb-99de-c09590c2c1d9` | classes: `policy_with_targeting` | loaded_count: `5299` | label: `Bug tracking`
+- `a26e5fac-99ee-49b1-b78c-4d4c159369c5` | classes: `invalid_trigger_task_type` | loaded_count: `5182` | label: `native apps, docker infra`
+- `4a453ef9-247f-411c-be54-6353857c7cff` | classes: `policy_with_targeting` | loaded_count: `5152` | label: `delete old code`
+- `2b5652b7-a7eb-4289-8a7d-7714c71a6804` | classes: `policy_with_targeting` | loaded_count: `5061` | label: `Feedback obligation: search, decide, act`
+- `0caa2225-c382-4f0f-8e45-751b38173cc2` | classes: `policy_with_targeting` | loaded_count: `4763` | label: `Alembic-only DB migrations`
+- `d2a6f07f-9f0a-4613-96f2-ec5f70b41234` | classes: `policy_with_targeting` | loaded_count: `4487` | label: `Rebuild before any verification`
+- `599b4bbf-4e78-4215-815c-230668033c84` | classes: `policy_with_targeting` | loaded_count: `4198` | label: `No hardcoded lists; use registries`
+- `b87abcad-58d1-46bb-aec3-4141a80674be` | classes: `invalid_trigger_task_type` | loaded_count: `4020` | label: `sf-browser uses project-index IPs`
+- `5262f9d0-4860-4e94-a8d5-641e83dfade4` | classes: `policy_with_targeting` | loaded_count: `3915` | label: `Global behavior scope`
+- `fb35137d-17df-471c-b526-0059453f53d8` | classes: `policy_with_targeting` | loaded_count: `3842` | label: `Fix broken CLI, never raw API`
+- `ccab51a7-6399-4f7b-a9d9-21912e225dd6` | classes: `policy_with_targeting` | loaded_count: `3788` | label: `Check raw and lane truth`
+- `f949496a-d425-4fb1-b226-411061024a9a` | classes: `policy_with_targeting` | loaded_count: `3686` | label: `Execution-ready task authoring`
+- `009f30b3-fd68-49fb-8422-63bab2f6a135` | classes: `policy_with_targeting` | loaded_count: `3677` | label: `Run st cleanup status before closeout`
+- `3805b146-51c3-4688-908f-0b0f1101e30c` | classes: `policy_with_targeting` | loaded_count: `3645` | label: `Agents manage git in-session`
+- `70be0dc3-5d4f-4179-8ae5-eb7e87fb1c71` | classes: `policy_with_targeting` | loaded_count: `3571` | label: `Checkpoint commits must publish`
+- `823f8549-f533-42d0-9005-62538c3f7dd7` | classes: `policy_with_targeting` | loaded_count: `3570` | label: `Runtime prompts live in DB`
+- `46bd575a-0dc9-4f83-ae2e-9ca9bb342fe0` | classes: `policy_with_targeting` | loaded_count: `3529` | label: `Use st cleanup path for deletions`
+- `4ebea600-daa9-498e-bd63-3b24613a1027` | classes: `policy_with_targeting` | loaded_count: `3484` | label: `Use overlap before blocking`
+- `db06d8a2-89f2-4fd1-b06d-0e27f35bdc9b` | classes: `policy_with_targeting` | loaded_count: `3461` | label: `Jenny git hygiene`
+- `b8fa1121-d9ac-497d-8b7b-ac7d02fa7b6b` | classes: `policy_with_targeting` | loaded_count: `3431` | label: `Use standard memory format`
+- `175cf4ad-be20-4a00-a37d-7a01375324ee` | classes: `policy_with_targeting` | loaded_count: `3390` | label: `Host exec blocks != CLI hooks`
+- `cc152100-0792-46d4-9ad2-d5c50fe0c559` | classes: `policy_with_targeting` | loaded_count: `3325` | label: `Codex wrapper, not hooks`
+- `a416f8ce-0cd0-4a6c-8c51-797abc487edd` | classes: `policy_with_targeting` | loaded_count: `3194` | label: `Use st prompt for prompt CRUD`
+- `fb92843f-9ced-4e1c-8c7f-8fcab39a2917` | classes: `policy_with_targeting` | loaded_count: `3187` | label: `Use cross-project st pulse first`
+- `f1e7cfee-18fb-4f68-8af6-3bb756d00538` | classes: `policy_with_targeting` | loaded_count: `3153` | label: `Prompt structure + variable split`
+- `7c8fd20b-28dd-4428-aa0c-9d160adfd43d` | classes: `policy_with_targeting` | loaded_count: `2863` | label: `Pulse and lane coordination`
+- `bd3d265d-8114-4f50-880f-aaa5b2319d8a` | classes: `policy_with_targeting` | loaded_count: `2852` | label: `Prompts in DB, not code`
+- `c11dbbe8-abf3-461f-ba42-d12ea7f39a7c` | classes: `policy_with_targeting` | loaded_count: `2778` | label: `keep apps container-compatible`
+- `937dcff1-f89b-4b24-8eb6-eda54d9703c7` | classes: `invalid_trigger_task_type` | loaded_count: `2748` | label: `native restart clears stale ports`
+- `38402815-0e4f-4ba3-beaa-92cd134a405b` | classes: `invalid_trigger_task_type` | loaded_count: `2746` | label: `runtime guardrail native+infra`
+- `2064632c-c57e-4cfd-8c89-c851bc9e7677` | classes: `invalid_trigger_task_type` | loaded_count: `2690` | label: `Check sf-browser health`
+- `b7e9c173-550d-4bc9-984f-26729b0bf28e` | classes: `invalid_trigger_task_type` | loaded_count: `2521` | label: `session events API`
+- `9d73bc3d-d6c8-4517-b3b8-eacc2305fc82` | classes: `policy_with_targeting` | loaded_count: `2469` | label: `Own broken wake dispatch`
+- `b9312059-9286-4cd5-a91b-2f6afa56f633` | classes: `policy_with_targeting` | loaded_count: `2399` | label: `Ghost lanes are debt`
+- `78ddb3d9-d85d-44c0-82c5-f26c93a4b177` | classes: `invalid_trigger_task_type` | loaded_count: `2261` | label: `Proxmox testbed .233, test VM .234`
+- `5bebfe5b-57ad-46da-961b-4c7e596d5f89` | classes: `policy_with_targeting` | loaded_count: `2154` | label: `Agents own cleanup debt`
+- `0e50d244-7586-4fe9-845c-a756f47b60b2` | classes: `policy_with_targeting` | loaded_count: `1995` | label: `Wait before redriving Claude`
+- `015a8754-95f0-4370-8a8c-077ace49ca90` | classes: `policy_with_targeting` | loaded_count: `475` | label: `Done path + specialists`
+- `f2ae2668-da26-46e1-b499-ffac6141e377` | classes: `policy_with_targeting` | loaded_count: `454` | label: `Ownership vs sessions`
+- `49372f37-2d06-414d-bb4d-f97c53224199` | classes: `invalid_trigger_task_type` | loaded_count: `345` | label: `sf-browser is canonical`
+- `22f8f615-11f1-4cd8-96ac-31eadd627106` | classes: `policy_with_targeting` | loaded_count: `141` | label: `Stop repeat cleanup reconcile`
+- `d7c57c77-ab4c-4bea-8cdc-5f867cb8d992` | classes: `invalid_trigger_task_type` | loaded_count: `101` | label: `Use live plan schema`
+- `7c847063-36a0-47e0-ad7b-218968681a79` | classes: `policy_with_targeting` | loaded_count: `46` | label: `Persona tool contract`
+- `65e20288-58de-4c16-ab32-212791203907` | classes: `policy_with_targeting` | loaded_count: `26` | label: `Jenny max autonomy`
+- `30f83ef3-f317-4450-be51-dcbac9bd9e77` | classes: `policy_with_targeting, startup_profile_agent_target` | loaded_count: `22` | label: `Verify coding goals`
+- `5fce1a4f-be5f-42f9-9360-b1276cf97002` | classes: `policy_with_targeting, startup_profile_agent_target` | loaded_count: `3` | label: `Keep coding simple`
+- `757618c5-fe67-48dd-b124-57a0945f3fea` | classes: `policy_with_targeting, startup_profile_agent_target` | loaded_count: `3` | label: `Check assumptions first`
+
+## Export coverage
+- Export file: `docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json`
+- Export command covered the full pre-edit working-set union before destructive edits: `st -P agent-hub memory export --full -s global -o docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json <50 UUIDs>`
+- Exported episode count: `50`
+- No new hard-issue UUIDs appeared after edits; the after snapshot is empty.
+
+## Hard-issue fixes
+- Startup dead-route precedence applied first, then invalid trigger cleanup, then remaining targeted-policy rewrites.
+- `3daeb5da-5c61-4568-9bd3-a4fe4f11a8e4` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `3545c228-f477-4a6f-9cff-854fa9f1927d` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `d12c03bf-e1c6-4738-a579-c2eeffb36748` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['backend', 'frontend', 'devops', 'verification'] -> ['backend', 'frontend', 'devops', 'test']
+- `d8b4598e-c956-4dfb-99de-c09590c2c1d9` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `a26e5fac-99ee-49b1-b78c-4d4c159369c5` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['devops', 'verification'] -> ['devops', 'test']
+- `4a453ef9-247f-411c-be54-6353857c7cff` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `2b5652b7-a7eb-4289-8a7d-7714c71a6804` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `0caa2225-c382-4f0f-8e45-751b38173cc2` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `d2a6f07f-9f0a-4613-96f2-ec5f70b41234` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `599b4bbf-4e78-4215-815c-230668033c84` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `b87abcad-58d1-46bb-aec3-4141a80674be` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['frontend', 'test', 'verification'] -> ['frontend', 'test']
+- `5262f9d0-4860-4e94-a8d5-641e83dfade4` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `fb35137d-17df-471c-b526-0059453f53d8` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `ccab51a7-6399-4f7b-a9d9-21912e225dd6` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `f949496a-d425-4fb1-b226-411061024a9a` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `009f30b3-fd68-49fb-8422-63bab2f6a135` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `3805b146-51c3-4688-908f-0b0f1101e30c` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `70be0dc3-5d4f-4179-8ae5-eb7e87fb1c71` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `823f8549-f533-42d0-9005-62538c3f7dd7` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `46bd575a-0dc9-4f83-ae2e-9ca9bb342fe0` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `4ebea600-daa9-498e-bd63-3b24613a1027` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `db06d8a2-89f2-4fd1-b06d-0e27f35bdc9b` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `b8fa1121-d9ac-497d-8b7b-ac7d02fa7b6b` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `175cf4ad-be20-4a00-a37d-7a01375324ee` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `cc152100-0792-46d4-9ad2-d5c50fe0c559` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `a416f8ce-0cd0-4a6c-8c51-797abc487edd` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `fb92843f-9ced-4e1c-8c7f-8fcab39a2917` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `f1e7cfee-18fb-4f68-8af6-3bb756d00538` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `7c8fd20b-28dd-4428-aa0c-9d160adfd43d` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `bd3d265d-8114-4f50-880f-aaa5b2319d8a` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `c11dbbe8-abf3-461f-ba42-d12ea7f39a7c` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `937dcff1-f89b-4b24-8eb6-eda54d9703c7` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['devops', 'verification'] -> ['devops', 'test']
+- `38402815-0e4f-4ba3-beaa-92cd134a405b` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['devops', 'verification'] -> ['devops', 'test']
+- `2064632c-c57e-4cfd-8c89-c851bc9e7677` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['frontend', 'test', 'verification'] -> ['frontend', 'test']
+- `b7e9c173-550d-4bc9-984f-26729b0bf28e` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['backend', 'review'] -> ['backend']
+- `9d73bc3d-d6c8-4517-b3b8-eacc2305fc82` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `b9312059-9286-4cd5-a91b-2f6afa56f633` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `78ddb3d9-d85d-44c0-82c5-f26c93a4b177` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['devops', 'verification'] -> ['devops', 'test']
+- `5bebfe5b-57ad-46da-961b-4c7e596d5f89` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `0e50d244-7586-4fe9-845c-a756f47b60b2` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `015a8754-95f0-4370-8a8c-077ace49ca90` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `f2ae2668-da26-46e1-b499-ffac6141e377` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `49372f37-2d06-414d-bb4d-f97c53224199` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['frontend', 'test', 'verification'] -> ['frontend', 'test']
+- `22f8f615-11f1-4cd8-96ac-31eadd627106` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `d7c57c77-ab4c-4bea-8cdc-5f867cb8d992` | original classes: `invalid_trigger_task_type` | action: trigger_task_types ['task'] -> []
+- `7c847063-36a0-47e0-ad7b-218968681a79` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `65e20288-58de-4c16-ab32-212791203907` | original classes: `policy_with_targeting` | action: context_kind policy -> capability
+- `30f83ef3-f317-4450-be51-dcbac9bd9e77` | original classes: `policy_with_targeting, startup_profile_agent_target` | action: cleared agent_slugs to remove startup dead route; context_kind policy -> capability
+- `5fce1a4f-be5f-42f9-9360-b1276cf97002` | original classes: `policy_with_targeting, startup_profile_agent_target` | action: cleared agent_slugs to remove startup dead route; context_kind policy -> capability
+- `757618c5-fe67-48dd-b124-57a0945f3fea` | original classes: `policy_with_targeting, startup_profile_agent_target` | action: cleared agent_slugs to remove startup dead route; context_kind policy -> capability
+
+## Startup-consumer verification
+- `claude_session_start`: `memory=OK scope=global scope_id=- profile=claude_session_start attempts=1 latency_ms=31`
+- `codex_startup`: `memory=OK scope=global scope_id=- profile=codex_startup attempts=1 latency_ms=29`
+
+## After snapshot
+- helper_version: `1`
+- health_status after edits: `healthy`
+- policy_with_targeting_count after edits: `0`
+- invalid_trigger_task_type_count after edits: `0`
+- startup_profile_agent_target_count after edits: `0`
+- working_set_count after edits: `0`
+- Result: all hard governance counters reached zero.

@@ -1,0 +1,180 @@
+{
+  "_meta": {
+    "schema_version": "1.0.0",
+    "created_at": "2026-04-23T13:31:59Z",
+    "updated_at": "2026-04-23T13:31:59Z",
+    "source": "manual"
+  },
+  "title": "Reduce Agent Hub memory governance from critical to healthy with bounded global record surgery",
+  "description": "Why now: prior memory-provider plumbing is healthy, but the live Agent Hub governance snapshot is critical because too many active records are over-broad or malformed. This is the Agent Hub half of the optimization: use bounded discovery, export-first safety, explicit mutation authority by issue class, and consumer-fit spot checks to clean up the live memory corpus without changing the backend architecture.",
+  "task_type": "feature",
+  "priority": 1,
+  "labels": [
+    "agent-hub",
+    "memory",
+    "governance",
+    "cleanup"
+  ],
+  "complexity": "COMPLEX",
+  "autonomous": false,
+  "objective": "Bring the live Agent Hub memory corpus to a healthy governance state with explicit hard-issue zeroing, bounded soft-issue reduction, and traceable export-backed edits that preserve useful consumer-fit routing.",
+  "spirit_anti": "Do not add a new memory backend. Do not change the database schema. Do not fix counters by deleting broadly useful memories blindly. Keep the work inside the current public memory surfaces and live governance snapshot logic.",
+  "done_when": [
+    "A fresh live governance snapshot from the helper script reports `policy_with_targeting_count == 0`, `invalid_trigger_task_type_count == 0`, `startup_profile_agent_target_count == 0`, `untargeted_reference_count <= 40`, `oversized_policy_count <= 12`, and `health_status == healthy`.",
+    "Before destructive edits, the full live working-set UUID list has been exported to `docs/tasks/agent-hub-memory-governance-cleanup-export.json` with `st memory export ... --full`.",
+    "Every mutated or deleted UUID is recorded in the evidence file with the issue class and action taken.",
+    "Consumer-fit spot checks confirm surviving shared records still route meaningfully for intended surfaces, not merely that aggregate counters fell."
+  ],
+  "constraints": [
+    "Source of truth is the live Agent Hub backend state.",
+    "Authoritative snapshot command is explicit: `cd /srv/workspaces/projects/agent-hub/backend && .venv/bin/python docs/tasks/agent-hub-memory-governance-snapshot.py`.",
+    "Active delivery-eligible records are explicit: only active records surfaced by the snapshot helper are in scope.",
+    "Mutation authority is explicit by issue class: targeted policy records may change tier/context-kind/applicability or be deleted only when redundant; invalid-trigger records may change only trigger metadata unless broader rewrite is required; startup dead-route records may remove startup profiles or agent slugs; untargeted/oversized reference records may be summarized, retargeted, re-tiered, split, or deleted only when obsolete/duplicate.",
+    "Export scope is explicit: export the full working-set UUID list from the current snapshot before the first destructive edit, then refresh/export incrementally only when a later snapshot adds new UUIDs to scope.",
+    "If sample UUIDs drift, the fresh snapshot UUIDs win.",
+    "Verification must cover both startup consumer profiles: `claude_session_start` and `codex_startup`.",
+    "Counter success alone is insufficient; consumer-fit spot checks are required."
+  ],
+  "testing_strategy": [
+    "Run the snapshot helper before and after cleanup and copy the outputs into the evidence file.",
+    "Run `st -P agent-hub memory status --scope global --consumer-profile claude_session_start` and `st -P agent-hub memory status --scope global --consumer-profile codex_startup` after cleanup.",
+    "Verify the export JSON contains every mutated/deleted UUID noted in the evidence file.",
+    "Use `st memory get` on representative surviving shared records after cleanup to prove they still carry meaningful summaries/targeting for the intended consumer surfaces."
+  ],
+  "context": {
+    "files_to_modify": [
+      "docs/tasks/agent-hub-memory-governance-cleanup-evidence.md",
+      "docs/tasks/agent-hub-memory-governance-cleanup-export.json",
+      "docs/tasks/agent-hub-memory-governance-snapshot.py"
+    ],
+    "files_to_create": [
+      "docs/tasks/agent-hub-memory-governance-cleanup-evidence.md",
+      "docs/tasks/agent-hub-memory-governance-cleanup-export.json",
+      "docs/tasks/agent-hub-memory-governance-snapshot.py"
+    ],
+    "risks": [
+      "Global record surgery can remove useful shared context if export-first discipline is skipped.",
+      "Counters can improve while consumer-fit worsens if surviving records are hollowed out.",
+      "Concurrent live changes can cause the working-set UUID list to drift between export and mutation."
+    ],
+    "references": [
+      {
+        "title": "Governance snapshot helper",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-memory-governance-snapshot.py"
+      },
+      {
+        "title": "Evidence file",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-memory-governance-cleanup-evidence.md"
+      },
+      {
+        "title": "Export JSON",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-memory-governance-cleanup-export.json"
+      },
+      {
+        "title": "Memory routing guide",
+        "url": "/srv/workspaces/projects/agent-hub/docs/memory-routing.md"
+      },
+      {
+        "title": "Governance implementation",
+        "url": "/srv/workspaces/projects/agent-hub/backend/app/services/memory/governance.py"
+      }
+    ],
+    "second_opinion": {
+      "required": true,
+      "stage": "both",
+      "status": "pending",
+      "summary": "Task-shape approval gates start. Pre-close approval gates final healthy snapshot and evidence-backed UUID surgery."
+    }
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "research",
+      "subtask_type": "exploration",
+      "description": "Capture the live working set and export it before edits.",
+      "steps": [
+        {
+          "description": "Run the authoritative governance snapshot helper and record the output.",
+          "spec": {
+            "detail": "Use the exact helper command from the constraints. The helper output defines the active working-set UUIDs and all success counters."
+          }
+        },
+        {
+          "description": "Export the full current working set before destructive edits.",
+          "spec": {
+            "detail": "Export every current working-set UUID to `docs/tasks/agent-hub-memory-governance-cleanup-export.json` with `st memory export <uuid...> --full` before any `update` or `delete`."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "1.1"
+      ],
+      "description": "Zero the hard governance issues first.",
+      "steps": [
+        {
+          "description": "Fix targeted policy records.",
+          "spec": {
+            "detail": "Rewrite or re-tier targeted policy records into bounded reference/capability shape, or delete only if redundant."
+          }
+        },
+        {
+          "description": "Fix invalid trigger types and startup dead routes.",
+          "spec": {
+            "detail": "Normalize/remove invalid trigger metadata and eliminate startup-profile-plus-agent-slug dead routes without widening unrelated record scope."
+          }
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "2.1"
+      ],
+      "description": "Reduce soft issues with consumer-fit preserved.",
+      "steps": [
+        {
+          "description": "Retarget or split high-load broad records as needed.",
+          "spec": {
+            "detail": "Use the current working-set UUIDs from the helper output, not stale examples. Record every UUID/action in the evidence file."
+          }
+        },
+        {
+          "description": "Re-run the helper if scope changes and export any newly in-scope UUIDs before destructive edits.",
+          "spec": {
+            "detail": "Keep export coverage and working-set coverage aligned."
+          }
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "subtask_type": "test",
+      "depends_on": [
+        "3.1"
+      ],
+      "description": "Prove the corpus is healthier, not just numerically smaller.",
+      "steps": [
+        {
+          "description": "Run the after snapshot and startup-consumer status checks.",
+          "spec": {
+            "detail": "Use the helper script plus both startup consumer-profile status commands."
+          }
+        },
+        {
+          "description": "Run consumer-fit spot checks on surviving shared records.",
+          "spec": {
+            "detail": "Use `st memory get` on representative surviving shared UUIDs after cleanup and record why they still make sense for their intended consumers."
+          }
+        }
+      ]
+    }
+  ]
+}

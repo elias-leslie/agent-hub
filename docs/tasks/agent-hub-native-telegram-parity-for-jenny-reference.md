@@ -4,13 +4,13 @@ Authority order
 - `docs/tasks/agent-hub-native-telegram-parity-for-jenny.plan.json`
 - this reference doc
 - canonical `agent-hub` code/tests
-- donor/reference implementations in `/srv/workspaces/projects/agent-hub-telegram-bot-v1` and `/home/kasadis/references/hermes-agent`
+- donor/reference implementations in `/srv/workspaces/projects/agent-hub-telegram-bot-v1` and archived delivery notes
 
 Goal
 - Make canonical `/srv/workspaces/projects/agent-hub` own Jenny's Telegram path natively.
 - Upstream the working v1 bot/config/admin/systemd surfaces into canonical Agent Hub.
-- Port Hermes-grade Telegram rendering behavior into an Agent Hub-owned stack without any runtime Hermes dependency.
-- Keep Hermes and `agent-hub-telegram-bot-v1` as donor/reference implementations only until native parity is proven and cutover is safe.
+- Port high-fidelity Telegram rendering behavior into an Agent Hub-owned stack without any runtime sidecar dependency.
+- Keep `agent-hub-telegram-bot-v1` and archived delivery notes as donor/reference implementations only until native parity is proven and cutover is safe.
 
 Donor surfaces to inspect, not edit
 - `/srv/workspaces/projects/agent-hub-telegram-bot-v1/backend/app/services/telegram_config_service.py`
@@ -22,14 +22,11 @@ Donor surfaces to inspect, not edit
 - `/srv/workspaces/projects/agent-hub-telegram-bot-v1/scripts/systemd/agent-hub-telegram-bot.service`
 - `/srv/workspaces/projects/agent-hub-telegram-bot-v1/scripts/systemd/agent-hub-telegram-status-report.service`
 - `/srv/workspaces/projects/agent-hub-telegram-bot-v1/scripts/systemd/agent-hub-telegram-status-report.timer`
-- `/home/kasadis/references/hermes-agent/gateway/platforms/telegram.py`
-- `/home/kasadis/references/hermes-agent/tests/gateway/test_telegram_format.py`
-- `/home/kasadis/references/hermes-agent/tests/gateway/test_telegram_text_batching.py`
 
 Native ownership rules
 - The canonical runtime lives in `/srv/workspaces/projects/agent-hub`.
 - Do not keep a plain-text-only Telegram stack in canonical Agent Hub once the shared renderer exists.
-- Do not add a runtime import or subprocess dependency on Hermes.
+- Do not add a runtime import or subprocess dependency on the sidecar.
 - Do not edit anything under `~/references/`; copy or reimplement the needed behavior in canonical Agent Hub.
 - Do not treat `agent-hub-telegram-bot-v1` as the final production location after this task; it is a staging donor only.
 
@@ -96,7 +93,7 @@ Systemd and rollout contract
   - `agent-hub-telegram-status-report.service`
   - `agent-hub-telegram-status-report.timer`
 - The report timer/service may coexist with the old sidecar during verification.
-- Do not disable Hermes or the sidecar services until canonical Agent Hub passes tests and at least one native canary send/dry-run path is verified.
+- Do not disable the sidecar services until canonical Agent Hub passes tests and at least one native canary send/dry-run path is verified.
 
 Out of scope for this task
 - group chats
@@ -105,7 +102,7 @@ Out of scope for this task
 - webhooks
 - callback queries and inline mode
 - streaming Telegram message edits
-- final production cutover of Hermes delivery before parity proof exists
+- final production cutover of sidecar delivery before parity proof exists
 
 
 Exact bootstrap strings
@@ -195,7 +192,7 @@ Verification substitute when live Telegram canary is unavailable
 
 Rollout activation boundary
 - Canonical `agent-hub-telegram-bot.service` and `agent-hub-telegram-status-report.timer` install disabled by default in this task.
-- Do not enable them until the operator intentionally cuts over and the old sidecar/Hermes poller path is stopped or otherwise isolated.
+- Do not enable them until the operator intentionally cuts over and the old sidecar poller path is stopped or otherwise isolated.
 - Avoid duplicate pollers, duplicate recurring sends, or two Telegram owners racing at once.
 
 
@@ -300,7 +297,7 @@ Exact unauthorized command behavior
 - Unauthorized commands do not reveal privileged status/config details.
 
 Exact install-scope boundary
-- Adding canonical Telegram templates does not modify, disable, or auto-start existing Hermes or sidecar Telegram units/timers.
+- Adding canonical Telegram templates does not modify, disable, or auto-start existing sidecar Telegram units/timers.
 - This task only adds canonical templates plus disabled-by-default activation instructions.
 
 

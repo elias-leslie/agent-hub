@@ -1,0 +1,184 @@
+{
+  "_meta": {
+    "schema_version": "1.0.0",
+    "created_at": "2026-04-23T13:31:59Z",
+    "updated_at": "2026-04-23T13:31:59Z",
+    "source": "manual"
+  },
+  "title": "Zero the hard Agent Hub memory-governance issues with export-backed live edits",
+  "description": "Why now: the live Agent Hub governance snapshot is critical because active records still violate the hard rules: targeted policy memories, invalid trigger task types, and startup-profile dead routes. This focused task only covers the hard-issue pass. It avoids soft-issue reduction and broader corpus tuning so the live mutation contract stays narrow and safe.",
+  "task_type": "feature",
+  "priority": 1,
+  "labels": [
+    "agent-hub",
+    "memory",
+    "governance",
+    "cleanup"
+  ],
+  "complexity": "STANDARD",
+  "autonomous": false,
+  "objective": "Finish a bounded live cleanup where the hard governance counters reach zero, every destructive edit is export-backed and traceable, and both startup consumer profiles still report healthy delivery status afterward.",
+  "spirit_anti": "Do not broaden this task into soft-issue reduction or general corpus redesign. Do not change backend architecture or schema. Keep the live mutation scope narrow: hard issues only.",
+  "done_when": [
+    "The snapshot helper reports `policy_with_targeting_count == 0`, `invalid_trigger_task_type_count == 0`, `startup_profile_agent_target_count == 0`, and `health_status` is no longer `critical` because of those hard issues.",
+    "The full live working-set UUID list has been exported before destructive edits to `docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json`.",
+    "Every mutated or deleted UUID is recorded in the evidence file with its hard-issue class and action taken.",
+    "`st -P agent-hub memory status --scope global --consumer-profile claude_session_start` and `st -P agent-hub memory status --scope global --consumer-profile codex_startup` both return `memory=OK` after cleanup."
+  ],
+  "constraints": [
+    "Source of truth is the live Agent Hub backend state.",
+    "Run all `st memory get/update/tag/delete/export` commands from `/srv/workspaces/projects/agent-hub`.",
+    "Authoritative hard-issue snapshot command is explicit: `cd /srv/workspaces/projects/agent-hub/backend && .venv/bin/python docs/tasks/agent-hub-hard-memory-governance-snapshot.py`.",
+    "Only active records surfaced by the snapshot helper are in scope.",
+    "Issue-class precedence is explicit when one UUID matches multiple hard classes: resolve startup-profile dead-route first, then invalid trigger types, then targeted-policy shape. Delete only when the record is redundant after higher-priority fixes.",
+    "Mutation authority is explicit: startup dead-route fixes may remove startup consumer profiles or agent slugs; invalid-trigger fixes may change trigger metadata only unless the record must be rewritten into compliant shape; targeted-policy fixes may change tier/context_kind/applicability or delete only when redundant.",
+    "Export the full working-set UUID list before the first destructive edit. If a later snapshot adds new hard-issue UUIDs, export those new UUIDs before touching them too.",
+    "This task does not pursue soft-issue reduction.",
+    "Snapshot helper output contract is explicit: JSON object with `helper_version`, hard counts, and `working_set`, where each working-set item contains `uuid`, `issue_classes`, `label`, `loaded_count`, and `details`.",
+    "Full live working-set UUID list means the union of every `working_set[].uuid` returned by the hard-issue snapshot helper.",
+    "For this task, every `update`, `tag`, `delete`, or shape-changing rewrite counts as a destructive edit and therefore requires prior export coverage.",
+    "Hard-issue evidence-file contract is explicit: required sections are `Before snapshot`, `Working-set UUIDs`, `Export coverage`, `Hard-issue fixes`, `Startup-consumer verification`, and `After snapshot`. Closeout fails if any section is empty.",
+    "Minimal compliant rewrite targets are explicit: targeted-policy fixes must end outside the policy class; invalid-trigger fixes must remove invalid trigger values; startup dead-route fixes must leave no overlap between startup consumer profiles and agent-slug targeting on the same active record.",
+    "If a later snapshot changes the working set, record the new snapshot, append the new UUIDs to `Working-set UUIDs`, and export the new UUIDs before touching them.",
+    "Second-opinion gate is explicit: implementation starts only after task-shape approval, and pre-close approval is required before `st done` / closeout."
+  ],
+  "testing_strategy": [
+    "Run the hard-issue snapshot helper before and after cleanup and copy the outputs into the evidence file.",
+    "Verify the export JSON is readable and covers every mutated/deleted UUID recorded in the evidence file.",
+    "Verify both startup consumer-profile status commands return `memory=OK` after cleanup.",
+    "Use `st memory get` on each mutated surviving UUID after cleanup to confirm the record now matches the intended hard-issue fix.",
+    "Treat the helper output shape above as part of the task contract; do not change `docs/tasks/agent-hub-hard-memory-governance-snapshot.py` during execution unless it is objectively broken, and if it changes, record why in the evidence file."
+  ],
+  "context": {
+    "files_to_modify": [
+      "docs/tasks/agent-hub-hard-memory-governance-cleanup-evidence.md",
+      "docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json",
+      "docs/tasks/agent-hub-hard-memory-governance-snapshot.py"
+    ],
+    "files_to_create": [
+      "docs/tasks/agent-hub-hard-memory-governance-cleanup-evidence.md",
+      "docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json",
+      "docs/tasks/agent-hub-hard-memory-governance-snapshot.py"
+    ],
+    "risks": [
+      "A UUID can match multiple hard issue classes, so precedence must be followed consistently.",
+      "Concurrent live changes can move new hard-issue UUIDs into scope mid-task.",
+      "Deleting redundant records without export coverage can destroy rollback proof."
+    ],
+    "references": [
+      {
+        "title": "Hard-issue snapshot helper",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-hard-memory-governance-snapshot.py"
+      },
+      {
+        "title": "Evidence file",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-hard-memory-governance-cleanup-evidence.md"
+      },
+      {
+        "title": "Export JSON",
+        "url": "/srv/workspaces/projects/agent-hub/docs/tasks/agent-hub-hard-memory-governance-cleanup-export.json"
+      },
+      {
+        "title": "Governance implementation",
+        "url": "/srv/workspaces/projects/agent-hub/backend/app/services/memory/governance.py"
+      }
+    ],
+    "second_opinion": {
+      "required": true,
+      "stage": "both",
+      "status": "pending",
+      "summary": "Task-shape approval gates start. Pre-close approval gates the final hard-issue-zero proof."
+    }
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "research",
+      "subtask_type": "exploration",
+      "description": "Capture and export the live hard-issue working set.",
+      "steps": [
+        {
+          "description": "Run the authoritative hard-issue snapshot helper.",
+          "spec": {
+            "detail": "Run `cd /srv/workspaces/projects/agent-hub/backend && .venv/bin/python docs/tasks/agent-hub-hard-memory-governance-snapshot.py`. The authoritative working set is the union of `working_set[].uuid` from that JSON output."
+          }
+        },
+        {
+          "description": "Export the full current working set before destructive edits.",
+          "spec": {
+            "detail": "Export every UUID in the current `working_set` before any `update`, `tag`, `delete`, or shape-changing rewrite. This task treats all such changes as destructive for export purposes."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "1.1"
+      ],
+      "description": "Resolve startup dead routes and invalid triggers with explicit precedence.",
+      "steps": [
+        {
+          "description": "Fix startup-profile dead routes first.",
+          "spec": {
+            "detail": "Remove startup consumer profiles or agent slugs as needed so those UUIDs no longer violate the dead-route rule."
+          }
+        },
+        {
+          "description": "Fix invalid trigger types next.",
+          "spec": {
+            "detail": "Fix invalid trigger metadata next. When the same UUID also appears in another hard class, keep the precedence rule from the constraints and document the final class resolution in the evidence file."
+          }
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "depends_on": [
+        "2.1"
+      ],
+      "description": "Resolve targeted-policy hard issues.",
+      "steps": [
+        {
+          "description": "Rewrite or re-tier targeted policy records into compliant non-policy shape.",
+          "spec": {
+            "detail": "Rewrite targeted-policy records so they no longer remain policy-targeted. Preserve useful non-governance content, do not silently deactivate records to zero counters, and record the final issue-class resolution for each touched UUID."
+          }
+        },
+        {
+          "description": "If new hard-issue UUIDs appear after a refresh snapshot, export them before touching them.",
+          "spec": {
+            "detail": "Keep export coverage aligned with the live hard-issue working set."
+          }
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "subtask_type": "test",
+      "depends_on": [
+        "3.1"
+      ],
+      "description": "Verify hard-issue zeroing and export-backed traceability.",
+      "steps": [
+        {
+          "description": "Run the after snapshot and both startup-consumer status checks.",
+          "spec": {
+            "detail": "Use the snapshot helper and both `st -P agent-hub memory status` commands."
+          }
+        },
+        {
+          "description": "Verify every mutated/deleted UUID is covered by the export JSON and evidence file.",
+          "spec": {
+            "detail": "Verification must prove three things: every touched UUID had export coverage first, the evidence file names every touched UUID/action, and the after snapshot helper shows no remaining hard-issue UUIDs in `working_set` for the three hard classes."
+          }
+        }
+      ]
+    }
+  ]
+}

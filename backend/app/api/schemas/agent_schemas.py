@@ -65,7 +65,7 @@ class AgentCreateRequest(BaseModel):
     )
     daily_token_budget: int | None = Field(default=None, ge=0, description="Max tokens per day (0=unlimited)")
     hourly_request_limit: int | None = Field(default=None, ge=0, description="Max requests per hour (0=unlimited)")
-    timeout_seconds: float | None = Field(default=None, gt=0, le=600)
+    timeout_seconds: float | None = Field(default=None, gt=0)
 
 
 class AgentUpdateRequest(BaseModel):
@@ -91,7 +91,7 @@ class AgentUpdateRequest(BaseModel):
     max_subagent_concurrency: int | None = Field(default=None, ge=1, le=100)
     daily_token_budget: int | None = Field(default=None, ge=0)
     hourly_request_limit: int | None = Field(default=None, ge=0)
-    timeout_seconds: float | None = Field(default=None, gt=0, le=600)
+    timeout_seconds: float | None = Field(default=None, gt=0)
     change_reason: str | None = None
 
 

@@ -4,8 +4,8 @@ Please review Agent Hub's current `/persona` and `/sessions` surfaces as an oper
 
 Artifacts:
 - Reference contract: `docs/tasks/agent-hub-sessions-persona-operator-refactor-reference.md`
-- Persona screenshot: `/home/kasadis/.hermes/cache/screenshots/browser_screenshot_b3b253cd8578454791ae2ef336ba90fd.png`
-- Sessions screenshot: `/home/kasadis/.hermes/cache/screenshots/browser_screenshot_3084e237b916410788d802fb30f2c6dc.png`
+- Persona screenshot: no longer available
+- Sessions screenshot: no longer available
 - Current page entrypoints:
   - `frontend/src/app/persona/page.tsx`
   - `frontend/src/app/sessions/page.tsx`

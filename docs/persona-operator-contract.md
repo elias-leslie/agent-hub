@@ -7,7 +7,7 @@ Thin canonical contract for `/persona` operator UX. Purpose: keep future work DR
 - Primary surface is `/persona`. `/sessions` and `/persona/settings` support it; they do not replace it.
 - Tool contract stays `read`, `write`, `edit`, `bash`. No plugin, marketplace, or tool-surface expansion.
 - Persona naming stays dynamic. UI may show configured display name or neutral `persona` / `operator` copy. Never hardcode a specific persona name.
-- Hermes is reference for interaction quality, not architecture parity.
+- Prior operator work is reference for interaction quality, not architecture parity.
 
 ## Source of truth
 
@@ -70,6 +70,5 @@ Thin canonical contract for `/persona` operator UX. Purpose: keep future work DR
 
 ## References
 
-- `~/references/hermes-agent`
 - `~/references/pi-mono`
 - `~/.claude/skills/frontend-design/SKILL.md`
