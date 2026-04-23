@@ -1,0 +1,342 @@
+{
+  "title": "Build native Agent Hub Telegram parity for Jenny",
+  "description": "Long-term target: SummitFlow + Agent Hub + A-Term should replace Hermes and external coding CLIs for development and agentic work, so Jenny/Agent Hub needs native Telegram ownership rather than Hermes-mediated delivery. Upstream the existing `agent-hub-telegram-bot-v1` implementation into canonical `/srv/workspaces/projects/agent-hub`, create an Agent Hub-owned shared Telegram renderer/delivery stack with Hermes-grade behavior, and extend canonical scheduler/automation/report surfaces so native Agent Hub can own Jenny-facing Telegram delivery without a runtime Hermes dependency.",
+  "task_type": "task",
+  "priority": 2,
+  "labels": [
+    "agent-hub",
+    "telegram",
+    "jenny",
+    "native-delivery",
+    "scheduler",
+    "systemd"
+  ],
+  "complexity": "COMPLEX",
+  "autonomous": true,
+  "done_when": [
+    "Canonical `/srv/workspaces/projects/agent-hub` contains native Telegram config, admin API, bot runtime, report script, and systemd templates; no runtime Hermes import or subprocess dependency is introduced.",
+    "One shared Agent Hub-owned Telegram renderer/delivery stack is used by both DM chat replies and scheduled/operator sends, and the old plain-text-only sender path is removed from canonical Agent Hub.",
+    "The shared renderer passes golden coverage for MarkdownV2 conversion, code fence protection, markdown links with parentheses, GFM table wrapping, UTF-16-aware chunking, escaped ` (n/N)` continuation suffixes, whitespace-only suppression, and MarkdownV2 parse fallback to plain text.",
+    "Exact bootstrap/admin contracts are proven by tests: literal unauthorized/non-text/reset/start/status strings are frozen, env-vs-stored config precedence plus source labels are covered, and admin status/config endpoints expose the exact canonical response/request schema.",
+    "Exact runtime compatibility is proven by tests: canonical env var names, stored credential keys, heartbeat Redis key/payload fields, `bot_username` lifecycle, malformed-heartbeat behavior, and internal-only admin auth all match the frozen task contract.",
+    "Canonical config and operator helpers are exact: `allowed_chat_ids` and `report_chat_id` normalize to strings, malformed env allowlist overrides do not fall back to stored values, `configure_telegram_bot.py` follows the frozen CLI contract, and `backend/pyproject.toml` carries the canonical `python-telegram-bot>=22.6,<23` dependency.",
+    "Admin status semantics and helper CLIs are exact: `configured` means effective token present only, unauthorized commands always return the frozen unauthorized text without side effects, the report script follows the frozen `--dry-run/--title/--st-path/--workdir` contract, and graceful bot shutdown clears the heartbeat key while startup failures write explicit degraded/not_configured status.",
+    "Tie-breakers and storage encoding are proven by tests: `not_configured` beats allowlist degradation when token is absent, heartbeat uses one JSON object at `agent-hub:telegram:bot:status`, unauthorized non-text updates return the unauthorized message, admin PUT preserves omitted keys, and both DM/report callers hit one shared delivery implementation.",
+    "The Telegram DM bot preserves the bootstrap/session contract: empty allowlist does not block startup, unauthorized chats get the exact chat-id rejection string, `/reset` forces a fresh conversation on the next message, and `/api/complete` requests use the agentic tool-loop settings (`execute_tools=true`, `enable_programmatic_tools=true`, `enable_caching=false`, `skip_cache=true`, `max_turns > 1`).",
+    "Canonical persona scheduler, automation schemas, and manual trigger path support `delivery=telegram` for `payload_type=agent_turn`, targeting the configured `report_chat_id` via the same shared delivery helper.",
+    "Canonical repo tests cover renderer/delivery, bot runtime/config, admin API, first-party client registration, scheduler/automation Telegram delivery, report-script dry-run behavior, and systemd templates; targeted pytest suites pass and full `dt --check` passes before closeout.",
+    "The task log and final closeout record the safe cutover plan from Hermes/sidecar delivery to canonical Agent Hub, including any explicitly deferred non-v1 scope such as groups, topics, media, webhook mode, and streaming edits.",
+    "Canonical systemd bot/report units and cutover notes explicitly keep activation disabled by default until the old sidecar/Hermes path is intentionally stopped or isolated, preventing duplicate pollers/sends during rollout."
+  ],
+  "objective": "Make canonical Agent Hub the native owner of Jenny's Telegram DM and operator-report path by upstreaming the v1 bot surfaces, porting Hermes-grade rendering behavior into an Agent Hub-owned module, and wiring scheduler/report delivery so Jenny no longer depends on Hermes at runtime.",
+  "spirit_anti": "Do not leave canonical Agent Hub with a plain-text-only Telegram sender, do not keep divergent DM/report formatting stacks, do not add a runtime dependency on Hermes, and do not let the sidecar remain the unowned long-term source of truth. Avoid speculative group/media scope and avoid ambiguous delivery semantics like per-job chat routing in this task.",
+  "constraints": [
+    "Authority order is fixed: `docs/tasks/agent-hub-native-telegram-parity-for-jenny.plan.json` first, then `docs/tasks/agent-hub-native-telegram-parity-for-jenny-reference.md`, then canonical `agent-hub` code/tests, then donor/reference implementations in `agent-hub-telegram-bot-v1` and `~/references/hermes-agent`.",
+    "Treat `/srv/workspaces/projects/agent-hub-telegram-bot-v1` and `~/references/hermes-agent` as donor/reference code only. Do not edit `~/references/`, and do not leave the final implementation living only in the sidecar repo.",
+    "The canonical shared Telegram stack must be Agent Hub-owned. No runtime import, shell-out, or library dependency on Hermes is allowed for rendering or delivery.",
+    "DM replies and scheduled/operator sends must use the same shared renderer/chunk sender. It is acceptable for caller-owned options like `reply_to_message_id` and `disable_link_previews` to differ, but not for the formatting/chunking logic to fork.",
+    "Bootstrap/user-facing strings are frozen for this task. Unauthorized chat reply exact text: `This chat is not authorized yet. Chat ID: <chat_id>. Ask the operator to add it in Agent Hub.` Unsupported non-text reply exact text: `This bot supports text messages only in v1.` `/reset` exact text: `Conversation reset. Your next text message will start a fresh Jenny conversation.` Allowed `/start` exact template: `Jenny connected.\\nChat ID: <chat_id>\\nReports bound: <yes|no>\\nSend a message to talk to Jenny. Use /status for config/runtime state. Use /reset to start a fresh conversation.` Allowed `/status` exact template: `Chat ID: <chat_id>\\nAllowed: yes\\nReports bound: <yes|no>\\nRunner status: <status>\\nCurrent session id: <session_id|none>`. Do not treat 'same as v1' as sufficient; keep these literals in canonical tests.",
+    "Config precedence and source-label contract are explicit. Effective values resolve as: non-blank env override first, else stored credential, else unset. `PUT /api/admin/telegram/config` only mutates stored values for keys present in the request; `null` clears the stored value for that key; blank strings are normalized to clear/unset; `allowed_chat_ids` normalization trims entries, drops blanks, de-duplicates while preserving first-seen order, and malformed JSON/storage resolves to `allowlist_error='allowed_chat_ids must be a JSON array'`. Source labels are `env` when the effective non-blank env override wins, `stored` when the stored value wins, else `null`.",
+    "Admin API contract is explicit. `GET /api/admin/telegram/status` and `PUT /api/admin/telegram/config` use the exact shape `{configured, bot_token_source, bot_username, allowed_chat_ids, allowed_chat_ids_source, report_chat_id, report_chat_id_source, runner_status, last_poll_at, last_error}`. `PUT` accepts only `{bot_token?: str | null, allowed_chat_ids?: list[str | int] | null, report_chat_id?: str | int | null}` with nullable values for clearing stored config. Runner-status semantics are fixed: `not_configured` when no token is effective; `degraded` when allowlist parsing fails or the normalized allowlist is empty; `unknown` when config is otherwise valid but no runner heartbeat exists; otherwise use the runner heartbeat payload status. Empty allowlist degrades status but must not block bot startup.",
+    "Canonical config namespace is explicit. Env override names are exactly `AGENT_HUB_TELEGRAM_BOT_TOKEN`, `AGENT_HUB_TELEGRAM_ALLOWED_CHAT_IDS`, and `AGENT_HUB_TELEGRAM_REPORT_CHAT_ID`. Stored credential namespace is exactly provider `_system_telegram_bot` with credential types `bot_token`, `allowed_chat_ids`, and `report_chat_id`. Whitespace-only scalar env values are treated as unset after normalization, and env allowlist text is parsed with the same JSON-array normalizer used for stored values so malformed env JSON also yields `allowlist_error='allowed_chat_ids must be a JSON array'`.",
+    "Chat-id typing/normalization is explicit. `allowed_chat_ids` request/env/stored values normalize to strings: array items may start as strings or integers, each item is cast to string, trimmed, blanks are dropped, duplicates are removed after normalization, and `GET /api/admin/telegram/status` always returns `list[str]`. Incoming Telegram `chat_id` values are converted to strings before allowlist membership checks.",
+    "`report_chat_id` typing/normalization is explicit. Admin/script inputs may start as string or integer, are normalized to a trimmed string, blank strings clear/unset the stored value, storage persists a string, and status/delivery call sites always consume/emit `report_chat_id` as `str | null`.",
+    "Malformed env precedence is explicit. When `AGENT_HUB_TELEGRAM_ALLOWED_CHAT_IDS` is present but malformed JSON, the env override still wins; the stored allowlist is ignored for that process, the effective allowlist becomes empty, and status/bot startup surface `allowlist_error='allowed_chat_ids must be a JSON array'` plus degraded status.",
+    "Persistence impact is explicit. Current live storage for `persona_scheduled_jobs.delivery` is plain `varchar` with no delivery-specific DB constraint, so expanding allowed values to include `telegram` does not require a migration by default. If implementation-time inspection finds a live DB enum/check constraint that contradicts this, stop and add a narrow prerequisite migration plus task-log note before continuing.",
+    "Telegram runtime dependency is explicit. Canonical Agent Hub should reuse the donor library surface and add `python-telegram-bot>=22.6,<23` to `backend/pyproject.toml` rather than inventing a different Telegram client. Fallback/error handling assumptions in this task are grounded in that library family.",
+    "`configure_telegram_bot.py` CLI contract is explicit. The script exposes `--token`, repeated `--allowed-chat-id`, `--report-chat-id`, `--clear-token`, `--clear-allowed-chat-ids`, and `--clear-report-chat-id`. Clear flags override corresponding set flags for the same field. With no mutation flags it prints current canonical Telegram status as JSON to stdout; with mutations it applies them through the canonical config service, prints resulting status as JSON, exits 0 on success, and is idempotent for repeated identical calls. Validation failures exit non-zero with a concise error.",
+    "Runner heartbeat contract is explicit. Redis key is exactly `agent-hub:telegram:bot:status`. Heartbeat payload fields are exactly `{runner_status, last_poll_at, last_error, updated_at, pid, bot_username}` with UTC ISO-8601 timestamps. `runner_status` allowed values for this task are `not_configured`, `unknown`, `polling`, and `degraded`. Status reads use this rule: missing heartbeat => `unknown` when config is otherwise valid; malformed/non-dict heartbeat payload => `runner_status=degraded`, `last_error='malformed heartbeat payload'`, and null timestamp/username fields; stale heartbeat has no separate auto-demotion rule in this task and is exposed via the raw timestamps rather than inferred status rewriting.",
+    "Runner-status precedence tie-breaker is explicit. `not_configured` wins whenever no effective bot token exists, even if allowlist parsing also fails or the normalized allowlist is empty. `degraded` for allowlist problems only applies when an effective token is present.",
+    "Heartbeat encoding is explicit. `agent-hub:telegram:bot:status` stores one JSON-serialized object payload, not a Redis hash. Writer and reader both use JSON object encoding; any non-JSON or non-object value is treated as malformed heartbeat payload and degrades status.",
+    "Unauthorized/non-text precedence is explicit. Authorization check runs first for every Telegram update type. Unauthorized chats always receive the frozen unauthorized-chat string, even for stickers/photos/other non-text updates; the text-only-v1 message is only for authorized chats sending unsupported non-text content.",
+    "Admin config API error contract is explicit. For syntactically valid requests that reach the handler but fail Telegram config normalization, return HTTP 400 with `detail` containing the concise validation error string. For body/schema validation failures before the handler, keep FastAPI's normal 422 response. Omitted keys must preserve stored values exactly; only present keys mutate.",
+    "Shared-path proof is explicit. Verification must include at least one structural test or patching assertion that DM replies and scheduler/report sends call the same canonical delivery helper functions, not parallel implementations that merely happen to render identical visible output.",
+    "`bot_username` source/update contract is explicit. It comes only from the bot runner heartbeat payload after a successful Telegram `getMe()` during startup/polling, not from stored config. Until that handshake succeeds or when heartbeat is absent/malformed, status returns `bot_username=null`.",
+    "Authorization scope for `/api/admin/telegram/*` is explicit. These endpoints live under `/api/admin` and therefore require the existing internal-header guard used by other admin endpoints: `X-Agent-Hub-Internal` with the configured internal service secret. Missing that header must yield the standard `403` `internal_only` response; no separate public/admin auth pattern is introduced for Telegram config.",
+    "`configured` field meaning is explicit. In admin status/config responses, `configured` means an effective bot token is present after env-vs-stored precedence resolution. It does not require a valid allowlist, live heartbeat, or report chat binding; those affect `runner_status`/`last_error`, not `configured`.",
+    "Dedicated report-script CLI contract is explicit. `send_jenny_telegram_status_report.py` exposes `--dry-run`, `--title`, `--st-path`, and `--workdir`. `--dry-run` requires no live Telegram send and no report chat binding; it only runs/composes the Jenny report and prints the final report body to stdout, exiting 0 on success. Normal execution prints a JSON object containing at least `sent_chunks` and `title` on success and exits non-zero on generation/delivery failure.",
+    "Runner lifecycle cleanup is explicit. On graceful shutdown after polling started, the bot runner deletes `agent-hub:telegram:bot:status`. On startup failure before polling (for example missing token or malformed allowlist override), it writes the corresponding degraded/not_configured status payload instead of clearing to null. Hard crashes may leave the last heartbeat payload behind; admin status reads it verbatim under the no-auto-staleness rule already frozen in this package.",
+    "Operational logging is explicit for best-effort Telegram delivery failures. When `_maybe_send_delivery_telegram(...)` skips or fails, emit at least job id, job name, delivery=`telegram`, and a concise reason string that distinguishes missing config from send/runtime exception so operators can debug silent delivery gaps.",
+    "Unauthorized command handling is explicit. `/start`, `/status`, `/reset`, and plain text from unauthorized chats all return the same frozen unauthorized-chat string and must not call `/api/complete`, mutate session/reset keys, or reveal privileged status details.",
+    "Canonical install scope is explicit. Adding canonical Telegram systemd templates must not modify, disable, or auto-start existing Hermes or sidecar Telegram units/timers. This task only adds canonical templates and disabled-by-default activation instructions.",
+    "Reply-threading scope is explicit. DM replies send through the shared sender with `reply_to_message_id` only on the first chunk. All later chunks must omit `reply_to_message_id` and continue unthreaded while still preserving order and the visible ` (n/N)` suffix.",
+    "Markdown parse fallback trigger is explicit. The shared sender first attempts Telegram `send_message(..., parse_mode=MARKDOWN_V2)`. If Telegram rejects that attempt with an error whose message contains `parse` or `markdown` (case-insensitive), the sender strips MarkdownV2 formatting/escapes, re-chunks if needed through the same UTF-16-aware path, and retries once with `parse_mode=None`. If the plain-text resend fails, surface that failure normally.",
+    "Scheduler/manual-trigger delivery failure behavior is explicit. For `delivery=telegram` on `payload_type=agent_turn`, the agent-turn result remains authoritative. Missing `report_chat_id`, malformed config, or Telegram send failure must not convert a successful agent turn into a failed scheduler/manual-trigger job; instead log the delivery problem and leave the agent-turn output/session result intact. The dedicated one-shot report script is different: missing token/report chat or send failure is a hard script error because delivery is the script's only purpose.",
+    "Validation for invalid delivery combinations is explicit. API create/update paths must reject `delivery=telegram` when `payload_type != agent_turn` with 422-level validation rather than silently ignoring it. Scheduler/manual-trigger code should still guard against legacy invalid rows defensively by skipping Telegram delivery and logging the mismatch instead of throwing.",
+    "Second-opinion gate is explicit. Research/package refinement may proceed while task-shape critique is pending, but implementation work may not start until `st critique <task> --stage task_shape` returns approval and `st context` shows the task ready. `st critique <task> --stage pre_close` blocks closeout only, not package authoring.",
+    "Rollout activation boundary is explicit. Canonical systemd bot/report units are installed disabled by default in this task package. Do not enable native canonical Telegram polling or recurring report timers until the operator intentionally cuts over and the old sidecar/Hermes poller path is stopped or otherwise isolated to avoid duplicate pollers/sends.",
+    "Bootstrap behavior is explicit: empty allowlist does not block bot polling, unauthorized chats return the exact chat-id rejection string, unsupported non-text content returns the exact v1 text-only message, and `/reset` returns the exact v1 reset confirmation string.",
+    "DM completion contract is explicit: `external_id=telegram:dm:<chat_id>`, `project_id=agent-hub`, `agent_slug=persona`, `use_memory=true`, `enable_caching=false`, `skip_cache=true`, `execute_tools=true`, `enable_programmatic_tools=true`, and `max_turns > 1`. Do not ship a one-shot completion path that can leak pseudo-tool traces into Telegram.",
+    "Renderer contract is explicit: protect code blocks and inline code before escaping, convert markdown to Telegram MarkdownV2, wrap GFM pipe tables in fenced code blocks, preserve markdown links/headers/bold/italic/strike/spoiler/blockquote semantics when possible, and fall back once to stripped plain text on Markdown parse failure.",
+    "Chunking contract is explicit: use UTF-16-aware Telegram length accounting, keep each chunk within 4096 characters after suffix budgeting, prefer paragraph/newline boundaries before hard splits, append a visible ` (n/N)` continuation suffix on multipart sends, escape the suffix parentheses for MarkdownV2 chunks, and skip whitespace-only sends entirely.",
+    "Link-preview policy is explicit and caller-owned for this task: DM replies use `disable_link_previews=false`; scheduled/operator/report sends use `disable_link_previews=true`; both still route through the same shared renderer and sender.",
+    "Scheduler contract is explicit: the delivery enum becomes `none | push | telegram`, `delivery=telegram` is supported only for `payload_type=agent_turn`, and both cron-driven execution and manual trigger must call the same `_maybe_send_delivery_telegram(...)` helper after the agent turn completes. Do not add per-job chat routing, topic routing, or a new scheduler payload type here.",
+    "The dedicated operator report script/timer remains a separate one-shot bridge that runs Jenny via `st complete -a persona -p agent-hub -x --skip-cache --raw`, then sends the result through the shared Telegram delivery helper. Keep the prompt plain-text/Telegram-ready and explicitly grounded in live checks.",
+    "Out of scope remains fixed for this task: groups, forum topics, media/voice, webhook mode, callback queries, inline mode, and streaming Telegram edits. Record any desired expansion as a follow-up task instead of smuggling it into this implementation."
+  ],
+  "testing_strategy": [
+    "Add a focused renderer golden suite in `backend/tests/services/test_telegram_renderer.py` covering MarkdownV2 conversion, code fences, link escaping, GFM table wrapping, UTF-16-safe chunking, suffix escaping, and parse fallback behavior using Hermes donor cases as grounding.",
+    "Add explicit literal-string tests for unauthorized-chat, unsupported non-text, `/reset`, allowed `/start`, and allowed `/status` responses so parity cannot silently drift under cosmetic wording changes.",
+    "Add explicit config/admin tests for env-vs-stored precedence, source-label mapping, null-clearing semantics, whitespace/duplicate allowlist normalization, malformed stored allowlist payloads, and the status distinction between degraded-empty-allowlist vs startup still allowed.",
+    "Add explicit compatibility tests for the exact env var names, stored credential keys, heartbeat Redis key/payload fields, malformed/missing heartbeat behavior, `bot_username` lifecycle before and after `getMe()`, and internal-only admin auth on `/api/admin/telegram/*`.",
+    "Add explicit tests for chat-id normalization and malformed env precedence: mixed string/int allowlist entries normalize to a de-duplicated `list[str]`, incoming Telegram `chat_id` matching uses string comparison, `report_chat_id` normalizes to string, and malformed `AGENT_HUB_TELEGRAM_ALLOWED_CHAT_IDS` overrides block fallback to stored allowlists while surfacing degraded status.",
+    "Add explicit tests for `configured` semantics, unauthorized `/start`/`/status`/`/reset` handling, and runner lifecycle cleanup: graceful shutdown clears the heartbeat key, startup failure writes explicit degraded/not_configured payloads, and stale/crash leftovers remain readable under the no-auto-staleness rule.",
+    "Add explicit tie-breaker/storage tests: no-token-plus-malformed-allowlist yields `not_configured`, heartbeat writer/reader use one JSON object payload at `agent-hub:telegram:bot:status`, unauthorized non-text updates return the unauthorized message, and admin PUT preserves omitted stored fields while mutating only present keys.",
+    "Add or update service tests for `telegram_delivery`, `telegram_bot_service`, `telegram_config_service`, and `first_party_client_service`, including shared send-path behavior, caller-owned link-preview policy, bootstrap/allowlist rules, agentic `/api/complete` payload flags, and first-party client registration of `agent-hub-telegram-bot`.",
+    "Add explicit fallback tests where Telegram rejects MarkdownV2 output, then verify the shared sender strips formatting, re-chunks through the same UTF-16-aware path, preserves caller-owned link-preview policy, and succeeds in plain-text mode.",
+    "Add explicit tests for multipart DM reply ordering/threading and invalid delivery combinations: first chunk replies to the inbound message, later chunks do not, and `delivery=telegram` with non-`agent_turn` payloads is rejected at API validation time while legacy invalid rows are skipped safely in workflow code.",
+    "Add explicit script tests for `send_jenny_telegram_status_report.py` CLI flags and output: `--dry-run` prints report body without needing live Telegram config, success path prints JSON with at least `sent_chunks` and `title`, and failure exits non-zero with concise stderr/stdout proof.",
+    "Add explicit persistence/runtime tests or verification notes showing `persona_scheduled_jobs.delivery` is plain `varchar` with no delivery-specific DB constraint, and add script tests that lock the exact `configure_telegram_bot.py` flags, JSON stdout behavior, idempotency, and failure mode.",
+    "Add or update API/workflow tests for `admin_telegram`, persona automation schemas, manual automation trigger behavior, and scheduler delivery hooks so `delivery=telegram` is exercised for `payload_type=agent_turn` and rejected or ignored outside the frozen scope.",
+    "Add or update script/systemd tests for `send_jenny_telegram_status_report.py`, `configure_telegram_bot.py`, and `backend/tests/unit/test_systemd_service_templates.py` so canonical bot/report service templates and dry-run report behavior are locked down.",
+    "Run targeted pytest suites with `/srv/workspaces/projects/agent-hub/backend/.venv/bin/pytest ...` first, then `dt --check --changed-only` during iteration, then full `dt --check` before closeout.",
+    "Verification evidence must include: targeted pytest output, report-script `--dry-run`, one native send canary if credentials/chat binding are available, `scripts/rebuild.sh agent-hub`, and the documented cutover/deferred-scope notes in the task log/final summary.",
+    "If live credentials/chat binding are unavailable, substitute proof is mandatory: report-script `--dry-run`, mocked-bot delivery tests, scheduler/manual-trigger Telegram delivery tests, and systemd template/script tests together satisfy closeout. Live canary send remains supplemental, not the sole acceptable proof path."
+  ],
+  "context": {
+    "files_to_modify": [
+      "docs/tasks/agent-hub-native-telegram-parity-for-jenny-reference.md",
+      "backend/pyproject.toml",
+      "backend/app/config.py",
+      "backend/app/api/__init__.py",
+      "backend/app/api/persona/automations.py",
+      "backend/app/api/persona/schemas.py",
+      "backend/app/models/persona_scheduled_job.py",
+      "backend/app/services/first_party_client_service.py",
+      "backend/app/workflows/persona_scheduler.py",
+      "backend/tests/api/test_persona.py",
+      "backend/tests/services/test_first_party_client_service.py",
+      "backend/tests/unit/test_systemd_service_templates.py"
+    ],
+    "files_to_create": [
+      "backend/app/api/admin_telegram.py",
+      "backend/app/services/telegram_renderer.py",
+      "backend/app/services/telegram_delivery.py",
+      "backend/app/services/telegram_config_service.py",
+      "backend/app/services/telegram_bot_service.py",
+      "backend/app/scripts/run_telegram_bot.py",
+      "backend/app/scripts/configure_telegram_bot.py",
+      "backend/app/scripts/send_jenny_telegram_status_report.py",
+      "scripts/systemd/agent-hub-telegram-bot.service",
+      "scripts/systemd/agent-hub-telegram-status-report.service",
+      "scripts/systemd/agent-hub-telegram-status-report.timer",
+      "backend/tests/api/test_admin_telegram.py",
+      "backend/tests/services/test_telegram_renderer.py",
+      "backend/tests/services/test_telegram_delivery.py",
+      "backend/tests/services/test_telegram_bot_service.py",
+      "backend/tests/workflows/test_persona_scheduler_telegram.py",
+      "backend/tests/unit/test_send_jenny_telegram_status_report.py"
+    ],
+    "risks": [
+      "If the renderer/delivery logic is only partially ported, canonical Agent Hub could still ship a weaker Telegram path than Hermes and create inconsistent DM vs report output.",
+      "If the bot path uses one-shot `/api/complete` settings, Jenny can leak pseudo-tool traces into Telegram instead of actually running tools.",
+      "If `delivery=telegram` semantics are left ambiguous across model/schema/scheduler/manual-trigger layers, critique and later agents will keep bouncing the task or silently diverge.",
+      "If canonical runtime rollout is attempted before tests and dry-run proof exist, the live sidecar/Hermes path could be disrupted without parity proof."
+    ],
+    "references": [
+      {
+        "title": "Task reference package",
+        "url": "docs/tasks/agent-hub-native-telegram-parity-for-jenny-reference.md"
+      },
+      {
+        "title": "Native Agent Hub v1 donor bot service",
+        "url": "/srv/workspaces/projects/agent-hub-telegram-bot-v1/backend/app/services/telegram_bot_service.py"
+      },
+      {
+        "title": "Native Agent Hub v1 donor config and delivery",
+        "url": "/srv/workspaces/projects/agent-hub-telegram-bot-v1/backend/app/services/telegram_config_service.py"
+      },
+      {
+        "title": "Hermes Telegram renderer donor",
+        "url": "/home/kasadis/references/hermes-agent/gateway/platforms/telegram.py"
+      },
+      {
+        "title": "Hermes Telegram formatting tests donor",
+        "url": "/home/kasadis/references/hermes-agent/tests/gateway/test_telegram_format.py"
+      }
+    ],
+    "second_opinion": {
+      "required": true,
+      "stage": "both",
+      "status": "pending",
+      "summary": "`specifier` provides the task-shape readiness gate before implementation and the pre-close gate before closure. Design/behavior donor review from Hermes/v1 informs implementation but does not replace either second-opinion gate."
+    }
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "research",
+      "subtask_type": "exploration",
+      "description": "Freeze the canonical Telegram parity contract in the repo before implementation begins.",
+      "steps": [
+        {
+          "description": "Inspect the canonical `agent-hub` scheduler/persona/client-registration surfaces and the donor `agent-hub-telegram-bot-v1` plus Hermes Telegram renderer surfaces.",
+          "spec": {
+            "detail": "Ground the task against the exact files listed in the reference doc so the implementation starts from live code rather than memory or hand-wavy architecture guesses."
+          }
+        },
+        {
+          "description": "Write `docs/tasks/agent-hub-native-telegram-parity-for-jenny-reference.md` and keep it aligned with the imported plan.",
+          "spec": {
+            "detail": "The reference already exists in-repo and must stay aligned with the imported plan. It freezes authority order, bootstrap messages, DM completion flags, renderer/chunking rules, configured-field meaning, CLI contracts, link-preview policy, scheduler `delivery=telegram` semantics, and out-of-scope boundaries before coding begins."
+          }
+        },
+        {
+          "description": "Record in the task log that the latest imported plan plus reference doc are the authoritative package for implementation.",
+          "spec": {
+            "detail": "This prevents stale critique summaries or earlier sidecar assumptions from outranking the refreshed canonical task package."
+          }
+        },
+        {
+          "description": "Freeze the exact bootstrap literals, admin schemas, delivery-failure semantics, fallback trigger, and rollout boundary inside the plan/reference package before implementation begins.",
+          "spec": {
+            "detail": "Do not leave critical behavior as \"same as v1/Hermes\". The imported package itself must state the exact strings, field names, validation rules, failure handling, and disabled-by-default rollout boundary."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "description": "Upstream the Telegram config/admin/bootstrap surfaces into canonical Agent Hub.",
+      "depends_on": [
+        "1.1"
+      ],
+      "steps": [
+        {
+          "description": "Add canonical config settings and first-party client registration for `agent-hub-telegram-bot` plus stored Telegram credential loading/updating.",
+          "spec": {
+            "detail": "Port the v1 credential namespace into canonical Agent Hub and freeze the exact env var names (`AGENT_HUB_TELEGRAM_BOT_TOKEN`, `AGENT_HUB_TELEGRAM_ALLOWED_CHAT_IDS`, `AGENT_HUB_TELEGRAM_REPORT_CHAT_ID`), stored credential keys (`_system_telegram_bot` + `bot_token`/`allowed_chat_ids`/`report_chat_id`), env-vs-stored precedence, malformed-env-overrides-win behavior, string normalization for chat ids, blank/null clearing behavior, allowlist normalization, malformed-allowlist error text, and degraded-but-startup-safe empty-allowlist semantics."
+          }
+        },
+        {
+          "description": "Create the canonical internal-only `/api/admin/telegram` status/config API and its tests.",
+          "spec": {
+            "detail": "The admin API must expose the exact `{configured, bot_token_source, bot_username, allowed_chat_ids, allowed_chat_ids_source, report_chat_id, report_chat_id_source, runner_status, last_poll_at, last_error}` shape, require the existing `/api/admin` internal-header guard, accept `allowed_chat_ids` as `list[str|int]|null` and `report_chat_id` as `str|int|null`, treat `configured` as effective-token-present only, return HTTP 400 with concise `detail` for handler-level Telegram config normalization failures, preserve omitted keys, and read runner status from the exact JSON-encoded Redis heartbeat contract rather than an ad hoc status cache."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "subtask_type": "backend",
+      "description": "Implement the shared Agent Hub-owned Telegram renderer and delivery helper with Hermes-grade behavior.",
+      "depends_on": [
+        "1.1",
+        "2.1"
+      ],
+      "steps": [
+        {
+          "description": "Create `telegram_renderer.py` and `telegram_delivery.py` as the single formatting/chunking/send authority for canonical Agent Hub.",
+          "spec": {
+            "detail": "Port or faithfully reimplement the Hermes donor behavior for MarkdownV2 conversion, protected code spans/blocks, GFM table wrapping, UTF-16-aware chunking, escaped continuation suffixes, whitespace skipping, and parse fallback to stripped plain text. The fallback trigger must be the Telegram API rejecting the Markdown send with a parse/markdown error, after which the sender re-chunks through the same UTF-16-aware path and retries once in plain text."
+          }
+        },
+        {
+          "description": "Add focused renderer and delivery tests before wiring bot or scheduler callers to the new stack.",
+          "spec": {
+            "detail": "Golden tests must lock the edge cases that made Hermes higher quality than the v1 plain-text sender, including tables, code fences, emoji/UTF-16 chunking, suffix escaping, parse-fallback re-chunking, and caller-owned link-preview kwargs."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "integration",
+      "subtask_type": "backend",
+      "description": "Port the Telegram DM bot runtime into canonical Agent Hub and make it use the shared renderer/delivery path.",
+      "depends_on": [
+        "2.1",
+        "2.2"
+      ],
+      "steps": [
+        {
+          "description": "Create canonical bot/runtime scripts and systemd bot service templates from the v1 donor, then replace plain `reply_text(...)` sends with the shared delivery helper.",
+          "spec": {
+            "detail": "Keep the exact bootstrap/reset/text-only rejection contract, unauthorized-command handling, runner-status Redis heartbeat, latest-session selection logic, and first-chunk-only reply threading semantics while routing all outbound text through the shared renderer/chunk sender. Authorization runs before content-type handling, so unauthorized non-text updates also return the frozen unauthorized message."
+          }
+        },
+        {
+          "description": "Keep the DM `/api/complete` call path explicitly agentic and test it.",
+          "spec": {
+            "detail": "The canonical bot must send `execute_tools=true`, `enable_programmatic_tools=true`, `enable_caching=false`, `skip_cache=true`, and `max_turns > 1`, otherwise Jenny can emit literal pseudo-tool text instead of actually using tools."
+          }
+        },
+        {
+          "description": "Keep heartbeat/bot-identity semantics exact during startup and steady state.",
+          "spec": {
+            "detail": "Runner heartbeat writes one JSON object to `agent-hub:telegram:bot:status` with `{runner_status, last_poll_at, last_error, updated_at, pid, bot_username}`. `bot_username` is populated only after successful `getMe()` and remains null before that; graceful shutdown clears the key; startup failure writes explicit degraded/not_configured payloads; malformed heartbeat payloads degrade status rather than crashing the bot or admin status endpoint. `not_configured` beats allowlist degradation whenever no effective token exists."
+          }
+        },
+        {
+          "description": "Freeze the canonical Telegram dependency and helper CLI behavior while porting the bot runtime.",
+          "spec": {
+            "detail": "Add `python-telegram-bot>=22.6,<23` to `backend/pyproject.toml`, implement `configure_telegram_bot.py` with the exact flag/JSON/idempotency contract frozen in the task package, and keep `send_jenny_telegram_status_report.py` on the exact `--dry-run/--title/--st-path/--workdir` CLI/output contract so operator setup and verification stay deterministic."
+          }
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "integration",
+      "subtask_type": "backend",
+      "description": "Extend canonical scheduler, automation, and report surfaces to deliver Telegram output through the shared path.",
+      "depends_on": [
+        "2.1",
+        "2.2"
+      ],
+      "steps": [
+        {
+          "description": "Extend the scheduled-job model, persona schemas, and automation API so `delivery=telegram` is accepted consistently for `payload_type=agent_turn`.",
+          "spec": {
+            "detail": "Freeze the enum and validation contract to `none | push | telegram`. API create/update paths must reject `delivery=telegram` when `payload_type != agent_turn` with 422-level validation. Workflow code must still guard against legacy invalid rows defensively without throwing."
+          }
+        },
+        {
+          "description": "Add `_maybe_send_delivery_telegram(...)` to the scheduler/manual-trigger flow and port the canonical report script plus report systemd service/timer.",
+          "spec": {
+            "detail": "Both cron execution and manual automation trigger must use the same Telegram delivery helper, but delivery failures are best-effort and must not overwrite a successful agent-turn result. Log at least job id, job name, delivery=`telegram`, and concise failure reason when delivery skips or fails. The dedicated report script/timer remains a separate one-shot Jenny status-report bridge targeting the configured `report_chat_id`, and canonical systemd units stay disabled by default until intentional cutover."
+          }
+        },
+        {
+          "description": "Verify the delivery enum expansion does not require a DB migration before coding proceeds past the persistence boundary.",
+          "spec": {
+            "detail": "Current expectation is no migration because `persona_scheduled_jobs.delivery` is plain `varchar` with no delivery-specific constraint. If live inspection contradicts that, capture the mismatch in the task log and add the narrow migration as a prerequisite instead of silently proceeding."
+          }
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "verification",
+      "subtask_type": "test",
+      "description": "Verify native Telegram parity in canonical Agent Hub and capture the safe cutover plan.",
+      "depends_on": [
+        "2.3",
+        "2.4"
+      ],
+      "steps": [
+        {
+          "description": "Run the targeted canonical pytest suites, then `dt --check --changed-only`, then full `dt --check`.",
+          "spec": {
+            "detail": "Use the Agent Hub backend venv for pytest commands and include the renderer, delivery, bot, admin, scheduler, script, and systemd template suites in the proof set. The proof set must include tie-breaker/storage tests (`not_configured` precedence, JSON heartbeat encoding, unauthorized non-text handling, omitted-key preservation) plus one structural assertion that DM and scheduler/report paths call the same shared delivery helper."
+          }
+        },
+        {
+          "description": "Run report-script `--dry-run`, rebuild canonical Agent Hub, and capture one native send canary if credentials/chat binding are available without disrupting the current sidecar/Hermes path.",
+          "spec": {
+            "detail": "Verification must prove canonical code can generate Telegram-ready output and, when safe, send it natively. If live credentials/chat binding are unavailable, substitute proof is the dry-run report path plus mocked-bot/service/workflow/systemd coverage. Do not enable or disable live pollers during this task unless the operator intentionally performs the cutover."
+          }
+        },
+        {
+          "description": "Record the cutover/deferred-scope note in the task log and final closeout summary.",
+          "spec": {
+            "detail": "The closeout must explicitly distinguish what is live in canonical Agent Hub now, what still runs through Hermes or the sidecar, and which non-v1 features remain intentionally deferred."
+          }
+        }
+      ]
+    }
+  ]
+}

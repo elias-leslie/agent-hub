@@ -1,0 +1,16 @@
+[Unit]
+Description=Agent Hub Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PROJECT_ROOT__/backend
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/bin/bash -lc '__PROJECT_ROOT__/backend/.venv/bin/python -m app.scripts.run_telegram_bot'
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=default.target

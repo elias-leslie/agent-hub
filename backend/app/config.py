@@ -83,9 +83,15 @@ class Settings(BaseSettings):
     # First-party client registrations for standalone and companion installs
     agent_hub_dashboard_client_id: str = "agent-hub-dashboard"
     agent_hub_dashboard_request_source: str = "agent-hub-dashboard"
+    agent_hub_telegram_client_id: str = "agent-hub-telegram-bot"
     summitflow_client_id: str = ""
     portfolio_client_id: str = ""
     monkey_fight_client_id: str = ""
+
+    # Native Telegram config overrides
+    agent_hub_telegram_bot_token: str = ""
+    agent_hub_telegram_allowed_chat_ids: str = ""
+    agent_hub_telegram_report_chat_id: str = ""
 
     @field_validator("agent_hub_dashboard_client_id", mode="before")
     @classmethod
@@ -104,6 +110,15 @@ class Settings(BaseSettings):
             return "agent-hub-dashboard"
         cleaned = v.strip()
         return cleaned or "agent-hub-dashboard"
+
+    @field_validator("agent_hub_telegram_client_id", mode="before")
+    @classmethod
+    def default_telegram_client_id(cls, v: str | None) -> str:
+        """Treat blank env values as the built-in Telegram bot client id."""
+        if v is None:
+            return "agent-hub-telegram-bot"
+        cleaned = v.strip()
+        return cleaned or "agent-hub-telegram-bot"
 
     # CORS (comma-separated list via CORS_ORIGINS env var)
     cors_origins: Annotated[list[str], NoDecode] = [

@@ -75,6 +75,12 @@ def _iter_first_party_client_specs() -> list[FirstPartyClientSpec]:
         ("agent-hub",),
     )
     add(
+        settings.agent_hub_telegram_client_id,
+        "agent-hub-telegram-bot",
+        "internal",
+        ("agent-hub",),
+    )
+    add(
         "summitflow",
         "summitflow",
         "internal",
