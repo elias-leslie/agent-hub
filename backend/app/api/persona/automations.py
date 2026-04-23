@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_db
 from app.models.persona_scheduled_job import PersonaScheduledJob
 from app.services.persona_service import get_or_create_persona
-from app.workflows.persona_scheduler import _maybe_send_delivery_push, compute_next_run, execute_job
+from app.workflows.persona_scheduler import (
+    _maybe_send_delivery_push,
+    _maybe_send_delivery_telegram,
+    compute_next_run,
+    execute_job,
+)
 
 from .schemas import (
     PersonaAutomationCreate,
@@ -79,6 +84,11 @@ def _compute_or_422(
     return next_run, max_runs
 
 
+def _validate_delivery_or_422(*, payload_type: str, delivery: str) -> None:
+    if delivery == "telegram" and payload_type != "agent_turn":
+        raise HTTPException(status_code=422, detail="delivery=telegram requires payload_type=agent_turn")
+
+
 @router.get("/automations", response_model=list[PersonaAutomationResponse])
 async def list_automations(
     db: AsyncSession = Depends(get_db),
@@ -106,6 +116,7 @@ async def create_automation(
         payload.schedule_value,
         payload.schedule_timezone,
     )
+    _validate_delivery_or_422(payload_type=payload.payload_type, delivery=payload.delivery)
     job = PersonaScheduledJob(
         persona_id=persona.id,
         name=payload.name,
@@ -142,6 +153,8 @@ async def update_automation(
 
     for field, value in updates.items():
         setattr(job, field, value)
+
+    _validate_delivery_or_422(payload_type=job.payload_type, delivery=job.delivery)
 
     if {
         "schedule_type",
@@ -186,6 +199,7 @@ async def trigger_automation(
     job = await _require_job(db, persona.id, job_id)
     result = await execute_job(job)
     await _maybe_send_delivery_push(job, result.output)
+    await _maybe_send_delivery_telegram(job, result.output)
     now = datetime.now(UTC)
     job.last_run_at = now
     job.run_count = int(job.run_count or 0) + 1

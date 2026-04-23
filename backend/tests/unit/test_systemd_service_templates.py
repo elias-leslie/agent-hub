@@ -32,3 +32,21 @@ def test_ops_worker_template_points_to_ops_entrypoint_and_host_marker() -> None:
 def test_frontend_template_uses_control_group_shutdown() -> None:
     text = (SYSTEMD_DIR / "agent-hub-frontend.service").read_text()
     assert "KillMode=control-group" in text
+
+
+def test_telegram_bot_template_exists_and_points_to_run_script() -> None:
+    text = (SYSTEMD_DIR / "agent-hub-telegram-bot.service").read_text()
+    assert "__PROJECT_ROOT__" in text
+    assert "WorkingDirectory=__PROJECT_ROOT__/backend" in text
+    assert "python -m app.scripts.run_telegram_bot" in text
+    assert "KillMode=control-group" in text
+
+
+def test_telegram_report_service_and_timer_templates_exist() -> None:
+    service = (SYSTEMD_DIR / "agent-hub-telegram-status-report.service").read_text()
+    timer = (SYSTEMD_DIR / "agent-hub-telegram-status-report.timer").read_text()
+    assert "__PROJECT_ROOT__" in service
+    assert "python -m app.scripts.send_jenny_telegram_status_report" in service
+    assert "OnBootSec=10m" in timer
+    assert "OnUnitActiveSec=1h" in timer
+    assert "Persistent=true" in timer
