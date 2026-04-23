@@ -14,7 +14,8 @@
       "lib/**",
       "hooks/**",
       "*.ts",
-      "*.tsx"
+      "*.tsx",
+      "!next-env.d.ts"
     ]
   },
   "formatter": {

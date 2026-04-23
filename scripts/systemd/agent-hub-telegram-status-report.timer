@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Agent Hub Jenny Telegram status report on a recurring timer
+
+[Timer]
+OnBootSec=10m
+OnUnitActiveSec=1h
+AccuracySec=1m
+Persistent=true
+Unit=agent-hub-telegram-status-report.service
+
+[Install]
+WantedBy=timers.target
