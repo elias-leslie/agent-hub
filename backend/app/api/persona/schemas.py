@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Core persona schemas
@@ -126,8 +126,14 @@ class PersonaAutomationCreate(BaseModel):
     payload_type: Literal["agent_turn", "push", "self_honing"] = "agent_turn"
     payload_message: str = Field(min_length=1, max_length=10000)
     payload_title: str | None = Field(default=None, max_length=200)
-    delivery: Literal["none", "push"] = "none"
+    delivery: Literal["none", "push", "telegram"] = "none"
     enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_delivery(self) -> PersonaAutomationCreate:
+        if self.delivery == "telegram" and self.payload_type != "agent_turn":
+            raise ValueError("delivery=telegram requires payload_type=agent_turn")
+        return self
 
 
 class PersonaAutomationUpdate(BaseModel):
@@ -140,7 +146,7 @@ class PersonaAutomationUpdate(BaseModel):
     payload_type: Literal["agent_turn", "push", "self_honing"] | None = None
     payload_message: str | None = Field(default=None, min_length=1, max_length=10000)
     payload_title: str | None = Field(default=None, max_length=200)
-    delivery: Literal["none", "push"] | None = None
+    delivery: Literal["none", "push", "telegram"] | None = None
     enabled: bool | None = None
 
 

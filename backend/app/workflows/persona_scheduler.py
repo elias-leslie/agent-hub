@@ -15,7 +15,10 @@ from typing import Any
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
+from app.db import async_session
 from app.hatchet_app import hatchet
+from app.services.telegram_config_service import load_runtime_config
+from app.services.telegram_delivery import send_rendered_message
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +33,7 @@ PAYLOAD_TYPE_SELF_HONING = "self_honing"
 
 # Misc string constants
 DELIVERY_PUSH = "push"
+DELIVERY_TELEGRAM = "telegram"
 PERMISSION_TIER_OFF = "off"
 
 # Self-honing configuration
@@ -311,6 +315,40 @@ async def _maybe_send_delivery_push(job: Any, output: str) -> None:
         logger.debug("Delivery push failed for job %s", job.id)
 
 
+async def _maybe_send_delivery_telegram(job: Any, output: str) -> None:
+    """Send a post-execution Telegram notification if the job is configured for it."""
+    if job.delivery != DELIVERY_TELEGRAM or job.payload_type != PAYLOAD_TYPE_AGENT_TURN:
+        return
+    try:
+        async with async_session() as db:
+            runtime_config = await load_runtime_config(db)
+        token = runtime_config.get("token")
+        report_chat_id = runtime_config.get("report_chat_id")
+        if not token or not report_chat_id:
+            logger.warning(
+                "Telegram delivery skipped for job %s (%s): missing report_chat_id or token",
+                job.id,
+                job.name,
+            )
+            return
+        from telegram import Bot
+
+        bot = Bot(token=token)
+        await send_rendered_message(
+            bot=bot,
+            chat_id=str(report_chat_id),
+            text=output,
+            disable_link_previews=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Telegram delivery failed for job %s (%s): %s",
+            job.id,
+            job.name,
+            exc,
+        )
+
+
 def _update_job_state(job: Any, now: datetime) -> None:
     """Update run tracking fields and compute the next scheduled run time."""
     job.last_run_at = now
@@ -366,6 +404,7 @@ async def persona_scheduler_task(input: BaseModel, ctx: Context) -> dict[str, An
             try:
                 result = await execute_job(job)
                 await _maybe_send_delivery_push(job, result.output)
+                await _maybe_send_delivery_telegram(job, result.output)
                 _update_job_state(job, now)
                 executed += 1
                 logger.info("Scheduled job %s (%s) executed", job.name, job.id)

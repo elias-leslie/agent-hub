@@ -36,6 +36,8 @@ dependencies = [
     "jsonschema>=4.20.0",
     # Web Push notifications
     "pywebpush>=2.0.0",
+    # Telegram bot
+    "python-telegram-bot>=22.6,<23",
     # Voice
     "edge-tts>=6.1.0", # TTS
     "faster-whisper>=1.0.0", # STT
