@@ -82,3 +82,16 @@ export function formatModelPricing(cost: ModelCost): { primary: string; secondar
     source: pricingSourceLabel(cost.source),
   };
 }
+
+export function formatCatalogModelPricing(
+  model: Pick<CatalogModel, "cost" | "availability">,
+): { primary: string; secondary: string; source: string } {
+  if (model.availability === "codex_only") {
+    return {
+      primary: "Codex OAuth",
+      secondary: "API pricing pending",
+      source: "Codex-only",
+    };
+  }
+  return formatModelPricing(model.cost);
+}

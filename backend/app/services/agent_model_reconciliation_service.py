@@ -19,6 +19,7 @@ from app.constants import (
     CODEX_GPT_5_3,
     CODEX_GPT_5_3_SPARK,
     CODEX_GPT_5_4,
+    CODEX_GPT_5_5,
     OR_FREE_GLM,
     XAI_GROK_4_1_FAST,
     XAI_GROK_4_20,
@@ -122,6 +123,8 @@ def _prefers_fast_codex(agent: Agent) -> bool:
 
 def _preferred_codex_fallback(agent: Agent, primary_model_id: str) -> str | None:
     prefer_fast = _prefers_fast_codex(agent)
+    if primary_model_id == CODEX_GPT_5_5:
+        return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_4
     if primary_model_id == CODEX_GPT_5_4:
         return CODEX_GPT_5_3_SPARK if prefer_fast else CODEX_GPT_5_3
     if primary_model_id == CODEX_GPT_5_3_SPARK:
@@ -180,6 +183,7 @@ def _target_chain(agent: Agent, available_providers: list[str]) -> list[str]:
     if "codex" not in available_providers or get_provider_for_model(target_primary) != "codex":
         return available_chain
 
+    target_primary = CODEX_GPT_5_5
     preferred_chain = [target_primary]
     codex_fallback = _preferred_codex_fallback(agent, target_primary)
     if codex_fallback and get_provider_for_model(codex_fallback) in available_providers:

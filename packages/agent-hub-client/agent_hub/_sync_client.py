@@ -12,6 +12,7 @@ from agent_hub._image import generate_image_sync
 from agent_hub._memory import MemoryOperationsMixin
 from agent_hub._sessions import SessionOperationsMixin
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
+from agent_hub.constants import DEFAULT_IMAGE_MODEL
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -35,7 +36,7 @@ class AgentHubClient(
             client_name="my-app"
         )
         response = client.complete(
-            model="claude-sonnet-4-6",
+            agent_slug="chat",
             messages=[{"role": "user", "content": "Hello!"}]
         )
         print(response.content)
@@ -234,7 +235,8 @@ class AgentHubClient(
         *,
         project_id: str,
         purpose: str | None = None,
-        model: str = "gemini-3-pro-image-preview",
+        agent_slug: str | None = None,
+        model: str = DEFAULT_IMAGE_MODEL,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: str | None = None,
@@ -249,6 +251,7 @@ class AgentHubClient(
             prompt=prompt,
             project_id=project_id,
             purpose=purpose,
+            agent_slug=agent_slug,
             model=model,
             size=size,
             style=style,

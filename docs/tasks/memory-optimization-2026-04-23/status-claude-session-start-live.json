@@ -1,0 +1,10 @@
+{
+  "attempts": 1,
+  "consumer_profile": "claude_session_start",
+  "failure": null,
+  "healthy": true,
+  "latency_ms": 6183,
+  "project_id": null,
+  "scope": "global",
+  "status": "ok"
+}

@@ -12,10 +12,10 @@ vi.mock("@/lib/api-config", () => ({
 
 const models: ModelInfo[] = [
   {
-    id: "codex/gpt-5.4",
-    name: "GPT-5.4 (Codex)",
+    id: "codex/gpt-5.5",
+    name: "GPT-5.5 (Codex)",
     provider: "codex",
-    alias: "codex-5.4",
+    alias: "codex",
     hint: "Frontier",
     cost: {
       input_per_m: 2.5,
@@ -106,7 +106,7 @@ describe("committee tab", () => {
     );
 
     expect(screen.getByText("Market Prediction Committee")).toBeInTheDocument();
-    expect(screen.getByLabelText("Macro seat model")).toHaveValue("codex/gpt-5.4");
+    expect(screen.getByLabelText("Macro seat model")).toHaveValue("");
 
     fireEvent.change(screen.getByLabelText("Macro seat model"), {
       target: { value: "claude-opus-4-7" },

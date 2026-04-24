@@ -8,6 +8,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CODEX_GPT_5_2,
+    CODEX_GPT_5_3,
+    CODEX_GPT_5_3_SPARK,
+    CODEX_GPT_5_5,
+)
 from scripts.persona_benchmark_cases import (
     DEFAULT_PERSONA_BENCHMARK_MODELS,
     get_case_by_id,
@@ -28,13 +37,13 @@ from scripts.persona_benchmark_report import generate_markdown_report
 
 def test_default_model_roster_includes_seven_configured_candidates() -> None:
     assert DEFAULT_PERSONA_BENCHMARK_MODELS == [
-        "codex/gpt-5.4",
-        "codex/gpt-5.3-codex",
-        "codex/gpt-5.3-codex-spark",
-        "codex/gpt-5.2-codex",
-        "claude-opus-4-6",
-        "claude-sonnet-4-6",
-        "claude-haiku-4-5",
+        CODEX_GPT_5_5,
+        CODEX_GPT_5_3,
+        CODEX_GPT_5_3_SPARK,
+        CODEX_GPT_5_2,
+        CLAUDE_OPUS,
+        CLAUDE_SONNET,
+        CLAUDE_HAIKU,
     ]
 
 

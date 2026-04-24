@@ -1,16 +1,10 @@
 # Persona Arena Benchmark
 
-This benchmark profiles the persona against a fixed seven-model roster:
+This benchmark profiles the persona against the roster defined by
+`DEFAULT_PERSONA_BENCHMARK_MODELS` in
+`backend/scripts/persona_benchmark_cases.py`.
 
-- `codex/gpt-5.4`
-- `codex/gpt-5.3-codex`
-- `codex/gpt-5.3-codex-spark`
-- `codex/gpt-5.2-codex`
-- `claude-opus-4-6`
-- `claude-sonnet-4-6`
-- `claude-haiku-4-5`
-
-Direct `openai/*` models are excluded from the default roster in this environment because no OpenAI API key is configured; `codex/gpt-5.2` fills that comparison slot instead.
+Direct `openai/*` models are excluded from the default roster in this environment because no OpenAI API key is configured; Codex constants fill that comparison slot instead.
 
 `xai/*` models stay out of the default roster on purpose. They are useful candidate cohorts, but they spend real API dollars and should be run as opt-in Arena comparisons instead of every baseline pass.
 
@@ -53,7 +47,7 @@ Cheap xAI comparison example:
 
 ```bash
 python backend/scripts/run_persona_model_benchmark.py \
-  --models codex/gpt-5.4,claude-sonnet-4-6,xai/grok-4.20-reasoning \
+  --models <comma-separated-candidate-model-ids> \
   --runs-per-case 1 \
   --cases dispatch-ready,wait-healthy-session \
   --no-persist
@@ -167,8 +161,8 @@ Second-opinion models can help, but they should be experiment cohorts or reviewe
 
 Example:
 
-- baseline supervisor model: `codex/gpt-5.4`
-- candidate supervisor model: `claude-opus-4-6`
+- baseline supervisor model: current `supervisor` agent primary model
+- candidate supervisor model: alternate benchmark cohort model
 - same benchmark suite
 - repeated runs until the comparison is powered enough to decide
 

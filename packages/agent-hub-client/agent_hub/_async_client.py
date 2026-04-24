@@ -14,6 +14,7 @@ from agent_hub._memory import AsyncMemoryOperationsMixin
 from agent_hub._sessions import AsyncSessionOperationsMixin
 from agent_hub._streaming import stream_completion_sse
 from agent_hub._workflow import build_workflow_payload, handle_workflow_response
+from agent_hub.constants import DEFAULT_IMAGE_MODEL
 from agent_hub.models import (
     CompletionResponse,
     ImageGenerationResponse,
@@ -41,14 +42,14 @@ class AsyncAgentHubClient(
             client_name="my-app"
         ) as client:
             response = await client.complete(
-                model="claude-sonnet-4-6",
+                agent_slug="chat",
                 messages=[{"role": "user", "content": "Hello!"}]
             )
             print(response.content)
 
             # Streaming
             async for chunk in client.stream(
-                model="claude-sonnet-4-6",
+                agent_slug="chat",
                 messages=[{"role": "user", "content": "Tell me a story"}]
             ):
                 print(chunk.content, end="", flush=True)
@@ -332,7 +333,8 @@ class AsyncAgentHubClient(
         *,
         project_id: str,
         purpose: str | None = None,
-        model: str = "gemini-3-pro-image-preview",
+        agent_slug: str | None = None,
+        model: str = DEFAULT_IMAGE_MODEL,
         size: str = "1024x1024",
         style: str | None = None,
         reference_image: str | None = None,
@@ -347,6 +349,7 @@ class AsyncAgentHubClient(
             prompt=prompt,
             project_id=project_id,
             purpose=purpose,
+            agent_slug=agent_slug,
             model=model,
             size=size,
             style=style,

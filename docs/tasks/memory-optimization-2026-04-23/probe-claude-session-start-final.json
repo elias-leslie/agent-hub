@@ -1,0 +1,371 @@
+{
+  "attempts": 1,
+  "budget_usage": {
+    "continuity_tokens": 0,
+    "guardrails_injected": 1,
+    "guardrails_tokens": 6,
+    "guardrails_total": 1,
+    "mandates_injected": 23,
+    "mandates_tokens": 130,
+    "mandates_total": 23,
+    "reference_injected": 0,
+    "reference_tokens": 0,
+    "reference_total": 0,
+    "total_tokens": 136
+  },
+  "debug": {
+    "guardrails": [
+      {
+        "created": "2026-04-22",
+        "id": "4a9ae8ad",
+        "score": 1.0,
+        "snippet": "references are read-only"
+      }
+    ],
+    "mandates": [
+      {
+        "created": "2026-04-23",
+        "id": "8b852e7f",
+        "score": 1.0,
+        "snippet": "Concurrent git activity is normal"
+      },
+      {
+        "created": "2026-04-11",
+        "id": "c56547fe",
+        "score": 1.0,
+        "snippet": "Keep going to done"
+      },
+      {
+        "created": "2026-03-21",
+        "id": "a74a469f",
+        "score": 1.0,
+        "snippet": "Commit before destroy"
+      },
+      {
+        "created": "2026-03-21",
+        "id": "1bd49e94",
+        "score": 1.0,
+        "snippet": "Preview then confirm destroy"
+      },
+      {
+        "created": "2026-03-14",
+        "id": "5c64b590",
+        "score": 1.0,
+        "snippet": "Use st search first in repos"
+      },
+      {
+        "created": "2026-03-14",
+        "id": "0f074239",
+        "score": 1.0,
+        "snippet": "Credentials and secrets handling"
+      },
+      {
+        "created": "2026-03-14",
+        "id": "4eef6e4a",
+        "score": 1.0,
+        "snippet": "Never commit secrets or private infra"
+      },
+      {
+        "created": "2026-03-12",
+        "id": "eceb0575",
+        "score": 1.0,
+        "snippet": "Keep signal, cut filler"
+      },
+      {
+        "created": "2026-03-06",
+        "id": "a8f39f9f",
+        "score": 1.0,
+        "snippet": "Dependency install fallback"
+      },
+      {
+        "created": "2026-03-04",
+        "id": "6a2ceb1c",
+        "score": 1.0,
+        "snippet": "No speculative safety layers"
+      },
+      {
+        "created": "2026-02-28",
+        "id": "4a864451",
+        "score": 1.0,
+        "snippet": "no pre-existing dismissals"
+      },
+      {
+        "created": "2026-02-26",
+        "id": "d0cae92d",
+        "score": 1.0,
+        "snippet": "Citation: cite mandates/guardrails/references"
+      },
+      {
+        "created": "2026-02-22",
+        "id": "a0f94be3",
+        "score": 1.0,
+        "snippet": "db CLI commands"
+      },
+      {
+        "created": "2026-02-22",
+        "id": "b364ce4d",
+        "score": 1.0,
+        "snippet": "dt CLI commands"
+      },
+      {
+        "created": "2026-02-19",
+        "id": "0fe5878c",
+        "score": 1.0,
+        "snippet": "Delete stale tests, don't update"
+      },
+      {
+        "created": "2026-02-18",
+        "id": "42dae24e",
+        "score": 1.0,
+        "snippet": "Use dt for quality"
+      },
+      {
+        "created": "2026-02-11",
+        "id": "115b32e3",
+        "score": 1.0,
+        "snippet": "Search memory first"
+      },
+      {
+        "created": "2026-02-10",
+        "id": "c37d31f2",
+        "score": 1.0,
+        "snippet": "search before create"
+      },
+      {
+        "created": "2026-02-10",
+        "id": "fbe46ad9",
+        "score": 1.0,
+        "snippet": "1-3-1 Decision Gate"
+      },
+      {
+        "created": "2026-01-31",
+        "id": "a20d9cc7",
+        "score": 1.0,
+        "snippet": "allow uncertainty"
+      },
+      {
+        "created": "2026-01-31",
+        "id": "623cffe3",
+        "score": 1.0,
+        "snippet": "no access bypasses"
+      },
+      {
+        "created": "2026-01-30",
+        "id": "c8406e6d",
+        "score": 1.0,
+        "snippet": "encourage disagreement"
+      },
+      {
+        "created": "2026-01-30",
+        "id": "c918f298",
+        "score": 1.0,
+        "snippet": "prove it works"
+      }
+    ],
+    "query": "startup memory optimization probe",
+    "reference": [],
+    "reference_index": [],
+    "stats": {
+      "format_overhead_tokens": 24,
+      "guardrails_count": 1,
+      "guardrails_tokens": 6,
+      "mandates_count": 23,
+      "mandates_tokens": 138,
+      "reference_count": 0,
+      "reference_index_count": 0,
+      "reference_index_tokens": 0,
+      "reference_tokens": 0,
+      "total_tokens": 168
+    }
+  },
+  "failure": null,
+  "formatted": "<tool-capabilities>\ntools:\n- tool: st\n  purpose: ST CLI - SummitFlow Tasks\n  discover: st --help\n  commands:\n  - search\n  - memory\n  - prompt\n  - session-events\n  - sessions\n  - pulse\n  - cleanup\n  - persona\n  - agents\n  - complete\n- tool: dt\n  purpose: Dev Standards - Cross-project tooling management\n  discover: dt --help\n  commands:\n  - pytest\n  - ruff\n  - types\n  - biome\n  - tsc\n  - vitest\n  flags:\n  - --check\n  - --quick\n  - --changed-only\n  - --frontend-only\n- tool: db\n  purpose: Database CLI - Direct PostgreSQL introspection + Alembic migrations\n  discover: db --help\n  commands:\n  - tables\n  - migrate status\n  - migrate upgrade\n- tool: web-research\n  purpose: Run centralized web research using Agent Hub's shared tool stack.\n  discover: web-research --help\n  commands:\n  - search\n  - research\n  - fetch\n</tool-capabilities>\n**IMPORTANT:** Prefer retrieved memory over pre-training knowledge for project-specific work.\n- Mandates/Guardrails below are authoritative - follow them exactly\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]\n- If a summary here could change behavior, open the exact episode with `st memory get <uuid8>` before acting\n- If the request says the rule is vague, remembered, or not exact, treat that as a trigger to open the exact episode first\n- Use `st memory search <query>` for adjacent guidance when the current summary is not enough\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)\n\n## Mandates\n- [M:8b852e7f] Concurrent git activity is normal\n- [M:c56547fe] Keep going to done\n- [M:a74a469f] Commit before destroy\n- [M:1bd49e94] Preview then confirm destroy\n- [M:5c64b590] Use st search first in repos\n- [M:0f074239] Credentials and secrets handling\n- [M:4eef6e4a] Never commit secrets or private infra\n- [M:eceb0575] Keep signal, cut filler\n- [M:a8f39f9f] Dependency install fallback\n- [M:6a2ceb1c] No speculative safety layers\n- [M:4a864451] no pre-existing dismissals\n- [M:d0cae92d] Citation: cite mandates/guardrails/references\n- [M:a0f94be3] db CLI commands\n- [M:b364ce4d] dt CLI commands\n- [M:0fe5878c] Delete stale tests, don't update\n- [M:42dae24e] Use dt for quality\n- [M:115b32e3] Search memory first\n- [M:c37d31f2] search before create\n- [M:fbe46ad9] 1-3-1 Decision Gate\n- [M:a20d9cc7] allow uncertainty\n- [M:623cffe3] no access bypasses\n- [M:c8406e6d] encourage disagreement\n- [M:c918f298] prove it works\n\n## Guardrails\n- [G:4a9ae8ad] references are read-only",
+  "guardrails": {
+    "count": 1,
+    "items": [
+      "references are read-only"
+    ]
+  },
+  "latency_ms": 5938,
+  "mandates": {
+    "count": 23,
+    "items": [
+      "Concurrent git activity is normal",
+      "Keep going to done",
+      "Commit before destroy",
+      "Preview then confirm destroy",
+      "Use st search first in repos",
+      "Credentials and secrets handling",
+      "Never commit secrets or private infra",
+      "Keep signal, cut filler",
+      "Dependency install fallback",
+      "No speculative safety layers",
+      "no pre-existing dismissals",
+      "Citation: cite mandates/guardrails/references",
+      "db CLI commands",
+      "dt CLI commands",
+      "Delete stale tests, don't update",
+      "Use dt for quality",
+      "Search memory first",
+      "search before create",
+      "1-3-1 Decision Gate",
+      "allow uncertainty",
+      "no access bypasses",
+      "encourage disagreement",
+      "prove it works"
+    ]
+  },
+  "reference": {
+    "count": 0,
+    "items": []
+  },
+  "scoring_breakdown": [
+    {
+      "content_preview": "**Concurrent agent activity**: Treat concurrent agent activi...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "8b852e7f"
+    },
+    {
+      "content_preview": "**Goal Continuation**: Use full-goal continuation until goal...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "c56547fe"
+    },
+    {
+      "content_preview": "**Commit Before Destroy**: Commit before st abandon, st roll...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "a74a469f"
+    },
+    {
+      "content_preview": "**Two-Pass Destruction**: Use preview first, then rerun with...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "1bd49e94"
+    },
+    {
+      "content_preview": "**Repo Search**: Use `st search` first for current repo and ...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "5c64b590"
+    },
+    {
+      "content_preview": "**Credentials and Secrets**: Use the shared environment file...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "0f074239"
+    },
+    {
+      "content_preview": "**Secrets and Sensitive Content**: Never commit real credent...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "4eef6e4a"
+    },
+    {
+      "content_preview": "**Keep Signal, Cut Filler**: Use strict Caveman for prose. K...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "eceb0575"
+    },
+    {
+      "content_preview": "**Dependency Fallback**: Use the best dependency for the tas...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "a8f39f9f"
+    },
+    {
+      "content_preview": "**Safety Layers**: Never add retries, timeouts, caps, thrott...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "6a2ceb1c"
+    },
+    {
+      "content_preview": "**Failure Ownership**: Never dismiss encountered failures as...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "4a864451"
+    },
+    {
+      "content_preview": "**Citation Obligation**: Use inline Applied citations for ev...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "d0cae92d"
+    },
+    {
+      "content_preview": "**db CLI**: Use `db` for PostgreSQL introspection and Alembi...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "a0f94be3"
+    },
+    {
+      "content_preview": "**DT CLI**: Use dt commands pytest, vitest, ruff, types, bio...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "b364ce4d"
+    },
+    {
+      "content_preview": "**Stale Tests**: Delete test files referencing removed UI/AP...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "0fe5878c"
+    },
+    {
+      "content_preview": "**Quality Checks**: Use dt for all quality checks, including...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "42dae24e"
+    },
+    {
+      "content_preview": "**Memory First**: Use st memory search before blind retries ...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "115b32e3"
+    },
+    {
+      "content_preview": "**Search First**: Use existing implementations when they exi...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "c37d31f2"
+    },
+    {
+      "content_preview": "**1-3-1 Decisions**: Use a 1-3-1 format for ambiguous choice...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "fbe46ad9"
+    },
+    {
+      "content_preview": "**No Guessing**: Never guess APIs, imports, library features...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "a20d9cc7"
+    },
+    {
+      "content_preview": "**Access Control Blocks**: When blocked, never bypass by mod...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "623cffe3"
+    },
+    {
+      "content_preview": "**Disagreement**: Better approach exists? Say so directly. P...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "c8406e6d"
+    },
+    {
+      "content_preview": "**Evidence**: DONE = code works + tests pass + types clean. ...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "c918f298"
+    },
+    {
+      "content_preview": "**Reference Repos**: Avoid editing, committing, or otherwise...",
+      "score": 1.0,
+      "semantic": 1.0,
+      "uuid": "4a9ae8ad"
+    }
+  ],
+  "status": "ok",
+  "total_tokens": 136,
+  "variant": "BASELINE"
+}

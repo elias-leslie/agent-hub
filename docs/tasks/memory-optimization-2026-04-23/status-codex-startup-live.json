@@ -1,0 +1,10 @@
+{
+  "attempts": 1,
+  "consumer_profile": "codex_startup",
+  "failure": null,
+  "healthy": true,
+  "latency_ms": 6173,
+  "project_id": null,
+  "scope": "global",
+  "status": "ok"
+}

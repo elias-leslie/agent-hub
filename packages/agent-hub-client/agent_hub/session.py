@@ -21,8 +21,8 @@ class Session:
         async with AsyncAgentHubClient() as client:
             session = await client.session(
                 project_id="my-project",
-                provider="claude",
-                model="claude-sonnet-4-6"
+                provider="<provider>",
+                model="<model-id>"
             )
 
             # Messages automatically persist in this session

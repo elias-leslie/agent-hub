@@ -28,7 +28,7 @@ from app.services.agent_service import get_agent_service
 DEFAULT_COMMITTEE_CONFIG = CommitteeConfig(
     orchestrator=CommitteeOrchestratorConfig(
         agent_slug="investment-committee",
-        model_id="codex/gpt-5.4",
+        model_id=None,
         instruction="Synthesize committee votes into the final market call.",
     ),
     seats=[
@@ -37,7 +37,7 @@ DEFAULT_COMMITTEE_CONFIG = CommitteeConfig(
             label="Macro",
             enabled=True,
             agent_slug="market-pulse-analyst",
-            model_id="codex/gpt-5.4",
+            model_id=None,
             instruction="Focus on macro regime, rates, breadth, and options positioning.",
             weight=1.0,
         ),
@@ -46,7 +46,7 @@ DEFAULT_COMMITTEE_CONFIG = CommitteeConfig(
             label="Cross-Asset",
             enabled=True,
             agent_slug="equity-analyst",
-            model_id="xai/grok-4.20-reasoning",
+            model_id=None,
             instruction="Stress-test cross-asset leadership, policy shocks, and narrative drift.",
             weight=1.0,
         ),
@@ -55,7 +55,7 @@ DEFAULT_COMMITTEE_CONFIG = CommitteeConfig(
             label="Risk",
             enabled=True,
             agent_slug="risk-manager",
-            model_id="claude-opus-4-7",
+            model_id=None,
             instruction="Challenge downside tails, uncertainty, and failure modes.",
             weight=1.0,
         ),

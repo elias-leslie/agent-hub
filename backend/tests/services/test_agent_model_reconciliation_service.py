@@ -132,7 +132,7 @@ class TestReconcileAgentModelsToAvailableProviders:
             changed = await reconcile_agent_models_to_available_providers(mock_db)
 
         assert changed == ["chat"]
-        assert agent.primary_model_id == "codex/gpt-5.4"
+        assert agent.primary_model_id == "codex/gpt-5.5"
         assert agent.fallback_models[0] == "codex/gpt-5.3-codex-spark"
         assert any(model.startswith("codex/") for model in agent.fallback_models)
         assert any(model.startswith("xai/") for model in agent.fallback_models)

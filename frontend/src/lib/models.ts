@@ -83,6 +83,7 @@ export interface CatalogModel {
   release_date?: string | null;
   knowledge_cutoff?: string | null;
   family?: string | null;
+  availability?: string | null;
   enrichment?: ModelEnrichment | null;
   scores: {
     coding: number;

@@ -5,6 +5,7 @@ def test_canonicalize_model_id_resolves_legacy_codex_aliases() -> None:
     assert _canonicalize_model_id("codex/gpt-5.2") == "codex/gpt-5.2-codex"
     assert _canonicalize_model_id("codex/gpt-5.3") == "codex/gpt-5.3-codex"
     assert _canonicalize_model_id("codex/gpt-5.4") == "codex/gpt-5.4"
+    assert _canonicalize_model_id("codex") == "codex/gpt-5.5"
 
 
 def test_canonicalize_model_chain_dedupes_after_alias_resolution() -> None:

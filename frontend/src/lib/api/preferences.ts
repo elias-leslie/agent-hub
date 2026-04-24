@@ -7,9 +7,6 @@ import { getApiBaseUrl, fetchApi } from "../api-config";
 const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface UserPreferences {
-  verbosity: "concise" | "normal" | "detailed";
-  tone: "professional" | "friendly" | "technical";
-  default_model: string;
   codex_auth_preference?: "oauth" | "api_key";
   claude_auth_preference?: "oauth" | "api_key";
 }
@@ -20,9 +17,8 @@ export async function fetchUserPreferences(): Promise<UserPreferences> {
     // Return defaults if not found
     if (response.status === 404) {
       return {
-        verbosity: "normal",
-        tone: "professional",
-        default_model: "claude-sonnet-4-6",
+        codex_auth_preference: "oauth",
+        claude_auth_preference: "oauth",
       };
     }
     throw new Error(`Preferences fetch failed: ${response.status}`);

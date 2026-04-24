@@ -1,8 +1,8 @@
 import { X, Check, Minus, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
-import { formatModelPricing } from "@/lib/model-pricing";
-import type { ModelOption, ModelScores } from "@agent-hub/chat-ui";
+import { formatCatalogModelPricing } from "@/lib/model-pricing";
+import type { ModelOption, ModelScores } from "@/components/chat/use-models";
 
 const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
   "coding",
@@ -104,7 +104,7 @@ export function CostComparison({ models }: SectionProps) {
       <div className="grid grid-cols-1 gap-3">
         {models.map((model) => {
           const providerColor = PROVIDER_COLORS[model.provider];
-          const pricing = formatModelPricing(model.cost);
+          const pricing = formatCatalogModelPricing(model);
           return (
             <div
               key={model.id}

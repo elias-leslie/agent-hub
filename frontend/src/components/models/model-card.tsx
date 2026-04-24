@@ -3,9 +3,9 @@
 import { Brain, Camera, Eye, FileText, Headphones, Pencil, Zap, Clock, Gauge, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
-import { formatModelPricing } from "@/lib/model-pricing";
+import { formatCatalogModelPricing } from "@/lib/model-pricing";
 import { ModelRadar } from "./model-radar";
-import type { ModelOption } from "@agent-hub/chat-ui";
+import type { ModelOption } from "@/components/chat/use-models";
 
 interface ModelCardProps {
   model: ModelOption;
@@ -40,8 +40,9 @@ function formatSyncMoment(value: string | null | undefined): string | null {
 export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardProps) {
   const providerColor = PROVIDER_COLORS[model.provider];
   const hasEnrichment = !!model.enrichment;
-  const pricing = formatModelPricing(model.cost);
+  const pricing = formatCatalogModelPricing(model);
   const syncedAt = formatSyncMoment(model.enrichment?.synced_at);
+  const isCodexOnlyPreview = model.availability === "codex_only";
 
   return (
     <div
@@ -86,6 +87,11 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
                 <span className="ml-1 text-slate-400">({model.family})</span>
               )}
             </p>
+            {isCodexOnlyPreview && (
+              <div className="mt-2 inline-flex rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                ChatGPT/Codex now, API soon
+              </div>
+            )}
           </div>
 
           {/* Provider badge */}

@@ -372,9 +372,53 @@ class TestReferenceInjection:
         assert context.mandates[0].render_reason == "consumer_profile_tag"
         assert context.mandates[0].rendered_content == context.mandates[0].content
         assert context.mandates[1].render_tier == "L0"
-        assert context.mandates[1].render_reason == "startup_policy_summary"
+        assert context.mandates[1].render_reason == "policy_summary"
         assert context.mandates[1].rendered_content == "Generic startup guidance."
         assert context.debug_info["consumer_profile"] == "codex_startup"
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_operator_uses_generic_policy_summary_reason(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(
+                    return_value=(
+                        [
+                            MemorySearchResult(
+                                uuid="operator-uuid",
+                                content="Use preview before explaining effective prompt.",
+                                summary="Prompt preview first.",
+                                source=MemorySource.SYSTEM,
+                                relevance_score=0.8,
+                                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                                facts=[],
+                            )
+                        ],
+                        [],
+                        [],
+                    )
+                ),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Explain prompt preview flow.",
+                scope=MemoryScope.PROJECT,
+                scope_id="agent-hub",
+                consumer_profile="agent_operator",
+            )
+
+        assert context.mandates[0].render_tier == "L0"
+        assert context.mandates[0].render_reason == "policy_summary"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_codex_startup_caps_policy_counts(self) -> None:

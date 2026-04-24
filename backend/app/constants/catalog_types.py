@@ -98,3 +98,4 @@ class ModelEntry:
     release_date: str | None = None
     knowledge_cutoff: str | None = None
     family: str | None = None
+    availability: str | None = None

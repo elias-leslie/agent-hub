@@ -438,7 +438,7 @@ class TestCompleteWithFallback:
             name="Codex Coder",
             description=None,
             system_prompt="Write code.",
-            primary_model_id="codex/gpt-5.4",
+            primary_model_id="codex/gpt-5.5",
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -477,7 +477,7 @@ class TestCompleteWithFallback:
                 thinking_level=agent.thinking_level,
             )
 
-        assert result.model_used == "codex/gpt-5.4"
+        assert result.model_used == "codex/gpt-5.5"
         assert captured.kwargs is not None
         assert captured.kwargs["reasoning_effort"] == "xhigh"
         assert "thinking_level" not in captured.kwargs
