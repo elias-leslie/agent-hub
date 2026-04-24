@@ -145,6 +145,7 @@ def _build_model_info(
         release_date=e.release_date,
         knowledge_cutoff=e.knowledge_cutoff,
         family=e.family,
+        availability=e.availability,
         enrichment=enr,
     )
 

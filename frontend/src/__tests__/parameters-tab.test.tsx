@@ -5,7 +5,7 @@ import { ParametersTab } from "@/app/agents/[slug]/components/ParametersTab";
 import type { Agent, ModelInfo } from "@/app/agents/[slug]/types";
 
 const baseFormData: Partial<Agent> = {
-  primary_model_id: "codex/gpt-5.4",
+  primary_model_id: "codex/gpt-5.5",
   temperature: 0.7,
   thinking_level: "medium",
   verbosity_level: "high",
@@ -17,10 +17,10 @@ const baseFormData: Partial<Agent> = {
 };
 
 const codexModel: ModelInfo = {
-  id: "codex/gpt-5.4",
-  name: "GPT-5.4 (Codex)",
+  id: "codex/gpt-5.5",
+  name: "GPT-5.5 (Codex)",
   provider: "codex",
-  alias: "codex-5.4",
+  alias: "codex",
   hint: "Frontier",
   cost: {
     input_per_m: 2.5,

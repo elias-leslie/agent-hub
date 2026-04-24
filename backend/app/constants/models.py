@@ -36,6 +36,7 @@ OPENAI_GPT_5_2 = "openai/gpt-5.2"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
 # Codex models (ChatGPT subscription via OAuth)
+CODEX_GPT_5_5 = "codex/gpt-5.5"
 CODEX_GPT_5_4 = "codex/gpt-5.4"
 CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
 CODEX_GPT_5_3_SPARK = "codex/gpt-5.3-codex-spark"

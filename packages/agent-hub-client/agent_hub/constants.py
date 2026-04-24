@@ -15,6 +15,10 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
 GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite-preview"
+GEMINI_IMAGE = "gemini-3-pro-image-preview"
+
+# Codex models (ChatGPT subscription via Agent Hub)
+CODEX_GPT_5_5 = "codex/gpt-5.5"
 
 # Default models for each use case
 DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
@@ -27,3 +31,4 @@ REASONING_GEMINI_MODEL = GEMINI_3_1_PRO
 # Model for fast/cheap operations
 FAST_CLAUDE_MODEL = CLAUDE_HAIKU
 FAST_GEMINI_MODEL = GEMINI_3_1_FLASH_LITE
+DEFAULT_IMAGE_MODEL = GEMINI_IMAGE

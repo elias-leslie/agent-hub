@@ -15,7 +15,8 @@ from agent_hub import AsyncAgentHubClient
 
 async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
     response = await client.complete(
-        model="claude-sonnet-4-6",
+        agent_slug="chat",
+        project_id="agent-hub",
         messages=[{"role": "user", "content": "Hello!"}]
     )
     print(response.content)

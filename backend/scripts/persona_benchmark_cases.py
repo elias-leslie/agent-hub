@@ -5,18 +5,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CODEX_GPT_5_2,
+    CODEX_GPT_5_3,
+    CODEX_GPT_5_3_SPARK,
+    CODEX_GPT_5_5,
+)
 from scripts.persona_display import normalize_persona_name
 
 type SummaryTermAlternatives = dict[str, tuple[str, ...]]
 
 DEFAULT_PERSONA_BENCHMARK_MODELS = [
-    "codex/gpt-5.4",
-    "codex/gpt-5.3-codex",
-    "codex/gpt-5.3-codex-spark",
-    "codex/gpt-5.2-codex",
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5",
+    CODEX_GPT_5_5,
+    CODEX_GPT_5_3,
+    CODEX_GPT_5_3_SPARK,
+    CODEX_GPT_5_2,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    CLAUDE_HAIKU,
 ]
 
 _RESPONSE_SHAPE = """Return JSON only with this exact shape:

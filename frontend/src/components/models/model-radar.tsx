@@ -10,7 +10,7 @@ import {
   Legend,
 } from "recharts";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
-import type { ModelOption } from "@agent-hub/chat-ui";
+import type { ModelOption } from "@/components/chat/use-models";
 
 interface ModelRadarProps {
   models: ModelOption[];

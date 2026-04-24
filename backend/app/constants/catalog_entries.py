@@ -29,6 +29,7 @@ from app.constants.models import (
     CODEX_GPT_5_3,
     CODEX_GPT_5_3_SPARK,
     CODEX_GPT_5_4,
+    CODEX_GPT_5_5,
     GEMINI_2_5_FLASH_LITE,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
@@ -248,7 +249,26 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(has_vision=True, max_output_tokens=8192),
         release_date="2025-10-01", family="gpt-nano",
     ),
-    # --- Codex (6) ---
+    # --- Codex (7) ---
+    ModelEntry(
+        id=CODEX_GPT_5_5, alias="codex", name="GPT-5.5 (Codex)",
+        hint="Codex Frontier", provider="codex",
+        scores=ModelScores(coding=98, reasoning=99, planning=90, tool_use=91, instruction=94, design=82),
+        cost=ModelCost(0.00, 0.00),
+        context_window=1_050_000, speed_tier="medium",
+        capabilities=ModelCapabilities(
+            has_vision=True,
+            has_thinking=True,
+            supports_pdf=True,
+            supports_tool_execution=True,
+            supports_verbosity=True,
+            supports_xhigh=True,
+            supports_session_cache=True,
+            max_output_tokens=32768,
+        ),
+        release_date="2026-04-23", knowledge_cutoff="2026-01-01", family="gpt",
+        availability="codex_only",
+    ),
     ModelEntry(
         id=CODEX_GPT_5_4, alias="codex-5.4", name="GPT-5.4 (Codex)",
         hint="Frontier", provider="codex",
@@ -268,7 +288,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         release_date="2026-03-05", knowledge_cutoff="2025-12-01", family="gpt",
     ),
     ModelEntry(
-        id=CODEX_GPT_5_3, alias="codex", name="GPT-5.3 Codex",
+        id=CODEX_GPT_5_3, alias="codex-5.3", name="GPT-5.3 Codex",
         hint="Best Coding", provider="codex",
         scores=ModelScores(coding=93, reasoning=95, planning=80, tool_use=80, instruction=90, design=72),
         cost=ModelCost(1.75, 14.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),

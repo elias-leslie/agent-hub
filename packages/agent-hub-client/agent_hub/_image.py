@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from agent_hub.constants import DEFAULT_IMAGE_MODEL
 from agent_hub._utils import handle_error
 from agent_hub.models import ImageGenerationResponse
 
@@ -14,7 +15,8 @@ def generate_image_sync(
     prompt: str,
     project_id: str,
     purpose: str | None = None,
-    model: str = "gemini-3-pro-image-preview",
+    agent_slug: str | None = None,
+    model: str = DEFAULT_IMAGE_MODEL,
     size: str = "1024x1024",
     style: str | None = None,
     reference_image: str | None = None,
@@ -43,6 +45,8 @@ def generate_image_sync(
     }
     if purpose:
         payload["purpose"] = purpose
+    if agent_slug:
+        payload["agent_slug"] = agent_slug
     if style:
         payload["style"] = style
     if reference_image:
@@ -64,7 +68,8 @@ async def generate_image_async(
     prompt: str,
     project_id: str,
     purpose: str | None = None,
-    model: str = "gemini-3-pro-image-preview",
+    agent_slug: str | None = None,
+    model: str = DEFAULT_IMAGE_MODEL,
     size: str = "1024x1024",
     style: str | None = None,
     reference_image: str | None = None,
@@ -93,6 +98,8 @@ async def generate_image_async(
     }
     if purpose:
         payload["purpose"] = purpose
+    if agent_slug:
+        payload["agent_slug"] = agent_slug
     if style:
         payload["style"] = style
     if reference_image:

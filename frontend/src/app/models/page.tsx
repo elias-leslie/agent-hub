@@ -2,8 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, useDeferredValue } from "react";
 import { Cpu, AlertCircle, Database, Loader2, RefreshCw, Clock, Layers, Activity, Zap } from "lucide-react";
-import type { ModelOption } from "@agent-hub/chat-ui";
-import { useModelsWithSync } from "@/components/chat/use-models";
+import { useModelsWithSync, type ModelOption } from "@/components/chat/use-models";
 import { fetchApi } from "@/lib/api-config";
 import { useToastActions } from "@/components/error/toast";
 import { getPricingSortValue } from "@/lib/model-pricing";
@@ -24,6 +23,11 @@ function formatMoment(value: string | null): string {
 function compactNumber(value: number | null | undefined): string {
   if (!value) return "0";
   return new Intl.NumberFormat(undefined, { notation: "compact" }).format(value);
+}
+
+function pricingSortValue(model: ModelOption): number {
+  if (model.availability === "codex_only") return Number.POSITIVE_INFINITY;
+  return getPricingSortValue(model.cost);
 }
 
 export default function ModelsPage() {
@@ -139,9 +143,9 @@ export default function ModelsPage() {
         case "reasoning":
           return b.scores.reasoning - a.scores.reasoning;
         case "cost-asc":
-          return getPricingSortValue(a.cost) - getPricingSortValue(b.cost);
+          return pricingSortValue(a) - pricingSortValue(b);
         case "cost-desc":
-          return getPricingSortValue(b.cost) - getPricingSortValue(a.cost);
+          return pricingSortValue(b) - pricingSortValue(a);
         case "name":
           return a.name.localeCompare(b.name);
         default:
@@ -214,11 +218,11 @@ export default function ModelsPage() {
                 </div>
                 <div className="space-y-3">
                   <h1 className="font-serif text-3xl tracking-tight text-slate-50 lg:text-4xl">
-                    Model truth, freshness, price honesty.
+                    Model truth, GPT-5.5 readiness, price honesty.
                   </h1>
                   <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                    Curated registry stays authoritative. Sync overlays live pricing and benchmark evidence.
-                    Watchlist flags external models from already-tracked providers that are not yet in catalog.
+                    Curated registry stays authoritative. GPT-5.5 is routed through Codex OAuth until API
+                    availability lands; sync overlays live pricing and benchmark evidence for API-backed models.
                   </p>
                 </div>
               </div>
@@ -227,6 +231,10 @@ export default function ModelsPage() {
                 <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-right">
                   <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Last Sync</div>
                   <div className="text-sm font-medium text-slate-100">{formatMoment(lastSync)}</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-right">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300/70">Newest</div>
+                  <div className="text-sm font-medium text-emerald-100">GPT-5.5 Codex-only</div>
                 </div>
                 <button
                   type="button"

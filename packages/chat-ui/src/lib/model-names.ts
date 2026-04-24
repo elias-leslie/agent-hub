@@ -31,9 +31,9 @@ export function formatModelName(modelId?: string): string {
 }
 
 export const MODEL_ALIAS_ENTRIES: Record<string, { model: string; label: string }> = {
-  sonnet: { model: "claude-sonnet-4-6", label: "Sonnet" },
-  opus: { model: "claude-opus-4-6", label: "Opus" },
-  haiku: { model: "claude-haiku-4-5", label: "Haiku" },
-  flash: { model: "gemini-3-flash-preview", label: "Flash" },
-  pro: { model: "gemini-3-pro-preview", label: "Pro" },
+  chat: { model: "chat", label: "Chat" },
+  coder: { model: "coder", label: "Coder" },
+  planner: { model: "planner", label: "Planner" },
+  reasoner: { model: "reasoner", label: "Reasoner" },
+  reviewer: { model: "reviewer", label: "Reviewer" },
 };

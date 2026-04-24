@@ -33,6 +33,7 @@ export interface ModelOption {
   release_date?: string | null;
   knowledge_cutoff?: string | null;
   family?: string | null;
+  availability?: string | null;
   enrichment?: ModelEnrichment | null;
 }
 

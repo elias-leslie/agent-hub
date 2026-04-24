@@ -5,7 +5,7 @@ import json
 import pytest
 from pytest_httpx import HTTPXMock
 
-from agent_hub import AgentHubClient, AsyncAgentHubClient
+from agent_hub import CODEX_GPT_5_5, AgentHubClient, AsyncAgentHubClient
 
 
 def _workflow_response() -> dict[str, object]:
@@ -19,7 +19,7 @@ def _workflow_response() -> dict[str, object]:
                 "stage": "clarify",
                 "agent_used": "chat",
                 "content": "clarify output",
-                "model": "codex/gpt-5.4",
+                "model": CODEX_GPT_5_5,
                 "provider": "codex",
                 "session_id": "sess-clarify",
                 "usage": {
@@ -32,7 +32,7 @@ def _workflow_response() -> dict[str, object]:
                 "stage": "qa",
                 "agent_used": "critic",
                 "content": "qa output",
-                "model": "codex/gpt-5.4",
+                "model": CODEX_GPT_5_5,
                 "provider": "codex",
                 "session_id": "sess-qa",
                 "usage": {

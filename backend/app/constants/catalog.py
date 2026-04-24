@@ -30,6 +30,7 @@ from app.constants.models import (
     CODEX_GPT_5_3,
     CODEX_GPT_5_3_SPARK,
     CODEX_GPT_5_4,
+    CODEX_GPT_5_5,
     GEMINI_2_5_FLASH_LITE,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
@@ -106,6 +107,7 @@ MODEL_ALIASES.update({
     "codex/gpt-5.1": CODEX_GPT_5_1,
     "codex/gpt-5.2": CODEX_GPT_5_2,
     "codex/gpt-5.3": CODEX_GPT_5_3,
+    "codex/gpt-5.5": CODEX_GPT_5_5,
     # CloudCode aliases
     "cc/sonnet": CLAUDE_SONNET,
     "cc/opus": CLAUDE_OPUS,
@@ -184,6 +186,7 @@ CODEX_TO_CLAUDE_MAP: dict[str, str] = {
     CODEX_GPT_5_3: CLAUDE_OPUS,
     CODEX_GPT_5_3_SPARK: CLAUDE_SONNET,
     CODEX_GPT_5_4: CLAUDE_OPUS,
+    CODEX_GPT_5_5: CLAUDE_OPUS,
 }
 
 XAI_TO_CLAUDE_MAP: dict[str, str] = {

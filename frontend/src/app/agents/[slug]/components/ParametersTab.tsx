@@ -95,7 +95,7 @@ const THINKING_LEVELS = [
   { value: "low", label: "Low", hint: "Basic reasoning, fast responses" },
   { value: "medium", label: "Medium", hint: "Balanced reasoning for most tasks" },
   { value: "high", label: "High", hint: "Deep reasoning for complex analysis" },
-  { value: "xhigh", label: "xHigh", hint: "Maximum reasoning (GPT-5.4 only)" },
+  { value: "xhigh", label: "xHigh", hint: "Maximum reasoning (GPT-5.4/5.5)" },
 ] as const;
 
 const VERBOSITY_LEVELS = [

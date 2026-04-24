@@ -8,14 +8,14 @@ Example usage:
 
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         response = await client.complete(
-            model="claude-sonnet-4-6",
+            agent_slug="chat",
             messages=[{"role": "user", "content": "Hello!"}]
         )
         print(response.content)
 
     # Streaming
     async for chunk in client.stream_sse(
-        model="claude-sonnet-4-6",
+        agent_slug="chat",
         messages=[{"role": "user", "content": "Tell me a story"}]
     ):
         print(chunk.content, end="", flush=True)
@@ -26,13 +26,16 @@ from agent_hub.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
+    CODEX_GPT_5_5,
     DEFAULT_CLAUDE_MODEL,
     DEFAULT_GEMINI_MODEL,
+    DEFAULT_IMAGE_MODEL,
     FAST_CLAUDE_MODEL,
     FAST_GEMINI_MODEL,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
     GEMINI_FLASH,
+    GEMINI_IMAGE,
     GEMINI_PRO,
     REASONING_CLAUDE_MODEL,
     REASONING_GEMINI_MODEL,
@@ -83,8 +86,11 @@ __all__ = [
     "GEMINI_PRO",
     "GEMINI_3_1_PRO",
     "GEMINI_3_1_FLASH_LITE",
+    "GEMINI_IMAGE",
+    "CODEX_GPT_5_5",
     "DEFAULT_CLAUDE_MODEL",
     "DEFAULT_GEMINI_MODEL",
+    "DEFAULT_IMAGE_MODEL",
     "REASONING_CLAUDE_MODEL",
     "REASONING_GEMINI_MODEL",
     "FAST_CLAUDE_MODEL",

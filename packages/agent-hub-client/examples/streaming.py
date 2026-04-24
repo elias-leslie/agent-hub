@@ -11,9 +11,10 @@ async def main() -> None:
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         print("Streaming response: ", end="", flush=True)
 
-        # Stream via SSE (OpenAI-compatible API)
+        # Stream via the configured chat agent instead of pinning a model.
         async for chunk in client.stream_sse(
-            model="claude-sonnet-4-6",
+            agent_slug="chat",
+            project_id="agent-hub",
             messages=[{"role": "user", "content": "Write a haiku about coding."}],
         ):
             if chunk.type == "content":

@@ -8,7 +8,7 @@ import { fetchApi } from "@/lib/api-config";
 const DEFAULT_COMMITTEE_CONFIG: CommitteeConfig = {
   orchestrator: {
     agent_slug: "investment-committee",
-    model_id: "codex/gpt-5.4",
+    model_id: null,
     instruction: "Synthesize committee votes into the final market call.",
   },
   seats: [
@@ -17,7 +17,7 @@ const DEFAULT_COMMITTEE_CONFIG: CommitteeConfig = {
       label: "Macro",
       enabled: true,
       agent_slug: "market-pulse-analyst",
-      model_id: "codex/gpt-5.4",
+      model_id: null,
       instruction: "Focus on macro regime, rates, breadth, and options positioning.",
       weight: 1,
     },
@@ -26,7 +26,7 @@ const DEFAULT_COMMITTEE_CONFIG: CommitteeConfig = {
       label: "Cross-Asset",
       enabled: true,
       agent_slug: "equity-analyst",
-      model_id: "xai/grok-4.20-reasoning",
+      model_id: null,
       instruction: "Stress-test policy, cross-asset leadership, and narrative drift.",
       weight: 1,
     },
@@ -35,7 +35,7 @@ const DEFAULT_COMMITTEE_CONFIG: CommitteeConfig = {
       label: "Risk",
       enabled: true,
       agent_slug: "risk-manager",
-      model_id: "claude-opus-4-7",
+      model_id: null,
       instruction: "Challenge downside tails, uncertainty, and failure modes.",
       weight: 1,
     },

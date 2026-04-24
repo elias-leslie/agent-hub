@@ -138,12 +138,12 @@ def _select_initial_tier(
     # not by compressing instructions into useless summaries.
     if block == "mandate":
         if summarize_policies_for_profile(profile.value):
-            return PROMPT_TIER_L0, "startup_policy_summary"
+            return PROMPT_TIER_L0, "policy_summary"
         return PROMPT_TIER_L2, "mandate"
 
     if block == "guardrail":
         if summarize_policies_for_profile(profile.value):
-            return PROMPT_TIER_L0, "startup_policy_summary"
+            return PROMPT_TIER_L0, "policy_summary"
         return PROMPT_TIER_L2, "guardrail"
 
     if block == "reference_index":
