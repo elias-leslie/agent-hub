@@ -271,6 +271,8 @@ async def api_save_learning(
 | 7 | Terse content | Prefer 3 sentences max and 280 chars max |
 | 8 | Summary | 10-40 chars |
 
+Valid compact saves are stored as prompt-ready compact_content and defer routine review until cadence. Invalid or bulky saves create review debt.
+
 Example of GOOD format:
   **Git Publish**: Use commit.sh --push --msg "description" for new commits. Use commit.sh --current --push for clean ahead branches. Why: both stay on the canonical publish path.
 

@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import DateTime, cast, func, or_, select, text
 
 from app.models.memory_unified import Memory, MemoryReviewRun
 
@@ -24,6 +24,14 @@ def _bounded_int(value: int | None, *, default: int, minimum: int, maximum: int)
     except (TypeError, ValueError):
         parsed = default
     return max(minimum, min(maximum, parsed))
+
+
+def _effective_reviewed_at_expr() -> Any:
+    source_validated_at = cast(
+        func.nullif(Memory.metadata_["source_compact_validated_at"].astext, ""),
+        DateTime(timezone=True),
+    )
+    return func.coalesce(Memory.last_reviewed_at, source_validated_at)
 
 
 def _json(data: dict[str, Any]) -> str:
@@ -49,7 +57,8 @@ def _review_filters(
             ]
         )
     if not force_all:
-        filters.append(or_(Memory.last_reviewed_at.is_(None), Memory.last_reviewed_at < cutoff))
+        effective_reviewed_at = _effective_reviewed_at_expr()
+        filters.append(or_(effective_reviewed_at.is_(None), effective_reviewed_at < cutoff))
     return filters
 
 
@@ -97,11 +106,16 @@ async def _review_status(
                 func.count().filter(
                     text("coalesce(memories.metadata->>'compact_reviewed_at', '') <> ''")
                 ),
+                func.count().filter(
+                    text("coalesce(memories.metadata->>'source_compact_validated_at', '') <> ''")
+                ),
             )
             .select_from(Memory)
             .where(Memory.status.in_(statuses))
         )
-        compact_ready, compact_missing_long, compact_reviewed = compact_counts_result.one()
+        compact_ready, compact_missing_long, compact_reviewed, source_ready = (
+            compact_counts_result.one()
+        )
         runs_result = await db.execute(
             select(MemoryReviewRun)
             .order_by(MemoryReviewRun.started_at.desc())
@@ -121,6 +135,7 @@ async def _review_status(
                 "ready": int(compact_ready or 0),
                 "missing_long": int(compact_missing_long or 0),
                 "reviewed": int(compact_reviewed or 0),
+                "source_ready": int(source_ready or 0),
             },
             "review_status": {
                 str(status or "pending"): int(count)

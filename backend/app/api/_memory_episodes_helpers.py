@@ -146,18 +146,19 @@ async def _build_content_update(
     messages: list[str],
 ) -> tuple[dict[str, Any], list[str]]:
     """Validate content and add embedding to updates dict."""
+    from datetime import UTC, datetime
+
     from app.services.memory.embedder import get_embedder
+    from app.services.memory.episode_creator_helpers import build_source_quality_metadata
     from app.services.memory.episode_validation import EpisodeValidationError, EpisodeValidator
 
-    existing_episode: dict[str, Any] | None = None
-    if request.injection_tier is None:
-        existing_episode = await repo.get_as_dict(full_uuid)
-        if existing_episode is None:
-            raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+    existing_episode = await repo.get_as_dict(full_uuid)
+    if existing_episode is None:
+        raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
     effective_tier = (
         request.injection_tier.value
         if request.injection_tier is not None
-        else str((existing_episode or {}).get("injection_tier") or "reference")
+        else str(existing_episode.get("injection_tier") or "reference")
     )
     try:
         EpisodeValidator.validate_content(request.content, tier=effective_tier)
@@ -173,5 +174,12 @@ async def _build_content_update(
     embedder = get_embedder()
     updates["content"] = request.content
     updates["embedding"] = await embedder.embed(request.content)
+    updates["metadata"] = build_source_quality_metadata(
+        request.content,
+        existing_episode.get("metadata"),
+        checked_at=datetime.now(UTC),
+        tier_name=effective_tier,
+        replace_existing=True,
+    )
     messages.append("content")
     return updates, messages

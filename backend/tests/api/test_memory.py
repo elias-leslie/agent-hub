@@ -139,6 +139,14 @@ class TestUpdateEpisodeEndpoint:
         assert "content" in data["message"].lower()
         mock_embedder.embed.assert_awaited_once_with("**Episode Refresh**: Use refreshed episode content.")
         mock_repo.update.assert_awaited_once()
+        update_call = mock_repo.update.await_args
+        assert update_call is not None
+        update_kwargs = update_call.kwargs
+        assert update_kwargs["metadata"]["compact_content"] == (
+            "**Episode Refresh**: Use refreshed episode content."
+        )
+        assert update_kwargs["metadata"]["compact_status"] == "source_ready"
+        assert update_kwargs["metadata"]["source_quality_method"] == "format_standard"
 
     @pytest.mark.asyncio
     async def test_update_episode_tier_only(
