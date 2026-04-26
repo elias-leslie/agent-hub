@@ -92,6 +92,9 @@ class MemorySearchResult(BaseModel):
     uuid: str
     content: str
     summary: str | None = None
+    review_status: str = "pending"
+    sensitivity_tier: str = "normal"
+    last_reviewed_at: datetime | None = None
     overview: str | None = None
     rendered_content: str | None = None
     render_tier: str | None = None

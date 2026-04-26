@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
     from .episode_creator_models import CreateResult
 
+from .enrichment import enrich_memory_content
 from .episode_creator import get_episode_creator
 from .ingestion_config import CHAT_STREAM, LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA, IngestionConfig
 from .observation_schema import ObservationRequest, ObservationResponse, ObservationType
@@ -206,12 +207,33 @@ async def capture_observation(
     now = datetime.now(UTC)
     episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"
     creator = get_episode_creator(scope, scope_id)
+    episode_body = _build_episode_body(request, filtered_content, filtered_narrative)
+    enrichment = enrich_memory_content(
+        episode_body,
+        source=request.source.value,
+        observation_type=request.type.value,
+    )
+    metadata = dict(enrichment.metadata)
+    metadata["capture"] = {
+        "source": request.source.value,
+        "observation_type": request.type.value,
+        "session_id": request.session_id,
+        "task_id": request.task_id,
+        "provider": request.provider,
+        "model": request.model,
+        "files_modified": request.files_modified[:20],
+        "files_read": request.files_read[:20],
+        "concepts": request.concepts[:20],
+    }
     result = await creator.create(
-        content=_build_episode_body(request, filtered_content, filtered_narrative),
+        content=episode_body,
         name=episode_name,
         config=_TYPE_TO_CONFIG.get(request.type, LEARNING),
         source_description=_build_observation_source_description(request),
         reference_time=now,
+        summary=enrichment.summary,
+        metadata=metadata,
+        sensitivity_tier=enrichment.sensitivity_tier,
     )
 
     if result.success:

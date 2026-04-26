@@ -14,6 +14,7 @@ from app.db import async_session
 from app.models.memory_unified import Memory, MemoryRevision
 
 from ._repo_helpers import TIER_MAP, to_dict
+from .fingerprint import content_fingerprint
 from .memory_utils import parse_group_id
 
 
@@ -233,6 +234,9 @@ class CrudRepository:
         trigger_phases: list[str] | None = None,
         token_count: int | None = None,
         status: str = "active",
+        review_status: str = "pending",
+        sensitivity_tier: str = "normal",
+        content_fingerprint_value: str | None = None,
         metadata: dict | None = None,
         valid_at: datetime | None = None,
         id: _uuid.UUID | None = None,
@@ -251,6 +255,7 @@ class CrudRepository:
             id=id or _uuid.uuid4(),
             version=1,
             content=content,
+            content_fingerprint=content_fingerprint_value or content_fingerprint(content),
             name=name,
             summary=summary,
             embedding=embedding,
@@ -271,6 +276,8 @@ class CrudRepository:
             trigger_phases=trigger_phases,
             token_count=token_count,
             status=status,
+            review_status=review_status,
+            sensitivity_tier=sensitivity_tier,
             metadata_=metadata or {},
             valid_at=valid_at or now,
             created_at=now,
@@ -339,6 +346,8 @@ class CrudRepository:
         uid = _uuid.UUID(str(memory_id)) if isinstance(memory_id, str) else memory_id
         if "metadata" in kwargs:
             kwargs["metadata_"] = kwargs.pop("metadata")
+        if "content" in kwargs and "content_fingerprint" not in kwargs:
+            kwargs["content_fingerprint"] = content_fingerprint(str(kwargs["content"]))
         if "injection_tier" in kwargs:
             kwargs["tier"] = TIER_MAP.get(kwargs.pop("injection_tier"), 3)
         now = datetime.now(UTC)

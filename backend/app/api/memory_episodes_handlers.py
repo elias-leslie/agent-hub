@@ -35,12 +35,18 @@ async def handle_add_episode(
     """Add an episode to semantic memory."""
     from datetime import UTC, datetime
 
+    from app.services.memory.enrichment import enrich_memory_content
     from app.services.memory.episode_creator import get_episode_creator
     from app.services.memory.ingestion_config import LEARNING
 
     from .memory_schemas import AddEpisodeResponse
 
     creator = get_episode_creator(scope=memory.scope, scope_id=memory.scope_id)
+    enrichment = enrich_memory_content(
+        request.content,
+        source=request.source.value,
+        summary=None,
+    )
     result = await creator.create(
         content=request.content,
         name=f"{request.source.value}_{datetime.now(UTC).isoformat()}",
@@ -52,6 +58,9 @@ async def handle_add_episode(
         applicability=(
             request.applicability.model_dump() if request.applicability is not None else None
         ),
+        summary=enrichment.summary,
+        metadata=enrichment.metadata,
+        sensitivity_tier=enrichment.sensitivity_tier,
         changed_by="api",
         change_reason=request.change_reason or "Episode added",
     )

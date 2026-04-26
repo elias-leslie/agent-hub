@@ -38,6 +38,8 @@ from .memory_schemas import (
     EpisodeDetailResponse,
     HealthResponse,
     MemoryRestoreRequest,
+    MemoryReviewRunRequest,
+    MemoryReviewRunResponse,
     MemoryRevisionListResponse,
     SearchResponse,
     UpdateEpisodePropertiesRequest,
@@ -204,3 +206,25 @@ async def memory_health(
 ) -> HealthResponse:
     """Check memory system health (PostgreSQL + pgvector connection status)."""
     return await handle_memory_health(memory)
+
+
+@router.post("/review/run", response_model=MemoryReviewRunResponse)
+async def run_memory_review(
+    request: MemoryReviewRunRequest,
+) -> MemoryReviewRunResponse:
+    """Run one dedicated-agent memory review batch."""
+    from app.db import async_session
+    from app.services.memory.review_agent import run_memory_review_batch
+
+    async with async_session() as db:
+        result = await run_memory_review_batch(
+            db=db,
+            batch_limit=request.batch_limit,
+            cadence_days=request.cadence_days,
+            reviewer_agent_slug=request.reviewer_agent_slug,
+            reviewer_model_id=request.reviewer_model_id,
+            dry_run=request.dry_run,
+            include_archived=request.include_archived,
+        )
+        await db.commit()
+    return MemoryReviewRunResponse(**result.__dict__)

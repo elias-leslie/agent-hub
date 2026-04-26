@@ -28,6 +28,7 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "uuid": str(mem.id),
         "version": mem.version,
         "content": mem.content,
+        "content_fingerprint": getattr(mem, "content_fingerprint", None),
         "name": mem.name,
         "summary": mem.summary,
         "memory_type": mem.memory_type,
@@ -52,6 +53,8 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "harmful_count": mem.harmful_count,
         "utility_score": mem.utility_score,
         "status": mem.status,
+        "review_status": getattr(mem, "review_status", "pending"),
+        "sensitivity_tier": getattr(mem, "sensitivity_tier", "normal"),
         "token_count": mem.token_count,
         "lifecycle_score": mem.lifecycle_score,
         "lifecycle_score_updated_at": mem.lifecycle_score_updated_at,
@@ -62,4 +65,5 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "created_at": mem.created_at,
         "updated_at": mem.updated_at,
         "last_accessed_at": mem.last_accessed_at,
+        "last_reviewed_at": getattr(mem, "last_reviewed_at", None),
     }

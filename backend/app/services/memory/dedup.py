@@ -5,29 +5,18 @@ Uses SHA256 for content hashing and normalized content comparison.
 Delegates to MemoryRepository.find_duplicate() for database lookup.
 """
 
-import hashlib
 import logging
 
+from .fingerprint import content_fingerprint
+from .fingerprint import normalize_content as _normalize_content
 from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 def normalize_content(content: str) -> str:
-    """Normalize content for consistent hashing.
-
-    Normalizes whitespace, trims, and lowercases for comparison.
-
-    Args:
-        content: Raw content string
-
-    Returns:
-        Normalized content string
-    """
-    # Normalize whitespace: collapse multiple spaces/newlines to single space
-    normalized = " ".join(content.split())
-    # Trim and lowercase
-    return normalized.strip().lower()
+    """Normalize content for consistent hashing."""
+    return _normalize_content(content)
 
 
 def content_hash(content: str) -> str:
@@ -39,8 +28,7 @@ def content_hash(content: str) -> str:
     Returns:
         SHA256 hex digest
     """
-    normalized = normalize_content(content)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return content_fingerprint(content)
 
 
 async def find_exact_duplicate(

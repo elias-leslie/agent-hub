@@ -7,6 +7,7 @@ computes the next run time.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -30,6 +31,7 @@ SCHEDULER_MEMORY_GROUP = "agent-hub:scheduler"
 PAYLOAD_TYPE_AGENT_TURN = "agent_turn"
 PAYLOAD_TYPE_PUSH = "push"
 PAYLOAD_TYPE_SELF_HONING = "self_honing"
+PAYLOAD_TYPE_MEMORY_REVIEW = "memory_review"
 
 # Misc string constants
 DELIVERY_PUSH = "push"
@@ -288,12 +290,66 @@ async def _execute_self_honing(job: Any) -> JobExecutionResult:
     )
 
 
+def _parse_memory_review_payload(payload_message: str) -> dict[str, Any]:
+    """Parse optional JSON config for a scheduled memory review job."""
+    try:
+        parsed = json.loads(payload_message)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+async def _execute_memory_review(job: Any) -> JobExecutionResult:
+    """Execute one rolling memory-review batch."""
+    from app.db import async_session
+    from app.services.memory.review_agent import (
+        DEFAULT_BATCH_LIMIT,
+        DEFAULT_REVIEW_CADENCE_DAYS,
+        DEFAULT_REVIEWER_AGENT,
+        run_memory_review_batch,
+    )
+
+    payload = _parse_memory_review_payload(job.payload_message or "")
+    batch_limit = int(payload.get("batch_limit") or DEFAULT_BATCH_LIMIT)
+    cadence_days = int(payload.get("cadence_days") or DEFAULT_REVIEW_CADENCE_DAYS)
+    reviewer_agent_slug = str(payload.get("reviewer_agent_slug") or DEFAULT_REVIEWER_AGENT)
+    reviewer_model_id = payload.get("reviewer_model_id")
+    reviewer_model_id = str(reviewer_model_id) if reviewer_model_id else None
+    dry_run = bool(payload.get("dry_run") or False)
+    include_archived = bool(payload.get("include_archived") or False)
+
+    async with async_session() as db:
+        result = await run_memory_review_batch(
+            db=db,
+            batch_limit=batch_limit,
+            cadence_days=cadence_days,
+            reviewer_agent_slug=reviewer_agent_slug,
+            reviewer_model_id=reviewer_model_id,
+            dry_run=dry_run,
+            include_archived=include_archived,
+        )
+        await db.commit()
+
+    return JobExecutionResult(
+        output=(
+            "Memory review "
+            f"{result.status}: reviewed={result.reviewed_count} "
+            f"needs_action={result.needs_action_count} failed={result.failed_count} "
+            f"reviewer={result.reviewer_agent_slug} model={result.reviewer_model_id or 'n/a'} "
+            f"run={result.run_id or 'n/a'}"
+        ),
+        session_id=result.session_id,
+    )
+
+
 async def execute_job(job: Any) -> JobExecutionResult:
     """Dispatch to the correct executor based on payload type."""
     if job.payload_type == PAYLOAD_TYPE_PUSH:
         return await _execute_push(job)
     if job.payload_type == PAYLOAD_TYPE_SELF_HONING:
         return await _execute_self_honing(job)
+    if job.payload_type == PAYLOAD_TYPE_MEMORY_REVIEW:
+        return await _execute_memory_review(job)
     return await _execute_agent_turn(job)
 
 

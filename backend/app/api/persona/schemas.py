@@ -123,7 +123,7 @@ class PersonaAutomationCreate(BaseModel):
     schedule_type: Literal["at", "every", "cron"]
     schedule_value: str = Field(min_length=1, max_length=100)
     schedule_timezone: str = Field(default="UTC", max_length=50)
-    payload_type: Literal["agent_turn", "push", "self_honing"] = "agent_turn"
+    payload_type: Literal["agent_turn", "push", "self_honing", "memory_review"] = "agent_turn"
     payload_message: str = Field(min_length=1, max_length=10000)
     payload_title: str | None = Field(default=None, max_length=200)
     delivery: Literal["none", "push", "telegram"] = "none"
@@ -143,7 +143,7 @@ class PersonaAutomationUpdate(BaseModel):
     schedule_type: Literal["at", "every", "cron"] | None = None
     schedule_value: str | None = Field(default=None, min_length=1, max_length=100)
     schedule_timezone: str | None = Field(default=None, max_length=50)
-    payload_type: Literal["agent_turn", "push", "self_honing"] | None = None
+    payload_type: Literal["agent_turn", "push", "self_honing", "memory_review"] | None = None
     payload_message: str | None = Field(default=None, min_length=1, max_length=10000)
     payload_title: str | None = Field(default=None, max_length=200)
     delivery: Literal["none", "push", "telegram"] | None = None

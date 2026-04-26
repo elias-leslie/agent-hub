@@ -64,6 +64,8 @@ __all__ = [
     "EpisodeDetailResponse",
     "HealthResponse",
     "MemoryRestoreRequest",
+    "MemoryReviewRunRequest",
+    "MemoryReviewRunResponse",
     "MemoryRevisionListResponse",
     "MemoryRevisionResponse",
     "PhaseTriggeredReferenceItem",
@@ -146,6 +148,31 @@ class HealthResponse(BaseModel):
     scope_id: str | None = None
     total_memories: int | None = None
     error: str | None = None
+
+
+class MemoryReviewRunRequest(BaseModel):
+    """Request one dedicated-agent memory review batch."""
+
+    batch_limit: int = Field(default=25, ge=1, le=100)
+    cadence_days: int = Field(default=45, ge=1, le=365)
+    reviewer_agent_slug: str = Field(default="memory-curator", min_length=1, max_length=100)
+    reviewer_model_id: str | None = Field(default=None, min_length=1, max_length=200)
+    dry_run: bool = False
+    include_archived: bool = False
+
+
+class MemoryReviewRunResponse(BaseModel):
+    """Result of one dedicated-agent memory review batch."""
+
+    run_id: str | None
+    status: str
+    reviewed_count: int
+    needs_action_count: int
+    failed_count: int
+    reviewer_agent_slug: str
+    reviewer_model_id: str | None = None
+    session_id: str | None = None
+    errors: list[str] = Field(default_factory=list)
 
 
 # ============================================================================

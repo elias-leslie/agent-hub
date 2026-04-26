@@ -7,13 +7,14 @@ import uuid as _uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select, text
+from sqlalchemy import and_, desc, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
 from app.models.memory_unified import Memory
 
 from ._repo_helpers import TIER_MAP
+from .fingerprint import content_fingerprint
 
 
 def _parse_pagination_cursor(cursor: str) -> tuple[datetime, _uuid.UUID | None]:
@@ -266,15 +267,16 @@ class QueryRepository:
         limit: int = 50,
         db: AsyncSession | None = None,
     ) -> list[Memory]:
-        """Case-insensitive text search on content, name, and summary."""
-        pattern = f"%{query}%"
+        """Ranked full-text search with ILIKE fallback."""
+        search_document = func.to_tsvector(
+            "english",
+            func.concat_ws(" ", Memory.name, Memory.summary, Memory.content),
+        )
+        search_query = func.websearch_to_tsquery("english", query)
+        rank = func.ts_rank_cd(search_document, search_query)
         stmt = select(Memory).where(
             Memory.status == "active",
-            or_(
-                Memory.content.ilike(pattern),
-                Memory.name.ilike(pattern),
-                Memory.summary.ilike(pattern),
-            ),
+            search_document.op("@@")(search_query),
         )
         if group_id:
             stmt = stmt.where(Memory.group_id == group_id)
@@ -284,13 +286,42 @@ class QueryRepository:
             tier_num = TIER_MAP.get(category)
             if tier_num:
                 stmt = stmt.where(Memory.tier == tier_num)
-        stmt = stmt.order_by(Memory.created_at.desc()).limit(limit)
+        stmt = stmt.order_by(desc(rank), Memory.updated_at.desc()).limit(limit)
 
         if db:
             result = await db.execute(stmt)
+            rows = list(result.scalars().all())
+        else:
+            async with async_session() as session:
+                result = await session.execute(stmt)
+                rows = list(result.scalars().all())
+        if rows:
+            return rows
+
+        pattern = f"%{query}%"
+        fallback_stmt = select(Memory).where(
+            Memory.status == "active",
+            or_(
+                Memory.content.ilike(pattern),
+                Memory.name.ilike(pattern),
+                Memory.summary.ilike(pattern),
+            ),
+        )
+        if group_id:
+            fallback_stmt = fallback_stmt.where(Memory.group_id == group_id)
+        if scope:
+            fallback_stmt = fallback_stmt.where(Memory.scope == scope)
+        if category:
+            tier_num = TIER_MAP.get(category)
+            if tier_num:
+                fallback_stmt = fallback_stmt.where(Memory.tier == tier_num)
+        fallback_stmt = fallback_stmt.order_by(Memory.updated_at.desc()).limit(limit)
+
+        if db:
+            result = await db.execute(fallback_stmt)
             return list(result.scalars().all())
         async with async_session() as session:
-            result = await session.execute(stmt)
+            result = await session.execute(fallback_stmt)
             return list(result.scalars().all())
 
     async def resolve_uuid_prefix(
@@ -375,7 +406,26 @@ class QueryRepository:
         window_minutes: int = 5,
         db: AsyncSession | None = None,
     ) -> str | None:
-        """Find exact content duplicate within time window. Returns UUID or None."""
+        """Find normalized content duplicate. Returns UUID or None."""
+        fingerprint = content_fingerprint(content)
+        fingerprint_stmt = select(Memory.id).where(
+            Memory.content_fingerprint == fingerprint,
+            Memory.status == "active",
+        )
+        if group_id:
+            fingerprint_stmt = fingerprint_stmt.where(Memory.group_id == group_id)
+        fingerprint_stmt = fingerprint_stmt.order_by(Memory.created_at.asc()).limit(1)
+
+        if db:
+            result = await db.execute(fingerprint_stmt)
+            row = result.scalar()
+        else:
+            async with async_session() as session:
+                result = await session.execute(fingerprint_stmt)
+                row = result.scalar()
+        if row:
+            return str(row)
+
         cutoff = datetime.now(UTC) - timedelta(minutes=window_minutes)
         stmt = select(Memory.id).where(
             Memory.content == content,

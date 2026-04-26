@@ -39,11 +39,13 @@ class TestReferenceInjection:
                 "uuid": "f2ae2668-da26-46e1-b499-ffac6141e377",
                 "content": "**Session Surfaces**: Use ownership for normalized lane truth.",
                 "tags": None,
+                "review_status": "clean",
             }
         )
 
         assert result is not None
         assert result.tags == []
+        assert result.review_status == "clean"
 
     @pytest.mark.asyncio
     async def test_query_relevant_reference_payload_preserves_trigger_hints(self) -> None:
@@ -528,6 +530,114 @@ class TestReferenceInjection:
         assert context.mandates[0].render_tier == "L0"
         assert context.guardrails[0].render_tier == "L0"
         assert context.debug_info["consumer_profile"] == "agent_coding"
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_promptops_uses_tighter_policy_profile(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        mandates = [
+            MemorySearchResult(
+                uuid=f"m-{idx:02d}",
+                content=f"Promptops mandate {idx}.",
+                summary=f"Mandate {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(20)
+        ]
+        guardrails = [
+            MemorySearchResult(
+                uuid=f"g-{idx:02d}",
+                content=f"Promptops guardrail {idx}.",
+                summary=f"Guardrail {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+            )
+            for idx in range(8)
+        ]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=(mandates, guardrails, [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Review prompt routing.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="agent_promptops",
+            )
+
+        assert len(context.mandates) == 14
+        assert len(context.guardrails) == 4
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_prioritizes_clean_reviewed_policies(self) -> None:
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        mandates = [
+            MemorySearchResult(
+                uuid=f"needs-{idx}",
+                content=f"Needs action mandate {idx}.",
+                summary=f"Needs {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+                review_status="needs_action",
+            )
+            for idx in range(4)
+        ] + [
+            MemorySearchResult(
+                uuid=f"clean-{idx}",
+                content=f"Clean mandate {idx}.",
+                summary=f"Clean {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.4,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+                review_status="clean",
+            )
+            for idx in range(4)
+        ]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=(mandates, [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="General chat.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="agent_general",
+            )
+
+        assert [item.uuid for item in context.mandates[:4]] == [
+            "clean-0",
+            "clean-1",
+            "clean-2",
+            "clean-3",
+        ]
+        assert len(context.mandates) == 6
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_query_selected_refs_respect_triggers_and_applicability(self) -> None:

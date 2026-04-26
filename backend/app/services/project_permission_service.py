@@ -79,6 +79,7 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "mark_memory_relevant",
     "mark_memory_irrelevant",
     "manage_memory_tags",
+    "review_memory_system",
     "manage_model_config",
     "log_agent_performance",
     "review_agent_performance",

@@ -65,6 +65,9 @@ class EpisodeDetailResponse(BaseModel):
     trigger_task_types: list[str] = Field(default_factory=list)
     trigger_phases: list[str] = Field(default_factory=list)
     summary: str | None = Field(None, description="Short action phrase for TOON index (~20 chars)")
+    review_status: str = "pending"
+    sensitivity_tier: str = "normal"
+    last_reviewed_at: datetime | None = None
     context_kind: MemoryContextKind = MemoryContextKind.REFERENCE
     applicability: MemoryApplicability = Field(default_factory=MemoryApplicability)
     # Usage stats
