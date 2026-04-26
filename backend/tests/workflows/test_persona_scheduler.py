@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -151,3 +152,54 @@ async def test_execute_self_honing_runs_default_loop_and_reports_summary(tmp_pat
     assert await_args is not None
     assert await_args.kwargs["case_ids"] == get_persona_improvement_case_ids()
     assert await_args.kwargs["suite_id"] == PERSONA_IMPROVEMENT_SUITE_ID
+
+
+@pytest.mark.asyncio
+async def test_execute_memory_review_clamps_scheduled_batch_limit():
+    from app.services.memory.review_agent import DEFAULT_BATCH_LIMIT
+    from app.workflows.persona_scheduler import _execute_memory_review
+
+    class FakeAsyncSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def commit(self):
+            return None
+
+    job = SimpleNamespace(
+        payload_message=json.dumps(
+            {
+                "batch_limit": DEFAULT_BATCH_LIMIT + 10,
+                "cadence_days": 45,
+                "reviewer_agent_slug": "memory-curator",
+            }
+        )
+    )
+    review_result = SimpleNamespace(
+        status="completed",
+        reviewed_count=1,
+        needs_action_count=0,
+        failed_count=0,
+        reviewer_agent_slug="memory-curator",
+        reviewer_model_id="codex/gpt-5.4",
+        run_id="run-1",
+        session_id="sess-1",
+    )
+
+    with (
+        patch("app.db.async_session", return_value=FakeAsyncSession()),
+        patch(
+            "app.services.memory.review_agent.run_memory_review_batch",
+            new=AsyncMock(return_value=review_result),
+        ) as mock_review,
+    ):
+        result = await _execute_memory_review(job)
+
+    assert "Memory review completed" in result.output
+    mock_review.assert_awaited_once()
+    await_args = mock_review.await_args
+    assert await_args is not None
+    assert await_args.kwargs["batch_limit"] == DEFAULT_BATCH_LIMIT
