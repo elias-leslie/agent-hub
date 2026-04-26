@@ -77,7 +77,10 @@ class EpisodeCreator:
         injection_tier: str | None = None,
         context_kind: str | None = None,
         applicability: dict[str, object] | None = None,
+        tags: list[str] | None = None,
         summary: str | None = None,
+        metadata: dict[str, object] | None = None,
+        sensitivity_tier: str = "normal",
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> CreateResult:
@@ -115,7 +118,10 @@ class EpisodeCreator:
             injection_tier=injection_tier,
             context_kind=context_kind,
             applicability=applicability,
+            tags=tags,
             summary=summary,
+            metadata=metadata,
+            sensitivity_tier=sensitivity_tier,
             changed_by=changed_by,
             change_reason=change_reason,
         )

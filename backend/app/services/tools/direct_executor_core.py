@@ -64,7 +64,7 @@ class DirectToolExecutor:
         "write_user_context", "read_user_context",
         "read_heartbeat_instructions", "write_heartbeat_instructions",
         "mark_memory_relevant", "mark_memory_irrelevant", "manage_memory_tags",
-        "submit_onboarding", "send_push",
+        "review_memory_system", "submit_onboarding", "send_push",
         "schedule_job", "list_scheduled_jobs", "cancel_scheduled_job",
         "steer_consultation", "list_consultations", "cancel_consultation",
         "manage_tasks", "manage_backups", "manage_model_config", "manage_feedback",

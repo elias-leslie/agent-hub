@@ -473,6 +473,30 @@ class TestDispatch:
             focus_query="pricing api limits",
         )
 
+    @pytest.mark.asyncio
+    async def test_dispatch_review_memory_system(self, tmp_path: Path) -> None:
+        calls: list[dict[str, object]] = []
+
+        async def fake_review_memory_system(
+            action: str = "status",
+            batch_limit: int = 20,
+        ) -> str:
+            calls.append({"action": action, "batch_limit": batch_limit})
+            return '{"status":"ok"}'
+
+        with patch(
+            "app.services.tools._executor_memory_review.review_memory_system",
+            new=fake_review_memory_system,
+        ):
+            executor = DirectToolExecutor(str(tmp_path))
+            result = await executor.dispatch(
+                "review_memory_system",
+                {"action": "status", "batch_limit": 20, "bogus": "ignored"},
+            )
+
+        assert result == '{"status":"ok"}'
+        assert calls == [{"action": "status", "batch_limit": 20}]
+
 
 class TestConsultAgent:
     """Tests for consult_agent tool."""

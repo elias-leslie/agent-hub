@@ -219,6 +219,7 @@ def build_tool_registry(
     )
     from app.services.tools._executor_feedback import manage_feedback
     from app.services.tools._executor_io import send_push
+    from app.services.tools._executor_memory_review import review_memory_system
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
@@ -258,6 +259,7 @@ def build_tool_registry(
         "mark_memory_relevant": mark_memory_relevant,
         "mark_memory_irrelevant": mark_memory_irrelevant,
         "manage_memory_tags": manage_memory_tags,
+        "review_memory_system": review_memory_system,
         "submit_onboarding": submit_onboarding,
         "schedule_job": schedule_job,
         "list_scheduled_jobs": list_scheduled_jobs,

@@ -26,7 +26,7 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.AGENT_VISUAL: (6, 2),
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
     MemoryConsumerProfile.AGENT_OPERATOR: (20, 6),
-    MemoryConsumerProfile.AGENT_PROMPTOPS: (20, 6),
+    MemoryConsumerProfile.AGENT_PROMPTOPS: (14, 4),
     MemoryConsumerProfile.CLAUDE_SESSION_START: (28, 6),
     MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
 }

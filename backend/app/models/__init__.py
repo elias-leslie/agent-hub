@@ -27,7 +27,7 @@ from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
-from .memory_unified import Memory, MemoryRevision
+from .memory_unified import Memory, MemoryReviewRun, MemoryRevision
 from .model_catalog_sync_state import ModelCatalogSyncState
 from .model_enrichment import ModelEnrichment
 from .narration_tag import NarrationTag
@@ -66,6 +66,7 @@ __all__ = [
     "FeedbackVote",
     "Memory",
     "MemoryInjectionMetric",
+    "MemoryReviewRun",
     "MemoryRevision",
     "MemorySettings",
     "ModelCatalogSyncState",

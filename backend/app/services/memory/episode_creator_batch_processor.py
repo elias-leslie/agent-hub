@@ -110,7 +110,11 @@ async def _process_batches(
                     reference_time=ep.reference_time,
                     source=ep.source,
                     injection_tier=ep.injection_tier,
+                    context_kind=ep.context_kind,
+                    applicability=ep.applicability,
+                    tags=ep.tags,
                     summary=ep.summary,
+                    metadata=ep.metadata,
                 )
                 batch_results.append(result)
             return batch_results

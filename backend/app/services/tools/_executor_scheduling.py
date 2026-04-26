@@ -11,7 +11,7 @@ from app.models.persona_scheduled_job import PersonaScheduledJob
 
 logger = logging.getLogger(__name__)
 
-_VALID_PAYLOAD_TYPES = frozenset({"agent_turn", "push", "self_honing"})
+_VALID_PAYLOAD_TYPES = frozenset({"agent_turn", "push", "self_honing", "memory_review"})
 
 
 async def schedule_job(
@@ -29,7 +29,7 @@ async def schedule_job(
     if payload_type not in _VALID_PAYLOAD_TYPES:
         return (
             f"Error: Invalid payload_type '{payload_type}'. "
-            "Must be agent_turn/push/self_honing."
+            "Must be agent_turn/push/self_honing/memory_review."
         )
 
     try:

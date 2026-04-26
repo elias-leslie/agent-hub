@@ -207,6 +207,80 @@ MANAGE_MEMORY_TAGS_TOOL = Tool(
     defer_loading=True,
 )
 
+REVIEW_MEMORY_SYSTEM_TOOL = Tool(
+    name="review_memory_system",
+    description=(
+        "Inspect, run, or schedule memory-system review in one call. Uses the dedicated "
+        "memory-curator agent as reviewer, compact batches, oldest-first review cadence, "
+        "and persists review metadata. Use this instead of shelling out to several memory commands."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["status", "run_due", "schedule"],
+                "description": "status=inspect review queue, run_due=run one or more batches, schedule=create recurring review job",
+                "default": "status",
+            },
+            "batch_limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 25,
+                "description": "Memories per reviewer prompt; capped for token efficiency",
+                "default": 20,
+            },
+            "max_batches": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20,
+                "description": "Maximum batches for run_due in this single tool call",
+                "default": 1,
+            },
+            "cadence_days": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365,
+                "description": "Review memories not reviewed within this many days",
+                "default": 45,
+            },
+            "reviewer_agent_slug": {
+                "type": "string",
+                "description": "Dedicated reviewer agent slug; must be memory-curator",
+                "default": "memory-curator",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Run reviewer without mutating memories",
+                "default": False,
+            },
+            "include_archived": {
+                "type": "boolean",
+                "description": "Also review archived memories; use for full validation sweeps, not normal cadence",
+                "default": False,
+            },
+            "schedule_type": {
+                "type": "string",
+                "enum": ["at", "every", "cron"],
+                "description": "Required for schedule action",
+            },
+            "schedule_value": {
+                "type": "string",
+                "description": "ISO datetime, interval ms, or cron expression for schedule action",
+            },
+            "timezone": {
+                "type": "string",
+                "description": "IANA timezone for cron scheduling",
+                "default": "UTC",
+            },
+        },
+    },
+    category="memory",
+    search_keywords=["memory review", "memory quality", "curate memories", "last reviewed"],
+    usage_examples=["Run all currently due memory reviews with max_batches set high enough for the queue."],
+    defer_loading=True,
+)
+
 # --- Onboarding tool ---
 
 SUBMIT_ONBOARDING_TOOL = Tool(

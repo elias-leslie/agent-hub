@@ -731,6 +731,33 @@ class TestScheduleJob:
         added_job = mock_db.add.call_args.args[0]
         assert added_job.payload_type == "self_honing"
 
+    @pytest.mark.asyncio
+    async def test_creates_memory_review_job(self):
+        from app.services.tools._executor_scheduling import schedule_job
+
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona)
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await schedule_job(
+                name="Memory review",
+                schedule_type="cron",
+                schedule_value="0 */6 * * *",
+                payload_message='{"batch_limit": 25}',
+                payload_type="memory_review",
+            )
+
+        assert "scheduled" in result
+        added_job = mock_db.add.call_args.args[0]
+        assert added_job.payload_type == "memory_review"
+
 
 class TestListScheduledJobs:
     """Tests for list_scheduled_jobs tool."""

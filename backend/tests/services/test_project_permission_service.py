@@ -20,6 +20,7 @@ from app.services.project_permission_service import (
     delete_project_permission,
     get_project_permission,
     get_tools_for_tier,
+    get_visible_tools_for_tier,
     list_project_permissions,
     reconcile_registered_project_access,
     update_project_permission,
@@ -698,8 +699,14 @@ class TestPersonaToolSets:
             "write_personality",
             "read_user_context",
             "write_user_context",
+            "review_memory_system",
         ):
             assert tool in _PERSONA_INTERNAL
+
+    def test_visible_read_tier_includes_memory_review_surface(self):
+        tools = get_visible_tools_for_tier("read")
+
+        assert "review_memory_system" in tools
 
     def test_operational_contains_agency_tools(self):
         for tool in (
@@ -726,6 +733,17 @@ class TestPersonaToolTierExemption:
             return_value="read",
         ):
             allowed, reason = await check_tool_allowed("proj", "write_personality")
+            assert allowed is True
+            assert "persona-internal" in reason
+
+    @pytest.mark.asyncio
+    async def test_memory_review_tool_allowed_at_read_tier(self):
+        with patch(
+            "app.services.project_permission_service._get_cached_tier",
+            new_callable=AsyncMock,
+            return_value="read",
+        ):
+            allowed, reason = await check_tool_allowed("proj", "review_memory_system")
             assert allowed is True
             assert "persona-internal" in reason
 

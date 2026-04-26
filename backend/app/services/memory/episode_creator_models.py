@@ -33,6 +33,7 @@ class BatchEpisodeRequest:
         source: Source type for the episode
         injection_tier: Explicit tier override (mandate/guardrail/reference)
         summary: Optional summary for the episode
+        metadata: Optional structured metadata to store with the episode
     """
 
     content: str
@@ -43,6 +44,10 @@ class BatchEpisodeRequest:
     source: MemorySource = field(default_factory=lambda: MemorySource.SYSTEM)
     injection_tier: str | None = None
     summary: str | None = None
+    context_kind: str | None = None
+    applicability: dict[str, object] | None = None
+    tags: list[str] | None = None
+    metadata: dict[str, object] | None = None
 
     @property
     def token_count(self) -> int:

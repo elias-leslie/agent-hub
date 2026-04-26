@@ -159,12 +159,25 @@ def _prioritize_items_for_profile(
 ) -> list[MemorySearchResult]:
     """Move tagged startup-critical items to the front for profile-specific startup UX."""
     priority_tags = priority_tags_for_profile(consumer_profile)
-    if not priority_tags:
+    if not priority_tags and all(item.review_status == "pending" for item in items):
         return items
     return sorted(
         items,
-        key=lambda item: (0 if priority_tags.intersection(item.tags) else 1, -item.relevance_score),
+        key=lambda item: (
+            0 if priority_tags.intersection(item.tags) else 1,
+            _review_status_rank(item),
+            -item.relevance_score,
+        ),
     )
+
+
+def _review_status_rank(item: MemorySearchResult) -> int:
+    """Prefer clean reviewed memories, then unreviewed, then queued review debt."""
+    if item.review_status == "clean":
+        return 0
+    if item.review_status == "needs_action":
+        return 2
+    return 1
 
 
 def _limit_references_for_variant(
@@ -184,6 +197,7 @@ def _limit_references_for_variant(
         key=lambda pair: (
             0 if priority_tags.intersection(pair[1].tags) else 1,
             0 if pair[1].pinned else 1,
+            _review_status_rank(pair[1]),
             -pair[1].relevance_score,
             pair[0],
         ),
