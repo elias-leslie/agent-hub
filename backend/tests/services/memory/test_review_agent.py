@@ -15,6 +15,7 @@ from app.services.memory.review_agent import (
     build_memory_review_prompt,
     parse_memory_review_content,
     run_memory_review_batch,
+    select_memories_due_for_review,
 )
 
 
@@ -472,6 +473,22 @@ async def test_run_memory_review_batch_marks_last_reviewed() -> None:
     assert memory.last_reviewed_at is not None
     assert memory.metadata_["last_review"]["decision"] == "keep"
     assert memory.metadata_["compact_content"] == "Use st search before repo spelunking."
+
+
+@pytest.mark.asyncio
+async def test_select_memories_due_for_review_respects_source_compact_validation() -> None:
+    execute_result = MagicMock()
+    execute_result.scalars.return_value.all.return_value = []
+    mock_db = AsyncMock()
+    mock_db.execute.return_value = execute_result
+
+    await select_memories_due_for_review(mock_db, limit=1)
+
+    stmt = mock_db.execute.await_args.args[0]
+    compiled = str(stmt)
+    params = list(stmt.compile().params.values())
+    assert "source_compact_validated_at" in params
+    assert "coalesce" in compiled.lower()
 
 
 @pytest.mark.asyncio

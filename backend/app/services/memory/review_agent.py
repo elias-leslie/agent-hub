@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import DateTime, cast, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
@@ -31,6 +31,14 @@ _NORMATIVE_PATTERN = re.compile(
     r"\b(must|never|always|required|require|use|only|do not|don't|cannot|avoid)\b",
     re.IGNORECASE,
 )
+
+
+def _effective_reviewed_at_expr() -> Any:
+    source_validated_at = cast(
+        func.nullif(Memory.metadata_["source_compact_validated_at"].astext, ""),
+        DateTime(timezone=True),
+    )
+    return func.coalesce(Memory.last_reviewed_at, source_validated_at)
 
 _REVIEW_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -448,11 +456,13 @@ async def select_memories_due_for_review(
             ]
         )
     if not force_all:
-        filters.append(or_(Memory.last_reviewed_at.is_(None), Memory.last_reviewed_at < cutoff))
+        effective_reviewed_at = _effective_reviewed_at_expr()
+        filters.append(or_(effective_reviewed_at.is_(None), effective_reviewed_at < cutoff))
+    effective_reviewed_at = _effective_reviewed_at_expr()
     stmt = (
         select(Memory)
         .where(*filters)
-        .order_by(Memory.last_reviewed_at.asc().nulls_first(), Memory.created_at.asc())
+        .order_by(effective_reviewed_at.asc().nulls_first(), Memory.created_at.asc())
         .limit(limit)
     )
     result = await db.execute(stmt)

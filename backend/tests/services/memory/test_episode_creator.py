@@ -185,6 +185,38 @@ class TestEpisodeCreatorCreate:
         assert result.deduplicated is False
 
     @pytest.mark.asyncio
+    async def test_create_marks_format_valid_memory_source_compact(self):
+        """Strict source-valid memories should not need immediate compaction review."""
+        new_uuid = str(uuid.uuid4())
+        mock_memory = MagicMock()
+        mock_memory.id = uuid.UUID(new_uuid)
+        self.mock_repo.create.return_value = mock_memory
+        content = (
+            "**Memory Authoring**: Use st memory format before st memory save. "
+            "Why: source compactness prevents curation churn."
+        )
+
+        with patch(
+            "app.services.memory.episode_creator_core.find_exact_duplicate",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            result = await self.creator.create(
+                content=content,
+                name="memory_authoring",
+                config=LEARNING,
+                injection_tier="mandate",
+            )
+
+        assert result.success is True
+        create_kwargs = self.mock_repo.create.await_args.kwargs
+        metadata = create_kwargs["metadata"]
+        assert metadata["compact_content"] == content
+        assert metadata["compact_status"] == "source_ready"
+        assert metadata["source_quality_method"] == "format_standard"
+        assert metadata["source_compact_validated_at"]
+
+    @pytest.mark.asyncio
     async def test_create_validation_failure(self):
         """Test creation fails with verbose content when validation enabled."""
         result = await self.creator.create(

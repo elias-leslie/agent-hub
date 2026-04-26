@@ -13,6 +13,7 @@ from .budget import count_tokens
 from .dedup import find_exact_duplicate
 from .embedder import EmbedderService
 from .episode_creator_helpers import (
+    build_source_quality_metadata,
     handle_rate_limit_error,
     insert_memory,
     is_rate_limit_error,
@@ -129,6 +130,15 @@ async def create_episode_internal(
     if not source_description:
         source_description = build_simple_source_description(config)
 
+    tier_name = injection_tier or derive_injection_tier(config)
+    if config.validate:
+        metadata = build_source_quality_metadata(
+            content,
+            metadata,
+            checked_at=reference_time,
+            tier_name=tier_name,
+        )
+
     return await _create_and_finalize(
         repo,
         embedder,
@@ -138,7 +148,7 @@ async def create_episode_internal(
         source_description,
         reference_time,
         config,
-        injection_tier,
+        tier_name,
         context_kind,
         applicability,
         tags,

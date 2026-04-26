@@ -11,11 +11,13 @@ from datetime import datetime
 from .applicability import normalize_applicability, normalize_context_kind
 from .embedder import EMBEDDING_MODEL
 from .episode_creator_models import CreateResult
-from .episode_validation import EpisodeValidator
+from .episode_validation import EpisodeValidationError, EpisodeValidator
 from .ingestion_config import LEARNING, IngestionConfig
 from .repository import MemoryRepository
 
 logger = logging.getLogger(__name__)
+
+MAX_SOURCE_COMPACT_CONTENT_CHARS = 420
 
 
 def validate_content(content: str, config: IngestionConfig) -> CreateResult | None:
@@ -30,6 +32,64 @@ def validate_content(content: str, config: IngestionConfig) -> CreateResult | No
         if reusability_error:
             return CreateResult(success=False, validation_error=reusability_error)
     return None
+
+
+def _collapse_whitespace(content: str) -> str:
+    return " ".join(content.split())
+
+
+def build_source_quality_metadata(
+    content: str,
+    metadata: dict[str, object] | None,
+    *,
+    checked_at: datetime,
+    tier_name: str,
+    replace_existing: bool = False,
+) -> dict[str, object] | None:
+    """Mark source-authored memories that are already prompt-ready compact."""
+    enriched = dict(metadata or {})
+    compact_content = _collapse_whitespace(content)
+    if len(compact_content) > MAX_SOURCE_COMPACT_CONTENT_CHARS:
+        if replace_existing:
+            for key in (
+                "compact_content",
+                "compact_status",
+                "source_compact_validated_at",
+                "source_quality_checked_at",
+                "source_quality_method",
+            ):
+                enriched.pop(key, None)
+            return enriched
+        return metadata
+    try:
+        EpisodeValidator.validate_content(compact_content, tier=tier_name)
+    except EpisodeValidationError:
+        if replace_existing:
+            for key in (
+                "compact_content",
+                "compact_status",
+                "source_compact_validated_at",
+                "source_quality_checked_at",
+                "source_quality_method",
+            ):
+                enriched.pop(key, None)
+            return enriched
+        return metadata
+
+    checked_at_iso = checked_at.isoformat()
+    if replace_existing:
+        enriched["compact_content"] = compact_content
+        enriched["compact_status"] = "source_ready"
+        enriched["source_compact_validated_at"] = checked_at_iso
+        enriched["source_quality_checked_at"] = checked_at_iso
+        enriched["source_quality_method"] = "format_standard"
+    else:
+        enriched.setdefault("compact_content", compact_content)
+        enriched.setdefault("compact_status", "source_ready")
+        enriched.setdefault("source_compact_validated_at", checked_at_iso)
+        enriched.setdefault("source_quality_checked_at", checked_at_iso)
+        enriched.setdefault("source_quality_method", "format_standard")
+    return enriched
 
 
 async def insert_memory(
