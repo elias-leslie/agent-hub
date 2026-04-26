@@ -310,7 +310,7 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     )
 
     payload = _parse_memory_review_payload(job.payload_message or "")
-    batch_limit = int(payload.get("batch_limit") or DEFAULT_BATCH_LIMIT)
+    batch_limit = max(1, min(int(payload.get("batch_limit") or DEFAULT_BATCH_LIMIT), DEFAULT_BATCH_LIMIT))
     cadence_days = int(payload.get("cadence_days") or DEFAULT_REVIEW_CADENCE_DAYS)
     reviewer_agent_slug = str(payload.get("reviewer_agent_slug") or DEFAULT_REVIEWER_AGENT)
     reviewer_model_id = payload.get("reviewer_model_id")
