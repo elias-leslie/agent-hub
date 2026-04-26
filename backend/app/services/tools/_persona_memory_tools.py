@@ -226,9 +226,9 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
             "batch_limit": {
                 "type": "integer",
                 "minimum": 1,
-                "maximum": 25,
+                "maximum": 10,
                 "description": "Memories per reviewer prompt; capped for token efficiency",
-                "default": 20,
+                "default": 10,
             },
             "max_batches": {
                 "type": "integer",
@@ -239,9 +239,9 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
             },
             "cadence_days": {
                 "type": "integer",
-                "minimum": 1,
+                "minimum": 0,
                 "maximum": 365,
-                "description": "Review memories not reviewed within this many days",
+                "description": "Review memories not reviewed within this many days; use 0 only with force_all refreshes",
                 "default": 45,
             },
             "reviewer_agent_slug": {
@@ -254,9 +254,19 @@ REVIEW_MEMORY_SYSTEM_TOOL = Tool(
                 "description": "Run reviewer without mutating memories",
                 "default": False,
             },
+            "force_all": {
+                "type": "boolean",
+                "description": "Force-refresh all matching memories regardless of last_reviewed_at; use for migrations/contract changes",
+                "default": False,
+            },
             "include_archived": {
                 "type": "boolean",
                 "description": "Also review archived memories; use for full validation sweeps, not normal cadence",
+                "default": False,
+            },
+            "only_missing_compact": {
+                "type": "boolean",
+                "description": "Review long active memories that still lack compact prompt-ready content",
                 "default": False,
             },
             "schedule_type": {

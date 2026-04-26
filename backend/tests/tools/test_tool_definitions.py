@@ -27,6 +27,11 @@ def test_memory_curator_tool_registry_exposes_single_review_surface() -> None:
     tool_names = {tool.name for tool in tools}
 
     assert tool_names == {"review_memory_system"}
+    review_tool = tools[0]
+    assert review_tool.input_schema["properties"]["force_all"]["type"] == "boolean"
+    assert review_tool.input_schema["properties"]["only_missing_compact"]["type"] == "boolean"
+    assert review_tool.input_schema["properties"]["cadence_days"]["minimum"] == 0
+    assert review_tool.input_schema["properties"]["batch_limit"]["maximum"] == 10
 
 
 def test_persona_tool_registry_includes_memory_review_surface() -> None:

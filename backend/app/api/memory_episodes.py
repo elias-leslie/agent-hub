@@ -224,7 +224,9 @@ async def run_memory_review(
             reviewer_agent_slug=request.reviewer_agent_slug,
             reviewer_model_id=request.reviewer_model_id,
             dry_run=request.dry_run,
+            force_all=request.force_all,
             include_archived=request.include_archived,
+            only_missing_compact=request.only_missing_compact,
         )
         await db.commit()
     return MemoryReviewRunResponse(**result.__dict__)

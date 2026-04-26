@@ -50,6 +50,19 @@ def _safe_optional_datetime(raw: Any) -> datetime | None:
     return None
 
 
+def _compact_content(ep: dict[str, Any]) -> str | None:
+    """Return reviewed compact prompt text from top-level or metadata."""
+    compact = ep.get("compact_content")
+    if isinstance(compact, str) and compact.strip():
+        return compact.strip()
+    metadata = ep.get("metadata")
+    if isinstance(metadata, dict):
+        compact = metadata.get("compact_content")
+        if isinstance(compact, str) and compact.strip():
+            return compact.strip()
+    return None
+
+
 def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SYSTEM) -> MemorySearchResult | None:
     """Convert a raw episode dict to a MemorySearchResult, or None if content is missing."""
     content = ep.get("content") or ""
@@ -62,6 +75,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
     return MemorySearchResult(
         uuid=uuid,
         content=content,
+        compact_content=_compact_content(ep),
         summary=ep.get("summary"),
         source=source,
         relevance_score=float(ep.get("relevance_score") or 1.0),
@@ -111,6 +125,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
         return MemorySearchResult(
             uuid=uuid,
             content=content,
+            compact_content=_compact_content(ep),
             summary=ep.get("summary"),
             source=MemorySource.SYSTEM,
             relevance_score=1.0,
@@ -155,6 +170,7 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
     return MemorySearchResult(
         uuid=uuid,
         content=content,
+        compact_content=_compact_content(ep),
         summary=ep.get("summary"),
         source=MemorySource.SYSTEM,
         relevance_score=1.0,

@@ -423,7 +423,7 @@ class TestReferenceInjection:
         assert context.mandates[0].render_reason == "policy_summary"
 
     @pytest.mark.asyncio
-    async def test_build_progressive_context_codex_startup_caps_policy_counts(self) -> None:
+    async def test_build_progressive_context_codex_startup_compacts_before_policy_limit(self) -> None:
         settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
         mandates = [
             MemorySearchResult(
@@ -470,12 +470,12 @@ class TestReferenceInjection:
                 consumer_profile="codex_startup",
             )
 
-        assert len(context.mandates) == 28
-        assert len(context.guardrails) == 6
+        assert len(context.mandates) == 40
+        assert len(context.guardrails) == 10
         assert context.mandates[0].uuid == "m-00"
-        assert context.mandates[-1].uuid == "m-27"
+        assert context.mandates[-1].uuid == "m-39"
         assert context.guardrails[0].uuid == "g-00"
-        assert context.guardrails[-1].uuid == "g-05"
+        assert context.guardrails[-1].uuid == "g-09"
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_agent_coding_uses_compact_policy_profile(self) -> None:
@@ -525,8 +525,8 @@ class TestReferenceInjection:
                 consumer_profile="agent_coding",
             )
 
-        assert len(context.mandates) == 16
-        assert len(context.guardrails) == 4
+        assert len(context.mandates) == 25
+        assert len(context.guardrails) == 8
         assert context.mandates[0].render_tier == "L0"
         assert context.guardrails[0].render_tier == "L0"
         assert context.debug_info["consumer_profile"] == "agent_coding"
@@ -579,8 +579,9 @@ class TestReferenceInjection:
                 consumer_profile="agent_promptops",
             )
 
-        assert len(context.mandates) == 14
-        assert len(context.guardrails) == 4
+        assert len(context.mandates) == 20
+        assert len(context.guardrails) == 8
+        assert context.debug_info["mandates_count"] == 20
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_prioritizes_clean_reviewed_policies(self) -> None:
@@ -637,7 +638,54 @@ class TestReferenceInjection:
             "clean-2",
             "clean-3",
         ]
-        assert len(context.mandates) == 6
+        assert len(context.mandates) == 8
+
+    @pytest.mark.asyncio
+    async def test_build_progressive_context_compacts_before_policy_limit(self) -> None:
+        full = (
+            "Use st check for every repository quality gate before closeout. "
+            "Never run raw pytest, Vitest, Ruff, TSC, SQLFluff, Squawk, or legacy dt."
+        )
+        compact = "Use st check for all repo gates. Never run raw pytest/Vitest/Ruff/TSC."
+        settings = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
+        mandates = [
+            MemorySearchResult(
+                uuid=f"compact-{idx}",
+                content=full,
+                compact_content=compact,
+                summary=f"Gate {idx}.",
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime(2026, 3, 7, 20, 55, tzinfo=UTC),
+                facts=[],
+                review_status="clean",
+            )
+            for idx in range(10)
+        ]
+
+        with (
+            patch(
+                "app.services.memory.context_builder.fetch_all_episodes",
+                new=AsyncMock(return_value=(mandates, [], [])),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_query_relevant_references_as_search_results",
+                new=AsyncMock(return_value=[]),
+            ),
+            patch(
+                "app.services.memory.context_builder.get_memory_settings",
+                new=AsyncMock(return_value=settings),
+            ),
+        ):
+            context = await build_progressive_context(
+                query="Run quality gates.",
+                scope=MemoryScope.GLOBAL,
+                consumer_profile="agent_general",
+            )
+
+        assert len(context.mandates) == 10
+        assert all(item.rendered_content == compact for item in context.mandates)
+        assert context.debug_info["render_chars_saved"] > 0
 
     @pytest.mark.asyncio
     async def test_build_progressive_context_query_selected_refs_respect_triggers_and_applicability(self) -> None:

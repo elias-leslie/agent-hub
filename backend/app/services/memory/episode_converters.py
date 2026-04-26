@@ -35,6 +35,21 @@ def _map_source(source: Any) -> MemorySource:
     return MemorySource.SYSTEM
 
 
+def _compact_content_from_metadata(ep: Any) -> str | None:
+    """Read reviewed compact prompt text from top-level field or metadata."""
+    compact = _get_attr_or_key(ep, "compact_content")
+    if isinstance(compact, str) and compact.strip():
+        return compact.strip()
+    metadata = _get_attr_or_key(ep, "metadata")
+    if metadata is None:
+        metadata = _get_attr_or_key(ep, "metadata_")
+    if isinstance(metadata, dict):
+        compact = metadata.get("compact_content")
+        if isinstance(compact, str) and compact.strip():
+            return compact.strip()
+    return None
+
+
 def convert_raw_episode_to_memory_episode(
     ep: Any,
     scope: MemoryScope | None = None,
@@ -85,6 +100,7 @@ def convert_raw_episode_to_memory_episode(
         uuid=str(_get_attr_or_key(ep, "uuid") or _get_attr_or_key(ep, "id") or ""),
         name=_get_attr_or_key(ep, "name") or "",
         content=_get_attr_or_key(ep, "content") or "",
+        compact_content=_compact_content_from_metadata(ep),
         source=mapped_source,
         category=cat,
         scope=resolved_scope,

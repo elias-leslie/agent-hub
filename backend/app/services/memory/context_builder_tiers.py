@@ -165,12 +165,16 @@ def _apply_render_tier(item: MemorySearchResult, tier: str, reason: str | None) 
     if tier == PROMPT_TIER_L0:
         item.rendered_content = _build_summary(item)
     elif tier == PROMPT_TIER_L1:
-        item.rendered_content = item.overview
-    else:
+        item.rendered_content = item.compact_content or item.overview
+    elif reason == "consumer_profile_tag":
         item.rendered_content = item.content
+    else:
+        item.rendered_content = item.compact_content or item.content
 
 
 def _build_summary(item: MemorySearchResult) -> str:
+    if item.compact_content:
+        return _collapse_whitespace(item.compact_content)
     if item.summary:
         return _collapse_whitespace(item.summary)
     return _truncate_sentence(item.content, _L0_MAX_CHARS)
