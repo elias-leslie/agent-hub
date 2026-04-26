@@ -91,6 +91,7 @@ class MemorySearchResult(BaseModel):
 
     uuid: str
     content: str
+    compact_content: str | None = None
     summary: str | None = None
     review_status: str = "pending"
     sensitivity_tier: str = "normal"
@@ -120,7 +121,7 @@ class MemorySearchResult(BaseModel):
     @property
     def prompt_content(self) -> str:
         """Return the text currently selected for prompt injection."""
-        return self.rendered_content or self.content
+        return self.rendered_content or self.compact_content or self.content
 
 
 class MemoryContext(BaseModel):
@@ -138,6 +139,7 @@ class MemoryEpisode(BaseModel):
     uuid: str
     name: str
     content: str
+    compact_content: str | None = None
     source: MemorySource
     category: MemoryCategory
     scope: MemoryScope = MemoryScope.GLOBAL

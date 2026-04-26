@@ -24,10 +24,12 @@ def to_uuids(values: list[_uuid.UUID | str]) -> list[_uuid.UUID]:
 
 def to_dict(mem: Memory) -> dict[str, Any]:
     """Convert Memory ORM object to dict (backward compat)."""
+    metadata = getattr(mem, "metadata_", None) or {}
     return {
         "uuid": str(mem.id),
         "version": mem.version,
         "content": mem.content,
+        "compact_content": metadata.get("compact_content"),
         "content_fingerprint": getattr(mem, "content_fingerprint", None),
         "name": mem.name,
         "summary": mem.summary,
@@ -60,7 +62,7 @@ def to_dict(mem: Memory) -> dict[str, Any]:
         "lifecycle_score_updated_at": mem.lifecycle_score_updated_at,
         "retired_at": mem.retired_at,
         "superseded_by": str(mem.superseded_by) if mem.superseded_by else None,
-        "metadata": mem.metadata_ or {},
+        "metadata": metadata,
         "valid_at": mem.valid_at,
         "created_at": mem.created_at,
         "updated_at": mem.updated_at,

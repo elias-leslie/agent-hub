@@ -14,7 +14,7 @@ from .applicability import (
     normalize_trigger_phases,
     normalize_trigger_task_types,
 )
-from .budget import BudgetUsage
+from .budget import BudgetUsage, count_tokens
 from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
 from .context_builder_processors import compute_token_counts
@@ -25,7 +25,11 @@ from .context_builder_settings import (
     resolve_memory_tags,
     resolve_reference_index_enabled,
 )
-from .context_builder_tiers import build_memory_plan_debug, plan_context_render_tiers
+from .context_builder_tiers import (
+    build_memory_plan_debug,
+    get_rendered_content,
+    plan_context_render_tiers,
+)
 from .context_injector_queries import get_query_relevant_references_as_search_results
 from .context_profiles import (
     policy_limits_for_profile,
@@ -39,6 +43,7 @@ from .settings import get_memory_settings
 from .variants import get_variant_config
 
 logger = logging.getLogger(__name__)
+_TARGET_TOKENS_PER_LIMITED_ITEM = 100
 
 
 @dataclass
@@ -203,6 +208,24 @@ def _limit_references_for_variant(
         ),
     )
     return [item for _, item in ranked[:limit]]
+
+
+def _limit_by_rendered_token_budget(
+    items: list[MemorySearchResult],
+    limit: int,
+) -> list[MemorySearchResult]:
+    """Limit only after reviewed compaction/rendering has reduced each item."""
+    if limit <= 0 or len(items) <= limit:
+        return items
+    budget = limit * _TARGET_TOKENS_PER_LIMITED_ITEM
+    kept: list[MemorySearchResult] = []
+    used_tokens = 0
+    for item in items:
+        item_tokens = count_tokens(get_rendered_content(item))
+        if len(kept) < limit or used_tokens + item_tokens <= budget:
+            kept.append(item)
+            used_tokens += item_tokens
+    return kept
 
 
 def _apply_reference_variant_scoring(
@@ -445,11 +468,6 @@ def _apply_priority_and_limits(
     """Prioritize, score, and cap all context blocks according to variant config."""
     context.mandates = _prioritize_items_for_profile(context.mandates, consumer_profile)
     context.guardrails = _prioritize_items_for_profile(context.guardrails, consumer_profile)
-    policy_mandate_limit, policy_guardrail_limit = policy_limits_for_profile(consumer_profile)
-    if policy_mandate_limit > 0:
-        context.mandates = context.mandates[:policy_mandate_limit]
-    if policy_guardrail_limit > 0:
-        context.guardrails = context.guardrails[:policy_guardrail_limit]
     context.reference_index = _prioritize_items_for_profile(context.reference_index, consumer_profile)
     context.reference_index = _limit_references_for_variant(
         context.reference_index, variant_config.max_reference_items, consumer_profile
@@ -463,6 +481,9 @@ def _apply_priority_and_limits(
         context.mandates, context.guardrails, context.reference_index, context.reference,
         query, consumer_profile=consumer_profile,
     )
+    policy_mandate_limit, policy_guardrail_limit = policy_limits_for_profile(consumer_profile)
+    context.mandates = _limit_by_rendered_token_budget(context.mandates, policy_mandate_limit)
+    context.guardrails = _limit_by_rendered_token_budget(context.guardrails, policy_guardrail_limit)
 
 
 async def build_progressive_context(

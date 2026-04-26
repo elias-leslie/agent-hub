@@ -133,6 +133,34 @@ def test_parse_memory_review_content_accepts_codex_compact_shape() -> None:
     ]
 
 
+def test_parse_memory_review_content_uses_uuid8_when_full_uuid_wrong() -> None:
+    parsed = parse_memory_review_content(
+        """
+        {"reviews": [{
+          "uuid": "11111111-2222-2222-2222-222222222222",
+          "uuid8": "11111111",
+          "decision": "keep",
+          "evidence": "Correct uuid8, wrong generated suffix."
+        }]}
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="keep",
+            review_status="clean",
+            confidence=0.75,
+            reason="Correct uuid8, wrong generated suffix.",
+            suggested_summary=None,
+            suggested_tags=[],
+            suggested_applicability={},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
 def test_parse_memory_review_content_accepts_top_level_array_shape() -> None:
     parsed = parse_memory_review_content(
         """
@@ -188,6 +216,200 @@ def test_parse_memory_review_content_accepts_ok_alias() -> None:
     ]
 
 
+def test_parse_memory_review_content_accepts_curator_target_compact_alias() -> None:
+    parsed = parse_memory_review_content(
+        """
+        {"decisions": [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "uuid8": "11111111",
+          "review_status": "needs_action",
+          "decision": "keep_compact_target",
+          "evidence": "Broad reference should be targeted and compacted.",
+          "target_consumers": ["agent_coding"],
+          "compact_content": "**Search**: Use st search before repo spelunking."
+        }]}
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="Broad reference should be targeted and compacted.",
+            suggested_summary=None,
+            compact_content="**Search**: Use st search before repo spelunking.",
+            suggested_tags=[],
+            suggested_applicability={"consumer_profiles": ["agent_coding"]},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
+def test_parse_memory_review_content_uses_issues_and_applicability() -> None:
+    parsed = parse_memory_review_content(
+        """
+        {"decisions": [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "review_status": "needs_action",
+          "issues": ["too broad", "needs target"],
+          "decision": "keep_compact_retarget",
+          "applicability": {"consumer_profiles": ["agent_runtime"]},
+          "compact_content": "**Ports**: Use project index for current service ports."
+        }]}
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="too broad; needs target",
+            suggested_summary=None,
+            compact_content="**Ports**: Use project index for current service ports.",
+            suggested_tags=[],
+            suggested_applicability={"consumer_profiles": ["agent_runtime"]},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
+def test_parse_memory_review_content_uses_reasons_and_assignment() -> None:
+    parsed = parse_memory_review_content(
+        """
+        [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "decision": "needs_action",
+          "reasons": ["useful", "global reference too broad"],
+          "assignment": {"consumer_profiles": ["agent_operator"]},
+          "compact_content": "**Ports**: Use project index for service ports."
+        }]
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="useful; global reference too broad",
+            suggested_summary=None,
+            compact_content="**Ports**: Use project index for service ports.",
+            suggested_tags=[],
+            suggested_applicability={"consumer_profiles": ["agent_operator"]},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
+def test_parse_memory_review_content_infers_decision_from_status_and_routing() -> None:
+    parsed = parse_memory_review_content(
+        """
+        {"decisions": [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "review_status": "needs_action",
+          "issues": ["untargeted_reference"],
+          "routing": ["agent_operator"],
+          "compact_content": "**Proxy**: Check Caddy and cloudflared configs for external routing."
+        }]}
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="untargeted_reference",
+            suggested_summary=None,
+            compact_content="**Proxy**: Check Caddy and cloudflared configs for external routing.",
+            suggested_tags=[],
+            suggested_applicability={"consumer_profiles": ["agent_operator"]},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
+def test_parse_memory_review_content_normalizes_targeting_status() -> None:
+    parsed = parse_memory_review_content(
+        """
+        [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "decision": "needs_action",
+          "review_status": "keep_compact_and_target",
+          "evidence": "Useful but untargeted.",
+          "targeting": {"consumer_profiles": ["agent_coding"], "scope": "project"},
+          "compact_content": "**Logs**: Use journald for service logs."
+        }]
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="Useful but untargeted.",
+            suggested_summary=None,
+            compact_content="**Logs**: Use journald for service logs.",
+            suggested_tags=[],
+            suggested_applicability={"consumer_profiles": ["agent_coding"], "scope": "project"},
+            sensitivity_tier="normal",
+        )
+    ]
+
+
+def test_parse_memory_review_content_accepts_rationale_and_recommended_fields() -> None:
+    parsed = parse_memory_review_content(
+        """
+        {"decisions": [{
+          "uuid": "11111111-1111-1111-1111-111111111111",
+          "decision": "needs_action",
+          "rationale": "Useful but project-specific and untargeted.",
+          "recommended_context_kind": "reference",
+          "recommended_tier": "reference",
+          "recommended_scope": "project",
+          "recommended_scope_id": "summitflow",
+          "recommended_consumer_profiles": ["agent_operator"],
+          "compact_content": "**Hermes**: Use journald for gateway logs."
+        }]}
+        """,
+        {"11111111-1111-1111-1111-111111111111"},
+    )
+
+    assert parsed == [
+        MemoryReviewDecision(
+            uuid="11111111-1111-1111-1111-111111111111",
+            decision="retarget",
+            review_status="needs_action",
+            confidence=0.75,
+            reason="Useful but project-specific and untargeted.",
+            suggested_summary=None,
+            compact_content="**Hermes**: Use journald for gateway logs.",
+            suggested_tags=[],
+            suggested_applicability={
+                "scope": "project",
+                "scope_id": "summitflow",
+                "context_kind": "reference",
+                "tier": "reference",
+                "consumer_profiles": ["agent_operator"],
+            },
+            sensitivity_tier="normal",
+        )
+    ]
+
+
 def test_build_memory_review_prompt_includes_assignment_context() -> None:
     prompt = build_memory_review_prompt(
         [_memory()],
@@ -201,7 +423,12 @@ def test_build_memory_review_prompt_includes_assignment_context() -> None:
 
 @pytest.mark.asyncio
 async def test_run_memory_review_batch_marks_last_reviewed() -> None:
-    memory = _memory()
+    memory = _memory(
+        content=(
+            "Use st search before repo spelunking so agents start from canonical "
+            "repo evidence instead of broad manual file browsing."
+        )
+    )
     execute_result = MagicMock()
     execute_result.scalars.return_value.all.return_value = [memory]
     mock_db = AsyncMock()
@@ -226,6 +453,7 @@ async def test_run_memory_review_batch_marks_last_reviewed() -> None:
                   "confidence": 0.9,
                   "reason": "Still useful.",
                   "suggested_summary": "use st search",
+                  "compact_content": "Use st search before repo spelunking.",
                   "suggested_tags": ["tooling"],
                   "suggested_applicability": {},
                   "sensitivity_tier": "normal"
@@ -243,6 +471,7 @@ async def test_run_memory_review_batch_marks_last_reviewed() -> None:
     assert memory.review_status == "clean"
     assert memory.last_reviewed_at is not None
     assert memory.metadata_["last_review"]["decision"] == "keep"
+    assert memory.metadata_["compact_content"] == "Use st search before repo spelunking."
 
 
 @pytest.mark.asyncio

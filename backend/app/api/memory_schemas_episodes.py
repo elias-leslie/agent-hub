@@ -53,6 +53,7 @@ class EpisodeDetailResponse(BaseModel):
     uuid: str
     name: str
     content: str
+    compact_content: str | None = None
     injection_tier: str | None = None
     source_description: str | None = None
     created_at: datetime | None = None

@@ -153,12 +153,14 @@ class HealthResponse(BaseModel):
 class MemoryReviewRunRequest(BaseModel):
     """Request one dedicated-agent memory review batch."""
 
-    batch_limit: int = Field(default=25, ge=1, le=100)
-    cadence_days: int = Field(default=45, ge=1, le=365)
+    batch_limit: int = Field(default=10, ge=1, le=10)
+    cadence_days: int = Field(default=45, ge=0, le=365)
     reviewer_agent_slug: str = Field(default="memory-curator", min_length=1, max_length=100)
     reviewer_model_id: str | None = Field(default=None, min_length=1, max_length=200)
     dry_run: bool = False
+    force_all: bool = False
     include_archived: bool = False
+    only_missing_compact: bool = False
 
 
 class MemoryReviewRunResponse(BaseModel):

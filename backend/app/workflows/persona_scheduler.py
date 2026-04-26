@@ -316,7 +316,9 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
     reviewer_model_id = payload.get("reviewer_model_id")
     reviewer_model_id = str(reviewer_model_id) if reviewer_model_id else None
     dry_run = bool(payload.get("dry_run") or False)
+    force_all = bool(payload.get("force_all") or False)
     include_archived = bool(payload.get("include_archived") or False)
+    only_missing_compact = bool(payload.get("only_missing_compact") or False)
 
     async with async_session() as db:
         result = await run_memory_review_batch(
@@ -326,7 +328,9 @@ async def _execute_memory_review(job: Any) -> JobExecutionResult:
             reviewer_agent_slug=reviewer_agent_slug,
             reviewer_model_id=reviewer_model_id,
             dry_run=dry_run,
+            force_all=force_all,
             include_archived=include_archived,
+            only_missing_compact=only_missing_compact,
         )
         await db.commit()
 

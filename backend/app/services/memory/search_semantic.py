@@ -47,6 +47,7 @@ def _create_search_result(
     return MemorySearchResult(
         uuid=str(uuid_val),
         content=content,
+        compact_content=result.get("compact_content"),
         source=MemorySource.CHAT,
         relevance_score=score,
         created_at=created_dt,
@@ -56,6 +57,10 @@ def _create_search_result(
         pinned=result.get("pinned", False),
         tags=result.get("tags") or [],
         summary=result.get("summary"),
+        review_status=str(result.get("review_status") or "pending"),
+        sensitivity_tier=str(result.get("sensitivity_tier") or "normal"),
+        token_count=int(result.get("token_count") or 0),
+        last_reviewed_at=result.get("last_reviewed_at"),
         context_kind=normalize_context_kind(
             result.get("context_kind"),
             memory_type=result.get("memory_type"),
