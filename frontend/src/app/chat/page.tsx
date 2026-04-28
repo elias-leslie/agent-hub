@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 
 import { ChatPanel } from "@/components/chat";
+import { searchTasks, type TaskSearchItem } from "@/lib/api/tasks";
 import { cn } from "@/lib/utils";
 import { ChatHeader } from "./components/ChatHeader";
 import { useAgentSelection } from "./hooks/useAgentSelection";
@@ -25,12 +26,32 @@ const THINKING_LEVELS = [
   { value: "ultrathink", label: "Ultrathink" },
 ];
 
+function summarizePath(path: string | null): string {
+  if (!path) return "No configured root";
+  const parts = path.split("/").filter(Boolean);
+  return parts.slice(-2).join(" / ") || path;
+}
+
+function projectDescription(project: ProjectConfig): string {
+  return project.rootPath ? summarizePath(project.rootPath) : "General context only";
+}
+
+function taskSummary(task: TaskSearchItem): string {
+  const prefix = [task.id, task.priority ? `P${task.priority}` : null, task.task_type].filter(Boolean).join(" · ");
+  return `${prefix}: ${task.title}`;
+}
+
 function ChatContent() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [projects, setProjects] = useState<ProjectConfig[]>([FALLBACK_PROJECT]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState(FALLBACK_PROJECT.id);
-  const [taskId, setTaskId] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [taskQuery, setTaskQuery] = useState("");
+  const [taskResults, setTaskResults] = useState<TaskSearchItem[]>([]);
+  const [selectedTask, setSelectedTask] = useState<TaskSearchItem | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
   const [thinkingLevel, setThinkingLevel] = useState("");
 
   const {
@@ -56,8 +77,9 @@ function ChatContent() {
         if (cancelled) return;
         const nextProjects = fetchedProjects.length > 0 ? fetchedProjects : [FALLBACK_PROJECT];
         setProjects(nextProjects);
-        if (!nextProjects.some((project) => project.id === selectedProjectId)) {
-          setSelectedProjectId(nextProjects[0]?.id ?? FALLBACK_PROJECT.id);
+        if (selectedProjectId && !nextProjects.some((project) => project.id === selectedProjectId)) {
+          setSelectedProjectId(null);
+          setSelectedTask(null);
         }
         setProjectsError(null);
       })
@@ -77,12 +99,57 @@ function ChatContent() {
   }, [selectedAgent?.thinking_level]);
 
   const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? FALLBACK_PROJECT,
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId],
   );
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    if (!query) return projects;
+    return projects.filter((project) => {
+      const haystack = `${project.id} ${project.name} ${project.rootPath ?? ""}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [projectSearch, projects]);
 
-  const chatKey = `${selectedAgent?.slug ?? "loading"}:${selectedProject.id}`;
-  const displayError = sessionError || agentsError || projectsError;
+  useEffect(() => {
+    if (!selectedProject) {
+      setTaskResults([]);
+      setTasksError(null);
+      setTasksLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setTasksLoading(true);
+      searchTasks({ projectId: selectedProject.id, query: taskQuery, status: "pending", limit: 25 })
+        .then((response) => {
+          if (cancelled) return;
+          setTaskResults(response.tasks);
+          setTasksError(null);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setTasksError(err instanceof Error ? err.message : "Failed to search tasks");
+        })
+        .finally(() => {
+          if (!cancelled) setTasksLoading(false);
+        });
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [selectedProject, taskQuery]);
+
+  const effectiveProjectId = selectedProject?.id ?? "agent-hub";
+  const chatKey = `${selectedAgent?.slug ?? "loading"}:${selectedProject?.id ?? "general"}`;
+  const displayError = sessionError || agentsError || projectsError || tasksError;
+  const selectProject = (project: ProjectConfig | null) => {
+    setSelectedProjectId(project?.id ?? null);
+    setSelectedTask(null);
+    setTaskQuery("");
+  };
 
   if (agentsLoading && !selectedAgent) {
     return (
@@ -107,7 +174,7 @@ function ChatContent() {
         agentsError={agentsError}
         projects={projects}
         selectedProject={selectedProject}
-        onSelectProject={(project) => setSelectedProjectId(project.id)}
+        onSelectProject={selectProject}
       />
 
       <div className="flex min-h-0 flex-1">
@@ -118,7 +185,8 @@ function ChatContent() {
                 <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">Thread</div>
                 <div className="mt-2 space-y-2 text-xs text-slate-400">
                   <div className="truncate">session {activeSessionId ? activeSessionId.slice(0, 8) : "new"}</div>
-                  <div className="truncate">project {selectedProject.id}</div>
+                  <div className="truncate">context {selectedProject ? selectedProject.id : "general"}</div>
+                  <div className="truncate">task {selectedTask ? selectedTask.id : "none"}</div>
                   <div className="truncate">model {selectedAgent?.primary_model_id ?? "loading"}</div>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -141,15 +209,119 @@ function ChatContent() {
               </section>
 
               <section className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
-                <label className="block text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
-                  Task
-                </label>
-                <input
-                  value={taskId}
-                  onChange={(event) => setTaskId(event.target.value)}
-                  placeholder="task-..."
-                  className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500/40"
-                />
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                    Project Context
+                  </label>
+                  {selectedProject ? (
+                    <button
+                      type="button"
+                      onClick={() => selectProject(null)}
+                      className="text-slate-500 transition hover:text-slate-200"
+                      title="Clear project context"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+                <div className="relative mt-2">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={projectSearch}
+                    onChange={(event) => setProjectSearch(event.target.value)}
+                    placeholder="Search projects..."
+                    className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-800 outline-none focus:border-indigo-500/40"
+                  />
+                </div>
+                <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => selectProject(null)}
+                    className={cn(
+                      "w-full rounded-md px-2 py-1.5 text-left text-xs transition",
+                      !selectedProject ? "bg-indigo-500/10 text-indigo-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                    )}
+                  >
+                    <span className="block font-medium">General chat</span>
+                    <span className="block truncate text-[11px] opacity-70">No repo or task context</span>
+                  </button>
+                  {filteredProjects.map((project) => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => selectProject(project)}
+                      className={cn(
+                        "w-full rounded-md px-2 py-1.5 text-left text-xs transition",
+                        selectedProject?.id === project.id
+                          ? "bg-indigo-500/10 text-indigo-700"
+                          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                      )}
+                    >
+                      <span className="block truncate font-medium">{project.name}</span>
+                      <span className="block truncate text-[11px] opacity-70">{project.id} · {projectDescription(project)}</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-[10px] font-medium uppercase tracking-[0.18em] text-slate-500">
+                    Task Context
+                  </label>
+                  {selectedTask ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTask(null)}
+                      className="text-slate-500 transition hover:text-slate-200"
+                      title="Clear task context"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
+                </div>
+                {selectedProject ? (
+                  <>
+                    <div className="relative mt-2">
+                      <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                      <input
+                        value={taskQuery}
+                        onChange={(event) => setTaskQuery(event.target.value)}
+                        placeholder="Search task id or title..."
+                        className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-7 pr-2 text-xs text-slate-800 outline-none focus:border-indigo-500/40"
+                      />
+                    </div>
+                    <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
+                      {tasksLoading ? (
+                        <div className="px-2 py-2 text-xs text-slate-500">Searching...</div>
+                      ) : taskResults.length > 0 ? (
+                        taskResults.map((task) => (
+                          <button
+                            key={task.id}
+                            type="button"
+                            onClick={() => setSelectedTask(task)}
+                            className={cn(
+                              "w-full rounded-md px-2 py-1.5 text-left text-xs transition",
+                              selectedTask?.id === task.id
+                                ? "bg-indigo-500/10 text-indigo-700"
+                                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                            )}
+                            title={task.description ?? task.title}
+                          >
+                            <span className="block truncate font-medium">{taskSummary(task)}</span>
+                            {task.description ? (
+                              <span className="block truncate text-[11px] opacity-70">{task.description}</span>
+                            ) : null}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-2 py-2 text-xs text-slate-500">No matching pending tasks</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">Select a project to search tasks.</p>
+                )}
               </section>
 
               <section className="rounded-lg border border-slate-800 bg-slate-900/35 p-3">
@@ -159,7 +331,7 @@ function ChatContent() {
                 <select
                   value={thinkingLevel}
                   onChange={(event) => setThinkingLevel(event.target.value)}
-                  className="mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-500/40"
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-indigo-500/40"
                 >
                   {THINKING_LEVELS.map((level) => (
                     <option key={level.value || "default"} value={level.value}>
@@ -179,12 +351,12 @@ function ChatContent() {
               agent={selectedAgent}
               agentSlug={selectedAgent.slug}
               sessionId={activeSessionId ?? undefined}
-              workingDir={selectedProject.rootPath ?? undefined}
+              workingDir={selectedProject?.rootPath ?? undefined}
               toolsEnabled
               onSessionCreated={handleSessionCreated}
               onClear={handleNewSession}
-              projectId={selectedProject.id}
-              externalId={taskId.trim() || undefined}
+              projectId={effectiveProjectId}
+              externalId={selectedTask?.id}
               thinkingLevel={thinkingLevel || null}
             />
           ) : (
