@@ -23,8 +23,8 @@ interface ChatHeaderProps {
   sessionError: string | null;
   agentsError: string | null;
   projects: ProjectConfig[];
-  selectedProject: ProjectConfig;
-  onSelectProject: (project: ProjectConfig) => void;
+  selectedProject: ProjectConfig | null;
+  onSelectProject: (project: ProjectConfig | null) => void;
 }
 
 function getAgentIcon(slug: string) {
@@ -82,13 +82,27 @@ export function ChatHeader({
               )}
             >
               <FolderOpen className="h-3.5 w-3.5" />
-              {selectedProject.name}
+              {selectedProject?.name ?? "General"}
               <ChevronDown className="h-3 w-3" />
             </button>
 
             {showProjectSelector && (
               <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
                 <div className="p-1">
+                  <button
+                    onClick={() => {
+                      onSelectProject(null);
+                      setShowProjectSelector(false);
+                    }}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
+                      "hover:bg-slate-700 transition-colors",
+                      !selectedProject && "bg-indigo-900/20 text-indigo-400"
+                    )}
+                  >
+                    <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                    <span className="flex-1">General</span>
+                  </button>
                   {projects.map((project) => (
                     <button
                       key={project.id}
@@ -99,7 +113,7 @@ export function ChatHeader({
                       className={cn(
                         "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
                         "hover:bg-slate-700 transition-colors",
-                        project.id === selectedProject.id && "bg-indigo-900/20 text-indigo-400"
+                        project.id === selectedProject?.id && "bg-indigo-900/20 text-indigo-400"
                       )}
                     >
                       <FolderOpen className="h-4 w-4 flex-shrink-0" />

@@ -28,7 +28,7 @@ export function handleStreamEvent(
       state.thinking += data.content || "";
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, thinking: state.thinking } : m,
+          m.id === assistantId ? { ...m, thinking: state.thinking, statusLabel: "Thinking" } : m,
         ),
       );
       break;
@@ -37,7 +37,7 @@ export function handleStreamEvent(
       state.content += data.content || "";
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantId ? { ...m, content: state.content } : m,
+          m.id === assistantId ? { ...m, content: state.content, statusLabel: "Responding" } : m,
         ),
       );
       break;
@@ -60,6 +60,7 @@ export function handleStreamEvent(
               maxTokensRequested: data.max_tokens_requested,
               modelLimit: data.model_limit,
               truncationWarning: data.truncation_warning,
+              statusLabel: "Complete",
             }
             : m,
         ),
@@ -80,6 +81,7 @@ export function handleStreamEvent(
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
               thinkingTokens: data.thinking_tokens,
+              statusLabel: "Cancelled",
             }
             : m,
         ),
@@ -99,7 +101,7 @@ export function handleStreamEvent(
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, toolExecutions: [...state.tools] }
+              ? { ...m, toolExecutions: [...state.tools], statusLabel: `Running ${data.tool_name}` }
               : m,
           ),
         );
@@ -117,7 +119,7 @@ export function handleStreamEvent(
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, toolExecutions: [...state.tools] }
+              ? { ...m, toolExecutions: [...state.tools], statusLabel: "Running tool" }
               : m,
           ),
         );
@@ -139,7 +141,11 @@ export function handleStreamEvent(
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, toolExecutions: [...state.tools] }
+              ? {
+                ...m,
+                toolExecutions: [...state.tools],
+                statusLabel: data.tool_status === "error" ? "Tool failed" : "Tool complete",
+              }
               : m,
           ),
         );

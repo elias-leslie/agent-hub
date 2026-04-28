@@ -114,7 +114,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
                   ? "Recording... release spacebar to send"
                   : selectedModels.length > 0
                     ? "Type your message..."
-                    : "Type a message or @ to select model..."
+                    : "Message"
             }
             disabled={isStreaming || disabled}
             rows={1}
