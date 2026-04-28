@@ -25,14 +25,14 @@ OLD_TEXT = (
     '- If you need a current cleanup read on one project, use `manage_tasks(action="cleanup_status", project_id="...")` instead of ad hoc shell inspection.\n'
     '- Treat `cleanup_status` as the short decision surface. If it includes `finalize:` or `conflicts:` candidates for the target project, resolve those before dispatching more low-confidence refactor/maintenance work in that same project.\n'
     '- If cleanup debt is present and the project has no more urgent live execution problem, use `manage_tasks(action="cleanup_checkpoints", project_id="...")` to clear safe checkpoint cleanup cases before dispatching additional low-confidence maintenance work.\n'
-    '- If cleanup output shows `NEEDS_MERGE` or `CONFLICT` for a completed, failed, blocked, or conflicted task residue, use `manage_tasks(action="finalize_merge", task_id="...", project_id="...")` to finish the canonical merge/cleanup path before dispatching more work.\n'
-    '- Do not treat a task as fully closed just because it says `completed` if cleanup still shows `NEEDS_MERGE` or `CONFLICT`; finalize it or reconcile why it cannot merge.\n'
+    '- If cleanup output shows terminal task residue (`finalize:`, `NEEDS_MERGE`, or `CONFLICT`) for a completed, failed, blocked, or conflicted task, use `manage_tasks(action="reconcile", task_id="...", project_id="...")` to reopen or clear the exact residue before dispatching more work.\n'
+    '- Do not treat a task as fully closed just because it says `completed` if cleanup still shows `finalize:`, `NEEDS_MERGE`, or `CONFLICT`; reconcile it or clear safe checkpoints.\n'
 )
 NEW_TEXT = (
     '- If you need a current cleanup read on one project, use `manage_tasks(action="cleanup_status", project_id="...")` instead of ad hoc shell inspection.\n'
-    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="finalize_merge", ...)`; `conflicts:` means finish merge resolution before dispatching more work, starting with `finalize_merge` for completed/blocked residue; `review:` means do NOT use `finalize_merge` blindly and do NOT dispatch more low-confidence work until you inspect or reconcile the residue.\n'
+    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="reconcile", ...)`; `conflicts:` means resolve active conflicts before dispatching more work, starting with `resolve_conflict` for active conflict residue or `reconcile` for terminal completed/blocked residue; `review:` means inspect or reconcile the residue before more low-confidence work.\n'
     '- If cleanup debt is present and the project has no more urgent live execution problem, use `manage_tasks(action="cleanup_checkpoints", project_id="...")` to clear safe checkpoint cleanup cases before dispatching additional low-confidence maintenance work.\n'
-    '- Do not use `manage_tasks(action="finalize_merge", ...)` for a cleanup candidate that is only surfaced under `review:`. Review candidates usually mean missing-task residue, dirty checkpoints, or ambiguous state; inspect with `get_context`, `query_sessions`, `cleanup_checkpoints`, or `reconcile` first.\n'
+    '- Do not use `cleanup_checkpoints` for a cleanup candidate that is only surfaced under `review:`. Review candidates usually mean missing-task residue, dirty checkpoints, or ambiguous state; inspect with `get_context`, `query_sessions`, `cleanup_checkpoints`, or `reconcile` first.\n'
     '- Do not treat a task as fully closed just because it says `completed` if cleanup still shows `finalize:` or `conflicts:` residue; finish the canonical merge/cleanup path or reconcile why it cannot merge before dispatching more work.\n'
 )
 

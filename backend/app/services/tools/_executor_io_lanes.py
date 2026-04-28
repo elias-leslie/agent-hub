@@ -368,15 +368,13 @@ def _needs_admin_close(result: str) -> bool:
     )
 
 
-async def _finalize_merge_if_terminal_residue(
+async def _cleanup_terminal_residue(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str,
     project_id: str | None,
     result: str,
 ) -> str:
-    """Run finalize-merge when the result contains a terminal merge-residue error."""
-    from ._executor_io_tasks import _handle_finalize_merge
-
+    """Run safe cleanup when result contains terminal merge-residue text."""
     lowered = result.lower()
     if (
         "cannot merge - task" not in lowered
@@ -386,7 +384,8 @@ async def _finalize_merge_if_terminal_residue(
         return result
     task_status = await _get_task_status(bash_fn, task_id, project_id)
     if _task_is_final(task_status):
-        return await _handle_finalize_merge(bash_fn, task_id, project_id)
+        cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
+        return f"{result.rstrip()}\nCheckpoint cleanup: {cleanup_result}"
     return result
 
 
@@ -458,8 +457,8 @@ async def _dispatch_done(
             project_id,
         )
         admin_result = await bash_fn(admin_cmd)
-        return await _finalize_merge_if_terminal_residue(bash_fn, task_id, project_id, admin_result)
-    return await _finalize_merge_if_terminal_residue(bash_fn, task_id, project_id, result)
+        return await _cleanup_terminal_residue(bash_fn, task_id, project_id, admin_result)
+    return await _cleanup_terminal_residue(bash_fn, task_id, project_id, result)
 
 
 # ---------------------------------------------------------------------------

@@ -1784,72 +1784,6 @@ class TestManageTasks:
         ])
 
     @pytest.mark.asyncio
-    async def test_smart_sync_requires_project_id(self):
-        from app.services.tools._executor_io import manage_tasks
-
-        mock_bash = AsyncMock()
-
-        result = await manage_tasks(mock_bash, action="smart_sync")
-
-        assert "project_id required" in result
-        mock_bash.assert_not_awaited()
-
-    @pytest.mark.asyncio
-    async def test_smart_sync_routes_to_cli(self):
-        from app.services.tools._executor_io import manage_tasks
-
-        mock_bash = AsyncMock(return_value='{"status":"success","project_id":"agent-hub"}')
-
-        result = await manage_tasks(
-            mock_bash,
-            action="smart_sync",
-            project_id="agent-hub",
-        )
-
-        assert '"status":"success"' in result
-        mock_bash.assert_awaited_once_with("st -P agent-hub smart-sync")
-
-    @pytest.mark.asyncio
-    async def test_finalize_merge(self):
-        from app.services.tools._executor_io import manage_tasks
-
-        mock_bash = AsyncMock(
-            side_effect=[
-                '{"status":"merged"}',
-                "Deleted 1 checkpoint residue",
-            ]
-        )
-        result = await manage_tasks(
-            mock_bash,
-            action="finalize_merge",
-            task_id="task-42",
-            project_id="summitflow",
-        )
-
-        assert '"status":"merged"' in result
-        assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
-        assert mock_bash.await_args_list[0].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[1].args[0] == "st -P summitflow cleanup checkpoints --auto"
-
-    @pytest.mark.asyncio
-    async def test_finalize_merge_not_found_adds_review_hint(self):
-        from app.services.tools._executor_io import manage_tasks
-
-        mock_bash = AsyncMock(
-            return_value='ERROR Failed to finalize task merge: {"error":"http_error","message":"Task not found","details":[]}'
-        )
-        result = await manage_tasks(
-            mock_bash,
-            action="finalize_merge",
-            task_id="task-missing",
-            project_id="agent-hub",
-        )
-
-        assert "Task not found" in result
-        assert "review:" in result
-        mock_bash.assert_awaited_once_with("st -P agent-hub git finalize-task task-missing")
-
-    @pytest.mark.asyncio
     async def test_resolve_conflict_reopens_and_dispatches(self):
         from app.services.tools._executor_io import manage_tasks
 
@@ -2249,7 +2183,6 @@ class TestManageTasks:
                 "ERROR No checkpoint found for task-42. Was it claimed?\n",
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
-                '{"task_id":"task-42","status":"merged"}',
                 "Deleted 1 checkpoint residue",
             ]
         )
@@ -2275,7 +2208,7 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert '"status":"merged"' in result
+        assert "Task task-42 completed without checkpoint merge." in result
         assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
@@ -2286,8 +2219,7 @@ class TestManageTasks:
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
         assert mock_bash.await_args_list[3].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[5].args[0] == "st -P summitflow cleanup checkpoints --auto"
+        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_admin_closes_after_status_update_failure_recovery_hint(self):
@@ -2341,7 +2273,7 @@ class TestManageTasks:
         )
 
     @pytest.mark.asyncio
-    async def test_reconcile_uses_finalize_for_terminal_merge_residue(self):
+    async def test_reconcile_cleans_terminal_merge_residue(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
@@ -2349,7 +2281,6 @@ class TestManageTasks:
                 "",
                 "Error: Cannot merge - task task-42 is already completed",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
-                '{"task_id":"task-42","status":"merged"}',
                 "Deleted 1 checkpoint residue",
             ]
         )
@@ -2375,7 +2306,7 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert '"status":"merged"' in result
+        assert "Cannot merge - task task-42 is already completed" in result
         assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[0].args[0] == "st -P summitflow exec-log task-42 -n 40 --debug"
 
@@ -2388,7 +2319,6 @@ class TestManageTasks:
                 "",
                 "Task task-42 completed without checkpoint merge.",
                 "TASK:task-42|completed|P2|refactor|SIMPLE",
-                '{"task_id":"task-42","status":"merged"}',
                 "Deleted 1 checkpoint residue",
             ]
         )
@@ -2414,18 +2344,17 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert '"status":"merged"' in result
+        assert "Task task-42 completed without checkpoint merge." in result
         assert "Checkpoint cleanup: Deleted 1 checkpoint residue" in result
         assert mock_bash.await_args_list[1].args[0] == (
             "st -P summitflow done task-42 --message "
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
-        assert mock_bash.await_args_list[4].args[0] == "st -P summitflow cleanup checkpoints --auto"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
-    async def test_reconcile_treats_no_checkout_finalize_as_already_closed(self):
+    async def test_reconcile_treats_no_checkpoint_cleanup_as_already_closed(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(
@@ -2458,7 +2387,7 @@ class TestManageTasks:
                 project_id="summitflow",
             )
 
-        assert "Task already appears closed" in result
+        assert "Cannot merge - task task-42 is already completed" in result
         assert '"reason":"no_checkpoint"' in result
         assert mock_bash.await_args_list[0].args[0] == (
             "st -P summitflow exec-log task-42 -n 40 --debug"
@@ -2468,7 +2397,7 @@ class TestManageTasks:
             "'Reconciled from Agent Hub session evidence: Fixed the regression'"
         )
         assert mock_bash.await_args_list[2].args[0] == "st -P summitflow context task-42 --compact"
-        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow git finalize-task task-42"
+        assert mock_bash.await_args_list[3].args[0] == "st -P summitflow cleanup checkpoints --auto"
 
     @pytest.mark.asyncio
     async def test_reconcile_cancels_orphan_running_task_without_lane_evidence(self):
