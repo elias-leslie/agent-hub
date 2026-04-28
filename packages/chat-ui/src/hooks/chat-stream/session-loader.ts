@@ -62,7 +62,7 @@ export async function loadSession(
   return {
     messages: deduped.map((m) => ({
       id: `loaded-${m.id}`,
-      role: m.role as "user" | "assistant",
+      role: m.role as "user" | "assistant" | "system",
       content: m.content,
       timestamp: new Date(m.created_at),
       agentName: m.agent_display_name || m.agent_name,

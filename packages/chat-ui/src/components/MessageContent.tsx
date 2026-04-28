@@ -5,6 +5,7 @@ import { cn } from "../lib/utils";
 import { TruncationIndicator } from "./truncation-indicator";
 import { detectMentionedModel } from "./message-utils";
 import { MarkdownContent } from "./MarkdownContent";
+import { MessageRuntimeDetails } from "./MessageRuntimeDetails";
 
 interface MessageContentProps {
   message: ChatMessage;
@@ -84,12 +85,7 @@ export function MessageContent({
         />
       )}
 
-      {(message.inputTokens !== undefined || message.outputTokens !== undefined) && (
-        <div className="mt-2 text-xs opacity-60">
-          {message.inputTokens && <span>In: {message.inputTokens} </span>}
-          {message.outputTokens && <span>Out: {message.outputTokens}</span>}
-        </div>
-      )}
+      <MessageRuntimeDetails message={message} />
 
       {!isUser && !isStreaming && mentionedModel && onContinueAs && (
         <button

@@ -15,6 +15,37 @@ export interface ToolExecution {
   completedAt?: Date;
 }
 
+export interface ChatArtifact {
+  id: string;
+  type: "code_diff" | "file_patch" | "generated_file" | "command_output" | "screenshot" | "dom_extract" | "browser_replay" | "annotation_set" | "report" | "other";
+  title: string;
+  summary?: string;
+  mimeType?: string;
+  visibility?: "app" | "model" | "private";
+}
+
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  type?: string;
+  sizeBytes?: number;
+}
+
+export interface ChatPermissionRequest {
+  id: string;
+  action: string;
+  tool?: string;
+  target?: string;
+  risk?: string;
+  status: "requested" | "granted" | "denied";
+}
+
+export interface ChatContextHint {
+  label: string;
+  value: string;
+  tone?: "default" | "warning" | "danger";
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -48,6 +79,13 @@ export interface ChatMessage {
   maxTokensRequested?: number;
   modelLimit?: number;
   truncationWarning?: string;
+  compacted?: boolean;
+  contextHints?: ChatContextHint[];
+  costUsd?: number;
+  statusLabel?: string;
+  artifacts?: ChatArtifact[];
+  attachments?: ChatAttachment[];
+  permissionRequests?: ChatPermissionRequest[];
   // Tool execution
   toolExecutions?: ToolExecution[];
 }

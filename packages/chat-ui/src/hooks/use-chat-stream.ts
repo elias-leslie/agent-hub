@@ -5,6 +5,7 @@ import type { ChatMessage, StreamStatus } from "../types/chat";
 import type { StreamState } from "./chat-stream/types";
 import { loadSession } from "./chat-stream/session-loader";
 import { sendMessage as sendMessageImpl } from "./chat-stream/send-message";
+import { generateId } from "./chat-stream/utils";
 
 export interface ChatStreamApiConfig {
   fetchHeaders?: Record<string, string>;
@@ -15,6 +16,9 @@ export interface ChatStreamApiConfig {
 
   projectId?: string;
   memoryGroupPrefix?: string;
+  externalId?: string;
+  thinkingLevel?: string | null;
+  currentBranch?: string | null;
 }
 
 interface UseChatStreamOptions {
@@ -36,8 +40,12 @@ interface UseChatStreamReturn {
   cancelStream: () => void;
   clearMessages: () => void;
   resetSession: () => void;
+  resumeSession: (sessionId: string) => Promise<boolean>;
+  forkSession: (forkAtTurn?: number | null) => Promise<string | null>;
+  compactMessages: (keepRecent?: number) => boolean;
   editMessage: (messageId: string, newContent: string) => void;
   regenerateMessage: (messageId: string) => void;
+  continueMessage: (messageId: string) => void;
 }
 
 /**
@@ -64,6 +72,9 @@ export function useChatStream(
     fetchFn = fetch,
     projectId = "agent-hub",
     memoryGroupPrefix = "agent:",
+    externalId,
+    thinkingLevel,
+    currentBranch,
   } = apiConfig;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -216,9 +227,12 @@ export function useChatStream(
         preferencesEndpoint,
         projectId: effectiveProjectId,
         memoryGroupPrefix,
+        externalId,
+        thinkingLevel,
+        currentBranch,
       });
     },
-    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, loadedSessionProjectId, memoryGroupPrefix, externalId, thinkingLevel, currentBranch, setCurrentSessionIdWithTracking, fetchFn, sessionsEndpoint, loadInitialSession],
   );
 
   const cancelStream = useCallback(() => {
@@ -245,6 +259,88 @@ export function useChatStream(
     setError(null);
     setStatus("idle");
   }, []);
+
+  const resumeSession = useCallback(
+    async (targetSessionId: string) => {
+      try {
+        setStatus("connecting");
+        const loadedSession = await loadSession(targetSessionId, fetchFn, sessionsEndpoint);
+        setCurrentSessionId(targetSessionId);
+        setLoadedSessionProjectId(loadedSession.projectId);
+        setMessages(loadedSession.messages);
+        setError(null);
+        setStatus("idle");
+        return true;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to resume session");
+        setStatus("error");
+        return false;
+      }
+    },
+    [fetchFn, sessionsEndpoint],
+  );
+
+  const forkSession = useCallback(
+    async (forkAtTurn?: number | null) => {
+      const sourceSessionId = currentSessionId ?? sessionId;
+      if (!sourceSessionId || status !== "idle") return null;
+
+      try {
+        setStatus("connecting");
+        const response = await fetchFn(`${sessionsEndpoint}/${sourceSessionId}/fork`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...fetchHeaders },
+          body: JSON.stringify({ fork_at_turn: forkAtTurn ?? null }),
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to fork session: ${response.status}`);
+        }
+        const fork = await response.json() as { id: string };
+        const resumed = await resumeSession(fork.id);
+        return resumed ? fork.id : null;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fork session");
+        setStatus("error");
+        return null;
+      }
+    },
+    [currentSessionId, sessionId, status, fetchFn, sessionsEndpoint, fetchHeaders, resumeSession],
+  );
+
+  const compactMessages = useCallback((keepRecent = 6) => {
+    if (status !== "idle" || messages.length <= keepRecent + 1) return false;
+
+    const compacted = messages.slice(0, -keepRecent);
+    const kept = messages.slice(-keepRecent);
+    const summaryLines = compacted
+      .slice(-10)
+      .map((message) => {
+        const text = message.content.replace(/\s+/g, " ").trim();
+        const excerpt = text.length > 180 ? `${text.slice(0, 177)}...` : text;
+        return `- ${message.role}: ${excerpt || "[empty]"}`;
+      })
+      .join("\n");
+
+    const summaryMessage: ChatMessage = {
+      id: generateId(),
+      role: "system",
+      content: [
+        `[Context Summary: ${compacted.length} earlier messages compacted]`,
+        summaryLines,
+      ].filter(Boolean).join("\n\n"),
+      timestamp: new Date(),
+      compacted: true,
+      statusLabel: "Compacted context",
+      contextHints: [
+        { label: "Kept", value: `${kept.length} recent` },
+        { label: "Compacted", value: `${compacted.length}` },
+      ],
+    };
+
+    setMessages([summaryMessage, ...kept]);
+    setError(null);
+    return true;
+  }, [messages, status]);
 
   const editMessage = useCallback((messageId: string, newContent: string) => {
     setMessages((prev) =>
@@ -288,6 +384,16 @@ export function useChatStream(
     [messages, status, sendMessage],
   );
 
+  const continueMessage = useCallback(
+    (messageId: string) => {
+      if (status !== "idle") return;
+      const message = messages.find((m) => m.id === messageId);
+      if (!message || message.role !== "assistant") return;
+      sendMessage("Continue from your previous response.");
+    },
+    [messages, status, sendMessage],
+  );
+
   return {
     messages,
     status,
@@ -297,7 +403,11 @@ export function useChatStream(
     cancelStream,
     clearMessages,
     resetSession,
+    resumeSession,
+    forkSession,
+    compactMessages,
     editMessage,
     regenerateMessage,
+    continueMessage,
   };
 }
