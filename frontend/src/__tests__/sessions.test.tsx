@@ -194,13 +194,12 @@ describe("SessionsPage", () => {
     });
   });
 
-  it("surfaces requested-to-effective model identity, fallback reason, and compact message/event counts", async () => {
+  it("surfaces effective model identity, fallback state, and compact message/event counts", async () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/claude-opus-4-7/i)).toBeInTheDocument();
-      expect(screen.getByText(/claude-sonnet-4-6/i)).toBeInTheDocument();
-      expect(screen.getByText(/fallback\s*·\s*rate_limit/i)).toBeInTheDocument();
+      expect(screen.getByText(/claude\/sonnet-4\.6/i)).toBeInTheDocument();
+      expect(screen.getByText(/^fallback$/i)).toBeInTheDocument();
       expect(screen.getByText(/5 msg/i)).toBeInTheDocument();
       expect(screen.getByText(/12 evt/i)).toBeInTheDocument();
     });
@@ -222,8 +221,8 @@ describe("SessionsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText(/^live · collecting$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^usage pending$/i)).toBeInTheDocument();
+      expect(screen.getByText(/^collecting$/i)).toBeInTheDocument();
+      expect(screen.queryByText(/^usage pending$/i)).not.toBeInTheDocument();
     });
   });
 
@@ -266,11 +265,10 @@ describe("SessionsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText(/^in 0 · out 0$/i)).toBeInTheDocument();
-      expect(screen.getByText(/^\$0(?:\.00)?$/i)).toBeInTheDocument();
     });
   });
 
-  it("uses explicit row controls instead of a whole-row button", async () => {
+  it("expands from the row body while keeping nested controls isolated", async () => {
     renderPage();
 
     await waitFor(() => {
@@ -278,7 +276,19 @@ describe("SessionsPage", () => {
       expect(screen.getByRole("button", { name: /filter model claude-sonnet-4-6/i })).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("button", { name: /test-project/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("dispatch parser cleared branch drift"));
+
+    await waitFor(() => {
+      expect(fetchSession).toHaveBeenCalledWith("session-123-abc");
+      expect(screen.getByText(/5 messages · 12 events/i)).toBeInTheDocument();
+      expect(screen.getByTestId("event-timeline")).toHaveTextContent("0 events");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /filter model claude-sonnet-4-6/i }));
+
+    expect(fetchSession).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/5 messages · 12 events/i)).toBeInTheDocument();
+    expect(screen.getByTestId("event-timeline")).toBeInTheDocument();
   });
 
   it("shows a no-match state when the current filters remove every loaded row", async () => {

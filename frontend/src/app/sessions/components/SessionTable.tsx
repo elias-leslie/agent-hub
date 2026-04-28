@@ -56,7 +56,7 @@ export function SessionTable({
       className="max-h-[calc(100vh-220px)] overflow-auto border border-slate-800/70 bg-slate-950/70 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
     >
       <div className="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/95 backdrop-blur-sm">
-        <div className="grid grid-cols-[minmax(260px,1.6fr)_minmax(130px,0.8fr)_minmax(240px,1.2fr)_minmax(130px,0.8fr)_88px_76px] items-center gap-4 px-4 py-3">
+        <div className="grid grid-cols-[minmax(320px,1.8fr)_minmax(120px,0.65fr)_minmax(190px,0.9fr)_minmax(130px,0.7fr)_72px_64px] items-center gap-3 px-4 py-2.5">
           <SortableHeader
             label="Session"
             field="project"

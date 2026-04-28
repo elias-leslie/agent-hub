@@ -30,8 +30,8 @@ function getUsageCopy(session: SessionListItem, cost: number) {
   const isActive = session.status === "active" || session.live_activity?.status === "active";
   if (isActive && session.total_input_tokens === 0 && session.total_output_tokens === 0) {
     return {
-      primary: "live · collecting",
-      secondary: "usage pending",
+      primary: "collecting",
+      secondary: formatCost(cost),
     };
   }
   const tokenPair = formatTokenPair(session.total_input_tokens, session.total_output_tokens);
@@ -90,6 +90,9 @@ export function SessionTableRow({
   const hasSettledZeroUsage = hasKnownZeroUsage && !isActiveSession;
   const sessionSecondaryLine = getSessionSecondaryLine(session);
   const expandLabel = `${isExpanded ? "Collapse" : "Expand"} session ${session.id}`;
+  const modelTitle = identity.showRequested && identity.requestedModel
+    ? `${identity.requestedModel} -> ${identity.effectiveModel}`
+    : identity.effectiveModel;
 
   return (
     <div
@@ -101,48 +104,47 @@ export function SessionTableRow({
         isFlashing && "animate-flash",
       )}
     >
-      <div className="grid grid-cols-[minmax(260px,1.6fr)_minmax(130px,0.8fr)_minmax(240px,1.2fr)_minmax(130px,0.8fr)_88px_76px] items-start gap-4 px-4 py-3 hover:bg-slate-900/30">
-        <div className="min-w-0 space-y-1.5">
+      <div
+        role="button"
+        tabIndex={-1}
+        aria-expanded={isExpanded}
+        aria-controls={`session-details-${session.id}`}
+        onClick={() => onToggleExpand(session.id)}
+        className={cn(
+          "grid cursor-pointer grid-cols-[minmax(320px,1.8fr)_minmax(120px,0.65fr)_minmax(190px,0.9fr)_minmax(130px,0.7fr)_72px_64px] items-center gap-3 px-4 py-2 transition-colors",
+          isExpanded ? "bg-slate-900/55" : "hover:bg-slate-900/30",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-2">
           <StatusCell status={session.status} liveActivity={session.live_activity} />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-100">{session.project_id}</div>
-            <div className="truncate text-[11px] text-slate-400" title={session.summary_oneliner || session.id}>
+          <div className="min-w-0 flex items-baseline gap-2">
+            <span className="shrink-0 text-sm font-semibold text-slate-100">{session.project_id}</span>
+            <span className="truncate text-[11px] text-slate-400" title={session.summary_oneliner || session.id}>
               {sessionSecondaryLine}
-            </div>
+            </span>
           </div>
         </div>
 
-        <div className="min-w-0 space-y-1">
-          <div className="truncate text-sm text-slate-200">{session.agent_slug || "—"}</div>
-          <div className="truncate text-[11px] text-slate-500">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-sm text-slate-200">{session.agent_slug || "—"}</span>
+          <span className="shrink-0 text-[11px] text-slate-500">
             {session.message_count} msg
             {session.event_count !== null && session.event_count !== undefined ? ` · ${session.event_count} evt` : ""}
-          </div>
+          </span>
         </div>
 
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <ModelPill
-              model={identity.effectiveModel}
-              provider={identity.effectiveProvider ?? session.provider}
-              onClick={() => onModelFilterClick(session.model)}
-              isActive={modelFilter === session.model}
-              fallbackUsed={identity.fallbackUsed}
-            />
-          </div>
-          {identity.showRequested && identity.requestedModel ? (
-            <div className="truncate text-[11px] font-mono text-slate-500">
-              {identity.requestedModel}
-              <span className="px-1 text-slate-700">→</span>
-              {identity.effectiveModel}
-            </div>
-          ) : (
-            <div className="truncate text-[11px] font-mono text-slate-600">{identity.effectiveProvider}</div>
-          )}
-          {identity.fallbackUsed && identity.fallbackReason ? (
-            <div className="truncate text-[10px] uppercase tracking-[0.14em] text-slate-600">
-              fallback · {identity.fallbackReason}
-            </div>
+        <div className="flex min-w-0 items-center gap-2" title={modelTitle}>
+          <ModelPill
+            model={identity.effectiveModel}
+            provider={identity.effectiveProvider ?? session.provider}
+            onClick={() => onModelFilterClick(session.model)}
+            isActive={modelFilter === session.model}
+            fallbackUsed={identity.fallbackUsed}
+          />
+          {identity.fallbackUsed ? (
+            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-amber-300/80">
+              fallback
+            </span>
           ) : null}
         </div>
 
@@ -162,21 +164,15 @@ export function SessionTableRow({
         >
           <div className="cursor-help text-right">
             <div className={cn(
-              "text-[11px] font-mono tabular-nums",
+              "truncate text-[11px] font-mono tabular-nums",
               hasSettledZeroUsage ? "text-slate-500" : "text-slate-300",
             )}>
               {usageCopy.primary}
             </div>
-            <div className={cn(
-              "text-[11px] font-mono tabular-nums",
-              hasSettledZeroUsage ? "text-slate-700" : "text-slate-600",
-            )}>
-              {usageCopy.secondary}
-            </div>
           </div>
         </Tooltip>
 
-        <div className="pt-0.5 text-right text-[11px] font-mono tabular-nums text-slate-400">
+        <div className="text-right text-[11px] font-mono tabular-nums text-slate-400">
           {formatRelativeTime(session.updated_at)}
         </div>
 
@@ -187,7 +183,10 @@ export function SessionTableRow({
             aria-expanded={isExpanded}
             aria-controls={`session-details-${session.id}`}
             aria-label={expandLabel}
-            onClick={() => onToggleExpand(session.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleExpand(session.id);
+            }}
             className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
           >
             <ChevronDown
@@ -211,7 +210,6 @@ export function SessionTableRow({
           <div className="border-t border-slate-800/70 bg-slate-950/80">
             <ExpandedRowContent
               session={session}
-              modelCosts={modelCosts}
               expandedData={isExpanded ? expandedSessionData : null}
               eventsData={isExpanded ? expandedEventsData : null}
               isLoading={isExpanded && isLoadingDetails}

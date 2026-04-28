@@ -59,7 +59,10 @@ export function ModelPill({
       <button
         type="button"
         aria-label={`Filter model ${model}`}
-        onClick={onClick}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick();
+        }}
         className={className}
         title={title}
       >
