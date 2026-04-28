@@ -62,6 +62,24 @@ describe("MessageList - Edit and Regenerate", () => {
     expect(screen.getByTitle("Regenerate response")).toBeInTheDocument();
   });
 
+  it("shows continue button for assistant messages when callback provided", () => {
+    const onContinue = vi.fn();
+    const messages = [
+      createMessage({ id: "1", content: "User" }),
+      createMessage({ id: "2", role: "assistant", content: "Assistant" }),
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        isStreaming={false}
+        onContinueMessage={onContinue}
+      />
+    );
+
+    expect(screen.getByTitle("Continue response")).toBeInTheDocument();
+  });
+
   it("enters edit mode when edit button clicked", () => {
     const onEdit = vi.fn();
     const messages = [createMessage({ content: "Original content" })];
@@ -149,6 +167,26 @@ describe("MessageList - Edit and Regenerate", () => {
     fireEvent.click(screen.getByTitle("Regenerate response"));
 
     expect(onRegenerate).toHaveBeenCalledWith("2");
+  });
+
+  it("calls onContinue when continue button clicked", () => {
+    const onContinue = vi.fn();
+    const messages = [
+      createMessage({ id: "1", content: "User" }),
+      createMessage({ id: "2", role: "assistant", content: "Assistant" }),
+    ];
+
+    render(
+      <MessageList
+        messages={messages}
+        isStreaming={false}
+        onContinueMessage={onContinue}
+      />
+    );
+
+    fireEvent.click(screen.getByTitle("Continue response"));
+
+    expect(onContinue).toHaveBeenCalledWith("2");
   });
 
   it("shows edited indicator for edited messages", () => {

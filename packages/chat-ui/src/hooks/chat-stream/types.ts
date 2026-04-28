@@ -67,6 +67,9 @@ export interface CompletionRequest {
   execute_tools?: boolean;
   max_turns?: number;
   project_id: string;
+  external_id?: string;
+  thinking_level?: string;
+  current_branch?: string;
   stream: boolean;
   use_memory: boolean;
   memory_group_id: string;
