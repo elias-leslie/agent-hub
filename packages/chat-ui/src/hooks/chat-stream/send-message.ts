@@ -27,6 +27,9 @@ interface SendMessageParams {
   preferencesEndpoint?: string;
   projectId: string;
   memoryGroupPrefix: string;
+  externalId?: string;
+  thinkingLevel?: string | null;
+  currentBranch?: string | null;
 }
 
 /**
@@ -53,6 +56,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
     preferencesEndpoint,
     projectId,
     memoryGroupPrefix,
+    externalId,
+    thinkingLevel,
+    currentBranch,
   } = params;
 
   setError(null);
@@ -122,6 +128,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           execute_tools: toolsEnabled,
           max_turns: toolsEnabled ? 8 : 1,
           project_id: projectId,
+          external_id: externalId,
+          thinking_level: thinkingLevel || undefined,
+          current_branch: currentBranch || undefined,
           stream: true,
           use_memory: true,
           memory_group_id: `${memoryGroupPrefix}${targetAgent}`,

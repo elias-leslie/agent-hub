@@ -10,6 +10,7 @@ interface MessageListProps {
   isStreaming: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onContinueMessage?: (messageId: string) => void;
   onContinueAs?: (model: string, prompt: string) => void;
 }
 
@@ -34,6 +35,7 @@ function MessageListInner({
   isStreaming,
   onEditMessage,
   onRegenerateMessage,
+  onContinueMessage,
   onContinueAs,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -67,9 +69,11 @@ function MessageListInner({
                       isStreaming={isStreaming && message.role === "assistant" && !message.content}
                       onEdit={onEditMessage}
                       onRegenerate={onRegenerateMessage}
+                      onContinue={onContinueMessage}
                       onContinueAs={onContinueAs}
                       canEdit={!isStreaming}
                       canRegenerate={!isStreaming}
+                      canContinue={!isStreaming}
                     />
                   </div>
                 ))}
@@ -90,9 +94,11 @@ function MessageListInner({
               }
               onEdit={onEditMessage}
               onRegenerate={onRegenerateMessage}
+              onContinue={onContinueMessage}
               onContinueAs={onContinueAs}
               canEdit={!isStreaming}
               canRegenerate={!isStreaming}
+              canContinue={!isStreaming}
             />
           );
         })}

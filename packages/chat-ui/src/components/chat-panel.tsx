@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState, useRef, useCallback, useEffect } from "react";
-import { PanelRight, PanelRightClose } from "lucide-react";
+import {
+  Archive,
+  CornerDownRight,
+  PanelRight,
+  PanelRightClose,
+  Play,
+  Split,
+} from "lucide-react";
 import { useChatStream, type ChatStreamApiConfig } from "../hooks/use-chat-stream";
 import type { ChatMessage } from "../types/chat";
 import { MessageList } from "./message-list";
@@ -58,6 +65,10 @@ export function ChatPanel({
     clearMessages,
     editMessage,
     regenerateMessage,
+    continueMessage,
+    resumeSession,
+    forkSession,
+    compactMessages,
   } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled, apiConfig });
 
   const [showDebug, setShowDebug] = useState(false);
@@ -132,18 +143,86 @@ export function ChatPanel({
   }, [status, wasVoiceMessage, alwaysSpeak, dbTtsEnabled, selectedVoice, messages]);
 
   const isStreaming = status === "streaming" || status === "reconnecting" || status === "cancelling";
+  const isBusy = status !== "idle" && status !== "error";
+  const lastAssistantMessage = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "assistant") ?? null,
+    [messages],
+  );
+  const runningTool = lastAssistantMessage?.toolExecutions?.find((tool) => tool.status === "running") ?? null;
+  const tokenTotal = messages.reduce(
+    (sum, message) => sum + (message.inputTokens ?? 0) + (message.outputTokens ?? 0) + (message.thinkingTokens ?? 0),
+    0,
+  );
+
+  const handleContinueLatest = useCallback(() => {
+    if (!lastAssistantMessage) return;
+    continueMessage(lastAssistantMessage.id);
+  }, [continueMessage, lastAssistantMessage]);
+
+  const handleFork = useCallback(() => {
+    void forkSession();
+  }, [forkSession]);
+
+  const handleCompact = useCallback(() => {
+    compactMessages();
+  }, [compactMessages]);
+
+  const handleResume = useCallback(() => {
+    const targetSessionId = sessionId ?? currentSessionId;
+    if (!targetSessionId) return;
+    void resumeSession(targetSessionId);
+  }, [currentSessionId, resumeSession, sessionId]);
 
   return (
     <div className="flex flex-row h-full">
       <div className="flex flex-col flex-1 h-full min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-100">
-            {title}
-          </h1>
-          <div className="flex items-center gap-3">
+        <div className="border-b border-gray-700 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold text-gray-100 sm:text-lg">
+                {title}
+              </h1>
+              <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-gray-500 md:flex">
+                <span>{currentSessionId ? `session ${currentSessionId.slice(0, 8)}` : "new session"}</span>
+                {agentSlug ? <span>agent {agentSlug}</span> : null}
+                {workingDir ? <span className="truncate">cwd {workingDir}</span> : null}
+                {toolsEnabled ? <span>tools on</span> : null}
+                {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}
+                {runningTool ? <span className="text-blue-300">running {runningTool.name}</span> : null}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
             {/* Activity indicator */}
             <ActivityIndicator state={status as ActivityState} />
+
+            <button
+              onClick={handleContinueLatest}
+              disabled={!lastAssistantMessage || isBusy}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Continue response"
+            >
+              <CornerDownRight className="h-4 w-4" />
+            </button>
+
+            <button
+              onClick={handleFork}
+              disabled={!currentSessionId || isBusy}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Fork session"
+            >
+              <Split className="h-4 w-4" />
+            </button>
+
+            <button
+              onClick={handleCompact}
+              disabled={messages.length < 8 || isBusy}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Compact context"
+            >
+              <Archive className="h-4 w-4" />
+            </button>
 
             {/* Clear button */}
             {messages.length > 0 && !isStreaming && (
@@ -165,6 +244,15 @@ export function ChatPanel({
                 {showDebug ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
               </button>
             )}
+            <button
+              onClick={handleResume}
+              disabled={!(sessionId ?? currentSessionId) || isBusy}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              title="Resume session"
+            >
+                <Play className="h-4 w-4" />
+            </button>
+            </div>
           </div>
         </div>
 
@@ -184,6 +272,8 @@ export function ChatPanel({
           isStreaming={isStreaming}
           onEditMessage={editMessage}
           onRegenerateMessage={regenerateMessage}
+          onContinueMessage={continueMessage}
+          onContinueAs={(model, prompt) => sendMessage(prompt, [model])}
         />
 
         {/* Input */}

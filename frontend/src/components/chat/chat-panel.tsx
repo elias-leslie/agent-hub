@@ -20,6 +20,9 @@ interface ChatPanelProps {
   onClear?: () => void;
   initialPrompt?: string;
   projectId?: string;
+  externalId?: string;
+  thinkingLevel?: string | null;
+  currentBranch?: string | null;
 }
 
 export function ChatPanel({
@@ -32,6 +35,9 @@ export function ChatPanel({
   onClear,
   initialPrompt,
   projectId = "agent-hub",
+  externalId,
+  thinkingLevel,
+  currentBranch,
 }: ChatPanelProps) {
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -76,7 +82,10 @@ export function ChatPanel({
     fetchFn: fetchApi,
     projectId,
     memoryGroupPrefix: "agent:",
-  }), [projectId]);
+    externalId,
+    thinkingLevel,
+    currentBranch,
+  }), [projectId, externalId, thinkingLevel, currentBranch]);
 
   return (
     <ChatPanelBase

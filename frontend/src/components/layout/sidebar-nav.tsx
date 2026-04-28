@@ -10,6 +10,7 @@ import {
   Cpu,
   User,
   FlaskConical,
+  MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  {
+    href: "/chat",
+    label: "Chat",
+    icon: MessageSquare,
+    description: "Primary agent workspace",
+  },
   {
     href: "/persona",
     label: "Persona",

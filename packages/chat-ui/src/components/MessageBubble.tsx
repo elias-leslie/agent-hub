@@ -14,9 +14,11 @@ interface MessageBubbleProps {
   isStreaming: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onContinue?: (messageId: string) => void;
   onContinueAs?: (model: string, prompt: string) => void;
   canEdit: boolean;
   canRegenerate: boolean;
+  canContinue?: boolean;
 }
 
 export function MessageBubble({
@@ -24,9 +26,11 @@ export function MessageBubble({
   isStreaming,
   onEdit,
   onRegenerate,
+  onContinue,
   onContinueAs,
   canEdit,
   canRegenerate,
+  canContinue = false,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
   const [isEditing, setIsEditing] = useState(false);
@@ -67,7 +71,9 @@ export function MessageBubble({
             isHovered={isHovered}
             canEdit={false}
             canRegenerate={canRegenerate}
+            canContinue={canContinue}
             onRegenerate={onRegenerate ? () => onRegenerate(message.id) : undefined}
+            onContinue={onContinue ? () => onContinue(message.id) : undefined}
           />
         )}
 

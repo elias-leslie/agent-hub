@@ -3,6 +3,7 @@ export { MessageInput } from './components/message-input';
 export { MessageList } from './components/message-list';
 export { MessageBubble } from './components/MessageBubble';
 export { MessageContent } from './components/MessageContent';
+export { MessageRuntimeDetails } from './components/MessageRuntimeDetails';
 export { MarkdownContent } from './components/MarkdownContent';
 export { MessageActions } from './components/MessageActions';
 export { EditableContent } from './components/EditableContent';
