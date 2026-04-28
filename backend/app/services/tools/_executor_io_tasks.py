@@ -39,9 +39,6 @@ _PERMISSION_MODE_MANUAL = "manual"
 _CLEANUP_REVIEW_MARKER = " review:"
 _CLEANUP_CONFLICTS_MARKER = " conflicts:"
 _CLEANUP_FINALIZE_MARKER = " finalize:"
-_NO_CHECKPOINT = "no_checkpoint"
-_TASK_NOT_FOUND = "task not found"
-_MERGED_STATUS = "merged"
 _PLAN_CONTEXT_LIST_FIELDS = ("files_to_modify", "files_to_create", "risks")
 _PLAN_ROOT_LIST_FIELDS = ("done_when", "constraints")
 
@@ -440,7 +437,7 @@ def _cleanup_finalize_warning(cleanup_status: str | None) -> str | None:
     if cleanup_status and _CLEANUP_FINALIZE_MARKER in cleanup_status:
         return (
             "WARNING: merge-ready residue detected in cleanup status. "
-            "Prefer finalize_merge, reconcile, or cleanup_checkpoints when convenient."
+            "Use reconcile or cleanup_checkpoints before dispatching more work."
         )
     return None
 
@@ -498,7 +495,7 @@ async def _cleanup_dispatch_block_reason(
     actionable = build_actionable_cleanup_summary_from_items(filtered_items)
     return (
         "Dispatch blocked: unresolved cleanup residue detected in cleanup status. "
-        "Use finalize_merge, reconcile, or cleanup_checkpoints before dispatching more work."
+        "Use reconcile or cleanup_checkpoints before dispatching more work."
         f"\n\n{actionable}"
     ), cleanup_status
 
@@ -735,65 +732,6 @@ async def _handle_cleanup_all_safe(
     return "\n\n".join(part for part in parts if part)
 
 
-async def _handle_smart_sync(
-    bash_fn: Callable[..., Awaitable[str]],
-    project_id: str | None,
-) -> str:
-    """Publish one project's coherent repo state via canonical smart-sync path."""
-    if error := _require_project_id(project_id, "smart_sync"):
-        return error
-    return await bash_fn(_st_cmd("smart-sync", project_id))
-
-
-def _parse_finalize_result(result: str) -> dict[str, Any] | None:
-    """Return finalize result JSON dict when command emitted one."""
-    try:
-        payload = json.loads(result)
-    except json.JSONDecodeError:
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
-def _finalize_no_checkpoint_message(result: str) -> str:
-    """Return no-checkpoint finalize guidance."""
-    return (
-        f"{result}\n"
-        "Task already appears closed: no checkpoint remains to finalize. "
-        "Treat this as closure evidence unless other task context still shows a live session."
-    )
-
-
-def _finalize_task_not_found_message(result: str) -> str:
-    """Return task-not-found finalize guidance."""
-    return (
-        f"{result}\n"
-        "Hint: a cleanup_status `review:` candidate is not a direct finalize_merge target. "
-        "Use cleanup_checkpoints, get_context, query_sessions, or reconcile first."
-    )
-
-
-async def _handle_finalize_merge(
-    bash_fn: Callable[..., Awaitable[str]],
-    task_id: str | None,
-    project_id: str | None,
-) -> str:
-    """Finalize merge/cleanup for residue task checkpoint."""
-    if error := _require_task_id(task_id, "finalize_merge"):
-        return error
-    result = await bash_fn(_st_cmd(f"git finalize-task {shlex.quote(task_id)}", project_id))
-    parsed = _parse_finalize_result(result)
-    if _NO_CHECKPOINT in result:
-        return _finalize_no_checkpoint_message(result)
-    if _TASK_NOT_FOUND in result.lower():
-        return _finalize_task_not_found_message(result)
-    if parsed and parsed.get("status") == _MERGED_STATUS:
-        from ._executor_io_lanes import _cleanup_explicit_lane
-
-        cleanup_result = await _cleanup_explicit_lane(bash_fn, task_id, project_id)
-        return f"{result}\nCheckpoint cleanup: {cleanup_result}"
-    return result
-
-
 async def _handle_resolve_conflict(
     bash_fn: Callable[..., Awaitable[str]],
     task_id: str | None,
@@ -805,16 +743,6 @@ async def _handle_resolve_conflict(
     return await bash_fn(_st_cmd(f"git resolve-conflict {shlex.quote(task_id)}", project_id))
 
 
-async def _handle_done(
-    bash_fn: Callable[..., Awaitable[str]],
-    task_id: str | None,
-) -> str:
-    """Mark task complete using admin path required for autonomous closeout."""
-    if error := _require_task_id(task_id, "done"):
-        return error
-    return await bash_fn(f"st complete {shlex.quote(task_id)} --admin")
-
-
 __all__ = [
     "_handle_cleanup_all_safe",
     "_handle_cleanup_checkpoints",
@@ -822,8 +750,5 @@ __all__ = [
     "_handle_cleanup_status",
     "_handle_create",
     "_handle_dispatch",
-    "_handle_done",
-    "_handle_finalize_merge",
     "_handle_resolve_conflict",
-    "_handle_smart_sync",
 ]

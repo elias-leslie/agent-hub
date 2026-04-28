@@ -22,10 +22,10 @@ depends_on: str | Sequence[str] | None = None
 
 HEARTBEAT_PROMPT = "persona-heartbeat-orchestrator"
 OLD_TEXT = (
-    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="finalize_merge", ...)`; `conflicts:` means finish merge resolution before dispatching more work, starting with `finalize_merge` for completed/blocked residue; `review:` means do NOT use `finalize_merge` blindly and do NOT dispatch more low-confidence work until you inspect or reconcile the residue.\n'
+    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="reconcile", ...)`; `conflicts:` means resolve active conflicts before dispatching more work, starting with `resolve_conflict` for active conflict residue or `reconcile` for terminal completed/blocked residue; `review:` means inspect or reconcile the residue before more low-confidence work.\n'
 )
 NEW_TEXT = (
-    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="finalize_merge", ...)`; `conflicts:` means use `manage_tasks(action="resolve_conflict", ...)` to reopen and dispatch conflict-resolution work on that exact task before any new low-confidence work; `review:` means do NOT use `finalize_merge` blindly and do NOT dispatch more low-confidence work until you inspect or reconcile the residue.\n'
+    '- Treat `cleanup_status` as the short decision surface. Map it literally: `finalize:` means use `manage_tasks(action="reconcile", ...)`; `conflicts:` means use `manage_tasks(action="resolve_conflict", ...)` to reopen and dispatch conflict-resolution work on that exact task before any new low-confidence work; `review:` means inspect or reconcile the residue before more low-confidence work.\n'
 )
 
 

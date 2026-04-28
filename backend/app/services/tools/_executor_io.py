@@ -24,9 +24,7 @@ from ._executor_io_tasks import (
     _handle_cleanup_status,
     _handle_create,
     _handle_dispatch,
-    _handle_finalize_merge,
     _handle_resolve_conflict,
-    _handle_smart_sync,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,7 +32,7 @@ logger = logging.getLogger(__name__)
 _SIMPLE_TASK_ACTIONS = frozenset({"done", "abandon", "cancel"})
 _UNKNOWN_ACTIONS = (
     "overview/get_context/create/dispatch/cleanup_status/cleanup_checkpoints/"
-    "salvage_orphan/cleanup_all_safe/smart_sync/finalize_merge/resolve_conflict/"
+    "salvage_orphan/cleanup_all_safe/resolve_conflict/"
     "reconcile/retire_lane/done/abandon/cancel"
 )
 
@@ -139,10 +137,6 @@ async def _handle_project_action(
         return await _handle_cleanup_salvage_orphan(bash_fn, task_id, project_id)
     if action == "cleanup_all_safe":
         return await _handle_cleanup_all_safe(bash_fn)
-    if action == "smart_sync":
-        return await _handle_smart_sync(bash_fn, project_id)
-    if action == "finalize_merge":
-        return await _handle_finalize_merge(bash_fn, task_id, project_id)
     if action == "resolve_conflict":
         return await _handle_resolve_conflict(bash_fn, task_id, project_id)
     return None
