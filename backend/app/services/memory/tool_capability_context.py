@@ -42,6 +42,8 @@ _TOOL_SPECS: tuple[_ToolCapabilitySpec, ...] = (
         command_allowlist=(
             "search", "memory", "prompt", "session-events", "sessions",
             "pulse", "cleanup", "persona", "agents", "complete",
+            "check", "db", "browser", "web", "service", "tools",
+            "commit", "jj", "vcs", "backup", "vm",
         ),
     ),
     _ToolCapabilitySpec(
@@ -275,7 +277,11 @@ def _extract_rebuild_flags(help_text: str) -> list[str]:
     return flags
 
 
-def _build_tool_entry(spec: _ToolCapabilitySpec) -> dict[str, Any] | None:
+def _build_tool_entry(
+    spec: _ToolCapabilitySpec,
+    *,
+    st_quick: list[str] | None = None,
+) -> dict[str, Any] | None:
     help_text = _read_help_output(spec.help_command)
     if not help_text:
         return None
@@ -309,6 +315,8 @@ def _build_tool_entry(spec: _ToolCapabilitySpec) -> dict[str, Any] | None:
         entry["commands"] = filtered_commands
     if filtered_flags:
         entry["flags"] = filtered_flags
+    if spec.name == "st" and st_quick:
+        entry["quick"] = st_quick
     return entry
 
 
@@ -318,6 +326,7 @@ def build_tool_capability_payload(
     task_type: str | None = None,
     project_id: str | None = None,
     bash_available: bool | None = None,
+    st_quick: list[str] | None = None,
 ) -> dict[str, Any] | None:
     if bash_available is False:
         return None
@@ -331,7 +340,7 @@ def build_tool_capability_payload(
             project_id=project_id,
         ):
             continue
-        entry = _build_tool_entry(spec)
+        entry = _build_tool_entry(spec, st_quick=st_quick)
         if entry is not None:
             tools.append(entry)
 
@@ -346,12 +355,14 @@ def format_tool_capability_context(
     task_type: str | None = None,
     project_id: str | None = None,
     bash_available: bool | None = None,
+    st_quick: list[str] | None = None,
 ) -> str:
     payload = build_tool_capability_payload(
         consumer_profile=consumer_profile,
         task_type=task_type,
         project_id=project_id,
         bash_available=bash_available,
+        st_quick=st_quick,
     )
     if not payload:
         return ""

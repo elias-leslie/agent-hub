@@ -23,12 +23,15 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
             consumer_profile="agent_runtime",
             task_type="backend",
             project_id="agent-hub",
+            st_quick=["st pulse --gate | preflight; edit only if clear"],
         )
 
     assert "<tool-capabilities>" in rendered
     assert "tool: st" in rendered
     assert "discover: st --help" in rendered
     assert "commands:" in rendered
+    assert "quick:" in rendered
+    assert "st pulse --gate" in rendered
     assert "--check" in rendered
     assert "rebuild.sh" in rendered
 
