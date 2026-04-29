@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -359,9 +360,22 @@ async def test_build_agent_preview_includes_tool_capabilities_when_enabled() -> 
             return_value="",
         ),
         patch(
+            "app.api.helpers.agent_preview.get_visible_tools_for_project",
+            new=AsyncMock(return_value=frozenset({"bash"})),
+        ),
+        patch(
+            "app.api.helpers.agent_preview.get_recent_st_usage_memory",
+            new=AsyncMock(
+                return_value=SimpleNamespace(
+                    quick=["st pulse --gate | preflight; edit only if clear"],
+                    observed=4,
+                )
+            ),
+        ),
+        patch(
             "app.api.helpers.agent_preview.format_tool_capability_context",
             return_value="<tool-capabilities>\ntools:\n  - tool: st\n</tool-capabilities>",
-        ),
+        ) as mock_tool_capabilities,
         patch(
             "app.api.helpers.agent_preview.build_progressive_context",
             new_callable=AsyncMock,
@@ -382,6 +396,9 @@ async def test_build_agent_preview_includes_tool_capabilities_when_enabled() -> 
     assert preview["sections"][0]["source_kind"] == "tool_capabilities"
     assert "<tool-capabilities>" in preview["combined_prompt"]
     assert preview["full_context"].startswith("<tool-capabilities>")
+    assert mock_tool_capabilities.call_args.kwargs["st_quick"] == [
+        "st pulse --gate | preflight; edit only if clear"
+    ]
 
 
 @pytest.mark.asyncio
