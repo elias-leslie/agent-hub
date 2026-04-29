@@ -56,6 +56,53 @@ router = APIRouter()
 # Re-export schemas for backward compatibility
 __all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
 
+_SESSION_STORED_STATUSES = {"active", "completed", "failed"}
+_SESSION_STATUS_ALIASES = {"running": "active", "stale": "active", "reapable": "active"}
+_SESSION_LIVE_STATUS_ALIASES = {"stale", "reapable"}
+
+
+def _normalize_session_status_filter(status: str | None) -> str | None:
+    if not status:
+        return None
+    normalized = status.strip().lower()
+    if normalized in _SESSION_STATUS_ALIASES:
+        return _SESSION_STATUS_ALIASES[normalized]
+    if normalized not in _SESSION_STORED_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Unsupported session status: {status}")
+    return normalized
+
+
+def _session_live_activity(session: Any) -> dict[str, Any]:
+    metadata = getattr(session, "provider_metadata", None)
+    if not isinstance(metadata, dict):
+        return {}
+    live_activity = metadata.get("live_activity")
+    return live_activity if isinstance(live_activity, dict) else {}
+
+
+def _session_matches_live_status_alias(session: Any, status: str | None) -> bool:
+    if not status:
+        return True
+    normalized = status.strip().lower()
+    if normalized not in _SESSION_LIVE_STATUS_ALIASES:
+        return True
+    live_activity = _session_live_activity(session)
+    if not live_activity:
+        return False
+    state = str(
+        live_activity.get("lifecycle_state")
+        or live_activity.get("status")
+        or live_activity.get("state")
+        or ""
+    ).lower()
+    if normalized == "reapable":
+        return bool(live_activity.get("reapable")) or state == "reapable"
+    return bool(live_activity.get("is_stale")) or bool(live_activity.get("reapable")) or state in {
+        "reapable",
+        "stale",
+        "stalled",
+    }
+
 
 def _normalize_list_sessions_stats(
     result: Sequence[Any],
@@ -255,10 +302,11 @@ async def list_sessions(
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
+    stored_status = _normalize_session_status_filter(status)
     raw_stats = await list_sessions_with_stats(
         db,
         project_id=project_id,
-        status=status,
+        status=stored_status,
         agent_slug=agent_slug,
         session_type=session_type,
         page=page,
@@ -269,6 +317,9 @@ async def list_sessions(
     sessions, total, msg_counts, event_counts, token_stats, child_counts, active_child_counts = (
         _normalize_list_sessions_stats(raw_stats)
     )
+    if status and status.strip().lower() in _SESSION_LIVE_STATUS_ALIASES:
+        sessions = [session for session in sessions if _session_matches_live_status_alias(session, status)]
+        total = len(sessions)
     owner_session_ids, specialist_session_ids = await build_project_lane_session_ids(
         db,
         {session.project_id for session in sessions},

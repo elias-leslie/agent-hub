@@ -21,7 +21,7 @@ from app.models.prompt import Prompt
 from app.services.persona_identity import DEFAULT_PERSONA_DISPLAY_NAME, PERSONA_SLUG
 from app.services.prompt_catalog import build_agent_system_prompt_slug
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 SEED_FILE = Path(__file__).parent / "seed_agents_data" / "seed_data.json"
