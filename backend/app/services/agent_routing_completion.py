@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 _COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.TimeoutError)
 _DEFAULT_RATE_LIMIT_COOLDOWN = 60.0
+_UNSUPPORTED_NATIVE_THINKING_PROVIDERS = {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}
 _RATE_LIMIT_BREAKER = CircuitBreakerManager(list_providers())
 
 
@@ -60,6 +61,46 @@ async def _active_cooldown_error(provider: str) -> RateLimitError | None:
     )
 
 
+def _build_completion_kwargs(
+    model: str,
+    provider: str,
+    thinking_level: str | None,
+    verbosity_level: str | None,
+    prompt_cache_key: str | None,
+) -> dict[str, object]:
+    """Build provider-specific kwargs for adapter.complete."""
+    extra_kwargs: dict[str, object] = {}
+    if thinking_level:
+        thinking_config = get_thinking_config(model, thinking_level, provider)
+        if thinking_config:
+            extra_kwargs.update(thinking_config)
+        elif provider not in _UNSUPPORTED_NATIVE_THINKING_PROVIDERS:
+            extra_kwargs["thinking_level"] = thinking_level
+    capabilities = get_model_capabilities(model)
+    if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
+        extra_kwargs["verbosity_level"] = verbosity_level
+    if prompt_cache_key:
+        extra_kwargs["prompt_cache_key"] = prompt_cache_key
+    return extra_kwargs
+
+
+async def _record_completion_error(
+    provider: str,
+    model: str,
+    error: BaseException,
+    start: float,
+) -> None:
+    """Record provider failure and rate-limit state for a completion error."""
+    if isinstance(error, RateLimitError):
+        await _RATE_LIMIT_BREAKER.trip(
+            provider,
+            cooldown_seconds=_resolve_retry_after_seconds(error),
+            error_signature=f"rate_limit:{provider}",
+        )
+    record_provider_failure(provider, str(error), (time.monotonic() - start) * 1000)
+    logger.warning("Model %s failed: %s", model, error)
+
+
 async def _try_model(
     messages: list[Message],
     model: str,
@@ -84,40 +125,26 @@ async def _try_model(
     start = time.monotonic()
     try:
         adapter = get_adapter(provider)
-        # Convert thinking_level to provider-specific kwargs (e.g. reasoning_effort for Codex/OpenAI)
-        extra_kwargs: dict[str, object] = {}
-        if thinking_level:
-            thinking_config = get_thinking_config(model, thinking_level, provider)
-            if thinking_config:
-                extra_kwargs.update(thinking_config)
-            elif provider not in {"codex", "openai", "openrouter", "zhipu", "minimax", "xai"}:
-                extra_kwargs["thinking_level"] = thinking_level
-        capabilities = get_model_capabilities(model)
-        if verbosity_level and (capabilities is None or capabilities.supports_verbosity):
-            extra_kwargs["verbosity_level"] = verbosity_level
-        if prompt_cache_key:
-            extra_kwargs["prompt_cache_key"] = prompt_cache_key
         result = await adapter.complete(
             messages=messages,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             tools=tools,
-            **extra_kwargs,
+            **_build_completion_kwargs(
+                model,
+                provider,
+                thinking_level,
+                verbosity_level,
+                prompt_cache_key,
+            ),
         )
         record_provider_success(provider, (time.monotonic() - start) * 1000)
         await _RATE_LIMIT_BREAKER.on_success(provider)
         return result, None
-    except _COMPLETION_ERRORS as e:
-        if isinstance(e, RateLimitError):
-            await _RATE_LIMIT_BREAKER.trip(
-                provider,
-                cooldown_seconds=_resolve_retry_after_seconds(e),
-                error_signature=f"rate_limit:{provider}",
-            )
-        record_provider_failure(provider, str(e), (time.monotonic() - start) * 1000)
-        logger.warning("Model %s failed: %s", model, e)
-        return None, e
+    except _COMPLETION_ERRORS as error:
+        await _record_completion_error(provider, model, error, start)
+        return None, error
 
 
 async def _try_primary(
@@ -137,7 +164,7 @@ async def _try_primary(
     if result is None:
         logger.warning("Primary model %s failed for agent %s", agent.primary_model_id, agent.slug)
         return None
-    return CompletionResult(
+    return _completion_result(
         result=result,
         model_used=agent.primary_model_id,
         used_fallback=False,
@@ -172,7 +199,7 @@ async def _try_fallbacks(
         )
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
-            return CompletionResult(result=result, model_used=fallback_model, used_fallback=True)
+            return _completion_result(result=result, model_used=fallback_model, used_fallback=True)
         if isinstance(_error, RateLimitError):
             blocked_providers.add(fallback_provider)
     return None
@@ -212,7 +239,23 @@ async def _try_escalation(
             blocked_providers.add(escalation_provider)
         return None
     logger.info("Agent %s escalated to model: %s", agent.slug, escalation)
-    return CompletionResult(result=result, model_used=escalation, used_fallback=True)
+    return _completion_result(result=result, model_used=escalation, used_fallback=True)
+
+
+def _completion_result(
+    *,
+    result: object,
+    model_used: str,
+    used_fallback: bool,
+    fallback_reason: str | None = None,
+) -> CompletionResult:
+    """Build completion result payload."""
+    return CompletionResult(
+        result=result,
+        model_used=model_used,
+        used_fallback=used_fallback,
+        fallback_reason=fallback_reason,
+    )
 
 
 def _raise_all_models_failed(
@@ -224,6 +267,21 @@ def _raise_all_models_failed(
         message=f"All models failed for agent {agent.slug}: primary={primary_model}, "
         f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}, "
         f"primary_error={primary_reason}",
+    )
+
+
+async def _raise_primary_rate_limit(primary_error: RateLimitError) -> NoReturn:
+    """Raise primary rate limit with refreshed cooldown window."""
+    raise RateLimitError(
+        provider=primary_error.provider,
+        retry_after=max(
+            1.0,
+            math.ceil(
+                await get_provider_rate_limit_cooldown_remaining(primary_error.provider)
+                or _resolve_retry_after_seconds(primary_error)
+            ),
+        ),
+        quota_details=primary_error.quota_details,
     )
 
 
@@ -254,10 +312,10 @@ async def complete_with_fallback(
         messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level, prompt_cache_key
     )
     if result is not None:
-        return CompletionResult(
-            result=result, model_used=primary_model,
+        return _completion_result(
+            result=result,
+            model_used=primary_model,
             used_fallback=primary_model != agent.primary_model_id,
-            fallback_reason=None,
         )
     logger.warning("Primary model %s failed for agent %s", primary_model, agent.slug)
     if isinstance(primary_error, RateLimitError):
@@ -297,17 +355,7 @@ async def complete_with_fallback(
         return escalation_result
 
     if isinstance(primary_error, RateLimitError):
-        raise RateLimitError(
-            provider=primary_error.provider,
-            retry_after=max(
-                1.0,
-                math.ceil(
-                    await get_provider_rate_limit_cooldown_remaining(primary_error.provider)
-                    or _resolve_retry_after_seconds(primary_error)
-                ),
-            ),
-            quota_details=primary_error.quota_details,
-        )
+        await _raise_primary_rate_limit(primary_error)
 
     _raise_all_models_failed(agent, primary_model, primary_reason)
 
