@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants.projects import get_known_roots
 from app.db import get_db
 from app.models.project_permission import VALID_PERMISSION_TIERS
 from app.services.project_permission_service import (
@@ -114,6 +115,12 @@ async def list_permissions(
     """List all project permissions."""
     perms = await list_project_permissions(db)
     return [_to_response(p) for p in perms]
+
+
+@router.get("/roots", response_model=dict[str, str])
+async def list_project_roots() -> dict[str, str]:
+    """List canonical project roots keyed by project ID."""
+    return get_known_roots()
 
 
 @router.post("/permissions", response_model=ProjectPermissionResponse, status_code=201)

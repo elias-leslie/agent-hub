@@ -131,10 +131,12 @@ export type {
   ProjectPermissionCreate,
   ProjectPermissionUpdate,
   ExecutionPermission,
+  ProjectRoots,
 } from "./api/project-permissions";
 export {
   createProjectPermission,
   fetchProjectPermissions,
+  fetchProjectRoots,
   updateProjectPermission,
   fetchExecutionPermission,
 } from "./api/project-permissions";

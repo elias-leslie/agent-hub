@@ -107,6 +107,24 @@ class TestListPermissions:
 
 
 # ---------------------------------------------------------------------------
+# GET /api/projects/roots
+# ---------------------------------------------------------------------------
+
+
+class TestListProjectRoots:
+    @pytest.mark.asyncio
+    async def test_returns_canonical_project_roots(self, client):
+        ac, _ = client
+        with patch(
+            "app.api.project_permissions.get_known_roots",
+            return_value={"agent-hub": "/srv/workspaces/projects/agent-hub"},
+        ):
+            resp = await ac.get("/api/projects/roots")
+            assert resp.status_code == 200
+            assert resp.json() == {"agent-hub": "/srv/workspaces/projects/agent-hub"}
+
+
+# ---------------------------------------------------------------------------
 # POST /api/projects/permissions
 # ---------------------------------------------------------------------------
 

@@ -10,6 +10,13 @@ import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
 import { getApiBaseUrl, getCompleteApiUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
 
+const VALID_THINKING_LEVELS = new Set(["minimal", "low", "medium", "high", "ultrathink"]);
+
+export function normalizeThinkingLevel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return VALID_THINKING_LEVELS.has(value) ? value : null;
+}
+
 interface ChatPanelProps {
   agent?: Agent;
   agentSlug?: string;
@@ -83,7 +90,7 @@ export function ChatPanel({
     projectId,
     memoryGroupPrefix: "agent:",
     externalId,
-    thinkingLevel,
+    thinkingLevel: normalizeThinkingLevel(thinkingLevel),
     currentBranch,
   }), [projectId, externalId, thinkingLevel, currentBranch]);
 
