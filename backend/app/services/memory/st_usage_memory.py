@@ -24,17 +24,44 @@ _HELP_FLAGS = {"-h", "--help"}
 
 
 @dataclass(frozen=True)
+class StUsageQuickEntry:
+    """One injected st quick-use line split for UI display."""
+
+    command: str
+    description: str
+    source: str
+
+
+@dataclass(frozen=True)
+class StUsageCommandMetric:
+    """Observed usage metrics for one st command key."""
+
+    command_key: str
+    uses: int
+    help_lookups: int
+    injected_example: str | None = None
+    last_seen: str | None = None
+
+
+@dataclass(frozen=True)
 class StUsageMemory:
     """Compact injected memory for st command usage."""
 
     quick: list[str]
     observed: int
+    help_count: int
+    generated_at: datetime
+    quick_entries: list[StUsageQuickEntry]
+    command_metrics: list[StUsageCommandMetric]
+    cache_ttl_seconds: int = _CACHE_TTL_SECONDS
+    lookback: str = "14d"
 
 
 @dataclass
 class _CommandStats:
     uses: int = 0
     helps: int = 0
+    last_seen: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -184,8 +211,28 @@ def _seed_keys(task_type: str | None) -> list[str]:
     return keys
 
 
+def _split_quick_entry(line: str, *, source: str) -> StUsageQuickEntry:
+    command, sep, description = line.partition(" | ")
+    return StUsageQuickEntry(
+        command=command.strip(),
+        description=description.strip() if sep else "",
+        source=source,
+    )
+
+
+def _build_command_metric(key: str, stats: _CommandStats) -> StUsageCommandMetric:
+    last_seen = stats.last_seen
+    return StUsageCommandMetric(
+        command_key=key,
+        uses=stats.uses,
+        help_lookups=stats.helps,
+        injected_example=_STATIC_QUICK_USE.get(key),
+        last_seen=last_seen.isoformat() if last_seen is not None else None,
+    )
+
+
 def build_st_usage_memory_from_commands(
-    commands: list[str],
+    commands: list[str] | list[tuple[str, datetime]],
     *,
     task_type: str | None = None,
     max_entries: int = 8,
@@ -193,7 +240,13 @@ def build_st_usage_memory_from_commands(
     """Build quick-use memory from raw command strings plus curated fallback."""
     stats: dict[str, _CommandStats] = {}
     observed = 0
-    for command in commands:
+    generated_at = datetime.now(UTC)
+    for item in commands:
+        if isinstance(item, tuple):
+            command, created_at = item
+        else:
+            command = item
+            created_at = generated_at
         parsed = parse_st_command(command)
         if parsed is None:
             continue
@@ -203,12 +256,16 @@ def build_st_usage_memory_from_commands(
             bucket.helps += 1
         else:
             bucket.uses += 1
+        if bucket.last_seen is None or created_at > bucket.last_seen:
+            bucket.last_seen = created_at
 
     selected: list[str] = []
+    selected_keys: list[str] = []
     for key in _seed_keys(task_type):
         entry = _STATIC_QUICK_USE.get(key)
         if entry and entry not in selected:
             selected.append(entry)
+            selected_keys.append(key)
 
     ranked_keys = sorted(
         stats,
@@ -219,18 +276,34 @@ def build_st_usage_memory_from_commands(
         entry = _STATIC_QUICK_USE.get(key)
         if entry and entry not in selected:
             selected.append(entry)
+            selected_keys.append(key)
         if len(selected) >= max_entries:
             break
 
-    return StUsageMemory(quick=selected[:max_entries], observed=observed)
+    selected = selected[:max_entries]
+    selected_keys = selected_keys[:max_entries]
+    quick_entries = [
+        _split_quick_entry(line, source="learned" if key in stats and stats[key].uses > 0 else "fallback")
+        for key, line in zip(selected_keys, selected, strict=False)
+    ]
+    command_metrics = [_build_command_metric(key, stats[key]) for key in ranked_keys[:max_entries]]
+
+    return StUsageMemory(
+        quick=selected,
+        observed=observed,
+        help_count=sum(bucket.helps for bucket in stats.values()),
+        generated_at=generated_at,
+        quick_entries=quick_entries,
+        command_metrics=command_metrics,
+    )
 
 
-def _extract_commands_from_rows(rows: list[tuple[Any, str | None]]) -> list[str]:
-    commands: list[str] = []
-    for tool_input, content in rows:
+def _extract_commands_from_rows(rows: list[tuple[Any, str | None, datetime]]) -> list[tuple[str, datetime]]:
+    commands: list[tuple[str, datetime]] = []
+    for tool_input, content, created_at in rows:
         command = _command_from_payload(tool_input) or _command_from_payload(content)
         if command:
-            commands.append(command)
+            commands.append((command, created_at))
     return commands
 
 
@@ -239,11 +312,11 @@ async def _fetch_recent_st_command_rows(
     *,
     project_id: str | None,
     since: datetime,
-) -> list[tuple[Any, str | None]]:
+) -> list[tuple[Any, str | None, datetime]]:
     tool_input_text = SessionEvent.tool_input.cast(Text)
     content_text = SessionEvent.content.cast(Text)
     stmt = (
-        select(SessionEvent.tool_input, SessionEvent.content)
+        select(SessionEvent.tool_input, SessionEvent.content, SessionEvent.created_at)
         .where(
             SessionEvent.event_type == SessionEventType.TOOL_USE,
             SessionEvent.created_at >= since,
@@ -259,9 +332,9 @@ async def _fetch_recent_st_command_rows(
     if project_id:
         stmt = stmt.join(Session, Session.id == SessionEvent.session_id).where(
             Session.project_id == project_id
-        )
+    )
     result = await db.execute(stmt)
-    return [(tool_input, content) for tool_input, content in result.all()]
+    return [(tool_input, content, created_at) for tool_input, content, created_at in result.all()]
 
 
 async def get_recent_st_usage_memory(

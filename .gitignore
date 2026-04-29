@@ -68,6 +68,14 @@ backup-index.json
 # Reference repos
 references/
 
+# Graphify local artifacts
+graphify-out/cache/
+graphify-out/graph.json
+graphify-out/manifest.json
+graphify-out/.graphify_*.json
+graphify-out/.graphify_root
+graphify-out/graph.html.skipped.txt
+
 # Vendored packages
 packages/graphiti/
 

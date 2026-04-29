@@ -10,7 +10,10 @@ import {
   Trophy,
   Heart,
   ArrowUpDown,
+  Braces,
+  Clock,
   Search,
+  Terminal,
 } from "lucide-react";
 import { type MemoryAnalyticsDashboard } from "@/lib/memory-api";
 import {
@@ -144,6 +147,101 @@ function UtilizationSummary({
   );
 }
 
+function StUsageMemoryBand({
+  analytics,
+}: {
+  analytics: MemoryAnalyticsDashboard["activity"]["st_usage"];
+}) {
+  const quickEntries = analytics.quick_entries.slice(0, 5);
+  const metrics = [
+    {
+      label: "Observed",
+      value: analytics.observed_commands.toLocaleString(),
+    },
+    {
+      label: "Injected",
+      value: analytics.quick_entry_count.toLocaleString(),
+    },
+    {
+      label: "Help Rate",
+      value: `${(analytics.help_rate * 100).toFixed(1)}%`,
+    },
+    {
+      label: "Cache",
+      value: `${analytics.cache_ttl_seconds}s`,
+    },
+  ];
+
+  return (
+    <section className="rounded-lg border border-sky-500/20 bg-slate-900/60 p-5 shadow-lg shadow-black/10">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <SectionHeader title="st Quick-Use Memory" icon={Terminal} />
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+          <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1">
+            lookback {analytics.lookback}
+          </span>
+          <span className="rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1">
+            learned + fallback
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.95fr]">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            {metrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="border-l border-slate-700/80 pl-3"
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  {metric.label}
+                </div>
+                <div className="mt-1 font-mono text-xl font-semibold tabular-nums text-slate-100">
+                  {metric.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-2">
+            {quickEntries.map((entry) => (
+              <div
+                key={`${entry.command}-${entry.description}`}
+                className="grid gap-2 rounded-md border border-slate-800/90 bg-slate-950/50 px-3 py-2 text-xs md:grid-cols-[minmax(180px,240px)_1fr_auto] md:items-center"
+              >
+                <code className="break-words font-mono text-slate-100">
+                  {entry.command}
+                </code>
+                <span className="text-slate-400">{entry.description}</span>
+                <span className="w-fit rounded-full border border-slate-700 px-2 py-0.5 text-[10px] uppercase tracking-widest text-slate-500">
+                  {entry.source}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-md border border-slate-800/90 bg-slate-950/70">
+          <div className="flex items-center gap-2 border-b border-slate-800/90 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <Braces className="h-3.5 w-3.5 text-sky-400" />
+            Prompt Payload
+          </div>
+          <pre className="max-h-56 overflow-auto whitespace-pre-wrap px-3 py-3 font-mono text-xs leading-5 text-slate-300">
+            {analytics.payload_preview || "No st usage payload available."}
+          </pre>
+          <div className="flex items-center gap-2 border-t border-slate-800/90 px-3 py-2 text-xs text-slate-500">
+            <Clock className="h-3.5 w-3.5" />
+            {analytics.generated_at
+              ? new Date(analytics.generated_at).toLocaleString()
+              : "Not generated yet"}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 interface StateDistributionRowProps {
   analytics: MemoryAnalyticsDashboard["state"];
   onTierClick: (tier: string) => void;
@@ -230,6 +328,7 @@ export function AnalyticsContent({
         <SectionHeader title={`Recent Activity (${analytics.activity.lookback})`} icon={TrendingUp} />
         <ActivityKpiCards analytics={analytics.activity} />
       </div>
+      <StUsageMemoryBand analytics={analytics.activity.st_usage} />
       <UtilizationSummary analytics={analytics.activity.utilization} />
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
         <SectionHeader title="Injection Metrics Over Time" icon={TrendingUp} />

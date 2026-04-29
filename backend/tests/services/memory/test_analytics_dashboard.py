@@ -17,6 +17,11 @@ from app.services.memory.analytics_service import (
     _build_outcome_summary,
     get_memory_dashboard,
 )
+from app.services.memory.st_usage_memory import (
+    StUsageCommandMetric,
+    StUsageMemory,
+    StUsageQuickEntry,
+)
 
 
 def test_build_outcome_summary_tracks_coverage_and_unknowns() -> None:
@@ -141,6 +146,32 @@ async def test_get_memory_dashboard_separates_state_and_activity() -> None:
                 memory_debug_coverage_rate=1.0,
             ),
         ),
+        patch(
+            "app.services.memory.analytics_service.get_recent_st_usage_memory",
+            new_callable=AsyncMock,
+            return_value=StUsageMemory(
+                quick=["st pulse --gate | preflight; edit only if clear"],
+                observed=5,
+                help_count=1,
+                generated_at=now,
+                quick_entries=[
+                    StUsageQuickEntry(
+                        command="st pulse --gate",
+                        description="preflight; edit only if clear",
+                        source="learned",
+                    )
+                ],
+                command_metrics=[
+                    StUsageCommandMetric(
+                        command_key="pulse",
+                        uses=4,
+                        help_lookups=1,
+                        injected_example="st pulse --gate | preflight; edit only if clear",
+                        last_seen=now.isoformat(),
+                    )
+                ],
+            ),
+        ),
     ):
         dashboard = await get_memory_dashboard(
             lookback_delta=timedelta(hours=1),
@@ -156,3 +187,6 @@ async def test_get_memory_dashboard_separates_state_and_activity() -> None:
     assert dashboard.activity.injection_metrics.outcomes.unknown_count == 1
     assert dashboard.activity.utilization.lookup_after_injection_sessions == 2
     assert dashboard.activity.utilization.selected_reference_citation_rate == 0.5
+    assert dashboard.activity.st_usage.observed_commands == 5
+    assert dashboard.activity.st_usage.help_rate == 0.2
+    assert dashboard.activity.st_usage.quick_entries[0].command == "st pulse --gate"

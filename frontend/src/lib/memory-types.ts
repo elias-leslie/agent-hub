@@ -289,11 +289,39 @@ export interface MemoryUtilizationMetrics {
   memory_debug_coverage_rate: number;
 }
 
+export interface StUsageQuickEntry {
+  command: string;
+  description: string;
+  source: string;
+}
+
+export interface StUsageCommandMetric {
+  command_key: string;
+  uses: number;
+  help_lookups: number;
+  injected_example: string | null;
+  last_seen: string | null;
+}
+
+export interface StUsageSummary {
+  observed_commands: number;
+  help_lookups: number;
+  help_rate: number;
+  quick_entry_count: number;
+  quick_entries: StUsageQuickEntry[];
+  command_metrics: StUsageCommandMetric[];
+  payload_preview: string;
+  cache_ttl_seconds: number;
+  lookback: string;
+  generated_at: string | null;
+}
+
 export interface MemoryAnalyticsActivity {
   lookback: string;
   usage_totals: UsageTotals & { success: number };
   injection_metrics: MetricsDashboard;
   utilization: MemoryUtilizationMetrics;
+  st_usage: StUsageSummary;
   tier_changes: TierChangesSummary;
 }
 

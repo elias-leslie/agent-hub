@@ -21,6 +21,9 @@ from .analytics_models import (
     MemoryAnalyticsState,
     MemoryUtilizationMetrics,
     OutcomeSummary,
+    StUsageCommandMetricModel,
+    StUsageQuickEntryModel,
+    StUsageSummary,
     TimePeriodMetrics,
     TopMemory,
     UsageTotals,
@@ -36,6 +39,7 @@ from .analytics_queries import (
     get_top_memories_query,
     get_usage_aggregates,
 )
+from .st_usage_memory import StUsageMemory, get_recent_st_usage_memory
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,52 @@ def _normalize_usage_totals(raw: dict[str, int]) -> UsageTotals:
         helpful=raw.get("helpful", 0),
         harmful=raw.get("harmful", 0),
         success=raw.get("success", 0),
+    )
+
+
+def _build_st_usage_payload_preview(quick: list[str]) -> str:
+    """Return a compact prompt payload preview for the analytics UI."""
+    lines = [
+        "<tool-capabilities>",
+        "tools:",
+        "- tool: st",
+        "  quick:",
+    ]
+    lines.extend(f"  - {entry}" for entry in quick)
+    lines.append("</tool-capabilities>")
+    return "\n".join(lines)
+
+
+def _build_st_usage_summary(memory: StUsageMemory) -> StUsageSummary:
+    """Convert st usage memory into the dashboard response model."""
+    help_rate = round(memory.help_count / memory.observed, 3) if memory.observed else 0.0
+    return StUsageSummary(
+        observed_commands=memory.observed,
+        help_lookups=memory.help_count,
+        help_rate=help_rate,
+        quick_entry_count=len(memory.quick),
+        quick_entries=[
+            StUsageQuickEntryModel(
+                command=entry.command,
+                description=entry.description,
+                source=entry.source,
+            )
+            for entry in memory.quick_entries
+        ],
+        command_metrics=[
+            StUsageCommandMetricModel(
+                command_key=metric.command_key,
+                uses=metric.uses,
+                help_lookups=metric.help_lookups,
+                injected_example=metric.injected_example,
+                last_seen=metric.last_seen,
+            )
+            for metric in memory.command_metrics
+        ],
+        payload_preview=_build_st_usage_payload_preview(memory.quick),
+        cache_ttl_seconds=memory.cache_ttl_seconds,
+        lookback=memory.lookback,
+        generated_at=memory.generated_at.isoformat(),
     )
 
 
@@ -291,6 +341,12 @@ async def get_memory_dashboard(
         lookback_delta,
         project_id_filter=project_id_filter,
     )
+    st_usage = _build_st_usage_summary(
+        await get_recent_st_usage_memory(
+            project_id=project_id_filter,
+            task_type=None,
+        )
+    )
     tier_changes = await get_tier_changes_summary(lookback_delta=lookback_delta)
 
     state = MemoryAnalyticsState(
@@ -308,6 +364,7 @@ async def get_memory_dashboard(
         usage_totals=activity_usage_totals,
         injection_metrics=injection_metrics,
         utilization=utilization,
+        st_usage=st_usage,
         tier_changes=tier_changes,
     )
     return MemoryAnalyticsDashboard(state=state, activity=activity)
