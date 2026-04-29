@@ -1,6 +1,6 @@
 """Pydantic models for memory analytics."""
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TierDistribution(BaseModel):
@@ -122,6 +122,39 @@ class MemoryUtilizationMetrics(BaseModel):
     memory_debug_coverage_rate: float
 
 
+class StUsageQuickEntryModel(BaseModel):
+    """One st quick-use example injected into tool capabilities."""
+
+    command: str
+    description: str
+    source: str
+
+
+class StUsageCommandMetricModel(BaseModel):
+    """Observed usage metrics for a single st command key."""
+
+    command_key: str
+    uses: int
+    help_lookups: int
+    injected_example: str | None = None
+    last_seen: str | None = None
+
+
+class StUsageSummary(BaseModel):
+    """Recent st command usage and injected quick-use payload."""
+
+    observed_commands: int = 0
+    help_lookups: int = 0
+    help_rate: float = 0.0
+    quick_entry_count: int = 0
+    quick_entries: list[StUsageQuickEntryModel] = Field(default_factory=list)
+    command_metrics: list[StUsageCommandMetricModel] = Field(default_factory=list)
+    payload_preview: str = ""
+    cache_ttl_seconds: int = 60
+    lookback: str = "14d"
+    generated_at: str | None = None
+
+
 class MemoryAnalyticsState(BaseModel):
     """Current memory system state derived from memory records."""
 
@@ -142,6 +175,7 @@ class MemoryAnalyticsActivity(BaseModel):
     usage_totals: UsageTotals
     injection_metrics: InjectionMetricsSummary
     utilization: MemoryUtilizationMetrics
+    st_usage: StUsageSummary = Field(default_factory=StUsageSummary)
     tier_changes: dict[str, object]
 
 
