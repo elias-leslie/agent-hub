@@ -44,21 +44,19 @@ from app.workflows._heartbeat_task_overview import (
 
 logger = logging.getLogger(__name__)
 
-# Cleanup response payload keys
 _CLEANUP_KEY_COMPACT = "compact"
 _CLEANUP_KEY_PAYLOAD = "payload"
-
-# Display labels
 _SPECIALIST_SESSIONS_HEADER = "Active specialist sessions:"
-
-# Lane classification constant
 _LANE_RECONCILED = "reconciled"
-
-_QUEUE_TRUTH_SKIPPABLE_LANE_STATES = frozenset({
-    "active",
-    "mixed",
-    "stale_active",
-})
+_QUEUE_TRUTH_SKIPPABLE_LANE_STATES = frozenset({"active", "mixed", "stale_active"})
+_WORKSTREAM_INVENTORY_TAG = "workstream_inventory"
+_ACTIVE_SPECIALIST_INVENTORY_TAG = "active_specialist_inventory"
+_ACTIVE_WORK_TAG = "active_work"
+_CLEANUP_STATUS_TAG = "cleanup_status"
+_PROTECTION_STATUS_TAG = "protection_status"
+_GIT_STATE_TAG = "git_state"
+_SECTION_SEPARATOR = "\n---\n"
+_BLOCK_SEPARATOR = "\n\n"
 
 
 async def _get_recent_failed_tasks_summary(
@@ -134,6 +132,78 @@ async def _collect_agent_hub_heartbeat_state(
 # --- Heartbeat section builders ---
 
 
+def _wrap_section(tag: str, body: str) -> str:
+    return f"\n<{tag}>\n{body}\n</{tag}>"
+
+
+def _join_present(sections: tuple[str, ...] | list[str], separator: str) -> str:
+    return separator.join(section for section in sections if section)
+
+
+def _group_specialist_rows(
+    rows: list[dict[str, object]],
+) -> dict[tuple[str, str], list[dict[str, object]]]:
+    grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+    for row in rows:
+        key = (str(row["project_id"]), str(row["agent_slug"]))
+        grouped.setdefault(key, []).append(row)
+    return grouped
+
+
+def _should_resolve_queue_truth(
+    rows: list[dict[str, object]],
+    lane_states: set[str],
+    *,
+    task_overview: str | None,
+    task_overview_payload: dict[str, object] | None,
+    heartbeat_state: SummitFlowHeartbeatState | None,
+) -> bool:
+    return (
+        task_overview is not None
+        or task_overview_payload is not None
+        or heartbeat_state is not None
+        or not rows
+        or not lane_states
+        or not lane_states.issubset(_QUEUE_TRUTH_SKIPPABLE_LANE_STATES)
+    )
+
+
+def _extract_cleanup_items(
+    response: dict[str, object],
+) -> tuple[str, list[CleanupActionItem]]:
+    output = response.get(_CLEANUP_KEY_COMPACT)
+    compact = output.strip() if isinstance(output, str) else ""
+    payload = response.get(_CLEANUP_KEY_PAYLOAD)
+    items = (
+        extract_cleanup_action_items_from_payload(payload)
+        if isinstance(payload, dict)
+        else extract_cleanup_action_items(compact)
+    )
+    return compact, items
+
+
+def _build_cleanup_body(
+    compact: str,
+    items: list[CleanupActionItem],
+    workstream_rows: list[dict[str, object]] | None,
+) -> str:
+    filtered_items = _filter_reconciled_cleanup_items(items, workstream_rows)
+    actionable = (
+        build_actionable_cleanup_summary_from_items(filtered_items)
+        or build_filtered_reconciled_cleanup_note(items, filtered_items)
+    )
+    return _join_present([compact, actionable], _BLOCK_SEPARATOR)
+
+
+def _filter_git_rows(
+    rows: list[RepoGitStatus],
+    allowed_project_ids: set[str] | None,
+) -> list[RepoGitStatus]:
+    if allowed_project_ids is None:
+        return rows
+    return [row for row in rows if row.project_id in allowed_project_ids]
+
+
 def _filter_reconciled_cleanup_items(
     items: list[CleanupActionItem],
     workstream_rows: list[dict[str, object]] | None,
@@ -191,16 +261,13 @@ async def _get_workstream_inventory(
             for lane_rows in grouped.values()
         }
 
-        needs_queue_truth = (
-            task_overview is not None
-            or task_overview_payload is not None
-            or heartbeat_state is not None
-            or not rows
-            or not lane_states
-            or not lane_states.issubset(_QUEUE_TRUTH_SKIPPABLE_LANE_STATES)
-        )
-
-        if needs_queue_truth:
+        if _should_resolve_queue_truth(
+            rows,
+            lane_states,
+            task_overview=task_overview,
+            task_overview_payload=task_overview_payload,
+            heartbeat_state=heartbeat_state,
+        ):
             queue_truth_available, stale_tasks, visible_task_ids, _ = (
                 await _resolve_workstream_task_context(
                     task_overview=task_overview,
@@ -218,12 +285,15 @@ async def _get_workstream_inventory(
             return ""
         stale_keys = {(item["project_id"], item["task_id"]) for item in stale_tasks}
         lines = _build_workstream_lines(
-            grouped, stale_keys, visible_task_ids,
-            queue_truth_available=queue_truth_available, provider=provider,
+            grouped,
+            stale_keys,
+            visible_task_ids,
+            queue_truth_available=queue_truth_available,
+            provider=provider,
         )
         if len(lines) == 1:
             return ""
-        return f"\n<workstream_inventory>\n{chr(10).join(lines)}\n</workstream_inventory>"
+        return _wrap_section(_WORKSTREAM_INVENTORY_TAG, "\n".join(lines))
     except Exception:
         logger.debug("Failed to build workstream inventory for heartbeat", exc_info=True)
         return ""
@@ -246,15 +316,10 @@ async def _get_active_specialist_inventory(
         )
         if not rows:
             return ""
-        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
-        for row in rows:
-            key = (str(row["project_id"]), str(row["agent_slug"]))
-            grouped.setdefault(key, []).append(row)
         lines = [_SPECIALIST_SESSIONS_HEADER]
-        for (project_id, agent_slug), group_rows in sorted(grouped.items()):
+        for (project_id, agent_slug), group_rows in sorted(_group_specialist_rows(rows).items()):
             lines.append(_format_specialist_group_line(project_id, agent_slug, group_rows))
-        body = "\n".join(lines)
-        return f"\n<active_specialist_inventory>\n{body}\n</active_specialist_inventory>"
+        return _wrap_section(_ACTIVE_SPECIALIST_INVENTORY_TAG, "\n".join(lines))
     except Exception:
         logger.debug("Failed to build active specialist inventory for heartbeat", exc_info=True)
         return ""
@@ -299,13 +364,19 @@ async def _get_active_work_summary(
         if suppress_completed
         else await _fetch_recently_completed_sessions_section(target_project_id)
     )
-    sections = [s for s in (visible_task_overview, sessions_section, completed_section) if s]
-    if not sections:
+    body = _join_present(
+        [visible_task_overview, sessions_section, completed_section],
+        _BLOCK_SEPARATOR,
+    )
+    if not body:
         logger.info("Active work summary: empty (no tasks or sessions)")
         return ""
-    body = "\n\n".join(sections)
-    logger.info("Active work summary: %d section(s), %d chars", len(sections), len(body))
-    return f"\n<active_work>\n{body}\n</active_work>"
+    logger.info(
+        "Active work summary: %d section(s), %d chars",
+        len([section for section in (visible_task_overview, sessions_section, completed_section) if section]),
+        len(body),
+    )
+    return _wrap_section(_ACTIVE_WORK_TAG, body)
 
 
 async def _get_cleanup_status_summary(
@@ -320,23 +391,11 @@ async def _get_cleanup_status_summary(
     response = cleanup_status_response or await _fetch_cleanup_status_response(target_project_id)
     if not response:
         return ""
-    output = response.get(_CLEANUP_KEY_COMPACT)
-    compact = output.strip() if isinstance(output, str) else ""
-    payload = response.get(_CLEANUP_KEY_PAYLOAD)
-    items = (
-        extract_cleanup_action_items_from_payload(payload)
-        if isinstance(payload, dict)
-        else extract_cleanup_action_items(compact)
-    )
-    filtered_items = _filter_reconciled_cleanup_items(items, workstream_rows)
-    actionable = (
-        build_actionable_cleanup_summary_from_items(filtered_items)
-        or build_filtered_reconciled_cleanup_note(items, filtered_items)
-    )
-    if not compact and not actionable:
+    compact, items = _extract_cleanup_items(response)
+    body = _build_cleanup_body(compact, items, workstream_rows)
+    if not body:
         return ""
-    body = f"{compact}\n\n{actionable}" if actionable and compact else actionable or compact
-    return f"\n<cleanup_status>\n{body}\n</cleanup_status>"
+    return _wrap_section(_CLEANUP_STATUS_TAG, body)
 
 
 async def _get_protection_status_summary(target_project_id: str | None = None) -> str:
@@ -347,10 +406,10 @@ async def _get_protection_status_summary(target_project_id: str | None = None) -
         _fetch_backup_status(target_project_id),
         _fetch_backup_schedule(target_project_id),
     )
-    sections = [s for s in (latest, schedule) if s]
-    if not sections:
+    body = _join_present([latest, schedule], _SECTION_SEPARATOR)
+    if not body:
         return ""
-    return "\n<protection_status>\n" + "\n---\n".join(sections) + "\n</protection_status>"
+    return _wrap_section(_PROTECTION_STATUS_TAG, body)
 
 
 async def _get_git_status_summary(
@@ -365,11 +424,10 @@ async def _get_git_status_summary(
     if not rows:
         return ""
     allowed_project_ids = {target_project_id} if target_project_id else await get_permitted_project_ids()
-    if allowed_project_ids is not None:
-        rows = [row for row in rows if row.project_id in allowed_project_ids]
+    rows = _filter_git_rows(rows, allowed_project_ids)
     if not rows:
         return ""
     git_status = build_compact_git_status(rows)
     actionable = build_actionable_git_summary_from_rows(rows)
-    body = f"{git_status}\n\n{actionable}" if actionable else git_status
-    return f"\n<git_state>\n{body}\n</git_state>"
+    body = _join_present([git_status, actionable], _BLOCK_SEPARATOR)
+    return _wrap_section(_GIT_STATE_TAG, body)
