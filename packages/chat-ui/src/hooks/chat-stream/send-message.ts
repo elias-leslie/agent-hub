@@ -7,7 +7,7 @@ import type { StreamState, CompletionRequest, MessageHistoryEntry } from "./type
 import { formatModelName, generateId } from "./utils";
 import { processStreamWithReconnect } from "./stream-processor";
 
-const TOOL_ENABLED_MAX_TURNS = 40;
+const TOOL_ENABLED_MAX_TURNS = 80;
 
 interface SendMessageParams {
   content: string;

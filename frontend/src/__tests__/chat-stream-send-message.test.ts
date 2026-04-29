@@ -41,7 +41,7 @@ describe("chat stream sendMessage", () => {
         project_id: "summitflow",
         tools_enabled: true,
         execute_tools: true,
-        max_turns: 40,
+        max_turns: 80,
       }),
       expect.any(Object),
       expect.any(Function),
