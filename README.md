@@ -125,19 +125,19 @@ pip install -e packages/agent-hub-client
 Use the shared quality wrapper from the repo root:
 
 ```bash
-dt --check
+st check --check
 ```
 
 Frontend-only checks:
 
 ```bash
-dt --frontend-only
+st check --frontend-only
 ```
 
 Targeted backend suites:
 
 ```bash
-dt pytest backend/tests/path/to/test_file.py
+st check pytest -- backend/tests/path/to/test_file.py
 ```
 
 ## Screenshots
