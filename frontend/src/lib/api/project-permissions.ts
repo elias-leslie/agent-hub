@@ -42,9 +42,17 @@ export interface ExecutionPermission {
   reason: string;
 }
 
+export type ProjectRoots = Record<string, string>;
+
 export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
   const res = await fetchApi(buildApiUrl("/api/projects/permissions"));
   if (!res.ok) throw new Error("Failed to fetch project permissions");
+  return res.json();
+}
+
+export async function fetchProjectRoots(): Promise<ProjectRoots> {
+  const res = await fetchApi(buildApiUrl("/api/projects/roots"));
+  if (!res.ok) throw new Error("Failed to fetch project roots");
   return res.json();
 }
 

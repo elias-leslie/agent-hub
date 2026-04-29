@@ -1,4 +1,4 @@
-import { fetchProjectPermissions } from "@/lib/api";
+import { fetchProjectPermissions, fetchProjectRoots } from "@/lib/api";
 
 export interface ProjectConfig {
   id: string;
@@ -15,12 +15,15 @@ function formatProjectName(projectId: string): string {
 }
 
 export async function fetchProjectConfigs(): Promise<ProjectConfig[]> {
-  const permissions = await fetchProjectPermissions();
+  const [permissions, canonicalRoots] = await Promise.all([
+    fetchProjectPermissions(),
+    fetchProjectRoots(),
+  ]);
   return permissions
     .map((permission) => ({
       id: permission.project_id,
       name: formatProjectName(permission.project_id),
-      rootPath: permission.root_path,
+      rootPath: canonicalRoots[permission.project_id] ?? permission.root_path,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
