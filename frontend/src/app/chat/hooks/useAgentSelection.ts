@@ -33,20 +33,19 @@ export function useAgentSelection(): UseAgentSelectionReturn {
         const fetchedAgents = data.agents;
         setAgents(fetchedAgents);
 
-        // Try to find a good default agent
-        if (fetchedAgents.length > 0 && !selectedAgent) {
-          let defaultAgent = null;
-
+        // URL agent selection should win even after the user has used another agent.
+        setSelectedAgent((currentAgent) => {
           if (agentSlugFromUrl) {
-            defaultAgent = fetchedAgents.find((a: Agent) => a.slug === agentSlugFromUrl);
+            const urlAgent = fetchedAgents.find((a: Agent) => a.slug === agentSlugFromUrl);
+            if (urlAgent && currentAgent?.slug !== urlAgent.slug) return urlAgent;
           }
 
-          if (!defaultAgent) {
-            defaultAgent = fetchedAgents.find((a: Agent) => a.slug === "chat") || fetchedAgents[0];
+          if (!currentAgent && fetchedAgents.length > 0) {
+            return fetchedAgents.find((a: Agent) => a.slug === "chat") || fetchedAgents[0];
           }
 
-          setSelectedAgent(defaultAgent);
-        }
+          return currentAgent;
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load agents");
       } finally {
