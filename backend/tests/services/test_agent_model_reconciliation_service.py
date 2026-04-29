@@ -142,13 +142,18 @@ class TestReconcileAgentModelsToAvailableProviders:
         mock_cache.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_skips_ignored_design_and_image_agents(self) -> None:
+    async def test_skips_ignored_design_image_and_pinned_refactor_agents(self) -> None:
         credential_manager = CredentialManager.get_instance()
         credential_manager.set("codex", "oauth_token", "codex-token")
         ignored_agents = [
             _agent(slug="designer", primary_model_id="claude-opus-4-6"),
             _agent(slug="ux-polisher", primary_model_id="claude-opus-4-6"),
             _agent(slug="image-gen", primary_model_id="nvidia/flux.1-dev", fallback_models=["minimax/image-01"]),
+            _agent(
+                slug="refactor",
+                primary_model_id="codex/gpt-5.4",
+                fallback_models=["codex/gpt-5.3-codex-spark", "claude-sonnet-4-6"],
+            ),
         ]
         mock_db = AsyncMock()
         mock_db.execute.return_value = _db_result_for(ignored_agents)
@@ -164,6 +169,8 @@ class TestReconcileAgentModelsToAvailableProviders:
         assert ignored_agents[0].primary_model_id == "claude-opus-4-6"
         assert ignored_agents[1].primary_model_id == "claude-opus-4-6"
         assert ignored_agents[2].primary_model_id == "nvidia/flux.1-dev"
+        assert ignored_agents[3].primary_model_id == "codex/gpt-5.4"
+        assert ignored_agents[3].fallback_models[0] == "codex/gpt-5.3-codex-spark"
         mock_db.commit.assert_not_awaited()
         mock_cache.invalidate.assert_not_called()
         mock_cache.close.assert_not_awaited()
