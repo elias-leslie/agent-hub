@@ -34,7 +34,7 @@ from app.services.model_mapping import map_model_to_provider
 logger = logging.getLogger(__name__)
 
 TEXT_PROVIDER_PRIORITY = ("codex", "claude", "xai", "openai", "gemini", "openrouter")
-SKIP_AGENT_SLUGS = {"designer", "ux-polisher", "image-gen", "market-pulse-scout"}
+SKIP_AGENT_SLUGS = {"designer", "ux-polisher", "image-gen", "market-pulse-scout", "refactor"}
 FAST_UTILITY_SLUGS = {
     "context-compactor",
     "explorer",
