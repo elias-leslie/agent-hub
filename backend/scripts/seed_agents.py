@@ -27,7 +27,7 @@ from app.constants import resolve_model
 from app.models import Agent
 from app.services.owned_prompt_service import sync_agent_system_prompt
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 SEED_FILE = Path(__file__).parent / "seed_agents_data" / "seed_data.json"

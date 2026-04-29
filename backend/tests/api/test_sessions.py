@@ -571,6 +571,34 @@ class TestListSessions:
 
     @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
     @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
+    def test_list_sessions_status_alias_fetches_active_sessions(
+        self,
+        mock_list_sessions: AsyncMock,
+        mock_lane_session_ids: AsyncMock,
+        client: APITestClient,
+    ) -> None:
+        """Test live status aliases never hit the DB enum directly."""
+        active_session = MagicMock()
+        active_session.provider_metadata = {"live_activity": {"lifecycle_state": "waiting_for_model"}}
+        mock_list_sessions.return_value = ([active_session], 1, {}, {}, {})
+        mock_lane_session_ids.return_value = (set(), set())
+
+        response = client.get("/api/sessions?status=stale")
+
+        assert response.status_code == 200
+        assert response.json()["sessions"] == []
+        assert response.json()["total"] == 0
+        await_args = mock_list_sessions.await_args
+        assert await_args is not None
+        assert await_args.kwargs["status"] == "active"
+
+    def test_list_sessions_rejects_unknown_status(self, client: APITestClient) -> None:
+        response = client.get("/api/sessions?status=bogus")
+
+        assert response.status_code == 422
+
+    @patch("app.api.sessions.build_project_lane_session_ids", new_callable=AsyncMock)
+    @patch("app.api.sessions.list_sessions_with_stats", new_callable=AsyncMock)
     def test_list_sessions_filter_by_external_id(
         self,
         mock_list_sessions: AsyncMock,
