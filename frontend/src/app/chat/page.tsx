@@ -443,6 +443,16 @@ function ChatContent() {
     setSelectedProjectId(project?.id ?? null);
     setSelectedTask(null);
     setTaskQuery("");
+    handleNewSession();
+  };
+  const selectAgent = (agent: Agent) => {
+    setSelectedAgent(agent);
+    setSessionError(null);
+    handleNewSession();
+  };
+  const selectTask = (task: TaskSearchItem) => {
+    setSelectedTask(task);
+    handleNewSession();
   };
 
   if (agentsLoading && !selectedAgent) {
@@ -460,10 +470,7 @@ function ChatContent() {
         onToggleSidebar={() => setShowSidebar((current) => !current)}
         agents={agents}
         selectedAgent={selectedAgent}
-        onSelectAgent={(agent) => {
-          setSelectedAgent(agent);
-          setSessionError(null);
-        }}
+        onSelectAgent={selectAgent}
         sessionError={sessionError || projectsError}
         agentsError={agentsError}
         projects={projects}
@@ -487,7 +494,7 @@ function ChatContent() {
             onNewSession={handleNewSession}
             onResumeSession={() => handleSelectSession(activeSessionId)}
             onSelectProject={selectProject}
-            onSelectTask={setSelectedTask}
+            onSelectTask={selectTask}
             onProjectSearchChange={setProjectSearch}
             onTaskQueryChange={setTaskQuery}
             onClearTask={() => setSelectedTask(null)}
