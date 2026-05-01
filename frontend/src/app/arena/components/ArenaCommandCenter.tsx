@@ -162,36 +162,7 @@ export function ArenaCommandCenter() {
     () => (overview ? deriveSystemStatus(overview, personaName) : null),
     [overview, personaName],
   );
-  const memoryGovernance = useMemo(() => {
-    if (!overview) {
-      return null;
-    }
-    return {
-      ...overview.memory_governance,
-      active_agent_count: overview.memory_governance.active_agent_count ?? 0,
-      custom_memory_config_agent_count:
-        overview.memory_governance.custom_memory_config_agent_count ?? 0,
-      project_index_disabled_agent_count:
-        overview.memory_governance.project_index_disabled_agent_count ?? 0,
-      tool_capabilities_disabled_agent_count:
-        overview.memory_governance.tool_capabilities_disabled_agent_count ?? 0,
-      reference_index_disabled_agent_count:
-        overview.memory_governance.reference_index_disabled_agent_count ?? 0,
-      memory_exclusion_agent_count:
-        overview.memory_governance.memory_exclusion_agent_count ?? 0,
-      excluded_memory_uuid_count: overview.memory_governance.excluded_memory_uuid_count ?? 0,
-      hard_issue_count: overview.memory_governance.hard_issue_count ?? 0,
-      soft_issue_count: overview.memory_governance.soft_issue_count ?? 0,
-      soft_limit_breach_count: overview.memory_governance.soft_limit_breach_count ?? 0,
-      untargeted_reference_samples:
-        overview.memory_governance.untargeted_reference_samples ?? [],
-      oversized_policy_samples: overview.memory_governance.oversized_policy_samples ?? [],
-      invalid_trigger_task_type_samples:
-        overview.memory_governance.invalid_trigger_task_type_samples ?? [],
-      startup_profile_agent_target_samples:
-        overview.memory_governance.startup_profile_agent_target_samples ?? [],
-    };
-  }, [overview]);
+  const memoryGovernance = overview?.memory_governance ?? null;
   const pressuredAgents = useMemo(
     () => (overview ? derivePressureCount(overview.agents) : 0),
     [overview],
