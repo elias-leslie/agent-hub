@@ -14,7 +14,7 @@ from .applicability import (
     normalize_trigger_phases,
     normalize_trigger_task_types,
 )
-from .budget import BudgetUsage, count_tokens
+from .budget import BudgetUsage
 from .context_builder_fetcher import fetch_all_episodes
 from .context_builder_filters import filter_by_tags
 from .context_builder_processors import compute_token_counts
@@ -27,7 +27,6 @@ from .context_builder_settings import (
 )
 from .context_builder_tiers import (
     build_memory_plan_debug,
-    get_rendered_content,
     plan_context_render_tiers,
 )
 from .context_injector_queries import get_query_relevant_references_as_search_results
@@ -43,7 +42,6 @@ from .settings import get_memory_settings
 from .variants import get_variant_config
 
 logger = logging.getLogger(__name__)
-_TARGET_TOKENS_PER_LIMITED_ITEM = 100
 
 
 @dataclass
@@ -214,18 +212,10 @@ def _limit_by_rendered_token_budget(
     items: list[MemorySearchResult],
     limit: int,
 ) -> list[MemorySearchResult]:
-    """Limit only after reviewed compaction/rendering has reduced each item."""
+    """Cap policy items after reviewed compaction/rendering has reduced each item."""
     if limit <= 0 or len(items) <= limit:
         return items
-    budget = limit * _TARGET_TOKENS_PER_LIMITED_ITEM
-    kept: list[MemorySearchResult] = []
-    used_tokens = 0
-    for item in items:
-        item_tokens = count_tokens(get_rendered_content(item))
-        if len(kept) < limit or used_tokens + item_tokens <= budget:
-            kept.append(item)
-            used_tokens += item_tokens
-    return kept
+    return items[:limit]
 
 
 def _apply_reference_variant_scoring(

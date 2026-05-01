@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.services.memory.context_builder import ProgressiveContext
+from app.services.memory.context_builder import (
+    ProgressiveContext,
+    _limit_by_rendered_token_budget,
+)
 from app.services.memory.context_builder_settings import (
     normalize_memory_config,
     resolve_continuity_settings,
@@ -10,6 +13,10 @@ from app.services.memory.context_builder_settings import (
     resolve_memory_consumer_profile,
 )
 from app.services.memory.context_injector_formatter import format_progressive_context
+from app.services.memory.context_profiles import (
+    policy_limits_for_profile,
+    query_reference_selection_default_for_profile,
+)
 from app.services.memory.memory_models import MemoryScope, MemorySearchResult, MemorySource
 from app.services.memory.settings import MemorySettingsDTO
 
@@ -62,6 +69,33 @@ def test_resolve_memory_consumer_profile_preview_falls_back_to_runtime_profile()
 def test_resolve_memory_consumer_profile_defaults_preview_to_agent_preview() -> None:
     assert resolve_memory_consumer_profile(None, surface="runtime") is None
     assert resolve_memory_consumer_profile(None, surface="preview") == "agent_preview"
+
+
+def test_agent_preview_profile_uses_compact_policy_and_reference_defaults() -> None:
+    assert policy_limits_for_profile("agent_preview") == (8, 2)
+    assert query_reference_selection_default_for_profile("agent_preview") is False
+
+
+def test_policy_limiter_caps_short_rendered_items() -> None:
+    now = datetime.now(UTC)
+    items = [
+        MemorySearchResult(
+            uuid=f"m{i}",
+            content=f"Rule {i}",
+            rendered_content=f"Rule {i}",
+            source=MemorySource.SYSTEM,
+            relevance_score=1.0,
+            created_at=now,
+            facts=[],
+        )
+        for i in range(12)
+    ]
+
+    assert [item.uuid for item in _limit_by_rendered_token_budget(items, 3)] == [
+        "m0",
+        "m1",
+        "m2",
+    ]
 
 
 def test_normalize_memory_config_canonicalizes_known_consumer_profiles() -> None:
