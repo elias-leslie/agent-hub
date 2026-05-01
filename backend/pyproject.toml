@@ -99,6 +99,11 @@ invalid-argument-type = "ignore"  # dict unpacking, ParamSpec middleware
 unknown-argument = "ignore"       # structlog bound logger kwargs
 unresolved-import = "ignore"      # self-imports from packages, lazy imports
 
+[tool.ty.src]
+# Keep the type gate focused on runtime code while ty is still beta. Tests and
+# operational scripts are covered by pytest and dedicated script tests.
+exclude = ["tests/**", "scripts/**"]
+
 [tool.pytest.ini_options]
 markers = [
     "unit: marks tests as unit tests (fast, no external dependencies)",

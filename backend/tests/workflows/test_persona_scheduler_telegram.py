@@ -29,13 +29,18 @@ async def test_maybe_send_delivery_telegram_skips_non_agent_turn_payload() -> No
 
     job = SimpleNamespace(id="job-1", name="Digest", payload_type="push", delivery="telegram")
 
-    with patch(
-        "app.workflows.persona_scheduler.send_rendered_message",
-        new=AsyncMock(),
-    ) as mock_send:
+    with (
+        patch(
+            "app.workflows.persona_scheduler.send_rendered_message",
+            new=AsyncMock(),
+        ) as mock_send,
+        patch("app.workflows.persona_scheduler.logger.warning") as mock_warning,
+    ):
         await _maybe_send_delivery_telegram(job, "hello")
 
     mock_send.assert_not_awaited()
+    mock_warning.assert_called_once()
+    assert "unsupported payload_type=push" in mock_warning.call_args.args[0] % mock_warning.call_args.args[1:]
 
 
 @pytest.mark.asyncio
@@ -103,4 +108,5 @@ async def test_maybe_send_delivery_telegram_best_effort_on_missing_report_chat()
     ):
         await _maybe_send_delivery_telegram(job, "hello")
 
-    mock_warning.assert_called()
+    mock_warning.assert_called_once()
+    assert "missing config: report_chat_id" in mock_warning.call_args.args[0] % mock_warning.call_args.args[1:]

@@ -377,7 +377,15 @@ async def _maybe_send_delivery_push(job: Any, output: str) -> None:
 
 async def _maybe_send_delivery_telegram(job: Any, output: str) -> None:
     """Send a post-execution Telegram notification if the job is configured for it."""
-    if job.delivery != DELIVERY_TELEGRAM or job.payload_type != PAYLOAD_TYPE_AGENT_TURN:
+    if job.delivery != DELIVERY_TELEGRAM:
+        return
+    if job.payload_type != PAYLOAD_TYPE_AGENT_TURN:
+        logger.warning(
+            "Telegram delivery skipped for job %s (%s): unsupported payload_type=%s",
+            job.id,
+            job.name,
+            job.payload_type,
+        )
         return
     try:
         async with async_session() as db:
@@ -385,10 +393,16 @@ async def _maybe_send_delivery_telegram(job: Any, output: str) -> None:
         token = runtime_config.get("token")
         report_chat_id = runtime_config.get("report_chat_id")
         if not token or not report_chat_id:
+            missing = []
+            if not token:
+                missing.append("bot_token")
+            if not report_chat_id:
+                missing.append("report_chat_id")
             logger.warning(
-                "Telegram delivery skipped for job %s (%s): missing report_chat_id or token",
+                "Telegram delivery skipped for job %s (%s): missing config: %s",
                 job.id,
                 job.name,
+                ", ".join(missing),
             )
             return
         from telegram import Bot

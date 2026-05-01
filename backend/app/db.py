@@ -26,10 +26,10 @@ def _get_engine() -> Any:
         _get_async_url(settings.agent_hub_db_url),
         echo=settings.debug,
         pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
-        pool_timeout=30,
-        pool_recycle=1800,
+        pool_size=settings.agent_hub_db_pool_size,
+        max_overflow=settings.agent_hub_db_max_overflow,
+        pool_timeout=settings.agent_hub_db_pool_timeout,
+        pool_recycle=settings.agent_hub_db_pool_recycle,
     )
 
 

@@ -29,13 +29,20 @@ def _guard_assets_exist(resolved: SharedCommandGuard | None) -> bool:
 @lru_cache(maxsize=1)
 def _resolve_shared_command_guard_cached() -> SharedCommandGuard | None:
     """Resolve the shared command guard binaries and intercept metadata."""
+    scripts_dirs = []
     scripts_dir = resolve_summitflow_scripts_dir()
-    if scripts_dir is None:
-        return None
+    if scripts_dir is not None:
+        scripts_dirs.append(scripts_dir)
+    canonical_scripts_dir = Path("/srv/workspaces/projects/summitflow/scripts")
+    if canonical_scripts_dir not in scripts_dirs:
+        scripts_dirs.append(canonical_scripts_dir)
 
-    guard_bin = (scripts_dir / "lib" / "command-guard").resolve()
-    bash_env = (scripts_dir / "lib" / "bash-command-guard.sh").resolve()
-    if not guard_bin.exists() or not bash_env.exists():
+    for scripts_dir in scripts_dirs:
+        guard_bin = (scripts_dir / "lib" / "command-guard").resolve()
+        bash_env = (scripts_dir / "lib" / "bash-command-guard.sh").resolve()
+        if guard_bin.exists() and bash_env.exists():
+            break
+    else:
         return None
 
     try:
