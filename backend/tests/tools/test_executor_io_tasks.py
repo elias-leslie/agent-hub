@@ -122,6 +122,7 @@ def test_build_plan_json_preserves_structured_steps_and_rich_context() -> None:
                     "phase": "backend",
                     "description": "Preserve structured steps",
                     "subtask_type": "backend",
+                    "depends_on": ["0.1"],
                     "unexpected": "drop me",
                     "steps": [
                         {
@@ -158,6 +159,7 @@ def test_build_plan_json_preserves_structured_steps_and_rich_context() -> None:
         }
     }
     assert payload["subtasks"][0]["phase"] == "backend"
+    assert payload["subtasks"][0]["depends_on"] == ["0.1"]
     assert "unexpected" not in payload["subtasks"][0]
     assert payload["subtasks"][0]["steps"] == [
         {
