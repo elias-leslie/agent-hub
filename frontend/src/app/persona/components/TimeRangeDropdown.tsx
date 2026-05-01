@@ -34,7 +34,7 @@ export function TimeRangeDropdown({ value, onChange }: TimeRangeDropdownProps) {
   const activeLabel = TIME_RANGES.find((r) => r.value === value)?.label ?? value;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen(!open)}
         className={cn(
