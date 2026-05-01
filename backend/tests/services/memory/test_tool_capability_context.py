@@ -8,7 +8,7 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
     from app.services.memory.tool_capability_context import format_tool_capability_context
 
     help_outputs = {
-        ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n  memory  Memory ops\n  prompt  Prompt ops\n  complete  Complete\n",
+        ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n  memory  Memory ops\n  graph  Graphify ops\n  prompt  Prompt ops\n  complete  Complete\n",
         ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\n  ruff  Run ruff\nOptions:\n  --check, -c  Full check\n  --quick, -q  Quick check\n",
         ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n  query \"SELECT ...\"        Execute query\nMigration Commands:\n  migrate status            Show current revision\n",
         ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n\nRun centralized web research using Agent Hub's shared tool stack.\n\npositional arguments:\n  {search,research,fetch}\n    search              Search the public web.\n    research            Search first, then fetch one result.\n    fetch               Fetch and extract a webpage.\n",
@@ -30,6 +30,7 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
     assert "tool: st" in rendered
     assert "discover: st --help" in rendered
     assert "commands:" in rendered
+    assert "graph" in rendered
     assert "quick:" in rendered
     assert "st pulse --gate" in rendered
     assert "--check" in rendered

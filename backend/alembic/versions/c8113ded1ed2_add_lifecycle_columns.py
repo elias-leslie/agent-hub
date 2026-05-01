@@ -6,6 +6,7 @@ Create Date: 2026-02-28 18:00:00.000000
 """
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from alembic import op
 
@@ -37,7 +38,7 @@ def upgrade() -> None:
         "memories",
         sa.Column(
             "superseded_by",
-            sa.dialects.postgresql.UUID(as_uuid=True),
+            UUID(as_uuid=True),
             nullable=True,
         ),
     )
@@ -71,7 +72,7 @@ def upgrade() -> None:
         "tier_change_log",
         sa.Column(
             "metadata",
-            sa.dialects.postgresql.JSONB(),
+            JSONB(),
             server_default="{}",
             nullable=True,
         ),

@@ -41,6 +41,17 @@ def test_build_st_usage_memory_combines_curated_base_and_tracked_subcommands() -
     assert memory.observed == 5
     assert memory.quick[0].startswith("st pulse --gate")
     assert any("no raw git/jj" in entry for entry in memory.quick)
+    assert any(entry.startswith("st graph doctor") for entry in memory.quick)
     assert any(entry.startswith("st agents preview") for entry in memory.quick)
     assert any(entry.startswith("st browser check") for entry in memory.quick)
     assert all("--help" not in entry for entry in memory.quick)
+
+
+def test_parse_st_command_tracks_graph_subcommands_for_quick_use_memory() -> None:
+    graph_query = parse_st_command('st graph query "auth topology" --project summitflow')
+    graph_fallow = parse_st_command("st graph fallow audit --project summitflow")
+
+    assert graph_query is not None
+    assert graph_query.key == "graph query"
+    assert graph_fallow is not None
+    assert graph_fallow.key == "graph fallow"
