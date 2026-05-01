@@ -94,6 +94,37 @@ async def test_load_runtime_config_malformed_env_allowlist_blocks_stored_fallbac
 
 
 @pytest.mark.asyncio
+async def test_load_runtime_config_treats_blank_stored_scalars_as_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.telegram_config_service.settings.agent_hub_telegram_bot_token",
+        "",
+    )
+    monkeypatch.setattr(
+        "app.services.telegram_config_service.settings.agent_hub_telegram_allowed_chat_ids",
+        "",
+    )
+    monkeypatch.setattr(
+        "app.services.telegram_config_service.settings.agent_hub_telegram_report_chat_id",
+        "",
+    )
+    monkeypatch.setattr(
+        "app.services.telegram_config_service._load_stored_value",
+        AsyncMock(side_effect=["  ", '["123"]', "  "]),
+    )
+
+    payload = await load_runtime_config(AsyncMock())
+
+    assert payload["token"] is None
+    assert payload["allowed_chat_ids"] == ["123"]
+    assert payload["report_chat_id"] is None
+    assert payload["bot_token_source"] is None
+    assert payload["allowed_chat_ids_source"] == "stored"
+    assert payload["report_chat_id_source"] is None
+
+
+@pytest.mark.asyncio
 async def test_get_telegram_status_no_token_wins_over_allowlist_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
