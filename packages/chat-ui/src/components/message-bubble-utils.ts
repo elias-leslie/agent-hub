@@ -3,31 +3,32 @@ import type { ChatMessage } from "../types/chat";
 /**
  * Returns bubble styling for a chat message.
  *
- * Dark-mode only — no light-mode classes. Uses simple bg + border-l accent
- * instead of gradients to avoid tailwind-merge stripping conflicting utilities.
+ * Uses theme tokens for surfaces and a small provider accent for recognition.
  */
 export function getProviderBubbleStyle(message: ChatMessage, isUser: boolean): string {
   if (isUser) {
-    return "bg-blue-600 text-white";
+    return "bg-primary text-primary-foreground shadow-sm";
   }
 
   const provider = message.agentProvider;
   const styles: Record<string, string> = {
-    claude: "bg-orange-950/25 border-l-2 border-l-orange-500/60 text-gray-100",
-    gemini: "bg-blue-950/25 border-l-2 border-l-blue-500/60 text-gray-100",
-    openai: "bg-green-950/25 border-l-2 border-l-green-500/60 text-gray-100",
-    xai: "bg-red-950/25 border-l-2 border-l-red-500/60 text-gray-100",
-    zhipu: "bg-teal-950/25 border-l-2 border-l-teal-500/60 text-gray-100",
+    claude: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-orange-500/70",
+    gemini: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-blue-500/70",
+    openai: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-emerald-500/70",
+    openrouter: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-violet-500/70",
+    xai: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-rose-500/70",
+    zhipu: "border border-border bg-card/85 text-card-foreground shadow-sm border-l-2 border-l-teal-500/70",
   };
 
-  return (provider && styles[provider]) || "bg-gray-800 text-gray-100";
+  return (provider && styles[provider]) || "border border-border bg-card/85 text-card-foreground shadow-sm";
 }
 
 export function getProviderIconColor(provider?: string): string {
   const colors: Record<string, string> = {
     claude: "text-orange-400",
     gemini: "text-blue-400",
-    openai: "text-green-400",
+    openai: "text-emerald-400",
+    openrouter: "text-violet-400",
     xai: "text-red-400",
     zhipu: "text-teal-400",
   };
@@ -39,7 +40,8 @@ export function getProviderTextColor(provider?: string): string {
   const colors: Record<string, string> = {
     claude: "text-orange-400",
     gemini: "text-blue-400",
-    openai: "text-green-400",
+    openai: "text-emerald-400",
+    openrouter: "text-violet-400",
     xai: "text-red-400",
     zhipu: "text-teal-400",
   };
