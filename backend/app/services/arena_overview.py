@@ -32,6 +32,7 @@ async def _query_benchmark_rows(
     db: AsyncSession,
     agent_slugs: list[str],
     cutoff: datetime,
+    project_id: str | None,
 ) -> dict[str, dict[str, Any]]:
     stmt = (
         select(
@@ -50,6 +51,8 @@ async def _query_benchmark_rows(
         )
         .group_by(AgentBenchmarkRun.agent_slug)
     )
+    if project_id:
+        stmt = stmt.where(AgentBenchmarkRun.project_id == project_id)
     result = (await db.execute(stmt)).all()
     return {
         str(row.agent_slug): {
@@ -71,17 +74,29 @@ async def _query_benchmark_rows(
 async def _query_regression_rows(
     db: AsyncSession,
     agent_slugs: list[str],
+    cutoff: datetime,
+    project_id: str | None,
 ) -> tuple[dict[str, int], dict[str, int]]:
+    scoped_run_id = func.coalesce(
+        AgentRegressionCluster.last_seen_run_id,
+        AgentRegressionCluster.first_seen_run_id,
+    )
     stmt = (
         select(
             AgentRegressionCluster.agent_slug.label("agent_slug"),
             AgentRegressionCluster.failure_detail.label("failure_detail"),
         )
+        .join(AgentBenchmarkRun, AgentBenchmarkRun.id == scoped_run_id)
         .where(
             AgentRegressionCluster.agent_slug.in_(agent_slugs),
             AgentRegressionCluster.status == "open",
+            AgentRegressionCluster.last_seen_at >= cutoff,
+            AgentBenchmarkRun.completed_at.is_not(None),
+            benchmark_signal_run_clause(AgentBenchmarkRun),
         )
     )
+    if project_id:
+        stmt = stmt.where(AgentBenchmarkRun.project_id == project_id)
     regression_rows: dict[str, int] = {}
     regression_by_category: dict[str, int] = {}
     for row in (await db.execute(stmt)).all():
@@ -208,8 +223,13 @@ async def _fetch_arena_data(
     regression_rows: dict[str, int] = {}
     regression_by_category: dict[str, int] = {}
     if agent_slugs:
-        benchmark_rows = await _query_benchmark_rows(db, agent_slugs, cutoff)
-        regression_rows, regression_by_category = await _query_regression_rows(db, agent_slugs)
+        benchmark_rows = await _query_benchmark_rows(db, agent_slugs, cutoff, project_id)
+        regression_rows, regression_by_category = await _query_regression_rows(
+            db,
+            agent_slugs,
+            cutoff,
+            project_id,
+        )
     scheduled_jobs = await _query_scheduled_jobs(db, primary_agent_slug)
     signal_snapshot = await collect_improvement_signal_snapshot(
         project_id=project_id,
