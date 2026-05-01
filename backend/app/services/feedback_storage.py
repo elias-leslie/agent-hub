@@ -149,7 +149,9 @@ async def find_duplicate_candidates(
     """Find existing open items that might be duplicates of a new submission.
 
     Uses PostgreSQL full-text search with ts_rank for relevance scoring.
-    Only returns open/acknowledged items (not resolved/wont_fix).
+    Only returns open/acknowledged items (not resolved/wont_fix). Feedback
+    components are shared across projects, so duplicate matching is global for
+    the same component/type while preferring same-project matches.
     """
     stmt = text("""
         SELECT fi.*,
@@ -157,10 +159,9 @@ async def find_duplicate_candidates(
         FROM feedback_items fi
         WHERE fi.component_id = :component_id
         AND fi.feedback_type = :feedback_type
-        AND fi.project_id = :project_id
         AND fi.status IN ('open', 'acknowledged')
         AND fi.search_vector @@ plainto_tsquery('english', :title)
-        ORDER BY rank DESC
+        ORDER BY (fi.project_id = :project_id) DESC, rank DESC
         LIMIT :limit
     """)
     result = await db.execute(

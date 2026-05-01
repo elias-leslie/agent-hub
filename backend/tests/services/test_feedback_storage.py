@@ -12,6 +12,7 @@ from app.services.feedback_storage import (
     archive_stale_feedback_items,
     count_feedback_items,
     create_feedback_item,
+    find_duplicate_candidates,
     get_component_feedback,
     get_feedback_item,
     get_feedback_summary,
@@ -211,6 +212,40 @@ class TestCountFeedbackItems:
         stmt = db.execute.await_args.args[0]
         compiled = str(stmt.compile(compile_kwargs={"literal_binds": True}))
         assert "IN ('open', 'acknowledged')" in compiled
+
+
+class TestFindDuplicateCandidates:
+    """Tests for find_duplicate_candidates."""
+
+    @pytest.mark.asyncio
+    async def test_searches_same_component_globally_with_project_preference(self) -> None:
+        db = AsyncMock()
+        first = make_feedback_item(id="first", project_id="summitflow")
+        second = make_feedback_item(id="second", project_id="agent-hub")
+
+        rows_result = MagicMock()
+        rows_result.mappings.return_value.all.return_value = [
+            {"id": "first"},
+            {"id": "second"},
+        ]
+        orm_result = MagicMock()
+        orm_result.scalars.return_value.all.return_value = [second, first]
+        db.execute.side_effect = [rows_result, orm_result]
+
+        result = await find_duplicate_candidates(
+            db,
+            component_id="sf.cli",
+            feedback_type="friction",
+            project_id="agent-hub",
+            title="st feedback report --vote-if-match created duplicates",
+        )
+
+        stmt, params = db.execute.await_args_list[0].args
+        sql = str(stmt)
+        assert "AND fi.project_id = :project_id" not in sql
+        assert "ORDER BY (fi.project_id = :project_id) DESC, rank DESC" in sql
+        assert params["project_id"] == "agent-hub"
+        assert result == [first, second]
 
 
 class TestGetFeedbackItem:
