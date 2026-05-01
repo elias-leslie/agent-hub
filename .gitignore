@@ -93,3 +93,4 @@ backend/*_strategy.json
 
 # Benchmark/temp output
 backend/.tmp/
+.gitnexus
