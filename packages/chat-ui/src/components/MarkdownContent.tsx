@@ -34,17 +34,17 @@ function MarkdownCodeBlock({
   }, [code]);
 
   return (
-    <div className="relative group/code my-3 rounded-md overflow-hidden bg-black/30 border border-white/10">
+    <div className="relative group/code my-3 overflow-hidden rounded-md border border-border bg-muted/45">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/10 text-xs text-white/40">
-        <span className="uppercase tracking-wider">{language || "code"}</span>
+      <div className="flex items-center justify-between border-b border-border bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">
+        <span className="font-medium uppercase tracking-[0.14em]">{language || "code"}</span>
         <button
           onClick={handleCopy}
           className={cn(
             "flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors",
             copied
-              ? "text-green-400"
-              : "text-white/40 hover:text-white/70",
+              ? "text-emerald-500"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           {copied ? (
@@ -61,7 +61,7 @@ function MarkdownCodeBlock({
         </button>
       </div>
       {/* Code content */}
-      <pre className="overflow-x-auto p-3 m-0 text-sm leading-relaxed">
+      <pre className="m-0 overflow-x-auto p-3 text-sm leading-6 text-foreground">
         <code className={className}>{code}</code>
       </pre>
     </div>
@@ -90,7 +90,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
         if (isInline) {
           return (
             <code
-              className="px-1.5 py-0.5 rounded bg-white/10 text-[0.9em] font-mono"
+              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground"
               {...rest}
             >
               {children}
@@ -129,7 +129,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+            className="text-amber-500 underline underline-offset-2 transition hover:text-amber-400"
             {...rest}
           >
             {children}
@@ -140,21 +140,21 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       // Headers
       h1({ children, ...rest }) {
         return (
-          <h1 className="text-xl font-bold mt-4 mb-2" {...rest}>
+          <h1 className="mb-2 mt-5 text-xl font-semibold tracking-tight" {...rest}>
             {children}
           </h1>
         );
       },
       h2({ children, ...rest }) {
         return (
-          <h2 className="text-lg font-bold mt-3 mb-2" {...rest}>
+          <h2 className="mb-2 mt-4 text-lg font-semibold tracking-tight" {...rest}>
             {children}
           </h2>
         );
       },
       h3({ children, ...rest }) {
         return (
-          <h3 className="text-base font-bold mt-3 mb-1" {...rest}>
+          <h3 className="mb-1.5 mt-3 text-base font-semibold" {...rest}>
             {children}
           </h3>
         );
@@ -163,21 +163,21 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       // Lists
       ul({ children, ...rest }) {
         return (
-          <ul className="list-disc list-inside my-2 space-y-0.5" {...rest}>
+          <ul className="my-2 list-outside list-disc space-y-1 pl-5 marker:text-muted-foreground" {...rest}>
             {children}
           </ul>
         );
       },
       ol({ children, ...rest }) {
         return (
-          <ol className="list-decimal list-inside my-2 space-y-0.5" {...rest}>
+          <ol className="my-2 list-outside list-decimal space-y-1 pl-5 marker:text-muted-foreground marker:font-medium" {...rest}>
             {children}
           </ol>
         );
       },
       li({ children, ...rest }) {
         return (
-          <li className="leading-relaxed" {...rest}>
+          <li className="pl-1 leading-6" {...rest}>
             {children}
           </li>
         );
@@ -187,7 +187,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       blockquote({ children, ...rest }) {
         return (
           <blockquote
-            className="border-l-2 border-white/30 pl-3 my-2 italic opacity-80"
+            className="my-3 border-l-2 border-amber-500/50 pl-3 text-muted-foreground"
             {...rest}
           >
             {children}
@@ -198,7 +198,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       // Paragraphs — avoid extra margin on first/last
       p({ children, ...rest }) {
         return (
-          <p className="my-1.5 leading-relaxed" {...rest}>
+          <p className="my-2 leading-6" {...rest}>
             {children}
           </p>
         );
@@ -207,9 +207,9 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       // Tables (GFM)
       table({ children, ...rest }) {
         return (
-          <div className="overflow-x-auto my-3">
+          <div className="my-3 overflow-x-auto rounded-md border border-border">
             <table
-              className="min-w-full text-sm border-collapse border border-white/20"
+              className="min-w-full border-collapse text-sm"
               {...rest}
             >
               {children}
@@ -220,7 +220,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       th({ children, ...rest }) {
         return (
           <th
-            className="border border-white/20 px-3 py-1.5 text-left font-semibold bg-white/5"
+            className="border-b border-border bg-muted/60 px-3 py-2 text-left font-semibold"
             {...rest}
           >
             {children}
@@ -229,7 +229,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
       },
       td({ children, ...rest }) {
         return (
-          <td className="border border-white/20 px-3 py-1.5" {...rest}>
+          <td className="border-b border-border px-3 py-2 align-top" {...rest}>
             {children}
           </td>
         );
@@ -237,13 +237,13 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
 
       // Horizontal rules
       hr(rest) {
-        return <hr className="border-white/20 my-4" {...rest} />;
+        return <hr className="my-4 border-border" {...rest} />;
       },
 
       // Strong / em
       strong({ children, ...rest }) {
         return (
-          <strong className="font-bold" {...rest}>
+          <strong className="font-semibold" {...rest}>
             {children}
           </strong>
         );
@@ -260,7 +260,7 @@ export function MarkdownContent({ content, className }: MarkdownContentProps) {
   );
 
   return (
-    <div className={cn("markdown-content break-words", className)}>
+    <div className={cn("markdown-content max-w-none break-words text-sm leading-6 text-foreground", className)}>
       <Markdown remarkPlugins={remarkPlugins} components={components}>
         {content}
       </Markdown>

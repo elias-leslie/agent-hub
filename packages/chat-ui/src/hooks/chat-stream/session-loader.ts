@@ -58,6 +58,18 @@ export async function loadSession(
     seen.add(key);
     return true;
   });
+  const seenToolExecutionIds = new Set<string>();
+  const uniqueToolExecutionsByMessage = new Map<string | number, SessionToolExecution[]>();
+  for (const message of [...deduped].reverse()) {
+    const uniqueTools = (message.tool_executions ?? []).filter((tool) => {
+      if (seenToolExecutionIds.has(tool.id)) return false;
+      seenToolExecutionIds.add(tool.id);
+      return true;
+    });
+    if (uniqueTools.length > 0) {
+      uniqueToolExecutionsByMessage.set(message.id, uniqueTools);
+    }
+  }
 
   return {
     messages: deduped.map((m) => ({
@@ -70,8 +82,8 @@ export async function loadSession(
       ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
       ...(m.thinking ? { thinking: m.thinking } : {}),
       ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
-      ...(m.tool_executions && m.tool_executions.length > 0
-        ? { toolExecutions: mapToolExecutions(m.tool_executions) }
+      ...(uniqueToolExecutionsByMessage.has(m.id)
+        ? { toolExecutions: mapToolExecutions(uniqueToolExecutionsByMessage.get(m.id)) }
         : {}),
     })),
     projectId: session.project_id ?? null,

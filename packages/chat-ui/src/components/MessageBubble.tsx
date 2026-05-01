@@ -61,7 +61,7 @@ export function MessageBubble({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex items-start gap-2 max-w-[85%]">
+      <div className={cn("flex items-start gap-2", isUser ? "max-w-[85%]" : "w-full max-w-[72rem]")}>
         {/* Action buttons for assistant (left side) */}
         {!isUser && (
           <MessageActions
@@ -80,7 +80,8 @@ export function MessageBubble({
         {/* Message bubble */}
         <div
           className={cn(
-            "rounded-lg px-4 py-2 relative",
+            "relative rounded-md",
+            isUser ? "px-4 py-2" : "px-5 py-4",
             getProviderBubbleStyle(message, isUser),
             message.cancelled && "border-2 border-yellow-500"
           )}

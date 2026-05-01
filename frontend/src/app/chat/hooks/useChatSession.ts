@@ -1,84 +1,170 @@
-import { useState, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-const STORAGE_KEY = "persona_active_session_id";
+const LEGACY_STORAGE_KEY = 'persona_active_session_id'
+const CONTEXT_STORAGE_KEY = 'agent_hub_active_session_by_context'
 
-function getStoredSessionId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem(STORAGE_KEY);
+interface UseChatSessionOptions {
+  contextKey?: string | null
 }
 
-function storeSessionId(sessionId: string | null): void {
-  if (typeof window === "undefined") return;
-  if (sessionId) {
-    localStorage.setItem(STORAGE_KEY, sessionId);
-  } else {
-    localStorage.removeItem(STORAGE_KEY);
+function readContextSessions(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  const raw = localStorage.getItem(CONTEXT_STORAGE_KEY)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+      return {}
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === 'string' &&
+          typeof entry[1] === 'string' &&
+          entry[1].length > 0,
+      ),
+    )
+  } catch {
+    return {}
   }
 }
 
-interface UseChatSessionReturn {
-  activeSessionId: string | null;
-  sidebarRefreshTrigger: number;
-  sessionError: string | null;
-  setSessionError: (error: string | null) => void;
-  handleSessionCreated: (newSessionId: string) => void;
-  handleSelectSession: (sessionId: string | null) => void;
-  handleNewSession: () => void;
+function getStoredSessionId(contextKey?: string | null): string | null {
+  if (typeof window === 'undefined') return null
+  if (contextKey) return readContextSessions()[contextKey] ?? null
+  return localStorage.getItem(LEGACY_STORAGE_KEY)
 }
 
-export function useChatSession(): UseChatSessionReturn {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const sessionIdFromUrl = searchParams.get("session_id");
+function storeSessionId(
+  sessionId: string | null,
+  contextKey?: string | null,
+): void {
+  if (typeof window === 'undefined') return
+  if (contextKey) {
+    const sessions = readContextSessions()
+    if (sessionId) {
+      sessions[contextKey] = sessionId
+    } else {
+      delete sessions[contextKey]
+    }
+    if (Object.keys(sessions).length > 0) {
+      localStorage.setItem(CONTEXT_STORAGE_KEY, JSON.stringify(sessions))
+    } else {
+      localStorage.removeItem(CONTEXT_STORAGE_KEY)
+    }
+    return
+  }
+
+  if (sessionId) {
+    localStorage.setItem(LEGACY_STORAGE_KEY, sessionId)
+  } else {
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
+  }
+}
+
+function clearSessionIdFromUrl(): void {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.delete('session_id')
+  window.history.replaceState(null, '', url.toString())
+}
+
+function setSessionIdInUrl(sessionId: string): void {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  url.searchParams.set('session_id', sessionId)
+  window.history.replaceState(null, '', url.toString())
+}
+
+function pushSessionIdInUrl(
+  router: { push: (href: string, options?: { scroll?: boolean }) => void },
+  sessionId: string | null,
+): void {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (sessionId) {
+    url.searchParams.set('session_id', sessionId)
+  } else {
+    url.searchParams.delete('session_id')
+  }
+  router.push(url.pathname + url.search, { scroll: false })
+}
+
+interface UseChatSessionReturn {
+  activeSessionId: string | null
+  sidebarRefreshTrigger: number
+  sessionError: string | null
+  setSessionError: (error: string | null) => void
+  handleSessionCreated: (newSessionId: string) => void
+  handleSelectSession: (sessionId: string | null) => void
+  handleContextChange: () => void
+  handleNewSession: () => void
+}
+
+export function useChatSession(
+  options: UseChatSessionOptions = {},
+): UseChatSessionReturn {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const sessionIdFromUrl = searchParams.get('session_id')
+  const contextKey = options.contextKey ?? null
+  const ignoreUrlOnNextContextLoad = useRef(false)
 
   // Priority: URL param > localStorage
   const [activeSessionId, setActiveSessionId] = useState<string | null>(
-    sessionIdFromUrl || getStoredSessionId()
-  );
-  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
-  const [sessionError, setSessionError] = useState<string | null>(null);
+    sessionIdFromUrl || getStoredSessionId(contextKey),
+  )
+  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
-  const handleSessionCreated = useCallback((newSessionId: string) => {
-    setActiveSessionId(newSessionId);
-    storeSessionId(newSessionId);
-    // Update URL for bookmarking using replaceState instead of router.push
-    // to avoid triggering Next.js Suspense re-render, which would remount
-    // ChatContent and reinitialize activeSessionId from the URL, wiping
-    // in-flight streaming messages.
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.set("session_id", newSessionId);
-      window.history.replaceState(null, "", url.toString());
-    }
-    setSidebarRefreshTrigger((prev) => prev + 1);
-  }, []);
+  useEffect(() => {
+    if (!contextKey) return
+    const shouldIgnoreUrl = ignoreUrlOnNextContextLoad.current
+    ignoreUrlOnNextContextLoad.current = false
+    const nextSessionId = shouldIgnoreUrl
+      ? getStoredSessionId(contextKey)
+      : sessionIdFromUrl || getStoredSessionId(contextKey)
+    setActiveSessionId(nextSessionId)
+    setSessionError(null)
+  }, [contextKey, sessionIdFromUrl])
 
-  const handleSelectSession = useCallback((sessionId: string | null) => {
-    setActiveSessionId(sessionId);
-    storeSessionId(sessionId);
-    setSessionError(null);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      if (sessionId) {
-        url.searchParams.set("session_id", sessionId);
-      } else {
-        url.searchParams.delete("session_id");
-      }
-      router.push(url.pathname + url.search, { scroll: false });
-    }
-  }, [router]);
+  const handleSessionCreated = useCallback(
+    (newSessionId: string) => {
+      setActiveSessionId(newSessionId)
+      storeSessionId(newSessionId, contextKey)
+      // Update URL for bookmarking using replaceState instead of router.push
+      // to avoid triggering Next.js Suspense re-render, which would remount
+      // ChatContent and reinitialize activeSessionId from the URL, wiping
+      // in-flight streaming messages.
+      setSessionIdInUrl(newSessionId)
+      setSidebarRefreshTrigger((prev) => prev + 1)
+    },
+    [contextKey],
+  )
+
+  const handleSelectSession = useCallback(
+    (sessionId: string | null) => {
+      setActiveSessionId(sessionId)
+      storeSessionId(sessionId, contextKey)
+      setSessionError(null)
+      pushSessionIdInUrl(router, sessionId)
+    },
+    [contextKey, router],
+  )
+
+  const handleContextChange = useCallback(() => {
+    ignoreUrlOnNextContextLoad.current = true
+    setActiveSessionId(null)
+    setSessionError(null)
+    clearSessionIdFromUrl()
+  }, [])
 
   const handleNewSession = useCallback(() => {
-    setActiveSessionId(null);
-    storeSessionId(null);
-    setSessionError(null);
-    if (typeof window !== "undefined") {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("session_id");
-      router.push(url.pathname + url.search, { scroll: false });
-    }
-  }, [router]);
+    setActiveSessionId(null)
+    storeSessionId(null, contextKey)
+    setSessionError(null)
+    pushSessionIdInUrl(router, null)
+  }, [contextKey, router])
 
   return {
     activeSessionId,
@@ -87,6 +173,7 @@ export function useChatSession(): UseChatSessionReturn {
     setSessionError,
     handleSessionCreated,
     handleSelectSession,
+    handleContextChange,
     handleNewSession,
-  };
+  }
 }
