@@ -111,14 +111,14 @@ async def load_runtime_config(db: AsyncSession) -> dict[str, Any]:
     env_allowed = _normalize_stringish(getattr(settings, "agent_hub_telegram_allowed_chat_ids", ""))
     env_report_chat = _normalize_stringish(getattr(settings, "agent_hub_telegram_report_chat_id", ""))
 
-    stored_token = await _load_stored_value(db, BOT_TOKEN_TYPE)
-    stored_allowed = await _load_stored_value(db, ALLOWED_CHAT_IDS_TYPE)
-    stored_report_chat = await _load_stored_value(db, REPORT_CHAT_ID_TYPE)
+    stored_token = _normalize_stringish(await _load_stored_value(db, BOT_TOKEN_TYPE))
+    stored_allowed = _normalize_stringish(await _load_stored_value(db, ALLOWED_CHAT_IDS_TYPE))
+    stored_report_chat = _normalize_stringish(await _load_stored_value(db, REPORT_CHAT_ID_TYPE))
 
     token = env_token or stored_token
     allowlist_source_value = env_allowed if env_allowed is not None else stored_allowed
     allowed_chat_ids, allowlist_error = normalize_chat_ids(allowlist_source_value)
-    report_chat_id = env_report_chat or _normalize_stringish(stored_report_chat)
+    report_chat_id = env_report_chat or stored_report_chat
 
     return {
         "token": token,
