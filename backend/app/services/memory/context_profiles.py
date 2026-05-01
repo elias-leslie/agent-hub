@@ -22,6 +22,7 @@ class MemoryConsumerProfile(StrEnum):
 
 
 _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
+    MemoryConsumerProfile.AGENT_PREVIEW: (8, 2),
     MemoryConsumerProfile.AGENT_GENERAL: (6, 2),
     MemoryConsumerProfile.AGENT_VISUAL: (6, 2),
     MemoryConsumerProfile.AGENT_CODING: (16, 4),
@@ -31,6 +32,7 @@ _PROFILE_POLICY_LIMITS: dict[MemoryConsumerProfile, tuple[int, int]] = {
     MemoryConsumerProfile.CODEX_STARTUP: (28, 6),
 }
 _PROFILE_QUERY_REFERENCE_DEFAULTS: dict[MemoryConsumerProfile, bool] = {
+    MemoryConsumerProfile.AGENT_PREVIEW: False,
     MemoryConsumerProfile.AGENT_GENERAL: False,
     MemoryConsumerProfile.AGENT_VISUAL: False,
     MemoryConsumerProfile.AGENT_CODING: True,
