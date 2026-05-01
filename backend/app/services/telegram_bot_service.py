@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -115,7 +116,12 @@ class AgentHubTelegramBot:
 
     async def heartbeat(self) -> None:
         payload = await self.redis.get(RUNNER_STATUS_KEY)
-        data = json.loads(payload) if payload else {}
+        try:
+            data = json.loads(payload) if payload else {}
+        except json.JSONDecodeError:
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
         now = datetime.now(UTC).isoformat()
         data.update(
             {
@@ -290,6 +296,11 @@ class AgentHubTelegramBot:
         _ = context
         await self.heartbeat()
 
+    async def heartbeat_loop(self, *, interval_seconds: float = 30.0) -> None:
+        while True:
+            await self.heartbeat()
+            await asyncio.sleep(interval_seconds)
+
     async def run_polling(self) -> int:
         async with async_session() as db:
             await reconcile_first_party_clients(db)
@@ -317,26 +328,45 @@ class AgentHubTelegramBot:
         application.add_handler(
             MessageHandler(filters.ChatType.PRIVATE & ~filters.TEXT, self.handle_non_text)
         )
-        if application.job_queue is not None:
-            application.job_queue.run_repeating(self.heartbeat_job, interval=30, first=0)
-
-        await application.initialize()
-        me = await application.bot.get_me()
-        self.bot_username = me.username
-        await self.write_runner_status(
-            runner_status="polling",
-            bot_username=self.bot_username,
-            last_error=None,
-        )
-        await application.start()
-        if application.updater is None:
-            raise RuntimeError("telegram updater unavailable")
-        await application.updater.start_polling(drop_pending_updates=False)
+        initialized = False
+        started = False
+        polling_started = False
+        heartbeat_task: asyncio.Task[None] | None = None
         try:
-            while True:
-                await asyncio.sleep(3600)
-        finally:  # pragma: no cover - runtime cleanup
-            await application.updater.stop()
-            await application.stop()
-            await application.shutdown()
-            await self.clear_runner_status()
+            await application.initialize()
+            initialized = True
+            me = await application.bot.get_me()
+            self.bot_username = me.username
+            await self.write_runner_status(
+                runner_status="polling",
+                bot_username=self.bot_username,
+                last_error=None,
+            )
+            await application.start()
+            started = True
+            if application.updater is None:
+                raise RuntimeError("telegram updater unavailable")
+            await application.updater.start_polling(drop_pending_updates=False)
+            polling_started = True
+            await self.heartbeat()
+            heartbeat_task = asyncio.create_task(self.heartbeat_loop())
+            try:
+                while True:
+                    await asyncio.sleep(3600)
+            finally:  # pragma: no cover - runtime cleanup
+                if heartbeat_task is not None:
+                    heartbeat_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await heartbeat_task
+                await application.updater.stop()
+                await application.stop()
+                await application.shutdown()
+                await self.clear_runner_status()
+        except Exception as exc:
+            if not polling_started:
+                await self.write_runner_status(runner_status="degraded", last_error=str(exc))
+                if started:
+                    await application.stop()
+                if initialized:
+                    await application.shutdown()
+            raise

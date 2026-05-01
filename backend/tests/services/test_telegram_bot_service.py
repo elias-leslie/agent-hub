@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import json
+import sys
 import types
 from unittest.mock import AsyncMock
 
@@ -146,3 +149,128 @@ async def test_complete_text_requests_live_tool_enabled_completion(monkeypatch: 
     assert payload["enable_programmatic_tools"] is True
     assert payload["max_turns"] == TELEGRAM_CHAT_MAX_TURNS
     store_mock.assert_awaited_once_with("123", "sess-telegram")
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_replaces_malformed_existing_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    class _FakeRedis:
+        async def close(self) -> None:
+            return None
+
+        async def get(self, _key: str) -> str:
+            return "not-json"
+
+        async def set(self, key: str, value: str) -> None:
+            captured[key] = value
+
+    monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
+
+    bot = AgentHubTelegramBot()
+    bot.bot_username = "jenny_test_bot"
+    await bot.heartbeat()
+
+    payload = json.loads(next(iter(captured.values())))
+    assert payload["runner_status"] == "polling"
+    assert payload["last_error"] is None
+    assert payload["bot_username"] == "jenny_test_bot"
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_loop_runs_until_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRedis:
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
+
+    bot = AgentHubTelegramBot()
+    calls = 0
+
+    async def _heartbeat() -> None:
+        nonlocal calls
+        calls += 1
+        if calls >= 2:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(bot, "heartbeat", _heartbeat)
+    with pytest.raises(asyncio.CancelledError):
+        await bot.heartbeat_loop(interval_seconds=0)
+
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_run_polling_writes_degraded_on_startup_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeRedis:
+        async def close(self) -> None:
+            return None
+
+    class _SessionCtx:
+        async def __aenter__(self):
+            return AsyncMock()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Filter:
+        def __and__(self, _other):
+            return self
+
+        def __invert__(self):
+            return self
+
+    class _Application:
+        job_queue = None
+        updater = None
+
+        def __init__(self) -> None:
+            self.bot = types.SimpleNamespace(get_me=AsyncMock(side_effect=RuntimeError("telegram auth failed")))
+            self.shutdown = AsyncMock()
+
+        def add_handler(self, _handler) -> None:
+            return None
+
+        async def initialize(self) -> None:
+            return None
+
+    app_instance = _Application()
+
+    class _Builder:
+        def token(self, _token: str):
+            return self
+
+        def build(self):
+            return app_instance
+
+    telegram_ext = types.SimpleNamespace(
+        Application=types.SimpleNamespace(builder=lambda: _Builder()),
+        CommandHandler=lambda *args, **kwargs: object(),
+        MessageHandler=lambda *args, **kwargs: object(),
+        filters=types.SimpleNamespace(
+            ChatType=types.SimpleNamespace(PRIVATE=_Filter()),
+            TEXT=_Filter(),
+            COMMAND=_Filter(),
+        ),
+    )
+
+    monkeypatch.setattr("app.services.telegram_bot_service.aioredis.from_url", lambda *args, **kwargs: _FakeRedis())
+    monkeypatch.setattr("app.services.telegram_bot_service.async_session", lambda: _SessionCtx())
+    monkeypatch.setattr("app.services.telegram_bot_service.reconcile_first_party_clients", AsyncMock())
+    monkeypatch.setattr(
+        "app.services.telegram_bot_service.load_runtime_config",
+        AsyncMock(return_value={"token": "token", "allowlist_error": None}),
+    )
+    monkeypatch.setitem(sys.modules, "telegram", types.SimpleNamespace())
+    monkeypatch.setitem(sys.modules, "telegram.ext", telegram_ext)
+
+    bot = AgentHubTelegramBot()
+    write_status = AsyncMock()
+    monkeypatch.setattr(bot, "write_runner_status", write_status)
+
+    with pytest.raises(RuntimeError, match="telegram auth failed"):
+        await bot.run_polling()
+
+    write_status.assert_awaited_with(runner_status="degraded", last_error="telegram auth failed")
+    app_instance.shutdown.assert_awaited_once()
