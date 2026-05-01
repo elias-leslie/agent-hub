@@ -75,6 +75,9 @@ _STATIC_QUICK_USE: dict[str, str] = {
     "vcs": 'st vcs doctor; st jj status/diff; st commit -m "..." --push | no raw git/jj',
     "search": 'st search "query" | repo/code discovery',
     "memory search": 'st memory search "query" | rules/history before retries',
+    "graph doctor": "st graph doctor --project <project> | Graphify health; auto-refreshes code graph",
+    "graph query": 'st graph query "question" --project <project> --budget 1200 | topology map',
+    "graph fallow": "st graph fallow audit --project <project> | compact JS/TS audit",
     "check quick": "st check --quick --changed-only | changed repo gates",
     "check full": "st check --check | full repo gates",
     "web research": 'st web research --query "..." | public web verification',
@@ -92,8 +95,8 @@ _BASE_KEYS = (
     "vcs",
     "search",
     "memory search",
+    "graph doctor",
     "check quick",
-    "web research",
     "agents preview",
 )
 _TASK_KEYS: dict[str, tuple[str, ...]] = {
@@ -189,6 +192,7 @@ def parse_st_command(command: str | None) -> _ParsedStCommand | None:
         "agents",
         "browser",
         "db",
+        "graph",
         "memory",
         "service",
         "sessions",

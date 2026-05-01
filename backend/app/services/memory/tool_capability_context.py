@@ -43,7 +43,7 @@ _TOOL_SPECS: tuple[_ToolCapabilitySpec, ...] = (
             "search", "memory", "prompt", "session-events", "sessions",
             "pulse", "cleanup", "persona", "agents", "complete",
             "check", "db", "browser", "web", "service", "tools",
-            "commit", "jj", "vcs", "backup", "vm",
+            "graph", "commit", "jj", "vcs", "backup", "vm",
         ),
     ),
     _ToolCapabilitySpec(
