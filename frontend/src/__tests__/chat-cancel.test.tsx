@@ -2,164 +2,149 @@
  * Tests for chat cancellation UI.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MessageInput, MessageList, type ChatMessage } from "@agent-hub/chat-ui";
+import { type ChatMessage, MessageInput, MessageList } from '@agent-hub/chat-ui'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClientWrapper } from './test-utils'
 
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
-  return function Wrapper({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-  };
-}
-
-describe("MessageInput", () => {
-  const mockOnSend = vi.fn();
-  const mockOnCancel = vi.fn();
+describe('MessageInput', () => {
+  const mockOnSend = vi.fn()
+  const mockOnCancel = vi.fn()
 
   beforeEach(() => {
-    vi.resetAllMocks();
-  });
+    vi.resetAllMocks()
+  })
 
-  it("shows Send button when idle", () => {
+  it('shows Send button when idle', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="idle"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    expect(screen.getByLabelText("Send message")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Stop generating")).not.toBeInTheDocument();
-  });
+    expect(screen.getByLabelText('Send message')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Stop generating')).not.toBeInTheDocument()
+  })
 
-  it("shows Stop button when streaming", () => {
+  it('shows Stop button when streaming', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Send message")).not.toBeInTheDocument();
-  });
+    expect(screen.getByLabelText('Stop generating')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Send message')).not.toBeInTheDocument()
+  })
 
-  it("shows Stop button when cancelling", () => {
+  it('shows Stop button when cancelling', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="cancelling"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
-  });
+    expect(screen.getByLabelText('Stop generating')).toBeInTheDocument()
+  })
 
-  it("calls onCancel when Stop button is clicked", () => {
+  it('calls onCancel when Stop button is clicked', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    fireEvent.click(screen.getByLabelText("Stop generating"));
-    expect(mockOnCancel).toHaveBeenCalledTimes(1);
-  });
+    fireEvent.click(screen.getByLabelText('Stop generating'))
+    expect(mockOnCancel).toHaveBeenCalledTimes(1)
+  })
 
-  it("disables Stop button when cancelling", () => {
+  it('disables Stop button when cancelling', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="cancelling"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    const stopButton = screen.getByLabelText("Stop generating");
-    expect(stopButton).toBeDisabled();
-  });
+    const stopButton = screen.getByLabelText('Stop generating')
+    expect(stopButton).toBeDisabled()
+  })
 
-  it("disables textarea when streaming", () => {
+  it('disables textarea when streaming', () => {
     render(
       <MessageInput
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
       />,
-      { wrapper: createWrapper() },
-    );
+      { wrapper: createQueryClientWrapper() },
+    )
 
-    const textarea = screen.getByPlaceholderText("Waiting for response...");
-    expect(textarea).toBeDisabled();
-  });
-});
+    const textarea = screen.getByPlaceholderText('Waiting for response...')
+    expect(textarea).toBeDisabled()
+  })
+})
 
-describe("MessageList", () => {
-  it("shows cancelled indicator on cancelled messages", () => {
+describe('MessageList', () => {
+  it('shows cancelled indicator on cancelled messages', () => {
     const messages: ChatMessage[] = [
       {
-        id: "1",
-        role: "user",
-        content: "Hello",
+        id: '1',
+        role: 'user',
+        content: 'Hello',
         timestamp: new Date(),
       },
       {
-        id: "2",
-        role: "assistant",
-        content: "Hi there! I was just starting to explain—",
+        id: '2',
+        role: 'assistant',
+        content: 'Hi there! I was just starting to explain—',
         timestamp: new Date(),
         cancelled: true,
         inputTokens: 10,
         outputTokens: 15,
       },
-    ];
+    ]
 
-    render(<MessageList messages={messages} isStreaming={false} />);
+    render(<MessageList messages={messages} isStreaming={false} />)
 
-    expect(screen.getByText("[cancelled]")).toBeInTheDocument();
-  });
+    expect(screen.getByText('[cancelled]')).toBeInTheDocument()
+  })
 
-  it("shows token counts on completed messages", () => {
+  it('shows token counts on completed messages', () => {
     const messages: ChatMessage[] = [
       {
-        id: "1",
-        role: "assistant",
-        content: "Hello!",
+        id: '1',
+        role: 'assistant',
+        content: 'Hello!',
         timestamp: new Date(),
         inputTokens: 100,
         outputTokens: 50,
       },
-    ];
+    ]
 
-    render(<MessageList messages={messages} isStreaming={false} />);
+    render(<MessageList messages={messages} isStreaming={false} />)
 
-    expect(screen.getByText(/In: 100/)).toBeInTheDocument();
-    expect(screen.getByText(/Out: 50/)).toBeInTheDocument();
-  });
+    expect(screen.getByText(/In: 100/)).toBeInTheDocument()
+    expect(screen.getByText(/Out: 50/)).toBeInTheDocument()
+  })
 
-  it("shows empty state when no messages", () => {
-    render(<MessageList messages={[]} isStreaming={false} />);
+  it('shows empty state when no messages', () => {
+    render(<MessageList messages={[]} isStreaming={false} />)
 
-    expect(screen.getByText("Start a conversation")).toBeInTheDocument();
-  });
-});
+    expect(screen.getByText('Start a conversation')).toBeInTheDocument()
+  })
+})

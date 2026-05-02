@@ -33,7 +33,7 @@ export function ProviderBadge({ message }: ProviderBadgeProps) {
             : (message.agentName || "Assistant")}
       </span>
       {message.isDeliberation && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
           deliberation
         </span>
       )}

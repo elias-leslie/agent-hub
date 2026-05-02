@@ -17,8 +17,7 @@ export function ModelTriggerButton({ onClick, disabled }: ModelTriggerButtonProp
       className={cn(
         "flex items-center justify-center w-10 h-10 rounded-xl md:hidden",
         "transition-all duration-200",
-        "bg-gray-700 hover:bg-gray-600",
-        "text-gray-300",
+        "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground",
         "disabled:opacity-50 disabled:cursor-not-allowed"
       )}
     >
@@ -41,7 +40,7 @@ export function StopSpeakingButton({ onClick }: StopSpeakingButtonProps) {
       className={cn(
         "flex items-center justify-center w-10 h-10 rounded-xl",
         "transition-colors duration-150",
-        "bg-purple-500 hover:bg-purple-600 text-white cursor-pointer animate-pulse"
+        "bg-destructive hover:bg-destructive/90 text-white cursor-pointer animate-pulse"
       )}
     >
       <VolumeX className="w-5 h-5" />
@@ -68,10 +67,10 @@ export function MicButton({ isRecording, canRecord, isSpeaking, onClick }: MicBu
         "flex items-center justify-center w-10 h-10 rounded-xl",
         "transition-colors duration-150",
         isRecording
-          ? "bg-red-500 hover:bg-red-600 text-white cursor-pointer animate-pulse"
+          ? "bg-destructive hover:bg-destructive/90 text-white cursor-pointer animate-pulse"
           : canRecord && !isSpeaking
-            ? "bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer"
-            : "bg-gray-600 text-gray-500 cursor-not-allowed"
+            ? "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            : "bg-muted text-muted-foreground cursor-not-allowed"
       )}
     >
       {isRecording ? (
@@ -101,8 +100,8 @@ export function StopButton({ onClick, canCancel, isCancelling }: StopButtonProps
         "flex items-center justify-center w-10 h-10 rounded-xl",
         "transition-colors duration-150",
         canCancel
-          ? "bg-red-500 hover:bg-red-600 text-white cursor-pointer"
-          : "bg-gray-600 text-gray-500 cursor-not-allowed",
+          ? "bg-destructive hover:bg-destructive/90 text-white cursor-pointer"
+          : "bg-muted text-muted-foreground cursor-not-allowed",
         isCancelling && "animate-pulse"
       )}
     >
@@ -128,8 +127,8 @@ export function SendButton({ onClick, canSend }: SendButtonProps) {
         "flex items-center justify-center w-10 h-10 rounded-xl",
         "transition-all duration-200",
         canSend
-          ? "bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40"
-          : "bg-gray-600 text-gray-500 cursor-not-allowed"
+          ? "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/25"
+          : "bg-muted text-muted-foreground cursor-not-allowed"
       )}
     >
       <Send className="w-5 h-5" />

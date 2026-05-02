@@ -59,16 +59,16 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
   } = props;
 
   return (
-    <div className={cn("border-t border-gray-700", compact ? "p-2.5" : "p-4")}>
+    <div className={cn("border-t border-border bg-card/35", compact ? "p-2.5" : "p-4")}>
       {editingMessage && (
         <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-xs font-medium text-gray-400">
+          <span className="text-xs font-medium text-muted-foreground">
             Editing message
           </span>
           {onEditCancel && (
             <button
               onClick={cancelEditing}
-              className="text-xs text-gray-400 hover:text-gray-200"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               Cancel
             </button>
@@ -119,10 +119,10 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
             disabled={isStreaming || disabled}
             rows={1}
             className={cn(
-              "w-full resize-none rounded-xl border border-gray-600",
-              "bg-gray-800 text-gray-100 placeholder:text-gray-500 px-4",
+              "w-full resize-none rounded-xl border border-input",
+              "bg-background text-foreground placeholder:text-muted-foreground px-4",
               compact ? "py-2 text-sm" : "py-2.5",
-              "focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500",
+              "focus:outline-none focus:ring-2 focus:ring-ring/20 focus:border-ring",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               compact ? "min-h-[40px] max-h-[108px]" : "min-h-[44px] max-h-[120px]",
               "transition-all duration-200",
@@ -168,7 +168,7 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
       </div>
 
       {status === "error" && (
-        <p className="mt-2 text-sm text-red-500">
+        <p className="mt-2 text-sm text-destructive">
           Connection error. Please try again.
         </p>
       )}

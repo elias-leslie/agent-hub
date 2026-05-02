@@ -10,6 +10,28 @@ const createMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   ...overrides,
 })
 
+const createAssistantThread = (): ChatMessage[] => [
+  createMessage({ id: '1', content: 'User' }),
+  createMessage({ id: '2', role: 'assistant', content: 'Assistant' }),
+]
+
+const startEditingMessage = (
+  messages: ChatMessage[],
+  onEdit: (id: string, content: string) => void,
+) => {
+  render(
+    <MessageList
+      messages={messages}
+      isStreaming={false}
+      onEditMessage={onEdit}
+    />,
+  )
+
+  fireEvent.click(screen.getByTitle('Edit message'))
+
+  return screen.getByRole('textbox')
+}
+
 describe('MessageList - Edit and Regenerate', () => {
   it('renders messages correctly', () => {
     const messages: ChatMessage[] = [
@@ -107,10 +129,7 @@ describe('MessageList - Edit and Regenerate', () => {
 
   it('shows regenerate button on hover for assistant messages when callback provided', () => {
     const onRegenerate = vi.fn()
-    const messages = [
-      createMessage({ id: '1', content: 'User' }),
-      createMessage({ id: '2', role: 'assistant', content: 'Assistant' }),
-    ]
+    const messages = createAssistantThread()
 
     render(
       <MessageList
@@ -125,10 +144,7 @@ describe('MessageList - Edit and Regenerate', () => {
 
   it('shows continue button for assistant messages when callback provided', () => {
     const onContinue = vi.fn()
-    const messages = [
-      createMessage({ id: '1', content: 'User' }),
-      createMessage({ id: '2', role: 'assistant', content: 'Assistant' }),
-    ]
+    const messages = createAssistantThread()
 
     render(
       <MessageList
@@ -164,17 +180,7 @@ describe('MessageList - Edit and Regenerate', () => {
     const onEdit = vi.fn()
     const messages = [createMessage({ id: 'msg-1', content: 'Original' })]
 
-    render(
-      <MessageList
-        messages={messages}
-        isStreaming={false}
-        onEditMessage={onEdit}
-      />,
-    )
-
-    fireEvent.click(screen.getByTitle('Edit message'))
-
-    const textarea = screen.getByRole('textbox')
+    const textarea = startEditingMessage(messages, onEdit)
     fireEvent.change(textarea, { target: { value: 'Edited content' } })
 
     // Find save button (second button in edit controls, after cancel)
@@ -189,17 +195,7 @@ describe('MessageList - Edit and Regenerate', () => {
     const onEdit = vi.fn()
     const messages = [createMessage({ content: 'Original' })]
 
-    render(
-      <MessageList
-        messages={messages}
-        isStreaming={false}
-        onEditMessage={onEdit}
-      />,
-    )
-
-    fireEvent.click(screen.getByTitle('Edit message'))
-
-    const textarea = screen.getByRole('textbox')
+    const textarea = startEditingMessage(messages, onEdit)
     fireEvent.change(textarea, { target: { value: 'Changed' } })
 
     // Cancel - find X button (second button in edit mode)
@@ -212,10 +208,7 @@ describe('MessageList - Edit and Regenerate', () => {
 
   it('calls onRegenerate when regenerate button clicked', () => {
     const onRegenerate = vi.fn()
-    const messages = [
-      createMessage({ id: '1', content: 'User' }),
-      createMessage({ id: '2', role: 'assistant', content: 'Assistant' }),
-    ]
+    const messages = createAssistantThread()
 
     render(
       <MessageList
@@ -232,10 +225,7 @@ describe('MessageList - Edit and Regenerate', () => {
 
   it('calls onContinue when continue button clicked', () => {
     const onContinue = vi.fn()
-    const messages = [
-      createMessage({ id: '1', content: 'User' }),
-      createMessage({ id: '2', role: 'assistant', content: 'Assistant' }),
-    ]
+    const messages = createAssistantThread()
 
     render(
       <MessageList

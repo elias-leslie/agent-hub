@@ -35,7 +35,7 @@ function permissionTone(permission: ChatPermissionRequest): string {
 function contextTone(tone: NonNullable<ChatMessage["contextHints"]>[number]["tone"]): string {
   if (tone === "danger") return "text-rose-300";
   if (tone === "warning") return "text-amber-300";
-  return "text-slate-400";
+  return "text-muted-foreground";
 }
 
 export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
@@ -56,9 +56,9 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
   return (
     <div className="mt-3 space-y-2 border-t border-current/10 pt-2 text-xs">
       {(message.statusLabel || hasUsage || hasContextHints) && (
-        <div className="flex flex-wrap items-center gap-2 text-slate-400">
+        <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
           {message.statusLabel ? (
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-950/30 px-1.5 py-0.5">
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5">
               <Activity className="h-3 w-3" />
               {message.statusLabel}
             </span>
@@ -102,13 +102,13 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
       {hasArtifacts && (
         <div className="space-y-1">
           {message.artifacts?.map((artifact) => (
-            <div key={artifact.id} className="rounded-md border border-slate-700/50 bg-slate-950/25 px-2 py-1.5">
-              <div className="flex items-center gap-1.5 text-slate-200">
+            <div key={artifact.id} className="rounded-md border border-border bg-muted/45 px-2 py-1.5">
+              <div className="flex items-center gap-1.5 text-foreground">
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate font-medium">{artifact.title}</span>
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-slate-500">{artifact.type}</span>
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{artifact.type}</span>
               </div>
-              {artifact.summary ? <p className="mt-0.5 text-slate-400">{artifact.summary}</p> : null}
+              {artifact.summary ? <p className="mt-0.5 text-muted-foreground">{artifact.summary}</p> : null}
             </div>
           ))}
         </div>
@@ -117,10 +117,10 @@ export function MessageRuntimeDetails({ message }: MessageRuntimeDetailsProps) {
       {hasAttachments && (
         <div className="flex flex-wrap gap-1.5">
           {message.attachments?.map((attachment) => (
-            <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-slate-950/30 px-1.5 py-0.5 text-slate-300">
+            <span key={attachment.id} className="inline-flex max-w-full items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-muted-foreground">
               <Paperclip className="h-3 w-3 shrink-0" />
               <span className="truncate">{attachment.name}</span>
-              {formatBytes(attachment.sizeBytes) ? <span className="text-slate-500">{formatBytes(attachment.sizeBytes)}</span> : null}
+              {formatBytes(attachment.sizeBytes) ? <span className="opacity-70">{formatBytes(attachment.sizeBytes)}</span> : null}
             </span>
           ))}
         </div>
