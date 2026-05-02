@@ -138,7 +138,7 @@ class GeminiAdapter(ProviderAdapter):
         """Run agentic loop with tool execution, yielding (event, session_id) tuples."""
         self._refresh_credentials()
         async for event in tool_loop(
-            self._client,
+            self._sdk_clients,
             messages,
             model,
             tools,

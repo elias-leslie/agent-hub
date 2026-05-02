@@ -11,10 +11,12 @@ from app.adapters.base import (
     AuthenticationError,
     CompletionResult,
     Message,
+    ProviderError,
     RateLimitError,
     StreamEvent,
 )
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.gemini_adapter_ops import tool_loop
 from app.constants.models import GEMINI_FLASH
 
 
@@ -139,6 +141,7 @@ class TestGeminiAdapter:
             result = await adapter.complete([Message(role="user", content="Hi")], model=GEMINI_FLASH)
 
         assert result.content == "Second key succeeded"
+        assert mock_failover.await_args is not None
         args = mock_failover.await_args.args
         assert args[0] == [client_1, client_2]
         assert args[1] is client_1
@@ -178,3 +181,65 @@ class TestGeminiAdapter:
             events = [event async for event in adapter.stream([Message(role="user", content="hi")], GEMINI_FLASH)]
 
         assert [event.type for event in events] == ["content", "done"]
+
+    @pytest.mark.asyncio
+    async def test_tool_loop_forwards_agent_context_kwargs(self):
+        """Gemini tool loop should accept Agent Hub context kwargs."""
+        captured: dict[str, object] = {}
+
+        async def fake_execute_tool_loop(**kwargs):
+            captured.update(kwargs)
+            yield ("done", "session-1")
+
+        with patch("app.adapters.gemini_adapter_ops.execute_tool_loop", side_effect=fake_execute_tool_loop):
+            events = [
+                event
+                async for event in tool_loop(
+                    MagicMock(),
+                    [Message(role="user", content="hi")],
+                    GEMINI_FLASH,
+                    [],
+                    "/tmp/project",
+                    None,
+                    1,
+                    "gemini",
+                    project_id="summitflow",
+                    agent_slug="graphify-semantic-extractor",
+                    tool_catalog=[],
+                )
+            ]
+
+        assert events == [("done", "session-1")]
+        assert captured["agent_slug"] == "graphify-semantic-extractor"
+        assert captured["tool_catalog"] == []
+
+    @pytest.mark.asyncio
+    async def test_tool_loop_tries_second_key_after_retryable_failure(self):
+        """Gemini tool loop should use the secondary API key on quota failures."""
+        clients = [MagicMock(name="client-1"), MagicMock(name="client-2")]
+        attempted: list[object] = []
+
+        async def fake_execute_tool_loop(client, **_kwargs):
+            attempted.append(client)
+            if len(attempted) == 1:
+                raise ProviderError("quota", provider="gemini", retriable=True)
+            yield ("done", "session-2")
+
+        with patch("app.adapters.gemini_adapter_ops.execute_tool_loop", side_effect=fake_execute_tool_loop):
+            events = [
+                event
+                async for event in tool_loop(
+                    clients,
+                    [Message(role="user", content="hi")],
+                    GEMINI_FLASH,
+                    [],
+                    "/tmp/project",
+                    None,
+                    1,
+                    "gemini",
+                    project_id="summitflow",
+                )
+            ]
+
+        assert attempted == clients
+        assert events == [("done", "session-2")]
