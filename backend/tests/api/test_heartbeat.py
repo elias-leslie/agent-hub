@@ -260,9 +260,118 @@ class TestHeartbeatStatus:
             session_id="hb-session-1",
         )
 
+    def test_heartbeat_status_reports_current_skip_without_rewriting_last_success(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat._get_effective_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_last_run_info",
+                new_callable=AsyncMock,
+                return_value="2026-04-01T10:00:00+00:00",
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_state",
+                new_callable=AsyncMock,
+                return_value={
+                    "last_attempt": "2026-04-20T13:40:00+00:00",
+                    "last_success": "2026-04-01T10:00:00+00:00",
+                    "last_skip_reason": "schedule_disabled",
+                    "last_error": "",
+                    "last_session_id": "old-success-session",
+                },
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_metrics",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.get_heartbeat_runtime_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+        ):
+            response = api_client.get("/api/heartbeat/status")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["running"] is False
+        assert data["running_session_id"] is None
+        assert data["last_attempt"] == "2026-04-20T13:40:00+00:00"
+        assert data["last_skip_reason"] == "schedule_disabled"
+        assert data["last_run"] == "2026-04-01T10:00:00+00:00"
+        assert data["last_success"] == "2026-04-01T10:00:00+00:00"
+        assert data["last_session_id"] == "old-success-session"
+
 
 class TestHeartbeatTrigger:
     """Tests for POST /api/heartbeat/trigger."""
+
+
+    def test_heartbeat_trigger_when_schedule_disabled_returns_skipped_without_dispatch(self, api_client):
+        with (
+            patch(
+                "app.api.heartbeat._get_effective_running_info",
+                new_callable=AsyncMock,
+                return_value=None,
+            ) as mock_running,
+            patch(
+                "app.api.heartbeat.get_heartbeat_interval",
+                new_callable=AsyncMock,
+                return_value=(60, True),
+            ),
+            patch(
+                "app.api.heartbeat.get_persona_execution_state",
+                new_callable=AsyncMock,
+                return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch(
+                "app.api.heartbeat.record_heartbeat_skip",
+                new_callable=AsyncMock,
+            ) as mock_skip,
+            patch(
+                "app.api.heartbeat.record_heartbeat_attempt",
+                new_callable=AsyncMock,
+            ) as mock_attempt,
+            patch(
+                "app.api.heartbeat.set_heartbeat_running",
+                new_callable=AsyncMock,
+            ) as mock_set_running,
+            patch("app.api.heartbeat.persona_heartbeat_task") as mock_task,
+        ):
+            mock_task.aio_run_no_wait = AsyncMock()
+            response = api_client.post("/api/heartbeat/trigger")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {
+            "status": "skipped",
+            "message": "Heartbeat skipped (schedule disabled)",
+            "session_id": None,
+        }
+        mock_running.assert_awaited_once()
+        mock_skip.assert_awaited_once_with("schedule_disabled")
+        mock_attempt.assert_not_awaited()
+        mock_set_running.assert_not_awaited()
+        mock_task.aio_run_no_wait.assert_not_called()
 
     def test_heartbeat_trigger_when_idle_dispatches_task(self, api_client):
         with (
@@ -280,6 +389,11 @@ class TestHeartbeatTrigger:
                 "app.api.heartbeat.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=True,
             ),
             patch(
                 "app.api.heartbeat.check_project_permission",
@@ -339,6 +453,11 @@ class TestHeartbeatTrigger:
                 "app.api.heartbeat.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=True,
             ),
             patch(
                 "app.api.heartbeat.check_project_permission",
@@ -423,6 +542,11 @@ class TestHeartbeatTrigger:
                 return_value="active",
             ),
             patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=True,
+            ),
+            patch(
                 "app.api.heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
@@ -485,6 +609,11 @@ class TestHeartbeatTrigger:
                 "app.api.heartbeat.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=True,
             ),
             patch(
                 "app.api.heartbeat.check_project_permission",
@@ -556,6 +685,11 @@ class TestHeartbeatTrigger:
                 "app.api.heartbeat.get_persona_execution_state",
                 new_callable=AsyncMock,
                 return_value="active",
+            ),
+            patch(
+                "app.api.heartbeat.is_workflow_schedule_enabled",
+                new_callable=AsyncMock,
+                return_value=True,
             ),
             patch(
                 "app.api.heartbeat.check_project_permission",
