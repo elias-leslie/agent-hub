@@ -63,7 +63,7 @@ def _get_searxng_base_url() -> str | None:
     configured = settings.web_search_searxng_url.strip()
     if configured:
         return configured.rstrip("/")
-    host = settings.sf_browser_host.strip()
+    host = settings.st_browser_host.strip()
     if not host:
         return None
     return f"http://{host}:{DEFAULT_SEARXNG_PORT}"

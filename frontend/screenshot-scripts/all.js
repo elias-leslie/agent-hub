@@ -39,19 +39,19 @@ function resolveBaseUrl() {
 
 const baseUrl = resolveBaseUrl();
 
-function runSfBrowser(args, { allowFailure = false } = {}) {
+function runStBrowser(args, { allowFailure = false } = {}) {
   const result = spawnSync(
-    "sf-browser",
-    ["--session", sessionName, "--engine", "chrome", "--color-scheme", theme, ...args],
+    "st",
+    ["browser", "--engine", "chrome", "--session", sessionName, "--color-scheme", theme, ...args],
     {
       cwd: repoRoot,
       stdio: "inherit",
       env: {
         ...process.env,
-        SF_BROWSER_VIEWPORT_WIDTH:
-          process.env.SF_BROWSER_VIEWPORT_WIDTH || "1440",
-        SF_BROWSER_VIEWPORT_HEIGHT:
-          process.env.SF_BROWSER_VIEWPORT_HEIGHT || "960",
+        ST_BROWSER_VIEWPORT_WIDTH:
+          process.env.ST_BROWSER_VIEWPORT_WIDTH || "1440",
+        ST_BROWSER_VIEWPORT_HEIGHT:
+          process.env.ST_BROWSER_VIEWPORT_HEIGHT || "960",
       },
     },
   );
@@ -60,11 +60,11 @@ function runSfBrowser(args, { allowFailure = false } = {}) {
     return;
   }
 
-  throw new Error(`sf-browser ${args.join(" ")} failed with exit code ${result.status}`);
+  throw new Error(`st browser ${args.join(" ")} failed with exit code ${result.status}`);
 }
 
 function closeBrowser() {
-  runSfBrowser(["close"], { allowFailure: true });
+  runStBrowser(["close"], { allowFailure: true });
 }
 
 async function captureAll() {
@@ -91,10 +91,10 @@ async function captureAll() {
 
     try {
       closeBrowser();
-      runSfBrowser(["open", url]);
-      runSfBrowser(["wait", "--load", "networkidle"]);
-      runSfBrowser(["wait", "1500"]);
-      runSfBrowser(["screenshot", outputPath]);
+      runStBrowser(["open", url]);
+      runStBrowser(["wait", "--load", "networkidle"]);
+      runStBrowser(["wait", "1500"]);
+      runStBrowser(["screenshot", outputPath]);
       console.log(`Saved: ${path.relative(repoRoot, outputPath)}`);
     } catch (error) {
       failed = true;

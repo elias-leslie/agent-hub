@@ -40,18 +40,13 @@ _TOOL_SPECS: tuple[_ToolCapabilitySpec, ...] = (
         help_command=("st", "--help"),
         fallback_description="SummitFlow CLI",
         command_allowlist=(
-            "search", "memory", "prompt", "session-events", "sessions",
-            "pulse", "cleanup", "persona", "agents", "complete",
-            "check", "db", "browser", "web", "service", "tools",
+            "list", "ready", "ready-all", "context", "create", "claim",
+            "done", "abandon", "cancel", "pause", "resume", "log",
+            "search", "memory", "prompt", "feedback", "session-events",
+            "sessions", "pulse", "cleanup", "persona", "agents", "complete",
+            "autocode", "check", "db", "browser", "web", "service", "tools",
             "graph", "commit", "jj", "vcs", "backup", "vm",
         ),
-    ),
-    _ToolCapabilitySpec(
-        name="dt",
-        help_command=("dt", "--help"),
-        fallback_description="Quality gate wrapper",
-        command_allowlist=("pytest", "ruff", "types", "biome", "tsc", "vitest"),
-        flag_allowlist=("--check", "--quick", "--changed-only", "--frontend-only"),
     ),
     _ToolCapabilitySpec(
         name="db",
@@ -71,14 +66,6 @@ _TOOL_SPECS: tuple[_ToolCapabilitySpec, ...] = (
         fallback_description="Project rebuild helper",
         flag_allowlist=("--detach", "--include-all-workers"),
         require_project=True,
-    ),
-    _ToolCapabilitySpec(
-        name="sf-browser",
-        help_command=("sf-browser", "--help"),
-        fallback_description="Browser automation CLI",
-        command_allowlist=("open", "snapshot", "click", "type", "get", "session"),
-        require_project=True,
-        frontend_only=True,
     ),
 )
 
@@ -194,31 +181,6 @@ def _extract_st_commands(help_text: str) -> list[str]:
     return commands
 
 
-def _extract_dt_commands(help_text: str) -> tuple[list[str], list[str]]:
-    commands: list[str] = []
-    flags: list[str] = []
-    section = ""
-    for raw_line in _extract_help_lines(help_text):
-        stripped = raw_line.strip()
-        if stripped.startswith("Subcommands"):
-            section = "commands"
-            continue
-        if stripped == "Options:":
-            section = "flags"
-            continue
-        if not stripped:
-            continue
-        if section == "commands" and raw_line.startswith("  "):
-            command = stripped.split()[0]
-            if command and command not in commands:
-                commands.append(command)
-        elif section == "flags" and raw_line.startswith("  "):
-            flag = stripped.split()[0].rstrip(",")
-            if flag.startswith("-") and flag not in flags:
-                flags.append(flag)
-    return commands, flags
-
-
 def _extract_db_commands(help_text: str) -> list[str]:
     commands: list[str] = []
     section = ""
@@ -256,18 +218,6 @@ def _extract_web_research_commands(help_text: str) -> list[str]:
     return commands
 
 
-def _extract_sf_browser_commands(help_text: str) -> list[str]:
-    commands: list[str] = []
-    for raw_line in _extract_help_lines(help_text):
-        stripped = raw_line.strip()
-        if stripped.endswith(":") or not raw_line.startswith("  "):
-            continue
-        command = stripped.split()[0]
-        if command and command not in commands:
-            commands.append(command)
-    return commands
-
-
 def _extract_rebuild_flags(help_text: str) -> list[str]:
     usage_line = next((line.strip() for line in help_text.splitlines() if line.strip().startswith("Usage:")), "")
     flags: list[str] = []
@@ -290,14 +240,10 @@ def _build_tool_entry(
     flags: list[str] = []
     if spec.name == "st":
         commands = _extract_st_commands(help_text)
-    elif spec.name == "dt":
-        commands, flags = _extract_dt_commands(help_text)
     elif spec.name == "db":
         commands = _extract_db_commands(help_text)
     elif spec.name == "web-research":
         commands = _extract_web_research_commands(help_text)
-    elif spec.name == "sf-browser":
-        commands = _extract_sf_browser_commands(help_text)
     elif spec.name == "rebuild.sh":
         flags = _extract_rebuild_flags(help_text)
 
