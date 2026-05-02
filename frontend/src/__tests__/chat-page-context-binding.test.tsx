@@ -56,6 +56,11 @@ function latestChatPanelProps() {
   return mocks.chatPanelProps[mocks.chatPanelProps.length - 1]
 }
 
+function selectAgent(name: RegExp) {
+  fireEvent.click(screen.getByTestId('model-selector'))
+  fireEvent.click(screen.getByRole('button', { name }))
+}
+
 describe('ChatPage context binding', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -151,10 +156,7 @@ describe('ChatPage context binding', () => {
       )
     })
 
-    fireEvent.click(screen.getByTestId('model-selector'))
-    fireEvent.click(
-      screen.getByRole('button', { name: /Debugger\s*debugger/i }),
-    )
+    selectAgent(/Debugger\s*debugger/i)
 
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(
@@ -203,10 +205,7 @@ describe('ChatPage context binding', () => {
       )
     })
 
-    fireEvent.click(screen.getByTestId('model-selector'))
-    fireEvent.click(
-      screen.getByRole('button', { name: /Debugger\s*debugger/i }),
-    )
+    selectAgent(/Debugger\s*debugger/i)
 
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(
@@ -217,10 +216,7 @@ describe('ChatPage context binding', () => {
       )
     })
 
-    fireEvent.click(screen.getByTestId('model-selector'))
-    fireEvent.click(
-      screen.getByRole('button', { name: /General Assistant\s*chat/i }),
-    )
+    selectAgent(/General Assistant\s*chat/i)
 
     await waitFor(() => {
       expect(latestChatPanelProps()).toEqual(

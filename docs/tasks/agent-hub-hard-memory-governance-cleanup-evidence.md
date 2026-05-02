@@ -20,7 +20,7 @@
 - `0caa2225-c382-4f0f-8e45-751b38173cc2` | classes: `policy_with_targeting` | loaded_count: `4763` | label: `Alembic-only DB migrations`
 - `d2a6f07f-9f0a-4613-96f2-ec5f70b41234` | classes: `policy_with_targeting` | loaded_count: `4487` | label: `Rebuild before any verification`
 - `599b4bbf-4e78-4215-815c-230668033c84` | classes: `policy_with_targeting` | loaded_count: `4198` | label: `No hardcoded lists; use registries`
-- `b87abcad-58d1-46bb-aec3-4141a80674be` | classes: `invalid_trigger_task_type` | loaded_count: `4020` | label: `sf-browser uses project-index IPs`
+- `b87abcad-58d1-46bb-aec3-4141a80674be` | classes: `invalid_trigger_task_type` | loaded_count: `4020` | label: `st browser uses project-index IPs`
 - `5262f9d0-4860-4e94-a8d5-641e83dfade4` | classes: `policy_with_targeting` | loaded_count: `3915` | label: `Global behavior scope`
 - `fb35137d-17df-471c-b526-0059453f53d8` | classes: `policy_with_targeting` | loaded_count: `3842` | label: `Fix broken CLI, never raw API`
 - `ccab51a7-6399-4f7b-a9d9-21912e225dd6` | classes: `policy_with_targeting` | loaded_count: `3788` | label: `Check raw and lane truth`
@@ -43,7 +43,7 @@
 - `c11dbbe8-abf3-461f-ba42-d12ea7f39a7c` | classes: `policy_with_targeting` | loaded_count: `2778` | label: `keep apps container-compatible`
 - `937dcff1-f89b-4b24-8eb6-eda54d9703c7` | classes: `invalid_trigger_task_type` | loaded_count: `2748` | label: `native restart clears stale ports`
 - `38402815-0e4f-4ba3-beaa-92cd134a405b` | classes: `invalid_trigger_task_type` | loaded_count: `2746` | label: `runtime guardrail native+infra`
-- `2064632c-c57e-4cfd-8c89-c851bc9e7677` | classes: `invalid_trigger_task_type` | loaded_count: `2690` | label: `Check sf-browser health`
+- `2064632c-c57e-4cfd-8c89-c851bc9e7677` | classes: `invalid_trigger_task_type` | loaded_count: `2690` | label: `Check st browser health`
 - `b7e9c173-550d-4bc9-984f-26729b0bf28e` | classes: `invalid_trigger_task_type` | loaded_count: `2521` | label: `session events API`
 - `9d73bc3d-d6c8-4517-b3b8-eacc2305fc82` | classes: `policy_with_targeting` | loaded_count: `2469` | label: `Own broken wake dispatch`
 - `b9312059-9286-4cd5-a91b-2f6afa56f633` | classes: `policy_with_targeting` | loaded_count: `2399` | label: `Ghost lanes are debt`
@@ -52,7 +52,7 @@
 - `0e50d244-7586-4fe9-845c-a756f47b60b2` | classes: `policy_with_targeting` | loaded_count: `1995` | label: `Wait before redriving Claude`
 - `015a8754-95f0-4370-8a8c-077ace49ca90` | classes: `policy_with_targeting` | loaded_count: `475` | label: `Done path + specialists`
 - `f2ae2668-da26-46e1-b499-ffac6141e377` | classes: `policy_with_targeting` | loaded_count: `454` | label: `Ownership vs sessions`
-- `49372f37-2d06-414d-bb4d-f97c53224199` | classes: `invalid_trigger_task_type` | loaded_count: `345` | label: `sf-browser is canonical`
+- `49372f37-2d06-414d-bb4d-f97c53224199` | classes: `invalid_trigger_task_type` | loaded_count: `345` | label: `st browser is canonical`
 - `22f8f615-11f1-4cd8-96ac-31eadd627106` | classes: `policy_with_targeting` | loaded_count: `141` | label: `Stop repeat cleanup reconcile`
 - `d7c57c77-ab4c-4bea-8cdc-5f867cb8d992` | classes: `invalid_trigger_task_type` | loaded_count: `101` | label: `Use live plan schema`
 - `7c847063-36a0-47e0-ad7b-218968681a79` | classes: `policy_with_targeting` | loaded_count: `46` | label: `Persona tool contract`

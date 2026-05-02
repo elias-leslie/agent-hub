@@ -125,7 +125,7 @@
     {
       "uuid": "49372f37-2d06-414d-bb4d-f97c53224199",
       "name": "learning_20260408_140624",
-      "content": "**SF Browser Canonical Interface**: Use `sf-browser` as the standard browser UI verification CLI for SummitFlow work. Treat `agent-browser` as an internal implementation detail unless you are maintaining `sf-browser` itself or using a documented fallback path.",
+      "content": "**SF Browser Canonical Interface**: Use `st browser` as the standard browser UI verification CLI for SummitFlow work. Treat `agent-browser` as an internal implementation detail unless you are maintaining `st browser` itself or using a documented fallback path.",
       "injection_tier": "mandate",
       "source_description": "mandate mandate source:learning confidence:80 status:provisional",
       "created_at": "2026-04-08T14:06:24.958265Z",
@@ -140,7 +140,7 @@
         "verification"
       ],
       "trigger_phases": [],
-      "summary": "sf-browser is canonical",
+      "summary": "st browser is canonical",
       "context_kind": "capability",
       "applicability": {
         "consumer_profiles": [],
@@ -1009,7 +1009,7 @@
     {
       "uuid": "2064632c-c57e-4cfd-8c89-c851bc9e7677",
       "name": "learning_20260319_171050",
-      "content": "**SF Browser Health**: Check `sf-browser health` before UI verification. If engines are down, start VM 100 with `proxmox-vm.sh start 100` and wait for SSH plus Docker. Never skip UI verification because the test VM is down.",
+      "content": "**SF Browser Health**: Check `st browser health` before UI verification. If engines are down, start VM 100 with `proxmox-vm.sh start 100` and wait for SSH plus Docker. Never skip UI verification because the test VM is down.",
       "injection_tier": "reference",
       "source_description": "guardrail guardrail source:learning confidence:80 type:anti_pattern status:provisional",
       "created_at": "2026-03-19T17:10:51.342862Z",
@@ -1024,7 +1024,7 @@
         "verification"
       ],
       "trigger_phases": [],
-      "summary": "Check sf-browser health",
+      "summary": "Check st browser health",
       "context_kind": "capability",
       "applicability": {
         "consumer_profiles": [],
@@ -1511,7 +1511,7 @@
     {
       "uuid": "b87abcad-58d1-46bb-aec3-4141a80674be",
       "name": "chat_2026-03-06T15:14:37.663143+00:00",
-      "content": "**SF Browser URLs**: Use host_ip from project-index (injected at session start) plus service port for sf-browser URLs. Never guess IPs. Check `sf-browser health` before UI work.",
+      "content": "**SF Browser URLs**: Use host_ip from project-index (injected at session start) plus service port for st browser URLs. Never guess IPs. Check `st browser health` before UI work.",
       "injection_tier": "mandate",
       "source_description": "tier:reference",
       "created_at": "2026-03-06T15:14:37.958869Z",
@@ -1526,7 +1526,7 @@
         "verification"
       ],
       "trigger_phases": [],
-      "summary": "sf-browser uses project-index IPs",
+      "summary": "st browser uses project-index IPs",
       "context_kind": "capability",
       "applicability": {
         "consumer_profiles": [],

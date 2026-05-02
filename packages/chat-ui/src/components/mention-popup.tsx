@@ -29,17 +29,17 @@ export function MentionPopup({
       ref={popupRef}
       className={cn(
         "absolute bottom-full left-0 mb-2 z-50",
-        "bg-gray-900/95 backdrop-blur-xl",
-        "border border-gray-700/80",
-        "rounded-xl shadow-xl shadow-black/30",
+        "bg-popover text-popover-foreground backdrop-blur-xl",
+        "border border-border",
+        "rounded-xl shadow-xl shadow-black/20",
         "py-2 min-w-[220px] max-h-[280px] overflow-y-auto",
         "animate-in fade-in slide-in-from-bottom-2 duration-200"
       )}
       role="listbox"
       aria-label="Select a model"
     >
-      <div className="px-3 pb-2 mb-1 border-b border-gray-800">
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+      <div className="px-3 pb-2 mb-1 border-b border-border">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           {filter ? `Matching "${filter}"` : "Select Model"}
         </span>
       </div>
@@ -93,7 +93,7 @@ export function MentionPopup({
               "focus:outline-none",
               isSelected
                 ? colors.bg
-                : "hover:bg-gray-800/50"
+                : "hover:bg-accent"
             )}
           >
             <span
@@ -115,12 +115,12 @@ export function MentionPopup({
               >
                 @{option.alias}
               </div>
-              <div className="text-xs text-gray-400">
+              <div className="text-xs text-muted-foreground">
                 {option.hint}
               </div>
             </div>
             {isSelected && (
-              <span className="text-xs text-gray-500 font-mono">
+              <span className="text-xs text-muted-foreground font-mono">
                 ↵
               </span>
             )}
@@ -128,7 +128,7 @@ export function MentionPopup({
         );
       })}
       {options.length === 0 && (
-        <div className="px-3 py-4 text-center text-sm text-gray-500">
+        <div className="px-3 py-4 text-center text-sm text-muted-foreground">
           No matching models
         </div>
       )}

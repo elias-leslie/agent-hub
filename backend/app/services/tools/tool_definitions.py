@@ -114,6 +114,7 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         READ_HEARTBEAT_INSTRUCTIONS_TOOL,
     ],
     "memory-curator": [
+        *STANDARD_TOOLS,
         REVIEW_MEMORY_SYSTEM_TOOL,
     ],
 }

@@ -33,7 +33,7 @@ export function getProviderIconColor(provider?: string): string {
     zhipu: "text-teal-400",
   };
 
-  return (provider && colors[provider]) || "text-gray-400";
+  return (provider && colors[provider]) || "text-muted-foreground";
 }
 
 export function getProviderTextColor(provider?: string): string {
@@ -46,5 +46,5 @@ export function getProviderTextColor(provider?: string): string {
     zhipu: "text-teal-400",
   };
 
-  return (provider && colors[provider]) || "text-gray-400";
+  return (provider && colors[provider]) || "text-muted-foreground";
 }

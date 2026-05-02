@@ -177,19 +177,19 @@ export function ChatPanel({
     <div className="flex flex-row h-full">
       <div className="flex flex-col flex-1 h-full min-w-0">
         {/* Header */}
-        <div className="border-b border-gray-700 px-4 py-3">
+        <div className="border-b border-border bg-card/35 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold text-gray-100 sm:text-lg">
+              <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
                 {title}
               </h1>
-              <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-gray-500 md:flex">
+              <div className="mt-1 hidden flex-wrap items-center gap-2 text-xs text-muted-foreground md:flex">
                 <span>{currentSessionId ? `session ${currentSessionId.slice(0, 8)}` : "new session"}</span>
                 {agentSlug ? <span>agent {agentSlug}</span> : null}
                 {workingDir ? <span className="truncate">cwd {workingDir}</span> : null}
                 {toolsEnabled ? <span>tools on</span> : null}
                 {tokenTotal > 0 ? <span>{tokenTotal.toLocaleString()} tokens</span> : null}
-                {runningTool ? <span className="text-blue-300">running {runningTool.name}</span> : null}
+                {runningTool ? <span className="text-primary">running {runningTool.name}</span> : null}
               </div>
             </div>
 
@@ -200,7 +200,7 @@ export function ChatPanel({
             <button
               onClick={handleContinueLatest}
               disabled={!lastAssistantMessage || isBusy}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
               title="Continue response"
             >
               <CornerDownRight className="h-4 w-4" />
@@ -209,7 +209,7 @@ export function ChatPanel({
             <button
               onClick={handleFork}
               disabled={!currentSessionId || isBusy}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
               title="Fork session"
             >
               <Split className="h-4 w-4" />
@@ -218,7 +218,7 @@ export function ChatPanel({
             <button
               onClick={handleCompact}
               disabled={messages.length < 8 || isBusy}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
               title="Compact context"
             >
               <Archive className="h-4 w-4" />
@@ -228,7 +228,7 @@ export function ChatPanel({
             {messages.length > 0 && !isStreaming && (
               <button
                 onClick={() => { clearMessages(); onClear?.(); }}
-                className="text-sm text-gray-400 hover:text-gray-200"
+                className="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
                 Clear
               </button>
@@ -238,7 +238,7 @@ export function ChatPanel({
             {renderDebugPanel && (
               <button
                 onClick={() => setShowDebug(!showDebug)}
-                className="p-1.5 rounded-md text-gray-400 hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                 title="Toggle Debug Panel"
               >
                 {showDebug ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
@@ -247,7 +247,7 @@ export function ChatPanel({
             <button
               onClick={handleResume}
               disabled={!(sessionId ?? currentSessionId) || isBusy}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
               title="Resume session"
             >
                 <Play className="h-4 w-4" />
@@ -261,8 +261,8 @@ export function ChatPanel({
 
         {/* Error banner */}
         {error && (
-          <div className="bg-red-900/20 border-b border-red-800 px-4 py-2">
-            <p className="text-sm text-red-400">{error}</p>
+          <div className="border-b border-destructive/30 bg-destructive/10 px-4 py-2">
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 

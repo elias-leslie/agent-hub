@@ -16,7 +16,7 @@ Thin canonical contract for `/persona` operator UX. Purpose: keep future work DR
 - Live run summary truth: `session.live_activity`.
 - Stage execution truth: `/api/orchestration/workflow` response plus child sessions created by completion pipeline.
 - Prompt-budget truth: existing preview/runtime prompt data. If live runtime lacks a metric, show preview-derived data as preview, not fact.
-- Browser verification truth: `sf-browser` against host-IP lane URLs.
+- Browser verification truth: `st browser` against host-IP lane URLs.
 
 ## Workflow semantics
 
