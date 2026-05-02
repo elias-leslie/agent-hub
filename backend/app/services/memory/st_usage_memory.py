@@ -72,7 +72,8 @@ class _ParsedStCommand:
 
 _STATIC_QUICK_USE: dict[str, str] = {
     "pulse": "st pulse --gate | preflight; edit only if clear",
-    "vcs": 'st vcs doctor; st jj status/diff; st commit -m "..." --push | no raw git/jj',
+    "queue": "project flag before command: st -P <project> ready --limit N; st feedback list --project <project> --status open --limit N; st sessions ownership -P <project> | queue + lanes",
+    "vcs": "st vcs doctor; st jj status | read-only VCS diagnostics",
     "search": 'st search "query" | repo/code discovery',
     "memory search": 'st memory search "query" | rules/history before retries',
     "graph doctor": "st graph doctor --project <project> | Graphify health; auto-refreshes code graph",
@@ -92,6 +93,7 @@ _STATIC_QUICK_USE: dict[str, str] = {
 
 _BASE_KEYS = (
     "pulse",
+    "queue",
     "vcs",
     "search",
     "memory search",

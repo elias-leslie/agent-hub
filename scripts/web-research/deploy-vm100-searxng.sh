@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOST="${SEARXNG_HOST:-${SF_BROWSER_HOST:-192.168.8.234}}"
+HOST="${SEARXNG_HOST:-${ST_BROWSER_HOST:-192.168.8.234}}"
 PORT="${SEARXNG_PORT:-18900}"
 CONTAINER_NAME="${SEARXNG_CONTAINER_NAME:-agenthub-searxng}"
 REMOTE_DIR="${SEARXNG_REMOTE_DIR:-/opt/agenthub/searxng}"
