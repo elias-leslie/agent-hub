@@ -42,7 +42,7 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
                 : "text-emerald-400",
           )}
         />
-        <span className="font-medium text-slate-300 flex-1">
+        <span className="font-medium text-foreground flex-1">
           {tool.name}
         </span>
         {tool.status === "running" ? (
@@ -53,18 +53,18 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
         )}
         {expanded ? (
-          <ChevronUp className="h-3 w-3 text-slate-400" />
+          <ChevronUp className="h-3 w-3 text-muted-foreground" />
         ) : (
-          <ChevronDown className="h-3 w-3 text-slate-400" />
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
         )}
       </button>
 
       {expanded && (
         <div className="px-2.5 pb-2 space-y-1.5">
           {/* Input */}
-          <div className="text-slate-400">
+          <div className="text-muted-foreground">
             <span className="font-medium">Input: </span>
-            <code className="text-[10px] bg-black/20 px-1 py-0.5 rounded">
+            <code className="text-[10px] bg-muted px-1 py-0.5 rounded">
               {JSON.stringify(tool.input, null, 2).slice(0, 200)}
               {JSON.stringify(tool.input).length > 200 && "..."}
             </code>
@@ -72,9 +72,9 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
 
           {/* Result */}
           {tool.result && (
-            <div className="text-slate-400">
+            <div className="text-muted-foreground">
               <span className="font-medium">Result: </span>
-              <pre className="text-[10px] bg-black/20 p-1.5 rounded mt-0.5 overflow-x-auto max-h-24 whitespace-pre-wrap break-all">
+              <pre className="text-[10px] bg-muted p-1.5 rounded mt-0.5 overflow-x-auto max-h-24 whitespace-pre-wrap break-all">
                 {tool.result.slice(0, 500)}
                 {tool.result.length > 500 && "\n... (truncated)"}
               </pre>

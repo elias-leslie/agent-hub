@@ -55,7 +55,7 @@
 - `bash ~/summitflow/scripts/rebuild.sh agent-hub`
 
 ### Browser Notes
-- `sf-browser` could not reach `localhost:3003` directly from the browser session and returned `ERR_CONNECTION_REFUSED`.
+- `st browser` could not reach `localhost:3003` directly from the browser session and returned `ERR_CONNECTION_REFUSED`.
 - Using the host LAN IP worked:
   - `http://192.168.8.244:3003/persona/arena`
   - `http://192.168.8.244:3003/agents/persona/arena`

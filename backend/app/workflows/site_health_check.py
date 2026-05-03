@@ -57,7 +57,7 @@ def _get_frontend_url(project_id: str) -> str:
     """
     service_name, port = FRONTEND_SERVICES[project_id]
     configured_host = settings.host.strip()
-    browser_host = settings.sf_browser_host.strip()
+    browser_host = settings.st_browser_host.strip()
     host = (
         service_name
         if _IN_DOCKER
@@ -92,13 +92,13 @@ async def _run_cmd(*args: str, timeout: int = 30) -> str:
 def _agent_browser_cdp_args() -> list[str]:
     """Return --cdp args for agent-browser so it attaches to the shared Chrome on the test VM.
 
-    Reads settings in priority order: explicit web_fetch_browser_cdp_url → sf_browser_host.
+    Reads settings in priority order: explicit web_fetch_browser_cdp_url → st_browser_host.
     Falls back to an empty list when neither is configured (e.g. in CI).
     """
     cdp_url = settings.web_fetch_browser_cdp_url.strip()
     if cdp_url:
         return ["--cdp", cdp_url]
-    host = settings.sf_browser_host.strip()
+    host = settings.st_browser_host.strip()
     if host:
         return ["--cdp", f"http://{host}:{_BROWSER_CDP_PORT}"]
     return []

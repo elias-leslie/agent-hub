@@ -142,7 +142,7 @@ st check pytest -- backend/tests/path/to/test_file.py
 
 ## Screenshots
 
-The docs screenshot flow uses `sf-browser`, not local Playwright:
+The docs screenshot flow uses `st browser`, not local Playwright:
 
 ```bash
 cd frontend
@@ -155,7 +155,7 @@ Base URL resolution order:
 2. `network.host_ip` from [`.index.yaml`](.index.yaml)
 3. `http://localhost:3003`
 
-When `sf-browser` is attached to the shared browser VM, do not use `localhost`; the remote browser must reach the app over the host IP.
+When `st browser` is attached to the shared browser VM, do not use `localhost`; the remote browser must reach the app over the host IP.
 
 ## License
 

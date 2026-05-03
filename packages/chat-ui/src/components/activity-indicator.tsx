@@ -60,8 +60,8 @@ const stateConfig: Record<
   connecting: {
     icon: Loader2,
     label: "Connecting...",
-    color: "text-slate-400",
-    bgColor: "bg-slate-800",
+    color: "text-muted-foreground",
+    bgColor: "bg-muted",
     animate: true,
   },
   thinking: {
@@ -150,7 +150,7 @@ export function ActivityIndicator({
 
         {/* Step progress bar */}
         {stepProgress && (
-          <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden ml-1">
+          <div className="w-16 h-1.5 bg-background/70 rounded-full overflow-hidden ml-1">
             <div
               className="h-full bg-current rounded-full transition-all duration-300"
               style={{

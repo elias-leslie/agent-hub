@@ -53,3 +53,20 @@ def test_persona_yolo_tier_keeps_core_shell_tools_visible() -> None:
         "read_file",
         "write_file",
     ]
+
+
+def test_memory_curator_yolo_tier_exposes_workspace_tools_and_memory_review() -> None:
+    result = provision_standard_tools(
+        True,
+        None,
+        agent_slug="memory-curator",
+        project_id="agent-hub",
+        visible_tool_names={"bash", "read_file", "write_file", "review_memory_system"},
+    )
+
+    assert [tool["name"] for tool in result.loaded_tools] == [
+        "bash",
+        "read_file",
+        "write_file",
+        "review_memory_system",
+    ]

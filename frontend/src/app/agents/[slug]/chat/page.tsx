@@ -1,51 +1,52 @@
-"use client";
+'use client'
 
-import { useState, useEffect, Suspense } from "react";
-import { useParams } from "next/navigation";
-import { Loader2, ArrowLeft } from "lucide-react";
-import Link from "next/link";
-
-import { ChatPanel } from "@/components/chat";
-import { fetchApi } from "@/lib/api-config";
-import type { Agent } from "@/types/agent";
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useChatSession } from '@/app/chat/hooks/useChatSession'
+import { ChatPanel } from '@/components/chat'
+import { fetchApi } from '@/lib/api-config'
+import type { Agent } from '@/types/agent'
 
 function AgentChatContent() {
-  const params = useParams();
-  const slug = params.slug as string;
+  const params = useParams()
+  const slug = params.slug as string
 
-  const [agent, setAgent] = useState<Agent | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [agent, setAgent] = useState<Agent | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { activeSessionId, handleSessionCreated, handleNewSession } =
+    useChatSession({ contextKey: `agent-page:agent-hub:${slug}` })
 
   useEffect(() => {
     async function fetchAgent() {
       try {
-        const res = await fetchApi(`/api/agents/${slug}`);
-        if (!res.ok) throw new Error(`Agent not found: ${slug}`);
-        const data = await res.json();
-        setAgent(data);
+        const res = await fetchApi(`/api/agents/${slug}`)
+        if (!res.ok) throw new Error(`Agent not found: ${slug}`)
+        const data = await res.json()
+        setAgent(data)
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load agent");
+        setError(err instanceof Error ? err.message : 'Failed to load agent')
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
-    fetchAgent();
-  }, [slug]);
+    fetchAgent()
+  }, [slug])
 
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
       </div>
-    );
+    )
   }
 
   if (error || !agent) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-slate-500">{error || "Agent not found"}</p>
+        <p className="text-sm text-slate-500">{error || 'Agent not found'}</p>
         <Link
           href="/agents"
           className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1"
@@ -54,7 +55,7 @@ function AgentChatContent() {
           Back to agents
         </Link>
       </div>
-    );
+    )
   }
 
   return (
@@ -83,14 +84,15 @@ function AgentChatContent() {
           key={slug}
           agent={agent}
           agentSlug={slug}
-          sessionId={sessionId}
+          sessionId={activeSessionId ?? undefined}
           toolsEnabled={true}
-          onSessionCreated={setSessionId}
+          onSessionCreated={handleSessionCreated}
+          onClear={handleNewSession}
           projectId="agent-hub"
         />
       </main>
     </div>
-  );
+  )
 }
 
 export default function AgentChatPage() {
@@ -104,5 +106,5 @@ export default function AgentChatPage() {
     >
       <AgentChatContent />
     </Suspense>
-  );
+  )
 }

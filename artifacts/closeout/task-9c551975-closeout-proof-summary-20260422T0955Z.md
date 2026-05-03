@@ -53,7 +53,7 @@ Purpose: explicit degraded-state, browser, setup, guidance, and supersession pro
   - `artifacts/closeout/task-9c551975-persona-live.png`
   - `artifacts/closeout/task-9c551975-persona-live-narrow.png`
   - `artifacts/closeout/task-9c551975-persona-live-mobile.png`
-  - command: `sf-browser check http://192.168.8.244:3003/persona ...`
+  - command: `st browser check http://192.168.8.244:3003/persona ...`
   - result: page loaded cleanly with no console/network failures
 
 - persisted-child advisory draft browser proof
@@ -68,7 +68,7 @@ Purpose: explicit degraded-state, browser, setup, guidance, and supersession pro
   - `artifacts/closeout/task-9c551975-sessions-live.png`
   - `artifacts/closeout/task-9c551975-sessions-live-narrow.png`
   - `artifacts/closeout/task-9c551975-sessions-live-mobile.png`
-  - command: `sf-browser check http://192.168.8.244:3003/sessions ...`
+  - command: `st browser check http://192.168.8.244:3003/sessions ...`
   - result: page loaded cleanly with no console/network failures
 
 - live sessions local-evidence degradation capture

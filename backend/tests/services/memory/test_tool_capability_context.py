@@ -8,8 +8,7 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
     from app.services.memory.tool_capability_context import format_tool_capability_context
 
     help_outputs = {
-        ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n  memory  Memory ops\n  graph  Graphify ops\n  prompt  Prompt ops\n  complete  Complete\n",
-        ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\n  ruff  Run ruff\nOptions:\n  --check, -c  Full check\n  --quick, -q  Quick check\n",
+        ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  list  List tasks\n  ready  Ready tasks\n  context  Task context\n  feedback  Feedback ops\n  search  Search code\n  memory  Memory ops\n  graph  Graphify ops\n  prompt  Prompt ops\n  complete  Complete\n  check  Quality checks\n",
         ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n  query \"SELECT ...\"        Execute query\nMigration Commands:\n  migrate status            Show current revision\n",
         ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n\nRun centralized web research using Agent Hub's shared tool stack.\n\npositional arguments:\n  {search,research,fetch}\n    search              Search the public web.\n    research            Search first, then fetch one result.\n    fetch               Fetch and extract a webpage.\n",
         ("rebuild.sh", "--help"): "Usage: rebuild.sh [--detach] [--include-all-workers] <project>\n",
@@ -30,10 +29,14 @@ def test_format_tool_capability_context_renders_compact_yaml_for_runtime() -> No
     assert "tool: st" in rendered
     assert "discover: st --help" in rendered
     assert "commands:" in rendered
+    assert "list" in rendered
+    assert "ready" in rendered
+    assert "context" in rendered
+    assert "feedback" in rendered
     assert "graph" in rendered
     assert "quick:" in rendered
     assert "st pulse --gate" in rendered
-    assert "--check" in rendered
+    assert "check" in rendered
     assert "rebuild.sh" in rendered
 
 
@@ -42,11 +45,10 @@ def test_format_tool_capability_context_skips_project_only_and_frontend_tools_wh
 
     help_outputs = {
         ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n  memory  Memory ops\n",
-        ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\nOptions:\n  --check, -c  Full check\n",
         ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n",
         ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n\nRun centralized web research using Agent Hub's shared tool stack.\n\npositional arguments:\n  {search,research,fetch}\n    search              Search the public web.\n",
         ("rebuild.sh", "--help"): "Usage: rebuild.sh [--detach] [--include-all-workers] <project>\n",
-        ("sf-browser", "--help"): "agent-browser\n\nCore Commands:\n  open <url>    Navigate\n  snapshot      Snapshot\nSessions:\n  session       Session info\n",
+        ("st browser", "--help"): "Remote browser automation\n\nCommands:\n  open <url>    Navigate\n  snapshot      Snapshot\n",
     }
 
     with patch(
@@ -60,7 +62,7 @@ def test_format_tool_capability_context_skips_project_only_and_frontend_tools_wh
         )
 
     assert "rebuild.sh" not in rendered
-    assert "sf-browser" not in rendered
+    assert "st browser" not in rendered
 
 
 def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> None:
@@ -68,7 +70,6 @@ def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> N
 
     help_outputs = {
         ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n  memory  Memory ops\n",
-        ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\nOptions:\n  --check, -c  Full check\n",
         ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n",
         ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n\nRun centralized web research using Agent Hub's shared tool stack.\n\npositional arguments:\n  {search,research,fetch}\n    search              Search the public web.\n",
         ("rebuild.sh", "--help"): "Usage: rebuild.sh [--detach] [--include-all-workers] <project>\n",
@@ -85,7 +86,6 @@ def test_format_tool_capability_context_keeps_core_tools_for_chat_runtime() -> N
         )
 
     assert "tool: st" in rendered
-    assert "tool: dt" in rendered
     assert "tool: rebuild.sh" in rendered
 
 
@@ -94,7 +94,6 @@ def test_format_tool_capability_context_omits_cli_wrappers_without_bash() -> Non
 
     help_outputs = {
         ("st", "--help"): "Usage: st [OPTIONS] COMMAND [ARGS]...\n\nCommands:\n  search  Search code\n",
-        ("dt", "--help"): "Dev Standards\n\nSubcommands (TOON output for Claude):\n  pytest  Run pytest\n",
         ("db", "--help"): "Database CLI\n\nCommands:\n  tables                    List tables\n",
         ("web-research", "--help"): "usage: web-research [-h] {search,research,fetch} ...\n",
         ("rebuild.sh", "--help"): "Usage: rebuild.sh [--detach] <project>\n",

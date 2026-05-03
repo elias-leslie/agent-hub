@@ -89,21 +89,38 @@ async def tool_loop(
     max_turns: int,
     provider_name: str,
     project_id: str | None,
-    kwargs: dict[str, Any],
+    **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Run the SDK-backed Gemini tool loop."""
-    if sdk_client is None:
+    sdk_clients = sdk_client if isinstance(sdk_client, list) else ([sdk_client] if sdk_client is not None else [])
+    if not sdk_clients:
         raise ProviderError("Gemini API key is not configured", provider=provider_name, retriable=False)
-    async for event in execute_tool_loop(
-        client=sdk_client,
-        messages=messages,
-        model=model,
-        tools=tools,
-        working_dir=working_dir,
-        max_tokens=max_tokens,
-        max_turns=max_turns,
-        provider_name=provider_name,
-        project_id=project_id,
-        **kwargs,
-    ):
-        yield event
+    last_error: ProviderError | None = None
+    for i, client in enumerate(sdk_clients):
+        try:
+            buffered: list[tuple[Any, str | None]] = []
+            async for event in execute_tool_loop(
+                client=client,
+                messages=messages,
+                model=model,
+                tools=tools,
+                working_dir=working_dir,
+                max_tokens=max_tokens,
+                max_turns=max_turns,
+                provider_name=provider_name,
+                project_id=project_id,
+                **kwargs,
+            ):
+                buffered.append(event)
+            if i > 0:
+                logger.info("Gemini: API key #%d tool loop succeeded after %d failure(s)", i + 1, i)
+            for event in buffered:
+                yield event
+            return
+        except ProviderError as e:
+            last_error = e
+            if not e.retriable:
+                raise
+            logger.warning("Gemini API key #%d tool loop failed for %s, trying next key", i + 1, model)
+    if last_error:
+        raise last_error

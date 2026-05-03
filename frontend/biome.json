@@ -9,10 +9,12 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
-      "app/**",
-      "components/**",
-      "lib/**",
-      "hooks/**",
+      "src/app/**",
+      "src/components/**",
+      "src/lib/**",
+      "src/hooks/**",
+      "src/types/**",
+      "src/__tests__/**",
       "*.ts",
       "*.tsx",
       "!next-env.d.ts"
