@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,6 +10,7 @@ from app.scripts.send_jenny_telegram_status_report import (
     build_prompt,
     deliver_report,
     extract_report_text,
+    persona_status_report_skip_reason,
 )
 
 
@@ -45,6 +47,30 @@ def test_extract_report_text_returns_trimmed_content() -> None:
 def test_extract_report_text_rejects_empty_content() -> None:
     with pytest.raises(RuntimeError, match="empty content"):
         extract_report_text(json.dumps({"content": "   "}))
+
+
+def test_persona_status_report_skip_reason_respects_disabled_heartbeat() -> None:
+    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=0)
+
+    assert (
+        persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True)
+        == "persona_heartbeat_disabled"
+    )
+
+
+def test_persona_status_report_skip_reason_respects_disabled_schedule() -> None:
+    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=60)
+
+    assert (
+        persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=False)
+        == "persona_heartbeat_schedule_disabled"
+    )
+
+
+def test_persona_status_report_skip_reason_allows_active_heartbeat() -> None:
+    persona = SimpleNamespace(execution_state="active", heartbeat_interval_minutes=60)
+
+    assert persona_status_report_skip_reason(persona, heartbeat_schedule_enabled=True) is None
 
 
 @pytest.mark.asyncio
