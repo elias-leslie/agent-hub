@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -82,6 +83,34 @@ class ProgressiveContext:
         return [r.uuid for r in self.reference_index if r.uuid]
 
 
+def _get_context_blocks(context: ProgressiveContext) -> dict[str, list[MemorySearchResult]]:
+    """Return mutable access to each context block."""
+    return {
+        "mandates": context.mandates,
+        "guardrails": context.guardrails,
+        "reference": context.reference,
+        "reference_index": context.reference_index,
+    }
+
+
+def _set_context_block(
+    context: ProgressiveContext,
+    field_name: str,
+    items: list[MemorySearchResult],
+) -> None:
+    """Replace one context block in-place."""
+    setattr(context, field_name, items)
+
+
+def _map_context_blocks(
+    context: ProgressiveContext,
+    transform: Callable[[str, list[MemorySearchResult]], list[MemorySearchResult]],
+) -> None:
+    """Apply same transform to each context block."""
+    for field_name, items in _get_context_blocks(context).items():
+        _set_context_block(context, field_name, transform(field_name, items))
+
+
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
     """Apply exclude tags universally and audience tags only for legacy references.
 
@@ -93,19 +122,20 @@ def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any
     """
     audience_tags, exclude_tags = resolve_memory_tags(memory_config)
     if exclude_tags:
-        context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
-        context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
-        context.reference = filter_by_tags(context.reference, [], exclude_tags)
-        context.reference_index = filter_by_tags(context.reference_index, [], exclude_tags)
+        _map_context_blocks(
+            context,
+            lambda _field_name, items: filter_by_tags(items, [], exclude_tags),
+        )
     if audience_tags:
-        context.reference = _filter_legacy_reference_audience_tags(
-            context.reference,
-            audience_tags,
-        )
-        context.reference_index = _filter_legacy_reference_audience_tags(
-            context.reference_index,
-            audience_tags,
-        )
+        for field_name in ("reference", "reference_index"):
+            _set_context_block(
+                context,
+                field_name,
+                _filter_legacy_reference_audience_tags(
+                    _get_context_blocks(context)[field_name],
+                    audience_tags,
+                ),
+            )
 
 
 def _filter_legacy_reference_audience_tags(
@@ -132,9 +162,9 @@ def _apply_applicability_filters(
     consumer_tags: list[str],
 ) -> None:
     """Filter all context blocks against explicit applicability targeting."""
-    for field_name in ("mandates", "guardrails", "reference", "reference_index"):
-        items = getattr(context, field_name)
-        filtered = [
+    _map_context_blocks(
+        context,
+        lambda _field_name, items: [
             item
             for item in items
             if applicability_matches(
@@ -143,17 +173,18 @@ def _apply_applicability_filters(
                 consumer_agent_slug=consumer_agent_slug,
                 consumer_tags=consumer_tags,
             )
-        ]
-        setattr(context, field_name, filtered)
+        ],
+    )
 
 
 def _apply_uuid_exclusions(context: ProgressiveContext, excluded_uuids: set[str]) -> None:
     """Remove explicitly excluded memory UUIDs from all context blocks."""
     if not excluded_uuids:
         return
-    for field_name in ("mandates", "guardrails", "reference", "reference_index"):
-        items = getattr(context, field_name)
-        setattr(context, field_name, [item for item in items if item.uuid not in excluded_uuids])
+    _map_context_blocks(
+        context,
+        lambda _field_name, items: [item for item in items if item.uuid not in excluded_uuids],
+    )
 
 
 def _prioritize_items_for_profile(
@@ -333,6 +364,15 @@ def _should_select_query_references(
     return task_kind != "heartbeat"
 
 
+def _partition_reference_index(
+    items: list[MemorySearchResult],
+) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
+    """Split references into capability-index and normal references."""
+    reference_index = [item for item in items if item.context_kind == MemoryContextKind.CAPABILITY]
+    reference = [item for item in items if item.context_kind != MemoryContextKind.CAPABILITY]
+    return reference_index, reference
+
+
 def _split_reference_index(
     context: ProgressiveContext,
     settings: Any,
@@ -340,12 +380,7 @@ def _split_reference_index(
 ) -> None:
     """Partition fetched references into capability (index) vs regular buckets."""
     if settings.reference_index_enabled and resolve_reference_index_enabled(memory_config):
-        context.reference_index = [
-            item for item in context.reference if item.context_kind == MemoryContextKind.CAPABILITY
-        ]
-        context.reference = [
-            item for item in context.reference if item.context_kind != MemoryContextKind.CAPABILITY
-        ]
+        context.reference_index, context.reference = _partition_reference_index(context.reference)
 
 
 def _deduplicate_query_selected(
