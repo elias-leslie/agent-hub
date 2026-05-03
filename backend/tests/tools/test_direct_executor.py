@@ -71,7 +71,11 @@ class TestDirectToolExecutor:
         mock_run.assert_awaited_once()
         assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "rebuild.sh --detach agent-hub"
-        assert mock_run.await_args.kwargs == {"agent_slug": None, "session_id": None}
+        assert mock_run.await_args.kwargs == {
+            "agent_slug": None,
+            "session_id": None,
+            "max_output_size": None,
+        }
 
     @pytest.mark.asyncio
     async def test_bash_rewrites_in_band_agent_hub_rebuild_from_direct_executor(
@@ -112,7 +116,11 @@ class TestDirectToolExecutor:
         mock_run.assert_awaited_once()
         assert mock_run.await_args is not None
         assert mock_run.await_args.args[0] == "restart.sh --detach agent-hub"
-        assert mock_run.await_args.kwargs == {"agent_slug": "persona", "session_id": None}
+        assert mock_run.await_args.kwargs == {
+            "agent_slug": "persona",
+            "session_id": None,
+            "max_output_size": None,
+        }
 
     @pytest.mark.asyncio
     async def test_bash_still_blocks_chained_agent_hub_rebuild_from_direct_executor(
@@ -148,7 +156,11 @@ class TestDirectToolExecutor:
         assert result == "queued"
         mock_run.assert_awaited_once()
         assert mock_run.await_args is not None
-        assert mock_run.await_args.kwargs == {"agent_slug": "coder", "session_id": None}
+        assert mock_run.await_args.kwargs == {
+            "agent_slug": "coder",
+            "session_id": None,
+            "max_output_size": None,
+        }
 
     @pytest.mark.asyncio
     async def test_bash_blocks_rebuild_that_restarts_hosting_agent_worker(
@@ -208,7 +220,11 @@ class TestDirectToolExecutor:
         assert result == "ok"
         assert mock_run.await_args is not None
         assert mock_run.await_args.args == ("echo ok", tmp_path.resolve(), executor._env)
-        assert mock_run.await_args.kwargs == {"agent_slug": None, "session_id": None}
+        assert mock_run.await_args.kwargs == {
+            "agent_slug": None,
+            "session_id": None,
+            "max_output_size": None,
+        }
 
     @pytest.mark.asyncio
     async def test_read_file_success(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
@@ -308,10 +324,16 @@ class TestStandardTools:
     """Tests for standard tool definitions."""
 
     def test_get_standard_tools_returns_all(self) -> None:
-        """Test that standard tools expose only the primitive shell/file baseline."""
+        """Test that standard tools expose shell/file plus scratch context helpers."""
         tools = get_standard_tools()
         names = [t.name for t in tools]
-        assert names == ["bash", "read_file", "write_file"]
+        assert names == [
+            "bash",
+            "read_file",
+            "write_file",
+            "search_scratch_context",
+            "batch_execute",
+        ]
 
     def test_bash_description_prefers_shell_wrappers(self) -> None:
         """Bash should nudge callers toward canonical wrapper CLIs."""

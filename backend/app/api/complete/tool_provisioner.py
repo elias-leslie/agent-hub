@@ -104,7 +104,7 @@ def provision_standard_tools(
     """Auto-provision tools if execute_tools is enabled and no tools provided.
 
     Uses agent-specific tools from the registry when agent_slug is provided,
-    falling back to standard tools (bash, read_file, write_file) otherwise.
+    falling back to standard workspace tools otherwise.
 
     When project_id is provided, filters the tool list to only include tools
     allowed by the project's permission tier.
