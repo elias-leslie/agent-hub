@@ -37,6 +37,70 @@ BASH_TOOL = Tool(
     usage_examples=["Run the changed-file quality gate with `dt -q -d`."],
 )
 
+SEARCH_SCRATCH_CONTEXT_TOOL = Tool(
+    name="search_scratch_context",
+    description=(
+        "Search full output previously indexed from oversized bash or batch results. "
+        "Use when a tool returned a scratch artifact id instead of full output."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Term or phrase to find in scratch artifacts",
+            },
+            "artifact_id": {
+                "type": "string",
+                "description": "Optional scratch artifact id; omit to search current session artifacts",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Maximum matches to return",
+                "default": 5,
+            },
+            "context_lines": {
+                "type": "integer",
+                "description": "Neighboring lines around each match",
+                "default": 2,
+            },
+        },
+        "required": ["query"],
+    },
+    category="workspace",
+    search_keywords=["scratch", "large output", "indexed output", "search previous command"],
+    usage_examples=["Search a large test log artifact for the failing test name."],
+)
+
+BATCH_EXECUTE_TOOL = Tool(
+    name="batch_execute",
+    description=(
+        "Run up to 8 bash commands sequentially. Large command outputs are indexed as "
+        "scratch artifacts and returned as compact searchable handles."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "commands": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "maxItems": 8,
+                "description": "Bash commands to execute in order",
+            },
+            "stop_on_error": {
+                "type": "boolean",
+                "description": "Stop after the first blocked or error result",
+                "default": True,
+            },
+        },
+        "required": ["commands"],
+    },
+    category="workspace",
+    search_keywords=["batch", "many commands", "large output", "indexed output"],
+    usage_examples=["Run several inspection commands and index any large logs."],
+)
+
 READ_FILE_TOOL = Tool(
     name="read_file",
     description="Read contents of a file. Returns lines with line numbers.",
@@ -306,6 +370,8 @@ STANDARD_TOOLS: list[Tool] = [
     BASH_TOOL,
     READ_FILE_TOOL,
     WRITE_FILE_TOOL,
+    SEARCH_SCRATCH_CONTEXT_TOOL,
+    BATCH_EXECUTE_TOOL,
 ]
 
 

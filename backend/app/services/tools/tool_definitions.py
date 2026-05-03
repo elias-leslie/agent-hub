@@ -43,10 +43,12 @@ from app.services.tools._persona_tools import (
 )
 from app.services.tools._standard_tools import (
     BASH_TOOL,
+    BATCH_EXECUTE_TOOL,
     CONSULT_AGENT_TOOL,
     FETCH_WEB_PAGE_TOOL,
     PRECISION_CODE_SEARCH_TOOL,
     READ_FILE_TOOL,
+    SEARCH_SCRATCH_CONTEXT_TOOL,
     SEARCH_WEB_TOOL,
     STANDARD_TOOLS,
     WRITE_FILE_TOOL,
@@ -57,6 +59,7 @@ from app.services.tools.base import Tool
 
 __all__ = [
     "BASH_TOOL",
+    "BATCH_EXECUTE_TOOL",
     "CANCEL_CONSULTATION_TOOL",
     "CANCEL_SCHEDULED_JOB_TOOL",
     "CONSULT_AGENT_TOOL",
@@ -80,6 +83,7 @@ __all__ = [
     "REVIEW_MEMORY_SYSTEM_TOOL",
     "SCHEDULE_JOB_TOOL",
     "SEARCH_PERSONA_HISTORY_TOOL",
+    "SEARCH_SCRATCH_CONTEXT_TOOL",
     "SEARCH_WEB_TOOL",
     "SEND_PUSH_TOOL",
     "STANDARD_TOOLS",
