@@ -178,7 +178,7 @@ def _get_browser_cdp_url() -> str | None:
     configured = settings.web_fetch_browser_cdp_url.strip()
     if configured:
         return configured
-    host = settings.sf_browser_host.strip()
+    host = settings.st_browser_host.strip()
     if not host:
         return None
     return f"http://{host}:{DEFAULT_BROWSER_CDP_PORT}"

@@ -20,14 +20,14 @@ def test_governance_auditor_tool_registry_includes_governance_surfaces() -> None
     assert "read_heartbeat_instructions" in tool_names
 
 
-def test_memory_curator_tool_registry_exposes_single_review_surface() -> None:
+def test_memory_curator_tool_registry_exposes_memory_review_and_workspace_tools() -> None:
     tools = get_agent_tool_specs("memory-curator")
 
     assert tools is not None
     tool_names = {tool.name for tool in tools}
 
-    assert tool_names == {"review_memory_system"}
-    review_tool = tools[0]
+    assert tool_names == {"bash", "read_file", "write_file", "review_memory_system"}
+    review_tool = next(tool for tool in tools if tool.name == "review_memory_system")
     assert review_tool.input_schema["properties"]["force_all"]["type"] == "boolean"
     assert review_tool.input_schema["properties"]["only_missing_compact"]["type"] == "boolean"
     assert review_tool.input_schema["properties"]["cadence_days"]["minimum"] == 0

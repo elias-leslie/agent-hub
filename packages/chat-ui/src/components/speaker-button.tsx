@@ -52,10 +52,10 @@ export function SpeakerButton({
         "flex items-center justify-center w-10 h-10 rounded-xl",
         "transition-colors duration-150",
         isSpeaking
-          ? "bg-purple-500 hover:bg-purple-600 text-white cursor-pointer animate-pulse"
+          ? "bg-destructive hover:bg-destructive/90 text-white cursor-pointer animate-pulse"
           : ttsEnabled
-            ? "bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 cursor-pointer"
-            : "bg-gray-700 hover:bg-gray-600 text-gray-400 cursor-pointer"
+            ? "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+            : "bg-secondary text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
       )}
     >
       {isSpeaking || ttsEnabled ? (

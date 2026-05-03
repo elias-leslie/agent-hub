@@ -1,0 +1,40 @@
+import type { ModelInfo } from '@/app/agents/[slug]/types'
+
+export const codexModel: ModelInfo = {
+  id: 'codex/gpt-5.5',
+  name: 'GPT-5.5 (Codex)',
+  provider: 'codex',
+  alias: 'codex',
+  hint: 'Frontier',
+  cost: {
+    input_per_m: 2.5,
+    output_per_m: 15,
+    pricing_unit: 'per_million_tokens',
+    unit_price: null,
+    source: 'catalog',
+  },
+  scores: {
+    coding: 82,
+    reasoning: 84,
+    planning: 80,
+    tool_use: 88,
+    instruction: 85,
+    design: 74,
+    composite: 82.6,
+  },
+  context_window: 1_050_000,
+  speed_tier: 'medium',
+  capabilities: {
+    can_generate_images: false,
+    has_vision: true,
+    can_edit_images: false,
+    has_thinking: true,
+    supports_pdf: true,
+    supports_audio: false,
+    max_output_tokens: 32768,
+    supports_tool_execution: true,
+    supports_verbosity: true,
+    supports_xhigh: true,
+    supports_session_cache: true,
+  },
+}

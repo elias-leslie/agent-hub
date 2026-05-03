@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.dialects import postgresql
+
+
+def _compile_statement(statement) -> str:
+    return str(
+        statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
 
 
 @pytest.mark.asyncio
@@ -87,3 +98,53 @@ async def test_get_arena_overview_honors_requested_window_for_improvement_signal
         max_clusters=6,
         max_reference_items=6,
     )
+
+
+@pytest.mark.asyncio
+async def test_benchmark_rows_are_scoped_to_requested_project() -> None:
+    from app.services.arena_overview import _query_benchmark_rows
+
+    mock_db = AsyncMock()
+    result = MagicMock()
+    result.all.return_value = []
+    mock_db.execute.return_value = result
+
+    await _query_benchmark_rows(
+        mock_db,
+        ["persona"],
+        datetime(2026, 3, 1, tzinfo=UTC),
+        "agent-hub",
+    )
+
+    statement = mock_db.execute.await_args.args[0]
+    compiled = _compile_statement(statement)
+
+    assert "agent_benchmark_runs.project_id = 'agent-hub'" in compiled
+    assert "agent_benchmark_runs.completed_at >= '2026-03-01" in compiled
+    assert "agent_benchmark_runs.run_kind NOT IN ('honing_iteration')" in compiled
+
+
+@pytest.mark.asyncio
+async def test_regression_rows_are_scoped_to_requested_project_and_window() -> None:
+    from app.services.arena_overview import _query_regression_rows
+
+    mock_db = AsyncMock()
+    result = MagicMock()
+    result.all.return_value = []
+    mock_db.execute.return_value = result
+
+    await _query_regression_rows(
+        mock_db,
+        ["persona"],
+        datetime(2026, 3, 1, tzinfo=UTC),
+        "agent-hub",
+    )
+
+    statement = mock_db.execute.await_args.args[0]
+    compiled = _compile_statement(statement)
+
+    assert "JOIN agent_benchmark_runs" in compiled
+    assert "agent_benchmark_runs.project_id = 'agent-hub'" in compiled
+    assert "agent_regression_clusters.last_seen_at >= '2026-03-01" in compiled
+    assert "agent_benchmark_runs.completed_at IS NOT NULL" in compiled
+    assert "agent_benchmark_runs.run_kind NOT IN ('honing_iteration')" in compiled

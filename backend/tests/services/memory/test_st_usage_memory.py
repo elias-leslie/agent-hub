@@ -35,12 +35,13 @@ def test_build_st_usage_memory_combines_curated_base_and_tracked_subcommands() -
             "st memory search --help",
         ],
         task_type="frontend",
-        max_entries=8,
+        max_entries=10,
     )
 
     assert memory.observed == 5
     assert memory.quick[0].startswith("st pulse --gate")
-    assert any("no raw git/jj" in entry for entry in memory.quick)
+    assert any("st -P <project> ready" in entry for entry in memory.quick)
+    assert any("read-only VCS diagnostics" in entry for entry in memory.quick)
     assert any(entry.startswith("st graph doctor") for entry in memory.quick)
     assert any(entry.startswith("st agents preview") for entry in memory.quick)
     assert any(entry.startswith("st browser check") for entry in memory.quick)

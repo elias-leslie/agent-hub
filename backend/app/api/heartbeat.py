@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from app.db import async_session
 from app.models.session import Session
+from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 from app.workflows._heartbeat_redis import (
     HeartbeatRunningInfo,
     clear_heartbeat_running,
@@ -20,6 +21,7 @@ from app.workflows._heartbeat_redis import (
     get_heartbeat_state,
     get_last_run_info,
     record_heartbeat_attempt,
+    record_heartbeat_skip,
     set_heartbeat_running,
 )
 from app.workflows.persona_heartbeat import (
@@ -202,6 +204,14 @@ async def heartbeat_trigger(
         raise HTTPException(status_code=400, detail="Persona onboarding not complete")
     if await get_persona_execution_state() == "paused":
         raise HTTPException(status_code=409, detail="Persona is paused")
+    if not await is_workflow_schedule_enabled("persona_heartbeat"):
+        await record_heartbeat_skip("schedule_disabled")
+        logger.info("Manual heartbeat skipped via API because schedule is disabled")
+        return HeartbeatTriggerResponse(
+            status="skipped",
+            message="Heartbeat skipped (schedule disabled)",
+            session_id=None,
+        )
 
     # Check project permissions
     permission_project = target_project_id or HEARTBEAT_PROJECT
