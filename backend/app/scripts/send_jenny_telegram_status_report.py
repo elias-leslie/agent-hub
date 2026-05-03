@@ -5,14 +5,43 @@ import asyncio
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from app.db import async_session
+from app.services._persona_crud import get_persona
 from app.services.telegram_delivery import send_configured_report
+from app.services.workflow_schedule_registry import is_workflow_schedule_enabled
 
 DEFAULT_ST_PATH = "/srv/workspaces/projects/summitflow/backend/.venv/bin/st"
 DEFAULT_WORKDIR = Path("/srv/workspaces/projects/agent-hub")
 DEFAULT_TITLE = "Jenny operator status report"
 DEFAULT_MAX_TURNS = 12
+
+
+def persona_status_report_skip_reason(
+    persona: Any | None,
+    *,
+    heartbeat_schedule_enabled: bool,
+) -> str | None:
+    if persona is None:
+        return "persona_missing"
+    if getattr(persona, "execution_state", "active") != "active":
+        return "persona_paused"
+    if int(getattr(persona, "heartbeat_interval_minutes", 0) or 0) <= 0:
+        return "persona_heartbeat_disabled"
+    if not heartbeat_schedule_enabled:
+        return "persona_heartbeat_schedule_disabled"
+    return None
+
+
+async def status_report_skip_reason() -> str | None:
+    async with async_session() as db:
+        persona = await get_persona(db)
+        heartbeat_enabled = await is_workflow_schedule_enabled("persona_heartbeat", db)
+    return persona_status_report_skip_reason(
+        persona,
+        heartbeat_schedule_enabled=heartbeat_enabled,
+    )
 
 
 def build_prompt() -> str:
@@ -80,6 +109,9 @@ async def deliver_report(*, title: str, body: str, dry_run: bool = False) -> int
 
 
 async def _run(args: argparse.Namespace) -> None:
+    if skip_reason := await status_report_skip_reason():
+        print(json.dumps({"skipped": True, "reason": skip_reason, "title": args.title}))
+        return
     report = run_status_completion(st_path=args.st_path, workdir=Path(args.workdir))
     sent = await deliver_report(title=args.title, body=report, dry_run=args.dry_run)
     if args.dry_run:
