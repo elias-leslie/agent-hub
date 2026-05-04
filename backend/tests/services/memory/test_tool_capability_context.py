@@ -123,7 +123,7 @@ def test_read_help_output_sanitizes_python_env_for_external_clis() -> None:
         {"PYTHONPATH": "/tmp/bad", "PYTHONHOME": "/tmp/also-bad"},
         clear=True,
     ), patch(
-        "app.services.memory.tool_capability_context.run",
+        "app.services.memory.tool_capability_context.run_process",
         return_value=SimpleNamespace(
             stdout="Usage: st [OPTIONS] COMMAND [ARGS]...\n",
             stderr="",
@@ -144,7 +144,7 @@ def test_read_help_output_ignores_stderr_tracebacks() -> None:
     _read_help_output.cache_clear()
 
     with patch(
-        "app.services.memory.tool_capability_context.run",
+        "app.services.memory.tool_capability_context.run_process",
         return_value=SimpleNamespace(
             stdout="",
             stderr=(

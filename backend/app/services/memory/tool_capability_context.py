@@ -5,10 +5,11 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from subprocess import run
 from typing import Any
 
 import yaml
+
+from app.utils.safe_subprocess import run_process
 
 from .context_profiles import MemoryConsumerProfile, resolve_consumer_profile
 
@@ -106,7 +107,7 @@ def _read_help_output(command: tuple[str, ...]) -> str:
     env.pop("PYTHONPATH", None)
     env.pop("PYTHONHOME", None)
     try:
-        result = run(command, capture_output=True, text=True, timeout=3, check=False, env=env)
+        result = run_process(command, capture_output=True, text=True, timeout=3, check=False, env=env)
     except Exception:
         return ""
     output = (result.stdout or "").strip()
