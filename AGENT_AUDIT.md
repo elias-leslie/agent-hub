@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
+_Sessions: 5 | Last run: 2026-05-04 | State: ISSUES_
 
 ## Architecture
 - FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -29,11 +29,13 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - `task-7984080d` split `backend/app/services/memory/review_agent.py` into a 47-line facade plus focused selection, prompt, call, decision, apply, and runner modules; all helper modules are under 300 lines. Focused memory review/scheduler tests passed 28 tests.
 - `task-69c7fa38` split chat sidebar UI out of `frontend/src/app/chat/page.tsx`; page is now 262 lines and focused on state/data wiring. Verification: Biome, full frontend TSC, changed gate, and browser checks for `/chat` passed with zero console/network errors.
 - `task-d8b9a77f` moved runtime-session streaming tool handling into `streaming_runtime_session.py`; `streaming_tool_loop.py` is now 156 lines and focused on legacy-loop orchestration/public entry. Focused streaming tool-loop tests passed.
+- `task-d5e78dde` moved persona runtime hook implementation behind `usePersonaRuntimeCore.ts`; public `usePersonaRuntime.ts` is now a 7-line compatibility facade. Verification: Biome, full frontend TSC, focused persona Vitest, and production browser `/persona` check passed. Closeout/recheck via `st` is blocked by shared CLI import failure: `ImportError: cannot import name 'collab_sessions' from partially initialized module 'app.storage'` from `/srv/workspaces/projects/summitflow/backend/app/storage/__init__.py`.
 
 ## Open Items
 - [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - feedback `a8e0e474` and open feedback backlog need triage authority/queue shaping - impact: visible feedback remains too easy to accumulate without disposition.
-- [AH-AUDIT-009] [MEDIUM] [OPEN] Maintainability backlog remains after schema/CRUD/tool/memory-review/chat/streaming slices - ready refactor `task-d5e78dde`; failed refactors need disposition - impact: large modules and failed cleanup attempts.
+- [AH-AUDIT-009] [MEDIUM] [DEFERRED] Maintainability backlog final recheck blocked - `task-d5e78dde` implementation is verified locally but `st ready`, `st feedback`, and `st done` cannot run while shared CLI import fails - recheck when `st --help` imports cleanly.
 ## Completed
+- [AH-AUDIT-028] 2026-05-04 - Reduced persona runtime public hook file to a compatibility facade over `usePersonaRuntimeCore.ts`; Biome, TSC, focused persona Vitest, and production browser `/persona` check passed.
 - [AH-AUDIT-027] 2026-05-04 - Split runtime-session streaming tool loop out of `streaming_tool_loop.py`; focused streaming tests and changed gate passed.
 - [AH-AUDIT-026] 2026-05-04 - Split chat sidebar out of `frontend/src/app/chat/page.tsx`; page is 262 lines, frontend checks passed, and browser `/chat` checks had zero console/network errors.
 - [AH-AUDIT-025] 2026-05-04 - Split memory `review_agent.py` into focused selection, prompt, reviewer-call, decision parsing, application, and runner modules while preserving facade imports; focused tests and changed gate passed.
@@ -64,4 +66,4 @@ _Sessions: 4 | Last run: 2026-05-04 | State: ISSUES_
 - Grok/xAI is not a default seed fallback for active text agents; keep mixed Codex plus non-Codex fallbacks with Claude/Haiku where needed.
 
 ## Human Follow-up
-- None.
+- Restore shared `st` CLI import path before task closeout/recheck: `/home/kasadis/bin/st` imports `/srv/workspaces/projects/summitflow/backend/cli/main.py`, which currently fails on `app.storage.collab_sessions` circular import before any command runs.
