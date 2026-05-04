@@ -394,8 +394,8 @@ def _build_prompt_from_task_context(
 
     verification_commands: list[str] = []
     if related_tests:
-        verification_commands.append(f"dt pytest {' '.join(related_tests)}")
-    verification_commands.append("dt --quick --changed-only")
+        verification_commands.append(f"st check pytest -- {' '.join(related_tests)}")
+    verification_commands.append("st check --quick --changed-only")
     lines.extend(["", "Verification commands:"])
     lines.extend(f"- `{command}`" for command in verification_commands)
 
