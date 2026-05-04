@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fastapi.responses import StreamingResponse
 
-from app.api.complete.request_schemas import CompletionRequest, MessageInput
+from app.api.complete.request_schemas import CompletionRequest, MessageInput, SourceMetadata
 from app.api.complete.streaming_handlers import _build_sse_response
 
 
@@ -49,3 +49,46 @@ def test_build_sse_response_forwards_loaded_tools_and_requested_max_turns() -> N
 
     assert isinstance(response, StreamingResponse)
     assert mock_stream_completion.call_args.kwargs["max_tool_turns"] == 37
+
+
+def test_build_sse_response_forwards_source_metadata() -> None:
+    request = CompletionRequest(
+        messages=[MessageInput(role="user", content="hello")],
+        project_id="agent-hub",
+        source_metadata=SourceMetadata(
+            transport="web",
+            surface="work_chats",
+            pane_id="pane-1",
+            source_client="agent-hub/work-chats",
+        ),
+    )
+
+    async def fake_stream_completion(**_kwargs):
+        yield "data: [DONE]\n\n"
+
+    with patch(
+        "app.api.complete.streaming_handlers.stream_completion",
+        side_effect=fake_stream_completion,
+    ) as mock_stream_completion:
+        response = _build_sse_response(
+            messages=[],
+            resolved_model="codex/gpt-5.4",
+            provider="codex",
+            request=request,
+            session_id="sess-1",
+            thinking_level=None,
+            agent_used="persona",
+            model_used="codex/gpt-5.4",
+            fallback_used=False,
+            db=None,
+            is_new_session=True,
+            tools=None,
+        )
+
+    assert isinstance(response, StreamingResponse)
+    assert mock_stream_completion.call_args.kwargs["source_metadata"] == {
+        "transport": "web",
+        "surface": "work_chats",
+        "pane_id": "pane-1",
+        "source_client": "agent-hub/work-chats",
+    }

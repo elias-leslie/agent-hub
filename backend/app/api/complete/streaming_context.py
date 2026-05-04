@@ -16,8 +16,8 @@ class StreamContext:
     __slots__ = (
         "_seq", "agent_used", "cancel_event", "fallback_used", "is_new_session",
         "is_one_shot", "last_progress_at", "last_progress_chars", "model",
-        "model_used", "project_id", "provider", "session_id", "stream_start",
-        "user_messages",
+        "model_used", "project_id", "provider", "session_id", "source_metadata",
+        "stream_start", "user_messages",
     )
 
     def __init__(
@@ -34,6 +34,7 @@ class StreamContext:
         is_one_shot: bool,
         cancel_event: asyncio.Event | None = None,
         project_id: str | None = None,
+        source_metadata: dict[str, object] | None = None,
     ) -> None:
         self._seq = 0
         self.session_id = session_id
@@ -48,6 +49,7 @@ class StreamContext:
         self.is_one_shot = is_one_shot
         self.cancel_event = cancel_event
         self.project_id = project_id
+        self.source_metadata = source_metadata
         self.last_progress_at = 0.0
         self.last_progress_chars = 0
 
@@ -66,6 +68,7 @@ class StreamContext:
         is_new_session: bool,
         is_one_shot: bool,
         project_id: str | None = None,
+        source_metadata: dict[str, object] | None = None,
     ) -> StreamContext:
         """Create and register an active stream context for cooperative cancel."""
         ctx = cls(
@@ -81,6 +84,7 @@ class StreamContext:
             is_one_shot=is_one_shot,
             cancel_event=asyncio.Event(),
             project_id=project_id,
+            source_metadata=source_metadata,
         )
         cls._active_contexts[session_id] = ctx
         return ctx

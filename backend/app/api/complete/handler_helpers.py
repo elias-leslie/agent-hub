@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
-from app.models import TruncationEvent
+from app.models import SessionEventType, TruncationEvent
 from app.services.context_tracker import log_token_usage
+from app.services.event_storage import store_child_session_lifecycle_event
 from app.services.events import publish_complete, publish_message
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_completed
@@ -49,6 +50,11 @@ async def save_and_track(
     duration_ms: int | None = None,
 ) -> None:
     """Save events and track token usage, costs, and session status."""
+    source_metadata = (
+        request.source_metadata.model_dump(exclude_none=True)
+        if request.source_metadata is not None
+        else None
+    )
     effective_model = model_used or resolved_model
     apply_execution_metadata(
         session,
@@ -77,6 +83,7 @@ async def save_and_track(
         getattr(result, "thinking_content", None),
         getattr(result, "thinking_tokens", None),
         agent_id=request.agent_slug, duration_ms=duration_ms,
+        source_metadata=source_metadata,
     )
     if publish_messages:
         for msg in request.messages:
@@ -117,6 +124,13 @@ async def save_and_track(
     else:
         session.health_detail = "completed"
     session.last_activity_at = datetime.now(UTC)
+    await store_child_session_lifecycle_event(
+        db,
+        session,
+        SessionEventType.CHILD_SESSION_RESULT,
+        summary="Child session completed",
+        status="completed",
+    )
     await db.commit()
 
 

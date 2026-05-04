@@ -37,6 +37,10 @@ class SessionEventType:
     ERROR = "error"
     SUBAGENT_RESULT = "subagent_result"
     TOOL_AUDIT = "tool_audit"
+    CHILD_SESSION_STARTED = "child_session_started"
+    CHILD_SESSION_UPDATE = "child_session_update"
+    CHILD_SESSION_BLOCKED = "child_session_blocked"
+    CHILD_SESSION_RESULT = "child_session_result"
 
 
 class Session(Base):
@@ -236,6 +240,13 @@ class SessionEvent(Base):
 
     agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     agent_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    transport: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    surface: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    chat_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    message_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    pane_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_client: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

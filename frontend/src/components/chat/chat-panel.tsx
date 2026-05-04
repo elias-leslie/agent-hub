@@ -5,7 +5,13 @@ import {
   ChatPanel as ChatPanelBase,
   type ChatStreamApiConfig,
 } from '@agent-hub/chat-ui'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  type ComponentProps,
+  type ComponentType,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import {
   fetchApi,
   getApiBaseUrl,
@@ -24,6 +30,43 @@ const VALID_THINKING_LEVELS = new Set([
   'ultrathink',
 ])
 
+interface WorkChatSourceMetadata {
+  transport?: string
+  surface?: string
+  chat_id?: string
+  message_id?: string
+  pane_id?: string
+  source_client?: string
+}
+
+interface WorkChatContext {
+  mode?: string
+  project_id?: string
+  project_name?: string
+  task_id?: string
+  task_title?: string
+  task_summary?: string
+  feedback_id?: string
+  design_id?: string
+  artifact_summary?: string
+  surface?: string
+  pane_id?: string
+}
+
+type ExtendedChatStreamApiConfig = ChatStreamApiConfig & {
+  parentSessionId?: string
+  sourceMetadata?: WorkChatSourceMetadata
+  workContext?: WorkChatContext
+}
+
+type ExtendedChatPanelBaseProps = ComponentProps<typeof ChatPanelBase> & {
+  autoSendPrompt?: string | null
+  autoSendKey?: string | number | null
+}
+
+const ExtendedChatPanelBase =
+  ChatPanelBase as ComponentType<ExtendedChatPanelBaseProps>
+
 export function normalizeThinkingLevel(
   value: string | null | undefined,
 ): string | null {
@@ -40,8 +83,13 @@ interface ChatPanelProps {
   onSessionCreated?: (sessionId: string) => void
   onClear?: () => void
   initialPrompt?: string
+  autoSendPrompt?: string | null
+  autoSendKey?: string | number | null
   projectId?: string
   externalId?: string
+  parentSessionId?: string
+  sourceMetadata?: WorkChatSourceMetadata
+  workContext?: WorkChatContext
   thinkingLevel?: string | null
   currentBranch?: string | null
 }
@@ -55,8 +103,13 @@ export function ChatPanel({
   onSessionCreated,
   onClear,
   initialPrompt,
+  autoSendPrompt,
+  autoSendKey,
   projectId = 'agent-hub',
   externalId,
+  parentSessionId,
+  sourceMetadata,
+  workContext,
   thinkingLevel,
   currentBranch,
 }: ChatPanelProps) {
@@ -106,7 +159,7 @@ export function ChatPanel({
     [],
   )
 
-  const apiConfig: ChatStreamApiConfig = useMemo(
+  const apiConfig: ExtendedChatStreamApiConfig = useMemo(
     () => ({
       fetchHeaders: INTERNAL_HEADERS,
       completeEndpoint: getCompleteApiUrl(),
@@ -116,14 +169,25 @@ export function ChatPanel({
       projectId,
       memoryGroupPrefix: 'agent:',
       externalId,
+      parentSessionId,
+      sourceMetadata,
+      workContext,
       thinkingLevel: normalizeThinkingLevel(thinkingLevel),
       currentBranch,
     }),
-    [projectId, externalId, thinkingLevel, currentBranch],
+    [
+      projectId,
+      externalId,
+      parentSessionId,
+      sourceMetadata,
+      workContext,
+      thinkingLevel,
+      currentBranch,
+    ],
   )
 
   return (
-    <ChatPanelBase
+    <ExtendedChatPanelBase
       agentSlug={agent?.slug || agentSlug}
       sessionId={sessionId}
       workingDir={workingDir}
@@ -131,6 +195,8 @@ export function ChatPanel({
       onSessionCreated={onSessionCreated}
       onClear={onClear}
       initialPrompt={initialPrompt}
+      autoSendPrompt={autoSendPrompt}
+      autoSendKey={autoSendKey}
       apiConfig={apiConfig}
       fetchFn={fetchApi}
       voiceWsUrl={voiceWsUrl}

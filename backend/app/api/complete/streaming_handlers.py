@@ -18,6 +18,9 @@ from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 from app.services.memory.context_builder_settings import resolve_memory_consumer_profile
 from app.services.session_live_activity import mark_session_execution_start
+from app.services.work_chats import bind_request_context
+
+from .work_context import inject_work_context_message
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,9 +68,16 @@ async def _setup_streaming_session(
             agent_slug=request.agent_slug,
             current_branch=request.current_branch,
             working_dir=request.working_dir,
+            parent_session_id=request.parent_session_id,
             trace_id=request.trace_id,
         )
         session_id = stream_session.id
+        await bind_request_context(
+            db,
+            session=stream_session,
+            work_context=request.work_context,
+            source_metadata=request.source_metadata,
+        )
         mark_session_execution_start(stream_session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
@@ -87,6 +97,7 @@ def _build_streaming_messages(
         for m in request.messages
     ]
     messages = context_messages + new_messages if context_messages else new_messages
+    messages = inject_work_context_message(messages, request.work_context)
 
     if agent_mandate_injection:
         messages = inject_system_prompt_into_messages(
@@ -166,6 +177,11 @@ def _build_sse_response(
     tools: list[dict[str, object]] | None,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
+    source_metadata = (
+        request.source_metadata.model_dump(exclude_none=True)
+        if request.source_metadata is not None
+        else None
+    )
     return StreamingResponse(
         stream_completion(
             messages=messages,
@@ -185,6 +201,7 @@ def _build_sse_response(
             project_id=request.project_id,
             max_tool_turns=request.max_turns,
             working_dir=request.working_dir,
+            source_metadata=source_metadata,
         ),
         media_type="text/event-stream",
         headers={

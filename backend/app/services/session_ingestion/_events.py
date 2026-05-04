@@ -79,6 +79,12 @@ async def _store_single_implicit_event(
             model_used=event.model_used,
             agent_id=event.agent_id,
             agent_name=event.agent_name,
+            transport=event.transport,
+            surface=event.surface,
+            chat_id=event.chat_id,
+            message_id=event.message_id,
+            pane_id=event.pane_id,
+            source_client=event.source_client,
             session=session,
         )
         await db.flush()
@@ -146,6 +152,12 @@ async def _process_event(
         model_used=normalized.model_used,
         agent_id=normalized.agent_id,
         agent_name=normalized.agent_name,
+        transport=normalized.transport,
+        surface=normalized.surface,
+        chat_id=normalized.chat_id,
+        message_id=normalized.message_id,
+        pane_id=normalized.pane_id,
+        source_client=normalized.source_client,
         session=session,
     )
     await db.flush()

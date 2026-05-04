@@ -10,7 +10,9 @@ from .request_schemas import (
     EstimateRequest,
     MessageInput,
     ResponseFormat,
+    SourceMetadata,
     ToolDefinition,
+    WorkContext,
 )
 from .response_schemas import (
     AsyncTaskResponse,
@@ -42,9 +44,11 @@ __all__ = [
     "MessageInput",
     "OutputUsageInfo",
     "ResponseFormat",
+    "SourceMetadata",
     "StreamingChunk",
     "ThinkingInfo",
     "ToolCallInfo",
     "ToolDefinition",
     "UsageInfo",
+    "WorkContext",
 ]
