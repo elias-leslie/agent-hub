@@ -26,6 +26,9 @@ from app.services.memory.context_builder_settings import (
 from app.services.response_cache import get_response_cache
 from app.services.session_live_activity import mark_session_execution_start
 from app.services.token_counter import count_message_tokens
+from app.services.work_chats import bind_request_context
+
+from .work_context import inject_work_context_message
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -88,6 +91,12 @@ async def setup_session(
             requested_model=resolved_model,
         )
         session_id = session.id
+        await bind_request_context(
+            db,
+            session=session,
+            work_context=request.work_context,
+            source_metadata=request.source_metadata,
+        )
         mark_session_execution_start(session)
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
@@ -114,6 +123,7 @@ def build_message_list(
         for m in request.messages
     ]
     all_messages = context_messages + new_messages if context_messages else new_messages
+    all_messages = inject_work_context_message(all_messages, request.work_context)
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
     return all_messages, messages_dict
 

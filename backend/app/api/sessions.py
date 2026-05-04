@@ -262,6 +262,12 @@ async def create_session_event(
                     tool_output=request.tool_output,
                     model_used=request.model_used,
                     agent_id=request.agent_id,
+                    transport=request.transport,
+                    surface=request.surface,
+                    chat_id=request.chat_id,
+                    message_id=request.message_id,
+                    pane_id=request.pane_id,
+                    source_client=request.source_client,
                 )
             ]
         ),

@@ -383,6 +383,12 @@ class SessionEventResponse(BaseModel):
     model_used: str | None = Field(default=None, description="Model that generated this event")
     agent_id: str | None = Field(default=None, description="Agent identifier")
     agent_name: str | None = Field(default=None, description="Agent display name")
+    transport: str | None = Field(default=None, description="Transport source")
+    surface: str | None = Field(default=None, description="Origin surface")
+    chat_id: str | None = Field(default=None, description="External chat id")
+    message_id: str | None = Field(default=None, description="External message id")
+    pane_id: str | None = Field(default=None, description="Work Chats pane id")
+    source_client: str | None = Field(default=None, description="Logical caller identifier")
     created_at: datetime = Field(..., description="Event timestamp")
 
 
@@ -415,6 +421,12 @@ class CreateSessionEventRequest(BaseModel):
     )
     model_used: str | None = Field(default=None, description="Model used for this event")
     agent_id: str | None = Field(default=None, description="Agent identifier")
+    transport: str | None = Field(default=None, description="Transport source")
+    surface: str | None = Field(default=None, description="Origin surface")
+    chat_id: str | None = Field(default=None, description="External chat id")
+    message_id: str | None = Field(default=None, description="External message id")
+    pane_id: str | None = Field(default=None, description="Work Chats pane id")
+    source_client: str | None = Field(default=None, description="Logical caller identifier")
 
 
 class CreateSessionEventResponse(BaseModel):

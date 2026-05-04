@@ -129,6 +129,7 @@ async def stream_completion(
     project_id: str | None = None,
     max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
     working_dir: str | None = None,
+    source_metadata: dict[str, object] | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -159,6 +160,7 @@ async def stream_completion(
         is_new_session=is_new_session,
         is_one_shot=is_one_shot,
         project_id=project_id,
+        source_metadata=source_metadata,
     )
     stream_kwargs["abort_event"] = ctx.cancel_event
     if working_dir:

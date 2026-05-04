@@ -30,6 +30,9 @@ interface SendMessageParams {
   projectId: string;
   memoryGroupPrefix: string;
   externalId?: string;
+  parentSessionId?: string;
+  sourceMetadata?: CompletionRequest["source_metadata"];
+  workContext?: CompletionRequest["work_context"];
   thinkingLevel?: string | null;
   currentBranch?: string | null;
 }
@@ -59,6 +62,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
     projectId,
     memoryGroupPrefix,
     externalId,
+    parentSessionId,
+    sourceMetadata,
+    workContext,
     thinkingLevel,
     currentBranch,
   } = params;
@@ -131,6 +137,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           max_turns: toolsEnabled ? TOOL_ENABLED_MAX_TURNS : 1,
           project_id: projectId,
           external_id: externalId,
+          parent_session_id: parentSessionId,
+          source_metadata: sourceMetadata,
+          work_context: workContext,
           thinking_level: thinkingLevel || undefined,
           current_branch: currentBranch || undefined,
           stream: true,

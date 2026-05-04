@@ -105,6 +105,12 @@ class NormalizedEvent(BaseModel):
     model_used: str | None = Field(default=None, description="Model used for the event")
     agent_id: str | None = Field(default=None, description="Agent identifier")
     agent_name: str | None = Field(default=None, description="Agent display name")
+    transport: str | None = Field(default=None, description="Transport source such as web or telegram")
+    surface: str | None = Field(default=None, description="UI surface that created the event")
+    chat_id: str | None = Field(default=None, description="External chat id for transport correlation")
+    message_id: str | None = Field(default=None, description="External message id for transport correlation")
+    pane_id: str | None = Field(default=None, description="Work Chats pane id")
+    source_client: str | None = Field(default=None, description="Logical caller identifier")
 
 
 class AppendNormalizedEventsRequest(BaseModel):
