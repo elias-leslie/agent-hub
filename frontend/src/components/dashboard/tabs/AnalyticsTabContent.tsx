@@ -98,8 +98,7 @@ export function AnalyticsTabContent({
                 width={90}
               />
               <Tooltip
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(value: any, name: any) =>
+                formatter={(value: unknown, name?: string | number) =>
                   name === 'requests'
                     ? formatNumber(Number(value))
                     : formatLatency(Number(value))
