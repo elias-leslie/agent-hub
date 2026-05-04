@@ -1,5 +1,5 @@
 # AGENT_AUDIT - agent-hub
-_Sessions: 6 | Last run: 2026-05-04 | State: ISSUES_
+_Sessions: 7 | Last run: 2026-05-04 | State: ISSUES_
 
 ## Architecture
 - FastAPI backend in `backend/app`; SQLAlchemy/Alembic over PostgreSQL, Redis/Hatchet background work, async provider adapters for completions/streams.
@@ -34,10 +34,15 @@ _Sessions: 6 | Last run: 2026-05-04 | State: ISSUES_
 - 2026-05-04 continuation: parallel read-only sidecars swept feedback duplicates and code/config drift while local work merged exact duplicate feedback clusters. Final feedback summary reported 174 total records with open clusters still led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`; `st ready --limit 50` returned `READY[0]`.
 - Updated live quality-gate guidance from legacy `dt` to `st check` in contributor docs, arena/persona docs, orchestrated worker prompt generation, memory path regression expectations, and benchmark dispatch readiness cases. Historical task exports, task plans, logs, and applied migrations with old `dt` text were left unchanged as history or generated artifacts.
 - Reported feedback `c86c6059` after `st check --changed-only` crashed with `IndexError`; live valid changed-file gate is `st check --quick --changed-only`.
+- 2026-05-04 continuation: preflight found no ready tasks and no owner overlap; only dirty residue was tracked generated `graphify-out/GRAPH_REPORT.md` from a graphify run. Kept and published the regenerated report rather than dropping valid generated output.
+- Replaced the remaining live UI/test stale `dt` examples in memory episode form placeholder and compactness fixture with `st check` wording. Historical docs, generated task exports, and tests intentionally modeling old tool-friction events remain unchanged.
+- Merged additional exact duplicate feedback clusters for focused changed gates, project-memory guardrails, search-first workflow, and duplicate feedback search. Final feedback summary still reports unresolved governance backlog led by `sf.cli`, `sf.workflows`, `sf.search`, `ah.sessions`, and `ah.completion`.
 
 ## Open Items
 - [AH-AUDIT-008] [MEDIUM] [OPEN] Feedback/prompt governance work remains - exact duplicate clusters were merged in bulk, but many open feedback items remain and some near-duplicate clusters need policy/product judgment before merging across component/type boundaries - impact: visible feedback still accumulates without full disposition.
 ## Completed
+- [AH-AUDIT-032] 2026-05-04 - Removed remaining live UI/test stale `dt` wording from memory episode form and compactness fixture; Biome, focused Vitest, changed gate, and stale live-reference search passed.
+- [AH-AUDIT-031] 2026-05-04 - Published refreshed tracked graphify report residue and merged more exact duplicate feedback clusters; final ready queue remained empty.
 - [AH-AUDIT-030] 2026-05-04 - Merged exact duplicate feedback clusters across praise/friction/idea groups, including repeated `dt`, feedback-search, precision-search, timeout-summary, citation-tracking, auto-project-detection, and tool-registry items.
 - [AH-AUDIT-029] 2026-05-04 - Replaced live legacy `dt` quality-gate guidance with `st check` equivalents in scripts and docs; ruff, types, changed gate, and stale-reference search passed for touched files.
 - [AH-AUDIT-009] 2026-05-04 - Exhausted current ready maintainability queue after schema/CRUD/tool/memory-review/chat/streaming/persona slices; final `st ready --limit 50` returned `READY[0]`.

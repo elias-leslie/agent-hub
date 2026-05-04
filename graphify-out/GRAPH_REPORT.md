@@ -1,12 +1,12 @@
 # Graph Report - agent-hub  (2026-05-04)
 
 ## Corpus Check
-- 1724 files · ~895,577 words
+- 1736 files · ~897,178 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 19265 nodes · 43144 edges · 508 communities detected
-- Extraction: 51% EXTRACTED · 49% INFERRED · 0% AMBIGUOUS · INFERRED: 21003 edges (avg confidence: 0.62)
+- 19429 nodes · 43529 edges · 509 communities detected
+- Extraction: 51% EXTRACTED · 49% INFERRED · 0% AMBIGUOUS · INFERRED: 21126 edges (avg confidence: 0.62)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -155,8 +155,8 @@
 - [[_COMMUNITY_Community 147|Community 147]]
 - [[_COMMUNITY_Community 148|Community 148]]
 - [[_COMMUNITY_Community 149|Community 149]]
-- [[_COMMUNITY_Community 151|Community 151]]
-- [[_COMMUNITY_Community 154|Community 154]]
+- [[_COMMUNITY_Community 150|Community 150]]
+- [[_COMMUNITY_Community 152|Community 152]]
 - [[_COMMUNITY_Community 155|Community 155]]
 - [[_COMMUNITY_Community 156|Community 156]]
 - [[_COMMUNITY_Community 157|Community 157]]
@@ -166,8 +166,8 @@
 - [[_COMMUNITY_Community 161|Community 161]]
 - [[_COMMUNITY_Community 162|Community 162]]
 - [[_COMMUNITY_Community 163|Community 163]]
-- [[_COMMUNITY_Community 167|Community 167]]
-- [[_COMMUNITY_Community 169|Community 169]]
+- [[_COMMUNITY_Community 164|Community 164]]
+- [[_COMMUNITY_Community 168|Community 168]]
 - [[_COMMUNITY_Community 170|Community 170]]
 - [[_COMMUNITY_Community 171|Community 171]]
 - [[_COMMUNITY_Community 172|Community 172]]
@@ -236,19 +236,19 @@
 - [[_COMMUNITY_Community 235|Community 235]]
 - [[_COMMUNITY_Community 236|Community 236]]
 - [[_COMMUNITY_Community 237|Community 237]]
-- [[_COMMUNITY_Community 239|Community 239]]
-- [[_COMMUNITY_Community 244|Community 244]]
-- [[_COMMUNITY_Community 249|Community 249]]
+- [[_COMMUNITY_Community 238|Community 238]]
+- [[_COMMUNITY_Community 240|Community 240]]
+- [[_COMMUNITY_Community 245|Community 245]]
 - [[_COMMUNITY_Community 250|Community 250]]
-- [[_COMMUNITY_Community 252|Community 252]]
+- [[_COMMUNITY_Community 251|Community 251]]
 - [[_COMMUNITY_Community 253|Community 253]]
 - [[_COMMUNITY_Community 254|Community 254]]
-- [[_COMMUNITY_Community 256|Community 256]]
-- [[_COMMUNITY_Community 264|Community 264]]
-- [[_COMMUNITY_Community 273|Community 273]]
+- [[_COMMUNITY_Community 255|Community 255]]
+- [[_COMMUNITY_Community 257|Community 257]]
+- [[_COMMUNITY_Community 265|Community 265]]
 - [[_COMMUNITY_Community 274|Community 274]]
-- [[_COMMUNITY_Community 280|Community 280]]
-- [[_COMMUNITY_Community 287|Community 287]]
+- [[_COMMUNITY_Community 275|Community 275]]
+- [[_COMMUNITY_Community 281|Community 281]]
 - [[_COMMUNITY_Community 288|Community 288]]
 - [[_COMMUNITY_Community 289|Community 289]]
 - [[_COMMUNITY_Community 290|Community 290]]
@@ -262,12 +262,12 @@
 - [[_COMMUNITY_Community 298|Community 298]]
 - [[_COMMUNITY_Community 299|Community 299]]
 - [[_COMMUNITY_Community 300|Community 300]]
-- [[_COMMUNITY_Community 302|Community 302]]
+- [[_COMMUNITY_Community 301|Community 301]]
 - [[_COMMUNITY_Community 303|Community 303]]
 - [[_COMMUNITY_Community 304|Community 304]]
+- [[_COMMUNITY_Community 305|Community 305]]
 - [[_COMMUNITY_Community 441|Community 441]]
 - [[_COMMUNITY_Community 442|Community 442]]
-- [[_COMMUNITY_Community 452|Community 452]]
 - [[_COMMUNITY_Community 453|Community 453]]
 - [[_COMMUNITY_Community 454|Community 454]]
 - [[_COMMUNITY_Community 455|Community 455]]
@@ -299,12 +299,12 @@
 - [[_COMMUNITY_Community 481|Community 481]]
 - [[_COMMUNITY_Community 482|Community 482]]
 - [[_COMMUNITY_Community 483|Community 483]]
-- [[_COMMUNITY_Community 487|Community 487]]
+- [[_COMMUNITY_Community 484|Community 484]]
 - [[_COMMUNITY_Community 488|Community 488]]
-- [[_COMMUNITY_Community 490|Community 490]]
+- [[_COMMUNITY_Community 489|Community 489]]
 - [[_COMMUNITY_Community 491|Community 491]]
 - [[_COMMUNITY_Community 492|Community 492]]
-- [[_COMMUNITY_Community 494|Community 494]]
+- [[_COMMUNITY_Community 493|Community 493]]
 - [[_COMMUNITY_Community 495|Community 495]]
 - [[_COMMUNITY_Community 496|Community 496]]
 - [[_COMMUNITY_Community 497|Community 497]]
@@ -336,7 +336,7 @@
 - [[_COMMUNITY_Community 523|Community 523]]
 - [[_COMMUNITY_Community 524|Community 524]]
 - [[_COMMUNITY_Community 525|Community 525]]
-- [[_COMMUNITY_Community 529|Community 529]]
+- [[_COMMUNITY_Community 526|Community 526]]
 - [[_COMMUNITY_Community 530|Community 530]]
 - [[_COMMUNITY_Community 531|Community 531]]
 - [[_COMMUNITY_Community 532|Community 532]]
@@ -344,7 +344,7 @@
 - [[_COMMUNITY_Community 534|Community 534]]
 - [[_COMMUNITY_Community 535|Community 535]]
 - [[_COMMUNITY_Community 536|Community 536]]
-- [[_COMMUNITY_Community 539|Community 539]]
+- [[_COMMUNITY_Community 537|Community 537]]
 - [[_COMMUNITY_Community 540|Community 540]]
 - [[_COMMUNITY_Community 541|Community 541]]
 - [[_COMMUNITY_Community 542|Community 542]]
@@ -451,10 +451,10 @@
 - [[_COMMUNITY_Community 643|Community 643]]
 - [[_COMMUNITY_Community 644|Community 644]]
 - [[_COMMUNITY_Community 645|Community 645]]
-- [[_COMMUNITY_Community 647|Community 647]]
+- [[_COMMUNITY_Community 646|Community 646]]
 - [[_COMMUNITY_Community 648|Community 648]]
 - [[_COMMUNITY_Community 649|Community 649]]
-- [[_COMMUNITY_Community 654|Community 654]]
+- [[_COMMUNITY_Community 650|Community 650]]
 - [[_COMMUNITY_Community 655|Community 655]]
 - [[_COMMUNITY_Community 656|Community 656]]
 - [[_COMMUNITY_Community 657|Community 657]]
@@ -470,7 +470,7 @@
 - [[_COMMUNITY_Community 667|Community 667]]
 - [[_COMMUNITY_Community 668|Community 668]]
 - [[_COMMUNITY_Community 669|Community 669]]
-- [[_COMMUNITY_Community 818|Community 818]]
+- [[_COMMUNITY_Community 670|Community 670]]
 - [[_COMMUNITY_Community 819|Community 819]]
 - [[_COMMUNITY_Community 820|Community 820]]
 - [[_COMMUNITY_Community 821|Community 821]]
@@ -492,7 +492,7 @@
 - [[_COMMUNITY_Community 837|Community 837]]
 - [[_COMMUNITY_Community 838|Community 838]]
 - [[_COMMUNITY_Community 839|Community 839]]
-- [[_COMMUNITY_Community 861|Community 861]]
+- [[_COMMUNITY_Community 840|Community 840]]
 - [[_COMMUNITY_Community 862|Community 862]]
 - [[_COMMUNITY_Community 863|Community 863]]
 - [[_COMMUNITY_Community 864|Community 864]]
@@ -518,176 +518,177 @@
 - [[_COMMUNITY_Community 884|Community 884]]
 - [[_COMMUNITY_Community 885|Community 885]]
 - [[_COMMUNITY_Community 886|Community 886]]
+- [[_COMMUNITY_Community 887|Community 887]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `PATCH()` - 953 edges
 2. `ToolCall` - 286 edges
 3. `APITestClient` - 214 edges
-4. `async_session()` - 210 edges
+4. `async_session()` - 212 edges
 5. `Persona` - 209 edges
 6. `ProjectPermission` - 186 edges
 7. `MemorySettingsDTO` - 177 edges
 8. `ProviderAdapter` - 166 edges
 9. `ToolDecision` - 156 edges
-10. `Session` - 142 edges
+10. `Memory` - 144 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Lazily import performance logging so tests can patch the wake seam.` --uses--> `Session`  [INFERRED]
   backend/app/workflows/persona_wake.py → packages/agent-hub-client/agent_hub/session.py
 - `Dispatch a wake workflow via Hatchet (fire-and-forget).` --uses--> `Session`  [INFERRED]
   backend/app/workflows/persona_wake.py → packages/agent-hub-client/agent_hub/session.py
-- `test_execute_bash()` --calls--> `ToolCall`  [INFERRED]
-  backend/tests/tools/test_direct_executor.py → packages/agent-hub-client/agent_hub/models/tools.py
-- `test_execute_unknown_tool()` --calls--> `ToolCall`  [INFERRED]
-  backend/tests/tools/test_direct_executor.py → packages/agent-hub-client/agent_hub/models/tools.py
 - `async_session()` --calls--> `main()`  [INFERRED]
   backend/app/db.py → docs/tasks/agent-hub-hard-memory-governance-snapshot.py
+- `_raise_for_usage_limit_banner()` --calls--> `RateLimitError`  [INFERRED]
+  backend/app/adapters/claude_oauth.py → packages/agent-hub-client/agent_hub/exceptions.py
+- `_resolve_account_id()` --calls--> `AuthenticationError`  [INFERRED]
+  backend/app/adapters/cloudflare.py → packages/agent-hub-client/agent_hub/exceptions.py
 
 ## Communities
 
 ### Community 0 - "Community 0"
 Cohesion: 0.0
-Nodes (1158): create_permission(), delete_permission(), ExecutionPermissionResponse, get_all_project_budgets(), get_execution_permission(), get_permission(), get_project_budget(), list_permissions() (+1150 more)
+Nodes (1159): create_permission(), delete_permission(), ExecutionPermissionResponse, get_all_project_budgets(), get_execution_permission(), get_permission(), get_project_budget(), list_permissions() (+1151 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.0
-Nodes (905): complete(), ProviderAdapter, Provider adapter interface for normalized session ingestion., Start a provider-owned tool runtime session.          Tool-capable adapters may, Stream a completion for the given messages.          Args:             messages:, Protocol for AI provider adapters., Return the provider name (e.g., 'claude', 'gemini')., Generate a completion for the given messages.          Args:             message (+897 more)
+Nodes (724): ProviderAdapter, ClaudeAdapter, _convert_messages(), Claude adapter with dual-mode: direct API (OAuth token) or CLI (Claude Agent SDK, Return current authentication mode., Convert internal Message format to Anthropic API format (delegates to claude_dir, Check if Claude is reachable (any mode)., Generate completion using Claude via direct API or CLI. (+716 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.01
-Nodes (733): AnalyticsRepository, set_episode_properties(), capture_stream(), get_timeline(), _apply_complex_properties(), apply_episode_properties(), _apply_property_setter(), _apply_scalar_properties() (+725 more)
+Cohesion: 0.0
+Nodes (754): complete(), Provider adapter interface for normalized session ingestion., Start a provider-owned tool runtime session.          Tool-capable adapters may, Stream a completion for the given messages.          Args:             messages:, Protocol for AI provider adapters., Return the provider name (e.g., 'claude', 'gemini')., Generate a completion for the given messages.          Args:             message, Check if the provider is available and working. (+746 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.0
-Nodes (744): Tests for /complete endpoint JSON schema validation., Test validation passes for valid JSON matching schema., Test validation fails for invalid JSON., Test validation fails when JSON doesn't match schema., Test validation fails when type doesn't match schema., Tests for JSON schema validation functionality., Non-tool streaming should pass the registered cancel event to the adapter., Completed streams should release cancel ownership. (+736 more)
+Cohesion: 0.01
+Nodes (679): ABC, build_mcp_server(), _patch_sdk_mcp_race_condition(), MCP server helpers for Claude adapter — race-condition patch and server construc, Patch SDK race condition where MCP control response writes fail during shutdown., Build an in-process SDK MCP server for custom tools.      Registers non-CLI-buil, compose_permission_hooks(), make_can_use_tool_callback() (+671 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.01
-Nodes (630): build_mcp_server(), _patch_sdk_mcp_race_condition(), MCP server helpers for Claude adapter — race-condition patch and server construc, Patch SDK race condition where MCP control response writes fail during shutdown., Build an in-process SDK MCP server for custom tools.      Registers non-CLI-buil, compose_permission_hooks(), make_can_use_tool_callback(), normalize_tool_name() (+622 more)
+Nodes (657): AnalyticsRepository, set_episode_properties(), capture_stream(), get_timeline(), _apply_complex_properties(), apply_episode_properties(), _apply_property_setter(), _apply_scalar_properties() (+649 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.01
-Nodes (669): Tests for the unified adapter registry., Reset registry state before each test., Registry should expose the supported provider set only., Adapters should be cached per provider., Unknown providers should fail loudly., Legacy CloudCode IDs should now resolve onto Claude., Capability queries should reflect the supported provider matrix., Capability listings should no longer include removed providers. (+661 more)
+Nodes (672): Tests for the unified adapter registry., Reset registry state before each test., Registry should expose the supported provider set only., Adapters should be cached per provider., Unknown providers should fail loudly., Legacy CloudCode IDs should now resolve onto Claude., Capability queries should reflect the supported provider matrix., Capability listings should no longer include removed providers. (+664 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.01
-Nodes (615): build_progressive_context_with_variant(), Track loaded memories and record injection metrics., Build progressive context and assign variant., track_and_record_metrics(), test_identified_session_attribution(), Tests for Agent API endpoints.  Tests cover: - Agent CRUD endpoints - Metrics en, Tests for GET /api/agents/{slug} endpoint., Test getting specific agent returns 200. (+607 more)
+Nodes (618): build_continuity_markdown(), build_progressive_context_with_variant(), Progressive context building logic for memory agent., Track loaded memories and record injection metrics., Build progressive context and assign variant., Build continuity context markdown for project scope., track_and_record_metrics(), test_identified_session_attribution() (+610 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.01
-Nodes (573): Stream a completion in this session.          Args:             content: The use, Add a message to local context (for building multi-turn).          Note: This ad, Get the full message history from the server.          Returns:             List, Get locally tracked messages (not from server).          Returns:             Li, Refresh session data from server.          Returns:             Updated SessionR, Mark the session as completed on the server., Manages a conversation session with automatic ID tracking.      Example:, Initialize session wrapper.          Args:             client: The async client (+565 more)
+Nodes (506): apply_cache_control(), _build_client(), _build_create_kwargs(), complete_direct(), convert_messages(), _ensure_valid_oauth_token(), ensure_valid_token(), _parse_completion_response() (+498 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.01
-Nodes (600): _dashboard_provider_state(), DashboardStatsResponse, get_dashboard_stats(), get_provider_health(), MemoryMetrics, ModelBreakdown, ProviderHealthInfo, ProviderHealthResponse (+592 more)
+Nodes (549): Stream a completion in this session.          Args:             content: The use, Add a message to local context (for building multi-turn).          Note: This ad, Get the full message history from the server.          Returns:             List, Get locally tracked messages (not from server).          Returns:             Li, Refresh session data from server.          Returns:             Updated SessionR, Mark the session as completed on the server., Manages a conversation session with automatic ID tracking.      Example:, Initialize session wrapper.          Args:             client: The async client (+541 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.01
-Nodes (465): apply_ratings_background(), dispatch_to_hatchet(), Helper functions and shared models for memory_dashboard endpoints., Attempt async dispatch to Hatchet worker. Returns True on success., Fire background tasks for rating tracking after summary generation., Run synchronous summary generation with background side-effects., run_sync_summarize(), SummarizeRequest (+457 more)
+Nodes (572): _dashboard_provider_state(), DashboardStatsResponse, get_dashboard_stats(), get_provider_health(), MemoryMetrics, ModelBreakdown, ProviderHealthInfo, ProviderHealthResponse (+564 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.01
-Nodes (519): build_actionable_cleanup_summary(), build_actionable_cleanup_summary_from_items(), build_actionable_cleanup_summary_from_payload(), build_filtered_reconciled_cleanup_note(), CleanupActionItem, extract_cleanup_action_items(), extract_cleanup_action_items_from_payload(), filter_reconciled_cleanup_items() (+511 more)
+Nodes (582): build_actionable_cleanup_summary(), build_actionable_cleanup_summary_from_items(), build_actionable_cleanup_summary_from_payload(), build_filtered_reconciled_cleanup_note(), CleanupActionItem, extract_cleanup_action_items(), extract_cleanup_action_items_from_payload(), filter_reconciled_cleanup_items() (+574 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.01
-Nodes (385): async_session(), Context manager for getting database sessions outside of FastAPI dependencies., cleanup_stale_memories(), TTL-based memory cleanup — graduated retirement (no hard deletes).  Replaces the, Clean up stale memories via graduated retirement.      Args:         driver: Ign, content_fingerprint(), normalize_content(), Stable content fingerprints for memory deduplication. (+377 more)
+Nodes (458): get_provider_for_model(), ConcreteTestAdapter, Tests for OpenAICompatibleAdapter base class., Concrete implementation for testing the base class., test_client_created_with_base_url(), test_complete_returns_result(), test_complete_with_tool_calls(), test_complete_with_tools_retries_empty_final_response_once() (+450 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.01
-Nodes (366): get_preference_value(), get_preferences(), PreferencesResponse, PreferencesUpdate, User preferences API endpoints., User preferences response., Update user preferences., Get a preference value from the database. (+358 more)
+Nodes (464): apply_ratings_background(), dispatch_to_hatchet(), Helper functions and shared models for memory_dashboard endpoints., Attempt async dispatch to Hatchet worker. Returns True on success., Fire background tasks for rating tracking after summary generation., Run synchronous summary generation with background side-effects., run_sync_summarize(), SummarizeRequest (+456 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.01
-Nodes (312): _generate_with_retry(), Tests for Gemini tool execution with retry logic., Tests for _generate_with_retry function., test_generate_exhausts_retries(), test_generate_no_retry_on_auth_error(), test_generate_retries_on_503_provider_error(), test_generate_retries_on_deadline_exceeded(), test_generate_retry_exponential_backoff() (+304 more)
+Nodes (441): validate_has_stage(), get_settings(), Centralized configuration loading.  Uses pydantic-settings for validated configu, Get cached settings instance.      Returns:         Settings instance (cached fo, Application settings loaded from environment variables.      Prefers repo-local, Settings, validate_database_url(), async_session() (+433 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.01
-Nodes (340): get_provider_for_model(), _agent_create_kwargs(), _agent_update_kwargs(), _build_agent_response(), _build_preview_response(), create_agent(), delete_agent(), get_agent() (+332 more)
+Nodes (305): get_preference_value(), get_preferences(), PreferencesResponse, PreferencesUpdate, User preferences API endpoints., User preferences response., Update user preferences., Get a preference value from the database. (+297 more)
 
 ### Community 15 - "Community 15"
 Cohesion: 0.01
-Nodes (259): ABC, apply_cache_control(), _build_client(), _build_create_kwargs(), complete_direct(), convert_messages(), _ensure_valid_oauth_token(), ensure_valid_token() (+251 more)
+Nodes (307): ProviderBoundary, ProviderSessionRef, Provider-owned session descriptor used during discovery., Detected lifecycle boundary for a provider session., Translation-only contract for external session providers., Discover provider sessions available for ingestion., Build canonical session metadata for a provider session., Translate raw provider data into normalized events and return the next checkpoin (+299 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.01
-Nodes (308): ProviderBoundary, ProviderSessionRef, Provider-owned session descriptor used during discovery., Detected lifecycle boundary for a provider session., Translation-only contract for external session providers., Discover provider sessions available for ingestion., Build canonical session metadata for a provider session., Translate raw provider data into normalized events and return the next checkpoin (+300 more)
+Nodes (318): _create_new_feedback_items(), Create feedback items for tags not already in existing_keys.      Cross-session, create_feedback(), delete_feedback(), get_component_feedback(), get_feedback_item(), get_summary(), list_feedback() (+310 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.01
-Nodes (279): assign_prompt_endpoint(), create_prompt_endpoint(), delete_prompt_endpoint(), get_prompt_endpoint(), _invalidate_owned_agent_cache(), list_agent_prompts(), list_prompt_revisions_endpoint(), list_prompts() (+271 more)
+Nodes (286): build_allowed_tools(), build_mcp_tool_name(), Shared constants for Claude adapter modules., Return the Claude MCP-qualified tool name for a bare tool., Build the complete allowed_tools list including MCP tool names.      When a tool, _extract_from_brace_pattern(), _extract_from_bracket_pattern(), _extract_from_code_blocks() (+278 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.01
-Nodes (244): build_allowed_tools(), build_mcp_tool_name(), Shared constants for Claude adapter modules., Return the Claude MCP-qualified tool name for a bare tool., Build the complete allowed_tools list including MCP tool names.      When a tool, _extract_from_brace_pattern(), _extract_from_bracket_pattern(), _extract_from_code_blocks() (+236 more)
+Nodes (275): _build_catalog_health(), _build_enrichment_info(), _build_model_info(), CatalogDiscoveryInfo, CatalogDiscoveryProviderInfo, CatalogHealthInfo, ModelCapabilitiesInfo, ModelCostInfo (+267 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.02
-Nodes (242): append_events_endpoint(), finalize_session_endpoint(), heartbeat_session_endpoint(), ingest_transcript_events_endpoint(), Provider-agnostic session ingestion API., Append normalized events to an existing session., Finalize a session by extracting citations, feedback, and summaries., Translate a provider transcript into normalized session events. (+234 more)
+Nodes (235): append_events_endpoint(), finalize_session_endpoint(), heartbeat_session_endpoint(), ingest_transcript_events_endpoint(), Provider-agnostic session ingestion API., Append normalized events to an existing session., Finalize a session by extracting citations, feedback, and summaries., Translate a provider transcript into normalized session events. (+227 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.02
-Nodes (208): Tests for provider-specific thinking configuration., Live xAI endpoint currently rejects reasoning effort for multi-agent., OpenRouter keeps the OpenAI-style reasoning mapping., Literal 'none' should disable reasoning params instead of sending an invalid val, xAI models reject OpenAI-style reasoning_effort parameters., test_none_disables_reasoning_for_openai_style_providers(), test_openrouter_still_uses_reasoning_effort(), test_xai_does_not_send_reasoning_effort() (+200 more)
+Cohesion: 0.01
+Nodes (213): _ensure_utc(), format_cross_project_activity(), format_live_sessions(), format_recent_activity(), _format_time_label(), format_unified_timeline(), Formatting utilities for continuity context markdown generation., Format summaries into a Recent Activity block.      Thin wrapper around :func:`f (+205 more)
 
 ### Community 21 - "Community 21"
+Cohesion: 0.03
+Nodes (188): format_context_with_continuity(), Format context and prepend continuity., _assemble_context_response(), _build_failure_response(), build_progressive_context_response(), _build_progressive_context_response_once(), handle_save_learning(), Handler functions for complex memory agent endpoints. (+180 more)
+
+### Community 22 - "Community 22"
 Cohesion: 0.04
 Nodes (213): Pydantic schemas for memory agent tools endpoints., Response from save_learning endpoint., A single block of progressive context., Scoring breakdown for a single memory item., Failure details for fail-closed progressive-context delivery., Response with 3-block progressive disclosure context., Request for canonical context retrieval., Response with canonical context. (+205 more)
 
-### Community 22 - "Community 22"
-Cohesion: 0.02
-Nodes (179): _dispatch(), events_websocket(), _handle_subscribe(), _handle_unsubscribe(), _handle_update(), _parse_event_types(), WebSocket API for session event subscriptions., Parse and dispatch one WebSocket message; returns (subscription_id, should_close (+171 more)
-
 ### Community 23 - "Community 23"
 Cohesion: 0.02
-Nodes (190): _get_effective_running_info(), _has_live_heartbeat_session(), heartbeat_status(), heartbeat_trigger(), HeartbeatStatusResponse, HeartbeatTriggerRequest, HeartbeatTriggerResponse, Heartbeat trigger and status API endpoints. (+182 more)
+Nodes (191): _get_effective_running_info(), _has_live_heartbeat_session(), heartbeat_status(), heartbeat_trigger(), HeartbeatStatusResponse, HeartbeatTriggerRequest, HeartbeatTriggerResponse, Heartbeat trigger and status API endpoints. (+183 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.03
-Nodes (169): build_continuity_markdown(), format_context_with_continuity(), Progressive context building logic for memory agent., Build continuity context markdown for project scope., Format context and prepend continuity., _assemble_context_response(), _build_failure_response(), build_progressive_context_response() (+161 more)
-
-### Community 25 - "Community 25"
-Cohesion: 0.02
-Nodes (173): get_known_roots(), get_valid_project_ids(), invalidate_project_cache(), _ProjectIDsProxy, Project and agent type constants.  VALID_PROJECT_IDS are derived dynamically fro, Force next call to refresh_project_cache() to reload from DB., Proxy that looks like a frozenset but delegates to get_valid_project_ids()., Resolve project roots from the canonical single-project resolver. (+165 more)
-
-### Community 26 - "Community 26"
 Cohesion: 0.01
 Nodes (139): fetchAccessControlStats(), disableClient(), enableClient(), fetchBlockedRequests(), fetchClients(), fetchSessionHotspots(), fetchWorkflowSchedules(), updateWorkflowSchedule() (+131 more)
 
+### Community 25 - "Community 25"
+Cohesion: 0.04
+Nodes (177): get_analytics(), get_continuity_context(), get_tier_changes(), get_top_memories_endpoint(), Memory API - Dashboard Endpoints., parse_memory_lookback(), Helpers for parsing compact memory analytics lookback ranges., Return a lookback delta and canonical label.      Supports ``1h``, ``1d``, ``7d` (+169 more)
+
+### Community 26 - "Community 26"
+Cohesion: 0.03
+Nodes (164): activate_client(), block_client(), create_client(), delete_client(), get_client(), list_clients(), Client management endpoints for Access Control API., Update client settings (display name, rate limits, allowed projects). (+156 more)
+
 ### Community 27 - "Community 27"
 Cohesion: 0.02
-Nodes (174): _analyse_and_store(), _build_transcript(), _enforce_oneliner(), _fetch_session_and_events(), generate_session_summary(), _null_async_context, Session summary auto-generation for the Agent Hub memory dashboard.  Usage:, Enforce summary_oneliner length limit. (+166 more)
+Nodes (144): _dispatch(), events_websocket(), _handle_subscribe(), _handle_unsubscribe(), _handle_update(), _parse_event_types(), WebSocket API for session event subscriptions., Parse and dispatch one WebSocket message; returns (subscription_id, should_close (+136 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.03
-Nodes (178): activate_client(), block_client(), create_client(), delete_client(), get_client(), list_clients(), Client management endpoints for Access Control API., Update client settings (display name, rate limits, allowed projects). (+170 more)
+Cohesion: 0.02
+Nodes (104): generate_cache_key(), get_fallback_key(), Cache key generation utilities., Generate cache key from request parameters.      Creates a deterministic hash fr, Convert primary cache key to fallback key., Redis-based response cache for API completions., Cache a response in both primary and fallback stores., Invalidate a cached response. (+96 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.04
-Nodes (176): get_analytics(), get_continuity_context(), get_tier_changes(), get_top_memories_endpoint(), Memory API - Dashboard Endpoints., parse_memory_lookback(), Helpers for parsing compact memory analytics lookback ranges., Return a lookback delta and canonical label.      Supports ``1h``, ``1d``, ``7d` (+168 more)
+Cohesion: 0.02
+Nodes (92): EmptyState(), summarize(), dedupeIssueMarkers(), filterIssueMarkers(), filterModeToPulseTag(), issueTaskId(), normalizeIssueText(), pulseTagClasses() (+84 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.02
-Nodes (106): generate_cache_key(), get_fallback_key(), Cache key generation utilities., Generate cache key from request parameters.      Creates a deterministic hash fr, Convert primary cache key to fallback key., get_response_cache(), Redis-based response cache for API completions., Cache a response in both primary and fallback stores. (+98 more)
+Nodes (126): get_known_roots(), get_valid_project_ids(), invalidate_project_cache(), _ProjectIDsProxy, Project and agent type constants.  VALID_PROJECT_IDS are derived dynamically fro, Force next call to refresh_project_cache() to reload from DB., Proxy that looks like a frozenset but delegates to get_valid_project_ids()., Resolve project roots from the canonical single-project resolver. (+118 more)
 
 ### Community 31 - "Community 31"
 Cohesion: 0.02
-Nodes (86): EmptyState(), summarize(), dedupeIssueMarkers(), filterIssueMarkers(), filterModeToPulseTag(), issueTaskId(), normalizeIssueText(), pulseTagClasses() (+78 more)
+Nodes (96): _append_event_line(), _apply_recency_window(), build_condensed_transcript(), build_condensed_transcript_from_jsonl(), build_transcript_from_cc_jsonl(), build_transcript_from_jsonl(), Transcript building for session summary generation.  Extracts and condenses sess, Build a condensed transcript from supported JSONL transcript lines. (+88 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.03
-Nodes (98): WakeInput, _agent_browser_cdp_args(), analyze_captures(), _build_capture_blocks(), _build_findings_prompt(), _build_project_triage_section(), build_user_content(), _capture_page() (+90 more)
+Cohesion: 0.02
+Nodes (105): put_telegram_config(), telegram_status(), TelegramConfigUpdate, TelegramStatusResponse, client(), Test client with mocked database and source headers., build_parser(), build_payload() (+97 more)
 
 ### Community 33 - "Community 33"
 Cohesion: 0.03
-Nodes (88): put_telegram_config(), telegram_status(), TelegramConfigUpdate, TelegramStatusResponse, build_parser(), build_payload(), main(), run_command() (+80 more)
+Nodes (96): chunk_markdown_by_sections(), _extract_section_title(), _format_section_episode(), _is_anti_pattern_section(), Episode chunking utilities for splitting large content., Extract the title from an H2 header in a markdown section., Return True if the section content indicates an anti-pattern., Format a single markdown section as a FormattedEpisode. (+88 more)
 
 ### Community 34 - "Community 34"
 Cohesion: 0.03
-Nodes (93): _ensure_utc(), format_cross_project_activity(), format_live_sessions(), format_recent_activity(), _format_time_label(), format_unified_timeline(), Formatting utilities for continuity context markdown generation., Format summaries into a Recent Activity block.      Thin wrapper around :func:`f (+85 more)
+Nodes (132): _build_onboarding_section(), _build_persona_sections(), get_persona_context_for_agent(), _handle_onboarding_phase_transition(), Persona context-building helpers — prompt injection for agents., Return the onboarding XML section for the current phase, or None., Advance onboarding phase from not_started to in_progress., Assemble the static persona XML sections. (+124 more)
 
 ### Community 35 - "Community 35"
 Cohesion: 0.03
-Nodes (81): health_check(), lifespan(), Run all shutdown tasks., Application lifespan manager., Basic liveness check at root level for k8s probes., Run all startup tasks., _shutdown(), _startup() (+73 more)
+Nodes (98): WakeInput, _agent_browser_cdp_args(), analyze_captures(), _build_capture_blocks(), _build_findings_prompt(), _build_project_triage_section(), build_user_content(), _capture_page() (+90 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.05
@@ -695,19 +696,19 @@ Nodes (91): create_webhook(), delete_webhook(), get_webhook(), list_webhooks(), 
 
 ### Community 37 - "Community 37"
 Cohesion: 0.03
-Nodes (99): client(), mock_session(), _owner(), Tests for ownership inventory API endpoints., Create a mock async database session., Tests for GET /api/ownership/projects/{project_id}/live., TestProjectOwnership, ActiveSpecialistSession (+91 more)
+Nodes (100): _apply_response_format(), _apply_thinking_config(), build_config(), Configuration building for Gemini adapter., Build GenerateContentConfig from parameters.      Args:         temperature: Sam, Apply structured output configuration.      Args:         config: Config object, Apply thinking configuration for Gemini 3 models.      Args:         config: Con, _check_error_finish_reason() (+92 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.05
-Nodes (62): TestDashboardProviderHealthEndpoint, Call the adapter for one turn and return (result, duration_ms)., run_adapter_turn(), handleClick(), HealthProber, Core HealthProber class implementation.  Probes each configured provider at regu, Update provider state after a failure., Record a successful real request for a provider. (+54 more)
+Cohesion: 0.03
+Nodes (91): client(), mock_session(), _owner(), Tests for ownership inventory API endpoints., Create a mock async database session., Tests for GET /api/ownership/projects/{project_id}/live., TestProjectOwnership, ActiveSpecialistSession (+83 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.06
-Nodes (82): aggregate_costs_by_agent(), aggregate_costs_by_external_id(), aggregate_costs_by_model(), aggregate_costs_by_project(), aggregate_costs_by_session_type(), aggregate_costs_by_time(), aggregate_costs_total(), _apply_cost_filters() (+74 more)
+Cohesion: 0.04
+Nodes (74): health_check(), _build_health_details(), _check_database(), fetch_status(), _get_circuit_breaker_info(), _get_provider_status(), Internal function to fetch fresh status data., Convert a ProviderHealth snapshot into ProviderHealthDetails. (+66 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.04
-Nodes (76): get_thinking_level(), Get thinking level for request.      Priority: request.thinking_level > agent DB, extract_text_content(), Auto-thinking detection for completion requests., Extract text from message content., Detect if request would benefit from extended thinking., should_enable_thinking(), CompletionSource (+68 more)
+Cohesion: 0.06
+Nodes (82): aggregate_costs_by_agent(), aggregate_costs_by_external_id(), aggregate_costs_by_model(), aggregate_costs_by_project(), aggregate_costs_by_session_type(), aggregate_costs_by_time(), aggregate_costs_total(), _apply_cost_filters() (+74 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.04
@@ -715,35 +716,35 @@ Nodes (72): _build_parser(), main(), CLI wrapper for the shared web research too
 
 ### Community 42 - "Community 42"
 Cohesion: 0.04
-Nodes (58): build_boundary_hook(), build_boundary_settings(), Settings-based write boundary enforcement for Claude SDK subprocess.  The Claude, Build SDK PreToolUse hook for write boundary enforcement.      Returns a hooks d, Build a Claude Code settings dict restricting writes to *working_dir*.      The, Write boundary settings to a temp file and return the path.      The Claude SDK, write_boundary_settings(), _build() (+50 more)
+Nodes (59): build_adaptive_index(), get_adaptive_index(), AdaptiveIndex, build_index_entry(), IndexEntry, Data models for adaptive index.  Defines IndexEntry and AdaptiveIndex dataclasse, A single entry in the adaptive index., The adaptive index containing all golden standard summaries. (+51 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.05
-Nodes (65): health_check(), _build_health_details(), _check_database(), fetch_status(), _get_circuit_breaker_info(), _get_provider_status(), Internal function to fetch fresh status data., Convert a ProviderHealth snapshot into ProviderHealthDetails. (+57 more)
+Cohesion: 0.04
+Nodes (68): Tests for /complete endpoint JSON schema validation., Test validation passes for valid JSON matching schema., Test validation fails for invalid JSON., Test validation fails when JSON doesn't match schema., Test validation fails when type doesn't match schema., Tests for JSON schema validation functionality., TestJsonSchemaValidation, _check_quotas() (+60 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.04
-Nodes (59): build_adaptive_index(), get_adaptive_index(), AdaptiveIndex, build_index_entry(), IndexEntry, Data models for adaptive index.  Defines IndexEntry and AdaptiveIndex dataclasse, A single entry in the adaptive index., The adaptive index containing all golden standard summaries. (+51 more)
-
-### Community 45 - "Community 45"
-Cohesion: 0.04
 Nodes (69): ClaudeOAuthCredentials, create_claude_auth_flow(), exchange_claude_code(), parse_claude_auth_input(), Claude OAuth authentication utilities.  Handles the browser-based OAuth PKCE flo, Exchange an authorization code for Claude OAuth tokens.      Args:         code:, Refresh an expired Claude access token., Holds a set of Claude OAuth tokens. (+61 more)
 
-### Community 46 - "Community 46"
-Cohesion: 0.04
-Nodes (62): calculate_context_usage(), check_context_before_request(), ContextUsage, format_budget_message(), get_session_token_totals(), log_token_usage(), Context tracking service for session token usage.  Tracks cumulative token usage, Check if request will exceed context limit.      Args:         db: Database sess (+54 more)
-
-### Community 47 - "Community 47"
+### Community 45 - "Community 45"
 Cohesion: 0.05
 Nodes (69): create_api_key(), delete_api_key(), get_api_key(), list_api_keys(), API key management endpoints for OpenAI-compatible authentication., Update an API key's settings., Revoke an API key. This cannot be undone., Rotate an API key - revokes the old key and creates a new one with same settings (+61 more)
 
+### Community 46 - "Community 46"
+Cohesion: 0.04
+Nodes (59): calculate_context_usage(), check_context_before_request(), ContextUsage, format_budget_message(), get_session_token_totals(), Context tracking service for session token usage.  Tracks cumulative token usage, Check if request will exceed context limit.      Args:         db: Database sess, Check if we should emit a warning event at this usage level. (+51 more)
+
+### Community 47 - "Community 47"
+Cohesion: 0.05
+Nodes (52): _aggregate_by_variant(), _build_variant_metrics(), collect_metrics(), _count_by_day(), Metric collection from database., Count records by day., Build VariantMetrics objects from aggregated data., Collect injection metrics from the database.      Args:         days: Number of (+44 more)
+
 ### Community 48 - "Community 48"
-Cohesion: 0.08
-Nodes (68): create_feedback(), delete_feedback(), get_component_feedback(), get_feedback_item(), get_summary(), list_feedback(), merge_feedback(), Feedback API endpoints for agent-sourced issues, ideas, and voting. (+60 more)
+Cohesion: 0.05
+Nodes (41): Tests for telemetry module., Test setting status in context., Test setting error status in context., Test trace_id property., Test context handles exceptions properly., Test nested trace contexts., Tests for lazy initialization., Test init_telemetry is idempotent. (+33 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.05
-Nodes (51): _aggregate_by_variant(), _build_variant_metrics(), collect_metrics(), _count_by_day(), Metric collection from database., Count records by day., Build VariantMetrics objects from aggregated data., Collect injection metrics from the database.      Args:         days: Number of (+43 more)
+Cohesion: 0.08
+Nodes (35): build_boundary_hook(), build_boundary_settings(), Settings-based write boundary enforcement for Claude SDK subprocess.  The Claude, Build SDK PreToolUse hook for write boundary enforcement.      Returns a hooks d, Build a Claude Code settings dict restricting writes to *working_dir*.      The, Write boundary settings to a temp file and return the path.      The Claude SDK, write_boundary_settings(), _build() (+27 more)
 
 ### Community 50 - "Community 50"
 Cohesion: 0.05
@@ -778,48 +779,48 @@ Cohesion: 0.07
 Nodes (16): Short valid IDs should pass through unchanged., IDs with alphanumeric, underscore, and hyphen should pass through., Long IDs (>64 chars) should be hashed., OpenAI-style IDs with pipes and special chars should be hashed., IDs with special characters (not alphanumeric/_/-) should be hashed., Gemini provider should pass through all IDs unchanged., Same input should always produce same normalized ID., Different input IDs should produce different normalized IDs. (+8 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.07
-Nodes (18): Tests for utility score computation and retrieval sorting.  Utility score = succ, Test sorting is stable for equal utility scores., Test utility score = success / referenced., Test rules with zero utility fall back to created_at ordering., Tests that high utility rules are prioritized in context injection., Test high utility rules appear first when context is limited., Test perfect utility score (always successful)., Test zero utility score (never successful). (+10 more)
-
-### Community 59 - "Community 59"
 Cohesion: 0.13
 Nodes (6): apply_privacy_filter(), strip_memory_tags(), strip_private_tags(), TestApplyPrivacyFilter, TestStripMemoryTags, TestStripPrivateTags
 
+### Community 59 - "Community 59"
+Cohesion: 0.11
+Nodes (22): main(), Run parameter sweep against historical data., run_sweep(), generate_configs(), ParameterConfig, Configuration generation for parameter sweep., A single parameter configuration to evaluate., Calculate confidence weight to ensure sum = 1.0. (+14 more)
+
 ### Community 60 - "Community 60"
+Cohesion: 0.07
+Nodes (18): Tests for utility score computation and retrieval sorting.  Utility score = succ, Test sorting is stable for equal utility scores., Test utility score = success / referenced., Test rules with zero utility fall back to created_at ordering., Tests that high utility rules are prioritized in context injection., Test high utility rules appear first when context is limited., Test perfect utility score (always successful)., Test zero utility score (never successful). (+10 more)
+
+### Community 61 - "Community 61"
 Cohesion: 0.09
 Nodes (19): main(), Hatchet worker entrypoint for long-lived agent execution., dump_asyncio_tasks(), install_asyncio_task_dump_signal(), Worker diagnostics for inspecting live asyncio task state., Render task metadata and stack snippets for log output., Log all live asyncio tasks for the worker loop., Install SIGUSR1 handler that logs asyncio task state for the worker loop. (+11 more)
 
-### Community 61 - "Community 61"
+### Community 62 - "Community 62"
 Cohesion: 0.17
 Nodes (23): is_policy_error(), main(), Check if response contains the Usage Policy error., Baseline: Auto-Claude's EXACT working pattern.     Uses query() directly with mi, Agent-Hub's current pattern.     Uses ClaudeSDKClient with context manager., Test different model version strings., Test different system prompts., Test different user prompts. (+15 more)
 
-### Community 62 - "Community 62"
+### Community 63 - "Community 63"
 Cohesion: 0.12
 Nodes (21): filter_persona_runtime_tool_dicts(), format_persona_operator_tools_for_tier(), get_persona_operator_tools_for_tier(), get_persona_operator_tools_for_visible_tools(), get_persona_runtime_tools_for_tier(), get_persona_runtime_tools_for_visible_tools(), infer_persona_tool_tier_from_visible_tools(), normalize_persona_tool_tier() (+13 more)
 
-### Community 63 - "Community 63"
+### Community 64 - "Community 64"
 Cohesion: 0.14
 Nodes (21): check_child_done(), dispatch_readable(), drain_master(), get_exit_code(), handle_master_output(), handle_stdin(), io_loop(), main() (+13 more)
 
-### Community 64 - "Community 64"
+### Community 65 - "Community 65"
 Cohesion: 0.13
 Nodes (13): MemoryTab(), getAgentEditorTabs(), cloneConfig(), parseBoolean(), parseConfig(), parseInteger(), parseOptionalString(), parseStringArray() (+5 more)
 
-### Community 65 - "Community 65"
+### Community 66 - "Community 66"
 Cohesion: 0.14
 Nodes (6): TranscriptionManager, useTranscription(), getSpeechRecognitionCtor(), resolveEngine(), useWebSpeechEngine(), useWhisperEngine()
 
-### Community 66 - "Community 66"
-Cohesion: 0.18
-Nodes (16): main(), make_request(), Result of a single request., Make a single request and measure latency., Run a batch of concurrent requests., Run the load test with specified concurrency., RequestResult, run_batch() (+8 more)
-
 ### Community 67 - "Community 67"
-Cohesion: 0.15
-Nodes (9): get_settings(), Centralized configuration loading.  Uses pydantic-settings for validated configu, Get cached settings instance.      Returns:         Settings instance (cached fo, Application settings loaded from environment variables.      Prefers repo-local, Settings, validate_database_url(), BaseSettings, Configuration loading tests. (+1 more)
+Cohesion: 0.26
+Nodes (18): _build_parser(), _commands_from_progress_log(), _extract_json_object(), _list_of_strings(), main(), _parse_codex_jsonl(), ProbeResult, _run_agent_hub() (+10 more)
 
 ### Community 68 - "Community 68"
-Cohesion: 0.12
-Nodes (8): useToast(), useToastActions(), useDebouncedAutosave(), useHeartbeat(), usePersona(), usePersonaSettings(), ToastTestComponent(), PersonaHarness()
+Cohesion: 0.18
+Nodes (16): main(), make_request(), Result of a single request., Make a single request and measure latency., Run a batch of concurrent requests., Run the load test with specified concurrency., RequestResult, run_batch() (+8 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.2
@@ -839,11 +840,11 @@ Nodes (5): AgentChatContent(), getStoredSessionId(), readContextSessions(), stor
 
 ### Community 73 - "Community 73"
 Cohesion: 0.18
-Nodes (4): pillClassName(), cn(), clsx(), cn()
+Nodes (5): useMentionPopup(), useMessageInput(), useModels(), useVoiceInput(), useVoice()
 
 ### Community 74 - "Community 74"
 Cohesion: 0.18
-Nodes (5): useMentionPopup(), useMessageInput(), useModels(), useVoiceInput(), useVoice()
+Nodes (4): pillClassName(), cn(), clsx(), cn()
 
 ### Community 75 - "Community 75"
 Cohesion: 0.29
@@ -1125,443 +1126,447 @@ Nodes (5): handle_event(), main(), Streaming completion example using SSE.  Uses
 Cohesion: 0.47
 Nodes (3): formatDraftValue(), getSelectedModel(), ParametersTab()
 
-### Community 151 - "Community 151"
+### Community 150 - "Community 150"
+Cohesion: 0.4
+Nodes (2): projectDescription(), summarizePath()
+
+### Community 152 - "Community 152"
 Cohesion: 0.4
 Nodes (2): compactState(), formatQuiet()
 
-### Community 154 - "Community 154"
+### Community 155 - "Community 155"
 Cohesion: 0.33
 Nodes (2): arraysEqual(), useEpisodeEditor()
 
-### Community 155 - "Community 155"
+### Community 156 - "Community 156"
 Cohesion: 0.47
 Nodes (4): getOAuthActive(), hasAnyAuth(), isClaudeStatus(), AuthBadges()
 
-### Community 156 - "Community 156"
+### Community 157 - "Community 157"
 Cohesion: 0.47
 Nodes (4): applyThemePreference(), getStoredTheme(), isThemePreference(), resolveTheme()
 
-### Community 157 - "Community 157"
+### Community 158 - "Community 158"
 Cohesion: 0.33
 Nodes (2): getProviderIconColor(), getIcon()
 
-### Community 158 - "Community 158"
+### Community 159 - "Community 159"
 Cohesion: 0.6
 Nodes (4): downgrade(), add_project_permissions_table  Revision ID: g8h9i0j1k2l3 Revises: f7g8h9i0j1k2 C, _table_exists(), upgrade()
 
-### Community 159 - "Community 159"
+### Community 160 - "Community 160"
 Cohesion: 0.6
 Nodes (4): downgrade(), migrate_model_ids_to_sonnet_46_opus_46  Revision ID: z3a4b5c6d7e8 Revises: 3f753, _table_exists(), upgrade()
 
-### Community 160 - "Community 160"
+### Community 161 - "Community 161"
 Cohesion: 0.4
 Nodes (3): dedupe narration tags  Revision ID: 46da0d007484 Revises: bcb0ec5298bb Create Da, Remove duplicate narration rows and enforce idempotent storage., upgrade()
 
-### Community 161 - "Community 161"
+### Community 162 - "Community 162"
 Cohesion: 0.5
 Nodes (1): STTService
 
-### Community 162 - "Community 162"
+### Community 163 - "Community 163"
 Cohesion: 0.6
 Nodes (4): _load_example_module(), Tests for the canonical orchestration workflow example., test_build_workflow_request_payload_matches_canonical_contract(), test_build_workflow_request_payload_omits_branch_when_not_provided()
 
-### Community 163 - "Community 163"
+### Community 164 - "Community 164"
 Cohesion: 0.5
 Nodes (2): buildPulseFields(), buildStreamResponse()
 
-### Community 167 - "Community 167"
+### Community 168 - "Community 168"
 Cohesion: 0.4
 Nodes (2): getEventConfig(), FilterChip()
 
-### Community 169 - "Community 169"
+### Community 170 - "Community 170"
 Cohesion: 0.4
 Nodes (2): KPISection(), formatNumber()
 
-### Community 170 - "Community 170"
+### Community 171 - "Community 171"
 Cohesion: 0.5
 Nodes (1): add_session_workstream_lifecycle_fields  Revision ID: 0bd342386e50 Revises: f82c
 
-### Community 171 - "Community 171"
+### Community 172 - "Community 172"
 Cohesion: 0.5
 Nodes (1): add agent benchmark tracking  Revision ID: 10d42965cd8e Revises: a8257e5c28c8 Cr
 
-### Community 172 - "Community 172"
+### Community 173 - "Community 173"
 Cohesion: 0.5
 Nodes (1): backfill tool_result content from tool_output  Revision ID: 163e34a7c829 Revises
 
-### Community 173 - "Community 173"
+### Community 174 - "Community 174"
 Cohesion: 0.5
 Nodes (1): initial schema - sessions messages credentials cost_logs  Revision ID: 17cdcc56e
 
-### Community 174 - "Community 174"
+### Community 175 - "Community 175"
 Cohesion: 0.5
 Nodes (1): add_provider_metadata_to_sessions  Revision ID: 1c6805054b00 Revises: 17cdcc56e5
 
-### Community 175 - "Community 175"
+### Community 176 - "Community 176"
 Cohesion: 0.5
 Nodes (1): drop_unused_session_columns  Revision ID: 1d642bcb1f01 Revises: cb33d77516d8 Cre
 
-### Community 176 - "Community 176"
+### Community 177 - "Community 177"
 Cohesion: 0.5
 Nodes (1): add truncation_events table  Revision ID: 27229f433f34 Revises: b9f50737450a Cre
 
-### Community 177 - "Community 177"
+### Community 178 - "Community 178"
 Cohesion: 0.5
 Nodes (1): add benchmark experiments  Revision ID: 29e5dc2c0921 Revises: 10d42965cd8e Creat
 
-### Community 178 - "Community 178"
+### Community 179 - "Community 179"
 Cohesion: 0.5
 Nodes (1): add_roundtable_session_and_message_tables  Revision ID: 2db02fafe6f7 Revises: 89
 
-### Community 179 - "Community 179"
+### Community 180 - "Community 180"
 Cohesion: 0.5
 Nodes (1): add client_not_found to rejection_reason_enum  Revision ID: 345f14d99f4f Revises
 
-### Community 180 - "Community 180"
+### Community 181 - "Community 181"
 Cohesion: 0.5
 Nodes (1): split reference injection metrics  Revision ID: 356c591a71de Revises: 0bd342386e
 
-### Community 181 - "Community 181"
+### Community 182 - "Community 182"
 Cohesion: 0.5
 Nodes (1): drop abandoned persona_journal table  Revision ID: 4181a970370b Revises: 65a0807
 
-### Community 182 - "Community 182"
+### Community 183 - "Community 183"
 Cohesion: 0.5
 Nodes (1): add_user_preferences_table  Revision ID: 4d833a3be2d8 Revises: y2z3a4b5c6d7 Crea
 
-### Community 183 - "Community 183"
+### Community 184 - "Community 184"
 Cohesion: 0.5
 Nodes (1): drop legacy persona heartbeat columns  Revision ID: 4e43b7027dcc Revises: c6d7e8
 
-### Community 184 - "Community 184"
+### Community 185 - "Community 185"
 Cohesion: 0.5
 Nodes (1): add_api_keys_table  Revision ID: 548fe3a69c99 Revises: 1c6805054b00 Create Date:
 
-### Community 185 - "Community 185"
+### Community 186 - "Community 186"
 Cohesion: 0.5
 Nodes (1): extend_api_key_prefix_length  Revision ID: 5d106fee3146 Revises: 548fe3a69c99 Cr
 
-### Community 186 - "Community 186"
+### Community 187 - "Community 187"
 Cohesion: 0.5
 Nodes (1): add previous backup columns to persona  Revision ID: 61e8ed756630 Revises: 345f1
 
-### Community 187 - "Community 187"
+### Community 188 - "Community 188"
 Cohesion: 0.5
 Nodes (1): drop premium model from agents  Revision ID: 6996cae6424b Revises: 356c591a71de
 
-### Community 188 - "Community 188"
+### Community 189 - "Community 189"
 Cohesion: 0.5
 Nodes (1): add prompt revisions  Revision ID: 6c39f1c7c8f3 Revises: 29e5dc2c0921 Create Dat
 
-### Community 189 - "Community 189"
+### Community 190 - "Community 190"
 Cohesion: 0.5
 Nodes (1): add persona execution state  Revision ID: 706345626a08 Revises: cf39a0bccadf Cre
 
-### Community 190 - "Community 190"
+### Community 191 - "Community 191"
 Cohesion: 0.5
 Nodes (1): mark_legacy_sessions  Revision ID: 78ebdaac1078 Revises: 86bacf829f75 Create Dat
 
-### Community 191 - "Community 191"
+### Community 192 - "Community 192"
 Cohesion: 0.5
 Nodes (1): add_access_control_tables  Revision ID: 86bacf829f75 Revises: g6h7i8j9k0l1 Creat
 
-### Community 192 - "Community 192"
+### Community 193 - "Community 193"
 Cohesion: 0.5
 Nodes (1): merge_heads  Revision ID: 8939a1bd7848 Revises: 98f371912aa2, c7a82f0e9b12 Creat
 
-### Community 193 - "Community 193"
+### Community 194 - "Community 194"
 Cohesion: 0.5
 Nodes (1): add_agent_id_to_messages  Revision ID: 98f371912aa2 Revises: ed13ea976211 Create
 
-### Community 194 - "Community 194"
+### Community 195 - "Community 195"
 Cohesion: 0.5
 Nodes (1): create_persona_table  Revision ID: a2b3c4d5e6f7 Revises: f7a8b9c0d1e2 Create Dat
 
-### Community 195 - "Community 195"
+### Community 196 - "Community 196"
 Cohesion: 0.5
 Nodes (1): feedback lifecycle archive and merge  Revision ID: a8257e5c28c8 Revises: 7063456
 
-### Community 196 - "Community 196"
+### Community 197 - "Community 197"
 Cohesion: 0.5
 Nodes (1): add_thinking_level_to_agents  Revision ID: a84930c276eb Revises: x1y2z3a4b5c6 Cr
 
-### Community 197 - "Community 197"
+### Community 198 - "Community 198"
 Cohesion: 0.5
 Nodes (1): add_onboarding_attempts_column  Revision ID: aa1bb2cc3dd4 Revises: ff9d19d2c6d1
 
-### Community 198 - "Community 198"
+### Community 199 - "Community 199"
 Cohesion: 0.5
 Nodes (1): rename_soul_to_personality  Revision ID: b3c4d5e6f7g8 Revises: a2b3c4d5e6f7 Crea
 
-### Community 199 - "Community 199"
+### Community 200 - "Community 200"
 Cohesion: 0.5
 Nodes (1): add resolve_conflict heartbeat guidance  Revision ID: b4c5d6e7f8g9 Revises: a3f2
 
-### Community 200 - "Community 200"
+### Community 201 - "Community 201"
 Cohesion: 0.5
 Nodes (1): migrate_persona_heartbeat_prompt  Revision ID: c6d7e8f9a0b1 Revises: a4b5c6d7e8f
 
-### Community 201 - "Community 201"
+### Community 202 - "Community 202"
 Cohesion: 0.5
 Nodes (1): add_webhook_subscriptions_table  Revision ID: b9f50737450a Revises: 5d106fee3146
 
-### Community 202 - "Community 202"
+### Community 203 - "Community 203"
 Cohesion: 0.5
 Nodes (1): add_model_enrichments_table  Revision ID: bb2cc3dd4ee5 Revises: aa1bb2cc3dd4 Cre
 
-### Community 203 - "Community 203"
+### Community 204 - "Community 204"
 Cohesion: 0.5
 Nodes (1): drop_persona_tools_guidance  Revision ID: c2d3e4f5g6h7 Revises: 31f7c68cf57f Cre
 
-### Community 204 - "Community 204"
+### Community 205 - "Community 205"
 Cohesion: 0.5
 Nodes (1): create_persona_journal_table  Revision ID: c4d5e6f7g8h9 Revises: b3c4d5e6f7g8 Cr
 
-### Community 205 - "Community 205"
+### Community 206 - "Community 206"
 Cohesion: 0.5
 Nodes (1): add lifecycle columns  Revision ID: c8113ded1ed2 Revises: e2a476ce0825 Create Da
 
-### Community 206 - "Community 206"
+### Community 207 - "Community 207"
 Cohesion: 0.5
 Nodes (1): consolidate agent prompt ownership  Revision ID: ca45411429f5 Revises: e25ac263b
 
-### Community 207 - "Community 207"
+### Community 208 - "Community 208"
 Cohesion: 0.5
 Nodes (1): add_agent_performance_logs_table  Revision ID: cc3dd4ee5ff6 Revises: bb2cc3dd4ee
 
-### Community 208 - "Community 208"
+### Community 209 - "Community 209"
 Cohesion: 0.5
 Nodes (1): add session scope tracking columns  Revision ID: cf39a0bccadf Revises: b4c5d6e7f
 
-### Community 209 - "Community 209"
+### Community 210 - "Community 210"
 Cohesion: 0.5
 Nodes (1): create_unified_memories_table  Revision ID: d3e4f5g6h7i8 Revises: c2d3e4f5g6h7 C
 
-### Community 210 - "Community 210"
+### Community 211 - "Community 211"
 Cohesion: 0.5
 Nodes (1): enhance_persona_memory_config  Revision ID: d5e6f7g8h9i0 Revises: c4d5e6f7g8h9 C
 
-### Community 211 - "Community 211"
+### Community 212 - "Community 212"
 Cohesion: 0.5
 Nodes (1): add_benchmark_enrichment_columns  Revision ID: dd4ee5ff6aa7 Revises: cc3dd4ee5ff
 
-### Community 212 - "Community 212"
+### Community 213 - "Community 213"
 Cohesion: 0.5
 Nodes (1): add session health tracking  Revision ID: e25ac263bac8 Revises: f1a2b3c4d5e6 Cre
 
-### Community 213 - "Community 213"
+### Community 214 - "Community 214"
 Cohesion: 0.5
 Nodes (1): add exclude_agents to prompts  Revision ID: e2a476ce0825 Revises: 61e8ed756630 C
 
-### Community 214 - "Community 214"
+### Community 215 - "Community 215"
 Cohesion: 0.5
 Nodes (1): add_persona_onboarding_phase  Revision ID: e6f7g8h9i0j1 Revises: d5e6f7g8h9i0 Cr
 
-### Community 215 - "Community 215"
+### Community 216 - "Community 216"
 Cohesion: 0.5
 Nodes (1): Add structured persona user_profile field.  Revision ID: e7f8g9h0i1j2 Revises: 6
 
-### Community 216 - "Community 216"
+### Community 217 - "Community 217"
 Cohesion: 0.5
 Nodes (1): add multi-model tracking columns  Revision ID: eb4ecc28ced9 Revises: 6b46071ec3b
 
-### Community 217 - "Community 217"
+### Community 218 - "Community 218"
 Cohesion: 0.5
 Nodes (1): add_purpose_and_session_type  Revision ID: ed13ea976211 Revises: 27229f433f34 Cr
 
-### Community 218 - "Community 218"
+### Community 219 - "Community 219"
 Cohesion: 0.5
 Nodes (1): add_agent_concurrency_and_quota_limits  Revision ID: f7a8b9c0d1e2 Revises: 031fa
 
-### Community 219 - "Community 219"
+### Community 220 - "Community 220"
 Cohesion: 0.5
 Nodes (1): drop_dead_tables_neo4j_cleanup  Revision ID: ff9d19d2c6d1 Revises: d3e4f5g6h7i8
 
-### Community 220 - "Community 220"
+### Community 221 - "Community 221"
 Cohesion: 0.5
 Nodes (1): Add budget_enabled column to memory_settings  Revision ID: j9k0l1m2n3o4 Revises:
 
-### Community 221 - "Community 221"
+### Community 222 - "Community 222"
 Cohesion: 0.5
 Nodes (1): add_summary_git_digest_to_sessions  Revision ID: y2z3a4b5c6d7 Revises: x1y2z3a4b
 
-### Community 222 - "Community 222"
+### Community 223 - "Community 223"
 Cohesion: 0.5
 Nodes (1): classify global prompts and repair note titler prompt  Revision ID: b217f2377552
 
-### Community 223 - "Community 223"
+### Community 224 - "Community 224"
 Cohesion: 0.5
 Nodes (1): add memory context routing fields  Revision ID: 0ff5fb2a634c Revises: 93da76ab0d
 
-### Community 224 - "Community 224"
+### Community 225 - "Community 225"
 Cohesion: 0.5
 Nodes (1): add_workflow_schedule_controls_table  Revision ID: 24ebd21257f3 Revises: ac9b84e
 
-### Community 225 - "Community 225"
+### Community 226 - "Community 226"
 Cohesion: 0.5
 Nodes (1): drop_agent_tool_permissions_column  Revision ID: 4b7a9c1d2e3f Revises: 24ebd2125
 
-### Community 226 - "Community 226"
+### Community 227 - "Community 227"
 Cohesion: 0.5
 Nodes (1): add_model_catalog_sync_state  Revision ID: c7d8e9f0a1b2 Revises: 4b7a9c1d2e3f, z
 
-### Community 227 - "Community 227"
+### Community 228 - "Community 228"
 Cohesion: 0.5
 Nodes (1): fix_git_agent_and_add_context_compactor  Revision ID: d8e9f0a1b2c3 Revises: c7d8
 
-### Community 228 - "Community 228"
+### Community 229 - "Community 229"
 Cohesion: 0.5
 Nodes (1): tighten heartbeat cleanup workflow  Revision ID: 0787049c485f Revises: 4e43b7027
 
-### Community 229 - "Community 229"
+### Community 230 - "Community 230"
 Cohesion: 0.5
 Nodes (1): clarify heartbeat cleanup candidate handling  Revision ID: a3f20b69e97e Revises:
 
-### Community 230 - "Community 230"
+### Community 231 - "Community 231"
 Cohesion: 0.5
 Nodes (1): unify_prompt_sources  Revision ID: a4b5c6d7e8f9 Revises: 6996cae6424b Create Dat
 
-### Community 231 - "Community 231"
+### Community 232 - "Community 232"
 Cohesion: 0.5
 Nodes (1): strengthen heartbeat residue gate  Revision ID: d3931b3024b3 Revises: d1f2ec627e
 
-### Community 232 - "Community 232"
+### Community 233 - "Community 233"
 Cohesion: 0.5
 Nodes (1): add_memory_review_and_fingerprints  Revision ID: a7c9d3e5f1b2 Revises: e9f0a1b2c
 
-### Community 233 - "Community 233"
+### Community 234 - "Community 234"
 Cohesion: 0.5
 Nodes (1): add_work_chats_bindings  Revision ID: b8c9d0e1f2a3 Revises: a7c9d3e5f1b2 Create
 
-### Community 234 - "Community 234"
+### Community 235 - "Community 235"
 Cohesion: 0.5
 Nodes (3): get_thinking_level(), Gemini thinking level configuration., Convert thinking_level to Gemini-compatible value.      Args:         model: Mod
 
-### Community 235 - "Community 235"
+### Community 236 - "Community 236"
 Cohesion: 0.5
 Nodes (3): orchestration_health(), Orchestration API routes - Multi-agent execution endpoints.  Provides HTTP endpo, Check orchestration services health.
 
-### Community 236 - "Community 236"
+### Community 237 - "Community 237"
 Cohesion: 0.5
 Nodes (3): format_subtask_types_markdown(), Canonical subtask type definitions for task routing., Return a stable bullet list for prompts/docs.
 
-### Community 237 - "Community 237"
+### Community 238 - "Community 238"
 Cohesion: 0.5
 Nodes (3): Constants shared across tool definition modules., Build st CLI command with -P flag in correct position (before subcommand)., st_cmd()
 
-### Community 239 - "Community 239"
+### Community 240 - "Community 240"
 Cohesion: 0.5
 Nodes (3): main(), Simple completion example using curl-style requests., Run a simple completion request.
 
-### Community 244 - "Community 244"
+### Community 245 - "Community 245"
 Cohesion: 0.67
 Nodes (2): buildSharedContext(), buildWorkflowRequest()
 
-### Community 249 - "Community 249"
+### Community 250 - "Community 250"
 Cohesion: 0.67
 Nodes (2): handleKeyDown(), handleSubmit()
 
-### Community 250 - "Community 250"
+### Community 251 - "Community 251"
 Cohesion: 0.67
 Nodes (1): TSLA Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 wit
 
-### Community 252 - "Community 252"
+### Community 253 - "Community 253"
 Cohesion: 0.67
 Nodes (1): Tests for API endpoints.
 
-### Community 253 - "Community 253"
+### Community 254 - "Community 254"
 Cohesion: 0.67
 Nodes (1): Tests for core services.
 
-### Community 254 - "Community 254"
+### Community 255 - "Community 255"
 Cohesion: 0.67
 Nodes (1): Spike test: Validate Claude Agent SDK behavior with max_turns=1 + deny-all.  Tes
 
-### Community 256 - "Community 256"
+### Community 257 - "Community 257"
 Cohesion: 1.0
 Nodes (2): createAssistantThread(), createMessage()
 
-### Community 264 - "Community 264"
+### Community 265 - "Community 265"
 Cohesion: 1.0
 Nodes (2): normalizeOptional(), useAgentPreview()
 
-### Community 273 - "Community 273"
+### Community 274 - "Community 274"
 Cohesion: 1.0
 Nodes (2): doCopy(), handleCopy()
 
-### Community 274 - "Community 274"
+### Community 275 - "Community 275"
 Cohesion: 1.0
 Nodes (2): resolveStatusState(), StatusCell()
 
-### Community 280 - "Community 280"
+### Community 281 - "Community 281"
 Cohesion: 1.0
 Nodes (2): FeedbackLoopsHealth(), getLoopStatus()
 
-### Community 287 - "Community 287"
+### Community 288 - "Community 288"
 Cohesion: 1.0
 Nodes (1): Access Control API endpoints for client management and request logging.  Replace
 
-### Community 288 - "Community 288"
+### Community 289 - "Community 289"
 Cohesion: 1.0
 Nodes (1): API helper functions.
 
-### Community 289 - "Community 289"
+### Community 290 - "Community 290"
 Cohesion: 1.0
 Nodes (1): Shared constants used across the application.  This module re-exports all consta
 
-### Community 290 - "Community 290"
+### Community 291 - "Community 291"
 Cohesion: 1.0
 Nodes (1): Model ID constants and provider groupings.
 
-### Community 291 - "Community 291"
+### Community 292 - "Community 292"
 Cohesion: 1.0
 Nodes (1): Header constants for access control middleware.  Centralized header name definit
 
-### Community 292 - "Community 292"
+### Community 293 - "Community 293"
 Cohesion: 1.0
 Nodes (1): Services for agent-hub.
 
-### Community 293 - "Community 293"
+### Community 294 - "Community 294"
 Cohesion: 1.0
 Nodes (1): Session helper utilities - Re-exports from specialized modules.  This module ser
 
-### Community 294 - "Community 294"
+### Community 295 - "Community 295"
 Cohesion: 1.0
 Nodes (1): Analytics service package for cost and truncation aggregation.
 
-### Community 295 - "Community 295"
+### Community 296 - "Community 296"
 Cohesion: 1.0
 Nodes (1): Task business logic modules.
 
-### Community 296 - "Community 296"
+### Community 297 - "Community 297"
 Cohesion: 1.0
 Nodes (1): Hatchet workflow definitions.
 
-### Community 297 - "Community 297"
+### Community 298 - "Community 298"
 Cohesion: 1.0
 Nodes (1): CLI entry points for Agent Hub.
 
-### Community 298 - "Community 298"
+### Community 299 - "Community 299"
 Cohesion: 1.0
 Nodes (1): Shared utility helpers.
 
-### Community 299 - "Community 299"
+### Community 300 - "Community 300"
 Cohesion: 1.0
 Nodes (1): Metrics collection and reporting modules.
 
-### Community 300 - "Community 300"
+### Community 301 - "Community 301"
 Cohesion: 1.0
 Nodes (1): Magic string constants for the persona honing loop.
 
-### Community 302 - "Community 302"
+### Community 303 - "Community 303"
 Cohesion: 1.0
 Nodes (1): End-to-end tests for session tracking.
 
-### Community 303 - "Community 303"
+### Community 304 - "Community 304"
 Cohesion: 1.0
 Nodes (1): Tests for storage layer.
 
-### Community 304 - "Community 304"
+### Community 305 - "Community 305"
 Cohesion: 1.0
 Nodes (1): Tests for extended thinking support.
 
@@ -1573,1736 +1578,1738 @@ Nodes (1): Model constants for Agent Hub.  Single source of truth for LLM model 
 Cohesion: 1.0
 Nodes (1): Tests for agent-hub-client package.
 
-### Community 452 - "Community 452"
-Cohesion: 1.0
-Nodes (1): Ensure agent_hub_db_url is provided.
-
 ### Community 453 - "Community 453"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in dashboard client id.
+Nodes (1): Ensure agent_hub_db_url is provided.
 
 ### Community 454 - "Community 454"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in dashboard request source.
+Nodes (1): Treat blank env values as the built-in dashboard client id.
 
 ### Community 455 - "Community 455"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in Telegram bot client id.
+Nodes (1): Treat blank env values as the built-in dashboard request source.
 
 ### Community 456 - "Community 456"
 Cohesion: 1.0
-Nodes (1): Parse CORS_ORIGINS from comma-separated string or list.
+Nodes (1): Treat blank env values as the built-in Telegram bot client id.
 
 ### Community 457 - "Community 457"
 Cohesion: 1.0
-Nodes (1): Return True if the access token has expired (or will within 60 s).
+Nodes (1): Parse CORS_ORIGINS from comma-separated string or list.
 
 ### Community 458 - "Community 458"
 Cohesion: 1.0
-Nodes (1): True if :meth:`end` has been called.
+Nodes (1): Return True if the access token has expired (or will within 60 s).
 
 ### Community 459 - "Community 459"
 Cohesion: 1.0
-Nodes (1): Create an EventStream that wraps an existing async iterator.          Useful for
+Nodes (1): True if :meth:`end` has been called.
 
 ### Community 460 - "Community 460"
 Cohesion: 1.0
-Nodes (1): Return the provider name (e.g., 'gemini').
+Nodes (1): Create an EventStream that wraps an existing async iterator.          Useful for
 
 ### Community 461 - "Community 461"
 Cohesion: 1.0
-Nodes (1): Generate an image from a text prompt, optionally guided by a reference image.
+Nodes (1): Return the provider name (e.g., 'gemini').
 
 ### Community 462 - "Community 462"
 Cohesion: 1.0
-Nodes (1): Calculate cache hit rate (0.0-1.0).
+Nodes (1): Generate an image from a text prompt, optionally guided by a reference image.
 
 ### Community 463 - "Community 463"
 Cohesion: 1.0
-Nodes (1): Yield canonical runtime events for the active turn.
+Nodes (1): Calculate cache hit rate (0.0-1.0).
 
 ### Community 464 - "Community 464"
 Cohesion: 1.0
-Nodes (1): Close the active turn session.
+Nodes (1): Yield canonical runtime events for the active turn.
 
 ### Community 465 - "Community 465"
 Cohesion: 1.0
-Nodes (1): Create and register an active stream context for cooperative cancel.
+Nodes (1): Close the active turn session.
 
 ### Community 466 - "Community 466"
 Cohesion: 1.0
-Nodes (1): Signal an active streaming session to stop after the current boundary.
+Nodes (1): Create and register an active stream context for cooperative cancel.
 
 ### Community 467 - "Community 467"
 Cohesion: 1.0
-Nodes (1): Weighted average across all categories.
+Nodes (1): Signal an active streaming session to stop after the current boundary.
 
 ### Community 468 - "Community 468"
 Cohesion: 1.0
-Nodes (1): Calculate availability as success_rate (0.0-1.0).
+Nodes (1): Weighted average across all categories.
 
 ### Community 469 - "Community 469"
 Cohesion: 1.0
-Nodes (1): Calculate error rate (0.0-1.0).
+Nodes (1): Calculate availability as success_rate (0.0-1.0).
 
 ### Community 470 - "Community 470"
 Cohesion: 1.0
-Nodes (1): Check if container has expired.
+Nodes (1): Calculate error rate (0.0-1.0).
 
 ### Community 471 - "Community 471"
 Cohesion: 1.0
-Nodes (1): Get time remaining before expiration.
+Nodes (1): Check if container has expired.
 
 ### Community 472 - "Community 472"
 Cohesion: 1.0
-Nodes (1): Age of this cache entry in seconds.
+Nodes (1): Get time remaining before expiration.
 
 ### Community 473 - "Community 473"
 Cohesion: 1.0
-Nodes (1): Whether this entry is within TTL.
+Nodes (1): Age of this cache entry in seconds.
 
 ### Community 474 - "Community 474"
 Cohesion: 1.0
-Nodes (1): Get cache statistics.
+Nodes (1): Whether this entry is within TTL.
 
 ### Community 475 - "Community 475"
 Cohesion: 1.0
-Nodes (1): Get trace ID for this span.
+Nodes (1): Get cache statistics.
 
 ### Community 476 - "Community 476"
 Cohesion: 1.0
-Nodes (1): Create DTO from SQLAlchemy model.
+Nodes (1): Get trace ID for this span.
 
 ### Community 477 - "Community 477"
 Cohesion: 1.0
-Nodes (1): Create DTO from dictionary.
+Nodes (1): Create DTO from SQLAlchemy model.
 
 ### Community 478 - "Community 478"
 Cohesion: 1.0
-Nodes (1): Total tokens used across all categories.
+Nodes (1): Create DTO from dictionary.
 
 ### Community 479 - "Community 479"
 Cohesion: 1.0
-Nodes (1): Return the text currently selected for prompt injection.
+Nodes (1): Total tokens used across all categories.
 
 ### Community 480 - "Community 480"
 Cohesion: 1.0
-Nodes (1): Calculate cache hit rate.
+Nodes (1): Return the text currently selected for prompt injection.
 
 ### Community 481 - "Community 481"
 Cohesion: 1.0
-Nodes (1): Total fallback responses served.
+Nodes (1): Calculate cache hit rate.
 
 ### Community 482 - "Community 482"
 Cohesion: 1.0
-Nodes (1): Create from dictionary.
+Nodes (1): Total fallback responses served.
 
 ### Community 483 - "Community 483"
 Cohesion: 1.0
-Nodes (1): Execute a tool call and return result.
+Nodes (1): Create from dictionary.
 
-### Community 487 - "Community 487"
+### Community 484 - "Community 484"
 Cohesion: 1.0
-Nodes (1): Calculate task success rate.
+Nodes (1): Execute a tool call and return result.
 
 ### Community 488 - "Community 488"
 Cohesion: 1.0
-Nodes (1): Calculate average retries per task.
+Nodes (1): Calculate task success rate.
 
-### Community 490 - "Community 490"
+### Community 489 - "Community 489"
 Cohesion: 1.0
-Nodes (1): Write with empty path should be allowed (let Claude handle the error).
+Nodes (1): Calculate average retries per task.
 
 ### Community 491 - "Community 491"
 Cohesion: 1.0
-Nodes (1): Check if hook result means 'allowed' (empty dict or no deny).
+Nodes (1): Write with empty path should be allowed (let Claude handle the error).
 
 ### Community 492 - "Community 492"
 Cohesion: 1.0
-Nodes (1): Check if hook result means 'denied'.
+Nodes (1): Check if hook result means 'allowed' (empty dict or no deny).
 
-### Community 494 - "Community 494"
+### Community 493 - "Community 493"
 Cohesion: 1.0
-Nodes (1): No compaction when usage is below threshold.
+Nodes (1): Check if hook result means 'denied'.
 
 ### Community 495 - "Community 495"
 Cohesion: 1.0
-Nodes (1): No compaction when there aren't enough messages to split.
+Nodes (1): No compaction when usage is below threshold.
 
 ### Community 496 - "Community 496"
 Cohesion: 1.0
-Nodes (1): Compaction triggers when usage exceeds threshold.
+Nodes (1): No compaction when there aren't enough messages to split.
 
 ### Community 497 - "Community 497"
 Cohesion: 1.0
-Nodes (1): System messages are kept at the front, not compacted.
+Nodes (1): Compaction triggers when usage exceeds threshold.
 
 ### Community 498 - "Community 498"
 Cohesion: 1.0
-Nodes (1): If summarization fails, return original messages.
+Nodes (1): System messages are kept at the front, not compacted.
 
 ### Community 499 - "Community 499"
 Cohesion: 1.0
-Nodes (1): Custom threshold_pct and keep_recent values work.
+Nodes (1): If summarization fails, return original messages.
 
 ### Community 500 - "Community 500"
 Cohesion: 1.0
-Nodes (1): Successful deletion returns 200 with success response.
+Nodes (1): Custom threshold_pct and keep_recent values work.
 
 ### Community 501 - "Community 501"
 Cohesion: 1.0
-Nodes (1): Episode not found returns 404.
+Nodes (1): Successful deletion returns 200 with success response.
 
 ### Community 502 - "Community 502"
 Cohesion: 1.0
-Nodes (1): Internal error returns 500.
+Nodes (1): Episode not found returns 404.
 
 ### Community 503 - "Community 503"
 Cohesion: 1.0
-Nodes (1): Content updates should patch in place and preserve UUID.
+Nodes (1): Internal error returns 500.
 
 ### Community 504 - "Community 504"
 Cohesion: 1.0
-Nodes (1): Tier-only updates should not require re-embedding.
+Nodes (1): Content updates should patch in place and preserve UUID.
 
 ### Community 505 - "Community 505"
 Cohesion: 1.0
-Nodes (1): Content-only updates should still enforce the topic-header format.
+Nodes (1): Tier-only updates should not require re-embedding.
 
 ### Community 506 - "Community 506"
 Cohesion: 1.0
-Nodes (1): Empty payload should be rejected clearly.
+Nodes (1): Content-only updates should still enforce the topic-header format.
 
 ### Community 507 - "Community 507"
 Cohesion: 1.0
-Nodes (1): Invalid learning format should return normalized validation payload.
+Nodes (1): Empty payload should be rejected clearly.
 
 ### Community 508 - "Community 508"
 Cohesion: 1.0
-Nodes (1): Valid save-learning requests should persist routing metadata on the created memo
+Nodes (1): Invalid learning format should return normalized validation payload.
 
 ### Community 509 - "Community 509"
 Cohesion: 1.0
-Nodes (1): Successful bulk deletion returns success count.
+Nodes (1): Valid save-learning requests should persist routing metadata on the created memo
 
 ### Community 510 - "Community 510"
 Cohesion: 1.0
-Nodes (1): Partial failure returns both success and failure counts.
+Nodes (1): Successful bulk deletion returns success count.
 
 ### Community 511 - "Community 511"
 Cohesion: 1.0
-Nodes (1): Empty ID list returns validation error.
+Nodes (1): Partial failure returns both success and failure counts.
 
 ### Community 512 - "Community 512"
 Cohesion: 1.0
-Nodes (1): Upsert returns created flag and session snapshot.
+Nodes (1): Empty ID list returns validation error.
 
 ### Community 513 - "Community 513"
 Cohesion: 1.0
-Nodes (1): Heartbeat returns updated flag and refreshed session snapshot.
+Nodes (1): Upsert returns created flag and session snapshot.
 
 ### Community 514 - "Community 514"
 Cohesion: 1.0
-Nodes (1): Append returns event counts and last sequence.
+Nodes (1): Heartbeat returns updated flag and refreshed session snapshot.
 
 ### Community 515 - "Community 515"
 Cohesion: 1.0
-Nodes (1): Finalize endpoint delegates to the canonical finalizer.
+Nodes (1): Append returns event counts and last sequence.
 
 ### Community 516 - "Community 516"
 Cohesion: 1.0
-Nodes (1): Transcript ingest endpoint returns checkpointed append results.
+Nodes (1): Finalize endpoint delegates to the canonical finalizer.
 
 ### Community 517 - "Community 517"
 Cohesion: 1.0
-Nodes (1): Feedback tags are parsed and create_feedback_item is called.
+Nodes (1): Transcript ingest endpoint returns checkpointed append results.
 
 ### Community 518 - "Community 518"
 Cohesion: 1.0
-Nodes (1): Same (component, type) tag twice in one session creates only one item.
+Nodes (1): Feedback tags are parsed and create_feedback_item is called.
 
 ### Community 519 - "Community 519"
 Cohesion: 1.0
-Nodes (1): No feedback tags returns 0 without DB queries.
+Nodes (1): Same (component, type) tag twice in one session creates only one item.
 
 ### Community 520 - "Community 520"
 Cohesion: 1.0
-Nodes (1): Tags already stored for session are skipped.
+Nodes (1): No feedback tags returns 0 without DB queries.
 
 ### Community 521 - "Community 521"
 Cohesion: 1.0
-Nodes (1): Duplicate inline feedback votes on the existing item instead of creating a new o
+Nodes (1): Tags already stored for session are skipped.
 
 ### Community 522 - "Community 522"
 Cohesion: 1.0
-Nodes (1): Native completion should persist memory_cite events when DB is available.
+Nodes (1): Duplicate inline feedback votes on the existing item instead of creating a new o
 
 ### Community 523 - "Community 523"
 Cohesion: 1.0
-Nodes (1): Every provider in PROVIDER_NAMES must be recognized as a valid @mention prefix.
+Nodes (1): Native completion should persist memory_cite events when DB is available.
 
 ### Community 524 - "Community 524"
 Cohesion: 1.0
-Nodes (1): When no [[S:...]] tags, a synthetic summary is generated.
+Nodes (1): Every provider in PROVIDER_NAMES must be recognized as a valid @mention prefix.
 
 ### Community 525 - "Community 525"
 Cohesion: 1.0
-Nodes (1): When [[S:...]] tags found, no synthetic summary is generated.
+Nodes (1): When no [[S:...]] tags, a synthetic summary is generated.
 
-### Community 529 - "Community 529"
+### Community 526 - "Community 526"
 Cohesion: 1.0
-Nodes (1): Create mock health prober with test data.
+Nodes (1): When [[S:...]] tags found, no synthetic summary is generated.
 
 ### Community 530 - "Community 530"
 Cohesion: 1.0
-Nodes (1): Test that /status includes provider health details from prober.
+Nodes (1): Create mock health prober with test data.
 
 ### Community 531 - "Community 531"
 Cohesion: 1.0
-Nodes (1): Test that degraded provider is reported in status.
+Nodes (1): Test that /status includes provider health details from prober.
 
 ### Community 532 - "Community 532"
 Cohesion: 1.0
-Nodes (1): Test that status response format matches what frontend expects.
+Nodes (1): Test that degraded provider is reported in status.
 
 ### Community 533 - "Community 533"
 Cohesion: 1.0
-Nodes (1): Test verification approved on first try.
+Nodes (1): Test that status response format matches what frontend expects.
 
 ### Community 534 - "Community 534"
 Cohesion: 1.0
-Nodes (1): Test verification requiring multiple iterations.
+Nodes (1): Test verification approved on first try.
 
 ### Community 535 - "Community 535"
 Cohesion: 1.0
-Nodes (1): Test verification hitting max iterations.
+Nodes (1): Test verification requiring multiple iterations.
 
 ### Community 536 - "Community 536"
 Cohesion: 1.0
-Nodes (1): Test verification when maker fails.
+Nodes (1): Test verification hitting max iterations.
 
-### Community 539 - "Community 539"
+### Community 537 - "Community 537"
 Cohesion: 1.0
-Nodes (1): Test index includes all mandates on cold start (ac-004).
+Nodes (1): Test verification when maker fails.
 
 ### Community 540 - "Community 540"
 Cohesion: 1.0
-Nodes (1): Test index uses stored summary when available (ac-004).
+Nodes (1): Test index includes all mandates on cold start (ac-004).
 
 ### Community 541 - "Community 541"
 Cohesion: 1.0
-Nodes (1): Test index falls back to truncated content when no summary.
+Nodes (1): Test index uses stored summary when available (ac-004).
 
 ### Community 542 - "Community 542"
 Cohesion: 1.0
-Nodes (1): Test usage stats are applied to entries.
+Nodes (1): Test index falls back to truncated content when no summary.
 
 ### Community 543 - "Community 543"
 Cohesion: 1.0
-Nodes (1): Test empty input produces empty index.
+Nodes (1): Test usage stats are applied to entries.
 
 ### Community 544 - "Community 544"
 Cohesion: 1.0
-Nodes (1): Test skips entries without uuid or content.
+Nodes (1): Test empty input produces empty index.
 
 ### Community 545 - "Community 545"
 Cohesion: 1.0
-Nodes (1): Test mandate demoted after sufficient low-relevance samples (ac-005).
+Nodes (1): Test skips entries without uuid or content.
 
 ### Community 546 - "Community 546"
 Cohesion: 1.0
-Nodes (1): Test no demotion when entries lack sufficient samples.
+Nodes (1): Test mandate demoted after sufficient low-relevance samples (ac-005).
 
 ### Community 547 - "Community 547"
 Cohesion: 1.0
-Nodes (1): Create mock Redis client.
+Nodes (1): Test no demotion when entries lack sufficient samples.
 
 ### Community 548 - "Community 548"
 Cohesion: 1.0
-Nodes (1): Create ResponseCache with mock Redis.
+Nodes (1): Create mock Redis client.
 
 ### Community 549 - "Community 549"
 Cohesion: 1.0
-Nodes (1): Sample messages for testing.
+Nodes (1): Create ResponseCache with mock Redis.
 
 ### Community 550 - "Community 550"
 Cohesion: 1.0
-Nodes (1): Test that set() stores in both primary and fallback cache.
+Nodes (1): Sample messages for testing.
 
 ### Community 551 - "Community 551"
 Cohesion: 1.0
-Nodes (1): Test that set() uses custom stale_if_error_ttl.
+Nodes (1): Test that set() stores in both primary and fallback cache.
 
 ### Community 552 - "Community 552"
 Cohesion: 1.0
-Nodes (1): Test get_fallback returns cached response.
+Nodes (1): Test that set() uses custom stale_if_error_ttl.
 
 ### Community 553 - "Community 553"
 Cohesion: 1.0
-Nodes (1): Test get_fallback looks in fallback cache.
+Nodes (1): Test get_fallback returns cached response.
 
 ### Community 554 - "Community 554"
 Cohesion: 1.0
-Nodes (1): Test get_fallback returns None on miss.
+Nodes (1): Test get_fallback looks in fallback cache.
 
 ### Community 555 - "Community 555"
 Cohesion: 1.0
-Nodes (1): Test get_fallback updates fallback stats.
+Nodes (1): Test get_fallback returns None on miss.
 
 ### Community 556 - "Community 556"
 Cohesion: 1.0
-Nodes (1): Test get_fallback handles Redis errors gracefully.
+Nodes (1): Test get_fallback updates fallback stats.
 
 ### Community 557 - "Community 557"
 Cohesion: 1.0
-Nodes (1): Create mock Redis client with storage.
+Nodes (1): Test get_fallback handles Redis errors gracefully.
 
 ### Community 558 - "Community 558"
 Cohesion: 1.0
-Nodes (1): Test fallback works when primary cache has expired.
+Nodes (1): Create mock Redis client with storage.
 
 ### Community 559 - "Community 559"
 Cohesion: 1.0
-Nodes (1): Test that identical requests return cached response.
+Nodes (1): Test fallback works when primary cache has expired.
 
 ### Community 560 - "Community 560"
 Cohesion: 1.0
-Nodes (1): Test that different requests are not confused.
+Nodes (1): Test that identical requests return cached response.
 
 ### Community 561 - "Community 561"
 Cohesion: 1.0
-Nodes (1): Test that cache hit rate is tracked correctly.
+Nodes (1): Test that different requests are not confused.
 
 ### Community 562 - "Community 562"
 Cohesion: 1.0
-Nodes (1): Create mock adapters for testing.
+Nodes (1): Test that cache hit rate is tracked correctly.
 
 ### Community 563 - "Community 563"
 Cohesion: 1.0
-Nodes (1): Create a prober with mock adapters (bypass __post_init__).
+Nodes (1): Create mock adapters for testing.
 
 ### Community 564 - "Community 564"
 Cohesion: 1.0
-Nodes (1): Test successful health probe.
+Nodes (1): Create a prober with mock adapters (bypass __post_init__).
 
 ### Community 565 - "Community 565"
 Cohesion: 1.0
-Nodes (1): Test that failures update state correctly.
+Nodes (1): Test successful health probe.
 
 ### Community 566 - "Community 566"
 Cohesion: 1.0
-Nodes (1): Test that events are emitted on state changes.
+Nodes (1): Test that failures update state correctly.
 
 ### Community 567 - "Community 567"
 Cohesion: 1.0
-Nodes (1): Test that recovery event is emitted.
+Nodes (1): Test that events are emitted on state changes.
 
 ### Community 568 - "Community 568"
 Cohesion: 1.0
-Nodes (1): Test is_provider_available method.
+Nodes (1): Test that recovery event is emitted.
 
 ### Community 569 - "Community 569"
 Cohesion: 1.0
-Nodes (1): Test get_available_providers method.
+Nodes (1): Test is_provider_available method.
 
 ### Community 570 - "Community 570"
 Cohesion: 1.0
-Nodes (1): Test immediate probe for single provider.
+Nodes (1): Test get_available_providers method.
 
 ### Community 571 - "Community 571"
 Cohesion: 1.0
-Nodes (1): Test immediate probe for all providers.
+Nodes (1): Test immediate probe for single provider.
 
 ### Community 572 - "Community 572"
 Cohesion: 1.0
-Nodes (1): Test start and stop background probing.
+Nodes (1): Test immediate probe for all providers.
 
 ### Community 573 - "Community 573"
 Cohesion: 1.0
-Nodes (1): Test that latency is tracked.
+Nodes (1): Test start and stop background probing.
 
 ### Community 574 - "Community 574"
 Cohesion: 1.0
-Nodes (1): Test that high latency marks provider as degraded.
+Nodes (1): Test that latency is tracked.
 
 ### Community 575 - "Community 575"
 Cohesion: 1.0
-Nodes (1): Test that error messages are recorded.
+Nodes (1): Test that high latency marks provider as degraded.
 
 ### Community 576 - "Community 576"
 Cohesion: 1.0
-Nodes (1): Create mock adapters for testing.
+Nodes (1): Test that error messages are recorded.
 
 ### Community 577 - "Community 577"
 Cohesion: 1.0
-Nodes (1): Create a prober with circuit breaker config.
+Nodes (1): Create mock adapters for testing.
 
 ### Community 578 - "Community 578"
 Cohesion: 1.0
-Nodes (1): DOWN providers are skipped until cooldown expires.
+Nodes (1): Create a prober with circuit breaker config.
 
 ### Community 579 - "Community 579"
 Cohesion: 1.0
-Nodes (1): DOWN providers are probed again after cooldown expires.
+Nodes (1): DOWN providers are skipped until cooldown expires.
 
 ### Community 580 - "Community 580"
 Cohesion: 1.0
-Nodes (1): HEALTHY providers are always probed.
+Nodes (1): DOWN providers are probed again after cooldown expires.
 
 ### Community 581 - "Community 581"
 Cohesion: 1.0
-Nodes (1): DEGRADED providers are always probed.
+Nodes (1): HEALTHY providers are always probed.
 
 ### Community 582 - "Community 582"
 Cohesion: 1.0
-Nodes (1): Create mock adapters with a slow health check.
+Nodes (1): DEGRADED providers are always probed.
 
 ### Community 583 - "Community 583"
 Cohesion: 1.0
-Nodes (1): Create a prober with short timeout.
+Nodes (1): Create mock adapters with a slow health check.
 
 ### Community 584 - "Community 584"
 Cohesion: 1.0
-Nodes (1): Timed-out probes count as failures.
+Nodes (1): Create a prober with short timeout.
 
 ### Community 585 - "Community 585"
 Cohesion: 1.0
-Nodes (1): Timed-out probes complete within the timeout window.
+Nodes (1): Timed-out probes count as failures.
 
 ### Community 586 - "Community 586"
 Cohesion: 1.0
-Nodes (1): probe_now(provider) should probe even if DOWN and within cooldown.
+Nodes (1): Timed-out probes complete within the timeout window.
 
 ### Community 587 - "Community 587"
 Cohesion: 1.0
-Nodes (1): Create a prober where one provider has no adapter (simulates credential missing
+Nodes (1): probe_now(provider) should probe even if DOWN and within cooldown.
 
 ### Community 588 - "Community 588"
 Cohesion: 1.0
-Nodes (1): Adapter created later (e.g., credential added) should be picked up on next probe
+Nodes (1): Create a prober where one provider has no adapter (simulates credential missing
 
 ### Community 589 - "Community 589"
 Cohesion: 1.0
-Nodes (1): If adapter still can't be created, probe is skipped (no crash).
+Nodes (1): Adapter created later (e.g., credential added) should be picked up on next probe
 
 ### Community 590 - "Community 590"
 Cohesion: 1.0
-Nodes (1): Providers without adapters should still appear in get_all_health.
+Nodes (1): If adapter still can't be created, probe is skipped (no crash).
 
 ### Community 591 - "Community 591"
 Cohesion: 1.0
-Nodes (1): probe_now should also resolve adapters lazily.
+Nodes (1): Providers without adapters should still appear in get_all_health.
 
 ### Community 592 - "Community 592"
 Cohesion: 1.0
-Nodes (1): Reset global prober before and after each test.
+Nodes (1): probe_now should also resolve adapters lazily.
 
 ### Community 593 - "Community 593"
 Cohesion: 1.0
-Nodes (1): Test init and shutdown of global prober.
+Nodes (1): Reset global prober before and after each test.
 
 ### Community 594 - "Community 594"
 Cohesion: 1.0
-Nodes (1): Test cache miss returns None.
+Nodes (1): Test init and shutdown of global prober.
 
 ### Community 595 - "Community 595"
 Cohesion: 1.0
-Nodes (1): Test cache hit returns cached response.
+Nodes (1): Test cache miss returns None.
 
 ### Community 596 - "Community 596"
 Cohesion: 1.0
-Nodes (1): Test set stores response in Redis (primary + fallback).
+Nodes (1): Test cache hit returns cached response.
 
 ### Community 597 - "Community 597"
 Cohesion: 1.0
-Nodes (1): Test cache invalidation.
+Nodes (1): Test set stores response in Redis (primary + fallback).
 
 ### Community 598 - "Community 598"
 Cohesion: 1.0
-Nodes (1): Test clearing all cache entries.
+Nodes (1): Test cache invalidation.
 
 ### Community 599 - "Community 599"
 Cohesion: 1.0
-Nodes (1): Test when no duplicates exist.
+Nodes (1): Test clearing all cache entries.
 
 ### Community 600 - "Community 600"
 Cohesion: 1.0
-Nodes (1): Test finding exact duplicate within time window.
+Nodes (1): Test when no duplicates exist.
 
 ### Community 601 - "Community 601"
 Cohesion: 1.0
-Nodes (1): Test that group_id is forwarded to repository.
+Nodes (1): Test finding exact duplicate within time window.
 
 ### Community 602 - "Community 602"
 Cohesion: 1.0
-Nodes (1): Test graceful handling of service errors.
+Nodes (1): Test that group_id is forwarded to repository.
 
 ### Community 603 - "Community 603"
 Cohesion: 1.0
-Nodes (1): Test that function returns True on success.
+Nodes (1): Test graceful handling of service errors.
 
 ### Community 604 - "Community 604"
 Cohesion: 1.0
-Nodes (1): Test that function returns False when memory not found.
+Nodes (1): Test that function returns True on success.
 
 ### Community 605 - "Community 605"
 Cohesion: 1.0
-Nodes (1): Test that errors are handled gracefully.
+Nodes (1): Test that function returns False when memory not found.
 
 ### Community 606 - "Community 606"
 Cohesion: 1.0
-Nodes (1): Should update lifecycle_score for all active memories.
+Nodes (1): Test that errors are handled gracefully.
 
 ### Community 607 - "Community 607"
 Cohesion: 1.0
-Nodes (1): Skips rating when loaded memories below threshold.
+Nodes (1): Should update lifecycle_score for all active memories.
 
 ### Community 608 - "Community 608"
 Cohesion: 1.0
-Nodes (1): Full flow: fetches, rates, credits helpful/harmful.
+Nodes (1): Skips rating when loaded memories below threshold.
 
 ### Community 609 - "Community 609"
 Cohesion: 1.0
-Nodes (1): Returns zero counts when no content found in database.
+Nodes (1): Full flow: fetches, rates, credits helpful/harmful.
 
 ### Community 610 - "Community 610"
 Cohesion: 1.0
-Nodes (1): Returns zero counts when LLM call fails.
+Nodes (1): Returns zero counts when no content found in database.
 
 ### Community 611 - "Community 611"
 Cohesion: 1.0
-Nodes (1): Pairs >= 0.97 should be auto-consolidated.
+Nodes (1): Returns zero counts when LLM call fails.
 
 ### Community 612 - "Community 612"
 Cohesion: 1.0
-Nodes (1): Pairs 0.92-0.97 should only log suggestions.
+Nodes (1): Pairs >= 0.97 should be auto-consolidated.
 
 ### Community 613 - "Community 613"
 Cohesion: 1.0
-Nodes (1): Pinned memories should not be auto-consolidated even at >= 0.97.
+Nodes (1): Pairs 0.92-0.97 should only log suggestions.
 
 ### Community 614 - "Community 614"
 Cohesion: 1.0
-Nodes (1): Archives untouched for >180 days should be retired.
+Nodes (1): Pinned memories should not be auto-consolidated even at >= 0.97.
 
 ### Community 615 - "Community 615"
 Cohesion: 1.0
-Nodes (1): If system is inactive (no recent active memories), skip retirement.
+Nodes (1): Archives untouched for >180 days should be retired.
 
 ### Community 616 - "Community 616"
 Cohesion: 1.0
-Nodes (1): Returns zero retired when no stale archives exist.
+Nodes (1): If system is inactive (no recent active memories), skip retirement.
 
 ### Community 617 - "Community 617"
 Cohesion: 1.0
-Nodes (1): Memory with lifecycle_score >= 0.55 should be healed.
+Nodes (1): Returns zero retired when no stale archives exist.
 
 ### Community 618 - "Community 618"
 Cohesion: 1.0
-Nodes (1): Memory with recent access and sufficient refs should be healed.
+Nodes (1): Memory with lifecycle_score >= 0.55 should be healed.
 
 ### Community 619 - "Community 619"
 Cohesion: 1.0
-Nodes (1): Memory with low score and no recent access should be skipped.
+Nodes (1): Memory with recent access and sufficient refs should be healed.
 
 ### Community 620 - "Community 620"
 Cohesion: 1.0
-Nodes (1): Memories with superseded_by should not appear (filtered by query).
+Nodes (1): Memory with low score and no recent access should be skipped.
 
 ### Community 621 - "Community 621"
 Cohesion: 1.0
-Nodes (1): Returns empty ContinuityContext when no summaries found.
+Nodes (1): Memories with superseded_by should not appear (filtered by query).
 
 ### Community 622 - "Community 622"
 Cohesion: 1.0
-Nodes (1): Returns summaries from segment rows when available.
+Nodes (1): Returns empty ContinuityContext when no summaries found.
 
 ### Community 623 - "Community 623"
 Cohesion: 1.0
-Nodes (1): Passes current_branch to the query for branch scoping.
+Nodes (1): Returns summaries from segment rows when available.
 
 ### Community 624 - "Community 624"
 Cohesion: 1.0
-Nodes (1): Uses session-column fallback when no segments exist (pre-migration).
+Nodes (1): Passes current_branch to the query for branch scoping.
 
 ### Community 625 - "Community 625"
 Cohesion: 1.0
-Nodes (1): Combines segment and legacy data when segments < max_sessions.
+Nodes (1): Uses session-column fallback when no segments exist (pre-migration).
 
 ### Community 626 - "Community 626"
 Cohesion: 1.0
-Nodes (1): Two segments for one session appear as separate entries.
+Nodes (1): Combines segment and legacy data when segments < max_sessions.
 
 ### Community 627 - "Community 627"
 Cohesion: 1.0
-Nodes (1): Time labels are based on segment created_at, not session created_at.
+Nodes (1): Two segments for one session appear as separate entries.
 
 ### Community 628 - "Community 628"
 Cohesion: 1.0
-Nodes (1): When no segments exist, returns only legacy session data.
+Nodes (1): Time labels are based on segment created_at, not session created_at.
 
 ### Community 629 - "Community 629"
 Cohesion: 1.0
-Nodes (1): Combined results are sorted by created_at descending.
+Nodes (1): When no segments exist, returns only legacy session data.
 
 ### Community 630 - "Community 630"
 Cohesion: 1.0
-Nodes (1): A recent session with UUID starting with 'f' must appear over older sessions.
+Nodes (1): Combined results are sorted by created_at descending.
 
 ### Community 631 - "Community 631"
 Cohesion: 1.0
-Nodes (1): With max_sessions=3 and 6 sessions, the 3 most recent are returned.
+Nodes (1): A recent session with UUID starting with 'f' must appear over older sessions.
 
 ### Community 632 - "Community 632"
 Cohesion: 1.0
-Nodes (1): track_inline_summaries stores summary from [[S:...]] tag in content.
+Nodes (1): With max_sessions=3 and 6 sessions, the 3 most recent are returned.
 
 ### Community 633 - "Community 633"
 Cohesion: 1.0
-Nodes (1): When multiple summary tags exist, the last one (most complete) is used.
+Nodes (1): track_inline_summaries stores summary from [[S:...]] tag in content.
 
 ### Community 634 - "Community 634"
 Cohesion: 1.0
-Nodes (1): Content without summary tags returns False without storing.
+Nodes (1): When multiple summary tags exist, the last one (most complete) is used.
 
 ### Community 635 - "Community 635"
 Cohesion: 1.0
-Nodes (1): Summary descriptions are enforced to 150 char limit via _enforce_oneliner.
+Nodes (1): Content without summary tags returns False without storing.
 
 ### Community 636 - "Community 636"
 Cohesion: 1.0
-Nodes (1): _process_summary_tags parses raw [[S:...]] strings and stores summary.
+Nodes (1): Summary descriptions are enforced to 150 char limit via _enforce_oneliner.
 
 ### Community 637 - "Community 637"
 Cohesion: 1.0
-Nodes (1): _process_summary_tags builds git_digest from git_context.
+Nodes (1): _process_summary_tags parses raw [[S:...]] strings and stores summary.
 
 ### Community 638 - "Community 638"
 Cohesion: 1.0
-Nodes (1): Empty summary_tags list returns False.
+Nodes (1): _process_summary_tags builds git_digest from git_context.
 
 ### Community 639 - "Community 639"
 Cohesion: 1.0
-Nodes (1): None summary_tags returns False.
+Nodes (1): Empty summary_tags list returns False.
 
 ### Community 640 - "Community 640"
 Cohesion: 1.0
-Nodes (1): analyze_session forwards summary_tags and returns summary_stored.
+Nodes (1): None summary_tags returns False.
 
 ### Community 641 - "Community 641"
 Cohesion: 1.0
-Nodes (1): analyze_session works without summary_tags (backward compat).
+Nodes (1): analyze_session forwards summary_tags and returns summary_stored.
 
 ### Community 642 - "Community 642"
 Cohesion: 1.0
-Nodes (1): Second identical log within 24h should be rejected.
+Nodes (1): analyze_session works without summary_tags (backward compat).
 
 ### Community 643 - "Community 643"
 Cohesion: 1.0
-Nodes (1): Different content for the same feedback type should still be recorded.
+Nodes (1): Second identical log within 24h should be rejected.
 
 ### Community 644 - "Community 644"
 Cohesion: 1.0
-Nodes (1): Entry should be created if no duplicate exists within 24h.
+Nodes (1): Different content for the same feedback type should still be recorded.
 
 ### Community 645 - "Community 645"
 Cohesion: 1.0
-Nodes (1): Different feedback_type for same agent+model should NOT be deduped.
+Nodes (1): Entry should be created if no duplicate exists within 24h.
 
-### Community 647 - "Community 647"
+### Community 646 - "Community 646"
 Cohesion: 1.0
-Nodes (1): Reset module-level caches between tests.
+Nodes (1): Different feedback_type for same agent+model should NOT be deduped.
 
 ### Community 648 - "Community 648"
 Cohesion: 1.0
-Nodes (1): Create a test registry file.
+Nodes (1): Reset module-level caches between tests.
 
 ### Community 649 - "Community 649"
 Cohesion: 1.0
-Nodes (1): Reset module-level caches between tests.
+Nodes (1): Create a test registry file.
 
-### Community 654 - "Community 654"
+### Community 650 - "Community 650"
 Cohesion: 1.0
-Nodes (1): dispatch_agent resolves agent and calls dispatch_wake, not complete_internal.
+Nodes (1): Reset module-level caches between tests.
 
 ### Community 655 - "Community 655"
 Cohesion: 1.0
-Nodes (1): dispatch_agent links wake sessions back to the current parent session.
+Nodes (1): dispatch_agent resolves agent and calls dispatch_wake, not complete_internal.
 
 ### Community 656 - "Community 656"
 Cohesion: 1.0
-Nodes (1): Explicit max_turns should override persona-limit resolution.
+Nodes (1): dispatch_agent links wake sessions back to the current parent session.
 
 ### Community 657 - "Community 657"
 Cohesion: 1.0
-Nodes (1): dispatch_agent must NOT call complete_internal (the whole point of this fix).
+Nodes (1): Explicit max_turns should override persona-limit resolution.
 
 ### Community 658 - "Community 658"
 Cohesion: 1.0
-Nodes (1): dispatch_agent returns error when project_id is None.
+Nodes (1): dispatch_agent must NOT call complete_internal (the whole point of this fix).
 
 ### Community 659 - "Community 659"
 Cohesion: 1.0
-Nodes (1): Retries log_agent_performance when 'Stream closed' detected.
+Nodes (1): dispatch_agent returns error when project_id is None.
 
 ### Community 660 - "Community 660"
 Cohesion: 1.0
-Nodes (1): Unknown tools are logged but not retried.
+Nodes (1): Retries log_agent_performance when 'Stream closed' detected.
 
 ### Community 661 - "Community 661"
 Cohesion: 1.0
-Nodes (1): Returns 0 immediately when no 'Stream closed' failures found.
+Nodes (1): Unknown tools are logged but not retried.
 
 ### Community 662 - "Community 662"
 Cohesion: 1.0
-Nodes (1): Skips retry when tool_use event not found (no args to retry with).
+Nodes (1): Returns 0 immediately when no 'Stream closed' failures found.
 
 ### Community 663 - "Community 663"
 Cohesion: 1.0
-Nodes (1): Retries dispatch_agent when 'Stream closed' detected.
+Nodes (1): Skips retry when tool_use event not found (no args to retry with).
 
 ### Community 664 - "Community 664"
 Cohesion: 1.0
-Nodes (1): Verifies [[S:...]] tags are parsed and stored.
+Nodes (1): Retries dispatch_agent when 'Stream closed' detected.
 
 ### Community 665 - "Community 665"
 Cohesion: 1.0
-Nodes (1): Verifies synthetic summary when no [[S:...]] tags present.
+Nodes (1): Verifies [[S:...]] tags are parsed and stored.
 
 ### Community 666 - "Community 666"
 Cohesion: 1.0
-Nodes (1): Empty content stores fallback summary and returns True.
+Nodes (1): Verifies synthetic summary when no [[S:...]] tags present.
 
 ### Community 667 - "Community 667"
 Cohesion: 1.0
-Nodes (1): Empty content should use transcript-based summary before generic fallback.
+Nodes (1): Empty content stores fallback summary and returns True.
 
 ### Community 668 - "Community 668"
 Cohesion: 1.0
-Nodes (1): Full postprocess pipeline runs all steps.
+Nodes (1): Empty content should use transcript-based summary before generic fallback.
 
 ### Community 669 - "Community 669"
 Cohesion: 1.0
-Nodes (1): Error from completion propagates through postprocessor.
+Nodes (1): Full postprocess pipeline runs all steps.
 
-### Community 818 - "Community 818"
+### Community 670 - "Community 670"
 Cohesion: 1.0
-Nodes (1): Create image content from base64 encoded data.          Args:             data:
+Nodes (1): Error from completion propagates through postprocessor.
 
 ### Community 819 - "Community 819"
 Cohesion: 1.0
-Nodes (1): Create a tool result message from execution result.          Args:             t
+Nodes (1): Create image content from base64 encoded data.          Args:             data:
 
 ### Community 820 - "Community 820"
 Cohesion: 1.0
-Nodes (1): Test async client initialization with defaults.
+Nodes (1): Create a tool result message from execution result.          Args:             t
 
 ### Community 821 - "Community 821"
 Cohesion: 1.0
-Nodes (1): Test async client as context manager.
+Nodes (1): Test async client initialization with defaults.
 
 ### Community 822 - "Community 822"
 Cohesion: 1.0
-Nodes (1): Test successful async completion.
+Nodes (1): Test async client as context manager.
 
 ### Community 823 - "Community 823"
 Cohesion: 1.0
-Nodes (1): Test completion with session ID.
+Nodes (1): Test successful async completion.
 
 ### Community 824 - "Community 824"
 Cohesion: 1.0
-Nodes (1): Test async session creation.
+Nodes (1): Test completion with session ID.
 
 ### Community 825 - "Community 825"
 Cohesion: 1.0
-Nodes (1): Test error handling in async client.
+Nodes (1): Test async session creation.
 
 ### Community 826 - "Community 826"
 Cohesion: 1.0
-Nodes (1): Test async completion with tools.
+Nodes (1): Test error handling in async client.
 
 ### Community 827 - "Community 827"
 Cohesion: 1.0
-Nodes (1): Test sending a message through session.
+Nodes (1): Test async completion with tools.
 
 ### Community 828 - "Community 828"
 Cohesion: 1.0
-Nodes (1): Test adding messages to local tracking.
+Nodes (1): Test sending a message through session.
 
 ### Community 829 - "Community 829"
 Cohesion: 1.0
-Nodes (1): Test getting history from server.
+Nodes (1): Test adding messages to local tracking.
 
 ### Community 830 - "Community 830"
 Cohesion: 1.0
-Nodes (1): Test refreshing session from server.
+Nodes (1): Test getting history from server.
 
 ### Community 831 - "Community 831"
 Cohesion: 1.0
-Nodes (1): Test closing/archiving a session.
+Nodes (1): Test refreshing session from server.
 
 ### Community 832 - "Community 832"
 Cohesion: 1.0
-Nodes (1): Test creating a new session via context manager.
+Nodes (1): Test closing/archiving a session.
 
 ### Community 833 - "Community 833"
 Cohesion: 1.0
-Nodes (1): Test resuming an existing session.
+Nodes (1): Test creating a new session via context manager.
 
 ### Community 834 - "Community 834"
 Cohesion: 1.0
-Nodes (1): Test that session ID is persisted across requests.
+Nodes (1): Test resuming an existing session.
 
 ### Community 835 - "Community 835"
 Cohesion: 1.0
-Nodes (1): Test streaming through session tracks content.
+Nodes (1): Test that session ID is persisted across requests.
 
 ### Community 836 - "Community 836"
 Cohesion: 1.0
-Nodes (1): Test that session state persists across client instances.
+Nodes (1): Test streaming through session tracks content.
 
 ### Community 837 - "Community 837"
 Cohesion: 1.0
-Nodes (1): Test successful SSE streaming.
+Nodes (1): Test that session state persists across client instances.
 
 ### Community 838 - "Community 838"
 Cohesion: 1.0
-Nodes (1): Test SSE streaming with MessageInput objects.
+Nodes (1): Test successful SSE streaming.
 
 ### Community 839 - "Community 839"
 Cohesion: 1.0
-Nodes (1): Test SSE streaming handles [DONE] marker.
+Nodes (1): Test SSE streaming with MessageInput objects.
 
-### Community 861 - "Community 861"
+### Community 840 - "Community 840"
 Cohesion: 1.0
-Nodes (1): Create and register an active stream context for cooperative cancel.
+Nodes (1): Test SSE streaming handles [DONE] marker.
 
 ### Community 862 - "Community 862"
 Cohesion: 1.0
-Nodes (1): Signal an active streaming session to stop after the current boundary.
+Nodes (1): Create and register an active stream context for cooperative cancel.
 
 ### Community 863 - "Community 863"
 Cohesion: 1.0
-Nodes (1): Normalize caller-provided profile names to a known profile.
+Nodes (1): Signal an active streaming session to stop after the current boundary.
 
 ### Community 864 - "Community 864"
 Cohesion: 1.0
-Nodes (1): Return memory tags that should render at full detail for a profile.
+Nodes (1): Normalize caller-provided profile names to a known profile.
 
 ### Community 865 - "Community 865"
 Cohesion: 1.0
-Nodes (1): Return memory tags that should be surfaced first for a profile.
+Nodes (1): Return memory tags that should render at full detail for a profile.
 
 ### Community 866 - "Community 866"
 Cohesion: 1.0
-Nodes (1): Return mandate/guardrail caps for any policy-summary consumer.
+Nodes (1): Return memory tags that should be surfaced first for a profile.
 
 ### Community 867 - "Community 867"
 Cohesion: 1.0
-Nodes (1): Return True when mandates/guardrails should render as compact summaries.
+Nodes (1): Return mandate/guardrail caps for any policy-summary consumer.
 
 ### Community 868 - "Community 868"
 Cohesion: 1.0
-Nodes (1): Backward-compatible alias for older callers/tests.
+Nodes (1): Return True when mandates/guardrails should render as compact summaries.
 
 ### Community 869 - "Community 869"
 Cohesion: 1.0
-Nodes (1): Return default semantic-reference behavior for a consumer profile.      `None` m
+Nodes (1): Backward-compatible alias for older callers/tests.
 
 ### Community 870 - "Community 870"
 Cohesion: 1.0
-Nodes (1): Ensure agent_hub_db_url is provided.
+Nodes (1): Return default semantic-reference behavior for a consumer profile.      `None` m
 
 ### Community 871 - "Community 871"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in dashboard client id.
+Nodes (1): Ensure agent_hub_db_url is provided.
 
 ### Community 872 - "Community 872"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in dashboard request source.
+Nodes (1): Treat blank env values as the built-in dashboard client id.
 
 ### Community 873 - "Community 873"
 Cohesion: 1.0
-Nodes (1): Treat blank env values as the built-in Telegram bot client id.
+Nodes (1): Treat blank env values as the built-in dashboard request source.
 
 ### Community 874 - "Community 874"
 Cohesion: 1.0
-Nodes (1): Parse CORS_ORIGINS from comma-separated string or list.
+Nodes (1): Treat blank env values as the built-in Telegram bot client id.
 
 ### Community 875 - "Community 875"
 Cohesion: 1.0
-Nodes (1): Get cached settings instance.      Returns:         Settings instance (cached fo
+Nodes (1): Parse CORS_ORIGINS from comma-separated string or list.
 
 ### Community 876 - "Community 876"
 Cohesion: 1.0
-Nodes (1): Return stable command key for one shell st invocation.
+Nodes (1): Get cached settings instance.      Returns:         Settings instance (cached fo
 
 ### Community 877 - "Community 877"
 Cohesion: 1.0
-Nodes (1): Build quick-use memory from raw command strings plus curated fallback.
+Nodes (1): Return stable command key for one shell st invocation.
 
 ### Community 878 - "Community 878"
 Cohesion: 1.0
-Nodes (1): Return cached recent st usage quick-use memory.
+Nodes (1): Build quick-use memory from raw command strings plus curated fallback.
 
 ### Community 879 - "Community 879"
 Cohesion: 1.0
-Nodes (1): Resolve the shared command guard binaries and recover from stale cached paths.
+Nodes (1): Return cached recent st usage quick-use memory.
 
 ### Community 880 - "Community 880"
 Cohesion: 1.0
-Nodes (1): Return env vars that enable the shared bash command guard.
+Nodes (1): Resolve the shared command guard binaries and recover from stale cached paths.
 
 ### Community 881 - "Community 881"
 Cohesion: 1.0
-Nodes (1): Return a shared-guard block reason for the command, or None if allowed.
+Nodes (1): Return env vars that enable the shared bash command guard.
 
 ### Community 882 - "Community 882"
 Cohesion: 1.0
-Nodes (1): Recent activity derived from event/injection tables.
+Nodes (1): Return a shared-guard block reason for the command, or None if allowed.
 
 ### Community 883 - "Community 883"
 Cohesion: 1.0
-Nodes (1): Full dashboard payload with explicit state and activity sections.
+Nodes (1): Recent activity derived from event/injection tables.
 
 ### Community 884 - "Community 884"
 Cohesion: 1.0
-Nodes (1): Return stable command key for one shell st invocation.
+Nodes (1): Full dashboard payload with explicit state and activity sections.
 
 ### Community 885 - "Community 885"
 Cohesion: 1.0
-Nodes (1): Build quick-use memory from raw command strings plus curated fallback.
+Nodes (1): Return stable command key for one shell st invocation.
 
 ### Community 886 - "Community 886"
+Cohesion: 1.0
+Nodes (1): Build quick-use memory from raw command strings plus curated fallback.
+
+### Community 887 - "Community 887"
 Cohesion: 1.0
 Nodes (1): Return cached recent st usage quick-use memory.
 
 ## Knowledge Gaps
-- **3684 isolated node(s):** `AMZN Trading Strategy Configuration Generator Uses the Agent Hub trade-manager a`, `TSLA Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 wit`, `VTI Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 with`, `Alembic migration environment configuration.`, `Normalize the runtime DB URL for Alembic's async engine.` (+3679 more)
+- **3720 isolated node(s):** `AMZN Trading Strategy Configuration Generator Uses the Agent Hub trade-manager a`, `TSLA Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 wit`, `VTI Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 with`, `Alembic migration environment configuration.`, `Normalize the runtime DB URL for Alembic's async engine.` (+3715 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 87`** (7 nodes): `connection_manager.py`, `ConnectionManager`, `.broadcast()`, `.connect()`, `.disconnect()`, `.__init__()`, `.send_personal_message()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 93`** (7 nodes): `buildDraftSession()`, `getLatestAssistantMessage()`, `handleNewThread()`, `handleStopDisplaySession()`, `isActiveChatStream()`, `updateCompactViewport()`, `UnifiedPersonaWorkspace.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 151`** (6 nodes): `compactState()`, `formatQuiet()`, `hasText()`, `isUsefulLiveSummary()`, `ScopeLine()`, `ExpandedRowContent.tsx`
+- **Thin community `Community 150`** (6 nodes): `cn()`, `projectDescription()`, `summarizePath()`, `taskSummary()`, `ThreadSection()`, `ChatSidebar.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 154`** (6 nodes): `arraysEqual()`, `formatTimestamp()`, `shortenHash()`, `PromptRevisionHistory.tsx`, `useEpisodeEditor.ts`, `useEpisodeEditor()`
+- **Thin community `Community 152`** (6 nodes): `compactState()`, `formatQuiet()`, `hasText()`, `isUsefulLiveSummary()`, `ScopeLine()`, `ExpandedRowContent.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 157`** (6 nodes): `getProviderBubbleStyle()`, `getProviderIconColor()`, `getProviderTextColor()`, `getIcon()`, `message-bubble-utils.ts`, `ProviderBadge.tsx`
+- **Thin community `Community 155`** (6 nodes): `arraysEqual()`, `formatTimestamp()`, `shortenHash()`, `PromptRevisionHistory.tsx`, `useEpisodeEditor.ts`, `useEpisodeEditor()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 161`** (5 nodes): `stt.py`, `STTService`, `.__init__()`, `.load_model()`, `.transcribe()`
+- **Thin community `Community 158`** (6 nodes): `getProviderBubbleStyle()`, `getProviderIconColor()`, `getProviderTextColor()`, `getIcon()`, `message-bubble-utils.ts`, `ProviderBadge.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 163`** (5 nodes): `unified-persona-workspace.test.tsx`, `buildPulseFields()`, `buildStreamResponse()`, `getToolFrictionFilterButton()`, `openHealthOverview()`
+- **Thin community `Community 162`** (5 nodes): `stt.py`, `STTService`, `.__init__()`, `.load_model()`, `.transcribe()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 167`** (5 nodes): `event-config.ts`, `filter-chip.tsx`, `getEventConfig()`, `cn()`, `FilterChip()`
+- **Thin community `Community 164`** (5 nodes): `unified-persona-workspace.test.tsx`, `buildPulseFields()`, `buildStreamResponse()`, `getToolFrictionFilterButton()`, `openHealthOverview()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 169`** (5 nodes): `KPISection()`, `cn()`, `formatNumber()`, `KPISection.tsx`, `truncation-indicator.tsx`
+- **Thin community `Community 168`** (5 nodes): `event-config.ts`, `filter-chip.tsx`, `getEventConfig()`, `cn()`, `FilterChip()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 170`** (4 nodes): `0bd342386e50_add_session_workstream_lifecycle_fields.py`, `downgrade()`, `add_session_workstream_lifecycle_fields  Revision ID: 0bd342386e50 Revises: f82c`, `upgrade()`
+- **Thin community `Community 170`** (5 nodes): `KPISection()`, `cn()`, `formatNumber()`, `KPISection.tsx`, `truncation-indicator.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 171`** (4 nodes): `10d42965cd8e_add_agent_benchmark_tracking.py`, `downgrade()`, `add agent benchmark tracking  Revision ID: 10d42965cd8e Revises: a8257e5c28c8 Cr`, `upgrade()`
+- **Thin community `Community 171`** (4 nodes): `0bd342386e50_add_session_workstream_lifecycle_fields.py`, `downgrade()`, `add_session_workstream_lifecycle_fields  Revision ID: 0bd342386e50 Revises: f82c`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 172`** (4 nodes): `163e34a7c829_backfill_tool_result_content_from_tool_.py`, `downgrade()`, `backfill tool_result content from tool_output  Revision ID: 163e34a7c829 Revises`, `upgrade()`
+- **Thin community `Community 172`** (4 nodes): `10d42965cd8e_add_agent_benchmark_tracking.py`, `downgrade()`, `add agent benchmark tracking  Revision ID: 10d42965cd8e Revises: a8257e5c28c8 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 173`** (4 nodes): `17cdcc56e5bd_initial_schema_sessions_messages_.py`, `downgrade()`, `initial schema - sessions messages credentials cost_logs  Revision ID: 17cdcc56e`, `upgrade()`
+- **Thin community `Community 173`** (4 nodes): `163e34a7c829_backfill_tool_result_content_from_tool_.py`, `downgrade()`, `backfill tool_result content from tool_output  Revision ID: 163e34a7c829 Revises`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 174`** (4 nodes): `1c6805054b00_add_provider_metadata_to_sessions.py`, `downgrade()`, `add_provider_metadata_to_sessions  Revision ID: 1c6805054b00 Revises: 17cdcc56e5`, `upgrade()`
+- **Thin community `Community 174`** (4 nodes): `17cdcc56e5bd_initial_schema_sessions_messages_.py`, `downgrade()`, `initial schema - sessions messages credentials cost_logs  Revision ID: 17cdcc56e`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 175`** (4 nodes): `1d642bcb1f01_drop_unused_session_columns.py`, `downgrade()`, `drop_unused_session_columns  Revision ID: 1d642bcb1f01 Revises: cb33d77516d8 Cre`, `upgrade()`
+- **Thin community `Community 175`** (4 nodes): `1c6805054b00_add_provider_metadata_to_sessions.py`, `downgrade()`, `add_provider_metadata_to_sessions  Revision ID: 1c6805054b00 Revises: 17cdcc56e5`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 176`** (4 nodes): `27229f433f34_add_truncation_events_table.py`, `downgrade()`, `add truncation_events table  Revision ID: 27229f433f34 Revises: b9f50737450a Cre`, `upgrade()`
+- **Thin community `Community 176`** (4 nodes): `1d642bcb1f01_drop_unused_session_columns.py`, `downgrade()`, `drop_unused_session_columns  Revision ID: 1d642bcb1f01 Revises: cb33d77516d8 Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 177`** (4 nodes): `29e5dc2c0921_add_benchmark_experiments.py`, `downgrade()`, `add benchmark experiments  Revision ID: 29e5dc2c0921 Revises: 10d42965cd8e Creat`, `upgrade()`
+- **Thin community `Community 177`** (4 nodes): `27229f433f34_add_truncation_events_table.py`, `downgrade()`, `add truncation_events table  Revision ID: 27229f433f34 Revises: b9f50737450a Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 178`** (4 nodes): `2db02fafe6f7_add_roundtable_session_and_message_.py`, `downgrade()`, `add_roundtable_session_and_message_tables  Revision ID: 2db02fafe6f7 Revises: 89`, `upgrade()`
+- **Thin community `Community 178`** (4 nodes): `29e5dc2c0921_add_benchmark_experiments.py`, `downgrade()`, `add benchmark experiments  Revision ID: 29e5dc2c0921 Revises: 10d42965cd8e Creat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 179`** (4 nodes): `345f14d99f4f_add_client_not_found_to_rejection_.py`, `downgrade()`, `add client_not_found to rejection_reason_enum  Revision ID: 345f14d99f4f Revises`, `upgrade()`
+- **Thin community `Community 179`** (4 nodes): `2db02fafe6f7_add_roundtable_session_and_message_.py`, `downgrade()`, `add_roundtable_session_and_message_tables  Revision ID: 2db02fafe6f7 Revises: 89`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 180`** (4 nodes): `356c591a71de_split_reference_injection_metrics.py`, `downgrade()`, `split reference injection metrics  Revision ID: 356c591a71de Revises: 0bd342386e`, `upgrade()`
+- **Thin community `Community 180`** (4 nodes): `345f14d99f4f_add_client_not_found_to_rejection_.py`, `downgrade()`, `add client_not_found to rejection_reason_enum  Revision ID: 345f14d99f4f Revises`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 181`** (4 nodes): `4181a970370b_drop_abandoned_persona_journal_table.py`, `downgrade()`, `drop abandoned persona_journal table  Revision ID: 4181a970370b Revises: 65a0807`, `upgrade()`
+- **Thin community `Community 181`** (4 nodes): `356c591a71de_split_reference_injection_metrics.py`, `downgrade()`, `split reference injection metrics  Revision ID: 356c591a71de Revises: 0bd342386e`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 182`** (4 nodes): `4d833a3be2d8_add_user_preferences_table.py`, `downgrade()`, `add_user_preferences_table  Revision ID: 4d833a3be2d8 Revises: y2z3a4b5c6d7 Crea`, `upgrade()`
+- **Thin community `Community 182`** (4 nodes): `4181a970370b_drop_abandoned_persona_journal_table.py`, `downgrade()`, `drop abandoned persona_journal table  Revision ID: 4181a970370b Revises: 65a0807`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 183`** (4 nodes): `4e43b7027dcc_drop_legacy_persona_heartbeat_columns.py`, `downgrade()`, `drop legacy persona heartbeat columns  Revision ID: 4e43b7027dcc Revises: c6d7e8`, `upgrade()`
+- **Thin community `Community 183`** (4 nodes): `4d833a3be2d8_add_user_preferences_table.py`, `downgrade()`, `add_user_preferences_table  Revision ID: 4d833a3be2d8 Revises: y2z3a4b5c6d7 Crea`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 184`** (4 nodes): `548fe3a69c99_add_api_keys_table.py`, `downgrade()`, `add_api_keys_table  Revision ID: 548fe3a69c99 Revises: 1c6805054b00 Create Date:`, `upgrade()`
+- **Thin community `Community 184`** (4 nodes): `4e43b7027dcc_drop_legacy_persona_heartbeat_columns.py`, `downgrade()`, `drop legacy persona heartbeat columns  Revision ID: 4e43b7027dcc Revises: c6d7e8`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 185`** (4 nodes): `5d106fee3146_extend_api_key_prefix_length.py`, `downgrade()`, `extend_api_key_prefix_length  Revision ID: 5d106fee3146 Revises: 548fe3a69c99 Cr`, `upgrade()`
+- **Thin community `Community 185`** (4 nodes): `548fe3a69c99_add_api_keys_table.py`, `downgrade()`, `add_api_keys_table  Revision ID: 548fe3a69c99 Revises: 1c6805054b00 Create Date:`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 186`** (4 nodes): `61e8ed756630_add_previous_backup_columns_to_persona.py`, `downgrade()`, `add previous backup columns to persona  Revision ID: 61e8ed756630 Revises: 345f1`, `upgrade()`
+- **Thin community `Community 186`** (4 nodes): `5d106fee3146_extend_api_key_prefix_length.py`, `downgrade()`, `extend_api_key_prefix_length  Revision ID: 5d106fee3146 Revises: 548fe3a69c99 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 187`** (4 nodes): `6996cae6424b_drop_premium_model_from_agents.py`, `downgrade()`, `drop premium model from agents  Revision ID: 6996cae6424b Revises: 356c591a71de`, `upgrade()`
+- **Thin community `Community 187`** (4 nodes): `61e8ed756630_add_previous_backup_columns_to_persona.py`, `downgrade()`, `add previous backup columns to persona  Revision ID: 61e8ed756630 Revises: 345f1`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 188`** (4 nodes): `6c39f1c7c8f3_add_prompt_revisions.py`, `downgrade()`, `add prompt revisions  Revision ID: 6c39f1c7c8f3 Revises: 29e5dc2c0921 Create Dat`, `upgrade()`
+- **Thin community `Community 188`** (4 nodes): `6996cae6424b_drop_premium_model_from_agents.py`, `downgrade()`, `drop premium model from agents  Revision ID: 6996cae6424b Revises: 356c591a71de`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 189`** (4 nodes): `706345626a08_add_persona_execution_state.py`, `downgrade()`, `add persona execution state  Revision ID: 706345626a08 Revises: cf39a0bccadf Cre`, `upgrade()`
+- **Thin community `Community 189`** (4 nodes): `6c39f1c7c8f3_add_prompt_revisions.py`, `downgrade()`, `add prompt revisions  Revision ID: 6c39f1c7c8f3 Revises: 29e5dc2c0921 Create Dat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 190`** (4 nodes): `78ebdaac1078_mark_legacy_sessions.py`, `downgrade()`, `mark_legacy_sessions  Revision ID: 78ebdaac1078 Revises: 86bacf829f75 Create Dat`, `upgrade()`
+- **Thin community `Community 190`** (4 nodes): `706345626a08_add_persona_execution_state.py`, `downgrade()`, `add persona execution state  Revision ID: 706345626a08 Revises: cf39a0bccadf Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 191`** (4 nodes): `86bacf829f75_add_access_control_tables.py`, `downgrade()`, `add_access_control_tables  Revision ID: 86bacf829f75 Revises: g6h7i8j9k0l1 Creat`, `upgrade()`
+- **Thin community `Community 191`** (4 nodes): `78ebdaac1078_mark_legacy_sessions.py`, `downgrade()`, `mark_legacy_sessions  Revision ID: 78ebdaac1078 Revises: 86bacf829f75 Create Dat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 192`** (4 nodes): `8939a1bd7848_merge_heads.py`, `downgrade()`, `merge_heads  Revision ID: 8939a1bd7848 Revises: 98f371912aa2, c7a82f0e9b12 Creat`, `upgrade()`
+- **Thin community `Community 192`** (4 nodes): `86bacf829f75_add_access_control_tables.py`, `downgrade()`, `add_access_control_tables  Revision ID: 86bacf829f75 Revises: g6h7i8j9k0l1 Creat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 193`** (4 nodes): `98f371912aa2_add_agent_id_to_messages.py`, `downgrade()`, `add_agent_id_to_messages  Revision ID: 98f371912aa2 Revises: ed13ea976211 Create`, `upgrade()`
+- **Thin community `Community 193`** (4 nodes): `8939a1bd7848_merge_heads.py`, `downgrade()`, `merge_heads  Revision ID: 8939a1bd7848 Revises: 98f371912aa2, c7a82f0e9b12 Creat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 194`** (4 nodes): `a2b3c4d5e6f7_create_persona_table.py`, `downgrade()`, `create_persona_table  Revision ID: a2b3c4d5e6f7 Revises: f7a8b9c0d1e2 Create Dat`, `upgrade()`
+- **Thin community `Community 194`** (4 nodes): `98f371912aa2_add_agent_id_to_messages.py`, `downgrade()`, `add_agent_id_to_messages  Revision ID: 98f371912aa2 Revises: ed13ea976211 Create`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 195`** (4 nodes): `a8257e5c28c8_feedback_lifecycle_archive_and_merge.py`, `downgrade()`, `feedback lifecycle archive and merge  Revision ID: a8257e5c28c8 Revises: 7063456`, `upgrade()`
+- **Thin community `Community 195`** (4 nodes): `a2b3c4d5e6f7_create_persona_table.py`, `downgrade()`, `create_persona_table  Revision ID: a2b3c4d5e6f7 Revises: f7a8b9c0d1e2 Create Dat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 196`** (4 nodes): `a84930c276eb_add_thinking_level_to_agents.py`, `downgrade()`, `add_thinking_level_to_agents  Revision ID: a84930c276eb Revises: x1y2z3a4b5c6 Cr`, `upgrade()`
+- **Thin community `Community 196`** (4 nodes): `a8257e5c28c8_feedback_lifecycle_archive_and_merge.py`, `downgrade()`, `feedback lifecycle archive and merge  Revision ID: a8257e5c28c8 Revises: 7063456`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 197`** (4 nodes): `aa1bb2cc3dd4_add_onboarding_attempts.py`, `downgrade()`, `add_onboarding_attempts_column  Revision ID: aa1bb2cc3dd4 Revises: ff9d19d2c6d1`, `upgrade()`
+- **Thin community `Community 197`** (4 nodes): `a84930c276eb_add_thinking_level_to_agents.py`, `downgrade()`, `add_thinking_level_to_agents  Revision ID: a84930c276eb Revises: x1y2z3a4b5c6 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 198`** (4 nodes): `b3c4d5e6f7g8_rename_soul_to_personality.py`, `downgrade()`, `rename_soul_to_personality  Revision ID: b3c4d5e6f7g8 Revises: a2b3c4d5e6f7 Crea`, `upgrade()`
+- **Thin community `Community 198`** (4 nodes): `aa1bb2cc3dd4_add_onboarding_attempts.py`, `downgrade()`, `add_onboarding_attempts_column  Revision ID: aa1bb2cc3dd4 Revises: ff9d19d2c6d1`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 199`** (4 nodes): `b4c5d6e7f8g9_add_resolve_conflict_heartbeat_guidance.py`, `downgrade()`, `add resolve_conflict heartbeat guidance  Revision ID: b4c5d6e7f8g9 Revises: a3f2`, `upgrade()`
+- **Thin community `Community 199`** (4 nodes): `b3c4d5e6f7g8_rename_soul_to_personality.py`, `downgrade()`, `rename_soul_to_personality  Revision ID: b3c4d5e6f7g8 Revises: a2b3c4d5e6f7 Crea`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 200`** (4 nodes): `b5c6d7e8f9a0_migrate_persona_heartbeat_prompt.py`, `downgrade()`, `migrate_persona_heartbeat_prompt  Revision ID: c6d7e8f9a0b1 Revises: a4b5c6d7e8f`, `upgrade()`
+- **Thin community `Community 200`** (4 nodes): `b4c5d6e7f8g9_add_resolve_conflict_heartbeat_guidance.py`, `downgrade()`, `add resolve_conflict heartbeat guidance  Revision ID: b4c5d6e7f8g9 Revises: a3f2`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 201`** (4 nodes): `b9f50737450a_add_webhook_subscriptions_table.py`, `downgrade()`, `add_webhook_subscriptions_table  Revision ID: b9f50737450a Revises: 5d106fee3146`, `upgrade()`
+- **Thin community `Community 201`** (4 nodes): `b5c6d7e8f9a0_migrate_persona_heartbeat_prompt.py`, `downgrade()`, `migrate_persona_heartbeat_prompt  Revision ID: c6d7e8f9a0b1 Revises: a4b5c6d7e8f`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 202`** (4 nodes): `bb2cc3dd4ee5_add_model_enrichments_table.py`, `downgrade()`, `add_model_enrichments_table  Revision ID: bb2cc3dd4ee5 Revises: aa1bb2cc3dd4 Cre`, `upgrade()`
+- **Thin community `Community 202`** (4 nodes): `b9f50737450a_add_webhook_subscriptions_table.py`, `downgrade()`, `add_webhook_subscriptions_table  Revision ID: b9f50737450a Revises: 5d106fee3146`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 203`** (4 nodes): `c2d3e4f5g6h7_drop_persona_tools_guidance.py`, `downgrade()`, `drop_persona_tools_guidance  Revision ID: c2d3e4f5g6h7 Revises: 31f7c68cf57f Cre`, `upgrade()`
+- **Thin community `Community 203`** (4 nodes): `bb2cc3dd4ee5_add_model_enrichments_table.py`, `downgrade()`, `add_model_enrichments_table  Revision ID: bb2cc3dd4ee5 Revises: aa1bb2cc3dd4 Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 204`** (4 nodes): `c4d5e6f7g8h9_create_persona_journal_table.py`, `downgrade()`, `create_persona_journal_table  Revision ID: c4d5e6f7g8h9 Revises: b3c4d5e6f7g8 Cr`, `upgrade()`
+- **Thin community `Community 204`** (4 nodes): `c2d3e4f5g6h7_drop_persona_tools_guidance.py`, `downgrade()`, `drop_persona_tools_guidance  Revision ID: c2d3e4f5g6h7 Revises: 31f7c68cf57f Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 205`** (4 nodes): `c8113ded1ed2_add_lifecycle_columns.py`, `downgrade()`, `add lifecycle columns  Revision ID: c8113ded1ed2 Revises: e2a476ce0825 Create Da`, `upgrade()`
+- **Thin community `Community 205`** (4 nodes): `c4d5e6f7g8h9_create_persona_journal_table.py`, `downgrade()`, `create_persona_journal_table  Revision ID: c4d5e6f7g8h9 Revises: b3c4d5e6f7g8 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 206`** (4 nodes): `ca45411429f5_consolidate_agent_prompt_ownership.py`, `downgrade()`, `consolidate agent prompt ownership  Revision ID: ca45411429f5 Revises: e25ac263b`, `upgrade()`
+- **Thin community `Community 206`** (4 nodes): `c8113ded1ed2_add_lifecycle_columns.py`, `downgrade()`, `add lifecycle columns  Revision ID: c8113ded1ed2 Revises: e2a476ce0825 Create Da`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 207`** (4 nodes): `cc3dd4ee5ff6_add_agent_performance_logs.py`, `downgrade()`, `add_agent_performance_logs_table  Revision ID: cc3dd4ee5ff6 Revises: bb2cc3dd4ee`, `upgrade()`
+- **Thin community `Community 207`** (4 nodes): `ca45411429f5_consolidate_agent_prompt_ownership.py`, `downgrade()`, `consolidate agent prompt ownership  Revision ID: ca45411429f5 Revises: e25ac263b`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 208`** (4 nodes): `cf39a0bccadf_add_session_scope_tracking_columns.py`, `downgrade()`, `add session scope tracking columns  Revision ID: cf39a0bccadf Revises: b4c5d6e7f`, `upgrade()`
+- **Thin community `Community 208`** (4 nodes): `cc3dd4ee5ff6_add_agent_performance_logs.py`, `downgrade()`, `add_agent_performance_logs_table  Revision ID: cc3dd4ee5ff6 Revises: bb2cc3dd4ee`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 209`** (4 nodes): `d3e4f5g6h7i8_create_unified_memories_table.py`, `downgrade()`, `create_unified_memories_table  Revision ID: d3e4f5g6h7i8 Revises: c2d3e4f5g6h7 C`, `upgrade()`
+- **Thin community `Community 209`** (4 nodes): `cf39a0bccadf_add_session_scope_tracking_columns.py`, `downgrade()`, `add session scope tracking columns  Revision ID: cf39a0bccadf Revises: b4c5d6e7f`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 210`** (4 nodes): `d5e6f7g8h9i0_enhance_persona_memory_config.py`, `downgrade()`, `enhance_persona_memory_config  Revision ID: d5e6f7g8h9i0 Revises: c4d5e6f7g8h9 C`, `upgrade()`
+- **Thin community `Community 210`** (4 nodes): `d3e4f5g6h7i8_create_unified_memories_table.py`, `downgrade()`, `create_unified_memories_table  Revision ID: d3e4f5g6h7i8 Revises: c2d3e4f5g6h7 C`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 211`** (4 nodes): `dd4ee5ff6aa7_add_benchmark_enrichment_columns.py`, `downgrade()`, `add_benchmark_enrichment_columns  Revision ID: dd4ee5ff6aa7 Revises: cc3dd4ee5ff`, `upgrade()`
+- **Thin community `Community 211`** (4 nodes): `d5e6f7g8h9i0_enhance_persona_memory_config.py`, `downgrade()`, `enhance_persona_memory_config  Revision ID: d5e6f7g8h9i0 Revises: c4d5e6f7g8h9 C`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 212`** (4 nodes): `e25ac263bac8_add_session_health_tracking.py`, `downgrade()`, `add session health tracking  Revision ID: e25ac263bac8 Revises: f1a2b3c4d5e6 Cre`, `upgrade()`
+- **Thin community `Community 212`** (4 nodes): `dd4ee5ff6aa7_add_benchmark_enrichment_columns.py`, `downgrade()`, `add_benchmark_enrichment_columns  Revision ID: dd4ee5ff6aa7 Revises: cc3dd4ee5ff`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 213`** (4 nodes): `e2a476ce0825_add_exclude_agents_to_prompts.py`, `downgrade()`, `add exclude_agents to prompts  Revision ID: e2a476ce0825 Revises: 61e8ed756630 C`, `upgrade()`
+- **Thin community `Community 213`** (4 nodes): `e25ac263bac8_add_session_health_tracking.py`, `downgrade()`, `add session health tracking  Revision ID: e25ac263bac8 Revises: f1a2b3c4d5e6 Cre`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 214`** (4 nodes): `e6f7g8h9i0j1_add_persona_onboarding_phase.py`, `downgrade()`, `add_persona_onboarding_phase  Revision ID: e6f7g8h9i0j1 Revises: d5e6f7g8h9i0 Cr`, `upgrade()`
+- **Thin community `Community 214`** (4 nodes): `e2a476ce0825_add_exclude_agents_to_prompts.py`, `downgrade()`, `add exclude_agents to prompts  Revision ID: e2a476ce0825 Revises: 61e8ed756630 C`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 215`** (4 nodes): `e7f8g9h0i1j2_add_persona_user_profile.py`, `downgrade()`, `Add structured persona user_profile field.  Revision ID: e7f8g9h0i1j2 Revises: 6`, `upgrade()`
+- **Thin community `Community 215`** (4 nodes): `e6f7g8h9i0j1_add_persona_onboarding_phase.py`, `downgrade()`, `add_persona_onboarding_phase  Revision ID: e6f7g8h9i0j1 Revises: d5e6f7g8h9i0 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 216`** (4 nodes): `eb4ecc28ced9_add_multi_model_tracking_columns.py`, `downgrade()`, `add multi-model tracking columns  Revision ID: eb4ecc28ced9 Revises: 6b46071ec3b`, `upgrade()`
+- **Thin community `Community 216`** (4 nodes): `e7f8g9h0i1j2_add_persona_user_profile.py`, `downgrade()`, `Add structured persona user_profile field.  Revision ID: e7f8g9h0i1j2 Revises: 6`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 217`** (4 nodes): `ed13ea976211_add_purpose_and_session_type.py`, `downgrade()`, `add_purpose_and_session_type  Revision ID: ed13ea976211 Revises: 27229f433f34 Cr`, `upgrade()`
+- **Thin community `Community 217`** (4 nodes): `eb4ecc28ced9_add_multi_model_tracking_columns.py`, `downgrade()`, `add multi-model tracking columns  Revision ID: eb4ecc28ced9 Revises: 6b46071ec3b`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 218`** (4 nodes): `f7a8b9c0d1e2_add_agent_concurrency_limits.py`, `downgrade()`, `add_agent_concurrency_and_quota_limits  Revision ID: f7a8b9c0d1e2 Revises: 031fa`, `upgrade()`
+- **Thin community `Community 218`** (4 nodes): `ed13ea976211_add_purpose_and_session_type.py`, `downgrade()`, `add_purpose_and_session_type  Revision ID: ed13ea976211 Revises: 27229f433f34 Cr`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 219`** (4 nodes): `ff9d19d2c6d1_drop_dead_tables_neo4j_cleanup.py`, `downgrade()`, `drop_dead_tables_neo4j_cleanup  Revision ID: ff9d19d2c6d1 Revises: d3e4f5g6h7i8`, `upgrade()`
+- **Thin community `Community 219`** (4 nodes): `f7a8b9c0d1e2_add_agent_concurrency_limits.py`, `downgrade()`, `add_agent_concurrency_and_quota_limits  Revision ID: f7a8b9c0d1e2 Revises: 031fa`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 220`** (4 nodes): `j9k0l1m2n3o4_add_budget_enabled_column.py`, `downgrade()`, `Add budget_enabled column to memory_settings  Revision ID: j9k0l1m2n3o4 Revises:`, `upgrade()`
+- **Thin community `Community 220`** (4 nodes): `ff9d19d2c6d1_drop_dead_tables_neo4j_cleanup.py`, `downgrade()`, `drop_dead_tables_neo4j_cleanup  Revision ID: ff9d19d2c6d1 Revises: d3e4f5g6h7i8`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 221`** (4 nodes): `y2z3a4b5c6d7_add_summary_git_digest.py`, `downgrade()`, `add_summary_git_digest_to_sessions  Revision ID: y2z3a4b5c6d7 Revises: x1y2z3a4b`, `upgrade()`
+- **Thin community `Community 221`** (4 nodes): `j9k0l1m2n3o4_add_budget_enabled_column.py`, `downgrade()`, `Add budget_enabled column to memory_settings  Revision ID: j9k0l1m2n3o4 Revises:`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 222`** (4 nodes): `b217f2377552_classify_global_prompts_and_repair_note_.py`, `downgrade()`, `classify global prompts and repair note titler prompt  Revision ID: b217f2377552`, `upgrade()`
+- **Thin community `Community 222`** (4 nodes): `y2z3a4b5c6d7_add_summary_git_digest.py`, `downgrade()`, `add_summary_git_digest_to_sessions  Revision ID: y2z3a4b5c6d7 Revises: x1y2z3a4b`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 223`** (4 nodes): `0ff5fb2a634c_add_memory_context_routing_fields.py`, `downgrade()`, `add memory context routing fields  Revision ID: 0ff5fb2a634c Revises: 93da76ab0d`, `upgrade()`
+- **Thin community `Community 223`** (4 nodes): `b217f2377552_classify_global_prompts_and_repair_note_.py`, `downgrade()`, `classify global prompts and repair note titler prompt  Revision ID: b217f2377552`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 224`** (4 nodes): `24ebd21257f3_add_workflow_schedule_controls_table.py`, `downgrade()`, `add_workflow_schedule_controls_table  Revision ID: 24ebd21257f3 Revises: ac9b84e`, `upgrade()`
+- **Thin community `Community 224`** (4 nodes): `0ff5fb2a634c_add_memory_context_routing_fields.py`, `downgrade()`, `add memory context routing fields  Revision ID: 0ff5fb2a634c Revises: 93da76ab0d`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 225`** (4 nodes): `4b7a9c1d2e3f_drop_agent_tool_permissions_column.py`, `downgrade()`, `drop_agent_tool_permissions_column  Revision ID: 4b7a9c1d2e3f Revises: 24ebd2125`, `upgrade()`
+- **Thin community `Community 225`** (4 nodes): `24ebd21257f3_add_workflow_schedule_controls_table.py`, `downgrade()`, `add_workflow_schedule_controls_table  Revision ID: 24ebd21257f3 Revises: ac9b84e`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 226`** (4 nodes): `c7d8e9f0a1b2_add_model_catalog_sync_state.py`, `downgrade()`, `add_model_catalog_sync_state  Revision ID: c7d8e9f0a1b2 Revises: 4b7a9c1d2e3f, z`, `upgrade()`
+- **Thin community `Community 226`** (4 nodes): `4b7a9c1d2e3f_drop_agent_tool_permissions_column.py`, `downgrade()`, `drop_agent_tool_permissions_column  Revision ID: 4b7a9c1d2e3f Revises: 24ebd2125`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 227`** (4 nodes): `d8e9f0a1b2c3_fix_git_agent_and_add_context_compactor.py`, `downgrade()`, `fix_git_agent_and_add_context_compactor  Revision ID: d8e9f0a1b2c3 Revises: c7d8`, `upgrade()`
+- **Thin community `Community 227`** (4 nodes): `c7d8e9f0a1b2_add_model_catalog_sync_state.py`, `downgrade()`, `add_model_catalog_sync_state  Revision ID: c7d8e9f0a1b2 Revises: 4b7a9c1d2e3f, z`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 228`** (4 nodes): `0787049c485f_tighten_heartbeat_cleanup_workflow.py`, `downgrade()`, `tighten heartbeat cleanup workflow  Revision ID: 0787049c485f Revises: 4e43b7027`, `upgrade()`
+- **Thin community `Community 228`** (4 nodes): `d8e9f0a1b2c3_fix_git_agent_and_add_context_compactor.py`, `downgrade()`, `fix_git_agent_and_add_context_compactor  Revision ID: d8e9f0a1b2c3 Revises: c7d8`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 229`** (4 nodes): `a3f20b69e97e_clarify_heartbeat_cleanup_candidate_.py`, `downgrade()`, `clarify heartbeat cleanup candidate handling  Revision ID: a3f20b69e97e Revises:`, `upgrade()`
+- **Thin community `Community 229`** (4 nodes): `0787049c485f_tighten_heartbeat_cleanup_workflow.py`, `downgrade()`, `tighten heartbeat cleanup workflow  Revision ID: 0787049c485f Revises: 4e43b7027`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 230`** (4 nodes): `a4b5c6d7e8f9_unify_prompt_sources.py`, `downgrade()`, `unify_prompt_sources  Revision ID: a4b5c6d7e8f9 Revises: 6996cae6424b Create Dat`, `upgrade()`
+- **Thin community `Community 230`** (4 nodes): `a3f20b69e97e_clarify_heartbeat_cleanup_candidate_.py`, `downgrade()`, `clarify heartbeat cleanup candidate handling  Revision ID: a3f20b69e97e Revises:`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 231`** (4 nodes): `d3931b3024b3_strengthen_heartbeat_finalize_gate.py`, `downgrade()`, `strengthen heartbeat residue gate  Revision ID: d3931b3024b3 Revises: d1f2ec627e`, `upgrade()`
+- **Thin community `Community 231`** (4 nodes): `a4b5c6d7e8f9_unify_prompt_sources.py`, `downgrade()`, `unify_prompt_sources  Revision ID: a4b5c6d7e8f9 Revises: 6996cae6424b Create Dat`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 232`** (4 nodes): `a7c9d3e5f1b2_add_memory_review_and_fingerprints.py`, `downgrade()`, `add_memory_review_and_fingerprints  Revision ID: a7c9d3e5f1b2 Revises: e9f0a1b2c`, `upgrade()`
+- **Thin community `Community 232`** (4 nodes): `d3931b3024b3_strengthen_heartbeat_finalize_gate.py`, `downgrade()`, `strengthen heartbeat residue gate  Revision ID: d3931b3024b3 Revises: d1f2ec627e`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 233`** (4 nodes): `b8c9d0e1f2a3_add_work_chats_bindings.py`, `downgrade()`, `add_work_chats_bindings  Revision ID: b8c9d0e1f2a3 Revises: a7c9d3e5f1b2 Create`, `upgrade()`
+- **Thin community `Community 233`** (4 nodes): `a7c9d3e5f1b2_add_memory_review_and_fingerprints.py`, `downgrade()`, `add_memory_review_and_fingerprints  Revision ID: a7c9d3e5f1b2 Revises: e9f0a1b2c`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 244`** (4 nodes): `buildSharedContext()`, `buildWorkflowRequest()`, `PersonaWorkflowComposer()`, `PersonaWorkflowComposer.tsx`
+- **Thin community `Community 234`** (4 nodes): `b8c9d0e1f2a3_add_work_chats_bindings.py`, `downgrade()`, `add_work_chats_bindings  Revision ID: b8c9d0e1f2a3 Revises: a7c9d3e5f1b2 Create`, `upgrade()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 249`** (4 nodes): `ManualPasteInput.tsx`, `handleKeyDown()`, `handleSubmit()`, `ManualPasteInput()`
+- **Thin community `Community 245`** (4 nodes): `buildSharedContext()`, `buildWorkflowRequest()`, `PersonaWorkflowComposer()`, `PersonaWorkflowComposer.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 250`** (3 nodes): `main()`, `tsla_strategy.py`, `TSLA Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 wit`
+- **Thin community `Community 250`** (4 nodes): `ManualPasteInput.tsx`, `handleKeyDown()`, `handleSubmit()`, `ManualPasteInput()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 252`** (3 nodes): `Tests for API endpoints.`, `__init__.py`, `__init__.py`
+- **Thin community `Community 251`** (3 nodes): `main()`, `tsla_strategy.py`, `TSLA Trading Strategy Configuration Generator Uses Anthropic claude-opus-4-6 wit`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 253`** (3 nodes): `__init__.py`, `__init__.py`, `Tests for core services.`
+- **Thin community `Community 253`** (3 nodes): `Tests for API endpoints.`, `__init__.py`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 254`** (3 nodes): `spike_sdk_deny_all.py`, `main()`, `Spike test: Validate Claude Agent SDK behavior with max_turns=1 + deny-all.  Tes`
+- **Thin community `Community 254`** (3 nodes): `__init__.py`, `__init__.py`, `Tests for core services.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 256`** (3 nodes): `message-actions.test.tsx`, `createAssistantThread()`, `createMessage()`
+- **Thin community `Community 255`** (3 nodes): `spike_sdk_deny_all.py`, `main()`, `Spike test: Validate Claude Agent SDK behavior with max_turns=1 + deny-all.  Tes`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 264`** (3 nodes): `useAgentPreview.ts`, `normalizeOptional()`, `useAgentPreview()`
+- **Thin community `Community 257`** (3 nodes): `message-actions.test.tsx`, `createAssistantThread()`, `createMessage()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 273`** (3 nodes): `doCopy()`, `handleCopy()`, `CopyIdButton.tsx`
+- **Thin community `Community 265`** (3 nodes): `useAgentPreview.ts`, `normalizeOptional()`, `useAgentPreview()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 274`** (3 nodes): `resolveStatusState()`, `StatusCell()`, `StatusCell.tsx`
+- **Thin community `Community 274`** (3 nodes): `doCopy()`, `handleCopy()`, `CopyIdButton.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 280`** (3 nodes): `FeedbackLoopsHealth()`, `getLoopStatus()`, `feedback-loops-health.tsx`
+- **Thin community `Community 275`** (3 nodes): `resolveStatusState()`, `StatusCell()`, `StatusCell.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 287`** (2 nodes): `Access Control API endpoints for client management and request logging.  Replace`, `access_control.py`
+- **Thin community `Community 281`** (3 nodes): `FeedbackLoopsHealth()`, `getLoopStatus()`, `feedback-loops-health.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 288`** (2 nodes): `__init__.py`, `API helper functions.`
+- **Thin community `Community 288`** (2 nodes): `Access Control API endpoints for client management and request logging.  Replace`, `access_control.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 289`** (2 nodes): `__init__.py`, `Shared constants used across the application.  This module re-exports all consta`
+- **Thin community `Community 289`** (2 nodes): `__init__.py`, `API helper functions.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 290`** (2 nodes): `models.py`, `Model ID constants and provider groupings.`
+- **Thin community `Community 290`** (2 nodes): `__init__.py`, `Shared constants used across the application.  This module re-exports all consta`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 291`** (2 nodes): `access_control_constants.py`, `Header constants for access control middleware.  Centralized header name definit`
+- **Thin community `Community 291`** (2 nodes): `models.py`, `Model ID constants and provider groupings.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 292`** (2 nodes): `__init__.py`, `Services for agent-hub.`
+- **Thin community `Community 292`** (2 nodes): `access_control_constants.py`, `Header constants for access control middleware.  Centralized header name definit`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 293`** (2 nodes): `session_helpers.py`, `Session helper utilities - Re-exports from specialized modules.  This module ser`
+- **Thin community `Community 293`** (2 nodes): `__init__.py`, `Services for agent-hub.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 294`** (2 nodes): `Analytics service package for cost and truncation aggregation.`, `__init__.py`
+- **Thin community `Community 294`** (2 nodes): `session_helpers.py`, `Session helper utilities - Re-exports from specialized modules.  This module ser`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 295`** (2 nodes): `__init__.py`, `Task business logic modules.`
+- **Thin community `Community 295`** (2 nodes): `Analytics service package for cost and truncation aggregation.`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 296`** (2 nodes): `__init__.py`, `Hatchet workflow definitions.`
+- **Thin community `Community 296`** (2 nodes): `__init__.py`, `Task business logic modules.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 297`** (2 nodes): `__init__.py`, `CLI entry points for Agent Hub.`
+- **Thin community `Community 297`** (2 nodes): `__init__.py`, `Hatchet workflow definitions.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 298`** (2 nodes): `__init__.py`, `Shared utility helpers.`
+- **Thin community `Community 298`** (2 nodes): `__init__.py`, `CLI entry points for Agent Hub.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 299`** (2 nodes): `__init__.py`, `Metrics collection and reporting modules.`
+- **Thin community `Community 299`** (2 nodes): `__init__.py`, `Shared utility helpers.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 300`** (2 nodes): `_constants.py`, `Magic string constants for the persona honing loop.`
+- **Thin community `Community 300`** (2 nodes): `__init__.py`, `Metrics collection and reporting modules.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 302`** (2 nodes): `__init__.py`, `End-to-end tests for session tracking.`
+- **Thin community `Community 301`** (2 nodes): `_constants.py`, `Magic string constants for the persona honing loop.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 303`** (2 nodes): `__init__.py`, `Tests for storage layer.`
+- **Thin community `Community 303`** (2 nodes): `__init__.py`, `End-to-end tests for session tracking.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 304`** (2 nodes): `__init__.py`, `Tests for extended thinking support.`
+- **Thin community `Community 304`** (2 nodes): `__init__.py`, `Tests for storage layer.`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 305`** (2 nodes): `__init__.py`, `Tests for extended thinking support.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 441`** (2 nodes): `Model constants for Agent Hub.  Single source of truth for LLM model identifiers`, `constants.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 442`** (2 nodes): `__init__.py`, `Tests for agent-hub-client package.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 452`** (1 nodes): `Ensure agent_hub_db_url is provided.`
+- **Thin community `Community 453`** (1 nodes): `Ensure agent_hub_db_url is provided.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 453`** (1 nodes): `Treat blank env values as the built-in dashboard client id.`
+- **Thin community `Community 454`** (1 nodes): `Treat blank env values as the built-in dashboard client id.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 454`** (1 nodes): `Treat blank env values as the built-in dashboard request source.`
+- **Thin community `Community 455`** (1 nodes): `Treat blank env values as the built-in dashboard request source.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 455`** (1 nodes): `Treat blank env values as the built-in Telegram bot client id.`
+- **Thin community `Community 456`** (1 nodes): `Treat blank env values as the built-in Telegram bot client id.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 456`** (1 nodes): `Parse CORS_ORIGINS from comma-separated string or list.`
+- **Thin community `Community 457`** (1 nodes): `Parse CORS_ORIGINS from comma-separated string or list.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 457`** (1 nodes): `Return True if the access token has expired (or will within 60 s).`
+- **Thin community `Community 458`** (1 nodes): `Return True if the access token has expired (or will within 60 s).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 458`** (1 nodes): `True if :meth:`end` has been called.`
+- **Thin community `Community 459`** (1 nodes): `True if :meth:`end` has been called.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 459`** (1 nodes): `Create an EventStream that wraps an existing async iterator.          Useful for`
+- **Thin community `Community 460`** (1 nodes): `Create an EventStream that wraps an existing async iterator.          Useful for`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 460`** (1 nodes): `Return the provider name (e.g., 'gemini').`
+- **Thin community `Community 461`** (1 nodes): `Return the provider name (e.g., 'gemini').`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 461`** (1 nodes): `Generate an image from a text prompt, optionally guided by a reference image.`
+- **Thin community `Community 462`** (1 nodes): `Generate an image from a text prompt, optionally guided by a reference image.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 462`** (1 nodes): `Calculate cache hit rate (0.0-1.0).`
+- **Thin community `Community 463`** (1 nodes): `Calculate cache hit rate (0.0-1.0).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 463`** (1 nodes): `Yield canonical runtime events for the active turn.`
+- **Thin community `Community 464`** (1 nodes): `Yield canonical runtime events for the active turn.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 464`** (1 nodes): `Close the active turn session.`
+- **Thin community `Community 465`** (1 nodes): `Close the active turn session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 465`** (1 nodes): `Create and register an active stream context for cooperative cancel.`
+- **Thin community `Community 466`** (1 nodes): `Create and register an active stream context for cooperative cancel.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 466`** (1 nodes): `Signal an active streaming session to stop after the current boundary.`
+- **Thin community `Community 467`** (1 nodes): `Signal an active streaming session to stop after the current boundary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 467`** (1 nodes): `Weighted average across all categories.`
+- **Thin community `Community 468`** (1 nodes): `Weighted average across all categories.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 468`** (1 nodes): `Calculate availability as success_rate (0.0-1.0).`
+- **Thin community `Community 469`** (1 nodes): `Calculate availability as success_rate (0.0-1.0).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 469`** (1 nodes): `Calculate error rate (0.0-1.0).`
+- **Thin community `Community 470`** (1 nodes): `Calculate error rate (0.0-1.0).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 470`** (1 nodes): `Check if container has expired.`
+- **Thin community `Community 471`** (1 nodes): `Check if container has expired.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 471`** (1 nodes): `Get time remaining before expiration.`
+- **Thin community `Community 472`** (1 nodes): `Get time remaining before expiration.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 472`** (1 nodes): `Age of this cache entry in seconds.`
+- **Thin community `Community 473`** (1 nodes): `Age of this cache entry in seconds.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 473`** (1 nodes): `Whether this entry is within TTL.`
+- **Thin community `Community 474`** (1 nodes): `Whether this entry is within TTL.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 474`** (1 nodes): `Get cache statistics.`
+- **Thin community `Community 475`** (1 nodes): `Get cache statistics.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 475`** (1 nodes): `Get trace ID for this span.`
+- **Thin community `Community 476`** (1 nodes): `Get trace ID for this span.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 476`** (1 nodes): `Create DTO from SQLAlchemy model.`
+- **Thin community `Community 477`** (1 nodes): `Create DTO from SQLAlchemy model.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 477`** (1 nodes): `Create DTO from dictionary.`
+- **Thin community `Community 478`** (1 nodes): `Create DTO from dictionary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 478`** (1 nodes): `Total tokens used across all categories.`
+- **Thin community `Community 479`** (1 nodes): `Total tokens used across all categories.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 479`** (1 nodes): `Return the text currently selected for prompt injection.`
+- **Thin community `Community 480`** (1 nodes): `Return the text currently selected for prompt injection.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 480`** (1 nodes): `Calculate cache hit rate.`
+- **Thin community `Community 481`** (1 nodes): `Calculate cache hit rate.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 481`** (1 nodes): `Total fallback responses served.`
+- **Thin community `Community 482`** (1 nodes): `Total fallback responses served.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 482`** (1 nodes): `Create from dictionary.`
+- **Thin community `Community 483`** (1 nodes): `Create from dictionary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 483`** (1 nodes): `Execute a tool call and return result.`
+- **Thin community `Community 484`** (1 nodes): `Execute a tool call and return result.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 487`** (1 nodes): `Calculate task success rate.`
+- **Thin community `Community 488`** (1 nodes): `Calculate task success rate.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 488`** (1 nodes): `Calculate average retries per task.`
+- **Thin community `Community 489`** (1 nodes): `Calculate average retries per task.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 490`** (1 nodes): `Write with empty path should be allowed (let Claude handle the error).`
+- **Thin community `Community 491`** (1 nodes): `Write with empty path should be allowed (let Claude handle the error).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 491`** (1 nodes): `Check if hook result means 'allowed' (empty dict or no deny).`
+- **Thin community `Community 492`** (1 nodes): `Check if hook result means 'allowed' (empty dict or no deny).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 492`** (1 nodes): `Check if hook result means 'denied'.`
+- **Thin community `Community 493`** (1 nodes): `Check if hook result means 'denied'.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 494`** (1 nodes): `No compaction when usage is below threshold.`
+- **Thin community `Community 495`** (1 nodes): `No compaction when usage is below threshold.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 495`** (1 nodes): `No compaction when there aren't enough messages to split.`
+- **Thin community `Community 496`** (1 nodes): `No compaction when there aren't enough messages to split.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 496`** (1 nodes): `Compaction triggers when usage exceeds threshold.`
+- **Thin community `Community 497`** (1 nodes): `Compaction triggers when usage exceeds threshold.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 497`** (1 nodes): `System messages are kept at the front, not compacted.`
+- **Thin community `Community 498`** (1 nodes): `System messages are kept at the front, not compacted.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 498`** (1 nodes): `If summarization fails, return original messages.`
+- **Thin community `Community 499`** (1 nodes): `If summarization fails, return original messages.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 499`** (1 nodes): `Custom threshold_pct and keep_recent values work.`
+- **Thin community `Community 500`** (1 nodes): `Custom threshold_pct and keep_recent values work.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 500`** (1 nodes): `Successful deletion returns 200 with success response.`
+- **Thin community `Community 501`** (1 nodes): `Successful deletion returns 200 with success response.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 501`** (1 nodes): `Episode not found returns 404.`
+- **Thin community `Community 502`** (1 nodes): `Episode not found returns 404.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 502`** (1 nodes): `Internal error returns 500.`
+- **Thin community `Community 503`** (1 nodes): `Internal error returns 500.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 503`** (1 nodes): `Content updates should patch in place and preserve UUID.`
+- **Thin community `Community 504`** (1 nodes): `Content updates should patch in place and preserve UUID.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 504`** (1 nodes): `Tier-only updates should not require re-embedding.`
+- **Thin community `Community 505`** (1 nodes): `Tier-only updates should not require re-embedding.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 505`** (1 nodes): `Content-only updates should still enforce the topic-header format.`
+- **Thin community `Community 506`** (1 nodes): `Content-only updates should still enforce the topic-header format.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 506`** (1 nodes): `Empty payload should be rejected clearly.`
+- **Thin community `Community 507`** (1 nodes): `Empty payload should be rejected clearly.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 507`** (1 nodes): `Invalid learning format should return normalized validation payload.`
+- **Thin community `Community 508`** (1 nodes): `Invalid learning format should return normalized validation payload.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 508`** (1 nodes): `Valid save-learning requests should persist routing metadata on the created memo`
+- **Thin community `Community 509`** (1 nodes): `Valid save-learning requests should persist routing metadata on the created memo`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 509`** (1 nodes): `Successful bulk deletion returns success count.`
+- **Thin community `Community 510`** (1 nodes): `Successful bulk deletion returns success count.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 510`** (1 nodes): `Partial failure returns both success and failure counts.`
+- **Thin community `Community 511`** (1 nodes): `Partial failure returns both success and failure counts.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 511`** (1 nodes): `Empty ID list returns validation error.`
+- **Thin community `Community 512`** (1 nodes): `Empty ID list returns validation error.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 512`** (1 nodes): `Upsert returns created flag and session snapshot.`
+- **Thin community `Community 513`** (1 nodes): `Upsert returns created flag and session snapshot.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 513`** (1 nodes): `Heartbeat returns updated flag and refreshed session snapshot.`
+- **Thin community `Community 514`** (1 nodes): `Heartbeat returns updated flag and refreshed session snapshot.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 514`** (1 nodes): `Append returns event counts and last sequence.`
+- **Thin community `Community 515`** (1 nodes): `Append returns event counts and last sequence.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 515`** (1 nodes): `Finalize endpoint delegates to the canonical finalizer.`
+- **Thin community `Community 516`** (1 nodes): `Finalize endpoint delegates to the canonical finalizer.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 516`** (1 nodes): `Transcript ingest endpoint returns checkpointed append results.`
+- **Thin community `Community 517`** (1 nodes): `Transcript ingest endpoint returns checkpointed append results.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 517`** (1 nodes): `Feedback tags are parsed and create_feedback_item is called.`
+- **Thin community `Community 518`** (1 nodes): `Feedback tags are parsed and create_feedback_item is called.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 518`** (1 nodes): `Same (component, type) tag twice in one session creates only one item.`
+- **Thin community `Community 519`** (1 nodes): `Same (component, type) tag twice in one session creates only one item.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 519`** (1 nodes): `No feedback tags returns 0 without DB queries.`
+- **Thin community `Community 520`** (1 nodes): `No feedback tags returns 0 without DB queries.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 520`** (1 nodes): `Tags already stored for session are skipped.`
+- **Thin community `Community 521`** (1 nodes): `Tags already stored for session are skipped.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 521`** (1 nodes): `Duplicate inline feedback votes on the existing item instead of creating a new o`
+- **Thin community `Community 522`** (1 nodes): `Duplicate inline feedback votes on the existing item instead of creating a new o`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 522`** (1 nodes): `Native completion should persist memory_cite events when DB is available.`
+- **Thin community `Community 523`** (1 nodes): `Native completion should persist memory_cite events when DB is available.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 523`** (1 nodes): `Every provider in PROVIDER_NAMES must be recognized as a valid @mention prefix.`
+- **Thin community `Community 524`** (1 nodes): `Every provider in PROVIDER_NAMES must be recognized as a valid @mention prefix.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 524`** (1 nodes): `When no [[S:...]] tags, a synthetic summary is generated.`
+- **Thin community `Community 525`** (1 nodes): `When no [[S:...]] tags, a synthetic summary is generated.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 525`** (1 nodes): `When [[S:...]] tags found, no synthetic summary is generated.`
+- **Thin community `Community 526`** (1 nodes): `When [[S:...]] tags found, no synthetic summary is generated.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 529`** (1 nodes): `Create mock health prober with test data.`
+- **Thin community `Community 530`** (1 nodes): `Create mock health prober with test data.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 530`** (1 nodes): `Test that /status includes provider health details from prober.`
+- **Thin community `Community 531`** (1 nodes): `Test that /status includes provider health details from prober.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 531`** (1 nodes): `Test that degraded provider is reported in status.`
+- **Thin community `Community 532`** (1 nodes): `Test that degraded provider is reported in status.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 532`** (1 nodes): `Test that status response format matches what frontend expects.`
+- **Thin community `Community 533`** (1 nodes): `Test that status response format matches what frontend expects.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 533`** (1 nodes): `Test verification approved on first try.`
+- **Thin community `Community 534`** (1 nodes): `Test verification approved on first try.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 534`** (1 nodes): `Test verification requiring multiple iterations.`
+- **Thin community `Community 535`** (1 nodes): `Test verification requiring multiple iterations.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 535`** (1 nodes): `Test verification hitting max iterations.`
+- **Thin community `Community 536`** (1 nodes): `Test verification hitting max iterations.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 536`** (1 nodes): `Test verification when maker fails.`
+- **Thin community `Community 537`** (1 nodes): `Test verification when maker fails.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 539`** (1 nodes): `Test index includes all mandates on cold start (ac-004).`
+- **Thin community `Community 540`** (1 nodes): `Test index includes all mandates on cold start (ac-004).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 540`** (1 nodes): `Test index uses stored summary when available (ac-004).`
+- **Thin community `Community 541`** (1 nodes): `Test index uses stored summary when available (ac-004).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 541`** (1 nodes): `Test index falls back to truncated content when no summary.`
+- **Thin community `Community 542`** (1 nodes): `Test index falls back to truncated content when no summary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 542`** (1 nodes): `Test usage stats are applied to entries.`
+- **Thin community `Community 543`** (1 nodes): `Test usage stats are applied to entries.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 543`** (1 nodes): `Test empty input produces empty index.`
+- **Thin community `Community 544`** (1 nodes): `Test empty input produces empty index.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 544`** (1 nodes): `Test skips entries without uuid or content.`
+- **Thin community `Community 545`** (1 nodes): `Test skips entries without uuid or content.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 545`** (1 nodes): `Test mandate demoted after sufficient low-relevance samples (ac-005).`
+- **Thin community `Community 546`** (1 nodes): `Test mandate demoted after sufficient low-relevance samples (ac-005).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 546`** (1 nodes): `Test no demotion when entries lack sufficient samples.`
+- **Thin community `Community 547`** (1 nodes): `Test no demotion when entries lack sufficient samples.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 547`** (1 nodes): `Create mock Redis client.`
+- **Thin community `Community 548`** (1 nodes): `Create mock Redis client.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 548`** (1 nodes): `Create ResponseCache with mock Redis.`
+- **Thin community `Community 549`** (1 nodes): `Create ResponseCache with mock Redis.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 549`** (1 nodes): `Sample messages for testing.`
+- **Thin community `Community 550`** (1 nodes): `Sample messages for testing.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 550`** (1 nodes): `Test that set() stores in both primary and fallback cache.`
+- **Thin community `Community 551`** (1 nodes): `Test that set() stores in both primary and fallback cache.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 551`** (1 nodes): `Test that set() uses custom stale_if_error_ttl.`
+- **Thin community `Community 552`** (1 nodes): `Test that set() uses custom stale_if_error_ttl.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 552`** (1 nodes): `Test get_fallback returns cached response.`
+- **Thin community `Community 553`** (1 nodes): `Test get_fallback returns cached response.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 553`** (1 nodes): `Test get_fallback looks in fallback cache.`
+- **Thin community `Community 554`** (1 nodes): `Test get_fallback looks in fallback cache.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 554`** (1 nodes): `Test get_fallback returns None on miss.`
+- **Thin community `Community 555`** (1 nodes): `Test get_fallback returns None on miss.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 555`** (1 nodes): `Test get_fallback updates fallback stats.`
+- **Thin community `Community 556`** (1 nodes): `Test get_fallback updates fallback stats.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 556`** (1 nodes): `Test get_fallback handles Redis errors gracefully.`
+- **Thin community `Community 557`** (1 nodes): `Test get_fallback handles Redis errors gracefully.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 557`** (1 nodes): `Create mock Redis client with storage.`
+- **Thin community `Community 558`** (1 nodes): `Create mock Redis client with storage.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 558`** (1 nodes): `Test fallback works when primary cache has expired.`
+- **Thin community `Community 559`** (1 nodes): `Test fallback works when primary cache has expired.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 559`** (1 nodes): `Test that identical requests return cached response.`
+- **Thin community `Community 560`** (1 nodes): `Test that identical requests return cached response.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 560`** (1 nodes): `Test that different requests are not confused.`
+- **Thin community `Community 561`** (1 nodes): `Test that different requests are not confused.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 561`** (1 nodes): `Test that cache hit rate is tracked correctly.`
+- **Thin community `Community 562`** (1 nodes): `Test that cache hit rate is tracked correctly.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 562`** (1 nodes): `Create mock adapters for testing.`
+- **Thin community `Community 563`** (1 nodes): `Create mock adapters for testing.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 563`** (1 nodes): `Create a prober with mock adapters (bypass __post_init__).`
+- **Thin community `Community 564`** (1 nodes): `Create a prober with mock adapters (bypass __post_init__).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 564`** (1 nodes): `Test successful health probe.`
+- **Thin community `Community 565`** (1 nodes): `Test successful health probe.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 565`** (1 nodes): `Test that failures update state correctly.`
+- **Thin community `Community 566`** (1 nodes): `Test that failures update state correctly.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 566`** (1 nodes): `Test that events are emitted on state changes.`
+- **Thin community `Community 567`** (1 nodes): `Test that events are emitted on state changes.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 567`** (1 nodes): `Test that recovery event is emitted.`
+- **Thin community `Community 568`** (1 nodes): `Test that recovery event is emitted.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 568`** (1 nodes): `Test is_provider_available method.`
+- **Thin community `Community 569`** (1 nodes): `Test is_provider_available method.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 569`** (1 nodes): `Test get_available_providers method.`
+- **Thin community `Community 570`** (1 nodes): `Test get_available_providers method.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 570`** (1 nodes): `Test immediate probe for single provider.`
+- **Thin community `Community 571`** (1 nodes): `Test immediate probe for single provider.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 571`** (1 nodes): `Test immediate probe for all providers.`
+- **Thin community `Community 572`** (1 nodes): `Test immediate probe for all providers.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 572`** (1 nodes): `Test start and stop background probing.`
+- **Thin community `Community 573`** (1 nodes): `Test start and stop background probing.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 573`** (1 nodes): `Test that latency is tracked.`
+- **Thin community `Community 574`** (1 nodes): `Test that latency is tracked.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 574`** (1 nodes): `Test that high latency marks provider as degraded.`
+- **Thin community `Community 575`** (1 nodes): `Test that high latency marks provider as degraded.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 575`** (1 nodes): `Test that error messages are recorded.`
+- **Thin community `Community 576`** (1 nodes): `Test that error messages are recorded.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 576`** (1 nodes): `Create mock adapters for testing.`
+- **Thin community `Community 577`** (1 nodes): `Create mock adapters for testing.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 577`** (1 nodes): `Create a prober with circuit breaker config.`
+- **Thin community `Community 578`** (1 nodes): `Create a prober with circuit breaker config.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 578`** (1 nodes): `DOWN providers are skipped until cooldown expires.`
+- **Thin community `Community 579`** (1 nodes): `DOWN providers are skipped until cooldown expires.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 579`** (1 nodes): `DOWN providers are probed again after cooldown expires.`
+- **Thin community `Community 580`** (1 nodes): `DOWN providers are probed again after cooldown expires.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 580`** (1 nodes): `HEALTHY providers are always probed.`
+- **Thin community `Community 581`** (1 nodes): `HEALTHY providers are always probed.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 581`** (1 nodes): `DEGRADED providers are always probed.`
+- **Thin community `Community 582`** (1 nodes): `DEGRADED providers are always probed.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 582`** (1 nodes): `Create mock adapters with a slow health check.`
+- **Thin community `Community 583`** (1 nodes): `Create mock adapters with a slow health check.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 583`** (1 nodes): `Create a prober with short timeout.`
+- **Thin community `Community 584`** (1 nodes): `Create a prober with short timeout.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 584`** (1 nodes): `Timed-out probes count as failures.`
+- **Thin community `Community 585`** (1 nodes): `Timed-out probes count as failures.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 585`** (1 nodes): `Timed-out probes complete within the timeout window.`
+- **Thin community `Community 586`** (1 nodes): `Timed-out probes complete within the timeout window.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 586`** (1 nodes): `probe_now(provider) should probe even if DOWN and within cooldown.`
+- **Thin community `Community 587`** (1 nodes): `probe_now(provider) should probe even if DOWN and within cooldown.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 587`** (1 nodes): `Create a prober where one provider has no adapter (simulates credential missing`
+- **Thin community `Community 588`** (1 nodes): `Create a prober where one provider has no adapter (simulates credential missing`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 588`** (1 nodes): `Adapter created later (e.g., credential added) should be picked up on next probe`
+- **Thin community `Community 589`** (1 nodes): `Adapter created later (e.g., credential added) should be picked up on next probe`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 589`** (1 nodes): `If adapter still can't be created, probe is skipped (no crash).`
+- **Thin community `Community 590`** (1 nodes): `If adapter still can't be created, probe is skipped (no crash).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 590`** (1 nodes): `Providers without adapters should still appear in get_all_health.`
+- **Thin community `Community 591`** (1 nodes): `Providers without adapters should still appear in get_all_health.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 591`** (1 nodes): `probe_now should also resolve adapters lazily.`
+- **Thin community `Community 592`** (1 nodes): `probe_now should also resolve adapters lazily.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 592`** (1 nodes): `Reset global prober before and after each test.`
+- **Thin community `Community 593`** (1 nodes): `Reset global prober before and after each test.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 593`** (1 nodes): `Test init and shutdown of global prober.`
+- **Thin community `Community 594`** (1 nodes): `Test init and shutdown of global prober.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 594`** (1 nodes): `Test cache miss returns None.`
+- **Thin community `Community 595`** (1 nodes): `Test cache miss returns None.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 595`** (1 nodes): `Test cache hit returns cached response.`
+- **Thin community `Community 596`** (1 nodes): `Test cache hit returns cached response.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 596`** (1 nodes): `Test set stores response in Redis (primary + fallback).`
+- **Thin community `Community 597`** (1 nodes): `Test set stores response in Redis (primary + fallback).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 597`** (1 nodes): `Test cache invalidation.`
+- **Thin community `Community 598`** (1 nodes): `Test cache invalidation.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 598`** (1 nodes): `Test clearing all cache entries.`
+- **Thin community `Community 599`** (1 nodes): `Test clearing all cache entries.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 599`** (1 nodes): `Test when no duplicates exist.`
+- **Thin community `Community 600`** (1 nodes): `Test when no duplicates exist.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 600`** (1 nodes): `Test finding exact duplicate within time window.`
+- **Thin community `Community 601`** (1 nodes): `Test finding exact duplicate within time window.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 601`** (1 nodes): `Test that group_id is forwarded to repository.`
+- **Thin community `Community 602`** (1 nodes): `Test that group_id is forwarded to repository.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 602`** (1 nodes): `Test graceful handling of service errors.`
+- **Thin community `Community 603`** (1 nodes): `Test graceful handling of service errors.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 603`** (1 nodes): `Test that function returns True on success.`
+- **Thin community `Community 604`** (1 nodes): `Test that function returns True on success.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 604`** (1 nodes): `Test that function returns False when memory not found.`
+- **Thin community `Community 605`** (1 nodes): `Test that function returns False when memory not found.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 605`** (1 nodes): `Test that errors are handled gracefully.`
+- **Thin community `Community 606`** (1 nodes): `Test that errors are handled gracefully.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 606`** (1 nodes): `Should update lifecycle_score for all active memories.`
+- **Thin community `Community 607`** (1 nodes): `Should update lifecycle_score for all active memories.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 607`** (1 nodes): `Skips rating when loaded memories below threshold.`
+- **Thin community `Community 608`** (1 nodes): `Skips rating when loaded memories below threshold.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 608`** (1 nodes): `Full flow: fetches, rates, credits helpful/harmful.`
+- **Thin community `Community 609`** (1 nodes): `Full flow: fetches, rates, credits helpful/harmful.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 609`** (1 nodes): `Returns zero counts when no content found in database.`
+- **Thin community `Community 610`** (1 nodes): `Returns zero counts when no content found in database.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 610`** (1 nodes): `Returns zero counts when LLM call fails.`
+- **Thin community `Community 611`** (1 nodes): `Returns zero counts when LLM call fails.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 611`** (1 nodes): `Pairs >= 0.97 should be auto-consolidated.`
+- **Thin community `Community 612`** (1 nodes): `Pairs >= 0.97 should be auto-consolidated.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 612`** (1 nodes): `Pairs 0.92-0.97 should only log suggestions.`
+- **Thin community `Community 613`** (1 nodes): `Pairs 0.92-0.97 should only log suggestions.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 613`** (1 nodes): `Pinned memories should not be auto-consolidated even at >= 0.97.`
+- **Thin community `Community 614`** (1 nodes): `Pinned memories should not be auto-consolidated even at >= 0.97.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 614`** (1 nodes): `Archives untouched for >180 days should be retired.`
+- **Thin community `Community 615`** (1 nodes): `Archives untouched for >180 days should be retired.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 615`** (1 nodes): `If system is inactive (no recent active memories), skip retirement.`
+- **Thin community `Community 616`** (1 nodes): `If system is inactive (no recent active memories), skip retirement.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 616`** (1 nodes): `Returns zero retired when no stale archives exist.`
+- **Thin community `Community 617`** (1 nodes): `Returns zero retired when no stale archives exist.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 617`** (1 nodes): `Memory with lifecycle_score >= 0.55 should be healed.`
+- **Thin community `Community 618`** (1 nodes): `Memory with lifecycle_score >= 0.55 should be healed.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 618`** (1 nodes): `Memory with recent access and sufficient refs should be healed.`
+- **Thin community `Community 619`** (1 nodes): `Memory with recent access and sufficient refs should be healed.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 619`** (1 nodes): `Memory with low score and no recent access should be skipped.`
+- **Thin community `Community 620`** (1 nodes): `Memory with low score and no recent access should be skipped.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 620`** (1 nodes): `Memories with superseded_by should not appear (filtered by query).`
+- **Thin community `Community 621`** (1 nodes): `Memories with superseded_by should not appear (filtered by query).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 621`** (1 nodes): `Returns empty ContinuityContext when no summaries found.`
+- **Thin community `Community 622`** (1 nodes): `Returns empty ContinuityContext when no summaries found.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 622`** (1 nodes): `Returns summaries from segment rows when available.`
+- **Thin community `Community 623`** (1 nodes): `Returns summaries from segment rows when available.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 623`** (1 nodes): `Passes current_branch to the query for branch scoping.`
+- **Thin community `Community 624`** (1 nodes): `Passes current_branch to the query for branch scoping.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 624`** (1 nodes): `Uses session-column fallback when no segments exist (pre-migration).`
+- **Thin community `Community 625`** (1 nodes): `Uses session-column fallback when no segments exist (pre-migration).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 625`** (1 nodes): `Combines segment and legacy data when segments < max_sessions.`
+- **Thin community `Community 626`** (1 nodes): `Combines segment and legacy data when segments < max_sessions.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 626`** (1 nodes): `Two segments for one session appear as separate entries.`
+- **Thin community `Community 627`** (1 nodes): `Two segments for one session appear as separate entries.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 627`** (1 nodes): `Time labels are based on segment created_at, not session created_at.`
+- **Thin community `Community 628`** (1 nodes): `Time labels are based on segment created_at, not session created_at.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 628`** (1 nodes): `When no segments exist, returns only legacy session data.`
+- **Thin community `Community 629`** (1 nodes): `When no segments exist, returns only legacy session data.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 629`** (1 nodes): `Combined results are sorted by created_at descending.`
+- **Thin community `Community 630`** (1 nodes): `Combined results are sorted by created_at descending.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 630`** (1 nodes): `A recent session with UUID starting with 'f' must appear over older sessions.`
+- **Thin community `Community 631`** (1 nodes): `A recent session with UUID starting with 'f' must appear over older sessions.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 631`** (1 nodes): `With max_sessions=3 and 6 sessions, the 3 most recent are returned.`
+- **Thin community `Community 632`** (1 nodes): `With max_sessions=3 and 6 sessions, the 3 most recent are returned.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 632`** (1 nodes): `track_inline_summaries stores summary from [[S:...]] tag in content.`
+- **Thin community `Community 633`** (1 nodes): `track_inline_summaries stores summary from [[S:...]] tag in content.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 633`** (1 nodes): `When multiple summary tags exist, the last one (most complete) is used.`
+- **Thin community `Community 634`** (1 nodes): `When multiple summary tags exist, the last one (most complete) is used.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 634`** (1 nodes): `Content without summary tags returns False without storing.`
+- **Thin community `Community 635`** (1 nodes): `Content without summary tags returns False without storing.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 635`** (1 nodes): `Summary descriptions are enforced to 150 char limit via _enforce_oneliner.`
+- **Thin community `Community 636`** (1 nodes): `Summary descriptions are enforced to 150 char limit via _enforce_oneliner.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 636`** (1 nodes): `_process_summary_tags parses raw [[S:...]] strings and stores summary.`
+- **Thin community `Community 637`** (1 nodes): `_process_summary_tags parses raw [[S:...]] strings and stores summary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 637`** (1 nodes): `_process_summary_tags builds git_digest from git_context.`
+- **Thin community `Community 638`** (1 nodes): `_process_summary_tags builds git_digest from git_context.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 638`** (1 nodes): `Empty summary_tags list returns False.`
+- **Thin community `Community 639`** (1 nodes): `Empty summary_tags list returns False.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 639`** (1 nodes): `None summary_tags returns False.`
+- **Thin community `Community 640`** (1 nodes): `None summary_tags returns False.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 640`** (1 nodes): `analyze_session forwards summary_tags and returns summary_stored.`
+- **Thin community `Community 641`** (1 nodes): `analyze_session forwards summary_tags and returns summary_stored.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 641`** (1 nodes): `analyze_session works without summary_tags (backward compat).`
+- **Thin community `Community 642`** (1 nodes): `analyze_session works without summary_tags (backward compat).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 642`** (1 nodes): `Second identical log within 24h should be rejected.`
+- **Thin community `Community 643`** (1 nodes): `Second identical log within 24h should be rejected.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 643`** (1 nodes): `Different content for the same feedback type should still be recorded.`
+- **Thin community `Community 644`** (1 nodes): `Different content for the same feedback type should still be recorded.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 644`** (1 nodes): `Entry should be created if no duplicate exists within 24h.`
+- **Thin community `Community 645`** (1 nodes): `Entry should be created if no duplicate exists within 24h.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 645`** (1 nodes): `Different feedback_type for same agent+model should NOT be deduped.`
+- **Thin community `Community 646`** (1 nodes): `Different feedback_type for same agent+model should NOT be deduped.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 647`** (1 nodes): `Reset module-level caches between tests.`
+- **Thin community `Community 648`** (1 nodes): `Reset module-level caches between tests.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 648`** (1 nodes): `Create a test registry file.`
+- **Thin community `Community 649`** (1 nodes): `Create a test registry file.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 649`** (1 nodes): `Reset module-level caches between tests.`
+- **Thin community `Community 650`** (1 nodes): `Reset module-level caches between tests.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 654`** (1 nodes): `dispatch_agent resolves agent and calls dispatch_wake, not complete_internal.`
+- **Thin community `Community 655`** (1 nodes): `dispatch_agent resolves agent and calls dispatch_wake, not complete_internal.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 655`** (1 nodes): `dispatch_agent links wake sessions back to the current parent session.`
+- **Thin community `Community 656`** (1 nodes): `dispatch_agent links wake sessions back to the current parent session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 656`** (1 nodes): `Explicit max_turns should override persona-limit resolution.`
+- **Thin community `Community 657`** (1 nodes): `Explicit max_turns should override persona-limit resolution.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 657`** (1 nodes): `dispatch_agent must NOT call complete_internal (the whole point of this fix).`
+- **Thin community `Community 658`** (1 nodes): `dispatch_agent must NOT call complete_internal (the whole point of this fix).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 658`** (1 nodes): `dispatch_agent returns error when project_id is None.`
+- **Thin community `Community 659`** (1 nodes): `dispatch_agent returns error when project_id is None.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 659`** (1 nodes): `Retries log_agent_performance when 'Stream closed' detected.`
+- **Thin community `Community 660`** (1 nodes): `Retries log_agent_performance when 'Stream closed' detected.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 660`** (1 nodes): `Unknown tools are logged but not retried.`
+- **Thin community `Community 661`** (1 nodes): `Unknown tools are logged but not retried.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 661`** (1 nodes): `Returns 0 immediately when no 'Stream closed' failures found.`
+- **Thin community `Community 662`** (1 nodes): `Returns 0 immediately when no 'Stream closed' failures found.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 662`** (1 nodes): `Skips retry when tool_use event not found (no args to retry with).`
+- **Thin community `Community 663`** (1 nodes): `Skips retry when tool_use event not found (no args to retry with).`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 663`** (1 nodes): `Retries dispatch_agent when 'Stream closed' detected.`
+- **Thin community `Community 664`** (1 nodes): `Retries dispatch_agent when 'Stream closed' detected.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 664`** (1 nodes): `Verifies [[S:...]] tags are parsed and stored.`
+- **Thin community `Community 665`** (1 nodes): `Verifies [[S:...]] tags are parsed and stored.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 665`** (1 nodes): `Verifies synthetic summary when no [[S:...]] tags present.`
+- **Thin community `Community 666`** (1 nodes): `Verifies synthetic summary when no [[S:...]] tags present.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 666`** (1 nodes): `Empty content stores fallback summary and returns True.`
+- **Thin community `Community 667`** (1 nodes): `Empty content stores fallback summary and returns True.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 667`** (1 nodes): `Empty content should use transcript-based summary before generic fallback.`
+- **Thin community `Community 668`** (1 nodes): `Empty content should use transcript-based summary before generic fallback.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 668`** (1 nodes): `Full postprocess pipeline runs all steps.`
+- **Thin community `Community 669`** (1 nodes): `Full postprocess pipeline runs all steps.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 669`** (1 nodes): `Error from completion propagates through postprocessor.`
+- **Thin community `Community 670`** (1 nodes): `Error from completion propagates through postprocessor.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 818`** (1 nodes): `Create image content from base64 encoded data.          Args:             data:`
+- **Thin community `Community 819`** (1 nodes): `Create image content from base64 encoded data.          Args:             data:`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 819`** (1 nodes): `Create a tool result message from execution result.          Args:             t`
+- **Thin community `Community 820`** (1 nodes): `Create a tool result message from execution result.          Args:             t`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 820`** (1 nodes): `Test async client initialization with defaults.`
+- **Thin community `Community 821`** (1 nodes): `Test async client initialization with defaults.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 821`** (1 nodes): `Test async client as context manager.`
+- **Thin community `Community 822`** (1 nodes): `Test async client as context manager.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 822`** (1 nodes): `Test successful async completion.`
+- **Thin community `Community 823`** (1 nodes): `Test successful async completion.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 823`** (1 nodes): `Test completion with session ID.`
+- **Thin community `Community 824`** (1 nodes): `Test completion with session ID.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 824`** (1 nodes): `Test async session creation.`
+- **Thin community `Community 825`** (1 nodes): `Test async session creation.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 825`** (1 nodes): `Test error handling in async client.`
+- **Thin community `Community 826`** (1 nodes): `Test error handling in async client.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 826`** (1 nodes): `Test async completion with tools.`
+- **Thin community `Community 827`** (1 nodes): `Test async completion with tools.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 827`** (1 nodes): `Test sending a message through session.`
+- **Thin community `Community 828`** (1 nodes): `Test sending a message through session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 828`** (1 nodes): `Test adding messages to local tracking.`
+- **Thin community `Community 829`** (1 nodes): `Test adding messages to local tracking.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 829`** (1 nodes): `Test getting history from server.`
+- **Thin community `Community 830`** (1 nodes): `Test getting history from server.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 830`** (1 nodes): `Test refreshing session from server.`
+- **Thin community `Community 831`** (1 nodes): `Test refreshing session from server.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 831`** (1 nodes): `Test closing/archiving a session.`
+- **Thin community `Community 832`** (1 nodes): `Test closing/archiving a session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 832`** (1 nodes): `Test creating a new session via context manager.`
+- **Thin community `Community 833`** (1 nodes): `Test creating a new session via context manager.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 833`** (1 nodes): `Test resuming an existing session.`
+- **Thin community `Community 834`** (1 nodes): `Test resuming an existing session.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 834`** (1 nodes): `Test that session ID is persisted across requests.`
+- **Thin community `Community 835`** (1 nodes): `Test that session ID is persisted across requests.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 835`** (1 nodes): `Test streaming through session tracks content.`
+- **Thin community `Community 836`** (1 nodes): `Test streaming through session tracks content.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 836`** (1 nodes): `Test that session state persists across client instances.`
+- **Thin community `Community 837`** (1 nodes): `Test that session state persists across client instances.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 837`** (1 nodes): `Test successful SSE streaming.`
+- **Thin community `Community 838`** (1 nodes): `Test successful SSE streaming.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 838`** (1 nodes): `Test SSE streaming with MessageInput objects.`
+- **Thin community `Community 839`** (1 nodes): `Test SSE streaming with MessageInput objects.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 839`** (1 nodes): `Test SSE streaming handles [DONE] marker.`
+- **Thin community `Community 840`** (1 nodes): `Test SSE streaming handles [DONE] marker.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 861`** (1 nodes): `Create and register an active stream context for cooperative cancel.`
+- **Thin community `Community 862`** (1 nodes): `Create and register an active stream context for cooperative cancel.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 862`** (1 nodes): `Signal an active streaming session to stop after the current boundary.`
+- **Thin community `Community 863`** (1 nodes): `Signal an active streaming session to stop after the current boundary.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 863`** (1 nodes): `Normalize caller-provided profile names to a known profile.`
+- **Thin community `Community 864`** (1 nodes): `Normalize caller-provided profile names to a known profile.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 864`** (1 nodes): `Return memory tags that should render at full detail for a profile.`
+- **Thin community `Community 865`** (1 nodes): `Return memory tags that should render at full detail for a profile.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 865`** (1 nodes): `Return memory tags that should be surfaced first for a profile.`
+- **Thin community `Community 866`** (1 nodes): `Return memory tags that should be surfaced first for a profile.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 866`** (1 nodes): `Return mandate/guardrail caps for any policy-summary consumer.`
+- **Thin community `Community 867`** (1 nodes): `Return mandate/guardrail caps for any policy-summary consumer.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 867`** (1 nodes): `Return True when mandates/guardrails should render as compact summaries.`
+- **Thin community `Community 868`** (1 nodes): `Return True when mandates/guardrails should render as compact summaries.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 868`** (1 nodes): `Backward-compatible alias for older callers/tests.`
+- **Thin community `Community 869`** (1 nodes): `Backward-compatible alias for older callers/tests.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 869`** (1 nodes): `Return default semantic-reference behavior for a consumer profile.      `None` m`
+- **Thin community `Community 870`** (1 nodes): `Return default semantic-reference behavior for a consumer profile.      `None` m`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 870`** (1 nodes): `Ensure agent_hub_db_url is provided.`
+- **Thin community `Community 871`** (1 nodes): `Ensure agent_hub_db_url is provided.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 871`** (1 nodes): `Treat blank env values as the built-in dashboard client id.`
+- **Thin community `Community 872`** (1 nodes): `Treat blank env values as the built-in dashboard client id.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 872`** (1 nodes): `Treat blank env values as the built-in dashboard request source.`
+- **Thin community `Community 873`** (1 nodes): `Treat blank env values as the built-in dashboard request source.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 873`** (1 nodes): `Treat blank env values as the built-in Telegram bot client id.`
+- **Thin community `Community 874`** (1 nodes): `Treat blank env values as the built-in Telegram bot client id.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 874`** (1 nodes): `Parse CORS_ORIGINS from comma-separated string or list.`
+- **Thin community `Community 875`** (1 nodes): `Parse CORS_ORIGINS from comma-separated string or list.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 875`** (1 nodes): `Get cached settings instance.      Returns:         Settings instance (cached fo`
+- **Thin community `Community 876`** (1 nodes): `Get cached settings instance.      Returns:         Settings instance (cached fo`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 876`** (1 nodes): `Return stable command key for one shell st invocation.`
+- **Thin community `Community 877`** (1 nodes): `Return stable command key for one shell st invocation.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 877`** (1 nodes): `Build quick-use memory from raw command strings plus curated fallback.`
+- **Thin community `Community 878`** (1 nodes): `Build quick-use memory from raw command strings plus curated fallback.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 878`** (1 nodes): `Return cached recent st usage quick-use memory.`
+- **Thin community `Community 879`** (1 nodes): `Return cached recent st usage quick-use memory.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 879`** (1 nodes): `Resolve the shared command guard binaries and recover from stale cached paths.`
+- **Thin community `Community 880`** (1 nodes): `Resolve the shared command guard binaries and recover from stale cached paths.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 880`** (1 nodes): `Return env vars that enable the shared bash command guard.`
+- **Thin community `Community 881`** (1 nodes): `Return env vars that enable the shared bash command guard.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 881`** (1 nodes): `Return a shared-guard block reason for the command, or None if allowed.`
+- **Thin community `Community 882`** (1 nodes): `Return a shared-guard block reason for the command, or None if allowed.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 882`** (1 nodes): `Recent activity derived from event/injection tables.`
+- **Thin community `Community 883`** (1 nodes): `Recent activity derived from event/injection tables.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 883`** (1 nodes): `Full dashboard payload with explicit state and activity sections.`
+- **Thin community `Community 884`** (1 nodes): `Full dashboard payload with explicit state and activity sections.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 884`** (1 nodes): `Return stable command key for one shell st invocation.`
+- **Thin community `Community 885`** (1 nodes): `Return stable command key for one shell st invocation.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 885`** (1 nodes): `Build quick-use memory from raw command strings plus curated fallback.`
+- **Thin community `Community 886`** (1 nodes): `Build quick-use memory from raw command strings plus curated fallback.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 886`** (1 nodes): `Return cached recent st usage quick-use memory.`
+- **Thin community `Community 887`** (1 nodes): `Return cached recent st usage quick-use memory.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PATCH()` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 20`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 27`, `Community 29`, `Community 30`, `Community 32`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 54`?**
-  _High betweenness centrality (0.248) - this node is a cross-community bridge._
-- **Why does `async_session()` connect `Community 11` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 12`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 25`, `Community 28`, `Community 29`, `Community 32`, `Community 33`, `Community 35`, `Community 37`, `Community 40`?**
+- **Why does `PATCH()` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 20`, `Community 21`, `Community 23`, `Community 25`, `Community 27`, `Community 28`, `Community 30`, `Community 32`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 43`, `Community 54`?**
+  _High betweenness centrality (0.225) - this node is a cross-community bridge._
+- **Why does `async_session()` connect `Community 13` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 14`, `Community 15`, `Community 16`, `Community 18`, `Community 22`, `Community 23`, `Community 25`, `Community 27`, `Community 30`, `Community 32`, `Community 34`, `Community 35`, `Community 37`, `Community 38`?**
   _High betweenness centrality (0.092) - this node is a cross-community bridge._
-- **Why does `APITestClient` connect `Community 7` to `Community 0`, `Community 35`, `Community 37`, `Community 47`, `Community 15`, `Community 17`?**
-  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+- **Why does `Session` connect `Community 8` to `Community 0`, `Community 34`, `Community 35`, `Community 2`, `Community 7`, `Community 9`, `Community 14`, `Community 15`, `Community 19`, `Community 23`?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
 - **Are the 950 inferred relationships involving `PATCH()` (e.g. with `block_real_llm_calls()` and `test_startup_reconciles_registered_project_access()`) actually correct?**
   _`PATCH()` has 950 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 284 inferred relationships involving `ToolCall` (e.g. with `MCP server helpers for Claude adapter — race-condition patch and server construc` and `Patch SDK race condition where MCP control response writes fail during shutdown.`) actually correct?**
   _`ToolCall` has 284 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 209 inferred relationships involving `APITestClient` (e.g. with `TestImageGenerationEndpoint` and `Tests for /generate-image endpoint.`) actually correct?**
   _`APITestClient` has 209 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 207 inferred relationships involving `async_session()` (e.g. with `_startup()` and `resolve_direct_credentials()`) actually correct?**
-  _`async_session()` has 207 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 209 inferred relationships involving `async_session()` (e.g. with `_startup()` and `resolve_direct_credentials()`) actually correct?**
+  _`async_session()` has 209 INFERRED edges - model-reasoned connections that need verification._
